@@ -26,7 +26,7 @@
     "publish": "npx @raycast/api@latest publish"
   },
   "dependencies": {
-    "@raycast/api": "^1.104.23",
+    "@raycast/api": "^1.104.9",
     "@raycast/utils": "^2.2.7",
     "@visx/curve": "^4.0.0",
     "@visx/gradient": "^4.0.0",
