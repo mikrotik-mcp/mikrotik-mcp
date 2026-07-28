@@ -29,7 +29,7 @@ interface Manifest {
   name: string;
   version: string;
   description: string;
-  author: { name: string };
+  author: string;
   icon?: string;
   server: {
     type: "node" | "python" | "binary" | "uv";
@@ -57,7 +57,7 @@ describe("mcpb manifest", () => {
     expect(manifest.manifest_version).toBe("0.3");
     expect(manifest.name).toBe("mikrotik-mcp");
     expect(manifest.description).toBeTruthy();
-    expect(manifest.author.name).toBeTruthy();
+    expect(manifest.author).toBeTruthy();
   });
 
   test("version tracks package.json", () => {
