@@ -62,9 +62,11 @@ lines.push("## Modules");
 lines.push("");
 lines.push("| Module | Group | Tools | Scope |");
 lines.push("|--------|-------|------:|-------|");
-// Escape `|` in cell text so a description like "`/interface gre|ipip|eoip`"
-// doesn't inject extra table columns (mirrors the per-tool table below).
-const cell = (s: string): string => s.replace(/\|/g, "\\|");
+// Escape `\` and `|` in cell text so a description like "`/interface gre|ipip|eoip`"
+// doesn't inject extra table columns. The backslash must be escaped first (as
+// `[\\|]` in one pass): a text like `a\|b` escaped naively becomes `a\\|b`,
+// where the `\\` renders as a literal backslash and leaves the `|` live again.
+const cell = (s: string): string => s.replace(/[\\|]/g, "\\$&");
 for (const m of moduleCatalog) {
   lines.push(
     `| [${cell(m.label)}](#${m.slug}) | ${cell(m.group)} | ${m.tools.length} | ${cell(m.description)} |`,
@@ -80,7 +82,7 @@ for (const m of moduleCatalog) {
   lines.push("| Tool | Risk | Parameters | Description |");
   lines.push("|------|------|------------|-------------|");
   for (const t of m.tools) {
-    const firstLine = t.description.split("\n")[0].replace(/\|/g, "\\|");
+    const firstLine = cell(t.description.split("\n")[0]);
     lines.push(
       `| \`${t.name}\` | ${RISK_BADGE[riskOf(t.annotations)]} | ${paramsOf(t.inputSchema as ZodRawShape)} | ${firstLine} |`,
     );

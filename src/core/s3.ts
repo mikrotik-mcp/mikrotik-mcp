@@ -46,7 +46,11 @@ export function getS3Client(): S3Client {
 }
 
 function trimSlashes(s: string): string {
-  return s.replace(/^\/+|\/+$/g, "");
+  // The trailing alternative is anchored with a negative look-behind so the
+  // engine can only start matching at the FIRST slash of a run. Without it,
+  // `\/+$` retries from every slash in a run that isn't at the end of the
+  // string, which makes trimming quadratic in the input length (ReDoS).
+  return s.replace(/^\/+|(?<!\/)\/+$/g, "");
 }
 
 /**

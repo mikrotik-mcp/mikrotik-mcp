@@ -150,6 +150,7 @@ import { closeDevice, isPoolEnabled, poolStatus } from "../core/connection-pool"
 import { isMacTelnetDevice } from "../core/transport";
 import { VERSION } from "../version";
 import { driftRoutes } from "./drift-routes";
+import { clientError, logError } from "./http-error";
 import { closeMemoryStore, memoryRoutes } from "./memory-routes";
 
 const SERVER_TAG = "mikrotik-mcp";
@@ -192,7 +193,7 @@ function restartProcess(): boolean {
     );
   } catch (e) {
     logger.error(
-      `Restart relaunch failed: ${e instanceof Error ? e.message : String(e)}. Exiting anyway.`,
+      `Restart relaunch failed: ${logError(e)}. Exiting anyway.`,
     );
   }
   // Flush the HTTP response first, then exit so the child (after its startup
@@ -615,9 +616,10 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
       );
       return json({ ok: true, mode: "config", count: devices.length, devices });
     } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      logger.error(`Config reload failed: ${error}`);
-      return json({ ok: false, error }, 500);
+      // Full detail (stack, absolute paths) to stderr; only the sanitised
+      // one-liner goes back over HTTP.
+      logger.error(`Config reload failed: ${logError(e)}`);
+      return json({ ok: false, error: clientError(e) }, 500);
     }
   }
 
@@ -762,7 +764,7 @@ async function modulesRoutes(req: Request, url: URL): Promise<Response | null> {
       atomicWrite(getConfigSource().path, serializeConfig(next));
     } catch (e) {
       persisted = false;
-      warning = `applied live but not saved to disk: ${e instanceof Error ? e.message : String(e)}`;
+      warning = `applied live but not saved to disk: ${clientError(e)}`;
     }
     if (persisted) {
       recordVersion(
@@ -802,7 +804,7 @@ async function modulesRoutes(req: Request, url: URL): Promise<Response | null> {
       atomicWrite(getConfigSource().path, serializeConfig(next));
     } catch (e) {
       persisted = false;
-      warning = `applied live but not saved to disk: ${e instanceof Error ? e.message : String(e)}`;
+      warning = `applied live but not saved to disk: ${clientError(e)}`;
     }
     if (persisted) {
       recordVersion(
@@ -1279,7 +1281,7 @@ async function featureRoutes(req: Request, url: URL): Promise<Response | null> {
       }));
       return json({ configured: true, target: s3Target(), objects, truncated: !!res.isTruncated });
     } catch (e) {
-      return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+      return json({ error: clientError(e) }, 502);
     }
   }
   if (p === "/api/s3/presign" && req.method === "GET") {
@@ -1291,7 +1293,7 @@ async function featureRoutes(req: Request, url: URL): Promise<Response | null> {
       const link = getS3Client().presign(key, { expiresIn: presignExpiresIn(), method: "GET" });
       return json({ url: link });
     } catch (e) {
-      return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+      return json({ error: clientError(e) }, 502);
     }
   }
   if (p === "/api/s3/delete" && req.method === "POST") {
@@ -1304,7 +1306,7 @@ async function featureRoutes(req: Request, url: URL): Promise<Response | null> {
       await client.delete(b.key);
       return json({ ok: true, key: b.key });
     } catch (e) {
-      return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+      return json({ error: clientError(e) }, 502);
     }
   }
 
@@ -1334,7 +1336,7 @@ async function featureRoutes(req: Request, url: URL): Promise<Response | null> {
         ok: true,
         dir: backupDir(),
         persisted: false,
-        warning: `applied live but not saved: ${e instanceof Error ? e.message : String(e)}`,
+        warning: `applied live but not saved: ${clientError(e)}`,
       });
     }
     recordVersion(getConfig(), "auto", Date.now(), "backup path changed");
@@ -1372,7 +1374,7 @@ async function featureRoutes(req: Request, url: URL): Promise<Response | null> {
       const safe = b.name.endsWith(".rsc") ? b.name : `${b.name}.rsc`;
       return json({ ok: true, name: writeBackup(safe, b.content) });
     } catch (e) {
-      return json({ error: e instanceof Error ? e.message : String(e) }, 400);
+      return json({ error: clientError(e) }, 400);
     }
   }
   if (p === "/api/backups/rename" && req.method === "POST") {
@@ -1381,7 +1383,7 @@ async function featureRoutes(req: Request, url: URL): Promise<Response | null> {
     try {
       return json({ ok: true, name: renameBackup(b.name, b.new_name) });
     } catch (e) {
-      return json({ error: e instanceof Error ? e.message : String(e) }, 400);
+      return json({ error: clientError(e) }, 400);
     }
   }
   if (p === "/api/backups/delete" && req.method === "POST") {
@@ -1390,7 +1392,7 @@ async function featureRoutes(req: Request, url: URL): Promise<Response | null> {
     try {
       return deleteBackup(b.name) ? json({ ok: true }) : json({ error: "not found" }, 404);
     } catch (e) {
-      return json({ error: e instanceof Error ? e.message : String(e) }, 400);
+      return json({ error: clientError(e) }, 400);
     }
   }
   if (p === "/api/backups/restore" && req.method === "POST") {
@@ -1654,7 +1656,7 @@ export async function runDashboard(
         atomicWrite(getConfigSource().path, serializeConfig(next));
       } catch (e) {
         persisted = false;
-        warning = `applied live but not saved to disk: ${e instanceof Error ? e.message : String(e)}`;
+        warning = `applied live but not saved to disk: ${clientError(e)}`;
       }
       if (persisted) {
         recordVersion(
@@ -1707,7 +1709,7 @@ export async function runDashboard(
       try {
         return json(await fetchLatestRelease());
       } catch (e) {
-        return json({ error: e instanceof Error ? e.message : "fetch failed" }, 502);
+        return json({ error: clientError(e, "fetch failed") }, 502);
       }
     }
 
@@ -1748,7 +1750,7 @@ export async function runDashboard(
       try {
         return json(await fetchAllReleases());
       } catch (e) {
-        return json({ error: e instanceof Error ? e.message : "fetch failed" }, 502);
+        return json({ error: clientError(e, "fetch failed") }, 502);
       }
     }
 
@@ -1832,9 +1834,8 @@ export async function runDashboard(
       try {
         return await dashboardRoute(req, url, srv, configAdmin, transportLabel);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        logger.error(`Dashboard request failed (${url.pathname}): ${msg}`);
-        return json({ error: msg }, 502);
+        logger.error(`Dashboard request failed (${url.pathname}): ${logError(e)}`);
+        return json({ error: clientError(e) }, 502);
       }
     },
     websocket: {

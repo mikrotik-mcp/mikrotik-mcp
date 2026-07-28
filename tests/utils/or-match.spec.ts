@@ -25,4 +25,11 @@ describe("orMatch", () => {
   test("escapes embedded double quotes in values", () => {
     expect(orMatch("message", ['say "hi"'])).toBe('(message~"say \\"hi\\"")');
   });
+
+  test("escapes backslashes so a trailing one cannot escape the closing quote", () => {
+    // Raw value: `C:\` — without escaping the backslash the clause would end
+    // `"C:\"` and the console would read the closing quote as string content.
+    expect(orMatch("comment", ["C:\\"])).toBe('(comment~"C:\\\\")');
+    expect(orMatch("comment", ['a\\"b'])).toBe('(comment~"a\\\\\\"b")');
+  });
 });

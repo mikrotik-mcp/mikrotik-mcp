@@ -44,6 +44,17 @@ export function quoteValue(value: string | number | boolean): string {
     .replace(/\r/g, "\\r")
     .replace(/\n/g, "\\n")
     .replace(/\t/g, "\\t");
+  // CodeQL reports this as "unsafe shell command constructed from library
+  // input" because the built command eventually reaches ssh2's `client.exec`
+  // channel, which its models treat as a system-command sink. That flow is the
+  // product: this server exists to run RouterOS console commands on a remote
+  // device, and the ssh2 channel sends the string to the ROUTER's console, not
+  // to any local OS shell. This function IS the sanitizer for that sink — every
+  // value goes through `Cmd`/`quoteValue`, never string concatenation (see the
+  // module header), and the escape order above (backslash first) leaves no way
+  // to break out of the quotes. Accepted and reviewed, not an open injection
+  // path.
+  // codeql[js/shell-command-constructed-from-input]
   return `"${escaped}"`;
 }
 

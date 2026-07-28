@@ -6,6 +6,11 @@ on:
   push:
     branches: [main, develop]
 
+# Least privilege: this workflow only reads the repo. Declared explicitly so it
+# stays read-only regardless of the repo/org default token permissions.
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ${{ matrix.os }}

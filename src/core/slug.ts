@@ -14,6 +14,9 @@
  * Pure (no imports) so it's trivially unit-testable and free of import cycles.
  */
 export function deviceSlug(name: string | undefined): string {
-  const s = (name ?? "").replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+  // The trailing `-+$` carries a negative look-behind so it can only start at
+  // the first dash of a run; without it the engine retries from every dash in a
+  // run that isn't at the end, making the trim quadratic in name length (ReDoS).
+  const s = (name ?? "").replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|(?<!-)-+$/g, "");
   return s || "device";
 }
