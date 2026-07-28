@@ -192,9 +192,7 @@ function restartProcess(): boolean {
       "Dashboard requested a restart — relaunched a fresh server process; this one is exiting.",
     );
   } catch (e) {
-    logger.error(
-      `Restart relaunch failed: ${logError(e)}. Exiting anyway.`,
-    );
+    logger.error(`Restart relaunch failed: ${logError(e)}. Exiting anyway.`);
   }
   // Flush the HTTP response first, then exit so the child (after its startup
   // delay) can bind the same ports.
