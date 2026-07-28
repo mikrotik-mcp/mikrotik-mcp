@@ -138,10 +138,10 @@ outlines the build. Every technology is covered:
 | ----------------------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
 | MikroTik ↔ MikroTik, modern clients | **WireGuard**           | `create_wireguard_interface`, `add_wireguard_peer`, `generate_wireguard_client_config` |
 | Interop site-to-site / native IKEv2 | **IPsec**               | `create_ipsec_{profile,peer,identity,proposal,policy}`, `get_ipsec_active_peers`       |
-| Built-in OS VPN clients             | **L2TP/IPsec**          | `set_l2tp_server`, `create_ppp_secret`, `create_ppp_profile`                            |
-| Through restrictive firewalls       | **SSTP** (TLS)          | `set_sstp_server`, `create_sstp_client`                                                 |
-| Cross-platform                      | **OpenVPN**             | `set_ovpn_server`, `create_ovpn_client`                                                 |
-| Route / L2-bridge between sites     | **GRE/IPIP/EoIP/VXLAN** | `create_gre_tunnel`, `create_eoip_tunnel`, `create_vxlan_tunnel`                        |
+| Built-in OS VPN clients             | **L2TP/IPsec**          | `set_l2tp_server`, `create_ppp_secret`, `create_ppp_profile`                           |
+| Through restrictive firewalls       | **SSTP** (TLS)          | `set_sstp_server`, `create_sstp_client`                                                |
+| Cross-platform                      | **OpenVPN**             | `set_ovpn_server`, `create_ovpn_client`                                                |
+| Route / L2-bridge between sites     | **GRE/IPIP/EoIP/VXLAN** | `create_gre_tunnel`, `create_eoip_tunnel`, `create_vxlan_tunnel`                       |
 
 Details: **[docs/vpn-guide.md](docs/vpn-guide.md)**.
 
@@ -194,8 +194,6 @@ alongside whatever transport you use:
 mikrotik-mcp serve --dashboard          # → http://127.0.0.1:9090
 ```
 
-<!-- SCREENSHOT ①  ── dashboard overview / stat cards + calls-over-time.
-     Drop the image at assets/screenshots/dashboard-overview.png and it will render below. -->
 <div align="center">
   <img src="assets/screenshots/dashboard-overview.png" alt="Observability dashboard — overview" width="820" />
 </div>
@@ -216,14 +214,10 @@ of them, across every transport**. Why you'll want it on:
   device, coloured by live SSH reachability, with per-device online/offline, latency,
   RouterOS identity/version and recent activity.
 
-<!-- SCREENSHOT ②  ── live feed + detail drawer (a row expanded with redacted input/output).
-     Drop the image at assets/screenshots/dashboard-live-feed.png -->
 <div align="center">
   <img src="assets/screenshots/dashboard-live-feed.png" alt="Observability dashboard — live call feed" width="820" />
 </div>
 
-<!-- SCREENSHOT ③  ── devices & connectivity graph.
-     Drop the image at assets/screenshots/dashboard-devices.png -->
 <div align="center">
   <img src="assets/screenshots/dashboard-devices.png" alt="Observability dashboard — devices & connectivity" width="820" />
 </div>
@@ -234,6 +228,102 @@ timeline, and a **reload/restart** button. Everything persists to a Bun-native S
 store on your machine — no external database. Binds to loopback (`127.0.0.1`) by default;
 set a bearer token (`--dashboard-token`) to expose it safely.
 
+<details>
+<summary><b>📸 Every dashboard screen (14 screenshots)</b></summary>
+
+<br/>
+
+**Live feed — call detail drawer.** One call expanded: arguments, output, target device,
+duration, risk annotation — secrets already `«redacted»`.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-live-feed-detail.png" alt="Live feed — call detail drawer" width="820" />
+</div>
+
+**Clients.** Every DHCP lease / connected station across devices, with identity, traffic
+and last-seen.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-clients.png" alt="Clients" width="820" />
+</div>
+
+**RADIUS & User Manager.** Servers, sessions, profiles, limitations and vouchers.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-radius-um.png" alt="RADIUS & User Manager" width="820" />
+</div>
+
+**Topology.** Live L2 map built from MNDP neighbour discovery.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-topology.png" alt="Topology map" width="820" />
+</div>
+
+**Packets.** Packet captures started from the dashboard, with status and download.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-packets.png" alt="Packet capture" width="820" />
+</div>
+
+**Snapshots.** `/export`-based config snapshots kept locally — browse and diff any two.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-snapshots.png" alt="Config snapshots" width="820" />
+</div>
+
+**Drift Guard.** Baseline vs. live config, with drift promoted or reconciled.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-drift-guard.png" alt="Drift Guard" width="820" />
+</div>
+
+**Change Plan.** Dry-run a batch of changes, review the exact commands, then apply under
+Safe Mode.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-changeplan.png" alt="Change plan / dry-run" width="820" />
+</div>
+
+**S3 Backups.** Off-device backup archive — upload, list, download, delete.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-s3-backup.png" alt="S3 backups" width="820" />
+</div>
+
+**Backups.** Local backup files kept on the MCP host.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-local-backup.png" alt="Local backups" width="820" />
+</div>
+
+**Modules.** The full tool catalog by module and risk annotation.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-modules.png" alt="Tool modules" width="820" />
+</div>
+
+**Config.** Config Studio — edit the config JSON with autocomplete, then safe-apply with
+auto-rollback.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-config.png" alt="Config Studio" width="820" />
+</div>
+
+**Memory.** Knowledge graph of entities, relations and observations gathered from calls.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-memory.png" alt="Memory knowledge graph" width="820" />
+</div>
+
+**What's new.** Release notes for the running server version, shown on first launch after
+an upgrade.
+
+<div align="center">
+  <img src="assets/screenshots/dashboard-whats-new.png" alt="What's new — release notes" width="820" />
+</div>
+
+</details>
+
 Full reference: **[docs/observability.md](docs/observability.md)**.
 
 ## The tool catalog
@@ -241,15 +331,15 @@ Full reference: **[docs/observability.md](docs/observability.md)**.
 **819 tools across 111 modules.** Full, always-current reference (parameters + risk per
 tool) is generated from source: **[docs/tools-reference.md](docs/tools-reference.md)**.
 
-| Group                    | Tools | Modules                                                                                                     |
-| ------------------------ | ----: | ---------------------------------------------------------------------------------------------------------- |
-| **Interfaces**           |    41 | interfaces, VLAN, bridge, wireless, PoE                                                                     |
-| **Addressing & Routing** |    46 | IP addresses, IP pools, routing, DHCP, DNS                                                                  |
-| **Dynamic Routing**      |    99 | router-id, tables, rules, next-hops, filters, BFD, BGP, OSPF, RIP, PIM-SM, IGMP proxy, GMP, RPKI           |
-| **Security**             |    34 | firewall filter, NAT, address-lists, certificates, IP services                                             |
-| **VPN & Tunneling**      |    96 | WireGuard, IPsec, PPP, L2TP, PPTP, SSTP, OpenVPN, GRE/IPIP/EoIP/VXLAN                                       |
-| **QoS**                  |    19 | queue types, queue trees, simple queues                                                                    |
-| **System & Ops**         |   102 | system, network tools, scheduler/scripts, users, logs, backup, Safe Mode                                   |
+| Group                    | Tools | Modules                                                                                          |
+| ------------------------ | ----: | ------------------------------------------------------------------------------------------------ |
+| **Interfaces**           |    41 | interfaces, VLAN, bridge, wireless, PoE                                                          |
+| **Addressing & Routing** |    46 | IP addresses, IP pools, routing, DHCP, DNS                                                       |
+| **Dynamic Routing**      |    99 | router-id, tables, rules, next-hops, filters, BFD, BGP, OSPF, RIP, PIM-SM, IGMP proxy, GMP, RPKI |
+| **Security**             |    34 | firewall filter, NAT, address-lists, certificates, IP services                                   |
+| **VPN & Tunneling**      |    96 | WireGuard, IPsec, PPP, L2TP, PPTP, SSTP, OpenVPN, GRE/IPIP/EoIP/VXLAN                            |
+| **QoS**                  |    19 | queue types, queue trees, simple queues                                                          |
+| **System & Ops**         |   102 | system, network tools, scheduler/scripts, users, logs, backup, Safe Mode                         |
 
 ## Beyond the catalog
 
@@ -293,41 +383,41 @@ HTTP transports expose `POST /mcp` and `GET /health` with DNS-rebinding protecti
 
 Settings come from `MIKROTIK_*` env vars or matching CLI flags (defaults → env → flags):
 
-| Variable                      | Flag                 | Default     | Purpose                                                     |
-| ----------------------------- | -------------------- | ----------- | ----------------------------------------------------------- |
-| `MIKROTIK_HOST`               | `--host`             | `127.0.0.1` | RouterOS host                                               |
-| `MIKROTIK_USERNAME`           | `--username`         | `admin`     | SSH user                                                    |
-| `MIKROTIK_PASSWORD`           | `--password`         | —           | SSH password _(or use a key →)_                             |
-| `MIKROTIK_KEY_FILENAME`       | `--key-filename`     | —           | SSH private-key file path                                   |
-| `MIKROTIK_KEY_PASSPHRASE`     | `--key-passphrase`   | —           | Passphrase for an encrypted key                             |
-| `MIKROTIK_JUMP_HOST`          | `--jump-host`        | —           | SSH bastion to tunnel through                               |
-| `MIKROTIK_CONFIG_FILE`        | `--config`           | —           | JSON file of named devices                                  |
-| `MIKROTIK_DEVICES`            | `--devices`          | —           | Inline JSON of named devices                                |
-| `MIKROTIK_MCP__TRANSPORT`     | `--transport`        | `stdio`     | `stdio` / `streamable-http` / `sse`                         |
-| `MIKROTIK_SSH__KEEP_ALIVE`    | `--ssh-keep-alive`   | `true`      | SSH connection pooling                                      |
-| `MIKROTIK_DASHBOARD__ENABLED` | `--dashboard`        | `false`     | Real-time observability dashboard                           |
+| Variable                      | Flag               | Default     | Purpose                             |
+| ----------------------------- | ------------------ | ----------- | ----------------------------------- |
+| `MIKROTIK_HOST`               | `--host`           | `127.0.0.1` | RouterOS host                       |
+| `MIKROTIK_USERNAME`           | `--username`       | `admin`     | SSH user                            |
+| `MIKROTIK_PASSWORD`           | `--password`       | —           | SSH password _(or use a key →)_     |
+| `MIKROTIK_KEY_FILENAME`       | `--key-filename`   | —           | SSH private-key file path           |
+| `MIKROTIK_KEY_PASSPHRASE`     | `--key-passphrase` | —           | Passphrase for an encrypted key     |
+| `MIKROTIK_JUMP_HOST`          | `--jump-host`      | —           | SSH bastion to tunnel through       |
+| `MIKROTIK_CONFIG_FILE`        | `--config`         | —           | JSON file of named devices          |
+| `MIKROTIK_DEVICES`            | `--devices`        | —           | Inline JSON of named devices        |
+| `MIKROTIK_MCP__TRANSPORT`     | `--transport`      | `stdio`     | `stdio` / `streamable-http` / `sse` |
+| `MIKROTIK_SSH__KEEP_ALIVE`    | `--ssh-keep-alive` | `true`      | SSH connection pooling              |
+| `MIKROTIK_DASHBOARD__ENABLED` | `--dashboard`      | `false`     | Real-time observability dashboard   |
 
 Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_LEVEL`):
 **[docs/configuration.md](docs/configuration.md)**.
 
 ## Documentation
 
-| Doc                                                           |                                                                       |
-| ------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [Getting started](docs/getting-started.md)                    | Install, verify, first run                                            |
-| [Configuration](docs/configuration.md)                        | Every env var & flag                                                  |
-| [Multiple devices](docs/multi-device.md)                      | Manage several routers; per-call targeting                            |
-| [Connecting clients](docs/connecting-clients.md)              | Claude Desktop, stdio, HTTP                                           |
-| **[Observability](docs/observability.md)**                    | Real-time dashboard: live feed + analytics, SQLite                    |
-| [Safe Mode](docs/safe-mode.md)                                | Transactional changes                                                 |
-| **[Change Plan & Dry-Run](docs/change-plan.md)**              | Preview commands, apply with the exact diff + auto-rollback           |
-| **[Firewall Audit](docs/firewall-audit.md)**                  | Shadowed/broad/dead rules, risk-scored                                |
-| **[Security Hardening](docs/security-hardening.md)**          | Per-category audit+remediate, snapshot + Safe-Mode                    |
-| **[VPN guide](docs/vpn-guide.md)**                            | Every tunnel type + how to build it                                   |
-| [Prompts](docs/prompts.md)                                    | The 9 guided workflows                                                |
-| [Architecture](docs/architecture.md) · [Security](docs/security.md) | How it's built · credentials & risk gating                    |
-| [Tool reference](docs/tools-reference.md)                     | The full generated catalog                                            |
-| [Development](docs/development.md) · [Docker](docs/docker.md) | Build, test, deploy                                                   |
+| Doc                                                                 |                                                             |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| [Getting started](docs/getting-started.md)                          | Install, verify, first run                                  |
+| [Configuration](docs/configuration.md)                              | Every env var & flag                                        |
+| [Multiple devices](docs/multi-device.md)                            | Manage several routers; per-call targeting                  |
+| [Connecting clients](docs/connecting-clients.md)                    | Claude Desktop, stdio, HTTP                                 |
+| **[Observability](docs/observability.md)**                          | Real-time dashboard: live feed + analytics, SQLite          |
+| [Safe Mode](docs/safe-mode.md)                                      | Transactional changes                                       |
+| **[Change Plan & Dry-Run](docs/change-plan.md)**                    | Preview commands, apply with the exact diff + auto-rollback |
+| **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                      |
+| **[Security Hardening](docs/security-hardening.md)**                | Per-category audit+remediate, snapshot + Safe-Mode          |
+| **[VPN guide](docs/vpn-guide.md)**                                  | Every tunnel type + how to build it                         |
+| [Prompts](docs/prompts.md)                                          | The 9 guided workflows                                      |
+| [Architecture](docs/architecture.md) · [Security](docs/security.md) | How it's built · credentials & risk gating                  |
+| [Tool reference](docs/tools-reference.md)                           | The full generated catalog                                  |
+| [Development](docs/development.md) · [Docker](docs/docker.md)       | Build, test, deploy                                         |
 
 ## Security
 
