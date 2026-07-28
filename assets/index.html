@@ -1321,6 +1321,522 @@
         color: var(--ink);
       }
 
+      /* ── dashboard showcase ──────────────────────────────────────────────
+         Mobile-first: one column, the rail is a swipeable chip row under the
+         frame. From 900px up it becomes a sticky vertical index on the left. */
+      .dash {
+        padding: 0 0 30px;
+      }
+      .dash-lede {
+        margin-top: 18px;
+        max-width: 60ch;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.72;
+      }
+      .dash-lede code {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        color: var(--cyan);
+        background: rgba(210, 130, 95, 0.1);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 2px 7px;
+        white-space: nowrap;
+      }
+      .dash-stage {
+        display: grid;
+        gap: 20px;
+      }
+
+      /* device frame */
+      .shot-frame {
+        position: relative;
+        margin: 0;
+        padding: 9px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(34, 25, 19, 0.92), rgba(18, 14, 12, 0.92));
+        box-shadow:
+          0 44px 90px -54px rgba(210, 114, 79, 0.9),
+          inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        isolation: isolate;
+      }
+      .shot-frame::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 16px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.45s var(--ease);
+        background: radial-gradient(
+          460px circle at var(--mx, 50%) var(--my, 0%),
+          rgba(224, 135, 99, 0.16),
+          transparent 62%
+        );
+      }
+      .shot-frame:hover::before {
+        opacity: 1;
+      }
+      .shot-chrome {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 6px 11px;
+      }
+      .shot-chrome .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        opacity: 0.75;
+      }
+      .shot-chrome .dot.is-r {
+        background: var(--coral);
+      }
+      .shot-chrome .dot.is-y {
+        background: var(--amber);
+      }
+      .shot-chrome .dot.is-g {
+        background: var(--lime);
+      }
+      .shot-url {
+        flex: 1;
+        min-width: 0;
+        margin-left: 8px;
+        padding: 4px 11px;
+        border: 1px solid var(--line);
+        border-radius: 100px;
+        background: rgba(0, 0, 0, 0.28);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--faint);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .shot-url b {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .shot-live {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .shot-live i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--lime);
+        box-shadow: 0 0 0 0 rgba(166, 201, 85, 0.6);
+        animation: pulseLive 2s infinite;
+      }
+      @keyframes pulseLive {
+        70% {
+          box-shadow: 0 0 0 7px rgba(166, 201, 85, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(166, 201, 85, 0);
+        }
+      }
+      @media (min-width: 560px) {
+        .shot-live {
+          display: inline-flex;
+        }
+      }
+      .shot-plate {
+        position: relative;
+        aspect-ratio: 16 / 10;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #0b0908;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .shot-plate img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: auto;
+        display: block;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+      .shot-plate img.is-on {
+        opacity: 1;
+      }
+      .shot-scan {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        opacity: 0.45;
+        mix-blend-mode: overlay;
+        background: repeating-linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.04) 0 1px,
+          transparent 1px 3px
+        );
+      }
+      .shot-plate::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        height: 70px;
+        z-index: 2;
+        pointer-events: none;
+        background: linear-gradient(transparent, rgba(11, 9, 8, 0.9));
+      }
+      .shot-zoom {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 12px;
+        border: 1px solid var(--line);
+        border-radius: 100px;
+        background: rgba(18, 14, 12, 0.72);
+        backdrop-filter: blur(8px);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        cursor: none;
+        transition:
+          border-color 0.25s,
+          transform 0.25s var(--ease);
+      }
+      .shot-zoom:hover {
+        border-color: color-mix(in srgb, var(--teal) 60%, var(--line));
+        transform: translateY(-2px);
+      }
+      .shot-zoom svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: var(--cyan);
+        stroke-width: 1.8;
+      }
+      .shot-cap {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        padding: 13px 6px 3px;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .shot-cap .ix {
+        color: var(--cyan);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+      }
+      .shot-cap b {
+        font-family: var(--disp);
+        font-size: 15px;
+        color: var(--ink);
+      }
+
+      /* rail — chips on mobile, index on desktop */
+      .dash-rail {
+        display: flex;
+        gap: 9px;
+        list-style: none;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+        margin: 0 -28px;
+        padding: 2px 28px 8px;
+      }
+      .dash-rail::-webkit-scrollbar {
+        display: none;
+      }
+      .dash-rail li {
+        flex: 0 0 auto;
+        scroll-snap-align: center;
+      }
+      .rail-item {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        padding: 9px 15px 11px;
+        border: 1px solid var(--line);
+        border-radius: 100px;
+        background: var(--glass);
+        backdrop-filter: blur(8px);
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+        text-align: left;
+        cursor: none;
+        transition:
+          color 0.25s,
+          border-color 0.25s,
+          background 0.25s,
+          transform 0.3s var(--ease);
+      }
+      .rail-idx {
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        color: var(--faint);
+      }
+      .rail-txt b {
+        font-family: var(--disp);
+        font-weight: 600;
+        font-size: 13.5px;
+        white-space: nowrap;
+      }
+      .rail-txt em {
+        display: none;
+      }
+      .rail-item.is-on {
+        color: var(--ink);
+        border-color: color-mix(in srgb, var(--teal) 55%, var(--line));
+      }
+      .rail-item.is-on .rail-idx {
+        color: var(--cyan);
+      }
+      .rail-bar {
+        position: absolute;
+        left: 15px;
+        right: 15px;
+        bottom: 4px;
+        height: 1.5px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.07);
+        overflow: hidden;
+      }
+      .rail-bar i {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: var(--grad);
+      }
+      @media (min-width: 900px) {
+        .dash-stage {
+          grid-template-columns: 296px minmax(0, 1fr);
+          gap: 28px;
+          align-items: start;
+        }
+        .dash-rail {
+          order: -1;
+          display: block;
+          overflow: visible;
+          margin: 0;
+          padding: 0;
+          position: sticky;
+          top: 92px;
+        }
+        .dash-rail li + li {
+          margin-top: 6px;
+        }
+        .rail-item {
+          align-items: flex-start;
+          border-radius: 12px;
+          padding: 12px 15px 15px;
+        }
+        .rail-idx {
+          padding-top: 3px;
+        }
+        .rail-txt b {
+          white-space: normal;
+        }
+        .rail-txt em {
+          display: block;
+          margin-top: 3px;
+          font-style: normal;
+          font-size: 11.5px;
+          line-height: 1.55;
+          color: var(--faint);
+        }
+        .rail-item.is-on {
+          background: rgba(210, 114, 79, 0.09);
+          transform: translateX(5px);
+        }
+      }
+
+      /* contact sheet */
+      .sheet-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        padding-top: 52px;
+        padding-bottom: 14px;
+      }
+      .sheet-head h3 {
+        font-family: var(--disp);
+        font-weight: 600;
+        font-size: clamp(1.05rem, 3.4vw, 1.45rem);
+        letter-spacing: -0.01em;
+      }
+      .sheet-head span {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--faint);
+      }
+      .sheet {
+        display: flex;
+        gap: 12px;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+        padding: 4px 28px 8px;
+      }
+      .sheet::-webkit-scrollbar {
+        display: none;
+      }
+      .thumb {
+        position: relative;
+        flex: 0 0 64vw;
+        max-width: 250px;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        background: #0b0908;
+        scroll-snap-align: center;
+        cursor: none;
+        transition:
+          border-color 0.3s,
+          transform 0.4s var(--ease);
+      }
+      .thumb:hover {
+        border-color: color-mix(in srgb, var(--teal) 50%, var(--line));
+        transform: translateY(-4px);
+      }
+      .thumb img {
+        display: block;
+        width: 100%;
+        height: 148px;
+        object-fit: cover;
+        object-position: top center;
+        opacity: 0.7;
+        transition:
+          opacity 0.35s,
+          transform 0.6s var(--ease);
+      }
+      .thumb:hover img {
+        opacity: 1;
+        transform: scale(1.05);
+      }
+      .thumb span {
+        position: absolute;
+        inset: auto 0 0;
+        padding: 26px 11px 9px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink);
+        text-align: left;
+        background: linear-gradient(transparent, rgba(11, 9, 8, 0.94));
+      }
+      @media (min-width: 700px) {
+        .thumb {
+          flex: 0 0 232px;
+        }
+      }
+
+      /* lightbox */
+      .lightbox {
+        /* A modal <dialog> is centred by the UA's `margin: auto`, which the
+           global `* { margin: 0 }` reset above wipes out — restore it, or the
+           dialog pins itself to the top-left corner. */
+        margin: auto;
+        width: 100%;
+        max-width: min(1180px, 94vw);
+        max-height: 92vh;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: var(--ink);
+      }
+      .lightbox::backdrop {
+        background: rgba(8, 6, 5, 0.88);
+        backdrop-filter: blur(6px);
+      }
+      .lb-inner {
+        display: flex;
+        flex-direction: column;
+        max-height: 92vh;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--bg-2);
+      }
+      .lb-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .lb-bar b {
+        font-family: var(--disp);
+        font-size: 14px;
+        color: var(--ink);
+      }
+      .lb-bar .lb-of {
+        color: var(--faint);
+      }
+      .lb-nav {
+        display: flex;
+        gap: 6px;
+        margin-left: auto;
+      }
+      .lb-btn {
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.25);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 13px;
+        cursor: none;
+        transition:
+          border-color 0.25s,
+          background 0.25s;
+      }
+      .lb-btn:hover {
+        border-color: color-mix(in srgb, var(--teal) 60%, var(--line));
+        background: rgba(210, 114, 79, 0.14);
+      }
+      .lb-scroll {
+        overflow: auto;
+        background: #0b0908;
+        -webkit-overflow-scrolling: touch;
+      }
+      .lb-scroll img {
+        display: block;
+        width: 100%;
+      }
+      @media (pointer: coarse) {
+        .rail-item,
+        .thumb,
+        .shot-zoom,
+        .lb-btn {
+          cursor: pointer;
+        }
+      }
+
       .progress {
         position: fixed;
         top: 0;
@@ -1336,6 +1852,13 @@
       @media (prefers-reduced-motion: reduce) {
         * {
           scroll-behavior: auto;
+        }
+        .shot-scan,
+        .rail-bar {
+          display: none;
+        }
+        .shot-live i {
+          animation: none;
         }
       }
     </style>
@@ -1435,6 +1958,7 @@
         <a href="#workflows" data-hover>Workflows</a>
         <a href="#surface" data-hover>Surface</a>
         <a href="#capabilities" data-hover>Capabilities</a>
+        <a href="#dashboard" data-hover>Dashboard</a>
         <a href="#flow" data-hover>Anatomy</a>
         <a href="https://github.com/mikrotik-mcp/mikrotik-mcp" data-hover>GitHub ↗</a>
       </div>
@@ -1764,6 +2288,75 @@
         </div>
       </div>
     </section>
+
+    <!-- DASHBOARD SHOWCASE (rail + frame + contact sheet, all built from SHOTS) -->
+    <section class="dash" id="dashboard" aria-label="Observability dashboard tour">
+      <div class="wrap head">
+        <span class="eyebrow">Watch it work</span>
+        <h2 data-reveal>Seventeen screens that show what the AI just did to your router.</h2>
+        <p class="dash-lede">
+          <code>mikrotik-mcp serve --dashboard</code> opens a localhost UI on port 9090 that records
+          every tool call as it happens — inputs, outputs, latency, target device, risk — with every
+          secret redacted before it is ever stored. Off by default. Zero overhead until you flip it
+          on.
+        </p>
+      </div>
+
+      <div class="wrap dash-stage">
+        <figure class="shot-frame" id="shotFrame">
+          <div class="shot-chrome">
+            <span class="dot is-r"></span><span class="dot is-y"></span
+            ><span class="dot is-g"></span>
+            <span class="shot-url" id="shotUrl">127.0.0.1:9090</span>
+            <span class="shot-live"><i></i>live · ws</span>
+          </div>
+          <div class="shot-plate" id="shotPlate" role="tabpanel" aria-live="polite">
+            <div class="shot-scan"></div>
+            <button class="shot-zoom" id="shotZoom" type="button" data-hover>
+              <svg viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5M11 8v6M8 11h6" />
+              </svg>
+              Full size
+            </button>
+          </div>
+          <figcaption class="shot-cap" id="shotCap"></figcaption>
+        </figure>
+        <ol class="dash-rail" id="dashRail" role="tablist" aria-label="Dashboard screens"></ol>
+      </div>
+
+      <div class="wrap sheet-head">
+        <h3>Every screen in the box</h3>
+        <span>Tap any frame for the full-height capture <span class="arrow">→</span></span>
+      </div>
+      <div class="sheet" id="dashSheet"></div>
+    </section>
+
+    <dialog class="lightbox" id="lightbox" aria-label="Screenshot viewer">
+      <div class="lb-inner">
+        <div class="lb-bar">
+          <b id="lbTitle"></b><span class="lb-of" id="lbOf"></span>
+          <div class="lb-nav">
+            <button
+              class="lb-btn"
+              id="lbPrev"
+              type="button"
+              aria-label="Previous screen"
+              data-hover
+            >
+              ←
+            </button>
+            <button class="lb-btn" id="lbNext" type="button" aria-label="Next screen" data-hover>
+              →
+            </button>
+            <button class="lb-btn" id="lbClose" type="button" aria-label="Close" data-hover>
+              ✕
+            </button>
+          </div>
+        </div>
+        <div class="lb-scroll" id="lbScroll"></div>
+      </div>
+    </dialog>
 
     <!-- PINNED PIPELINE -->
     <section class="pipeline" id="flow">
@@ -2794,6 +3387,370 @@
             ease: "sine.inOut",
             yoyo: true,
             repeat: -1,
+          });
+      })();
+
+      /* ---------- dashboard showcase ---------- */
+      (function dashboardTour() {
+        // One source of truth: the rail, the viewer and the contact sheet are
+        // all rendered from this list. `rail: true` promotes a screen into the
+        // eight-item switcher; every screen shows up in the sheet + lightbox.
+        const SHOTS = [
+          {
+            f: "dashboard-overview",
+            t: "Overview",
+            r: "/overview",
+            rail: true,
+            d: "Calls in window, calls/min, error rate and p50 / p95 / p99 latency — with top tools, a risk mix and recent errors.",
+          },
+          {
+            f: "dashboard-live-feed",
+            t: "Live Feed",
+            r: "/live",
+            rail: true,
+            d: "Every call streaming in over a Bun-native WebSocket. Filter by tool, risk, device or status; pause, resume, export CSV/JSON.",
+          },
+          {
+            f: "dashboard-live-feed-detail",
+            t: "Call detail",
+            r: "/live",
+            d: "One call opened up: arguments, output, device, duration — secrets already «redacted» before storage.",
+          },
+          {
+            f: "dashboard-devices",
+            t: "Devices",
+            r: "/devices",
+            rail: true,
+            d: "Hub-and-spoke map from the server to each router, coloured by live SSH reachability, with identity, version and latency.",
+          },
+          {
+            f: "dashboard-topology",
+            t: "Topology",
+            r: "/topology",
+            rail: true,
+            d: "A live Layer-2 map assembled from MNDP neighbour discovery — no hand-drawn diagram to keep in sync.",
+          },
+          {
+            f: "dashboard-clients",
+            t: "Clients",
+            r: "/clients",
+            d: "Every lease and connected station across the fleet: identity, traffic counters, last seen.",
+          },
+          {
+            f: "dashboard-radius-um",
+            t: "RADIUS & UM",
+            r: "/radius",
+            d: "RADIUS servers, live User Manager sessions, profiles, limitations and voucher batches.",
+          },
+          {
+            f: "dashboard-packets",
+            t: "Packets",
+            r: "/packets",
+            d: "Start a capture from the browser, watch it fill over TZSP, pull the pcap down.",
+          },
+          {
+            f: "dashboard-snapshots",
+            t: "Snapshots",
+            r: "/snapshots",
+            rail: true,
+            d: "Config snapshots taken with /export and kept on your machine. Diff any two and see exactly what moved.",
+          },
+          {
+            f: "dashboard-drift-guard",
+            t: "Drift Guard",
+            r: "/drift",
+            rail: true,
+            d: "Baseline versus live config, each drift attributed to the change that caused it — then promote it or reconcile it away.",
+          },
+          {
+            f: "dashboard-changeplan",
+            t: "Change Plan",
+            r: "/plan",
+            rail: true,
+            d: "A terraform-style dry run: read the exact RouterOS commands first, then apply them inside Safe Mode.",
+          },
+          {
+            f: "dashboard-s3-backup",
+            t: "S3 Backups",
+            r: "/s3",
+            d: "Off-device archive on any S3-compatible bucket: upload, browse, presign, restore.",
+          },
+          {
+            f: "dashboard-local-backup",
+            t: "Backups",
+            r: "/backups",
+            d: "The local backup vault on the MCP host — rename, restore, delete.",
+          },
+          {
+            f: "dashboard-modules",
+            t: "Modules",
+            r: "/modules",
+            d: "The entire catalog, module by module, with the risk annotation every tool carries.",
+          },
+          {
+            f: "dashboard-config",
+            t: "Config Studio",
+            r: "/config",
+            rail: true,
+            d: "Edit the config JSON with autocomplete and apply it live — a broken apply rolls itself back.",
+          },
+          {
+            f: "dashboard-memory",
+            t: "Memory",
+            r: "/memory",
+            d: "A knowledge graph of entities, relations and observations gathered from the calls themselves.",
+          },
+          {
+            f: "dashboard-whats-new",
+            t: "What's new",
+            r: "/live",
+            d: "Release notes for the version you are actually running, the moment you upgrade.",
+          },
+        ];
+
+        const plate = document.getElementById("shotPlate");
+        const railEl = document.getElementById("dashRail");
+        const sheetEl = document.getElementById("dashSheet");
+        const capEl = document.getElementById("shotCap");
+        const urlEl = document.getElementById("shotUrl");
+        const frame = document.getElementById("shotFrame");
+        const dlg = document.getElementById("lightbox");
+        if (!plate || !railEl || !sheetEl || !dlg) return;
+
+        const el = (tag, cls, text) => {
+          const n = document.createElement(tag);
+          if (cls) n.className = cls;
+          if (text != null) n.textContent = text;
+          return n;
+        };
+        const src = (s) => `./screenshots/web/${s.f}.webp`;
+        const pad = (n) => String(n + 1).padStart(2, "0");
+        const railShots = SHOTS.filter((s) => s.rail);
+        const DUR = 6.4;
+
+        /* ---- viewer images (stacked; only the active one is visible) ---- */
+        const imgs = SHOTS.map((s, i) => {
+          const img = el("img");
+          img.src = src(s);
+          img.alt = `MikroTik MCP dashboard — ${s.t}`;
+          img.decoding = "async";
+          if (i > 0) img.loading = "lazy";
+          plate.prepend(img);
+          return img;
+        });
+
+        /* ---- rail ---- */
+        const railBtns = railShots.map((s, i) => {
+          const b = el("button", "rail-item");
+          b.type = "button";
+          b.setAttribute("role", "tab");
+          b.setAttribute("data-hover", "");
+          b.setAttribute("aria-selected", "false");
+          const txt = el("span", "rail-txt");
+          txt.append(el("b", null, s.t), el("em", null, s.d));
+          const barWrap = el("span", "rail-bar");
+          barWrap.appendChild(el("i"));
+          b.append(el("span", "rail-idx", pad(i)), txt, barWrap);
+          b.addEventListener("click", () => activate(i, true));
+          const li = el("li");
+          li.appendChild(b);
+          railEl.appendChild(li);
+          return b;
+        });
+
+        /* ---- contact sheet ---- */
+        SHOTS.forEach((s, gi) => {
+          const b = el("button", "thumb");
+          b.type = "button";
+          b.setAttribute("data-hover", "");
+          b.setAttribute("aria-label", `Open ${s.t} full size`);
+          const img = el("img");
+          img.src = src(s);
+          img.alt = "";
+          img.loading = "lazy";
+          img.decoding = "async";
+          b.append(img, el("span", null, s.t));
+          b.addEventListener("click", () => openLightbox(gi));
+          sheetEl.appendChild(b);
+        });
+
+        /* ---- active screen ---- */
+        let cur = -1;
+        let bar = null;
+        let pan = null;
+
+        function panShot(img) {
+          if (pan) pan.kill();
+          gsap.set(imgs, { yPercent: 0 });
+          if (reduce) return;
+          // Tall full-page captures (Config Studio is ~12k px) walk from top to
+          // bottom while they are on screen, so you see the whole page.
+          const run = () => {
+            const over = img.clientHeight - plate.clientHeight;
+            if (over < 40) return;
+            const pct = (over / img.clientHeight) * 100;
+            pan = gsap.to(img, {
+              yPercent: -pct,
+              duration: Math.min(16, Math.max(5, pct / 7)),
+              ease: "none",
+              delay: 1.1,
+            });
+          };
+          if (img.complete) run();
+          else img.addEventListener("load", run, { once: true });
+        }
+
+        function activate(i, user) {
+          const n = (i + railShots.length) % railShots.length;
+          if (n === cur) return;
+          cur = n;
+          const s = railShots[cur];
+          const img = imgs[SHOTS.indexOf(s)];
+
+          imgs.forEach((im) => im.classList.toggle("is-on", im === img));
+          // GSAP writes opacity INLINE, which outranks the `.is-on` class — so
+          // every image it has ever faded in stays visible unless it is reset
+          // here. Images are prepended, meaning shot 0 paints last (on top),
+          // and without this reset it covers every later selection.
+          gsap.set(imgs, { opacity: 0 });
+          gsap.set(img, { opacity: 1 });
+          if (!reduce)
+            gsap.fromTo(
+              img,
+              { opacity: 0, scale: 1.02 },
+              { opacity: 1, scale: 1, duration: 0.7, ease: "power3.out" },
+            );
+          panShot(img);
+
+          urlEl.textContent = "127.0.0.1:9090";
+          urlEl.appendChild(el("b", null, s.r));
+
+          capEl.textContent = "";
+          capEl.append(
+            el("span", "ix", pad(cur)),
+            el("b", null, s.t),
+            document.createTextNode(s.d),
+          );
+          if (!reduce)
+            gsap.fromTo(capEl, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.45 });
+
+          railBtns.forEach((b, k) => {
+            b.classList.toggle("is-on", k === cur);
+            b.setAttribute("aria-selected", k === cur ? "true" : "false");
+            b.querySelector(".rail-bar i").style.width = "0%";
+          });
+          if (user) railBtns[cur].scrollIntoView({ block: "nearest", inline: "center" });
+          startBar();
+        }
+
+        /* ---- autoplay, paced by the active item's progress bar ---- */
+        let visible = false;
+        let hovering = false;
+        const playable = () => visible && !hovering && !dlg.open && !document.hidden;
+
+        function startBar() {
+          if (bar) bar.kill();
+          if (reduce) return;
+          bar = gsap.fromTo(
+            railBtns[cur].querySelector(".rail-bar i"),
+            { width: "0%" },
+            {
+              width: "100%",
+              duration: DUR,
+              ease: "none",
+              paused: true,
+              onComplete: () => activate(cur + 1),
+            },
+          );
+          if (playable()) bar.play();
+        }
+        function sync() {
+          const go = playable();
+          if (bar) go ? bar.play() : bar.pause();
+          if (pan) go ? pan.play() : pan.pause();
+        }
+
+        const stage = frame.parentElement;
+        ["pointerenter", "focusin"].forEach((ev) =>
+          stage.addEventListener(ev, () => {
+            hovering = true;
+            sync();
+          }),
+        );
+        ["pointerleave", "focusout"].forEach((ev) =>
+          stage.addEventListener(ev, () => {
+            hovering = false;
+            sync();
+          }),
+        );
+        document.addEventListener("visibilitychange", sync);
+        new IntersectionObserver(
+          ([e]) => {
+            visible = e.isIntersecting;
+            sync();
+          },
+          { threshold: 0.25 },
+        ).observe(frame);
+
+        railEl.addEventListener("keydown", (e) => {
+          if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+          e.preventDefault();
+          activate(cur + (e.key === "ArrowRight" ? 1 : -1), true);
+          railBtns[cur].focus();
+        });
+
+        /* ---- lightbox: native <dialog>, walks all seventeen ---- */
+        const lbScroll = document.getElementById("lbScroll");
+        const lbTitle = document.getElementById("lbTitle");
+        const lbOf = document.getElementById("lbOf");
+        let lbIdx = 0;
+
+        function openLightbox(gi) {
+          lbIdx = (gi + SHOTS.length) % SHOTS.length;
+          const s = SHOTS[lbIdx];
+          lbTitle.textContent = s.t;
+          lbOf.textContent = `${pad(lbIdx)} / ${SHOTS.length} · ${s.d}`;
+          lbScroll.textContent = "";
+          const img = el("img");
+          img.src = src(s);
+          img.alt = `MikroTik MCP dashboard — ${s.t}, full capture`;
+          lbScroll.appendChild(img);
+          lbScroll.scrollTop = 0;
+          if (!dlg.open) dlg.showModal();
+          sync();
+        }
+        document
+          .getElementById("shotZoom")
+          .addEventListener("click", () => openLightbox(SHOTS.indexOf(railShots[cur])));
+        document.getElementById("lbPrev").addEventListener("click", () => openLightbox(lbIdx - 1));
+        document.getElementById("lbNext").addEventListener("click", () => openLightbox(lbIdx + 1));
+        document.getElementById("lbClose").addEventListener("click", () => dlg.close());
+        dlg.addEventListener("click", (e) => {
+          if (e.target === dlg) dlg.close();
+        });
+        dlg.addEventListener("close", sync);
+        dlg.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowRight") openLightbox(lbIdx + 1);
+          if (e.key === "ArrowLeft") openLightbox(lbIdx - 1);
+        });
+
+        bindHover(document.getElementById("dashboard"));
+        bindHover(dlg);
+        activate(0);
+
+        // coral glow tracks the pointer across the frame
+        frame.addEventListener("pointermove", (e) => {
+          const r = frame.getBoundingClientRect();
+          frame.style.setProperty("--mx", ((e.clientX - r.left) / r.width) * 100 + "%");
+          frame.style.setProperty("--my", ((e.clientY - r.top) / r.height) * 100 + "%");
+        });
+        if (!reduce)
+          gsap.from(frame, {
+            y: 60,
+            opacity: 0,
+            duration: 1,
+            ease: "power3.out",
+            scrollTrigger: { trigger: frame, start: "top 88%" },
           });
       })();
 

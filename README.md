@@ -195,7 +195,7 @@ mikrotik-mcp serve --dashboard          # → http://127.0.0.1:9090
 ```
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-overview.png" alt="Observability dashboard — overview" width="820" />
+  <img src="assets/screenshots/web/dashboard-overview.webp" alt="Observability dashboard — overview" width="820" />
 </div>
 
 Every call flows through one choke point in the registry, so the dashboard sees **all
@@ -215,11 +215,11 @@ of them, across every transport**. Why you'll want it on:
   RouterOS identity/version and recent activity.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-live-feed.png" alt="Observability dashboard — live call feed" width="820" />
+  <img src="assets/screenshots/web/dashboard-live-feed.webp" alt="Observability dashboard — live call feed" width="820" />
 </div>
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-devices.png" alt="Observability dashboard — devices & connectivity" width="820" />
+  <img src="assets/screenshots/web/dashboard-devices.webp" alt="Observability dashboard — devices & connectivity" width="820" />
 </div>
 
 It also carries **Config Studio** (edit the config JSON with autocomplete + safe-apply
@@ -237,89 +237,89 @@ set a bearer token (`--dashboard-token`) to expose it safely.
 duration, risk annotation — secrets already `«redacted»`.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-live-feed-detail.png" alt="Live feed — call detail drawer" width="820" />
+  <img src="assets/screenshots/web/dashboard-live-feed-detail.webp" alt="Live feed — call detail drawer" width="820" />
 </div>
 
 **Clients.** Every DHCP lease / connected station across devices, with identity, traffic
 and last-seen.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-clients.png" alt="Clients" width="820" />
+  <img src="assets/screenshots/web/dashboard-clients.webp" alt="Clients" width="820" />
 </div>
 
 **RADIUS & User Manager.** Servers, sessions, profiles, limitations and vouchers.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-radius-um.png" alt="RADIUS & User Manager" width="820" />
+  <img src="assets/screenshots/web/dashboard-radius-um.webp" alt="RADIUS & User Manager" width="820" />
 </div>
 
 **Topology.** Live L2 map built from MNDP neighbour discovery.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-topology.png" alt="Topology map" width="820" />
+  <img src="assets/screenshots/web/dashboard-topology.webp" alt="Topology map" width="820" />
 </div>
 
 **Packets.** Packet captures started from the dashboard, with status and download.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-packets.png" alt="Packet capture" width="820" />
+  <img src="assets/screenshots/web/dashboard-packets.webp" alt="Packet capture" width="820" />
 </div>
 
 **Snapshots.** `/export`-based config snapshots kept locally — browse and diff any two.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-snapshots.png" alt="Config snapshots" width="820" />
+  <img src="assets/screenshots/web/dashboard-snapshots.webp" alt="Config snapshots" width="820" />
 </div>
 
 **Drift Guard.** Baseline vs. live config, with drift promoted or reconciled.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-drift-guard.png" alt="Drift Guard" width="820" />
+  <img src="assets/screenshots/web/dashboard-drift-guard.webp" alt="Drift Guard" width="820" />
 </div>
 
 **Change Plan.** Dry-run a batch of changes, review the exact commands, then apply under
 Safe Mode.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-changeplan.png" alt="Change plan / dry-run" width="820" />
+  <img src="assets/screenshots/web/dashboard-changeplan.webp" alt="Change plan / dry-run" width="820" />
 </div>
 
 **S3 Backups.** Off-device backup archive — upload, list, download, delete.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-s3-backup.png" alt="S3 backups" width="820" />
+  <img src="assets/screenshots/web/dashboard-s3-backup.webp" alt="S3 backups" width="820" />
 </div>
 
 **Backups.** Local backup files kept on the MCP host.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-local-backup.png" alt="Local backups" width="820" />
+  <img src="assets/screenshots/web/dashboard-local-backup.webp" alt="Local backups" width="820" />
 </div>
 
 **Modules.** The full tool catalog by module and risk annotation.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-modules.png" alt="Tool modules" width="820" />
+  <img src="assets/screenshots/web/dashboard-modules.webp" alt="Tool modules" width="820" />
 </div>
 
 **Config.** Config Studio — edit the config JSON with autocomplete, then safe-apply with
 auto-rollback.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-config.png" alt="Config Studio" width="820" />
+  <img src="assets/screenshots/web/dashboard-config.webp" alt="Config Studio" width="820" />
 </div>
 
 **Memory.** Knowledge graph of entities, relations and observations gathered from calls.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-memory.png" alt="Memory knowledge graph" width="820" />
+  <img src="assets/screenshots/web/dashboard-memory.webp" alt="Memory knowledge graph" width="820" />
 </div>
 
 **What's new.** Release notes for the running server version, shown on first launch after
 an upgrade.
 
 <div align="center">
-  <img src="assets/screenshots/dashboard-whats-new.png" alt="What's new — release notes" width="820" />
+  <img src="assets/screenshots/web/dashboard-whats-new.webp" alt="What's new — release notes" width="820" />
 </div>
 
 </details>
