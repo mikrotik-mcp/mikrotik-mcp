@@ -88,6 +88,23 @@ export const McpServerSettingsSchema = z.object({
    * surface lean and broadly compatible.
    */
   appViews: z.boolean().default(false),
+  /**
+   * How to treat tools the target device cannot run (see `src/core/capability.ts`).
+   *
+   * - `off` — never annotate or filter; the probe still runs for the dashboard.
+   * - `annotate` (default) — unsupported tools stay listed but their description
+   *   is prefixed with the reason, which is what the model reads when choosing.
+   * - `filter` — unsupported tools are omitted from `tools/list` entirely.
+   *
+   * `filter` is honoured only in single-device mode: with several devices the
+   * tool list is global while capabilities are per-device, so a tool unusable on
+   * one router may be essential on another. In multi-device mode it degrades to
+   * `annotate` with a warning.
+   *
+   * Independently of this setting, a tool declaring `requires` is always guarded
+   * at call time — listing behaviour is UX, the guard is the safety net.
+   */
+  capabilityGating: z.enum(["off", "annotate", "filter"]).default("annotate"),
 });
 export type McpServerSettings = z.infer<typeof McpServerSettingsSchema>;
 
@@ -591,6 +608,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     toolPageSize: pick("tool-page-size", "MIKROTIK_MCP__TOOL_PAGE_SIZE"),
     // `--app-views=false` / MIKROTIK_MCP__APP_VIEWS=false disables App-view metadata.
     appViews: appViewsEnv,
+    capabilityGating: pick("capability-gating", "MIKROTIK_MCP__CAPABILITY_GATING"),
   });
 
   // Read-only mode (boolean flag/env). A bare `--read-only` parses to "true".

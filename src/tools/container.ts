@@ -14,7 +14,14 @@
  */
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
-import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
+import {
+  WRITE_IDEMPOTENT,
+  WRITE,
+  READ,
+  DESTRUCTIVE,
+  defineTool,
+  withRequires,
+} from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import {
   whereClause,
@@ -43,7 +50,7 @@ const IDENTITY = {
   tag: z.string().optional().describe("Image tag to match (e.g. 'pihole') if no name"),
 };
 
-export const containerTools: ToolModule = [
+const containerToolsDefs: ToolModule = [
   // ── Containers ─────────────────────────────────────────────────────────────
   defineTool({
     name: "list_containers",
@@ -542,3 +549,10 @@ export const containerTools: ToolModule = [
     },
   }),
 ];
+
+// Containers need the `container` package AND device-mode permission; both are
+// probed once per device, so an unsupported router says so without a round-trip.
+export const containerTools: ToolModule = withRequires(
+  { packages: ["container"], deviceMode: "container", minVersion: "7.0" },
+  containerToolsDefs,
+);

@@ -11,8 +11,12 @@ import { containsRawParserError, indicatesFailure } from "./routeros";
 import { buildRecordsView } from "./routeros-parse";
 import { toolUiMeta, uiViewUri } from "./ui-meta";
 import type { UiLink } from "./ui-meta";
-import { resolvedTarget } from "./runtime";
+import { getConfig, resolvedTarget } from "./runtime";
 import type { DeviceDirectoryEntry } from "./runtime";
+import { explainUnmet } from "./capability";
+import type { ToolRequires } from "./capability";
+import { getCapabilities, peekCapabilities } from "./capability-cache";
+import { logger } from "../logger";
 import { riskOf } from "../observability/event";
 import { recordToolToMemory } from "../memory/auto-record";
 import { isRecording, recordToolCall } from "../observability/recorder";
@@ -191,6 +195,17 @@ export interface ToolDef<Shape extends ZodRawShape> {
    * Use for server-introspection tools that never contact a RouterOS device.
    */
   noDevice?: boolean;
+  /**
+   * What this tool needs from the device — a RouterOS version floor, a package,
+   * a wireless stack, a board, a device-mode permission.
+   *
+   * Omit it unless the tool genuinely cannot run everywhere; the large majority
+   * of the catalog is universal, and a spurious requirement hides a working tool.
+   * Declaring it does two things: the description is annotated when the device is
+   * known to be unsupported, and the call is guarded so an unsupported invocation
+   * returns a clear reason instead of a RouterOS parser error.
+   */
+  requires?: ToolRequires;
   /** Handler returning the result shown to the model (text, or text + structured data). */
   handler: (args: any, ctx: ToolContext) => Promise<HandlerOutput> | HandlerOutput;
 }
@@ -203,6 +218,8 @@ export interface RegisterableTool {
   description: string;
   /** Present when the tool renders an MCP App view. */
   ui?: UiLink;
+  /** Device requirements, if the tool declared any. */
+  requires?: ToolRequires;
   /**
    * The raw handler (pre-`device`-injection, pre-validation). Exposed so the
    * tool-gateway dispatcher (`invoke_tool`) can run any tool by name through its
@@ -213,6 +230,53 @@ export interface RegisterableTool {
   register: (server: McpServer, opts?: RegisterOptions) => void;
 }
 
+/** Warn once per process, not once per tool — 819 identical lines helps nobody. */
+let warnedMultiDeviceFilter = false;
+
+/**
+ * What listing-time gating should do for one tool.
+ *
+ * Returns `{hide}` to omit the tool entirely and `{prefix}` to prepend a reason
+ * to its description. **Both require an already-resolved probe**: tool
+ * descriptions are registered once at startup and cannot await I/O, so a cold
+ * cache yields `{}` and the tool lists exactly as it always did. That is the
+ * safe direction — a missing probe must never hide a working tool.
+ *
+ * Because of that, `annotate`/`filter` take effect on the *next* registration
+ * after a probe exists (a server reload), while the call-time guard works
+ * immediately. The guard is the safety net; this is presentation.
+ */
+export function gatingDecision(
+  requires: ToolRequires | undefined,
+  multiDevice: boolean,
+): { hide?: boolean; prefix?: string } {
+  if (!requires) return {};
+  const mode = getConfig().mcp.capabilityGating;
+  if (mode === "off") return {};
+
+  // A probe that hasn't resolved yet is "no information", never "unsupported".
+  const caps = peekCapabilities();
+  if (!caps) return {};
+
+  const unmet = explainUnmet(caps, requires);
+  if (!unmet) return {};
+
+  // `filter` is single-device only: with several routers the tool list is
+  // global while capabilities are per-device, so hiding a tool unsupported on
+  // the default device would remove it for every other device too.
+  if (mode === "filter") {
+    if (!multiDevice) return { hide: true };
+    if (!warnedMultiDeviceFilter) {
+      warnedMultiDeviceFilter = true;
+      logger.warn(
+        "capabilityGating=filter is ignored in multi-device mode (the tool list is global, " +
+          "capabilities are per-device) — falling back to annotate.",
+      );
+    }
+  }
+  return { prefix: `[unavailable on this device: ${unmet}]` };
+}
+
 export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): RegisterableTool {
   return {
     name: def.name,
@@ -221,6 +285,7 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
     annotations: def.annotations,
     inputSchema: def.inputSchema,
     ui: def.ui,
+    requires: def.requires,
     handler: def.handler,
     register(server: McpServer, opts: RegisterOptions = {}) {
       const { sendLog, deviceNames, deviceAliases, deviceDirectory, appViews } = opts;
@@ -259,6 +324,13 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
         : def.inputSchema;
 
       const risk = riskOf(def.annotations);
+
+      // Listing-time gating. Descriptions are fixed when the server starts and
+      // cannot await a probe, so this consults only an ALREADY-RESOLVED probe
+      // (`peekCapabilities`). A cold cache means no information — every tool
+      // lists normally, which is the safe direction. See `gatingDecision`.
+      const gate = gatingDecision(def.requires, multiDevice);
+      if (gate.hide) return; // `filter` mode, single device, known unsupported
 
       // For DANGEROUS (high-blast-radius, non-repeatable) tools, inject a
       // required `reason` field so the model must explain *why* it chose this
@@ -302,6 +374,21 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
         let errMsg: string | undefined;
         let hasStructured = false;
         try {
+          // Capability guard. Runs regardless of `capabilityGating` — listing
+          // behaviour is UX, this is the safety net that turns "bad command
+          // name" into a sentence naming what the device is missing. A cold
+          // cache probes once here and is shared by every concurrent caller.
+          if (def.requires) {
+            const unmet = explainUnmet(await getCapabilities(deviceName), def.requires);
+            if (unmet) {
+              const text = `${def.name} is not available on this device: ${unmet}.`;
+              ctx.error(text);
+              isErr = true;
+              errMsg = text;
+              outText = text;
+              return { content: [{ type: "text", text }], isError: true };
+            }
+          }
           const raw = await def.handler(rest, ctx);
           // Normalize: a plain string is just text; an object may also carry
           // `structuredContent` for an MCP App view.
@@ -387,7 +474,7 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
         def.name,
         {
           title: def.title,
-          description: def.description,
+          description: gate.prefix ? `${gate.prefix} ${def.description}` : def.description,
           inputSchema,
           annotations: { ...def.annotations, title: def.title },
           // When the tool has an MCP App view (explicit, or the auto records view
@@ -412,6 +499,19 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
 }
 
 export type ToolModule = RegisterableTool[];
+
+/**
+ * Apply one device requirement to every tool in a module.
+ *
+ * Whole modules share a requirement far more often than individual tools do —
+ * every `/container` tool needs the same package, every PoE tool the same
+ * hardware. Declaring it once at the module boundary keeps the requirement in a
+ * single place instead of repeating it across dozens of definitions where one
+ * omission silently loses the guard.
+ */
+export function withRequires(requires: ToolRequires, tools: ToolModule): ToolModule {
+  return tools.map((t) => (t.requires ? t : { ...t, requires }));
+}
 
 /** Register every tool from every module, returning the total count. */
 export function registerTools(

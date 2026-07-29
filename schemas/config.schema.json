@@ -131,7 +131,8 @@
         "allowedOrigins": "",
         "corsOrigins": "",
         "toolPageSize": 0,
-        "appViews": false
+        "appViews": false,
+        "capabilityGating": "annotate"
       },
       "type": "object",
       "properties": {
@@ -171,6 +172,11 @@
         "appViews": {
           "default": false,
           "type": "boolean"
+        },
+        "capabilityGating": {
+          "default": "annotate",
+          "type": "string",
+          "enum": ["off", "annotate", "filter"]
         }
       },
       "required": [
@@ -181,7 +187,8 @@
         "allowedOrigins",
         "corsOrigins",
         "toolPageSize",
-        "appViews"
+        "appViews",
+        "capabilityGating"
       ],
       "additionalProperties": false
     },

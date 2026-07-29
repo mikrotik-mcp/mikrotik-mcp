@@ -8,14 +8,21 @@
  */
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
-import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
+import {
+  WRITE_IDEMPOTENT,
+  WRITE,
+  READ,
+  DESTRUCTIVE,
+  defineTool,
+  withRequires,
+} from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { whereClause, looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
 import { redactSecrets } from "../utils";
 
 const NOT_AVAILABLE = "User Manager is not available on this device (package not installed).";
 
-export const userManagerTools: ToolModule = [
+const userManagerToolsDefs: ToolModule = [
   // ── SETTINGS `/user-manager` ──────────────────────────────────────────────
   defineTool({
     name: "get_user_manager_settings",
@@ -705,3 +712,9 @@ export const userManagerTools: ToolModule = [
     },
   }),
 ];
+
+// User Manager ships as a separate, optional package.
+export const userManagerTools: ToolModule = withRequires(
+  { packages: ["user-manager"] },
+  userManagerToolsDefs,
+);

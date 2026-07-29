@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import type { ToolModule } from "../core/registry";
-import { READ, defineTool } from "../core/registry";
+import { READ, defineTool, withRequires } from "../core/registry";
 import { looksLikeError, isEmpty, commandUnsupported } from "../core/routeros";
 
 /**
@@ -22,7 +22,7 @@ const NO_POE =
   "powered over Ethernet). If your device is PoE-powered, read its PoE-IN voltage/state with " +
   "get_system_health (`/system health`), not the PoE tools.";
 
-export const poeTools: ToolModule = [
+const poeToolsDefs: ToolModule = [
   defineTool({
     name: "get_poe_monitor",
     title: "Read PoE Interface Live Metrics",
@@ -93,3 +93,6 @@ export const poeTools: ToolModule = [
     },
   }),
 ];
+
+// PoE-out is a board feature, not an OS one — CHR and x86 have no PoE hardware.
+export const poeTools: ToolModule = withRequires({ routerBoard: true }, poeToolsDefs);
