@@ -22,6 +22,8 @@ import {
 import { getSafeModeManager } from "../ssh/safe-mode";
 import { MikroTikSSHClient } from "../ssh/client";
 import { toRequest } from "../rest/bridge";
+import { parseRecords } from "./routeros-parse";
+import type { ParsedRecords } from "./routeros-parse";
 import { RestHttpError, shouldFallbackToSsh } from "../rest/client";
 import type { DeviceConfig } from "../config";
 import { logger } from "../logger";
@@ -149,6 +151,110 @@ export async function executeMikrotikCommand(
   }
   ctx.info(`[${deviceName}] Executing MikroTik command: ${command}`);
   return runOnce(command, ctx.device, opts, ctx);
+}
+
+/**
+ * Execute a command and return it as **records** rather than console text.
+ *
+ * This is the structured entry point for tools written against typed data
+ * instead of scraped output. It is transport-independent by construction:
+ *
+ * - Over **REST**, the JSON reply is used directly (values coerced to strings,
+ *   so a tool cannot accidentally depend on `5` vs `"5"` and behave differently
+ *   per transport).
+ * - Over **SSH / MAC-Telnet**, the console text goes through the existing
+ *   `parseRecords`, exactly as the auto-records MCP App view already does.
+ *
+ * The point is that a tool built on this renders the same output either way —
+ * which is the property `tests/rest/parity.spec.ts` asserts.
+ *
+ * Prefer this for NEW read tools. Existing handlers keep using
+ * `executeMikrotikCommand`; there is no reason to churn 819 of them.
+ */
+export async function executeMikrotikJson(
+  command: string,
+  ctx: ToolContext,
+  opts?: { maxMs?: number },
+): Promise<ParsedRecords> {
+  const deviceName = resolveDeviceName(ctx.device);
+  const dc = getDevice(deviceName);
+  const safe = getSafeModeManager(deviceName);
+
+  // Safe Mode and non-REST devices have no JSON to offer — parse the text.
+  if (!safe.isActive && isRestDevice(dc)) {
+    const req = toRequest(command);
+    if (req) {
+      const json = await tryRestJson(command, dc, deviceName, ctx);
+      if (json !== null) return json;
+    }
+  }
+  return parseRecords(await executeMikrotikCommand(command, ctx, opts));
+}
+
+/**
+ * The REST half of {@link executeMikrotikJson} — returns records straight from
+ * JSON, or null to fall back. Mirrors {@link tryRest}'s fallback contract
+ * exactly, so the two entry points can never disagree about when REST is used.
+ */
+async function tryRestJson(
+  command: string,
+  dc: DeviceConfig,
+  name: string,
+  ctx: ToolContext,
+): Promise<ParsedRecords | null> {
+  const req = toRequest(command);
+  if (!req) {
+    ctx.restFallback = "no REST mapping for this command";
+    return null;
+  }
+  const client = createRestClient(dc);
+  if (!(await client.connect())) {
+    ctx.restFallback = client.lastError ?? "REST probe failed";
+    return null;
+  }
+  try {
+    const rows = await client.runJson(command);
+    ctx.transport = "rest";
+    ctx.restFallback = undefined;
+    return toRecords(rows);
+  } catch (e) {
+    if (!shouldFallbackToSsh(e)) {
+      ctx.transport = "rest";
+      throw e instanceof RestHttpError
+        ? new Error(`REST ${e.status} on '${name}': ${e.detail}`)
+        : e;
+    }
+    ctx.restFallback = e instanceof Error ? e.message : String(e);
+    return null;
+  } finally {
+    client.disconnect();
+  }
+}
+
+/**
+ * JSON rows → {@link ParsedRecords}. Every value becomes a string so the shape
+ * matches `parseRecords` exactly; a tool that switched on `typeof` would
+ * otherwise behave differently per transport, which is the whole class of bug
+ * this entry point exists to prevent.
+ */
+export function toRecords(rows: unknown): ParsedRecords {
+  const list = Array.isArray(rows) ? rows : rows && typeof rows === "object" ? [rows] : [];
+  const out = list.map((r, i) =>
+    Object.fromEntries([
+      // The console prints a row index and `parseRecords` surfaces it as `#`.
+      // REST has no equivalent, so synthesise it from position — without this a
+      // tool sees a different key set depending on the transport, which is
+      // precisely the divergence this entry point exists to prevent.
+      ["#", String(i)],
+      ...Object.entries(r as Record<string, unknown>)
+        .filter(([, v]) => v !== null && v !== undefined)
+        .map(([k, v]) => [k, typeof v === "string" ? v : String(v)] as const),
+    ]),
+  );
+  const columns: string[] = [];
+  for (const row of out)
+    for (const k of Object.keys(row)) if (!columns.includes(k)) columns.push(k);
+  return { format: out.length === 0 ? "empty" : "detail", columns, rows: out };
 }
 
 /**

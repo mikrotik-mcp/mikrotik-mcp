@@ -1,5 +1,12 @@
 # Transports
 
+> Two different things are called "transport" in this project. **This page is
+> about how an MCP client reaches the server.** How the server reaches a
+> _router_ — SSH, MAC-Telnet or the RouterOS REST API — is a separate axis,
+> documented in **[Configuration](./configuration.md#rest-api-routeros-79)**.
+> The dashboard labels them `mcp transport` and `device link` for the same
+> reason.
+
 The server speaks one of three MCP transports, selected with `--transport`
 (`MIKROTIK_MCP__TRANSPORT`). The default is `stdio`.
 

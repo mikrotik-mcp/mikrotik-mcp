@@ -67,6 +67,9 @@ Then just ask:
   bastion (`jumpVia`); commands, Safe Mode and file upload all ride the hop.
 - ⚡ **Connection pooling** — one persistent SSH session per device saves ~200-500 ms
   per command.
+- 🔀 **REST API, opt-in** — point a device at RouterOS 7.9+'s `/rest` for structured
+  JSON and real HTTP status codes, with automatic SSH fallback for anything REST
+  can't express. Per-device, off by default.
 
 ## Install
 

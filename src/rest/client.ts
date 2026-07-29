@@ -184,6 +184,29 @@ export class MikroTikRestClient {
     }
   }
 
+  /**
+   * Like {@link run}, but returns the parsed JSON reply instead of rendering it
+   * back to console text — for `executeMikrotikJson`, where the round-trip
+   * through text would only throw information away.
+   */
+  async runJson(command: string): Promise<unknown> {
+    if (!this.connected) throw new Error("Not connected to MikroTik device (REST)");
+
+    const req = toRequest(command);
+    if (!req) throw new RestUnmappableError(command);
+
+    const res = await this.request(req.method, req.path, req.query, req.body);
+    if (!res.ok) throw new RestHttpError(res.status, await readErrorDetail(res), command);
+
+    const text = await res.text();
+    if (!text.trim()) return [];
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`REST returned a non-JSON body for '${command}'`);
+    }
+  }
+
   /** No-op: HTTP holds no session. Present for {@link DeviceClient} parity. */
   disconnect(): void {
     this.connected = false;
