@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "flow_top_talkers",
+  "type": "object",
+  "properties": {
+    "dimension": {
+      "default": "source",
+      "description": "What to rank by",
+      "type": "string",
+      "enum": ["source", "destination", "conversation", "application"]
+    },
+    "window": {
+      "default": "1h",
+      "description": "How far back to look",
+      "type": "string",
+      "enum": ["5m", "15m", "1h", "6h", "24h"]
+    },
+    "limit": {
+      "default": 10,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 100
+    },
+    "address": {
+      "description": "Restrict to flows touching this address",
+      "type": "string"
+    }
+  },
+  "required": ["dimension", "window", "limit"],
+  "additionalProperties": false
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "start_flow_collector",
+  "type": "object",
+  "properties": {
+    "port": {
+      "description": "UDP port to listen on (defaults to the configured flows.port, 2055)",
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "additionalProperties": false
+}

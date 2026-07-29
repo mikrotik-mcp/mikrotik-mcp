@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "analyze_flows",
+  "type": "object",
+  "properties": {
+    "window": {
+      "default": "1h",
+      "description": "How far back to look",
+      "type": "string",
+      "enum": ["5m", "15m", "1h", "6h", "24h"]
+    },
+    "address": {
+      "description": "Focus the whole report on one address",
+      "type": "string"
+    },
+    "anomaly_ratio": {
+      "default": 3,
+      "description": "Flag a talker at this multiple of its baseline",
+      "type": "number",
+      "exclusiveMinimum": 0
+    }
+  },
+  "required": ["window", "anomaly_ratio"],
+  "additionalProperties": false
+}

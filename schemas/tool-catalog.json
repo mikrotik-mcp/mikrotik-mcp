@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "4.24.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 847,
+  "toolCount": 856,
   "tools": [
     {
       "name": "find_tools",
@@ -26052,6 +26052,261 @@
           }
         },
         "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_traffic_flow_settings",
+      "title": "Get Traffic Flow Settings",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Reads `/ip traffic-flow` — whether NetFlow/IPFIX export is enabled, which interfaces are sampled, the cache size and the active/inactive flow timeouts. Traffic Flow is the cheap, continuous alternative to the packet sniffer: it exports flow METADATA (who talked to whom, how much) and never any payload. To see where the flows are sent use list_traffic_flow_targets; to change these settings use set_traffic_flow_settings.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_traffic_flow_settings",
+      "title": "Set Traffic Flow Settings",
+      "risk": "write-idempotent",
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Configures `/ip traffic-flow` — enable/disable export, choose interfaces, and tune the flow cache and timeouts. Idempotent: setting the same values twice changes nothing. `active_flow_timeout` (default 30m) caps how long a long-lived flow is held before it is reported, so a lower value gives fresher data at the cost of more exports; `inactive_flow_timeout` (default 15s) is how quickly a finished flow is flushed. `cache_entries` bounds device memory — raise it on a busy router that reports dropped flows. Enabling export alone does nothing until a collector target exists (add_traffic_flow_target).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Turn flow export on or off",
+            "type": "boolean"
+          },
+          "interfaces": {
+            "description": "Interface list, or \"all\" (default). e.g. \"ether1,bridge\"",
+            "type": "string"
+          },
+          "cache_entries": {
+            "description": "Flow cache size, e.g. \"4k\", \"16k\" — bound on device memory",
+            "type": "string"
+          },
+          "active_flow_timeout": {
+            "description": "e.g. \"30m\" — report long flows sooner",
+            "type": "string"
+          },
+          "inactive_flow_timeout": {
+            "description": "e.g. \"15s\"",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_traffic_flow_targets",
+      "title": "List Traffic Flow Targets",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists the collectors the device exports flows to (`/ip traffic-flow target print`) — each target's destination address, port and NetFlow version. Use this to confirm the device is pointed at this MCP host before wondering why the Flows page is empty. To add one use add_traffic_flow_target.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_traffic_flow_target",
+      "title": "Add Traffic Flow Target",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Points the device at a flow collector (`/ip traffic-flow target add`) — normally THIS MCP host, so the flows land in the local collector and the Flows dashboard. `version` should be **9 or ipfix**: v5 is IPv4-only and has no template mechanism, so IPv6 flows are simply absent from it. The device will send flow metadata (addresses, ports, byte counts — never payload) to `dst_address` continuously, so point it somewhere you control. Start the local receiver first with start_flow_collector, or the exports go nowhere.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "dst_address": {
+            "type": "string",
+            "description": "Collector IP — the address of this MCP host as the router sees it"
+          },
+          "port": {
+            "default": 2055,
+            "description": "Collector UDP port",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "version": {
+            "default": "9",
+            "description": "Export version; prefer 9 or ipfix",
+            "type": "string",
+            "enum": ["1", "5", "9", "ipfix"]
+          },
+          "v9_template_refresh": {
+            "description": "Packets between template resends (v9/IPFIX)",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "v9_template_timeout": {
+            "description": "Time between template resends, e.g. \"30s\" — lower means faster first decode",
+            "type": "string"
+          }
+        },
+        "required": ["dst_address", "port", "version"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "remove_traffic_flow_target",
+      "title": "Remove Traffic Flow Target",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Removes a flow collector target (`/ip traffic-flow target remove`), stopping export to that address. Verifies the target exists first. Removing every target leaves flow export enabled but going nowhere — to stop collection entirely also set enabled=no with set_traffic_flow_settings.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "dst_address": {
+            "type": "string",
+            "description": "Collector address of the target to remove"
+          }
+        },
+        "required": ["dst_address"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "start_flow_collector",
+      "title": "Start Local Flow Collector",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Starts the MCP host's UDP collector so exported NetFlow/IPFIX packets are decoded and stored locally. Nothing on the router changes — this is the receiving half. Point the device at this host with add_traffic_flow_target (same port). Records are kept per the `flows` config (24 h raw, 30 d of 1-minute rollups by default) and contain no payload. Reports the listening port and current health counters; stop with stop_flow_collector.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "port": {
+            "description": "UDP port to listen on (defaults to the configured flows.port, 2055)",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "stop_flow_collector",
+      "title": "Stop Local Flow Collector",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Stops the local UDP flow collector and releases the port. Already-collected flows stay in the store and remain queryable; anything the device exports while stopped is lost. The device keeps exporting until you also remove its target (remove_traffic_flow_target).",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "flow_top_talkers",
+      "title": "Flow Top Talkers",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Ranks collected flows by bytes over a window — the direct answer to 'who is using my bandwidth'. Group by `source`, `destination`, `conversation` (an address pair) or `application` (well-known port naming). Needs the local collector running and the device exporting to it; if the result is empty the tool explains which of those is missing. For a fuller narrative including protocol mix and anomalies use analyze_flows.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "default": "source",
+            "description": "What to rank by",
+            "type": "string",
+            "enum": ["source", "destination", "conversation", "application"]
+          },
+          "window": {
+            "default": "1h",
+            "description": "How far back to look",
+            "type": "string",
+            "enum": ["5m", "15m", "1h", "6h", "24h"]
+          },
+          "limit": {
+            "default": 10,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 100
+          },
+          "address": {
+            "description": "Restrict to flows touching this address",
+            "type": "string"
+          }
+        },
+        "required": ["dimension", "window", "limit"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "analyze_flows",
+      "title": "Analyze Traffic Flows",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "A rendered traffic report over the collected flows: top talkers, busiest conversations with the applications inside them, protocol mix, and anomalies — talkers well above their own baseline from the preceding period, or ones never seen before. This is the tool to reach for when asked 'what is using the bandwidth', 'is anything unusual on the network', or 'what is that host doing'. Reads only the local flow store; no device command is issued.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "default": "1h",
+            "description": "How far back to look",
+            "type": "string",
+            "enum": ["5m", "15m", "1h", "6h", "24h"]
+          },
+          "address": {
+            "description": "Focus the whole report on one address",
+            "type": "string"
+          },
+          "anomaly_ratio": {
+            "default": 3,
+            "description": "Flag a talker at this multiple of its baseline",
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": ["window", "anomaly_ratio"],
         "additionalProperties": false
       }
     },

@@ -81,6 +81,7 @@ import { smsTools } from "./tool-sms";
 import { speedTestTools } from "./tool-speed-test";
 import { trafficGeneratorTools } from "./tool-traffic-generator";
 import { trafficMonitorTools } from "./tool-traffic-monitor";
+import { trafficFlowTools } from "./traffic-flow";
 import { bandwidthForecastTools } from "./bandwidth-forecast";
 import { wolTools } from "./tool-wol";
 import { openvpnTools } from "./openvpn";
@@ -1029,6 +1030,15 @@ export const moduleCatalog: ModuleInfo[] = [
     description:
       "Run scripts when interface traffic crosses a threshold (`/tool traffic-monitor`).",
     tools: trafficMonitorTools,
+  },
+  {
+    label: "Traffic Flow",
+    slug: "traffic-flow",
+    group: "Tools",
+    description:
+      "NetFlow/IPFIX export (`/ip traffic-flow`) plus the host-side collector and analytics: top " +
+      "talkers, conversations, application mix and anomalies — cheap continuous metadata, no payload.",
+    tools: trafficFlowTools,
   },
   {
     label: "Bandwidth Forecast",

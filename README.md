@@ -360,6 +360,8 @@ Higher-level workflows built on top of the per-scope tools:
   duplicate and dead rules, risk-scored, with one-click fixes.
 - **[Security Hardening](docs/security-hardening.md)** — per-category audit+remediate
   pairs; audits read-only, fixes dry-run + snapshot + Safe-Mode first.
+- **[Traffic Flow](docs/traffic-flow.md)** — NetFlow/IPFIX collection and continuous
+  top-talker / conversation / application analytics; flow metadata only, no payload.
 - **[Port-Scan Detection](docs/port-scan-detection.md)** · **[Packet Capture Studio](docs/packet-capture.md)** ·
   **[Discovery](docs/discovery.md)** · **[Config Studio](docs/config-studio.md)**.
 
@@ -420,6 +422,7 @@ Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_L
 | [Safe Mode](docs/safe-mode.md)                                      | Transactional changes                                       |
 | **[Cross-Device Transactions](docs/transactions.md)**               | Two-phase commit across several routers                     |
 | **[Change Plan & Dry-Run](docs/change-plan.md)**                    | Preview commands, apply with the exact diff + auto-rollback |
+| **[Traffic Flow](docs/traffic-flow.md)**                            | NetFlow/IPFIX collection + top-talker analytics             |
 | **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                      |
 | **[Security Hardening](docs/security-hardening.md)**                | Per-category audit+remediate, snapshot + Safe-Mode          |
 | **[VPN guide](docs/vpn-guide.md)**                                  | Every tunnel type + how to build it                         |

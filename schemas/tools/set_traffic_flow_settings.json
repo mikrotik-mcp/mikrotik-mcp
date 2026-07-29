@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "set_traffic_flow_settings",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "description": "Turn flow export on or off",
+      "type": "boolean"
+    },
+    "interfaces": {
+      "description": "Interface list, or \"all\" (default). e.g. \"ether1,bridge\"",
+      "type": "string"
+    },
+    "cache_entries": {
+      "description": "Flow cache size, e.g. \"4k\", \"16k\" — bound on device memory",
+      "type": "string"
+    },
+    "active_flow_timeout": {
+      "description": "e.g. \"30m\" — report long flows sooner",
+      "type": "string"
+    },
+    "inactive_flow_timeout": {
+      "description": "e.g. \"15s\"",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
