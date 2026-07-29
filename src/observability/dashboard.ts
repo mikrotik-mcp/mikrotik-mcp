@@ -158,6 +158,8 @@ import { VERSION } from "../version";
 import { driftRoutes } from "./drift-routes";
 import { txnRoutes } from "./txn-routes";
 import { flowRoutes } from "./flow-routes";
+import { rolloutRoutes } from "./rollout-routes";
+import { subscribeRollout } from "./rollout-hub";
 import { subscribeTxn } from "./txn-hub";
 import { alertRoutes } from "./alert-routes";
 import { clientError, logError } from "./http-error";
@@ -1586,6 +1588,9 @@ export async function runDashboard(
     const flowResp = await flowRoutes(req, url);
     if (flowResp) return flowResp;
 
+    const rolloutResp = await rolloutRoutes(req, url);
+    if (rolloutResp) return rolloutResp;
+
     // `getEventStore()` rather than the `db` binding below, which is declared
     // later in this function — alerting's rule preview replays stored events.
     const alertResp = await alertRoutes(req, url, getEventStore());
@@ -1911,9 +1916,11 @@ export async function runDashboard(
           // a second socket per page is exactly what the dashboard avoids.
           const unsubEvents = subscribe((e: ToolEvent) => send({ type: "event", event: e }));
           const unsubTxn = subscribeTxn((update) => send({ type: "txn", update }));
+          const unsubRollout = subscribeRollout((update) => send({ type: "rollout", update }));
           ws.data.unsub = () => {
             unsubEvents();
             unsubTxn();
+            unsubRollout();
           };
         }
         ws.send(JSON.stringify({ type: "hello", transport: transportLabel }));

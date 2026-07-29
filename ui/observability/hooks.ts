@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { withToken } from "./api";
-import type { LiveMode, ToolEvent, TxnUpdate } from "./types";
+import type { LiveMode, RolloutUpdate, ToolEvent, TxnUpdate } from "./types";
 
 // ── transaction updates ride the SAME socket ────────────────────────────────
 // The dashboard opens exactly one live stream; a second view that needs push
@@ -18,6 +18,18 @@ export function onTxnUpdate(fn: (u: TxnUpdate) => void): () => void {
 
 function emitTxn(update: TxnUpdate): void {
   for (const fn of txnListeners) fn(update);
+}
+
+const rolloutListeners = new Set<(u: RolloutUpdate) => void>();
+
+/** Subscribe to live fleet-rollout updates. Returns an unsubscribe function. */
+export function onRolloutUpdate(fn: (u: RolloutUpdate) => void): () => void {
+  rolloutListeners.add(fn);
+  return () => rolloutListeners.delete(fn);
+}
+
+function emitRollout(update: RolloutUpdate): void {
+  for (const fn of rolloutListeners) fn(update);
 }
 
 // ── live stream hook (Bun WebSocket, SSE fallback) ───────────────────────────
@@ -80,10 +92,11 @@ export function useLiveStream(
           const msg = JSON.parse(m.data) as {
             type: string;
             event?: ToolEvent;
-            update?: TxnUpdate;
+            update?: TxnUpdate | RolloutUpdate;
           };
           if (msg.type === "event" && msg.event) onEventRef.current(msg.event);
-          if (msg.type === "txn" && msg.update) emitTxn(msg.update);
+          if (msg.type === "txn" && msg.update) emitTxn(msg.update as TxnUpdate);
+          if (msg.type === "rollout" && msg.update) emitRollout(msg.update as RolloutUpdate);
         } catch {
           /* ignore */
         }
