@@ -78,10 +78,15 @@ for the full behavior.
 | CORS allow-list for `/mcp` | `--mcp-cors-origins`    | `MIKROTIK_MCP__CORS_ORIGINS`                      | _(MCP-host defaults)_ |
 | Read-only mode             | `--read-only`           | `MIKROTIK_READ_ONLY`                              | `false`               |
 | App Views                  | `--app-views`           | `MIKROTIK_MCP__APP_VIEWS`                         | `false`               |
+| Capability gating          | `--capability-gating`   | `MIKROTIK_MCP__CAPABILITY_GATING`                 | `annotate`            |
 
 Transport values are `stdio`, `streamable-http`, or `sse`. The HTTP bind host,
 port, and allow-lists only apply to the HTTP transports; they're ignored for
 `stdio`.
+
+Capability gating is `off`, `annotate` (default) or `filter` — how to treat tools
+the target device cannot run. `filter` is honoured only in single-device mode.
+See **[docs/capabilities.md](capabilities.md)**.
 
 `--mcp-cors-origins` controls CORS on the `/mcp` endpoint, needed by the
 **ChatGPT Apps** connector. Empty allows the built-in MCP-host origins

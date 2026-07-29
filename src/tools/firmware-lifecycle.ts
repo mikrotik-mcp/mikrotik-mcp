@@ -29,6 +29,7 @@ import type {
 import { DANGEROUS, READ, WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { listDevices, resolveDeviceName } from "../core/runtime";
+import { invalidateCapabilities } from "../core/capability-cache";
 import { Cmd, isEmpty, looksLikeError } from "../core/routeros";
 import { parseKeyValues, parseRecords } from "../core/routeros-parse";
 import { safe } from "../utils/safe-exec";
@@ -465,6 +466,11 @@ export const firmwareLifecycleTools: ToolModule = [
       // Execute the upgrade — this triggers a reboot
       ctx.info("Installing firmware update (device will reboot)");
       await executeMikrotikCommand("/system package update install", ctx);
+
+      // The version, and possibly the package set, are about to change — drop
+      // the cached capability probe so the next call reprobes rather than gating
+      // on facts from the previous firmware.
+      invalidateCapabilities(ctx.device);
 
       lines.push("  UPGRADE INITIATED — device is rebooting.");
       lines.push("  The device will be offline for 1-3 minutes.");

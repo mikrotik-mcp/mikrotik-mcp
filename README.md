@@ -406,6 +406,7 @@ Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_L
 | ------------------------------------------------------------------- | ----------------------------------------------------------- |
 | [Getting started](docs/getting-started.md)                          | Install, verify, first run                                  |
 | [Configuration](docs/configuration.md)                              | Every env var & flag                                        |
+| [Device capabilities](docs/capabilities.md)                         | What a router supports; how tools are gated on it           |
 | [Multiple devices](docs/multi-device.md)                            | Manage several routers; per-call targeting                  |
 | [Connecting clients](docs/connecting-clients.md)                    | Claude Desktop, stdio, HTTP                                 |
 | **[Observability](docs/observability.md)**                          | Real-time dashboard: live feed + analytics, SQLite          |

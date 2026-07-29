@@ -15,7 +15,7 @@ import { probeDevice } from "./capability-probe";
 import { unknownCapabilities } from "./capability";
 import type { Capabilities } from "./capability";
 import { createContext } from "./context";
-import { resolveDeviceName } from "./runtime";
+import { onConfigChanged, resolveDeviceName } from "./runtime";
 import { logger } from "../logger";
 
 /** How long a probe stays fresh. RouterOS facts change only on upgrade/reboot. */
@@ -112,6 +112,11 @@ export function invalidateCapabilities(deviceName?: string): void {
   }
   cache.delete(resolveDeviceName(deviceName));
 }
+
+// A config reload can repoint a device name at a different router entirely, so
+// every cached probe becomes untrustworthy. Cheaper to reprobe on next use than
+// to reason about which entries survived.
+onConfigChanged(() => invalidateCapabilities());
 
 /** Seed the cache directly (tests, and the dashboard's reprobe-then-reload path). */
 export function primeCapabilities(deviceName: string | undefined, caps: Capabilities): void {

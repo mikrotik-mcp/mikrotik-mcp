@@ -10,8 +10,30 @@ import { MikrotikConfigSchema } from "../config";
 
 let active: MikrotikConfig = MikrotikConfigSchema.parse({});
 
+/**
+ * Listeners fired whenever the active config is replaced.
+ *
+ * A subscription rather than a direct call because the things that care about a
+ * config change — the capability cache, for one — already import this module for
+ * device resolution, so importing them back would be a cycle. Registering from
+ * the dependent side keeps the dependency pointing one way.
+ */
+const configListeners = new Set<() => void>();
+
+/** Run `fn` whenever `setConfig` installs a new configuration. */
+export function onConfigChanged(fn: () => void): void {
+  configListeners.add(fn);
+}
+
 export function setConfig(cfg: MikrotikConfig): void {
   active = cfg;
+  for (const fn of configListeners) {
+    try {
+      fn();
+    } catch {
+      // A listener must never be able to break config installation.
+    }
+  }
 }
 
 export function getConfig(): MikrotikConfig {

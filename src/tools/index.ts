@@ -113,6 +113,7 @@ import { drDrillTools } from "./dr-drill";
 import { safeModeTools } from "./safe-mode";
 import { schedulerTools } from "./scheduler";
 import { serverPulseTools } from "./server-pulse";
+import { capabilityTools } from "./capability";
 import { threatFeedTools } from "./threat-feed";
 import { sstpTools } from "./sstp";
 import { switchSettingsTools } from "./switch-settings";
@@ -166,6 +167,16 @@ export const moduleCatalog: ModuleInfo[] = [
       "Server self-awareness: running version, update availability, release notes, " +
       "upgrade path, and server vitals. No RouterOS device is contacted.",
     tools: serverPulseTools,
+  },
+  {
+    label: "Device Capabilities",
+    slug: "device-capabilities",
+    group: "Discovery & Meta",
+    description:
+      "What a device can actually do: RouterOS version and channel, board and architecture, " +
+      "wireless stack, enabled packages, and device-mode permissions — the facts that decide " +
+      "which tools are usable on it.",
+    tools: capabilityTools,
   },
   // ── Universal primitive (the reliable dispatcher for any RouterOS command) ─
   {
