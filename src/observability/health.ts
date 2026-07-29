@@ -15,6 +15,7 @@ import { parseDisks, parseKeyValues, parseSystemResource } from "../core/routero
 import type { RouterDisk } from "../core/routeros-parse";
 import { createDeviceClient } from "../core/transport";
 import { logger } from "../logger";
+import { emitAlertEvent } from "../alerts/engine";
 import { parseNeighbors } from "./topology";
 import type { Neighbor } from "./topology";
 
@@ -214,7 +215,21 @@ export async function probeDevice(name: string, dc: DeviceConfig): Promise<Devic
   } finally {
     client.disconnect();
   }
+  // Emit only on a TRANSITION, never on every probe. The alert engine has its
+  // own dedup, but feeding it one "still offline" event per cycle would make
+  // every `for` window trivially satisfied and defeat the point of the setting.
+  const previous = statuses.get(name)?.reachable ?? null;
   statuses.set(name, status);
+  if (previous !== null && previous !== status.reachable) {
+    emitAlertEvent({
+      kind: "device_state",
+      to: status.reachable ? "online" : "offline",
+      device: name,
+      detail: status.reachable
+        ? `Reachable again${status.latencyMs != null ? ` (${status.latencyMs}ms)` : ""}`
+        : (status.error ?? "unreachable"),
+    });
+  }
   return status;
 }
 

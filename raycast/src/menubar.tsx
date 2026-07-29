@@ -21,7 +21,31 @@ import {
 import { withToken } from "./lib/api";
 import { RISK_COLOR, clock, ms, num, riskLabel } from "./lib/format";
 import { useApi } from "./lib/hooks";
-import type { DeviceInfo, DevicesPayload, Stats, ToolEvent } from "./lib/types";
+import type {
+  AlertSeverity,
+  AlertsPayload,
+  DeviceInfo,
+  DevicesPayload,
+  Stats,
+  ToolEvent,
+} from "./lib/types";
+
+/** Severity → menu-bar tint. Only the worst live severity is ever shown. */
+const ALERT_TINT: Record<AlertSeverity, Color> = {
+  low: Color.SecondaryText,
+  medium: Color.Yellow,
+  high: Color.Orange,
+  critical: Color.Red,
+};
+
+/** Mute a rule for an hour from the menu bar — the one action worth one click. */
+async function muteAlert(id: string): Promise<void> {
+  await fetch(withToken(`/api/alerts/rules/${encodeURIComponent(id)}`), {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ mute: "1h" }),
+  });
+}
 
 type Health = "good" | "warn" | "bad" | "unknown";
 const HEALTH_TINT: Record<Health, Color> = {
@@ -47,6 +71,7 @@ export default function Command() {
   const devicesQ = useApi<DevicesPayload>("/api/devices");
   const statsQ = useApi<Stats>("/api/stats?window=3600000&buckets=1");
   const eventsQ = useApi<{ events: ToolEvent[] }>("/api/events?limit=6");
+  const alertsQ = useApi<AlertsPayload>("/api/alerts");
 
   const devices = devicesQ.data?.devices ?? [];
   const enabled = devices.filter((d) => !d.disabled);
@@ -58,6 +83,12 @@ export default function Command() {
   const total = enabled.length;
   const stats = statsQ.data;
   const events = eventsQ.data?.events ?? [];
+  const firing = alertsQ.data?.active ?? [];
+  // The menu-bar icon reports the WORST live severity. A menu bar has one glyph;
+  // spending it on anything less than the most urgent thing wastes it.
+  const worst: AlertSeverity | null = (["critical", "high", "medium", "low"] as const).find((s) =>
+    firing.some((a) => a.severity === s),
+  ) ?? null;
   const unreachable = !!devicesQ.error && !devicesQ.data;
 
   const alerts = offline.length + hot.length;
@@ -118,14 +149,34 @@ export default function Command() {
       // only updated when the dropdown was opened interactively. Keep-previous-data
       // means the title stays stable during the refresh, so there is no flicker.
       isLoading={devicesQ.isLoading || statsQ.isLoading || eventsQ.isLoading}
-      icon={{ source: Icon.Wifi, tintColor: HEALTH_TINT[health] }}
+      icon={
+        worst
+          ? { source: Icon.Bell, tintColor: ALERT_TINT[worst] }
+          : { source: Icon.Wifi, tintColor: HEALTH_TINT[health] }
+      }
       title={title}
       tooltip={
         unreachable
           ? "MikroTik MCP — dashboard unreachable"
-          : `MikroTik MCP — ${online.length}/${total} online`
+          : worst
+            ? `MikroTik MCP — ${firing.length} alert${firing.length === 1 ? "" : "s"} firing (${worst})`
+            : `MikroTik MCP — ${online.length}/${total} online`
       }
     >
+      {firing.length > 0 && (
+        <MenuBarExtra.Section title={`Firing (${firing.length})`}>
+          {firing.map((a) => (
+            <MenuBarExtra.Item
+              key={a.id}
+              icon={{ source: Icon.Bell, tintColor: ALERT_TINT[a.severity] }}
+              title={a.description ?? a.id}
+              subtitle={a.severity}
+              onAction={() => void muteAlert(a.id)}
+              tooltip="Mute this alert for 1 hour"
+            />
+          ))}
+        </MenuBarExtra.Section>
+      )}
       {unreachable ? (
         <MenuBarExtra.Section title="Dashboard">
           <MenuBarExtra.Item

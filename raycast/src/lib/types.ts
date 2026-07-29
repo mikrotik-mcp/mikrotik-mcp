@@ -113,6 +113,30 @@ export interface SSHPoolPayload {
     dead: boolean;
   }>;
 }
+export type AlertSeverity = "low" | "medium" | "high" | "critical";
+
+/** One alert rule with its live state (`GET /api/alerts`). */
+export interface AlertRuleRow {
+  id: string;
+  description?: string;
+  when: Record<string, unknown>;
+  severity: AlertSeverity;
+  channels: string[];
+  for?: string;
+  cooldown: string;
+  enabled: boolean;
+  mutedUntil?: number;
+  status: "clear" | "pending" | "firing" | "suppressed" | "muted" | "disabled";
+  since: number;
+}
+
+export interface AlertsPayload {
+  configured: boolean;
+  rules: AlertRuleRow[];
+  active: AlertRuleRow[];
+  channels: Record<string, { url?: string; method?: string; configured: boolean }>;
+}
+
 /** What a capability probe learned about one device (`GET /api/capabilities`). */
 export interface CapabilitiesJson {
   version: string | null;

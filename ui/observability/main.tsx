@@ -69,6 +69,7 @@ import { JsonView } from "./highlight";
 import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
 import { MemoryView } from "./memory";
+import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
 import { ReleasesView } from "./releases";
 import { CapsmanView } from "./capsman";
@@ -123,6 +124,7 @@ type ViewId =
   | "modules"
   | "config"
   | "memory"
+  | "alerts"
   | "releases"
   | "capsman"
   | "feed";
@@ -141,6 +143,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "modules", label: "Modules", sub: "Enable/disable tool modules — curate the surface" },
   { id: "config", label: "Config", sub: "Effective configuration & safe editor" },
   { id: "memory", label: "Memory", sub: "Knowledge graph — entities, relations & observations" },
+  {
+    id: "alerts",
+    label: "Alerts",
+    sub: "Rules that reach out — Slack, Discord, ntfy, webhook, MCP",
+  },
   { id: "releases", label: "Releases", sub: "Update, downgrade & read every version's notes" },
   { id: "capsman", label: "CAPsMAN", sub: "Wi-Fi fabric: coverage, weak signal, load, FT & HA" },
   { id: "feed", label: "Live Feed", sub: "Every tool call, in real time" },
@@ -203,6 +210,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   modules: MONO_ACCENT,
   config: MONO_ACCENT,
   memory: MONO_ACCENT,
+  alerts: MONO_ACCENT,
   releases: MONO_ACCENT,
   capsman: MONO_ACCENT,
   feed: MONO_ACCENT,
@@ -326,6 +334,15 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Entities are created by the AI via MCP tools — you can browse and delete them here.",
       "The graph visualization shows entities as circles and relations as directed edges; click a node to inspect it.",
       "Change the database path to switch between different knowledge bases.",
+    ],
+  },
+  alerts: {
+    what: "Rules that watch this server and reach out when something changes — an error spike, a device going dark, a destructive call on a named router — delivered to Slack, Discord, ntfy, a webhook, or the MCP client itself.",
+    tips: [
+      "Firing alerts are pinned to the top with a Mute action — that is the only thing that matters when you open this page under pressure.",
+      "`for` stops a two-second blip paging anyone; `cooldown` bounds re-fires. A link bouncing ten times inside the cooldown produces exactly one alert and one resolve.",
+      "Test a channel before relying on it — a silently broken webhook is worse than none.",
+      "Webhook URLs are never shown in full: the path is the credential, so only scheme and host are displayed.",
     ],
   },
   releases: {
@@ -608,6 +625,12 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <circle cx="18" cy="14" r="2" />
         <circle cx="12" cy="20" r="2" />
         <path d="M12 8v-0.5M12 8 7.2 12.5M12 8 16.8 12.5M6 16 10.5 18.5M18 16 13.5 18.5" />
+      </>
+    ),
+    alerts: (
+      <>
+        <path d="M12 4a5 5 0 0 0-5 5v3.5L5.5 15h13L17 12.5V9a5 5 0 0 0-5-5z" />
+        <path d="M10 18a2 2 0 0 0 4 0" />
       </>
     ),
     releases: (
@@ -907,6 +930,28 @@ function App(): ReactNode {
     void loadCapabilities();
   }, [loadCapabilities]);
 
+  // Firing-alert count for the nav badge. Polled rather than streamed: alerts
+  // change on the order of minutes, and a dedicated socket message type for a
+  // single integer is not worth the protocol surface.
+  const [firingCount, setFiringCount] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const poll = async (): Promise<void> => {
+      try {
+        const res = await api<{ active?: unknown[] }>("/api/alerts");
+        if (live) setFiringCount(res.active?.length ?? 0);
+      } catch {
+        /* alerting may not be configured — the badge simply stays hidden */
+      }
+    };
+    void poll();
+    const t = setInterval(() => void poll(), 15_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
+
   const probeCapabilities = useCallback(async (name: string) => {
     const res = await postJson<{
       device?: string;
@@ -1160,6 +1205,18 @@ function App(): ReactNode {
             >
               <NavIcon name={v.id} />
               <span className="truncate">{v.label}</span>
+              {v.id === "alerts" &&
+                firingCount > 0 && (
+                  // Visible from every page, not just the Alerts one — an alert
+                  // nobody navigates to is an alert nobody sees.
+                  <span
+                    key={firingCount}
+                    className="bg-destructive text-background animate-in zoom-in-50 ml-auto rounded-full px-1.5 py-0.5 text-[10px] tabular-nums"
+                    title={`${firingCount} alert${firingCount === 1 ? "" : "s"} firing`}
+                  >
+                    {firingCount}
+                  </span>
+                )}
               {v.id === "feed" &&
                 feed.length > 0 && (
                   // `key={feed.length}` remounts the badge on every change so the
@@ -1637,6 +1694,7 @@ function App(): ReactNode {
 
         {/* ── Memory ── */}
         {view === "memory" && <MemoryView />}
+        {view === "alerts" && <AlertsView />}
 
         {/* ── Releases & Updates ── */}
         {view === "releases" && <ReleasesView />}

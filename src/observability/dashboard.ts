@@ -156,6 +156,7 @@ import {
 import { isMacTelnetDevice } from "../core/transport";
 import { VERSION } from "../version";
 import { driftRoutes } from "./drift-routes";
+import { alertRoutes } from "./alert-routes";
 import { clientError, logError } from "./http-error";
 import { closeMemoryStore, memoryRoutes } from "./memory-routes";
 
@@ -1575,6 +1576,11 @@ export async function runDashboard(
 
     const driftResp = await driftRoutes(req, url);
     if (driftResp) return driftResp;
+
+    // `getEventStore()` rather than the `db` binding below, which is declared
+    // later in this function — alerting's rule preview replays stored events.
+    const alertResp = await alertRoutes(req, url, getEventStore());
+    if (alertResp) return alertResp;
 
     const memoryResp = await memoryRoutes(req, url);
     if (memoryResp) return memoryResp;
