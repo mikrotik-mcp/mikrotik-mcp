@@ -14,15 +14,17 @@ import { logger } from "../logger";
 import { deliver } from "./channels";
 import type { AlertNotification, ChannelConfig, DeliveryResult } from "./channels";
 import {
+  absenceMet,
   eventMet,
   initialState,
+  isAbsenceTrigger,
   isEventTrigger,
   isMetricTrigger,
   metricMet,
   parseDuration,
   step,
 } from "./model";
-import type { AlertEvent, AlertRule, AlertState, MetricSample } from "./model";
+import type { AbsenceTriggerT, AlertEvent, AlertRule, AlertState, MetricSample } from "./model";
 import { openAlertStore, toAlertRecord } from "./store";
 import type { AlertRecord, AlertStore } from "./store";
 
@@ -141,6 +143,36 @@ export class AlertEngine {
   /** True when any rule needs metric sampling — lets the timer skip the work. */
   hasMetricRules(): boolean {
     return this.rules.some((r) => isMetricTrigger(r.when));
+  }
+
+  /**
+   * Evaluate every `absence` rule.
+   *
+   * `lastSeen` answers "when did this last happen", returning `undefined` for
+   * never. It must be backed by something **persistent** — an in-memory tally
+   * seeded empty would report every subject as absent the moment the process
+   * restarts, firing every absence rule at once.
+   */
+  async sampleAbsence(
+    lastSeen: (t: AbsenceTriggerT) => Promise<number | undefined>,
+    now = this.now(),
+  ): Promise<void> {
+    try {
+      for (const rule of this.rules) {
+        if (!isAbsenceTrigger(rule.when)) continue;
+        // Sequential rather than parallel: the lookups hit the same two
+        // databases, and a handful of absence rules is not worth the fan-out.
+        const seen = await lastSeen(rule.when);
+        this.advance(rule, absenceMet(rule.when, seen, now), undefined);
+      }
+    } catch (e) {
+      logger.debug(`[alerts] absence sample failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /** True when any rule needs absence sampling. */
+  hasAbsenceRules(): boolean {
+    return this.rules.some((r) => isAbsenceTrigger(r.when));
   }
 
   /** Run one rule's machine and enqueue whatever it decided. */

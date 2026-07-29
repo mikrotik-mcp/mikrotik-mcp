@@ -67,7 +67,19 @@ case-insensitive.
 
 ```jsonc
 { "absence": "snapshot", "within": "24h" }
+{ "absence": "tool_call", "within": "1h", "device": ["core-rtr"] }
+{ "absence": "device_seen", "within": "10m" }
 ```
+
+`absence` is one of `tool_call` (nothing in the event log), `snapshot` (no config
+snapshot taken) or `device_seen` (no _successful_ health probe — a failing probe
+is exactly what this watches for). Evaluated on the same 30-second tick as
+`metric` rules.
+
+Last-seen is read from durable storage — the event log, the snapshot database,
+the live health cache — never from an in-memory tally. That matters: a tally
+seeded empty would report everything as absent the instant the server restarts,
+and every absence rule would fire at once on boot.
 
 ## Timing: `for` and `cooldown`
 

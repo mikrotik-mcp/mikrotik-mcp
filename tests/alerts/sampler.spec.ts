@@ -162,13 +162,106 @@ describe("metric rules fire and resolve over successive ticks", () => {
   });
 });
 
-describe("sampleAlertsOnce", () => {
-  test("is a no-op with no engine installed", () => {
-    setAlertEngine();
-    expect(() => sampleAlertsOnce()).not.toThrow();
+describe("absence rules", () => {
+  const absenceRule = (over: Record<string, unknown> = {}): AlertRule =>
+    AlertRuleSchema.parse({
+      id: "no-snapshot",
+      when: { absence: "snapshot", within: "24h" },
+      channels: ["mcp"],
+      ...over,
+    });
+
+  test("fires when the subject has not been seen inside the window", async () => {
+    const fired: string[] = [];
+    const now = 48 * 3_600_000;
+    const engine = new AlertEngine({
+      rules: [absenceRule()],
+      channels: { mcp: {} },
+      now: () => now,
+      onAlert: (n) => fired.push(n.ruleId),
+    });
+    // Last snapshot 48h ago, window is 24h.
+    await engine.sampleAbsence(async () => 0, now);
+    expect(fired).toEqual(["no-snapshot"]);
   });
 
-  test("is a no-op when no rule needs metric sampling", () => {
+  test("stays quiet while the subject is inside the window", async () => {
+    const fired: string[] = [];
+    const now = 48 * 3_600_000;
+    const engine = new AlertEngine({
+      rules: [absenceRule()],
+      channels: { mcp: {} },
+      now: () => now,
+      onAlert: (n) => fired.push(n.ruleId),
+    });
+    await engine.sampleAbsence(async () => now - 3_600_000, now);
+    expect(fired).toEqual([]);
+  });
+
+  test("resolves once the subject reappears", async () => {
+    const fired: string[] = [];
+    let now = 48 * 3_600_000;
+    const engine = new AlertEngine({
+      rules: [absenceRule()],
+      channels: { mcp: {} },
+      now: () => now,
+      onAlert: (n) => fired.push(`${n.kind}:${n.ruleId}`),
+    });
+    await engine.sampleAbsence(async () => 0, now);
+    expect(fired).toEqual(["fire:no-snapshot"]);
+
+    now += 60_000;
+    const seenNow = now;
+    await engine.sampleAbsence(async () => seenNow, now);
+    expect(fired).toEqual(["fire:no-snapshot", "resolve:no-snapshot"]);
+  });
+
+  test("never-seen counts as absent", async () => {
+    const fired: string[] = [];
+    const engine = new AlertEngine({
+      rules: [absenceRule()],
+      channels: { mcp: {} },
+      now: () => 0,
+      onAlert: (n) => fired.push(n.ruleId),
+    });
+    await engine.sampleAbsence(async () => undefined, 0);
+    expect(fired).toEqual(["no-snapshot"]);
+  });
+
+  test("a lookup that rejects does not escape the tick", async () => {
+    const engine = new AlertEngine({ rules: [absenceRule()], channels: {} });
+    // Sampling runs on a timer; an escaping rejection would kill the interval.
+    await expect(
+      engine.sampleAbsence(async () => {
+        throw new Error("db gone");
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  test("metric rules are untouched by absence sampling", async () => {
+    const fired: string[] = [];
+    const engine = new AlertEngine({
+      rules: [metricRule()],
+      channels: { mcp: {} },
+      onAlert: (n) => fired.push(n.ruleId),
+    });
+    await engine.sampleAbsence(async () => undefined);
+    expect(fired).toEqual([]);
+  });
+
+  test("hasAbsenceRules gates the work", () => {
+    expect(new AlertEngine({ rules: [metricRule()], channels: {} }).hasAbsenceRules()).toBe(false);
+    expect(new AlertEngine({ rules: [absenceRule()], channels: {} }).hasAbsenceRules()).toBe(true);
+  });
+});
+
+describe("sampleAlertsOnce", () => {
+  test("is a no-op with no engine installed", async () => {
+    setAlertEngine();
+    await expect(sampleAlertsOnce()).resolves.toBeUndefined();
+  });
+
+  test("is a no-op when no rule needs metric sampling", async () => {
     let asked = false;
     const engine = new AlertEngine({
       rules: [AlertRuleSchema.parse({ id: "e", when: { event: "drift" }, channels: ["mcp"] })],
@@ -181,7 +274,7 @@ describe("sampleAlertsOnce", () => {
       original(fn);
     };
     setAlertEngine(engine);
-    sampleAlertsOnce();
+    await sampleAlertsOnce();
     expect(asked).toBe(false);
   });
 });
