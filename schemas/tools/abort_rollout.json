@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "abort_rollout",
+  "type": "object",
+  "properties": {
+    "rollout_id": {
+      "type": "string",
+      "description": "Rollout id from start_rollout"
+    },
+    "reason": {
+      "description": "Recorded in the rollout history",
+      "type": "string"
+    }
+  },
+  "required": ["rollout_id"],
+  "additionalProperties": false
+}

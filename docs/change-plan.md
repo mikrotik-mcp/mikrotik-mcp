@@ -89,3 +89,10 @@ plan_changes script="<my changes>"     # review the plan + warnings
 apply_plan   script="<my changes>"      # confirm=false → see the exact diff, reverted
 apply_plan   script="<my changes>" confirm=true   # commit (auto-reverts on lock-out)
 ```
+
+## Across the fleet
+
+`apply_plan` changes **one** device. To roll the same commands out across many —
+canary first, a health gate and soak between waves, and automatic revert of
+everything already changed if a gate fails — see
+**[Staged Fleet Rollout](./fleet-rollout.md)** (`plan_rollout` / `start_rollout`).

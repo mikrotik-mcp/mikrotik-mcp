@@ -113,6 +113,7 @@ import { routingTableTools } from "./routing-table";
 import { drDrillTools } from "./dr-drill";
 import { safeModeTools } from "./safe-mode";
 import { txnTools } from "./txn";
+import { rolloutTools } from "./rollout";
 import { schedulerTools } from "./scheduler";
 import { serverPulseTools } from "./server-pulse";
 import { capabilityTools } from "./capability";
@@ -1178,6 +1179,15 @@ export const moduleCatalog: ModuleInfo[] = [
       "Chaos engineering: rehearse a failure in Safe Mode (disable a WAN/tunnel/route), verify the " +
       "backup path with a ping, then auto-revert — proving failover works.",
     tools: drDrillTools,
+  },
+  {
+    label: "Fleet Rollout",
+    slug: "rollout",
+    group: "System & Ops",
+    description:
+      "Apply one change across N routers as canary → wave → fleet, with a health gate and soak " +
+      "between waves and automatic revert of everything already changed on the first failure.",
+    tools: rolloutTools,
   },
   {
     label: "Change Plan",

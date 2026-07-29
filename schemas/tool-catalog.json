@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "4.24.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 856,
+  "toolCount": 860,
   "tools": [
     {
       "name": "find_tools",
@@ -29690,6 +29690,266 @@
           }
         },
         "required": ["target_type", "target", "verify_host", "ping_count", "confirm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "plan_rollout",
+      "title": "Plan a Staged Fleet Rollout",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Previews a fleet-wide change WITHOUT touching anything: which devices are selected, how they split into canary → wave → fleet, the exact commands each will run, and a rough duration. This is the tool to call before start_rollout, and the output is what a human should approve. `targets` is an explicit device list or a selector (`all`, `tags`, `versionBelow`, `exclude`). Put the router you reach the others THROUGH last in an explicit list — wave order follows the order given. Completely side-effect-free: no device is contacted.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "commands": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "RouterOS commands to apply to every device (array, or newline-separated)"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "all": {
+                    "description": "Every configured, enabled device",
+                    "type": "boolean"
+                  },
+                  "tags": {
+                    "description": "Devices carrying ALL of these config tags",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "versionBelow": {
+                    "description": "Devices whose RouterOS version is below this, e.g. \"7.14\" (uses the capability cache)",
+                    "type": "string"
+                  },
+                  "exclude": {
+                    "description": "Device names to leave out — composable",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            ],
+            "description": "Device names, or a selector like {\"tags\":[\"branch\"]}"
+          },
+          "strategy": {
+            "type": "object",
+            "properties": {
+              "canary": {
+                "description": "Devices in wave 1 (default 1)",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "wavePercent": {
+                "description": "Percent of the remaining devices in wave 2 (default 25)",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "soakSeconds": {
+                "description": "Wait after each wave's health check before continuing (default 30)",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "onFailure": {
+                "description": "What to do when a wave's gate fails (default halt-and-revert)",
+                "type": "string",
+                "enum": ["halt-and-revert", "halt-and-hold", "continue"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "label": {
+            "description": "What this change is, e.g. \"ntp servers\"",
+            "type": "string"
+          }
+        },
+        "required": ["commands", "targets"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "start_rollout",
+      "title": "Start a Staged Fleet Rollout",
+      "risk": "dangerous",
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "description": "Applies a change across the whole selection as canary → wave → fleet, with a health gate and a soak between waves. Each device is snapshotted, changed inside Safe Mode, verified still reachable, and only then committed. The gate checks the devices just changed AND the ones not yet touched — a change that breaks the wider network shows up as an untouched router going dark, which no per-device check sees. On failure the default (`halt-and-revert`) restores every device this rollout already changed, newest first, and skips the rest; `halt-and-hold` stops and changes nothing back; `continue` presses on and reports the failures. High blast radius — run plan_rollout first and show a human the output. Returns a rollout id; follow it with rollout_status, stop it with abort_rollout.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "commands": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "RouterOS commands to apply to every device"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "all": {
+                    "description": "Every configured, enabled device",
+                    "type": "boolean"
+                  },
+                  "tags": {
+                    "description": "Devices carrying ALL of these config tags",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "versionBelow": {
+                    "description": "Devices whose RouterOS version is below this, e.g. \"7.14\" (uses the capability cache)",
+                    "type": "string"
+                  },
+                  "exclude": {
+                    "description": "Device names to leave out — composable",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "strategy": {
+            "type": "object",
+            "properties": {
+              "canary": {
+                "description": "Devices in wave 1 (default 1)",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "wavePercent": {
+                "description": "Percent of the remaining devices in wave 2 (default 25)",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "soakSeconds": {
+                "description": "Wait after each wave's health check before continuing (default 30)",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "onFailure": {
+                "description": "What to do when a wave's gate fails (default halt-and-revert)",
+                "type": "string",
+                "enum": ["halt-and-revert", "halt-and-hold", "continue"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "label": {
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "Must be true to execute — false returns the plan instead",
+            "type": "boolean"
+          }
+        },
+        "required": ["commands", "targets", "confirm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rollout_status",
+      "title": "Rollout Status",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Reports the state of a rollout — current wave, per-device stage (pending / applied / failed / reverted / skipped), and every gate result so far. Omit `rollout_id` to list the rollouts still in flight. Reads local state only; no device is contacted.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "rollout_id": {
+            "description": "Rollout id from start_rollout",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "abort_rollout",
+      "title": "Abort a Rollout",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Stops a rollout now and restores every device it already changed, newest first — unlike a gate failure this is unconditional, so it reverts even when the rollout was started with `onFailure=halt-and-hold`. Devices not yet touched are simply skipped. If a revert itself fails the report names the device and the snapshot to restore it from.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "rollout_id": {
+            "type": "string",
+            "description": "Rollout id from start_rollout"
+          },
+          "reason": {
+            "description": "Recorded in the rollout history",
+            "type": "string"
+          }
+        },
+        "required": ["rollout_id"],
         "additionalProperties": false
       }
     },

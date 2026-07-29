@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "plan_rollout",
+  "type": "object",
+  "properties": {
+    "commands": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "RouterOS commands to apply to every device (array, or newline-separated)"
+    },
+    "targets": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "all": {
+              "description": "Every configured, enabled device",
+              "type": "boolean"
+            },
+            "tags": {
+              "description": "Devices carrying ALL of these config tags",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "versionBelow": {
+              "description": "Devices whose RouterOS version is below this, e.g. \"7.14\" (uses the capability cache)",
+              "type": "string"
+            },
+            "exclude": {
+              "description": "Device names to leave out — composable",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Device names, or a selector like {\"tags\":[\"branch\"]}"
+    },
+    "strategy": {
+      "type": "object",
+      "properties": {
+        "canary": {
+          "description": "Devices in wave 1 (default 1)",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "wavePercent": {
+          "description": "Percent of the remaining devices in wave 2 (default 25)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "soakSeconds": {
+          "description": "Wait after each wave's health check before continuing (default 30)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "onFailure": {
+          "description": "What to do when a wave's gate fails (default halt-and-revert)",
+          "type": "string",
+          "enum": ["halt-and-revert", "halt-and-hold", "continue"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "label": {
+      "description": "What this change is, e.g. \"ntp servers\"",
+      "type": "string"
+    }
+  },
+  "required": ["commands", "targets"],
+  "additionalProperties": false
+}

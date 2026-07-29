@@ -354,6 +354,9 @@ Higher-level workflows built on top of the per-scope tools:
 - **[Cross-Device Transactions](docs/transactions.md)** — coordinate Safe Mode across
   several routers: prepare, verify while still uncommitted, then commit everywhere or
   roll back everywhere.
+- **[Staged Fleet Rollout](docs/fleet-rollout.md)** — apply one change as canary → wave →
+  fleet with a health gate and soak between waves, reverting everything already changed
+  on the first failure.
 - **[Config Snapshots](docs/config-snapshots.md)** — store `/export` snapshots and
   time-travel diff any two, or one against the live device.
 - **[Firewall Audit](docs/firewall-audit.md)** — find shadowed, broad, missing-default-drop,
@@ -421,6 +424,7 @@ Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_L
 | **[Observability](docs/observability.md)**                          | Real-time dashboard: live feed + analytics, SQLite          |
 | [Safe Mode](docs/safe-mode.md)                                      | Transactional changes                                       |
 | **[Cross-Device Transactions](docs/transactions.md)**               | Two-phase commit across several routers                     |
+| **[Staged Fleet Rollout](docs/fleet-rollout.md)**                   | Canary → wave → fleet with health gates and auto-revert     |
 | **[Change Plan & Dry-Run](docs/change-plan.md)**                    | Preview commands, apply with the exact diff + auto-rollback |
 | **[Traffic Flow](docs/traffic-flow.md)**                            | NetFlow/IPFIX collection + top-talker analytics             |
 | **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                      |

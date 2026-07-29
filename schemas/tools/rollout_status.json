@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rollout_status",
+  "type": "object",
+  "properties": {
+    "rollout_id": {
+      "description": "Rollout id from start_rollout",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
