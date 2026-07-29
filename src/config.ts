@@ -26,6 +26,9 @@ export const DEFAULT_DASHBOARD_DB = join(homedir(), ".mikrotik-mcp", "events.db"
  */
 export const DEFAULT_SNAPSHOT_DB = join(homedir(), ".mikrotik-mcp", "snapshots.db");
 
+/** Default SQLite path for collected NetFlow/IPFIX records. */
+export const DEFAULT_FLOWS_DB = join(homedir(), ".mikrotik-mcp", "flows.db");
+
 /**
  * Default knowledge-graph memory DB: `~/.mikrotik-mcp/memory.db`. Persists
  * entities, relations and observations across sessions so the AI builds
@@ -266,6 +269,31 @@ export const AlertsConfigSchema = z.object({
 });
 export type AlertsConfig = z.infer<typeof AlertsConfigSchema>;
 
+/**
+ * Traffic Flow collection. Opt-in: nothing binds a UDP port unless `enabled` is
+ * set (or `start_flow_collector` is called), and the store is only opened then.
+ *
+ * Flow volume on a busy link is unbounded, so retention is capped in two tiers —
+ * raw records for hours, 1-minute rollups for weeks — plus a hard row cap whose
+ * evictions are logged. Silent loss on a monitoring feature reads as "no
+ * traffic", which is worse than no feature at all.
+ */
+export const FlowsConfigSchema = z.object({
+  /** Start the collector with the server. Off by default. */
+  enabled: z.boolean().default(false),
+  /** UDP port the device exports to (RouterOS default for NetFlow is 2055). */
+  port: z.coerce.number().int().positive().default(2055),
+  /** SQLite path (`:memory:` for an ephemeral store). */
+  db: z.string().default(DEFAULT_FLOWS_DB),
+  /** How long raw flow records are kept. */
+  retentionHours: z.coerce.number().int().positive().default(24),
+  /** How long 1-minute rollups are kept. */
+  rollupDays: z.coerce.number().int().positive().default(30),
+  /** Hard cap on raw rows; the oldest are evicted first (and logged). */
+  maxRows: z.coerce.number().int().positive().default(2_000_000),
+});
+export type FlowsConfig = z.infer<typeof FlowsConfigSchema>;
+
 export const DashboardConfigSchema = z.object({
   /** Master switch. When false, zero overhead and no SQLite is loaded. */
   enabled: z.boolean().default(false),
@@ -372,6 +400,8 @@ export const MikrotikConfigSchema = z.object({
   dashboard: DashboardConfigSchema.default(() => DashboardConfigSchema.parse({})),
   /** Alerting: rules + delivery channels. Absent unless configured (opt-in). */
   alerts: AlertsConfigSchema.optional(),
+  /** NetFlow/IPFIX collection (opt-in; binds a UDP port only when enabled). */
+  flows: FlowsConfigSchema.default(() => FlowsConfigSchema.parse({})),
   /**
    * SSH connection pooling — keeps one persistent connection per device and
    * reuses it across tool calls, saving the handshake cost. Enabled by default.

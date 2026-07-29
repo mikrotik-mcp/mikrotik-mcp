@@ -406,6 +406,53 @@
       "required": ["enabled", "rules", "channels", "maxHistory"],
       "additionalProperties": false
     },
+    "flows": {
+      "default": {
+        "enabled": false,
+        "port": 2055,
+        "db": "/Users/alimaster/.mikrotik-mcp/flows.db",
+        "retentionHours": 24,
+        "rollupDays": 30,
+        "maxRows": 2000000
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "port": {
+          "default": 2055,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "db": {
+          "default": "/Users/alimaster/.mikrotik-mcp/flows.db",
+          "type": "string"
+        },
+        "retentionHours": {
+          "default": 24,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rollupDays": {
+          "default": 30,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxRows": {
+          "default": 2000000,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["enabled", "port", "db", "retentionHours", "rollupDays", "maxRows"],
+      "additionalProperties": false
+    },
     "ssh": {
       "default": {
         "keepAlive": true,
@@ -511,6 +558,7 @@
     "defaultDevice",
     "mcp",
     "dashboard",
+    "flows",
     "ssh",
     "readOnly",
     "tools",
