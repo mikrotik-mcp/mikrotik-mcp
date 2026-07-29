@@ -23,6 +23,7 @@ import type {
 } from "../core/root-cause";
 import { READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
+import { isYes } from "../utils/yes";
 import { resolveDeviceName } from "../core/runtime";
 import { isEmpty, quoteValue } from "../core/routeros";
 import { parseKeyValues, parsePercent, parseRecords, parseSize } from "../core/routeros-parse";
@@ -317,9 +318,7 @@ async function collectDiagnosticData(
     dhcpLeases,
     dnsResolveResult: dnsResult ?? undefined,
     dnsServers: [dnsServersRaw.trim(), dnsDynamicRaw.trim()].filter(Boolean).join(",") || "",
-    dnsAllowRemote:
-      dnsAllowRemoteRaw.trim().toLowerCase() === "yes" ||
-      dnsAllowRemoteRaw.trim().toLowerCase() === "true",
+    dnsAllowRemote: isYes(dnsAllowRemoteRaw),
     cpuLoad: parsePercent(resKv["cpu-load"]) ?? 0,
     memoryUsedPct: memUsedPct,
     uptime: resKv.uptime ?? "",

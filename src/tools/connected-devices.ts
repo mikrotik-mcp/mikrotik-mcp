@@ -22,6 +22,7 @@ import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/
 import type { ToolModule } from "../core/registry";
 import type { ToolContext } from "../core/context";
 import { isEmpty, looksLikeError, quoteValue, Cmd } from "../core/routeros";
+import { isYes } from "../utils/yes";
 import { parseRecords, parseLeadingNumber } from "../core/routeros-parse";
 import { uiViewUri } from "../core/ui-meta";
 
@@ -178,7 +179,7 @@ export async function fetchDevices(ctx: ToolContext): Promise<Device[]> {
   }
 
   const byMac = new Map<string, Device>();
-  const yes = (v: string | undefined): boolean => v === "yes" || v === "true";
+  const yes = isYes;
   for (const l of leases) {
     const mac = (l["mac-address"] ?? "").toUpperCase();
     if (!mac) continue;

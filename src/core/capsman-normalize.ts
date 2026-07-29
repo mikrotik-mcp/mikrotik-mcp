@@ -8,6 +8,7 @@
  * and of missing fields (everything degrades to a sane default).
  */
 import { emptyCapsmanState, parseFloorTag } from "./capsman";
+import { isYes } from "../utils/yes";
 import type {
   Band,
   CapsmanState,
@@ -41,9 +42,7 @@ export interface CapsmanRaw {
   resources: Record<string, { cpuLoad?: number; memUsedPct?: number }>;
 }
 
-function yes(v: string | undefined): boolean {
-  return (v ?? "").trim().toLowerCase() === "yes" || (v ?? "").trim().toLowerCase() === "true";
-}
+const yes = isYes;
 
 function num(v: string | undefined): number | undefined {
   if (v == null) return undefined;

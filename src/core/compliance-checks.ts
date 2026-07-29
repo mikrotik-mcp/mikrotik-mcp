@@ -9,6 +9,7 @@
  * module is intentionally import-free of `connector.ts` so it stays testable
  * without a live device.
  */
+import { isYes } from "../utils/yes";
 
 // ── Severity & Scoring ──────────────────────────────────────────────────────
 
@@ -142,13 +143,6 @@ export interface ComplianceReport {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-/** True when a singleton-print field reads as enabled. */
-function isYes(v: string | undefined): boolean {
-  if (!v) return false;
-  const t = v.trim().toLowerCase();
-  return t === "yes" || t === "true";
-}
 
 /** True when raw `print` text contains `enabled: yes` or `enabled=yes`. */
 function textHasEnabled(text: string): boolean {

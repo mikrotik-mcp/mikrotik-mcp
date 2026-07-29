@@ -16,6 +16,7 @@ import { channelOf, unknownCapabilities } from "./capability";
 import type { Capabilities, WirelessStack } from "./capability";
 import { commandUnsupported, looksLikeError } from "./routeros";
 import { parseVersion } from "./firmware-lifecycle";
+import { isYes, isYesDefaultTrue } from "../utils/yes";
 import { logger } from "../logger";
 import type { ToolContext } from "./context";
 
@@ -75,15 +76,6 @@ export function pickWirelessStack(probes: {
   return "none";
 }
 
-/** `yes`/`no` → boolean, defaulting to `fallback` for anything unrecognised. */
-function yesNo(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) return fallback;
-  const v = value.trim().toLowerCase();
-  if (v === "yes" || v === "true") return true;
-  if (v === "no" || v === "false") return false;
-  return fallback;
-}
-
 /**
  * Build the model from already-fetched probe output. Pure — every argument is
  * the raw text (or null when that probe did not answer).
@@ -115,7 +107,7 @@ export function normalizeProbe(raw: {
   // only positive proof; CHR and x86 either lack the menu or report `no`.
   if (raw.routerboard) {
     const rb = parseSettings(raw.routerboard);
-    caps.isRouterBoard = yesNo(rb.routerboard, false);
+    caps.isRouterBoard = isYes(rb.routerboard);
   }
 
   // Absent before 7.13 — and absence means unrestricted, so the defaults from
@@ -123,9 +115,9 @@ export function normalizeProbe(raw: {
   if (raw.deviceMode) {
     const dm = parseSettings(raw.deviceMode);
     caps.deviceMode = {
-      container: yesNo(dm.container, true),
-      scheduler: yesNo(dm.scheduler, true),
-      fetch: yesNo(dm.fetch, true),
+      container: isYesDefaultTrue(dm.container),
+      scheduler: isYesDefaultTrue(dm.scheduler),
+      fetch: isYesDefaultTrue(dm.fetch),
     };
   }
 

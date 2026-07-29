@@ -51,6 +51,7 @@
  */
 import { cidrContains } from "./firewall-audit";
 import type { FirewallRule } from "./firewall-audit";
+import { isYes } from "../utils/yes";
 
 // ── Core result types ───────────────────────────────────────────────────────
 
@@ -248,12 +249,11 @@ export function emptySecurityState(): DeviceSecurityState {
 const CATCH_ALL_ADDR = new Set(["0.0.0.0/0", "::/0"]);
 const TERMINAL_DROP = new Set(["drop", "reject", "tarpit"]);
 
-/** True when a `key: value`/`key=value` field reads as enabled. */
-export function isYes(v: string | undefined): boolean {
-  if (!v) return false;
-  const t = v.trim().toLowerCase();
-  return t === "yes" || t === "true";
-}
+/**
+ * Re-exported so existing importers keep working; the implementation now lives
+ * in `src/utils/yes.ts` as the single copy.
+ */
+export { isYes };
 
 /** True when a rule matches every packet (no conditions, or only catch-all addrs). */
 export function matchesAll(rule: FirewallRule): boolean {
