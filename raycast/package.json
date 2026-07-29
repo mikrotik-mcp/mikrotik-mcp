@@ -86,6 +86,13 @@
       "mode": "view"
     },
     {
+      "name": "flows",
+      "title": "Flows",
+      "description": "NetFlow/IPFIX top talkers, conversations and applications",
+      "icon": "extension-icon.png",
+      "mode": "view"
+    },
+    {
       "name": "radius-um",
       "title": "RADIUS & UM",
       "description": "RADIUS client and User Manager \u2014 users, profiles, limitations, NAS, sessions",

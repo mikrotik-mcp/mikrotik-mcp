@@ -553,3 +553,61 @@ export interface TxnEvent {
   ok: boolean;
   detail?: string;
 }
+
+// ── Traffic Flow (`/api/flows`) ─────────────────────────────────────────────
+export interface FlowTopEntry {
+  key: string;
+  bytes: number;
+  packets: number;
+  flows: number;
+  share: number;
+}
+
+export interface FlowConversation {
+  src: string;
+  dst: string;
+  bytes: number;
+  packets: number;
+  flows: number;
+  applications: string[];
+}
+
+export interface FlowTopPayload {
+  window: { from: number; to: number };
+  totals: { flows: number; bytes: number; packets: number; sources: number; destinations: number };
+  top: FlowTopEntry[];
+  protocols: { protocol: string; bytes: number; share: number }[];
+  applications: FlowTopEntry[];
+  error?: string;
+}
+
+export interface FlowTimelinePayload {
+  window: { from: number; to: number };
+  bucketMs: number;
+  keys: string[];
+  buckets: { ts: number; series: Record<string, number> }[];
+}
+
+export interface FlowHealth {
+  collector: {
+    running: boolean;
+    port: number;
+    startedAt: number | null;
+    packets: number;
+    flows: number;
+    decodeErrors: number;
+    lastError?: string;
+    templates: number;
+    templatesPending: number;
+    templatesDropped: number;
+    exporters: Record<string, number>;
+    queued: number;
+  };
+  store: {
+    rawRows: number;
+    rollupRows: number;
+    oldestRaw: number | null;
+    newestRaw: number | null;
+    evicted: number;
+  } | null;
+}
