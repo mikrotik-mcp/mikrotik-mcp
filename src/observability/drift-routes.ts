@@ -11,6 +11,7 @@ import { diffLines } from "../core/diff";
 import { Cmd, isEmpty, looksLikeError } from "../core/routeros";
 import { getConfig, resolveDeviceName } from "../core/runtime";
 import { DEFAULT_SNAPSHOT_DB } from "../config";
+import { noteDriftResult } from "../drift/alert";
 import { analyzeDrift, attributeChanges } from "../drift/engine";
 import { clientError } from "./http-error";
 import { normalizeExport } from "../snapshots/format";
@@ -174,6 +175,10 @@ export async function driftRoutes(req: Request, url: URL): Promise<Response | nu
       });
 
       const report = analyzeDrift(diff, device, baseline.snapshotId, baseline.setAt);
+
+      // Feed alerting. Transition-only, so re-running a check while
+      // investigating does not emit a fresh alert each time.
+      noteDriftResult(report);
 
       // Best-effort log attribution
       try {

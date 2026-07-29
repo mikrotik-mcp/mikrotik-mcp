@@ -63,6 +63,18 @@ is the fastest way to get an alerting system muted.
 Every matcher is ANDed; an absent matcher matches anything. Risk names are
 case-insensitive.
 
+**Filter on `to` for anything that has a resolved state.** A bare
+`{"event": "drift"}` matches the _resolved_ event as well as the detected one —
+which re-satisfies the condition and keeps the rule firing, so it never emits a
+resolve. Write `{"event": "drift", "to": "detected"}`. Same for `device_state`:
+use `"to": "offline"`, not a bare `device_state`.
+
+**One rule reports one subject at a time.** Rule state is keyed by rule id, not
+by `(rule, device)`. A single "any device offline" rule that is already firing
+for `site-a` will not fire again when `site-b` also drops — the second device is
+folded into the first alert until it resolves. Where per-device alerts matter,
+write one rule per device.
+
 **`absence`** — something expected did not happen.
 
 ```jsonc

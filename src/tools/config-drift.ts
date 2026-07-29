@@ -22,6 +22,7 @@ import type { ToolModule } from "../core/registry";
 import { Cmd, isEmpty, looksLikeError } from "../core/routeros";
 import { resolveDeviceName, getDevice } from "../core/runtime";
 import { DEFAULT_SNAPSHOT_DB } from "../config";
+import { noteDriftResult } from "../drift/alert";
 import { analyzeDrift, attributeChanges, renderDriftReport } from "../drift/engine";
 import { contentSha, countLines, normalizeExport, parseExportMeta } from "../snapshots/format";
 import { openSnapshotStore } from "../snapshots/store";
@@ -188,6 +189,10 @@ export const configDriftTools: ToolModule = [
 
       // Analyze
       const report = analyzeDrift(diff, device, baseline.snapshotId, baseline.setAt);
+
+      // Feed alerting. Transition-only, so re-running a check while
+      // investigating does not emit a fresh alert each time.
+      noteDriftResult(report);
 
       // Change attribution from system logs
       if (a.include_logs && report.sections.length > 0) {
