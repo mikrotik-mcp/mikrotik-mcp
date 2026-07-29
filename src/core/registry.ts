@@ -19,6 +19,7 @@ import { getCapabilities, peekCapabilities } from "./capability-cache";
 import { logger } from "../logger";
 import { riskOf } from "../observability/event";
 import { recordToolToMemory } from "../memory/auto-record";
+import { emitAlertEvent } from "../alerts/engine";
 import { isRecording, recordToolCall } from "../observability/recorder";
 
 /**
@@ -470,6 +471,18 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             device: deviceName,
             isError: isErr,
             durationMs: Date.now() - startedAt,
+          });
+          // Emitted unconditionally, NOT from inside recordToolCall: that one
+          // early-returns unless the dashboard is enabled, and alerting must not
+          // silently depend on `--dashboard`. A no-op when no engine is
+          // installed, and synchronous by contract so it cannot delay the call.
+          emitAlertEvent({
+            kind: "tool_call",
+            risk,
+            device: deviceName,
+            tool: def.name,
+            isError: isErr,
+            detail: isErr ? errMsg : undefined,
           });
         }
       };
