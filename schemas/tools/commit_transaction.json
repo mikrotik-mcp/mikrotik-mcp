@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "commit_transaction",
+  "type": "object",
+  "properties": {
+    "txn_id": {
+      "type": "string",
+      "description": "Transaction id from begin_transaction"
+    }
+  },
+  "required": ["txn_id"],
+  "additionalProperties": false
+}

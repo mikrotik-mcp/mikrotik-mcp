@@ -61,10 +61,18 @@ export interface RunTransactionInput {
   steps: Record<string, string[]>;
   executor: TxnExecutor;
   onEvent?: TxnObserver;
+  /**
+   * Stop BEFORE performing an action this returns true for, leaving the
+   * transaction live. This is how `verify_transaction` runs prepare + verify and
+   * then hands control back to the caller instead of committing: the fleet sits
+   * prepared-but-uncommitted until someone calls commit or abort.
+   */
+  stopWhen?: (action: Action) => boolean;
 }
 
 export interface TxnRun {
-  state: TerminalState;
+  /** The terminal state, or undefined when the run paused at `stopWhen`. */
+  state?: TerminalState;
   txn: Txn;
   /** One line per participant — the report a PARTIAL transaction is judged by. */
   summary: string[];
@@ -91,7 +99,7 @@ export function isSessionLost(error: string): boolean {
  * failure is an outcome, and the terminal state is the answer.
  */
 export async function runTransaction(input: RunTransactionInput): Promise<TxnRun> {
-  const { steps, executor, onEvent } = input;
+  const { steps, executor, onEvent, stopWhen } = input;
   let txn = input.txn;
   // Every participant needs at most one snapshot + prepare + verify + commit +
   // one undo; the cap only exists so a model bug fails loudly instead of
@@ -102,6 +110,9 @@ export async function runTransaction(input: RunTransactionInput): Promise<TxnRun
     const action = nextAction(txn);
     if (action.kind === "done") {
       return { state: action.state, txn, summary: summarize(txn) };
+    }
+    if (stopWhen?.(action) === true) {
+      return { state: undefined, txn, summary: summarize(txn) };
     }
     const outcome = await perform(action, steps, executor);
     txn = applyOutcome(txn, outcome);

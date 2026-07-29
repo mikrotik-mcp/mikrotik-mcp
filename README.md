@@ -351,6 +351,9 @@ Higher-level workflows built on top of the per-scope tools:
 - **[Change Plan & Dry-Run](docs/change-plan.md)** — preview commands as a
   terraform-style plan, apply under Safe Mode, show the exact `/export` diff, commit
   only if still reachable.
+- **[Cross-Device Transactions](docs/transactions.md)** — coordinate Safe Mode across
+  several routers: prepare, verify while still uncommitted, then commit everywhere or
+  roll back everywhere.
 - **[Config Snapshots](docs/config-snapshots.md)** — store `/export` snapshots and
   time-travel diff any two, or one against the live device.
 - **[Firewall Audit](docs/firewall-audit.md)** — find shadowed, broad, missing-default-drop,
@@ -415,6 +418,7 @@ Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_L
 | [Connecting clients](docs/connecting-clients.md)                    | Claude Desktop, stdio, HTTP                                 |
 | **[Observability](docs/observability.md)**                          | Real-time dashboard: live feed + analytics, SQLite          |
 | [Safe Mode](docs/safe-mode.md)                                      | Transactional changes                                       |
+| **[Cross-Device Transactions](docs/transactions.md)**               | Two-phase commit across several routers                     |
 | **[Change Plan & Dry-Run](docs/change-plan.md)**                    | Preview commands, apply with the exact diff + auto-rollback |
 | **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                      |
 | **[Security Hardening](docs/security-hardening.md)**                | Per-category audit+remediate, snapshot + Safe-Mode          |

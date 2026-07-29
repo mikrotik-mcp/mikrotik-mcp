@@ -111,6 +111,7 @@ import { routingRuleTools } from "./routing-rule";
 import { routingTableTools } from "./routing-table";
 import { drDrillTools } from "./dr-drill";
 import { safeModeTools } from "./safe-mode";
+import { txnTools } from "./txn";
 import { schedulerTools } from "./scheduler";
 import { serverPulseTools } from "./server-pulse";
 import { capabilityTools } from "./capability";
@@ -1148,6 +1149,16 @@ export const moduleCatalog: ModuleInfo[] = [
     group: "System & Ops",
     description: "Transactional config window with auto-revert (Ctrl+X session).",
     tools: safeModeTools,
+  },
+  {
+    label: "Transactions",
+    slug: "txn",
+    group: "System & Ops",
+    description:
+      "Cross-device two-phase commit: coordinate Safe Mode across several routers so a multi-device " +
+      "change (both ends of a tunnel, a peering, a fleet ACL) either lands everywhere or is rolled " +
+      "back everywhere — prepare, verify against the uncommitted state, then commit in order.",
+    tools: txnTools,
   },
   {
     label: "DR Drill",

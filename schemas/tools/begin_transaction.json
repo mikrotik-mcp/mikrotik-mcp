@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "begin_transaction",
+  "type": "object",
+  "properties": {
+    "devices": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Configured device names taking part, in the order they should be prepared"
+    },
+    "commit_order": {
+      "description": "Order commits are issued in (defaults to `devices`); the safest device goes LAST",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "jump_host": {
+      "description": "Participant the others are reached through — warns unless it commits last",
+      "type": "string"
+    },
+    "assertions": {
+      "description": "Checks run against the prepared-but-uncommitted fleet",
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "ping"
+              },
+              "from": {
+                "type": "string",
+                "description": "Device that sends the ping"
+              },
+              "to": {
+                "type": "string",
+                "description": "Target address"
+              }
+            },
+            "required": ["kind", "from", "to"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "wireguard-peer-handshake"
+              },
+              "device": {
+                "type": "string"
+              },
+              "peer": {
+                "type": "string",
+                "description": "Peer public key"
+              }
+            },
+            "required": ["kind", "device", "peer"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "route-present"
+              },
+              "device": {
+                "type": "string"
+              },
+              "dst": {
+                "type": "string",
+                "description": "Destination prefix, e.g. \"10.0.0.0/30\""
+              }
+            },
+            "required": ["kind", "device", "dst"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "reachable"
+              },
+              "device": {
+                "type": "string"
+              }
+            },
+            "required": ["kind", "device"],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "label": {
+      "description": "Human label, e.g. \"site-a↔site-b tunnel\"",
+      "type": "string"
+    }
+  },
+  "required": ["devices"],
+  "additionalProperties": false
+}

@@ -73,3 +73,11 @@ firewall edits in Safe Mode: apply, verify connectivity, then commit.
 For low-risk, single read-only or clearly safe changes, Safe Mode is unnecessary
 overhead — `safe_mode_status` will confirm it's inactive and changes apply
 immediately.
+
+## Across several devices
+
+Safe Mode is **per device**. A change that must land on more than one router
+(both ends of a tunnel, a peering, a fleet ACL) needs the coordinator on top of
+it: see **[Cross-Device Transactions](./transactions.md)**, which holds one Safe
+Mode session per participant, verifies while everything is still uncommitted, and
+then commits in a declared order — reporting `COMMITTED`, `ABORTED` or `PARTIAL`.

@@ -370,6 +370,22 @@ export function applyOutcome(txn: Txn, outcome: Outcome): Txn {
 }
 
 /**
+ * Abandon a transaction on request (`abort_transaction`, or a coordinator that
+ * is giving up): switch to the rollback phase so every participant still holding
+ * uncommitted changes is reverted. A transaction whose devices have already
+ * committed cannot be "aborted" back to clean — it seals as PARTIAL, which is
+ * the honest answer.
+ */
+export function requestAbort(txn: Txn, reason?: string): Txn {
+  if (txn.state !== undefined) return txn;
+  const warnings = reason ? [...txn.warnings, `Aborted: ${reason}`] : txn.warnings;
+  const next: Txn = { ...txn, warnings, phase: "rollback" };
+  return nextAction(next).kind === "done"
+    ? { ...next, phase: "done", state: classify(next) }
+    : next;
+}
+
+/**
  * One line per participant for the tool/UI summary — for a PARTIAL transaction
  * this is the only thing that tells a human which device is in which state and
  * which snapshot to restore it from.

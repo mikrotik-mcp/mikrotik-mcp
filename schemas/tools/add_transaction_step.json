@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "add_transaction_step",
+  "type": "object",
+  "properties": {
+    "txn_id": {
+      "type": "string",
+      "description": "Transaction id from begin_transaction"
+    },
+    "target_device": {
+      "type": "string",
+      "description": "Which participant this command runs on"
+    },
+    "command": {
+      "type": "string",
+      "description": "Full RouterOS CLI command, e.g. \"/ip address add address=...\""
+    }
+  },
+  "required": ["txn_id", "target_device", "command"],
+  "additionalProperties": false
+}
