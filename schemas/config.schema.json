@@ -10,7 +10,8 @@
           "username": "admin",
           "password": "",
           "port": 22,
-          "timeoutMs": 10000
+          "timeoutMs": 10000,
+          "tags": []
         }
       },
       "type": "object",
@@ -121,11 +122,18 @@
           "description": {
             "type": "string"
           },
+          "tags": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "disabled": {
             "type": "boolean"
           }
         },
-        "required": ["host", "username", "password", "port", "timeoutMs"],
+        "required": ["host", "username", "password", "port", "timeoutMs", "tags"],
         "additionalProperties": false
       }
     },

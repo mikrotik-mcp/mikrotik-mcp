@@ -201,6 +201,13 @@ export const DeviceConfigSchema = z.object({
   apiInsecureTls: z.boolean().optional(),
   /** Free-text label shown to the AI (e.g. "HQ edge router"). */
   description: z.string().optional(),
+  /**
+   * Free-form labels for selecting groups of devices — e.g. `["branch", "eu"]`.
+   * Used by staged fleet rollouts (`targets: { tags: ["branch"] }`) so a change
+   * can name a class of routers rather than enumerating them, which is both
+   * shorter and less likely to silently miss a device someone added later.
+   */
+  tags: z.array(z.string()).default([]),
   /** When true, this device is excluded from the MCP tool surface — the AI cannot target it. */
   disabled: z.boolean().optional(),
 });

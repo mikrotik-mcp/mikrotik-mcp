@@ -201,9 +201,15 @@ describe("the canary fails", () => {
   });
 
   test("a device that cannot even be applied halts immediately, before any gate", () => {
-    const { outcome, actions } = drive(open(10), { applyFails: { "rtr-01": "bad command" } });
-    expect(outcome).toBe("reverted");
+    const { outcome, actions, state } = drive(open(10), {
+      applyFails: { "rtr-01": "bad command" },
+    });
+    // Nothing committed, so nothing to revert: Safe Mode already reverted the
+    // device that failed mid-change, and no later device was ever touched.
+    expect(outcome).toBe("halted");
     expect(actions.some((a) => a.kind === "gate")).toBe(false);
+    expect(actions.some((a) => a.kind === "revert")).toBe(false);
+    expect(state.devices.filter((d) => d.stage === "skipped")).toHaveLength(9);
   });
 });
 

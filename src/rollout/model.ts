@@ -220,10 +220,19 @@ function patch(rollout: RolloutState, device: string, change: Partial<DeviceStat
   };
 }
 
-/** Devices this rollout changed and has not yet undone, newest first. */
+/**
+ * Devices this rollout changed and has not yet undone, newest first.
+ *
+ * Only `applied` devices are in the set. A `failed` device is NOT: the runner
+ * applies each device inside Safe Mode, so a failure there is reverted by
+ * RouterOS as the session closes (and a device whose snapshot could not even be
+ * taken was never touched at all). Reverting it anyway would replay a full
+ * export over a router that is already in its original state — the most
+ * dangerous possible no-op.
+ */
 export function revertSet(rollout: RolloutState): DeviceState[] {
   return rollout.devices
-    .filter((d) => d.stage === "applied" || d.stage === "failed")
+    .filter((d) => d.stage === "applied")
     .sort((a, b) => (b.appliedSeq ?? 0) - (a.appliedSeq ?? 0));
 }
 
@@ -321,13 +330,18 @@ export function nextAction(rollout: RolloutState): RolloutAction {
       : { kind: "done", outcome: classify(rollout) };
   }
 
-  // A hold parks the machine at the next decision point rather than mid-device:
-  // stopping half-way through applying one router is the one place a pause makes
-  // things worse.
-  if (rollout.holdRequested && rollout.phase !== "apply") return { kind: "hold" };
-
   const wave = rollout.waves[rollout.currentWave];
   if (!wave) return { kind: "done", outcome: classify(rollout) };
+
+  // A hold means "start nothing new". A wave already in flight finishes — its
+  // devices are independent and each one is atomic, so stopping half-way through
+  // a wave buys nothing — but a gate, a soak, or the first device of the NEXT
+  // wave all park until someone resumes.
+  if (rollout.holdRequested) {
+    const inFlight =
+      rollout.phase === "apply" && wave.devices.some((d) => state(rollout, d).stage !== "pending");
+    if (!inFlight) return { kind: "hold" };
+  }
 
   switch (rollout.phase) {
     case "apply": {
