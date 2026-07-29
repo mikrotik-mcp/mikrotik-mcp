@@ -32,6 +32,15 @@ export interface ToolEvent {
   device?: string;
   /** Transport the call arrived on (`stdio` / `http`). */
   transport?: string;
+  /**
+   * Which transport carried the DEVICE command — distinct from `transport`
+   * above, which is how the MCP client reached this server. A REST-enabled
+   * device that fell back reports `ssh` here, with the reason in
+   * `restFallback`.
+   */
+  deviceTransport?: "ssh" | "rest" | "mac-telnet";
+  /** Why REST fell back to SSH, when a REST-enabled device did not use it. */
+  restFallback?: string;
   /** Wall-clock duration of the handler, in milliseconds. */
   durationMs: number;
   /** True when the result was an error (`isError`) or the handler threw. */
@@ -109,6 +118,8 @@ export interface RawCall {
   risk: Risk;
   device?: string;
   transport?: string;
+  deviceTransport?: "ssh" | "rest" | "mac-telnet";
+  restFallback?: string;
   ts: number;
   durationMs: number;
   isError: boolean;
@@ -141,6 +152,8 @@ export function buildEvent(raw: RawCall, id: string, opts: CaptureOptions): Tool
     risk: raw.risk,
     device: raw.device,
     transport: raw.transport,
+    deviceTransport: raw.deviceTransport,
+    restFallback: raw.restFallback,
     durationMs: raw.durationMs,
     isError: raw.isError,
     error: raw.error,

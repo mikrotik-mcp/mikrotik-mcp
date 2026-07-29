@@ -7,7 +7,12 @@ export interface ToolEvent {
   title: string;
   risk: Risk;
   device?: string;
+  /** MCP transport the call arrived on (`stdio`/`http`) — not the device link. */
   transport?: string;
+  /** Which transport actually carried the device command. */
+  deviceTransport?: "ssh" | "rest" | "mac-telnet";
+  /** Why REST fell back to SSH, when a REST-enabled device did not use it. */
+  restFallback?: string;
   durationMs: number;
   isError: boolean;
   error?: string;
@@ -135,6 +140,8 @@ export interface DeviceInfo {
   /** Set when the device is reached over Layer-2 MAC-Telnet instead of SSH. */
   mac?: string;
   transport?: string;
+  /** REST HTTPS port, when the device is configured for the REST API. */
+  restPort?: number;
   /** Display address: the MAC for a mac-telnet device, else `host:port`. */
   address?: string;
   username: string;

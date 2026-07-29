@@ -333,7 +333,11 @@ function devicesPayload(store: EventStore): unknown {
       // A `mac` device is reached over Layer-2 MAC-Telnet, not SSH — surface that
       // so the dashboard shows the MAC instead of the unused default host:port.
       mac: dc.mac,
-      transport: dc.mac ? "mac-telnet" : "ssh",
+      // The CONFIGURED transport. A REST device still falls back to SSH per
+      // command, so this is what it will attempt, not a guarantee — the Live
+      // Feed's per-call `deviceTransport` is the record of what actually ran.
+      transport: dc.mac ? "mac-telnet" : dc.api ? "rest" : "ssh",
+      restPort: dc.api ? (dc.apiPort ?? 443) : undefined,
       address: dc.mac ? dc.mac : `${dc.host}:${dc.port}`,
       username: dc.username,
       authMode: dc.mac

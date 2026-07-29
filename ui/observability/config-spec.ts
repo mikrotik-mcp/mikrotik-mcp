@@ -91,6 +91,27 @@ export const DEVICE_FIELDS: CfgField[] = [
     advanced: true,
     placeholder: "20561",
   },
+  {
+    key: "api",
+    label: "Use REST API",
+    type: "bool",
+    advanced: true,
+    help: "RouterOS 7.9+. Runs mappable commands over HTTPS for structured JSON, falling back to SSH for /export, Safe Mode and interactive tools. Needs the www-ssl service enabled.",
+  },
+  {
+    key: "apiPort",
+    label: "REST port",
+    type: "number",
+    advanced: true,
+    placeholder: "443",
+  },
+  {
+    key: "apiInsecureTls",
+    label: "Accept self-signed TLS",
+    type: "bool",
+    advanced: true,
+    help: "RouterOS ships a self-signed certificate, so most devices need this — it disables certificate verification, so enable it deliberately.",
+  },
 ];
 
 export const CONFIG_SECTIONS: CfgSection[] = [

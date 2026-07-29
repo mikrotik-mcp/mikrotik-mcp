@@ -56,6 +56,8 @@ interface Row {
   risk: string;
   device: string | null;
   transport: string | null;
+  device_transport: string | null;
+  rest_fallback: string | null;
   duration_ms: number;
   is_error: number;
   error: string | null;
@@ -76,6 +78,8 @@ function rowToEvent(r: Row): ToolEvent {
     risk: r.risk as Risk,
     device: r.device ?? undefined,
     transport: r.transport ?? undefined,
+    deviceTransport: (r.device_transport ?? undefined) as ToolEvent["deviceTransport"],
+    restFallback: r.rest_fallback ?? undefined,
     durationMs: r.duration_ms,
     isError: r.is_error === 1,
     error: r.error ?? undefined,
@@ -106,7 +110,9 @@ const SCHEMA_STATEMENTS = [
      output_bytes INTEGER NOT NULL,
      has_structured INTEGER NOT NULL,
      truncated INTEGER NOT NULL,
-     reason TEXT
+     reason TEXT,
+     device_transport TEXT,
+     rest_fallback TEXT
    )`,
   "CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts)",
   "CREATE INDEX IF NOT EXISTS idx_events_tool ON events(tool)",
@@ -114,7 +120,11 @@ const SCHEMA_STATEMENTS = [
 ];
 
 /** Column additions for existing databases (idempotent — new DBs already have them). */
-const MIGRATIONS = ["ALTER TABLE events ADD COLUMN reason TEXT"];
+const MIGRATIONS = [
+  "ALTER TABLE events ADD COLUMN reason TEXT",
+  "ALTER TABLE events ADD COLUMN device_transport TEXT",
+  "ALTER TABLE events ADD COLUMN rest_fallback TEXT",
+];
 
 class SqliteEventStore implements EventStore {
   private readonly db: Database;
@@ -136,9 +146,11 @@ class SqliteEventStore implements EventStore {
     this.db
       .query(
         `INSERT OR REPLACE INTO events
-         (id, ts, tool, title, risk, device, transport, duration_ms, is_error, error,
+         (id, ts, tool, title, risk, device, transport, device_transport, rest_fallback,
+          duration_ms, is_error, error,
           input, output, output_bytes, has_structured, truncated, reason)
-         VALUES ($id,$ts,$tool,$title,$risk,$device,$transport,$dur,$err,$errmsg,
+         VALUES ($id,$ts,$tool,$title,$risk,$device,$transport,$devtransport,$restfallback,
+                 $dur,$err,$errmsg,
           $input,$output,$obytes,$structured,$trunc,$reason)`,
       )
       .run({
@@ -149,6 +161,8 @@ class SqliteEventStore implements EventStore {
         $risk: e.risk,
         $device: e.device ?? null,
         $transport: e.transport ?? null,
+        $devtransport: e.deviceTransport ?? null,
+        $restfallback: e.restFallback ?? null,
         $dur: e.durationMs,
         $err: e.isError ? 1 : 0,
         $errmsg: e.error ?? null,

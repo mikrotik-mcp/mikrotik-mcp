@@ -18,7 +18,29 @@ export interface ToolContext {
    * `undefined` means "use the configured default device".
    */
   device?: string;
+  /**
+   * Which transport actually carried the last device command of this call.
+   *
+   * Recorded here rather than in a module-level global because tool calls run
+   * concurrently — a shared "last transport used" would be overwritten by
+   * whichever device answered most recently. One context per call makes this
+   * safe for free.
+   *
+   * A tool that issues several commands reports the LAST one; that is exact for
+   * the single-command majority and representative otherwise.
+   */
+  transport?: DeviceTransport;
+  /**
+   * Why REST fell back to SSH on the last command, when it did. Present only
+   * for a device with `api: true` that could not use REST — the reason is the
+   * whole diagnostic value, since a silent fallback otherwise looks like REST
+   * simply never being enabled.
+   */
+  restFallback?: string;
 }
+
+/** How a device command was actually carried. */
+export type DeviceTransport = "ssh" | "rest" | "mac-telnet";
 
 export type SendLog = (level: "info" | "error", message: string) => void;
 

@@ -138,6 +138,8 @@ export interface DeviceInfo {
   /** Set when the device is reached over Layer-2 MAC-Telnet instead of SSH. */
   mac?: string;
   transport?: string;
+  /** REST HTTPS port, when the device is configured for the REST API. */
+  restPort?: number;
   /** Display address: the MAC for a mac-telnet device, else `host:port`. */
   address?: string;
   username: string;

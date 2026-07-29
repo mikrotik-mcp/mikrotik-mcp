@@ -792,6 +792,13 @@ export function DeviceCard({
             aria-label={d.disabled ? "Enable device" : "Disable device"}
           />
         </span>
+        {d.transport === "rest" && (
+          <span
+            title={`Attempts the RouterOS REST API on port ${d.restPort ?? 443}, falling back to SSH for anything REST cannot express`}
+          >
+            <Badge type="accent">rest</Badge>
+          </span>
+        )}
         <Badge type="secondary">{d.authMode}</Badge>
       </div>
       <div className="text-muted-foreground [&_b]:text-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-[3px] text-[11px] [&_b]:font-medium [&_b]:break-words">

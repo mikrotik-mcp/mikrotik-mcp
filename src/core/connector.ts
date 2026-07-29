@@ -37,34 +37,44 @@ import { logger } from "../logger";
  * a 404 is right, because that means the menu does not exist on this RouterOS
  * version and SSH may well handle it.
  */
-async function tryRest(command: string, dc: DeviceConfig, name: string): Promise<string | null> {
-  // Cheap check first: an unmappable command never opens a connection.
-  if (!toRequest(command)) {
-    logger.debug(`[rest] no mapping for '${command}' on '${name}' — using SSH`);
+async function tryRest(
+  command: string,
+  dc: DeviceConfig,
+  name: string,
+  ctx?: ToolContext,
+): Promise<string | null> {
+  // Every fallback records WHY on the context. A silent fallback is
+  // indistinguishable from REST never being enabled, which makes an
+  // enabled-but-never-used transport impossible to diagnose.
+  const fallback = (reason: string): null => {
+    if (ctx) ctx.restFallback = reason;
+    logger.debug(`[rest] falling back to SSH for '${command}' on '${name}': ${reason}`);
     return null;
-  }
+  };
+
+  // Cheap check first: an unmappable command never opens a connection.
+  if (!toRequest(command)) return fallback("no REST mapping for this command");
 
   const client = createRestClient(dc);
-  if (!(await client.connect())) {
-    logger.debug(`[rest] probe failed on '${name}' (${client.lastError}) — using SSH`);
-    return null;
-  }
+  if (!(await client.connect())) return fallback(client.lastError ?? "REST probe failed");
+
   try {
-    return await client.run(command);
+    const out = await client.run(command);
+    if (ctx) {
+      ctx.transport = "rest";
+      ctx.restFallback = undefined;
+    }
+    return out;
   } catch (e) {
     if (!shouldFallbackToSsh(e)) {
       // The device answered with a rejection. Surface it rather than masking it
       // behind a second attempt over a different transport.
+      if (ctx) ctx.transport = "rest";
       throw e instanceof RestHttpError
         ? new Error(`REST ${e.status} on '${name}': ${e.detail}`)
         : e;
     }
-    logger.debug(
-      `[rest] falling back to SSH for '${command}' on '${name}': ${
-        e instanceof Error ? e.message : String(e)
-      }`,
-    );
-    return null;
+    return fallback(e instanceof Error ? e.message : String(e));
   } finally {
     client.disconnect();
   }
@@ -74,6 +84,7 @@ async function runOnce(
   command: string,
   deviceName?: string,
   opts?: { maxMs?: number },
+  ctx?: ToolContext,
 ): Promise<string> {
   const name = resolveDeviceName(deviceName);
   const dc = getDevice(deviceName);
@@ -82,9 +93,10 @@ async function runOnce(
   // active Safe Mode session is routed by executeMikrotikCommand before this
   // function is called, which is what keeps Safe Mode SSH-only.
   if (isRestDevice(dc)) {
-    const out = await tryRest(command, dc, name);
+    const out = await tryRest(command, dc, name, ctx);
     if (out !== null) return out;
   }
+  if (ctx) ctx.transport = isMacTelnetDevice(dc) ? "mac-telnet" : "ssh";
 
   // Use the persistent connection pool for SSH devices when pooling is enabled.
   // MAC-Telnet has no SSH transport to pool; the one-shot path handles it.
@@ -131,10 +143,12 @@ export async function executeMikrotikCommand(
   // by each tool via looksLikeError().
   if (safe.isActive) {
     ctx.info(`[${deviceName}] Executing (safe mode): ${command}`);
+    // Safe Mode holds a persistent interactive SSH session — never REST.
+    ctx.transport = "ssh";
     return safe.execute(command);
   }
   ctx.info(`[${deviceName}] Executing MikroTik command: ${command}`);
-  return runOnce(command, ctx.device, opts);
+  return runOnce(command, ctx.device, opts, ctx);
 }
 
 /**

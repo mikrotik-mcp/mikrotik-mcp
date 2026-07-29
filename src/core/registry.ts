@@ -457,6 +457,10 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
               error: errMsg,
               args: rest,
               output: outText,
+              // Stamped by the connector on the context, so this reflects what
+              // actually carried the command rather than what was configured.
+              deviceTransport: ctx.transport,
+              restFallback: ctx.restFallback,
               hasStructured,
               reason: typeof reason === "string" ? reason : undefined,
             });

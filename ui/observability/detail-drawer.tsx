@@ -80,8 +80,22 @@ export function DetailDrawer({
           </div>
           <div className={KV_K}>device</div>
           <div className={KV_V}>{event.device ?? "—"}</div>
-          <div className={KV_K}>transport</div>
+          <div className={KV_K}>mcp transport</div>
           <div className={KV_V}>{event.transport ?? "—"}</div>
+          {event.deviceTransport && (
+            <>
+              <div className={KV_K}>device link</div>
+              <div className={KV_V}>
+                {event.deviceTransport}
+                {event.restFallback ? (
+                  // A REST-enabled device that did not use REST: the reason is
+                  // the whole diagnostic, since a silent fallback is otherwise
+                  // indistinguishable from REST never being turned on.
+                  <span className="text-warning"> — REST fell back: {event.restFallback}</span>
+                ) : null}
+              </div>
+            </>
+          )}
           <div className={KV_K}>duration</div>
           <div className={KV_V}>{ms(event.durationMs)}</div>
           <div className={KV_K}>status</div>

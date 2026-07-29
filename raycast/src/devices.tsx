@@ -335,6 +335,14 @@ export default function Command() {
                           },
                         ]
                       : []),
+                    ...(d.transport === "rest"
+                      ? [
+                          {
+                            tag: { value: "rest", color: Color.Purple },
+                            tooltip: `Attempts the RouterOS REST API on port ${d.restPort ?? 443}, falling back to SSH for anything REST cannot express`,
+                          },
+                        ]
+                      : []),
                     ...(d.isDefault
                       ? [{ tag: { value: "default", color: Color.Blue } }]
                       : []),

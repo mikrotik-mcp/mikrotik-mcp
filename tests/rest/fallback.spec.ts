@@ -95,6 +95,54 @@ describe("commands that must never attempt REST", () => {
   });
 });
 
+describe("transport stamping on the context", () => {
+  test("a plain SSH device records ssh, even when the connection fails", async () => {
+    // The stamp records which transport was ATTEMPTED, so a failed call is still
+    // attributable in the live feed rather than showing a blank link.
+    setConfig(
+      MikrotikConfigSchema.parse({
+        devices: { default: { host: "127.0.0.1", port: 1, timeoutMs: 300 } },
+        defaultDevice: "default",
+      }),
+    );
+    const ctx = createContext();
+    await executeMikrotikCommand("/ip address print", ctx).catch(() => undefined);
+    expect(ctx.transport).toBe("ssh");
+    expect(ctx.restFallback).toBeUndefined();
+  });
+
+  test("a REST device that cannot connect falls back to ssh AND records why", async () => {
+    setConfig(
+      MikrotikConfigSchema.parse({
+        devices: {
+          default: { host: "127.0.0.1", port: 1, api: true, apiPort: 1, timeoutMs: 300 },
+        },
+        defaultDevice: "default",
+      }),
+    );
+    const ctx = createContext();
+    await executeMikrotikCommand("/ip address print", ctx).catch(() => undefined);
+    expect(ctx.transport).toBe("ssh");
+    // The reason is the whole diagnostic — without it, an enabled-but-unused
+    // REST transport is indistinguishable from one that was never turned on.
+    expect(ctx.restFallback).toBeTruthy();
+  });
+
+  test("an unmappable command on a REST device records the mapping reason", async () => {
+    setConfig(
+      MikrotikConfigSchema.parse({
+        devices: {
+          default: { host: "127.0.0.1", port: 1, api: true, apiPort: 1, timeoutMs: 300 },
+        },
+        defaultDevice: "default",
+      }),
+    );
+    const ctx = createContext();
+    await executeMikrotikCommand("/export", ctx).catch(() => undefined);
+    expect(ctx.restFallback).toBe("no REST mapping for this command");
+  });
+});
+
 describe("Safe Mode is never served over REST", () => {
   test("an active Safe Mode session bypasses the REST branch entirely", async () => {
     // A REST-enabled device pointed at a closed port: if the REST branch were
