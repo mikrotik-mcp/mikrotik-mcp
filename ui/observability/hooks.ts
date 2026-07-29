@@ -3,7 +3,22 @@ import type { RefObject } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { withToken } from "./api";
-import type { LiveMode, ToolEvent } from "./types";
+import type { LiveMode, ToolEvent, TxnUpdate } from "./types";
+
+// ── transaction updates ride the SAME socket ────────────────────────────────
+// The dashboard opens exactly one live stream; a second view that needs push
+// data subscribes here instead of opening its own socket.
+const txnListeners = new Set<(u: TxnUpdate) => void>();
+
+/** Subscribe to live transaction updates. Returns an unsubscribe function. */
+export function onTxnUpdate(fn: (u: TxnUpdate) => void): () => void {
+  txnListeners.add(fn);
+  return () => txnListeners.delete(fn);
+}
+
+function emitTxn(update: TxnUpdate): void {
+  for (const fn of txnListeners) fn(update);
+}
 
 // ── live stream hook (Bun WebSocket, SSE fallback) ───────────────────────────
 export function useLiveStream(
@@ -62,8 +77,13 @@ export function useLiveStream(
       ws.onerror = () => ws?.close();
       ws.onmessage = (m) => {
         try {
-          const msg = JSON.parse(m.data) as { type: string; event?: ToolEvent };
+          const msg = JSON.parse(m.data) as {
+            type: string;
+            event?: ToolEvent;
+            update?: TxnUpdate;
+          };
           if (msg.type === "event" && msg.event) onEventRef.current(msg.event);
+          if (msg.type === "txn" && msg.update) emitTxn(msg.update);
         } catch {
           /* ignore */
         }

@@ -68,6 +68,7 @@ import { DeviceHealthCard } from "./health";
 import { JsonView } from "./highlight";
 import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
+import { TransactionsView } from "./transactions";
 import { MemoryView } from "./memory";
 import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
@@ -118,6 +119,7 @@ type ViewId =
   | "packets"
   | "snapshots"
   | "drift"
+  | "txn"
   | "plan"
   | "s3"
   | "backups"
@@ -137,6 +139,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "packets", label: "Packets", sub: "Live TZSP capture & decode" },
   { id: "snapshots", label: "Snapshots", sub: "Config history & time-travel diff" },
   { id: "drift", label: "Drift Guard", sub: "Golden config baselines & live drift detection" },
+  {
+    id: "txn",
+    label: "Transactions",
+    sub: "Cross-device two-phase commit — prepare, verify, commit everywhere",
+  },
   { id: "plan", label: "Change Plan", sub: "Dry-run intended RouterOS commands" },
   { id: "s3", label: "S3 Backups", sub: "List, download & delete S3 backup objects" },
   { id: "backups", label: "Backups", sub: "Local config vault — create, restore, manage" },
@@ -204,6 +211,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   packets: MONO_ACCENT,
   snapshots: MONO_ACCENT,
   drift: MONO_ACCENT,
+  txn: MONO_ACCENT,
   plan: MONO_ACCENT,
   s3: MONO_ACCENT,
   backups: MONO_ACCENT,
@@ -286,6 +294,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Set a baseline via MCP tools (config_set_baseline) or the Baseline Manager below.",
       "Click a device card to run a live drift check against its golden config.",
       "Promote accepted changes as the new baseline, or reconcile to roll back.",
+    ],
+  },
+  txn: {
+    what: "Coordinate one change across several routers: each participant stages it in Safe Mode, the assertions run while nothing is committed, then every device commits — or none does.",
+    tips: [
+      "Green/amber/red cells show where a distributed operation actually is.",
+      "PARTIAL is the case to act on: some devices committed, and the report names the snapshot to restore each from.",
+      "Start one with begin_transaction; abort a live one from its detail panel.",
     ],
   },
   plan: {
@@ -579,6 +595,14 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z" />
         <path d="M9 12l2 2 4-4" />
         <path d="M12 6v2M12 16v2M6 12h2M16 12h2" />
+      </>
+    ),
+    txn: (
+      <>
+        <rect x="3" y="4" width="7" height="6" rx="1.5" />
+        <rect x="14" y="14" width="7" height="6" rx="1.5" />
+        <path d="M10 7h4a3 3 0 0 1 3 3v4" />
+        <path d="M14 17h-4a3 3 0 0 1-3-3v-4" />
       </>
     ),
     plan: (
@@ -1547,6 +1571,7 @@ function App(): ReactNode {
 
         {/* ── Drift Guard ── */}
         {view === "drift" && <DriftView />}
+        {view === "txn" && <TransactionsView />}
 
         {/* ── Change Plan ── */}
         {view === "plan" && <ChangePlanView />}

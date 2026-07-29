@@ -156,6 +156,8 @@ import {
 import { isMacTelnetDevice } from "../core/transport";
 import { VERSION } from "../version";
 import { driftRoutes } from "./drift-routes";
+import { txnRoutes } from "./txn-routes";
+import { subscribeTxn } from "./txn-hub";
 import { alertRoutes } from "./alert-routes";
 import { clientError, logError } from "./http-error";
 import { closeMemoryStore, memoryRoutes } from "./memory-routes";
@@ -1577,6 +1579,9 @@ export async function runDashboard(
     const driftResp = await driftRoutes(req, url);
     if (driftResp) return driftResp;
 
+    const txnResp = await txnRoutes(req, url);
+    if (txnResp) return txnResp;
+
     // `getEventStore()` rather than the `db` binding below, which is declared
     // later in this function — alerting's rule preview replays stored events.
     const alertResp = await alertRoutes(req, url, getEventStore());
@@ -1891,13 +1896,21 @@ export async function runDashboard(
             }
           });
         } else {
-          ws.data.unsub = subscribe((e: ToolEvent) => {
+          const send = (payload: unknown): void => {
             try {
-              ws.send(JSON.stringify({ type: "event", event: e }));
+              ws.send(JSON.stringify(payload));
             } catch {
               // client went away mid-send; close() will clean up
             }
-          });
+          };
+          // The tool feed and the transaction lanes share this one socket —
+          // a second socket per page is exactly what the dashboard avoids.
+          const unsubEvents = subscribe((e: ToolEvent) => send({ type: "event", event: e }));
+          const unsubTxn = subscribeTxn((update) => send({ type: "txn", update }));
+          ws.data.unsub = () => {
+            unsubEvents();
+            unsubTxn();
+          };
         }
         ws.send(JSON.stringify({ type: "hello", transport: transportLabel }));
       },

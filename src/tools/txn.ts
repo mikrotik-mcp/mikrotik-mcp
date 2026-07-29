@@ -18,6 +18,7 @@ import type { ToolModule } from "../core/registry";
 import { resolveDeviceName } from "../core/runtime";
 import { busyDevices, createDeviceExecutor, runTransaction } from "../txn/coordinator";
 import type { TxnRun } from "../txn/coordinator";
+import { publishTxn } from "../observability/txn-hub";
 import { beginTransaction, requestAbort } from "../txn/model";
 import type { Assertion, Txn } from "../txn/model";
 import {
@@ -98,19 +99,27 @@ async function advance(
     stopWhen,
     onEvent: ({ action, outcome, txn }) => {
       entry.txn = txn;
-      void logTxnEvent({
+      const device = "device" in action ? action.device : undefined;
+      const ok = "ok" in outcome ? outcome.ok : outcome.results.every((r) => r.ok);
+      const detail =
+        "error" in outcome
+          ? outcome.error
+          : "results" in outcome
+            ? outcome.results.map((r) => `${r.assertion.kind}:${r.ok ? "pass" : "fail"}`).join(" ")
+            : undefined;
+      void logTxnEvent({ txnId: txn.id, kind: action.kind, device, ok, detail });
+      // Live swimlane on the dashboard — seeing WHERE a distributed operation
+      // is is the whole point of the page, and polling would miss it.
+      publishTxn({
         txnId: txn.id,
-        kind: action.kind,
-        device: "device" in action ? action.device : undefined,
-        ok: "ok" in outcome ? outcome.ok : outcome.results.every((r) => r.ok),
-        detail:
-          "error" in outcome
-            ? outcome.error
-            : "results" in outcome
-              ? outcome.results
-                  .map((r) => `${r.assertion.kind}:${r.ok ? "pass" : "fail"}`)
-                  .join(" ")
-              : undefined,
+        ts: Date.now(),
+        phase: txn.phase,
+        state: txn.state,
+        action: action.kind,
+        device,
+        ok,
+        detail,
+        participants: txn.participants,
       });
     },
   });
