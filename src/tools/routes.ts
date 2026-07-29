@@ -6,12 +6,19 @@ import type { ToolModule } from "../core/registry";
 import {
   yesno,
   whereClause,
+  routeTypeArg,
   quoteValue,
   looksLikeError,
   isEmpty,
   commandUnsupported,
   Cmd,
 } from "../core/routeros";
+
+/**
+ * RouterOS v7 dropped v6's `type=` property on `/ip route`: `blackhole` is a
+ * bare keyword and `unreachable`/`prohibit` no longer exist (see routeTypeArg).
+ */
+const RouteType = z.enum(["unicast", "blackhole"]);
 
 interface AddRouteArgs {
   dst_address: string;
@@ -27,7 +34,7 @@ interface AddRouteArgs {
   pref_src?: string;
   check_gateway?: string;
   suppress_hw_offload?: boolean;
-  type?: string;
+  type?: "unicast" | "blackhole";
 }
 
 /** Shared `add_route` body, reused by `add_default_route`. */
@@ -51,7 +58,7 @@ async function addRoute(
     .opt("pref-src", a.pref_src)
     .opt("check-gateway", a.check_gateway)
     .bool("suppress-hw-offload", a.suppress_hw_offload)
-    .opt("type", a.type)
+    .raw(routeTypeArg(a.type))
     .build();
 
   const result = await executeMikrotikCommand(cmd, ctx);
@@ -127,10 +134,10 @@ export const routeTools: ToolModule = [
         .boolean()
         .optional()
         .describe("Exclude route from hardware (HW) offloading"),
-      type: z
-        .string()
-        .optional()
-        .describe('"unicast" (default), "blackhole", "unreachable", or "prohibit"'),
+      type: RouteType.optional().describe(
+        '"unicast" (default) or "blackhole" (drop silently). RouterOS v7 has no ' +
+          '"unreachable"/"prohibit" route types.',
+      ),
     },
     async handler(a, ctx) {
       return addRoute(a, ctx);
@@ -244,7 +251,10 @@ export const routeTools: ToolModule = [
         .boolean()
         .optional()
         .describe("Exclude route from hardware (HW) offloading"),
-      type: z.string().optional().describe('"unicast", "blackhole", "unreachable", or "prohibit"'),
+      type: RouteType.optional().describe(
+        '"blackhole" makes the route drop traffic; "unicast" turns a blackhole route back into a ' +
+          "normal next-hop route.",
+      ),
     },
     async handler(a, ctx) {
       ctx.info(`Updating route: route_id=${a.route_id}`);
@@ -275,7 +285,7 @@ export const routeTools: ToolModule = [
       if (a.check_gateway !== undefined) cmd.raw(`check-gateway=${quoteValue(a.check_gateway)}`);
       if (a.suppress_hw_offload !== undefined)
         cmd.bool("suppress-hw-offload", a.suppress_hw_offload);
-      if (a.type !== undefined) cmd.set("type", a.type);
+      if (a.type !== undefined) cmd.raw(routeTypeArg(a.type, true));
 
       const built = cmd.build();
       if (built === base) return "No updates specified.";
@@ -522,7 +532,7 @@ export const routeTools: ToolModule = [
     title: "Add IPv4 Blackhole Route",
     annotations: WRITE,
     description:
-      "Adds an IPv4 null/blackhole route (`/ip route add type=blackhole`) — traffic to `dst_address` " +
+      "Adds an IPv4 null/blackhole route (`/ip route add … blackhole`) — traffic to `dst_address` " +
       "is silently dropped at the routing layer without generating an ICMP unreachable. " +
       "Used for traffic engineering, bogon suppression, or null-routing abusive prefixes. " +
       "For a normal next-hop route use add_route; for a default gateway use add_default_route. " +
@@ -536,7 +546,7 @@ export const routeTools: ToolModule = [
       ctx.info(`Adding blackhole route: dst=${a.dst_address}`);
       const cmd = new Cmd("/ip route add")
         .set("dst-address", a.dst_address)
-        .set("type", "blackhole")
+        .raw("blackhole")
         .set("distance", a.distance)
         .opt("comment", a.comment)
         .build();

@@ -11,6 +11,7 @@ import {
   placeBeforeError,
   portConflictError,
   readBackUnavailable,
+  routeTypeArg,
   splitHostPort,
 } from "../../src/core/routeros";
 
@@ -142,5 +143,23 @@ describe("readBackUnavailable", () => {
   });
   test("returns false for a real record body", () => {
     expect(readBackUnavailable(" 0  chain=input action=accept dst-port=443 .id=*1A")).toBe(false);
+  });
+});
+
+describe("routeTypeArg", () => {
+  // Verified on RouterOS 7: `type=blackhole` → "bad parameter type",
+  // `blackhole=yes` → "expected end of command", bare `blackhole` works, and
+  // `!blackhole` on `set` turns the route back into a unicast one.
+  test("emits the bare keyword for blackhole", () => {
+    expect(routeTypeArg("blackhole")).toBe("blackhole");
+    expect(routeTypeArg("blackhole", true)).toBe("blackhole");
+  });
+  test("omits unicast on add but negates it on set", () => {
+    expect(routeTypeArg("unicast")).toBeUndefined();
+    expect(routeTypeArg("unicast", true)).toBe("!blackhole");
+  });
+  test("emits nothing when no type was requested", () => {
+    expect(routeTypeArg(undefined)).toBeUndefined();
+    expect(routeTypeArg(undefined, true)).toBeUndefined();
   });
 });

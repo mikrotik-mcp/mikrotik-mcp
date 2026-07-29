@@ -9,7 +9,7 @@
     },
     "source": {
       "type": "string",
-      "description": "Script source code (may contain spaces/semicolons)"
+      "description": "Script source code, VERBATIM (may contain spaces/semicolons/quotes — they are quoted and escaped for the console automatically). Never HTML-escape it: pass `<`, `>`, `&` as themselves, since `&lt;`/`&gt;`/`&amp;` are stored literally and break comparisons."
     },
     "policy": {
       "description": "Permission policy list, e.g. 'read,write,test,policy'",

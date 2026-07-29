@@ -59,8 +59,9 @@
       "type": "boolean"
     },
     "type": {
-      "description": "\"unicast\", \"blackhole\", \"unreachable\", or \"prohibit\"",
-      "type": "string"
+      "description": "\"blackhole\" makes the route drop traffic; \"unicast\" turns a blackhole route back into a normal next-hop route.",
+      "type": "string",
+      "enum": ["unicast", "blackhole"]
     }
   },
   "required": ["route_id"],

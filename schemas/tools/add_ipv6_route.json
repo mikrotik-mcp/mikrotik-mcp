@@ -13,7 +13,7 @@
     },
     "type": {
       "type": "string",
-      "enum": ["unicast", "blackhole", "unreachable", "prohibit"]
+      "enum": ["unicast", "blackhole"]
     },
     "distance": {
       "type": "integer",

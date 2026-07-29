@@ -56,8 +56,9 @@
       "type": "boolean"
     },
     "type": {
-      "description": "\"unicast\" (default), \"blackhole\", \"unreachable\", or \"prohibit\"",
-      "type": "string"
+      "description": "\"unicast\" (default) or \"blackhole\" (drop silently). RouterOS v7 has no \"unreachable\"/\"prohibit\" route types.",
+      "type": "string",
+      "enum": ["unicast", "blackhole"]
     }
   },
   "required": ["dst_address", "gateway", "disabled"],

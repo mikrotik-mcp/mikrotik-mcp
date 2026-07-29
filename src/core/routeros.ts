@@ -63,6 +63,28 @@ export function yesno(value: boolean): "yes" | "no" {
 }
 
 /**
+ * Render a route's discard type as the argument RouterOS v7 actually accepts.
+ *
+ * v6's `/ip route ... type=blackhole` no longer exists — v7 rejects it with
+ * "bad parameter type". The type is a BARE keyword argument instead
+ * (`/ip route add dst-address=0.0.0.0/0 blackhole`); even `blackhole=yes` fails
+ * ("expected end of command"), and on `set` the negated form `!blackhole` turns
+ * it back into a unicast route. v6's `unreachable`/`prohibit` types are gone
+ * from v7 entirely, which is why the tool schemas only offer unicast/blackhole.
+ *
+ * `forSet` picks the `set` form: on `add`, unicast is the default and needs no
+ * argument at all; on `set` it must be spelled `!blackhole` to clear the flag.
+ */
+export function routeTypeArg(
+  type: "unicast" | "blackhole" | undefined,
+  forSet = false,
+): string | undefined {
+  if (type === undefined) return undefined;
+  if (type === "blackhole") return "blackhole";
+  return forSet ? "!blackhole" : undefined;
+}
+
+/**
  * Split a `host:port` string into its host and numeric port. Several RouterOS
  * menus (e.g. `/interface sstp-client`) take the server address and the port as
  * SEPARATE parameters and reject a `connect-to` that embeds `:port` with "bad

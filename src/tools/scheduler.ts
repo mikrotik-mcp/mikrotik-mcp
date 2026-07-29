@@ -186,7 +186,13 @@ export const schedulerTools: ToolModule = [
       "Returns the added script's detail including its name and source.",
     inputSchema: {
       name: z.string().describe("Name for the script"),
-      source: z.string().describe("Script source code (may contain spaces/semicolons)"),
+      source: z
+        .string()
+        .describe(
+          "Script source code, VERBATIM (may contain spaces/semicolons/quotes — they are quoted " +
+            "and escaped for the console automatically). Never HTML-escape it: pass `<`, `>`, `&` " +
+            "as themselves, since `&lt;`/`&gt;`/`&amp;` are stored literally and break comparisons.",
+        ),
       policy: z
         .string()
         .optional()

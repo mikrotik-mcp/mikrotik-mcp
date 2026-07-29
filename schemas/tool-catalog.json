@@ -3477,8 +3477,9 @@
             "type": "boolean"
           },
           "type": {
-            "description": "\"unicast\" (default), \"blackhole\", \"unreachable\", or \"prohibit\"",
-            "type": "string"
+            "description": "\"unicast\" (default) or \"blackhole\" (drop silently). RouterOS v7 has no \"unreachable\"/\"prohibit\" route types.",
+            "type": "string",
+            "enum": ["unicast", "blackhole"]
           }
         },
         "required": ["dst_address", "gateway", "disabled"],
@@ -3632,8 +3633,9 @@
             "type": "boolean"
           },
           "type": {
-            "description": "\"unicast\", \"blackhole\", \"unreachable\", or \"prohibit\"",
-            "type": "string"
+            "description": "\"blackhole\" makes the route drop traffic; \"unicast\" turns a blackhole route back into a normal next-hop route.",
+            "type": "string",
+            "enum": ["unicast", "blackhole"]
           }
         },
         "required": ["route_id"],
@@ -3841,7 +3843,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Adds an IPv4 null/blackhole route (`/ip route add type=blackhole`) — traffic to `dst_address` is silently dropped at the routing layer without generating an ICMP unreachable. Used for traffic engineering, bogon suppression, or null-routing abusive prefixes. For a normal next-hop route use add_route; for a default gateway use add_default_route. Returns the created route's `.id` on success.",
+      "description": "Adds an IPv4 null/blackhole route (`/ip route add … blackhole`) — traffic to `dst_address` is silently dropped at the routing layer without generating an ICMP unreachable. Used for traffic engineering, bogon suppression, or null-routing abusive prefixes. For a normal next-hop route use add_route; for a default gateway use add_default_route. Returns the created route's `.id` on success.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -8835,7 +8837,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Adds an IPv6 static route (`/ipv6 route add`) to the routing table — use to configure next-hop forwarding, black-hole drops, or VRF-targeted routes for IPv6 prefixes. For the IPv4 equivalent use add_route. To set the gateway-of-last-resort (::/0) use add_ipv6_default_route instead. Returns the created route's full detail including its `.id`.\n\nNotes:\n    dst_address: destination prefix, e.g. '2001:db8:1::/64'.\n    type: 'unicast' (default) routes via gateway; 'blackhole',\n        'unreachable' and 'prohibit' discard traffic (no gateway needed).\n    routing_table: target a named routing table/FIB.",
+      "description": "Adds an IPv6 static route (`/ipv6 route add`) to the routing table — use to configure next-hop forwarding, black-hole drops, or VRF-targeted routes for IPv6 prefixes. For the IPv4 equivalent use add_route. To set the gateway-of-last-resort (::/0) use add_ipv6_default_route instead. Returns the created route's full detail including its `.id`.\n\nNotes:\n    dst_address: destination prefix, e.g. '2001:db8:1::/64'.\n    type: 'unicast' (default) routes via gateway; 'blackhole' discards\n        traffic (no gateway needed). RouterOS v7 has no 'unreachable'/'prohibit'.\n    routing_table: target a named routing table/FIB.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -8850,7 +8852,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["unicast", "blackhole", "unreachable", "prohibit"]
+            "enum": ["unicast", "blackhole"]
           },
           "distance": {
             "type": "integer",
@@ -26290,7 +26292,7 @@
           },
           "source": {
             "type": "string",
-            "description": "Script source code (may contain spaces/semicolons)"
+            "description": "Script source code, VERBATIM (may contain spaces/semicolons/quotes — they are quoted and escaped for the console automatically). Never HTML-escape it: pass `<`, `>`, `&` as themselves, since `&lt;`/`&gt;`/`&amp;` are stored literally and break comparisons."
           },
           "policy": {
             "description": "Permission policy list, e.g. 'read,write,test,policy'",

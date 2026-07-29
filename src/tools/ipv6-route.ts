@@ -3,15 +3,16 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { yesno, whereClause, routeTypeArg, looksLikeError, isEmpty, Cmd } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 
-const RouteType = z.enum(["unicast", "blackhole", "unreachable", "prohibit"]);
+/** Same v7 reality as `/ip route`: bare `blackhole`, no unreachable/prohibit. */
+const RouteType = z.enum(["unicast", "blackhole"]);
 
 interface AddIpv6RouteArgs {
   dst_address: string;
   gateway?: string;
-  type?: string;
+  type?: "unicast" | "blackhole";
   distance?: number;
   scope?: number;
   target_scope?: number;
@@ -31,7 +32,7 @@ async function addIpv6Route(a: AddIpv6RouteArgs, ctx: ToolContext): Promise<stri
   const cmd = new Cmd("/ipv6 route add")
     .set("dst-address", a.dst_address)
     .opt("gateway", a.gateway)
-    .opt("type", a.type)
+    .raw(routeTypeArg(a.type))
     .opt("distance", a.distance)
     .opt("scope", a.scope)
     .opt("target-scope", a.target_scope)
@@ -93,8 +94,8 @@ export const ipv6RouteTools: ToolModule = [
       "Returns the created route's full detail including its `.id`.\n\n" +
       "Notes:\n" +
       "    dst_address: destination prefix, e.g. '2001:db8:1::/64'.\n" +
-      "    type: 'unicast' (default) routes via gateway; 'blackhole',\n" +
-      "        'unreachable' and 'prohibit' discard traffic (no gateway needed).\n" +
+      "    type: 'unicast' (default) routes via gateway; 'blackhole' discards\n" +
+      "        traffic (no gateway needed). RouterOS v7 has no 'unreachable'/'prohibit'.\n" +
       "    routing_table: target a named routing table/FIB.",
     inputSchema: {
       dst_address: z.string().describe("Destination prefix, e.g. '2001:db8:1::/64'"),

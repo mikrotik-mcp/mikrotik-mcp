@@ -457,7 +457,7 @@ export const moduleCatalog: ModuleInfo[] = [
     label: "IPv6 Routes",
     slug: "ipv6-route",
     group: "IPv6",
-    description: "Static IPv6 routes, incl. default and blackhole/unreachable (`/ipv6 route`).",
+    description: "Static IPv6 routes, incl. default and blackhole routes (`/ipv6 route`).",
     tools: ipv6RouteTools,
   },
   {
