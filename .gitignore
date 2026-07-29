@@ -195,6 +195,7 @@ results/
 
 # Local plans / notes
 plans/
+docs/tasks
 
 ./mcp-inspector.config.local.json
 
