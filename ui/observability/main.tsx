@@ -69,6 +69,7 @@ import { JsonView } from "./highlight";
 import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
 import { TransactionsView } from "./transactions";
+import { FlowsView } from "./flows";
 import { MemoryView } from "./memory";
 import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
@@ -117,6 +118,7 @@ type ViewId =
   | "aaa"
   | "topology"
   | "packets"
+  | "flows"
   | "snapshots"
   | "drift"
   | "txn"
@@ -137,6 +139,7 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "aaa", label: "RADIUS & UM", sub: "RADIUS client & User Manager RADIUS server" },
   { id: "topology", label: "Topology", sub: "Layer-2 neighbours via MNDP / CDP / LLDP" },
   { id: "packets", label: "Packets", sub: "Live TZSP capture & decode" },
+  { id: "flows", label: "Flows", sub: "NetFlow/IPFIX top talkers, conversations & anomalies" },
   { id: "snapshots", label: "Snapshots", sub: "Config history & time-travel diff" },
   { id: "drift", label: "Drift Guard", sub: "Golden config baselines & live drift detection" },
   {
@@ -209,6 +212,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   aaa: MONO_ACCENT,
   topology: MONO_ACCENT,
   packets: MONO_ACCENT,
+  flows: MONO_ACCENT,
   snapshots: MONO_ACCENT,
   drift: MONO_ACCENT,
   txn: MONO_ACCENT,
@@ -294,6 +298,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Set a baseline via MCP tools (config_set_baseline) or the Baseline Manager below.",
       "Click a device card to run a live drift check against its golden config.",
       "Promote accepted changes as the new baseline, or reconcile to roll back.",
+    ],
+  },
+  flows: {
+    what: "Continuous traffic analytics from NetFlow/IPFIX the router exports here — who is using the bandwidth, talking to what, on which application. Flow metadata only; no packet payload is carried or stored.",
+    tips: [
+      "Empty page? Read the collector strip first — 'templates pending' means v9/IPFIX data arrived before the layout that decodes it, and resolves on the next refresh.",
+      "Set it up with the setup-traffic-flow prompt: start the collector, then point the router at this host.",
+      "Flows are cheap and aggregate; use Packets (TZSP) when you need to see inside a specific conversation.",
     ],
   },
   txn: {
@@ -583,6 +595,13 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       </>
     ),
     packets: <path d="M3 12h4l2-7 4 14 2-7h6" />,
+    flows: (
+      <>
+        <path d="M3 6h7a4 4 0 0 1 4 4v4a4 4 0 0 0 4 4h3" />
+        <path d="M3 18h5" />
+        <path d="m18 5 3 3-3 3" />
+      </>
+    ),
     snapshots: (
       <>
         <path d="M12 3 3 7.5 12 12 21 7.5 12 3Z" />
@@ -1571,6 +1590,9 @@ function App(): ReactNode {
 
         {/* ── Drift Guard ── */}
         {view === "drift" && <DriftView />}
+
+        {/* ── Flows ── */}
+        {view === "flows" && <FlowsView />}
         {view === "txn" && <TransactionsView />}
 
         {/* ── Change Plan ── */}

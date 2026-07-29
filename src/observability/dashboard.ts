@@ -157,6 +157,7 @@ import { isMacTelnetDevice } from "../core/transport";
 import { VERSION } from "../version";
 import { driftRoutes } from "./drift-routes";
 import { txnRoutes } from "./txn-routes";
+import { flowRoutes } from "./flow-routes";
 import { subscribeTxn } from "./txn-hub";
 import { alertRoutes } from "./alert-routes";
 import { clientError, logError } from "./http-error";
@@ -1581,6 +1582,9 @@ export async function runDashboard(
 
     const txnResp = await txnRoutes(req, url);
     if (txnResp) return txnResp;
+
+    const flowResp = await flowRoutes(req, url);
+    if (flowResp) return flowResp;
 
     // `getEventStore()` rather than the `db` binding below, which is declared
     // later in this function — alerting's rule preview replays stored events.
