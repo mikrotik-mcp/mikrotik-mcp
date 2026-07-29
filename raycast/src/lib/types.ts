@@ -611,3 +611,66 @@ export interface FlowHealth {
     evicted: number;
   } | null;
 }
+
+// ── Staged fleet rollout (`/api/rollout`) ───────────────────────────────────
+export type RolloutStage =
+  | "pending"
+  | "applied"
+  | "failed"
+  | "reverted"
+  | "revert-failed"
+  | "skipped";
+
+export type RolloutOutcome =
+  | "completed"
+  | "completed-with-failures"
+  | "halted"
+  | "reverted"
+  | "needs-attention"
+  | "aborted";
+
+export interface RolloutDevice {
+  device: string;
+  wave: number;
+  stage: RolloutStage;
+  snapshotId?: string;
+  error?: string;
+}
+
+export interface RolloutWave {
+  index: number;
+  devices: string[];
+  isCanary: boolean;
+}
+
+export interface RolloutGate {
+  wave: number;
+  ok: boolean;
+  failures: { device: string; reason: string }[];
+  collateral?: boolean;
+}
+
+export interface RolloutRecord {
+  id: string;
+  ts: number;
+  updated: number;
+  label?: string;
+  commands: string[];
+  waves: RolloutWave[];
+  devices: RolloutDevice[];
+  gates: RolloutGate[];
+  phase: string;
+  /** Undefined while the rollout is still in flight. */
+  outcome?: RolloutOutcome;
+  notes: string[];
+}
+
+export interface RolloutEventRow {
+  rolloutId: string;
+  seq: number;
+  ts: number;
+  kind: string;
+  device?: string;
+  ok: boolean;
+  detail?: string;
+}

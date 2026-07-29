@@ -10,11 +10,13 @@ import {
   Detail,
   Form,
   Icon,
+  List,
   useNavigation,
 } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { postJson } from "./lib/api";
 import { showFailureToast } from "./lib/confirm";
+import { RolloutSection } from "./lib/rollouts";
 import type { ChangePlan, PlanStep } from "./lib/types";
 
 const OP_SIGN: Record<string, string> = {
@@ -92,7 +94,8 @@ function PlanResult({ script }: { script: string }) {
   );
 }
 
-export default function Command() {
+/** The dry-run form, pushed from the command's root list. */
+function PlanForm() {
   const { push } = useNavigation();
   return (
     <Form
@@ -124,5 +127,31 @@ export default function Command() {
         }
       />
     </Form>
+  );
+}
+
+/**
+ * Root: the dry-run entry point plus the fleet-rollout section. A rollout is the
+ * same change plan applied to N devices with gates, so they belong in one place —
+ * and having Hold / Resume / Abort a keystroke away is the point of putting
+ * rollouts in a launcher at all.
+ */
+export default function Command() {
+  return (
+    <List searchBarPlaceholder="Change plan & rollouts…">
+      <List.Section title="Dry-run">
+        <List.Item
+          icon={Icon.Play}
+          title="Plan Changes"
+          subtitle="Paste commands for a risk-scored preview — no device is touched"
+          actions={
+            <ActionPanel>
+              <Action.Push title="Plan Changes" icon={Icon.Play} target={<PlanForm />} />
+            </ActionPanel>
+          }
+        />
+      </List.Section>
+      <RolloutSection />
+    </List>
   );
 }

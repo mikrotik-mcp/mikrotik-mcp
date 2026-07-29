@@ -26,6 +26,7 @@ import type {
   AlertsPayload,
   DeviceInfo,
   DevicesPayload,
+  RolloutRecord,
   Stats,
   ToolEvent,
 } from "./lib/types";
@@ -72,6 +73,7 @@ export default function Command() {
   const statsQ = useApi<Stats>("/api/stats?window=3600000&buckets=1");
   const eventsQ = useApi<{ events: ToolEvent[] }>("/api/events?limit=6");
   const alertsQ = useApi<AlertsPayload>("/api/alerts");
+  const rolloutQ = useApi<{ rollouts: RolloutRecord[] }>("/api/rollout?limit=10");
 
   const devices = devicesQ.data?.devices ?? [];
   const enabled = devices.filter((d) => !d.disabled);
@@ -84,6 +86,14 @@ export default function Command() {
   const stats = statsQ.data;
   const events = eventsQ.data?.events ?? [];
   const firing = alertsQ.data?.active ?? [];
+  // A fleet rollout in flight is worth a glyph of its own: it is the one thing
+  // running unattended that changes routers, and knowing it is mid-flight (and
+  // which wave) is the difference between watching it and finding out later.
+  const rollouts = rolloutQ.data?.rollouts ?? [];
+  const activeRollouts = rollouts.filter((r) => r.outcome === undefined);
+  const stoppedRollouts = rollouts.filter(
+    (r) => r.outcome === "halted" || r.outcome === "needs-attention",
+  );
   // The menu-bar icon reports the WORST live severity. A menu bar has one glyph;
   // spending it on anything less than the most urgent thing wastes it.
   const worst: AlertSeverity | null = (["critical", "high", "medium", "low"] as const).find((s) =>
@@ -106,7 +116,9 @@ export default function Command() {
     ? "offline"
     : total === 0
       ? "MikroTik"
-      : `${online.length}/${total}${alerts > 0 ? ` ⚠${alerts}` : ""}`;
+      : `${online.length}/${total}${alerts > 0 ? ` ⚠${alerts}` : ""}${
+          activeRollouts.length > 0 ? " ⟳" : ""
+        }`;
 
   // Keep the root-search subtitle in sync for background glances.
   useEffect(() => {
@@ -178,6 +190,41 @@ export default function Command() {
           ))}
         </MenuBarExtra.Section>
       )}
+      {activeRollouts.length > 0 || stoppedRollouts.length > 0 ? (
+        <MenuBarExtra.Section title="Rollouts">
+          {activeRollouts.map((r) => {
+            const applied = r.devices.filter((d) => d.stage === "applied").length;
+            return (
+              <MenuBarExtra.Item
+                key={r.id}
+                icon={{ source: Icon.Clock, tintColor: Color.Blue }}
+                title={r.label ?? r.id}
+                subtitle={`wave ${r.phase} · ${applied}/${r.devices.length} applied`}
+                onAction={open_("change-plan")}
+                tooltip="In flight — open Change Plan to hold or abort"
+              />
+            );
+          })}
+          {stoppedRollouts.map((r) => (
+            <MenuBarExtra.Item
+              key={r.id}
+              icon={{
+                source: Icon.Warning,
+                tintColor: r.outcome === "needs-attention" ? Color.Red : Color.Orange,
+              }}
+              title={r.label ?? r.id}
+              subtitle={r.outcome}
+              onAction={open_("change-plan")}
+              tooltip={
+                r.outcome === "needs-attention"
+                  ? "A revert failed — restore the flagged device by hand"
+                  : "Halted at a failed gate"
+              }
+            />
+          ))}
+        </MenuBarExtra.Section>
+      ) : null}
+
       {unreachable ? (
         <MenuBarExtra.Section title="Dashboard">
           <MenuBarExtra.Item
