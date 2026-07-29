@@ -26,6 +26,8 @@ import { runHttp } from "./transport/http";
 import { runStdio } from "./transport/stdio";
 import { VERSION, SERVER_NAME } from "./version";
 import { printBanner } from "./cli-logo";
+import { AlertEngine, setAlertEngine } from "./alerts/engine";
+import { parseRules } from "./alerts/model";
 
 const HELP = `${SERVER_NAME} v${VERSION} — MikroTik RouterOS MCP server
 
@@ -202,6 +204,29 @@ async function main(): Promise<void> {
       `devices=${deviceNames.length === 1 ? deviceNames[0] : deviceNames.join("/")}, ` +
       `ssh-pool=${cfg.ssh.keepAlive ? "on" : "off"})`,
   );
+
+  // Alerting: opt-in via the `alerts` config block. Installed before any tool
+  // registers so a rule can fire on the very first call. A malformed rule
+  // disables alerting with a clear log line rather than refusing to boot — the
+  // server's job is managing routers, and it should still do that.
+  if (cfg.alerts?.enabled !== false && cfg.alerts) {
+    try {
+      const rules = parseRules(cfg.alerts.rules);
+      setAlertEngine(
+        new AlertEngine({
+          rules,
+          channels: cfg.alerts.channels,
+          historyDb: cfg.dashboard.dbPath,
+          maxHistory: cfg.alerts.maxHistory,
+        }),
+      );
+      logger.info(`Alerting enabled: ${rules.length} rule(s)`);
+    } catch (e) {
+      logger.error(
+        `Alerting disabled — invalid rules: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
 
   // Close pooled SSH connections on shutdown so the device sees a clean
   // disconnect (vs. a TCP RST that RouterOS logs as a broken session).

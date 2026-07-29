@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "4.24.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 835,
+  "toolCount": 842,
   "tools": [
     {
       "name": "find_tools",
@@ -142,6 +142,238 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_alert_rules",
+      "title": "List Alert Rules",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists every configured alert rule with its trigger, severity, channels, timing (`for` / `cooldown`) and current live state (clear / pending / firing / suppressed / muted). Also reports the configured delivery channels — with webhook URLs masked to scheme and host, since the URL path is itself the credential. Use this to see what is being watched and what is firing right now. Contacts no RouterOS device.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_alert_history",
+      "title": "Get Alert History",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Returns alerts that fired or resolved over a time window, newest first, with the per-channel delivery outcome for each. Use this to check whether an alert actually reached its destination, or to review what has been noisy. Contacts no RouterOS device.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "hours": {
+            "default": 24,
+            "description": "Window in hours.",
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 720
+          },
+          "rule_id": {
+            "description": "Restrict to a single rule id.",
+            "type": "string"
+          },
+          "limit": {
+            "default": 100,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": ["hours", "limit"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "test_alert_channel",
+      "title": "Test Alert Channel",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Sends a test notification on one configured channel and reports the delivery outcome (HTTP status, attempts, duration). Use this to prove a webhook is reachable and correctly configured BEFORE relying on it for real alerts — a silently broken channel is worse than none. Sends a real message to the destination. Contacts no RouterOS device.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": ["slack", "discord", "ntfy", "webhook", "mcp"],
+            "description": "Which configured channel to test."
+          }
+        },
+        "required": ["channel"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_alert_rule",
+      "title": "Add Alert Rule",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Adds an alert rule at runtime. `trigger` is a JSON object of exactly one kind: a metric threshold `{\"metric\":\"error_rate\",\"window\":\"5m\",\"above\":0.15,\"minCalls\":20}`, an event `{\"event\":\"tool_call\",\"risk\":[\"destructive\"],\"device\":[\"core-rtr\"]}`, or an absence `{\"absence\":\"snapshot\",\"within\":\"24h\"}`. Set `for` so a condition must hold before firing, and `cooldown` (default 15m) to bound re-fires. The rule is added to the running engine; persist it in the config file to survive a restart.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Unique id — keys muting and history, so make it stable."
+          },
+          "trigger": {
+            "type": "string",
+            "description": "The trigger as a JSON object (see the description)."
+          },
+          "channels": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["slack", "discord", "ntfy", "webhook", "mcp"]
+            },
+            "description": "Where to deliver."
+          },
+          "severity": {
+            "default": "medium",
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"]
+          },
+          "description": {
+            "description": "Human-readable title used in the message.",
+            "type": "string"
+          },
+          "for": {
+            "description": "Hold time before firing, e.g. '2m'.",
+            "type": "string"
+          },
+          "cooldown": {
+            "default": "15m",
+            "description": "Minimum gap between fires.",
+            "type": "string"
+          }
+        },
+        "required": ["id", "trigger", "channels", "severity", "cooldown"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_alert_rule",
+      "title": "Update Alert Rule",
+      "risk": "write-idempotent",
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Changes an existing alert rule in place. Only the fields you pass are modified; the rest are left as they are. Use to retune a noisy threshold, widen the cooldown, change channels, or enable/disable a rule without deleting it.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "trigger": {
+            "description": "Replacement trigger, as a JSON object.",
+            "type": "string"
+          },
+          "channels": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["slack", "discord", "ntfy", "webhook", "mcp"]
+            }
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"]
+          },
+          "description": {
+            "type": "string"
+          },
+          "for": {
+            "type": "string"
+          },
+          "cooldown": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "remove_alert_rule",
+      "title": "Remove Alert Rule",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Deletes an alert rule from the running engine. Its live state is discarded, so a rule re-added with the same id starts clean rather than resuming a stale firing state. Consider mute_alert_rule instead if you only want quiet for a while.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mute_alert_rule",
+      "title": "Mute Alert Rule",
+      "risk": "write-idempotent",
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Silences one rule for a duration (e.g. '1h', '30m') without deleting it. A muted rule keeps tracking its condition but emits nothing — and un-muting does NOT replay alerts that fired and resolved while it was quiet. Use during planned maintenance, or to stop a known-noisy rule while you retune it. Pass duration '0s' to un-mute immediately.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "duration": {
+            "default": "1h",
+            "description": "How long to stay quiet, e.g. '1h', '30m', '0s'.",
+            "type": "string"
+          }
+        },
+        "required": ["id", "duration"],
         "additionalProperties": false
       }
     },

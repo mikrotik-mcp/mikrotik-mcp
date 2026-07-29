@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "add_alert_rule",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique id — keys muting and history, so make it stable."
+    },
+    "trigger": {
+      "type": "string",
+      "description": "The trigger as a JSON object (see the description)."
+    },
+    "channels": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["slack", "discord", "ntfy", "webhook", "mcp"]
+      },
+      "description": "Where to deliver."
+    },
+    "severity": {
+      "default": "medium",
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "description": {
+      "description": "Human-readable title used in the message.",
+      "type": "string"
+    },
+    "for": {
+      "description": "Hold time before firing, e.g. '2m'.",
+      "type": "string"
+    },
+    "cooldown": {
+      "default": "15m",
+      "description": "Minimum gap between fires.",
+      "type": "string"
+    }
+  },
+  "required": ["id", "trigger", "channels", "severity", "cooldown"],
+  "additionalProperties": false
+}

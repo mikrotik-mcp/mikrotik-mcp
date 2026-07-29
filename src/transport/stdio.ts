@@ -5,6 +5,7 @@ import { getConfig } from "../core/runtime";
 import { checkForUpdate } from "../core/update-check";
 import { logger } from "../logger";
 import { createServer } from "../server";
+import { setMcpAlertSender } from "../alerts/channels";
 import { VERSION } from "../version";
 
 export async function runStdio(): Promise<void> {
@@ -14,6 +15,21 @@ export async function runStdio(): Promise<void> {
   logger.info(
     `MCP server ready on stdio — ${toolCount} tools, ${promptCount} prompts, ${uiViewCount} app views${readOnly ? " [READ-ONLY]" : ""}`,
   );
+
+  // Wire the `mcp` alert channel to this client. Only stdio does this today —
+  // the HTTP transport has no unprompted push path wired, so an alert routed to
+  // `mcp` there degrades to a delivery failure with a clear reason rather than
+  // vanishing. Documented in docs/alerting.md.
+  setMcpAlertSender((n) => {
+    void server.server
+      .sendLoggingMessage({
+        level: n.severity === "critical" || n.severity === "high" ? "error" : "info",
+        data:
+          `[alert:${n.kind}] ${n.title}${n.device ? ` · ${n.device}` : ""} ` +
+          `(severity ${n.severity}, rule ${n.ruleId})${n.body ? ` — ${n.body}` : ""}`,
+      })
+      .catch(() => {});
+  });
 
   // Non-blocking update whisper: check for a newer version in the background
   // and, if found, notify the connected LLM via a logging message. This runs

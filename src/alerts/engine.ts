@@ -15,6 +15,8 @@ import { deliver } from "./channels";
 import type { AlertNotification, ChannelConfig, DeliveryResult } from "./channels";
 import { eventMet, initialState, isEventTrigger, isMetricTrigger, metricMet, step } from "./model";
 import type { AlertEvent, AlertRule, AlertState, MetricSample } from "./model";
+import { openAlertStore, toAlertRecord } from "./store";
+import type { AlertRecord, AlertStore } from "./store";
 
 /** A delivery that has been decided but not yet attempted. */
 interface QueueItem {
@@ -30,6 +32,10 @@ export interface EngineOptions {
   /** Called when an alert fires or resolves, before delivery. */
   onAlert?: (n: AlertNotification) => void;
   now?: () => number;
+  /** Path to `events.db`. Omit to keep history in memory only. */
+  historyDb?: string;
+  /** History retention, in records. */
+  maxHistory?: number;
 }
 
 export class AlertEngine {
@@ -40,6 +46,9 @@ export class AlertEngine {
   private draining = false;
   private readonly opts: EngineOptions;
   private readonly now: () => number;
+  /** Lazily opened on first write — an engine with no alerts opens no database. */
+  private storePromise: Promise<AlertStore> | null = null;
+  private counter = 0;
 
   constructor(opts: EngineOptions) {
     this.opts = opts;
@@ -145,9 +154,11 @@ export class AlertEngine {
       while (this.queue.length > 0) {
         const item = this.queue.shift();
         if (!item) break;
+        const results: DeliveryResult[] = [];
         for (const channel of item.channels) {
           // `deliver` never throws; this loop cannot break the queue.
           const result = await deliver(channel, this.channels, item.notification);
+          results.push(result);
           this.opts.onDelivery?.(result, item.notification);
           if (!result.ok) {
             logger.debug(
@@ -155,9 +166,44 @@ export class AlertEngine {
             );
           }
         }
+        await this.persist(item.notification, results);
       }
     } finally {
       this.draining = false;
+    }
+  }
+
+  /**
+   * Past alerts, newest first. Reads from `events.db` when a path was
+   * configured; otherwise returns nothing, since there is nowhere to read from.
+   */
+  async history(
+    opts: { sinceMs?: number; ruleId?: string; limit?: number } = {},
+  ): Promise<AlertRecord[]> {
+    if (!this.opts.historyDb) return [];
+    try {
+      return (await this.store()).list(opts);
+    } catch (e) {
+      logger.debug(`[alerts] history unavailable: ${e instanceof Error ? e.message : String(e)}`);
+      return [];
+    }
+  }
+
+  private store(): Promise<AlertStore> {
+    this.storePromise ??= openAlertStore(this.opts.historyDb as string);
+    return this.storePromise;
+  }
+
+  /** Persist one delivered alert. Best-effort: history must never break delivery. */
+  private async persist(n: AlertNotification, results: DeliveryResult[]): Promise<void> {
+    if (!this.opts.historyDb) return;
+    try {
+      const store = await this.store();
+      const id = `${n.at.toString(36)}-${(this.counter++).toString(36)}`;
+      store.insert(toAlertRecord(n, results, id));
+      if (this.counter % 50 === 0) store.prune(this.opts.maxHistory ?? 5000);
+    } catch (e) {
+      logger.debug(`[alerts] history write failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

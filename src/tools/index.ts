@@ -114,6 +114,7 @@ import { safeModeTools } from "./safe-mode";
 import { schedulerTools } from "./scheduler";
 import { serverPulseTools } from "./server-pulse";
 import { capabilityTools } from "./capability";
+import { alertTools } from "./alerts";
 import { threatFeedTools } from "./threat-feed";
 import { sstpTools } from "./sstp";
 import { switchSettingsTools } from "./switch-settings";
@@ -177,6 +178,16 @@ export const moduleCatalog: ModuleInfo[] = [
       "wireless stack, enabled packages, and device-mode permissions — the facts that decide " +
       "which tools are usable on it.",
     tools: capabilityTools,
+  },
+  {
+    label: "Alerting",
+    slug: "alerting",
+    group: "System & Ops",
+    description:
+      "Rules that watch this server and reach out when something changes — error spikes, a " +
+      "device going dark, drift, a destructive call on a named router — delivered to Slack, " +
+      "Discord, ntfy, a generic webhook, or the MCP client itself.",
+    tools: alertTools,
   },
   // ── Universal primitive (the reliable dispatcher for any RouterOS command) ─
   {

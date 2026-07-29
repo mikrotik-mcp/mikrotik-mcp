@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "test_alert_channel",
+  "type": "object",
+  "properties": {
+    "channel": {
+      "type": "string",
+      "enum": ["slack", "discord", "ntfy", "webhook", "mcp"],
+      "description": "Which configured channel to test."
+    }
+  },
+  "required": ["channel"],
+  "additionalProperties": false
+}

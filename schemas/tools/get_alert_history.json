@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_alert_history",
+  "type": "object",
+  "properties": {
+    "hours": {
+      "default": 24,
+      "description": "Window in hours.",
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 720
+    },
+    "rule_id": {
+      "description": "Restrict to a single rule id.",
+      "type": "string"
+    },
+    "limit": {
+      "default": 100,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 1000
+    }
+  },
+  "required": ["hours", "limit"],
+  "additionalProperties": false
+}

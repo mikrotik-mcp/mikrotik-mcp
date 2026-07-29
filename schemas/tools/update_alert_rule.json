@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "update_alert_rule",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "trigger": {
+      "description": "Replacement trigger, as a JSON object.",
+      "type": "string"
+    },
+    "channels": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["slack", "discord", "ntfy", "webhook", "mcp"]
+      }
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "description": {
+      "type": "string"
+    },
+    "for": {
+      "type": "string"
+    },
+    "cooldown": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    }
+  },
+  "required": ["id"],
+  "additionalProperties": false
+}

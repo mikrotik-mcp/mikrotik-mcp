@@ -230,6 +230,42 @@ export type S3Config = z.infer<typeof S3ConfigSchema>;
  * database and streamed to a web dashboard (live feed + analytics) served on its
  * own host/port, independently of the MCP transport. Disabled by default.
  */
+/**
+ * Alert delivery channels. Every `url` here is a **credential** — for Slack,
+ * Discord and ntfy the secret is the path, so anyone holding the URL can post
+ * as you. They are masked (`maskUrl`) before any logging, storage or API
+ * response. No SSRF validation is performed: these endpoints are configured
+ * deliberately by the operator.
+ */
+export const AlertChannelsSchema = z.object({
+  slack: z.object({ url: z.string().url() }).optional(),
+  discord: z.object({ url: z.string().url() }).optional(),
+  ntfy: z.object({ url: z.string().url(), token: z.string().optional() }).optional(),
+  webhook: z
+    .object({
+      url: z.string().url(),
+      method: z.string().optional(),
+      headers: z.record(z.string(), z.string()).optional(),
+    })
+    .optional(),
+  /** Push `notifications/message` to the connected MCP client. No config needed. */
+  mcp: z.object({}).optional(),
+});
+
+/**
+ * Alerting configuration. Rules are validated by `src/alerts/model.ts`; this
+ * schema keeps them loose (`unknown[]`) so a malformed rule surfaces as a clear
+ * alerting error at load rather than failing the entire server config.
+ */
+export const AlertsConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  rules: z.array(z.unknown()).default([]),
+  channels: AlertChannelsSchema.default(() => ({})),
+  /** Alert history retention, in records. */
+  maxHistory: z.coerce.number().int().positive().default(5000),
+});
+export type AlertsConfig = z.infer<typeof AlertsConfigSchema>;
+
 export const DashboardConfigSchema = z.object({
   /** Master switch. When false, zero overhead and no SQLite is loaded. */
   enabled: z.boolean().default(false),
@@ -334,6 +370,8 @@ export const MikrotikConfigSchema = z.object({
   s3: S3ConfigSchema.optional(),
   /** Real-time observability dashboard (opt-in; off by default). */
   dashboard: DashboardConfigSchema.default(() => DashboardConfigSchema.parse({})),
+  /** Alerting: rules + delivery channels. Absent unless configured (opt-in). */
+  alerts: AlertsConfigSchema.optional(),
   /**
    * SSH connection pooling — keeps one persistent connection per device and
    * reuses it across tool calls, saving the handshake cost. Enabled by default.

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mute_alert_rule",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "duration": {
+      "default": "1h",
+      "description": "How long to stay quiet, e.g. '1h', '30m', '0s'.",
+      "type": "string"
+    }
+  },
+  "required": ["id", "duration"],
+  "additionalProperties": false
+}
