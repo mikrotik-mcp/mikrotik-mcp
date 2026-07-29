@@ -27,6 +27,7 @@ import { runStdio } from "./transport/stdio";
 import { VERSION, SERVER_NAME } from "./version";
 import { printBanner } from "./cli-logo";
 import { AlertEngine, setAlertEngine } from "./alerts/engine";
+import { startAlertSampler, stopAlertSampler } from "./alerts/sampler";
 import { parseRules } from "./alerts/model";
 
 const HELP = `${SERVER_NAME} v${VERSION} — MikroTik RouterOS MCP server
@@ -220,6 +221,8 @@ async function main(): Promise<void> {
           maxHistory: cfg.alerts.maxHistory,
         }),
       );
+      // Metric rules need a tick; event rules are pushed from the tool path.
+      startAlertSampler();
       logger.info(`Alerting enabled: ${rules.length} rule(s)`);
     } catch (e) {
       logger.error(
@@ -237,6 +240,7 @@ async function main(): Promise<void> {
     logger.info(`Received ${signal}, shutting down…`);
     closeConnectionPool();
     closeMemoryStore();
+    stopAlertSampler();
     process.exit(0);
   };
   process.on("SIGINT", () => shutdown("SIGINT"));

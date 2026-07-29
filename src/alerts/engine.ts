@@ -13,7 +13,15 @@
 import { logger } from "../logger";
 import { deliver } from "./channels";
 import type { AlertNotification, ChannelConfig, DeliveryResult } from "./channels";
-import { eventMet, initialState, isEventTrigger, isMetricTrigger, metricMet, step } from "./model";
+import {
+  eventMet,
+  initialState,
+  isEventTrigger,
+  isMetricTrigger,
+  metricMet,
+  parseDuration,
+  step,
+} from "./model";
 import type { AlertEvent, AlertRule, AlertState, MetricSample } from "./model";
 import { openAlertStore, toAlertRecord } from "./store";
 import type { AlertRecord, AlertStore } from "./store";
@@ -102,18 +110,37 @@ export class AlertEngine {
   }
 
   /**
-   * Feed a window aggregate in, for `metric` rules. Called on a timer by the
-   * dashboard sampler, never from the tool-call path.
+   * Evaluate every `metric` rule against a freshly computed window aggregate.
+   *
+   * Takes a FUNCTION, not a single sample: each rule declares its own `window`,
+   * so one aggregate cannot serve them all — a `5m` rule and a `1h` rule
+   * evaluated against the same numbers would both be wrong. The engine asks for
+   * exactly the windows its rules need, computing each at most once.
+   *
+   * Called on a timer, never from the tool-call path.
    */
-  sample(s: MetricSample): void {
+  sample(compute: (windowMs: number) => MetricSample): void {
     try {
+      const byWindow = new Map<number, MetricSample>();
       for (const rule of this.rules) {
         if (!isMetricTrigger(rule.when)) continue;
+        const windowMs = parseDuration(rule.when.window);
+        if (windowMs === null) continue; // schema-validated, but be total
+        let s = byWindow.get(windowMs);
+        if (!s) {
+          s = compute(windowMs);
+          byWindow.set(windowMs, s);
+        }
         this.advance(rule, metricMet(rule.when, s), undefined);
       }
     } catch (e) {
       logger.debug(`[alerts] sample failed: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  /** True when any rule needs metric sampling — lets the timer skip the work. */
+  hasMetricRules(): boolean {
+    return this.rules.some((r) => isMetricTrigger(r.when));
   }
 
   /** Run one rule's machine and enqueue whatever it decided. */

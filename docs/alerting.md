@@ -46,7 +46,9 @@ at a glance is worth more than one that can express anything.
 ```
 
 `metric` is one of `error_rate`, `calls`, `avg_duration_ms`, `p95_duration_ms`.
-Bound it with `above`, `below`, or both. **`minCalls` matters more than it
+Bound it with `above`, `below`, or both. Each rule is evaluated against **its own
+`window`** — a `5m` rule and a `1h` rule see different numbers — on a 30-second
+tick. **`minCalls` matters more than it
 looks**: one failure on an idle server is a 100% error rate, and paging on that
 is the fastest way to get an alerting system muted.
 
