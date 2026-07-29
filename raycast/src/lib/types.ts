@@ -496,3 +496,60 @@ export interface SnapshotMeta {
   bytes: number;
   sha: string;
 }
+
+// ── Cross-device transactions (`/api/txn`) ──────────────────────────────────
+export type TxnStage =
+  | "pending"
+  | "prepared"
+  | "committed"
+  | "rolled-back"
+  | "restored"
+  | "failed"
+  | "rollback-failed";
+export type TxnTerminalState = "COMMITTED" | "ABORTED" | "PARTIAL";
+
+export interface TxnParticipant {
+  device: string;
+  stage: TxnStage;
+  snapshotId?: string;
+  error?: string;
+  sessionLost?: boolean;
+}
+
+export interface TxnAssertionResult {
+  assertion: {
+    kind: string;
+    device?: string;
+    from?: string;
+    to?: string;
+    peer?: string;
+    dst?: string;
+  };
+  ok: boolean;
+  detail: string;
+}
+
+export interface TxnRecord {
+  id: string;
+  ts: number;
+  updated: number;
+  devices: string[];
+  commitOrder: string[];
+  phase: string;
+  /** Undefined while the transaction is still in flight. */
+  state?: TxnTerminalState;
+  participants: TxnParticipant[];
+  results: TxnAssertionResult[];
+  warnings: string[];
+  label?: string;
+}
+
+export interface TxnEvent {
+  txnId: string;
+  seq: number;
+  ts: number;
+  kind: string;
+  device?: string;
+  ok: boolean;
+  detail?: string;
+}

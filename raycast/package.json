@@ -52,7 +52,7 @@
     {
       "name": "menubar",
       "title": "Fleet Menu Bar",
-      "description": "Live MikroTik fleet cockpit in the menu bar — health, activity, alerts",
+      "description": "Live MikroTik fleet cockpit in the menu bar \u2014 health, activity, alerts",
       "icon": "extension-icon.png",
       "mode": "menu-bar",
       "interval": "1m"
@@ -74,28 +74,28 @@
     {
       "name": "clients",
       "title": "Clients",
-      "description": "LAN devices on a router — live traffic, block/allow, pin IP, rate limits",
+      "description": "LAN devices on a router \u2014 live traffic, block/allow, pin IP, rate limits",
       "icon": "extension-icon.png",
       "mode": "view"
     },
     {
       "name": "packets",
       "title": "Packet Capture",
-      "description": "Live decoded TZSP packet capture — protocols, talkers, pcap export",
+      "description": "Live decoded TZSP packet capture \u2014 protocols, talkers, pcap export",
       "icon": "extension-icon.png",
       "mode": "view"
     },
     {
       "name": "radius-um",
       "title": "RADIUS & UM",
-      "description": "RADIUS client and User Manager — users, profiles, limitations, NAS, sessions",
+      "description": "RADIUS client and User Manager \u2014 users, profiles, limitations, NAS, sessions",
       "icon": "extension-icon.png",
       "mode": "view"
     },
     {
       "name": "capsman",
       "title": "CAPsMAN",
-      "description": "Wi-Fi fabric — radios, co-channel conflicts, weak-signal clients and roaming/HA audit",
+      "description": "Wi-Fi fabric \u2014 radios, co-channel conflicts, weak-signal clients and roaming/HA audit",
       "icon": "extension-icon.png",
       "mode": "view"
     },
@@ -121,9 +121,16 @@
       "mode": "view"
     },
     {
+      "name": "transactions",
+      "title": "Transactions",
+      "description": "Cross-device two-phase commit \u2014 swimlane, assertions, abort",
+      "icon": "extension-icon.png",
+      "mode": "view"
+    },
+    {
       "name": "change-plan",
       "title": "Change Plan",
-      "description": "Dry-run intended RouterOS commands — risk-scored, safely ordered",
+      "description": "Dry-run intended RouterOS commands \u2014 risk-scored, safely ordered",
       "icon": "extension-icon.png",
       "mode": "view"
     },
@@ -137,14 +144,14 @@
     {
       "name": "backups",
       "title": "Backups",
-      "description": "Local config vault — create, download, rename, restore, delete",
+      "description": "Local config vault \u2014 create, download, rename, restore, delete",
       "icon": "extension-icon.png",
       "mode": "view"
     },
     {
       "name": "modules",
       "title": "Modules",
-      "description": "Enable/disable tool modules — curate the exposed MCP surface",
+      "description": "Enable/disable tool modules \u2014 curate the exposed MCP surface",
       "icon": "extension-icon.png",
       "mode": "view"
     },
@@ -179,7 +186,7 @@
     {
       "name": "memory",
       "title": "Memory",
-      "description": "Knowledge graph — entities, relations, observations and activity",
+      "description": "Knowledge graph \u2014 entities, relations, observations and activity",
       "icon": "extension-icon.png",
       "mode": "view"
     },
