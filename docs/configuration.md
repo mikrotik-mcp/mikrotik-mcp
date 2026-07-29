@@ -29,6 +29,33 @@ a single device named `default`.
 | Private key passphrase   | `--key-passphrase` | `MIKROTIK_KEY_PASSPHRASE` | _(unset)_   |
 | SSH connect timeout (ms) | `--timeout-ms`     | `MIKROTIK_TIMEOUT_MS`     | `10000`     |
 
+### REST API (RouterOS 7.9+)
+
+Opt a device into the RouterOS REST API. Commands that map cleanly run over
+HTTPS and come back as structured JSON with real status codes; everything REST
+cannot express — `/export`, Safe Mode, the interactive `/tool` commands, `[find]`
+selectors — silently falls back to SSH. Requires the `www-ssl` service enabled on
+the router.
+
+| Setting                | CLI flag             | Environment variable        | Default |
+| ---------------------- | -------------------- | --------------------------- | ------- |
+| Use the REST API       | `--api`              | `MIKROTIK_API`              | `false` |
+| REST HTTPS port        | `--api-port`         | `MIKROTIK_API_PORT`         | `443`   |
+| Accept self-signed TLS | `--api-insecure-tls` | `MIKROTIK_API_INSECURE_TLS` | `false` |
+
+RouterOS ships a **self-signed certificate**, so most deployments need
+`--api-insecure-tls`. It disables certificate verification, so it stays an
+explicit opt-in rather than a default; the connection error names it when a TLS
+failure is what went wrong.
+
+Two behaviours worth knowing before enabling it:
+
+- **List output changes shape.** REST replies render in the `print detail` form
+  (`0 key=value …`) rather than the columnar `print` layout, because column
+  selection is per-menu console knowledge that cannot be reconstructed from JSON.
+- **A device reached by `mac` ignores `api`.** MAC-Telnet has no routable IP for
+  HTTPS to reach, so the two together can only mean MAC-Telnet.
+
 ### SSH jump host (bastion / ProxyJump)
 
 Reach a router with no exposed SSH port by tunnelling through another over SSH —

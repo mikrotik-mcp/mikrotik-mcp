@@ -11,6 +11,7 @@
  */
 import type { DeviceConfig } from "../config";
 import { MikroTikMacTelnetClient } from "../mac-telnet/client";
+import { MikroTikRestClient } from "../rest/client";
 import { MikroTikSSHClient } from "../ssh/client";
 import type { SSHClientOptions } from "../ssh/client";
 import { getDevice } from "./runtime";
@@ -35,6 +36,28 @@ export interface DeviceClient {
 /** True when this device config selects the MAC-Telnet transport. */
 export function isMacTelnetDevice(dc: DeviceConfig): dc is DeviceConfig & { mac: string } {
   return Boolean(dc.mac);
+}
+
+/**
+ * True when this device opts into the REST API.
+ *
+ * MAC-Telnet wins: a device addressed by MAC has no routable IP for HTTPS to
+ * reach, so `mac` and `api` together can only mean MAC-Telnet.
+ */
+export function isRestDevice(dc: DeviceConfig): boolean {
+  return Boolean(dc.api) && !dc.mac;
+}
+
+/** A REST client for a device, for the one-shot REST attempt in `runOnce`. */
+export function createRestClient(dc: DeviceConfig): MikroTikRestClient {
+  return new MikroTikRestClient({
+    host: dc.host,
+    username: dc.username,
+    password: dc.password,
+    port: dc.apiPort,
+    insecureTls: dc.apiInsecureTls,
+    timeoutMs: dc.timeoutMs,
+  });
 }
 
 /** The SSH connection options for a device (no jump), used as one chain hop. */

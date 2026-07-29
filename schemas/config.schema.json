@@ -107,6 +107,17 @@
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
           },
+          "api": {
+            "type": "boolean"
+          },
+          "apiPort": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "apiInsecureTls": {
+            "type": "boolean"
+          },
           "description": {
             "type": "string"
           },

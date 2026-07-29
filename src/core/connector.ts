@@ -13,12 +13,62 @@ import { resolveDeviceName, getDevice } from "./runtime";
 import {
   connectErrorMessage,
   createDeviceClient,
+  createRestClient,
   isMacTelnetDevice,
+  isRestDevice,
   resolveJump,
   sshOptionsOf,
 } from "./transport";
 import { getSafeModeManager } from "../ssh/safe-mode";
 import { MikroTikSSHClient } from "../ssh/client";
+import { toRequest } from "../rest/bridge";
+import { RestHttpError, shouldFallbackToSsh } from "../rest/client";
+import type { DeviceConfig } from "../config";
+import { logger } from "../logger";
+
+/**
+ * Try the command over REST, returning null when the caller should fall back to
+ * SSH. Never throws for a fallback-worthy condition; DOES throw for a genuine
+ * device-side rejection.
+ *
+ * The distinction is the whole point. Falling back on a 400 ("bad parameter")
+ * would re-run a malformed command over SSH and surface a second, differently
+ * worded failure — the operator then debugs the wrong transport. Falling back on
+ * a 404 is right, because that means the menu does not exist on this RouterOS
+ * version and SSH may well handle it.
+ */
+async function tryRest(command: string, dc: DeviceConfig, name: string): Promise<string | null> {
+  // Cheap check first: an unmappable command never opens a connection.
+  if (!toRequest(command)) {
+    logger.debug(`[rest] no mapping for '${command}' on '${name}' — using SSH`);
+    return null;
+  }
+
+  const client = createRestClient(dc);
+  if (!(await client.connect())) {
+    logger.debug(`[rest] probe failed on '${name}' (${client.lastError}) — using SSH`);
+    return null;
+  }
+  try {
+    return await client.run(command);
+  } catch (e) {
+    if (!shouldFallbackToSsh(e)) {
+      // The device answered with a rejection. Surface it rather than masking it
+      // behind a second attempt over a different transport.
+      throw e instanceof RestHttpError
+        ? new Error(`REST ${e.status} on '${name}': ${e.detail}`)
+        : e;
+    }
+    logger.debug(
+      `[rest] falling back to SSH for '${command}' on '${name}': ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    );
+    return null;
+  } finally {
+    client.disconnect();
+  }
+}
 
 async function runOnce(
   command: string,
@@ -27,6 +77,14 @@ async function runOnce(
 ): Promise<string> {
   const name = resolveDeviceName(deviceName);
   const dc = getDevice(deviceName);
+
+  // REST first when the device opts in. Reached only outside Safe Mode: an
+  // active Safe Mode session is routed by executeMikrotikCommand before this
+  // function is called, which is what keeps Safe Mode SSH-only.
+  if (isRestDevice(dc)) {
+    const out = await tryRest(command, dc, name);
+    if (out !== null) return out;
+  }
 
   // Use the persistent connection pool for SSH devices when pooling is enabled.
   // MAC-Telnet has no SSH transport to pool; the one-shot path handles it.

@@ -177,6 +177,25 @@ export const DeviceConfigSchema = z.object({
   macHost: z.string().optional(),
   /** Optional UDP port the device's mac-server listens on (default 20561). */
   macPort: z.coerce.number().int().positive().optional(),
+  /**
+   * Use the RouterOS **REST API** (`/rest`, RouterOS 7.9+) where the command
+   * maps cleanly, falling back to SSH for everything it cannot express —
+   * `/export`, Safe Mode, the interactive `/tool` commands, `[find]` selectors.
+   *
+   * REST returns structured JSON and real HTTP status codes instead of scraped
+   * console text, and skips the per-command SSH channel setup. Opt-in per
+   * device: it changes the shape of some tool output (list results render in
+   * the `print detail` form), and it requires the `www-ssl` service enabled.
+   */
+  api: z.boolean().optional(),
+  /** HTTPS port for the REST API (`/ip service www-ssl`). Default 443. */
+  apiPort: z.coerce.number().int().positive().optional(),
+  /**
+   * Accept a self-signed TLS certificate for the REST API. RouterOS ships one
+   * by default, so most deployments need this — but it disables certificate
+   * verification, so it stays a deliberate opt-in rather than the default.
+   */
+  apiInsecureTls: z.boolean().optional(),
   /** Free-text label shown to the AI (e.g. "HQ edge router"). */
   description: z.string().optional(),
   /** When true, this device is excluded from the MCP tool surface — the AI cannot target it. */
@@ -514,6 +533,11 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
       }
     : undefined;
 
+  // A bare `--api` parses to "true"; anything explicitly falsy turns it off.
+  // Returns undefined when unset so the schema/config-file value survives.
+  const flagBool = (v: string | undefined): boolean | undefined =>
+    v === undefined ? undefined : !/^(0|false|no|off)$/i.test(v);
+
   // 1) Single-device fields (legacy MIKROTIK_* / flags) → the "default" device.
   const single = {
     host: pick("host", "MIKROTIK_HOST"),
@@ -532,6 +556,12 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     sourceMac: pick("source-mac", "MIKROTIK_SOURCE_MAC"),
     macHost: pick("mac-host", "MIKROTIK_MAC_HOST"),
     macPort: pick("mac-port", "MIKROTIK_MAC_PORT"),
+    // RouterOS REST API (7.9+). Tri-state: absent leaves the field unset so a
+    // config-file value survives; an explicit flag/env wins. `z.boolean()` does
+    // not coerce strings, so these are parsed here rather than by the schema.
+    api: flagBool(pick("api", "MIKROTIK_API")),
+    apiPort: pick("api-port", "MIKROTIK_API_PORT"),
+    apiInsecureTls: flagBool(pick("api-insecure-tls", "MIKROTIK_API_INSECURE_TLS")),
   };
   const hasSingle = Object.values(single).some((v) => v !== undefined);
 

@@ -46,6 +46,26 @@ export class RestHttpError extends Error {
   }
 }
 
+/**
+ * Whether a failed REST attempt should quietly retry over SSH.
+ *
+ * The distinction is the whole safety story of this transport:
+ *
+ * - **Fall back** when REST could not express or reach the command —
+ *   unmappable, 404 (menu absent on this RouterOS version), or any
+ *   transport-level failure (DNS, TCP, TLS). SSH may well succeed.
+ * - **Do not fall back** on 4xx/5xx that is the device *answering* — 400 bad
+ *   parameter, 401 auth, 403, 5xx. Re-running a malformed command over SSH
+ *   produces a second, differently worded failure, and the operator then debugs
+ *   the wrong transport.
+ */
+export function shouldFallbackToSsh(e: unknown): boolean {
+  if (e instanceof RestUnmappableError) return true;
+  if (e instanceof RestHttpError) return e.status === 404;
+  // Anything else reaching here is a thrown transport/runtime failure.
+  return true;
+}
+
 export interface RestClientOptions {
   host: string;
   username: string;
