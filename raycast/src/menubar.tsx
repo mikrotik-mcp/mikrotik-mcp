@@ -167,10 +167,11 @@ export default function Command() {
         <MenuBarExtra.Section title={`Firing (${firing.length})`}>
           {firing.map((a) => (
             <MenuBarExtra.Item
-              key={a.id}
+              // A rule tracking several devices yields one row per device.
+              key={`${a.id}:${a.subject}`}
               icon={{ source: Icon.Bell, tintColor: ALERT_TINT[a.severity] }}
               title={a.description ?? a.id}
-              subtitle={a.severity}
+              subtitle={a.subject === "*" ? a.severity : `${a.subject} · ${a.severity}`}
               onAction={() => void muteAlert(a.id)}
               tooltip="Mute this alert for 1 hour"
             />

@@ -134,6 +134,53 @@ describe("engine bookkeeping", () => {
     expect(engine.active()).toHaveLength(1);
   });
 
+  test("state is keyed by (rule, device) so a fleet rule reports every device", async () => {
+    const fired: string[] = [];
+    const engine = new AlertEngine({
+      rules: [rule({ id: "fleet", when: { event: "device_state", to: "offline" } })],
+      channels: { mcp: {} },
+      onAlert: (n) => fired.push(`${n.kind}:${n.device}`),
+    });
+
+    engine.notify({ kind: "device_state", to: "offline", device: "site-a" });
+    engine.notify({ kind: "device_state", to: "offline", device: "site-b" });
+    await engine.flush();
+
+    // Keyed by rule id alone, site-b would have been folded into site-a's alert.
+    expect(fired).toEqual(["fire:site-a", "fire:site-b"]);
+    expect(engine.active()).toHaveLength(2);
+  });
+
+  test("one device recovering does not resolve the others", async () => {
+    const fired: string[] = [];
+    const engine = new AlertEngine({
+      rules: [rule({ id: "fleet", when: { event: "device_state", to: "offline" } })],
+      channels: { mcp: {} },
+      onAlert: (n) => fired.push(`${n.kind}:${n.device}`),
+    });
+    engine.notify({ kind: "device_state", to: "offline", device: "site-a" });
+    engine.notify({ kind: "device_state", to: "offline", device: "site-b" });
+    engine.notify({ kind: "device_state", to: "online", device: "site-a" });
+    await engine.flush();
+
+    expect(fired).toEqual(["fire:site-a", "fire:site-b", "resolve:site-a"]);
+    // site-b is still down.
+    expect(engine.active().map((a) => a.subject)).toEqual(["site-b"]);
+  });
+
+  test("a fleet-wide rule with no device uses the `*` subject", async () => {
+    const engine = new AlertEngine({ rules: [rule()], channels: { mcp: {} } });
+    engine.notify({ kind: "tool_call", tool: "x" });
+    await engine.flush();
+    expect(engine.active().map((a) => a.subject)).toEqual(["*"]);
+  });
+
+  test("snapshot lists a configured-but-quiet rule exactly once", () => {
+    const engine = new AlertEngine({ rules: [rule()], channels: {} });
+    expect(engine.snapshot()).toHaveLength(1);
+    expect(engine.snapshot()[0].state.status).toBe("clear");
+  });
+
   test("setRules drops state for rules that no longer exist", async () => {
     const engine = new AlertEngine({ rules: [rule()], channels: { mcp: {} } });
     engine.notify({ kind: "tool_call", tool: "x" });

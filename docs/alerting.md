@@ -69,11 +69,11 @@ which re-satisfies the condition and keeps the rule firing, so it never emits a
 resolve. Write `{"event": "drift", "to": "detected"}`. Same for `device_state`:
 use `"to": "offline"`, not a bare `device_state`.
 
-**One rule reports one subject at a time.** Rule state is keyed by rule id, not
-by `(rule, device)`. A single "any device offline" rule that is already firing
-for `site-a` will not fire again when `site-b` also drops — the second device is
-folded into the first alert until it resolves. Where per-device alerts matter,
-write one rule per device.
+**One rule tracks every device independently.** Rule state is keyed by
+`(rule, device)`, so a single "any device offline" rule fires separately for
+`site-a` and `site-b`, and one recovering does not resolve the other. Rules whose
+events name no device — `metric`, `absence`, and fleet-wide event rules — share
+the `*` subject.
 
 **`absence`** — something expected did not happen.
 

@@ -118,6 +118,8 @@ export type AlertSeverity = "low" | "medium" | "high" | "critical";
 /** One alert rule with its live state (`GET /api/alerts`). */
 export interface AlertRuleRow {
   id: string;
+  /** Which device this row is about; `*` for fleet-wide rules. */
+  subject: string;
   description?: string;
   when: Record<string, unknown>;
   severity: AlertSeverity;

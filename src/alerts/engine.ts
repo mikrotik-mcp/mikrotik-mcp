@@ -28,6 +28,25 @@ import type { AbsenceTriggerT, AlertEvent, AlertRule, AlertState, MetricSample }
 import { openAlertStore, toAlertRecord } from "./store";
 import type { AlertRecord, AlertStore } from "./store";
 
+/** Subject used when an event names no device — metric and absence rules. */
+export const ANY_SUBJECT = "*";
+
+/**
+ * State-map key. `\u0000` separates because it cannot appear in a rule id (Zod
+ * takes any string, but a NUL byte in configuration is not a real case) and
+ * keeps the split unambiguous for ids containing `:` or `/`.
+ */
+function stateKey(ruleId: string, subject: string): string {
+  return `${ruleId}\u0000${subject}`;
+}
+
+function splitKey(key: string): { ruleId: string; subject: string } {
+  const i = key.indexOf("\u0000");
+  return i === -1
+    ? { ruleId: key, subject: ANY_SUBJECT }
+    : { ruleId: key.slice(0, i), subject: key.slice(i + 1) };
+}
+
 /** A delivery that has been decided but not yet attempted. */
 interface QueueItem {
   notification: AlertNotification;
@@ -72,23 +91,51 @@ export class AlertEngine {
     this.rules = rules;
     // Drop state for rules that no longer exist, so a re-added rule starts clean.
     const ids = new Set(rules.map((r) => r.id));
-    for (const id of [...this.states.keys()]) if (!ids.has(id)) this.states.delete(id);
+    for (const key of [...this.states.keys()]) {
+      if (!ids.has(splitKey(key).ruleId)) this.states.delete(key);
+    }
+  }
+
+  /** The configured rules, without their per-subject state. */
+  configuredRules(): AlertRule[] {
+    return this.rules;
   }
 
   setChannels(channels: ChannelConfig): void {
     this.channels = channels;
   }
 
-  /** Current status of every rule, for `list_alert_rules` and the dashboard. */
-  snapshot(): { rule: AlertRule; state: AlertState }[] {
-    return this.rules.map((rule) => ({
-      rule,
-      state: this.states.get(rule.id) ?? initialState(0),
-    }));
+  /**
+   * Every tracked (rule, subject) pair with its state.
+   *
+   * A rule that has never seen a subject still gets one row, so the UI can list
+   * a configured-but-quiet rule. A rule tracking several devices gets one row
+   * per device — which is the point of keying state by subject.
+   */
+  snapshot(): { rule: AlertRule; subject: string; state: AlertState }[] {
+    const out: { rule: AlertRule; subject: string; state: AlertState }[] = [];
+    for (const rule of this.rules) {
+      const subjects = [...this.states.keys()]
+        .map(splitKey)
+        .filter((k) => k.ruleId === rule.id)
+        .map((k) => k.subject);
+      if (subjects.length === 0) {
+        out.push({ rule, subject: ANY_SUBJECT, state: initialState(0) });
+        continue;
+      }
+      for (const subject of subjects) {
+        out.push({
+          rule,
+          subject,
+          state: this.states.get(stateKey(rule.id, subject)) ?? initialState(0),
+        });
+      }
+    }
+    return out;
   }
 
-  /** Rules currently firing — what the nav badge counts. */
-  active(): { rule: AlertRule; state: AlertState }[] {
+  /** Firing (rule, subject) pairs — what the nav badge counts. */
+  active(): { rule: AlertRule; subject: string; state: AlertState }[] {
     return this.snapshot().filter((s) => s.state.status === "firing");
   }
 
@@ -175,11 +222,21 @@ export class AlertEngine {
     return this.rules.some((r) => isAbsenceTrigger(r.when));
   }
 
-  /** Run one rule's machine and enqueue whatever it decided. */
+  /**
+   * Run one rule's machine for one subject and enqueue whatever it decided.
+   *
+   * State is keyed by `(ruleId, subject)`, not by rule alone. Without the
+   * subject, a single "any device offline" rule already firing for `site-a`
+   * would stay silent when `site-b` also drops — the second device folded into
+   * the first alert. Device is the subject because that is what a network alert
+   * is about; metric and absence rules are fleet-wide and use `*`.
+   */
   private advance(rule: AlertRule, met: boolean, event: AlertEvent | undefined): void {
-    const prev = this.states.get(rule.id) ?? initialState(this.now());
+    const subject = event?.device ?? ANY_SUBJECT;
+    const key = stateKey(rule.id, subject);
+    const prev = this.states.get(key) ?? initialState(this.now());
     const { state, action } = step(rule, prev, met, this.now());
-    this.states.set(rule.id, state);
+    this.states.set(key, state);
     if (action.type === "none") return;
 
     const n: AlertNotification = {

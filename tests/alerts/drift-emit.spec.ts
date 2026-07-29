@@ -132,16 +132,28 @@ describe("noteDriftResult", () => {
     expect(seen).toEqual(["core-rtr", "edge-rtr"]);
   });
 
-  test("KNOWN LIMITATION: one rule reports only the first device to drift", () => {
-    // Alert-rule state is keyed by rule id alone, not by (rule, subject). So a
-    // single "any drift" rule that is already firing for core-rtr will not fire
-    // again when edge-rtr drifts too — the second device is folded into the
-    // first alert. Documented rather than silently accepted; see the task
-    // tracker. Work around it today with one rule per device.
+  test("one rule reports EVERY device that drifts, not just the first", () => {
+    // Rule state is keyed by (rule, subject), so a single "any drift" rule
+    // already firing for core-rtr still fires for edge-rtr. Keying by rule id
+    // alone folded the second device into the first alert — which made a
+    // fleet-wide rule structurally unable to report a fleet.
     const { events } = collect();
     noteDriftResult(DRIFTED);
     noteDriftResult({ ...DRIFTED, device: "edge-rtr" });
-    expect(events.map((e) => e.device)).toEqual(["core-rtr"]);
+    expect(events.map((e) => e.device)).toEqual(["core-rtr", "edge-rtr"]);
+  });
+
+  test("each device resolves independently", () => {
+    const { events } = collect();
+    noteDriftResult(DRIFTED);
+    noteDriftResult({ ...DRIFTED, device: "edge-rtr" });
+    // core-rtr is fixed; edge-rtr is still drifted and must stay firing.
+    noteDriftResult(report({ device: "core-rtr" }));
+    expect(events.map((e) => `${e.kind}:${e.device}`)).toEqual([
+      "fire:core-rtr",
+      "fire:edge-rtr",
+      "resolve:core-rtr",
+    ]);
   });
 
   test("with no engine installed it is a silent no-op", () => {

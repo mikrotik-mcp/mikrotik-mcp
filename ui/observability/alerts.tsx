@@ -21,6 +21,8 @@ type RuleStatus = "clear" | "pending" | "firing" | "suppressed" | "muted" | "dis
 
 interface AlertRuleRow {
   id: string;
+  /** Which device this row is about; `*` for fleet-wide rules. */
+  subject: string;
   description?: string;
   when: Record<string, unknown>;
   severity: Severity;
@@ -224,9 +226,13 @@ export function AlertsView(): ReactNode {
             {firing.length} alert{firing.length === 1 ? "" : "s"} firing
           </div>
           {firing.map((r) => (
-            <div key={r.id} className="flex flex-wrap items-center gap-2 text-xs">
+            <div
+              key={`${r.id}\u0000${r.subject}`}
+              className="flex flex-wrap items-center gap-2 text-xs"
+            >
               <Badge type={SEV[r.severity].badge}>{r.severity}</Badge>
               <b className="font-medium">{r.description ?? r.id}</b>
+              {r.subject !== "*" && <Badge type="secondary">{r.subject}</Badge>}
               <span className="text-muted-foreground">since {ago(r.since)}</span>
               <span className="flex-1" />
               <Button
@@ -297,7 +303,7 @@ export function AlertsView(): ReactNode {
           <div className="grid gap-2">
             {ordered.map((r) => (
               <div
-                key={r.id}
+                key={`${r.id}\u0000${r.subject}`}
                 className={cn(
                   "bg-card grid gap-1.5 rounded-lg border px-3 py-2.5",
                   r.status === "firing" && "border-destructive/50",
@@ -308,6 +314,9 @@ export function AlertsView(): ReactNode {
                   <span className={cn("size-2 shrink-0 rounded-full", SEV[r.severity].dot)} />
                   <b className="text-[13px] font-medium">{r.description ?? r.id}</b>
                   <code className="text-muted-foreground text-[10px]">{r.id}</code>
+                  {/* A rule tracking several devices renders one card per device,
+                      so "firing" always names what it is firing about. */}
+                  {r.subject !== "*" && <Badge type="accent">{r.subject}</Badge>}
                   <span
                     className="text-muted-foreground text-[10px] uppercase"
                     title={STATUS_HINT[r.status]}

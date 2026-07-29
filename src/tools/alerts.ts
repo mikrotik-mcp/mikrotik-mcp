@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { DESTRUCTIVE, READ, WRITE, WRITE_IDEMPOTENT, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { getAlertEngine } from "../alerts/engine";
+import { ANY_SUBJECT, getAlertEngine } from "../alerts/engine";
 import { AlertRuleSchema, CHANNELS, isMuted, parseDuration, SEVERITIES } from "../alerts/model";
 import type { AlertRule } from "../alerts/model";
 import { deliver, redactChannels } from "../alerts/channels";
@@ -29,15 +29,18 @@ function renderRules(): string {
   if (rows.length === 0) return "No alert rules configured.";
 
   const now = Date.now();
-  const lines = rows.map(({ rule, state }) => {
+  const lines = rows.map(({ rule, subject, state }) => {
     const status = isMuted(rule, now)
       ? `muted until ${new Date(rule.mutedUntil ?? 0).toISOString()}`
       : !rule.enabled
         ? "disabled"
         : state.status;
     const trigger = JSON.stringify(rule.when);
+    // A rule tracking several devices shows one line per device — state is keyed
+    // by (rule, subject), so "firing" always names what it is firing about.
+    const on = subject === ANY_SUBJECT ? "" : `  on ${subject}`;
     return (
-      `${rule.id}  [${rule.severity}]  ${status}\n` +
+      `${rule.id}${on}  [${rule.severity}]  ${status}\n` +
       `  when:     ${trigger}\n` +
       `  channels: ${rule.channels.join(", ")}\n` +
       `  for:      ${rule.for ?? "0 (fire immediately)"}   cooldown: ${rule.cooldown}${
@@ -53,7 +56,7 @@ function renderRules(): string {
 function withRules(fn: (rules: AlertRule[]) => AlertRule[] | string): string | null {
   const engine = getAlertEngine();
   if (!engine) return NO_ENGINE;
-  const current = engine.snapshot().map((s) => s.rule);
+  const current = engine.configuredRules();
   const next = fn(current);
   if (typeof next === "string") return next;
   engine.setRules(next);

@@ -31,9 +31,16 @@ function json(body: unknown, status = 200): Response {
 }
 
 /** A rule plus its live state, in the shape the UI consumes. */
-function ruleRow(rule: AlertRule, status: string, since: number): Record<string, unknown> {
+function ruleRow(
+  rule: AlertRule,
+  subject: string,
+  status: string,
+  since: number,
+): Record<string, unknown> {
   return {
     id: rule.id,
+    /** Which device this row is about; `*` for fleet-wide rules. */
+    subject,
     description: rule.description,
     when: rule.when,
     severity: rule.severity,
@@ -103,9 +110,10 @@ export async function alertRoutes(
     const now = Date.now();
     const rows = engine
       .snapshot()
-      .map(({ rule, state }) =>
+      .map(({ rule, subject, state }) =>
         ruleRow(
           rule,
+          subject,
           isMuted(rule, now) ? "muted" : !rule.enabled ? "disabled" : state.status,
           state.since,
         ),
@@ -136,7 +144,7 @@ export async function alertRoutes(
     if (!parsed.success) {
       return json({ error: parsed.error.issues.map((i) => i.message).join("; ") }, 400);
     }
-    const rules = engine.snapshot().map((s) => s.rule);
+    const rules = engine.configuredRules();
     if (rules.some((r) => r.id === parsed.data.id)) {
       return json({ error: `rule '${parsed.data.id}' already exists` }, 409);
     }
@@ -148,7 +156,7 @@ export async function alertRoutes(
   if (idMatch) {
     if (!engine) return json({ error: "alerting is not configured" }, 400);
     const id = decodeURIComponent(idMatch[1]);
-    const rules = engine.snapshot().map((s) => s.rule);
+    const rules = engine.configuredRules();
     const existing = rules.find((r) => r.id === id);
     if (!existing) return json({ error: `unknown rule: ${id}` }, 404);
 
