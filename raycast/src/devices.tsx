@@ -22,6 +22,7 @@ import { postJson } from "./lib/api";
 import { showFailureToast } from "./lib/confirm";
 import { areaChart, chartImage, gaugeRow, sparklineIcon } from "./lib/charts";
 import type {
+  CapabilitiesPayload,
   DeviceInfo,
   DevicesPayload,
   OpResult,
@@ -226,7 +227,12 @@ export default function Command() {
   const { data, isLoading, revalidate } =
     useApi<DevicesPayload>("/api/devices");
   const { data: pool } = useApi<SSHPoolPayload>("/api/ssh-pool");
+  // Non-probing: reports only what the server has already learned, so opening
+  // this command cannot fan a probe out across the fleet.
+  const { data: caps } = useApi<CapabilitiesPayload>("/api/capabilities");
   usePolling(revalidate, 4000);
+  const capOf = (name: string) =>
+    caps?.devices.find((c) => c.device === name)?.capabilities ?? null;
 
   async function toggle(d: DeviceInfo) {
     const verb = d.disabled ? "Enable" : "Disable";
@@ -306,7 +312,16 @@ export default function Command() {
             icon={reachIcon(d)}
             title={d.name}
             subtitle={
-              showDetail ? undefined : (d.address ?? `${d.host}:${d.port}`)
+              showDetail
+                ? undefined
+                : [
+                    d.address ?? `${d.host}:${d.port}`,
+                    capOf(d.name)?.version
+                      ? `v${capOf(d.name)?.version}`
+                      : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join("  ·  ")
             }
             accessories={
               showDetail

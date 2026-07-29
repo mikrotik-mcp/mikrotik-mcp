@@ -15,6 +15,28 @@
 import type { ToolFilter } from "../config";
 import { ALWAYS_ON_MODULES, moduleCatalog } from "../tools";
 import type { ModuleInfo } from "../tools";
+import { explainUnmet } from "../core/capability";
+import type { ToolRequires } from "../core/capability";
+import { peekCapabilities } from "../core/capability-cache";
+import { getConfig } from "../core/runtime";
+
+/**
+ * Devices already known to fail `requires`, with the reason.
+ *
+ * Reads only resolved probes — an unprobed device is omitted rather than
+ * reported as unsupported, so this never claims a device cannot do something on
+ * no evidence.
+ */
+function unsupportedDevices(requires: ToolRequires): { device: string; reason: string }[] {
+  const out: { device: string; reason: string }[] = [];
+  for (const name of Object.keys(getConfig().devices)) {
+    const caps = peekCapabilities(name);
+    if (!caps) continue;
+    const reason = explainUnmet(caps, requires);
+    if (reason) out.push({ device: name, reason });
+  }
+  return out;
+}
 
 export interface ModuleSurfaceItem {
   slug: string;
@@ -24,6 +46,12 @@ export interface ModuleSurfaceItem {
   toolCount: number;
   /** True when this module would register under the current `tools` filter. */
   enabled: boolean;
+  /**
+   * Devices this module's tools cannot run on, with the reason — computed from
+   * probes that have ALREADY resolved, so this is empty until a device has been
+   * probed. Absence means "not known to be unsupported", never "supported".
+   */
+  unsupported?: { device: string; reason: string }[];
 }
 
 export interface ModuleSurface {
@@ -70,14 +98,21 @@ export function moduleSurface(
   filter: ToolFilter,
   catalog: ModuleInfo[] = moduleCatalog,
 ): ModuleSurface {
-  const modules = catalog.map((m) => ({
-    slug: m.slug,
-    label: m.label,
-    group: m.group,
-    description: m.description,
-    toolCount: m.tools.length,
-    enabled: isModuleEnabled(filter, m.slug, m.group),
-  }));
+  const modules = catalog.map((m) => {
+    // A module's requirement is uniform across its tools (they are applied with
+    // `withRequires`), so the first declaring tool speaks for the module.
+    const requires = m.tools.find((t) => t.requires)?.requires;
+    const unsupported = requires ? unsupportedDevices(requires) : [];
+    return {
+      slug: m.slug,
+      label: m.label,
+      group: m.group,
+      description: m.description,
+      toolCount: m.tools.length,
+      enabled: isModuleEnabled(filter, m.slug, m.group),
+      ...(unsupported.length > 0 ? { unsupported } : {}),
+    };
+  });
   const hasAllowList =
     (filter.enabledModules?.length ?? 0) > 0 || (filter.enabledGroups?.length ?? 0) > 0;
   return {

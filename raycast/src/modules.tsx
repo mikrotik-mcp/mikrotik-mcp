@@ -162,7 +162,22 @@ export default function Command() {
                 title={m.label}
                 subtitle={m.slug}
                 keywords={[m.slug, m.group]}
-                accessories={[{ text: `${m.toolCount} tools` }]}
+                accessories={[
+                  ...(m.unsupported?.length
+                    ? [
+                        {
+                          tag: {
+                            value: `unsupported on ${m.unsupported.length}`,
+                            color: Color.Orange,
+                          },
+                          tooltip: m.unsupported
+                            .map((u) => `${u.device}: ${u.reason}`)
+                            .join("\n"),
+                        },
+                      ]
+                    : []),
+                  { text: `${m.toolCount} tools` },
+                ]}
                 actions={
                   <ActionPanel>
                     <Action

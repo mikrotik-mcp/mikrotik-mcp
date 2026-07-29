@@ -2,12 +2,12 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ms } from "./format";
 import { withToken } from "./api";
-import { Activity, Loader2, RadioTower, RotateCw, ShieldCheck } from "lucide-react";
+import { Activity, Cpu, Loader2, RadioTower, RefreshCw, RotateCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Badge } from "./geist";
-import type { DeviceInfo, DevicesPayload, DeviceStatus } from "./types";
+import type { CapabilitiesJson, DeviceInfo, DevicesPayload, DeviceStatus } from "./types";
 
 /**
  * A pill-backed SVG label whose rounded rect is sized to the REAL rendered text
@@ -623,24 +623,118 @@ export function ConnectivityGraph({
   );
 }
 
+/** Short label for the wireless stack a device answers on. */
+function stackLabel(stack: CapabilitiesJson["wirelessStack"]): string | null {
+  switch (stack) {
+    case "wifi":
+      return "wifi (v7)";
+    case "wireless":
+      return "wireless (legacy)";
+    case "capsman-legacy":
+      return "caps-man";
+    default:
+      return null;
+  }
+}
+
+/**
+ * What the device is known to support. Rendered only once a probe has resolved:
+ * an unprobed device shows a Probe button instead, never an empty matrix that
+ * reads as "supports nothing".
+ */
+function CapabilityStrip({
+  caps,
+  busy,
+  onProbe,
+}: {
+  caps: CapabilitiesJson | null;
+  busy: boolean;
+  onProbe?: () => void;
+}): ReactNode {
+  if (!caps) {
+    return (
+      <div className="text-muted-foreground mt-1 flex items-center gap-2 text-[10px]">
+        <span>capabilities not probed</span>
+        {onProbe && (
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={busy}
+            onClick={onProbe}
+            title="Probe this device's capabilities (version, packages, wireless stack, device-mode)"
+          >
+            {busy ? <Loader2 className="animate-spin" /> : <Cpu />} Probe
+          </Button>
+        )}
+      </div>
+    );
+  }
+  const stack = stackLabel(caps.wirelessStack);
+  const blocked = (["container", "scheduler", "fetch"] as const).filter((k) => !caps.deviceMode[k]);
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+      {caps.version && (
+        <span title={`RouterOS ${caps.version} (${caps.channel})`}>
+          <Badge type="secondary">v{caps.version}</Badge>
+        </span>
+      )}
+      {caps.isRouterBoard && <Badge type="secondary">RouterBOARD</Badge>}
+      {stack && <Badge type="secondary">{stack}</Badge>}
+      {caps.packages
+        .filter((p) => p !== "routeros" && p !== "system")
+        .slice(0, 4)
+        .map((p) => (
+          <span key={p} title={`\`${p}\` package enabled`}>
+            <Badge type="accent">{p}</Badge>
+          </span>
+        ))}
+      {blocked.length > 0 && (
+        <span
+          title={`device-mode blocks: ${blocked.join(", ")} — changing it needs a physical reset-button confirmation`}
+        >
+          <Badge type="warning">{blocked.join("/")} blocked</Badge>
+        </span>
+      )}
+      {onProbe && (
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={busy}
+          onClick={onProbe}
+          title="Reprobe capabilities"
+        >
+          {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function DeviceCard({
   d,
   allNames,
+  capabilities,
   onToggle,
   onTest,
   onReconnect,
+  onProbeCapabilities,
 }: {
   d: DeviceInfo;
   /** Every device name in the fleet — needed so the card's colour matches the
    *  radar's for the same device regardless of any filtering applied to the grid. */
   allNames: string[];
+  /** Probed capabilities, or null when nothing has been probed yet. */
+  capabilities?: CapabilitiesJson | null;
   onToggle?: (name: string, disabled: boolean) => void;
   /** Probe the device now (fresh SSH connect + health refresh). */
   onTest?: (name: string) => Promise<void>;
   /** Drop the pooled connection and re-establish it, then refresh health. */
   onReconnect?: (name: string) => Promise<void>;
+  /** Probe (or reprobe) this device's capabilities. */
+  onProbeCapabilities?: (name: string) => Promise<void>;
 }): ReactNode {
   const [busy, setBusy] = useState<"test" | "reconnect" | null>(null);
+  const [probing, setProbing] = useState(false);
   const runAction = (kind: "test" | "reconnect"): void => {
     if (busy) return;
     const fn = kind === "test" ? onTest : onReconnect;
@@ -741,6 +835,19 @@ export function DeviceCard({
           </>
         )}
       </div>
+      <CapabilityStrip
+        caps={capabilities ?? null}
+        busy={probing}
+        onProbe={
+          onProbeCapabilities
+            ? () => {
+                if (probing) return;
+                setProbing(true);
+                void onProbeCapabilities(d.name).finally(() => setProbing(false));
+              }
+            : undefined
+        }
+      />
       {jumpLabel(d) && (
         <div
           className="border-warning/30 bg-warning/8 mt-2.5 mb-0.5 flex items-center gap-1.5 overflow-hidden rounded-[10px] border px-2.5 py-[7px] text-[10px]"

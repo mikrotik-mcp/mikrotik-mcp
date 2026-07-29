@@ -79,6 +79,8 @@ import { TopologyMap } from "./topology";
 import { SSHPoolPanel } from "./ssh-pool";
 import { useWhatsNew, WhatsNewModal } from "./whats-new";
 import type {
+  CapabilitiesJson,
+  CapabilitiesPayload,
   DevicesPayload,
   Filter,
   LiveMode,
@@ -889,6 +891,38 @@ function App(): ReactNode {
     [probeAction],
   );
 
+  // Capabilities. `GET /api/capabilities` is deliberately non-probing — it
+  // reports only what has already been learned, so loading this page cannot fan
+  // a probe out to every configured router. The Probe button does the real work.
+  const [capabilities, setCapabilities] = useState<Record<string, CapabilitiesJson | null>>({});
+  const loadCapabilities = useCallback(async () => {
+    try {
+      const res = await api<CapabilitiesPayload>("/api/capabilities");
+      setCapabilities(Object.fromEntries(res.devices.map((d) => [d.device, d.capabilities])));
+    } catch {
+      /* capabilities are supplementary — never break the devices view */
+    }
+  }, []);
+  useEffect(() => {
+    void loadCapabilities();
+  }, [loadCapabilities]);
+
+  const probeCapabilities = useCallback(async (name: string) => {
+    const res = await postJson<{
+      device?: string;
+      capabilities?: CapabilitiesJson;
+      error?: string;
+    }>("/api/capabilities/refresh", { device: name });
+    if (res.error) {
+      toast.error(`Capability probe failed: ${res.error}`);
+      return;
+    }
+    if (res.capabilities) {
+      setCapabilities((prev) => ({ ...prev, [name]: res.capabilities as CapabilitiesJson }));
+      toast.success(`Probed ${name}`);
+    }
+  }, []);
+
   // Esc closes the drawer (the What's New modal handles its own Escape key).
   useEffect(() => {
     const h = (e: KeyboardEvent): void => {
@@ -1364,9 +1398,11 @@ function App(): ReactNode {
                       key={d.name}
                       d={d}
                       allNames={devices.devices.map((x) => x.name)}
+                      capabilities={capabilities[d.name] ?? null}
                       onToggle={toggleDevice}
                       onTest={testDevice}
                       onReconnect={reconnectDevice}
+                      onProbeCapabilities={probeCapabilities}
                     />
                   ))}
                 </div>

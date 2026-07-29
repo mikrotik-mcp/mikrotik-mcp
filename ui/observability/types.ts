@@ -110,6 +110,24 @@ export interface SSHPoolPayload {
   };
   devices: Array<{ device: string; inflight: number; idle: boolean; dead: boolean }>;
 }
+/** What a capability probe learned about one device (`GET /api/capabilities`). */
+export interface CapabilitiesJson {
+  version: string | null;
+  channel: "stable" | "long-term" | "testing" | "development" | "unknown";
+  board: string;
+  arch: string;
+  isRouterBoard: boolean;
+  packages: string[];
+  wirelessStack: "wifi" | "wireless" | "capsman-legacy" | "none";
+  deviceMode: { container: boolean; scheduler: boolean; fetch: boolean };
+  probedAt: number;
+}
+
+/** `GET /api/capabilities` — `capabilities` is null until a probe has resolved. */
+export interface CapabilitiesPayload {
+  devices: { device: string; capabilities: CapabilitiesJson | null }[];
+}
+
 export interface DeviceInfo {
   name: string;
   host: string;

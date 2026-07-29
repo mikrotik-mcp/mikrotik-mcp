@@ -155,6 +155,41 @@ export function explainUnmet(caps: Capabilities, requires: ToolRequires | undefi
   return reasons.length === 0 ? "" : reasons.join("; ");
 }
 
+/** JSON-safe shape of {@link Capabilities}, for the dashboard API. */
+export interface CapabilitiesJson {
+  version: string | null;
+  channel: ReleaseChannel;
+  board: string;
+  arch: string;
+  isRouterBoard: boolean;
+  packages: string[];
+  wirelessStack: WirelessStack;
+  deviceMode: { container: boolean; scheduler: boolean; fetch: boolean };
+  probedAt: number;
+}
+
+/**
+ * Convert a probe to JSON. Needed because `packages` is a `Set`, which
+ * `JSON.stringify` silently renders as `{}` rather than failing — a serializer
+ * that looks unnecessary right up until the wire payload is quietly empty.
+ * Returns null for an unprobed device so the client can distinguish
+ * "not probed yet" from "probed and found nothing".
+ */
+export function serializeCapabilities(caps: Capabilities | undefined): CapabilitiesJson | null {
+  if (!caps) return null;
+  return {
+    version: caps.version?.raw ?? null,
+    channel: caps.channel,
+    board: caps.board,
+    arch: caps.arch,
+    isRouterBoard: caps.isRouterBoard,
+    packages: [...caps.packages].sort(),
+    wirelessStack: caps.wirelessStack,
+    deviceMode: caps.deviceMode,
+    probedAt: caps.probedAt,
+  };
+}
+
 /** Derive the release channel from a version suffix. */
 export function channelOf(version: ParsedVersion | null): ReleaseChannel {
   if (!version) return "unknown";

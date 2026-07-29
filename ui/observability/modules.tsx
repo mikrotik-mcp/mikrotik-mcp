@@ -19,6 +19,8 @@ interface ModuleItem {
   description: string;
   toolCount: number;
   enabled: boolean;
+  /** Devices already known to fail this module's requirements, with the reason. */
+  unsupported?: { device: string; reason: string }[];
 }
 interface ConfigSource {
   path: string;
@@ -53,13 +55,19 @@ function ModuleRow({
   m,
   busy,
   onToggle,
+  unmet,
 }: {
   m: ModuleItem;
   busy: boolean;
   onToggle: (slug: string, enabled: boolean) => void;
+  /** Dim + explain when this module cannot run on the selected device. */
+  unmet?: string;
 }): ReactNode {
   return (
-    <label className={rowClass(m.enabled)} title={m.description}>
+    <label
+      className={cn(rowClass(m.enabled), unmet && "opacity-45")}
+      title={unmet ? `Unavailable on the selected device: ${unmet}` : m.description}
+    >
       <input
         type="checkbox"
         className="mt-0.5 cursor-pointer accent-brand"
@@ -75,6 +83,9 @@ function ModuleRow({
           </code>
         </span>
         <span className="text-[11px] leading-[1.35] text-muted-foreground">{m.description}</span>
+        {unmet && (
+          <span className="text-warning text-[10px] leading-[1.35]">unavailable here: {unmet}</span>
+        )}
       </span>
       <span className="whitespace-nowrap pt-px font-mono text-[10px] text-muted-foreground">
         {m.toolCount} tool{m.toolCount === 1 ? "" : "s"}
@@ -91,6 +102,19 @@ export function ModulesView(): ReactNode {
   const [query, setQuery] = useState("");
   const [appViews, setAppViews] = useState<boolean>(false);
   const [appViewsBusy, setAppViewsBusy] = useState(false);
+  // Which device to judge module availability against. Empty = judge none, which
+  // is the honest default: capabilities are per-device and may not be probed yet.
+  const [capDevice, setCapDevice] = useState("");
+  // Only devices that some module reports on are offerable — a device with no
+  // resolved probe contributes no `unsupported` entries, so selecting it would
+  // dim nothing and imply everything is supported.
+  const capDevices = useMemo(
+    () =>
+      [
+        ...new Set((data?.modules ?? []).flatMap((m) => m.unsupported?.map((u) => u.device) ?? [])),
+      ].sort(),
+    [data],
+  );
 
   const load = useCallback(() => {
     void api<ModuleSurface>("/api/modules")
@@ -263,6 +287,21 @@ export function ModulesView(): ReactNode {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {capDevices.length > 0 && (
+            <select
+              className="border-border bg-card text-muted-foreground h-8 rounded-md border px-2 text-[11px]"
+              value={capDevice}
+              onChange={(e) => setCapDevice(e.target.value)}
+              title="Dim modules the selected device cannot run. Only devices whose capabilities have been probed appear here — probe one from the Devices page."
+            >
+              <option value="">availability: all devices</option>
+              {capDevices.map((d) => (
+                <option key={d} value={d}>
+                  availability: {d}
+                </option>
+              ))}
+            </select>
+          )}
           <span className="flex-1" />
           <Button
             size="sm"
@@ -341,6 +380,11 @@ export function ModulesView(): ReactNode {
                         m={m}
                         busy={busy.has(m.slug)}
                         onToggle={(slug, enabled) => void toggle(slug, enabled)}
+                        unmet={
+                          capDevice
+                            ? m.unsupported?.find((u) => u.device === capDevice)?.reason
+                            : undefined
+                        }
                       />
                     ))}
                   </div>

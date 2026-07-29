@@ -147,6 +147,12 @@ import { computeStats } from "./stats";
 import { buildTopology } from "./topology";
 import { capture, DEFAULT_TZSP_PORT } from "./capture";
 import { closeDevice, isPoolEnabled, poolStatus } from "../core/connection-pool";
+import { serializeCapabilities } from "../core/capability";
+import {
+  getCapabilities,
+  invalidateCapabilities,
+  peekCapabilities,
+} from "../core/capability-cache";
 import { isMacTelnetDevice } from "../core/transport";
 import { VERSION } from "../version";
 import { driftRoutes } from "./drift-routes";
@@ -1628,6 +1634,33 @@ export async function runDashboard(
 
     if (url.pathname === "/api/devices") {
       return json(devicesPayload(db));
+    }
+
+    // Capability probes. GET is deliberately non-probing: it reports only what
+    // has already been learned, so opening the dashboard cannot fan out a probe
+    // to every configured router. Use the refresh endpoint to actually probe.
+    if (url.pathname === "/api/capabilities") {
+      const devices = Object.keys(getConfig().devices).map((name) => ({
+        device: name,
+        capabilities: serializeCapabilities(peekCapabilities(name)),
+      }));
+      return json({ devices });
+    }
+
+    if (url.pathname === "/api/capabilities/refresh" && req.method === "POST") {
+      const b = (await readJson(req)) as { device?: string };
+      if (typeof b?.device !== "string") return json({ error: "device (string) is required" }, 400);
+      if (!(b.device in getConfig().devices)) {
+        return json({ error: `unknown device: ${b.device}` }, 404);
+      }
+      invalidateCapabilities(b.device);
+      try {
+        const caps = await getCapabilities(b.device);
+        return json({ device: b.device, capabilities: serializeCapabilities(caps) });
+      } catch (e) {
+        logger.error(`Capability probe failed for '${b.device}': ${logError(e)}`);
+        return json({ error: clientError(e) }, 502);
+      }
     }
 
     if (url.pathname === "/api/devices/toggle" && req.method === "POST") {
