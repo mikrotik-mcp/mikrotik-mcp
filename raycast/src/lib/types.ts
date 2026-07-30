@@ -136,7 +136,10 @@ export interface AlertsPayload {
   configured: boolean;
   rules: AlertRuleRow[];
   active: AlertRuleRow[];
-  channels: Record<string, { url?: string; method?: string; configured: boolean }>;
+  channels: Record<
+    string,
+    { url?: string; method?: string; configured: boolean }
+  >;
 }
 
 /** What a capability probe learned about one device (`GET /api/capabilities`). */
@@ -574,7 +577,13 @@ export interface FlowConversation {
 
 export interface FlowTopPayload {
   window: { from: number; to: number };
-  totals: { flows: number; bytes: number; packets: number; sources: number; destinations: number };
+  totals: {
+    flows: number;
+    bytes: number;
+    packets: number;
+    sources: number;
+    destinations: number;
+  };
   top: FlowTopEntry[];
   protocols: { protocol: string; bytes: number; share: number }[];
   applications: FlowTopEntry[];
@@ -614,12 +623,7 @@ export interface FlowHealth {
 
 // ── Staged fleet rollout (`/api/rollout`) ───────────────────────────────────
 export type RolloutStage =
-  | "pending"
-  | "applied"
-  | "failed"
-  | "reverted"
-  | "revert-failed"
-  | "skipped";
+  "pending" | "applied" | "failed" | "reverted" | "revert-failed" | "skipped";
 
 export type RolloutOutcome =
   | "completed"
@@ -684,7 +688,11 @@ export interface PolicyRule {
   severity: PolicySeverity;
   description?: string;
   remediation?: string;
-  match: { section: string; where?: Record<string, string | number | boolean>; settings?: boolean };
+  match: {
+    section: string;
+    where?: Record<string, string | number | boolean>;
+    settings?: boolean;
+  };
   on_empty: string;
   tags: string[];
 }
@@ -744,4 +752,47 @@ export interface PolicyResultRow {
   notApplicable: number;
   bySeverity: Record<PolicySeverity, number>;
   findings: PolicyFinding[];
+}
+
+// ── Scheduled audits ────────────────────────────────────────────────────────
+export type ScheduleOutcome = "ok" | "failed" | "skipped" | "timeout";
+
+export interface ScheduleFinding {
+  id: string;
+  severity: string;
+  title: string;
+  device?: string;
+  detail?: string;
+}
+
+export interface ScheduleJobRow {
+  id: string;
+  cron: string;
+  cronText: string;
+  tool: string;
+  devices: string[] | "all";
+  enabled: boolean;
+  nextRun: number | null;
+  lastRun: {
+    startedAt: number;
+    outcome: ScheduleOutcome;
+    error?: string;
+  } | null;
+  posture: {
+    total: number;
+    worst: string | null;
+    bySeverity: Record<string, number>;
+    devices: number;
+  };
+  runCount: number;
+}
+
+export interface ScheduleRegression {
+  jobId: string;
+  device: string;
+  at: number;
+  summary: string;
+  added: ScheduleFinding[];
+  worsened: { finding: ScheduleFinding; from: string; to: string }[];
+  resolved: ScheduleFinding[];
 }

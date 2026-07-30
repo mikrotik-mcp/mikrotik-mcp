@@ -27,6 +27,8 @@ import type {
   DeviceInfo,
   DevicesPayload,
   RolloutRecord,
+  ScheduleJobRow,
+  ScheduleRegression,
   Stats,
   ToolEvent,
 } from "./lib/types";
@@ -38,6 +40,15 @@ const ALERT_TINT: Record<AlertSeverity, Color> = {
   high: Color.Orange,
   critical: Color.Red,
 };
+
+/** Trigger a scheduled audit off-schedule. Read-only — it runs a READ auditor. */
+async function runSchedule(id: string): Promise<void> {
+  await fetch(withToken(`/api/schedules/${encodeURIComponent(id)}/run`), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+}
 
 /** Mute a rule for an hour from the menu bar — the one action worth one click. */
 async function muteAlert(id: string): Promise<void> {
@@ -73,7 +84,13 @@ export default function Command() {
   const statsQ = useApi<Stats>("/api/stats?window=3600000&buckets=1");
   const eventsQ = useApi<{ events: ToolEvent[] }>("/api/events?limit=6");
   const alertsQ = useApi<AlertsPayload>("/api/alerts");
-  const rolloutQ = useApi<{ rollouts: RolloutRecord[] }>("/api/rollout?limit=10");
+  const rolloutQ = useApi<{ rollouts: RolloutRecord[] }>(
+    "/api/rollout?limit=10",
+  );
+  const scheduleQ = useApi<{ jobs: ScheduleJobRow[] }>("/api/schedules");
+  const regressionQ = useApi<{ regressions: ScheduleRegression[] }>(
+    "/api/schedules/regressions?limit=3",
+  );
 
   const devices = devicesQ.data?.devices ?? [];
   const enabled = devices.filter((d) => !d.disabled);
@@ -96,10 +113,22 @@ export default function Command() {
   );
   // The menu-bar icon reports the WORST live severity. A menu bar has one glyph;
   // spending it on anything less than the most urgent thing wastes it.
-  const worst: AlertSeverity | null = (["critical", "high", "medium", "low"] as const).find((s) =>
-    firing.some((a) => a.severity === s),
-  ) ?? null;
+  const worst: AlertSeverity | null =
+    (["critical", "high", "medium", "low"] as const).find((s) =>
+      firing.some((a) => a.severity === s),
+    ) ?? null;
   const unreachable = !!devicesQ.error && !devicesQ.data;
+
+  // Posture: open CRITICAL findings across every scheduled audit's latest run.
+  // One number, because the menu bar has room for one — and if it is not zero,
+  // nothing else on this list matters more.
+  const jobs = scheduleQ.data?.jobs ?? [];
+  const critical = jobs.reduce(
+    (n, j) => n + (j.posture.bySeverity.critical ?? 0),
+    0,
+  );
+  const regressions = regressionQ.data?.regressions ?? [];
+  const lastRegression = regressions[0];
 
   const alerts = offline.length + hot.length;
   const health: Health = unreachable
@@ -118,7 +147,7 @@ export default function Command() {
       ? "MikroTik"
       : `${online.length}/${total}${alerts > 0 ? ` ⚠${alerts}` : ""}${
           activeRollouts.length > 0 ? " ⟳" : ""
-        }`;
+        }${critical > 0 ? ` ⚑${critical}` : ""}`;
 
   // Keep the root-search subtitle in sync for background glances.
   useEffect(() => {
@@ -183,7 +212,9 @@ export default function Command() {
               key={`${a.id}:${a.subject}`}
               icon={{ source: Icon.Bell, tintColor: ALERT_TINT[a.severity] }}
               title={a.description ?? a.id}
-              subtitle={a.subject === "*" ? a.severity : `${a.subject} · ${a.severity}`}
+              subtitle={
+                a.subject === "*" ? a.severity : `${a.subject} · ${a.severity}`
+              }
               onAction={() => void muteAlert(a.id)}
               tooltip="Mute this alert for 1 hour"
             />
@@ -193,7 +224,9 @@ export default function Command() {
       {activeRollouts.length > 0 || stoppedRollouts.length > 0 ? (
         <MenuBarExtra.Section title="Rollouts">
           {activeRollouts.map((r) => {
-            const applied = r.devices.filter((d) => d.stage === "applied").length;
+            const applied = r.devices.filter(
+              (d) => d.stage === "applied",
+            ).length;
             return (
               <MenuBarExtra.Item
                 key={r.id}
@@ -210,7 +243,8 @@ export default function Command() {
               key={r.id}
               icon={{
                 source: Icon.Warning,
-                tintColor: r.outcome === "needs-attention" ? Color.Red : Color.Orange,
+                tintColor:
+                  r.outcome === "needs-attention" ? Color.Red : Color.Orange,
               }}
               title={r.label ?? r.id}
               subtitle={r.outcome}
@@ -220,6 +254,45 @@ export default function Command() {
                   ? "A revert failed — restore the flagged device by hand"
                   : "Halted at a failed gate"
               }
+            />
+          ))}
+        </MenuBarExtra.Section>
+      ) : null}
+
+      {jobs.length > 0 ? (
+        <MenuBarExtra.Section title="Audits">
+          {lastRegression ? (
+            <MenuBarExtra.Item
+              icon={{
+                source: Icon.ExclamationMark,
+                tintColor:
+                  lastRegression.added.length + lastRegression.worsened.length >
+                  0
+                    ? Color.Red
+                    : Color.Green,
+              }}
+              title={lastRegression.summary}
+              subtitle={`${lastRegression.device} · ${clock(lastRegression.at)}`}
+              onAction={() => open(withToken("/#schedules"))}
+              tooltip="The most recent change between two audit runs"
+            />
+          ) : null}
+          {jobs.slice(0, 3).map((job) => (
+            <MenuBarExtra.Item
+              key={job.id}
+              icon={{
+                source: Icon.Clock,
+                tintColor:
+                  (job.posture.bySeverity.critical ?? 0) > 0
+                    ? Color.Red
+                    : job.lastRun && job.lastRun.outcome !== "ok"
+                      ? Color.Orange
+                      : Color.Green,
+              }}
+              title={job.id}
+              subtitle={`${job.posture.total} open · ${job.cronText}`}
+              onAction={() => void runSchedule(job.id)}
+              tooltip="Run this audit now — read-only"
             />
           ))}
         </MenuBarExtra.Section>
@@ -368,6 +441,8 @@ export default function Command() {
             devicesQ.revalidate();
             statsQ.revalidate();
             eventsQ.revalidate();
+            scheduleQ.revalidate();
+            regressionQ.revalidate();
           }}
         />
         <MenuBarExtra.Item

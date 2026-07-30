@@ -16,15 +16,58 @@
  *   • If the dashboard itself is unreachable we leave stored state untouched and
  *     only update the subtitle — a dashboard restart must not read as "everything
  *     went offline".
+ *
+ * It also announces AUDIT REGRESSIONS from the scheduled audits, on the same
+ * schedule and with the same seed-silently rule. Regressions belong here rather
+ * than in a command of their own: the whole point of a scheduled audit is that
+ * nobody goes looking for it, so the notification has to arrive on its own.
  */
 import { LocalStorage, updateCommandMetadata } from "@raycast/api";
 import { api } from "./lib/api";
 import { notify } from "./lib/notify";
-import type { DevicesPayload } from "./lib/types";
+import type { DevicesPayload, ScheduleRegression } from "./lib/types";
 
 const STATE_KEY = "monitor-devices:reachability";
+/** Newest regression already announced, so each one is reported exactly once. */
+const REGRESSION_KEY = "monitor-devices:last-regression";
 
 type State = Record<string, boolean>;
+
+/**
+ * Announce audit regressions newer than the last one we announced.
+ *
+ * Only NEW and WORSENED raise a notification here; a resolved finding is good
+ * news and the dashboard is where you go to enjoy it. Never throws — a
+ * dashboard without the schedules feature must not break device monitoring.
+ */
+async function announceRegressions(): Promise<void> {
+  let regressions: ScheduleRegression[];
+  try {
+    const res = await api<{ regressions: ScheduleRegression[] }>(
+      "/api/schedules/regressions?limit=10",
+    );
+    regressions = res.regressions ?? [];
+  } catch {
+    return;
+  }
+  if (regressions.length === 0) return;
+
+  const raw = await LocalStorage.getItem<string>(REGRESSION_KEY);
+  const since = raw ? Number(raw) : 0;
+  const newest = Math.max(...regressions.map((r) => r.at));
+  await LocalStorage.setItem(REGRESSION_KEY, String(newest));
+  // First ever run seeds silently — a month of history must not arrive at once.
+  if (!raw) return;
+
+  const fresh = regressions
+    .filter((r) => r.at > since && r.added.length + r.worsened.length > 0)
+    .slice(0, 3);
+  await Promise.all(
+    fresh.map((r) =>
+      notify(`Audit regression on ${r.device}`, `${r.jobId}: ${r.summary}`),
+    ),
+  );
+}
 
 export default async function Command(): Promise<void> {
   let payload: DevicesPayload;
@@ -75,7 +118,7 @@ export default async function Command(): Promise<void> {
     }
   }
 
-  await Promise.all(flips);
+  await Promise.all([...flips, announceRegressions()]);
   await LocalStorage.setItem(STATE_KEY, JSON.stringify(next));
   await updateCommandMetadata({
     subtitle:
