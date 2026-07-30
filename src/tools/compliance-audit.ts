@@ -33,7 +33,7 @@ import { parseCertExpiry, parseKeyValues, parseRecords } from "../core/routeros-
 import { safe } from "../utils/safe-exec";
 
 /** Fetch all device state slices needed by the compliance engine. */
-async function fetchComplianceState(ctx: ToolContext): Promise<DeviceComplianceState> {
+export async function fetchComplianceState(ctx: ToolContext): Promise<DeviceComplianceState> {
   // Fire all commands in parallel for speed
   const [
     sshRaw,

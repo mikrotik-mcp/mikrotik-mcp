@@ -12,6 +12,7 @@
  *    findings is ignored by week two, so the unit of notification is the DELTA —
  *    new, worsened, resolved — and everything unchanged stays silent.
  */
+import { z } from "zod";
 
 export const SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"] as const;
 export type Severity = (typeof SEVERITY_ORDER)[number];
@@ -384,3 +385,30 @@ export function severityCounts(findings: AuditFinding[]): Record<string, number>
   for (const f of findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1;
   return counts;
 }
+
+// ── Job definition ──────────────────────────────────────────────────────────
+
+/**
+ * A job definition, as written in the `schedules` config block or passed to
+ * `add_schedule`.
+ *
+ * The cron expression is validated HERE rather than at first fire: a typo in a
+ * config file must fail loudly at load, not become a job that silently never
+ * runs and is discovered weeks later when someone asks why nothing was audited.
+ */
+export const JobSchema = z.object({
+  id: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9][a-z0-9-]*$/i, "use letters, digits and hyphens"),
+  cron: z.string().refine(isValidCron, "not a valid 5-field cron expression"),
+  tool: z.string().min(1),
+  devices: z.union([z.literal("all"), z.array(z.string().min(1)).min(1)]).default("all"),
+  notifyOn: z
+    .array(z.enum(["new", "worsened", "resolved", "improved"]))
+    .default(["new", "worsened"]),
+  args: z.record(z.string(), z.unknown()).optional(),
+  enabled: z.boolean().default(true),
+  retainDays: z.coerce.number().int().positive().default(90),
+});
+export type JobDefinition = z.infer<typeof JobSchema>;

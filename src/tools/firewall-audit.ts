@@ -18,7 +18,10 @@ import { parseRecords } from "../core/routeros-parse";
 import { uiViewUri } from "../core/ui-resources";
 
 /** Fetch and parse a `<path> print detail` ruleset into rows (empty on error). */
-async function fetchRules(path: string, ctx: ToolContext): Promise<Record<string, string>[]> {
+export async function fetchRules(
+  path: string,
+  ctx: ToolContext,
+): Promise<Record<string, string>[]> {
   const out = await executeMikrotikCommand(`${path} print detail`, ctx);
   if (looksLikeError(out) || isEmpty(out)) return [];
   return parseRecords(out).rows;
@@ -29,7 +32,9 @@ async function fetchRules(path: string, ctx: ToolContext): Promise<Record<string
  * Used by the audit engine to resolve `in-interface-list` / `out-interface-list`
  * conditions against concrete `in-interface` / `out-interface` conditions.
  */
-async function fetchInterfaceListMembers(ctx: ToolContext): Promise<Map<string, Set<string>>> {
+export async function fetchInterfaceListMembers(
+  ctx: ToolContext,
+): Promise<Map<string, Set<string>>> {
   const out = await executeMikrotikCommand("/interface list member print detail", ctx);
   const members = new Map<string, Set<string>>();
   if (looksLikeError(out) || isEmpty(out)) return members;

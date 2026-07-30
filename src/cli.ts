@@ -28,6 +28,7 @@ import { VERSION, SERVER_NAME } from "./version";
 import { printBanner } from "./cli-logo";
 import { AlertEngine, setAlertEngine } from "./alerts/engine";
 import { startAlertSampler, stopAlertSampler } from "./alerts/sampler";
+import { startScheduler, stopScheduler } from "./schedule/session";
 import { parseRules } from "./alerts/model";
 
 const HELP = `${SERVER_NAME} v${VERSION} — MikroTik RouterOS MCP server
@@ -231,6 +232,13 @@ async function main(): Promise<void> {
     }
   }
 
+  // Scheduled audits: opt-in via the `schedules` config block. The first tick
+  // only arms each job, so starting the server never fires a nightly audit at
+  // boot — a restart loop must not become an audit loop against the fleet.
+  void startScheduler().catch((e: unknown) => {
+    logger.error(`Scheduled audits disabled: ${e instanceof Error ? e.message : String(e)}`);
+  });
+
   // Close pooled SSH connections on shutdown so the device sees a clean
   // disconnect (vs. a TCP RST that RouterOS logs as a broken session).
   let shuttingDown = false;
@@ -241,6 +249,7 @@ async function main(): Promise<void> {
     closeConnectionPool();
     closeMemoryStore();
     stopAlertSampler();
+    stopScheduler();
     process.exit(0);
   };
   process.on("SIGINT", () => shutdown("SIGINT"));

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "add_schedule",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Job id, e.g. 'nightly-security'. Letters, digits and hyphens."
+    },
+    "cron": {
+      "type": "string",
+      "description": "5-field cron, e.g. \"0 3 * * *\" for every day at 03:00."
+    },
+    "tool": {
+      "type": "string",
+      "description": "Auditor to run — one of the schedulable tools listed above."
+    },
+    "devices": {
+      "description": "Device names, or 'all' (the default) for every configured device.",
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "all"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "notify_on": {
+      "description": "Which deltas raise an alert. Default: new + worsened.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["new", "worsened", "resolved", "improved"]
+      }
+    },
+    "retain_days": {
+      "description": "How long run history is kept. Default 90.",
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": ["id", "cron", "tool"],
+  "additionalProperties": false
+}

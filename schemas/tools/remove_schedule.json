@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "remove_schedule",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The job id to remove."
+    }
+  },
+  "required": ["id"],
+  "additionalProperties": false
+}

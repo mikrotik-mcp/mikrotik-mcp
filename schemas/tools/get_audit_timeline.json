@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_audit_timeline",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "description": "Which job's history to show."
+    },
+    "device": {
+      "description": "Restrict to one device.",
+      "type": "string"
+    },
+    "limit": {
+      "default": 20,
+      "description": "How many runs to show. Default 20.",
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 200
+    }
+  },
+  "required": ["job_id", "limit"],
+  "additionalProperties": false
+}

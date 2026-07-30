@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "run_schedule_now",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "The job id to run."
+    }
+  },
+  "required": ["id"],
+  "additionalProperties": false
+}

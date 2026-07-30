@@ -357,6 +357,9 @@ Higher-level workflows built on top of the per-scope tools:
 - **[Staged Fleet Rollout](docs/fleet-rollout.md)** — apply one change as canary → wave →
   fleet with a health gate and soak between waves, reverting everything already changed
   on the first failure.
+- **[Scheduled Audits](docs/scheduled-audits.md)** — run the auditors on a cron with
+  nobody in the loop and alert only on what changed since the previous run: new,
+  worsened, resolved.
 - **[Config Snapshots](docs/config-snapshots.md)** — store `/export` snapshots and
   time-travel diff any two, or one against the live device.
 - **[Firewall Audit](docs/firewall-audit.md)** — find shadowed, broad, missing-default-drop,
@@ -433,6 +436,7 @@ Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_L
 | **[Traffic Flow](docs/traffic-flow.md)**                            | NetFlow/IPFIX collection + top-talker analytics             |
 | **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                      |
 | **[Security Hardening](docs/security-hardening.md)**                | Per-category audit+remediate, snapshot + Safe-Mode          |
+| **[Scheduled Audits](docs/scheduled-audits.md)**                    | Auditors on a cron, alerting only on run-over-run changes   |
 | **[Policy-as-Code](docs/policy-as-code.md)**                        | Your own YAML compliance rules, linted offline → SARIF      |
 | **[Offline Simulator](docs/simulator.md)**                          | Trace a packet through firewall + routing, no device        |
 | **[VPN guide](docs/vpn-guide.md)**                                  | Every tunnel type + how to build it                         |

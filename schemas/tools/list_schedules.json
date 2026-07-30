@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "list_schedules",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "description": "Only this job.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

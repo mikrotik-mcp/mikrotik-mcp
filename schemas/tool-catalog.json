@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "4.24.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 870,
+  "toolCount": 875,
   "tools": [
     {
       "name": "find_tools",
@@ -30368,6 +30368,167 @@
           }
         },
         "required": ["rollout_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_schedules",
+      "title": "List Scheduled Audits",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists every scheduled audit job with its cron in plain English, next run, last outcome and the current finding counts by severity. Use this to see what the server is watching on its own — these jobs run without anyone asking, and their value is the run-over-run comparison, not any single report. Shows which auditors can be scheduled when there are no jobs yet.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "description": "Only this job.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_schedule",
+      "title": "Add a Scheduled Audit",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Schedules an audit to run on its own and report only what changed since the previous run. Only READ auditors can be scheduled — this is enforced, not advisory: an unattended loop that can write to a router is a footgun, so schedule the audit and wire the alert to a human instead. Cron is the restricted 5-field form (minute hour day-of-month month day-of-week) with *, ranges, lists and step syntax.\n\nSchedulable auditors:\n  run_security_hardening_audit — Device security posture — services, firewall defaults, credentials, helpers.\n  run_compliance_audit — Scored pass/fail compliance checks across 10 categories.\n  firewall_audit — Shadowed, unreachable, overly-broad and dead firewall rules.\n  run_policy_check — Loaded policy-as-code rules against the device's live configuration.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Job id, e.g. 'nightly-security'. Letters, digits and hyphens."
+          },
+          "cron": {
+            "type": "string",
+            "description": "5-field cron, e.g. \"0 3 * * *\" for every day at 03:00."
+          },
+          "tool": {
+            "type": "string",
+            "description": "Auditor to run — one of the schedulable tools listed above."
+          },
+          "devices": {
+            "description": "Device names, or 'all' (the default) for every configured device.",
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "all"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "notify_on": {
+            "description": "Which deltas raise an alert. Default: new + worsened.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["new", "worsened", "resolved", "improved"]
+            }
+          },
+          "retain_days": {
+            "description": "How long run history is kept. Default 90.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["id", "cron", "tool"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "remove_schedule",
+      "title": "Remove a Scheduled Audit",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Removes a scheduled audit and its run history. The history is the timeline — deleting it discards the record of how the posture changed over time, which cannot be rebuilt. To stop a job while keeping its history, add_schedule the same id with a cron that suits you, or disable it from the dashboard.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The job id to remove."
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "run_schedule_now",
+      "title": "Run a Scheduled Audit Now",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Runs a scheduled audit immediately, off-schedule, and reports what changed against each device's previous successful run. Read-only — it runs the same READ auditor the schedule would. Use it after a change to check you did not make something worse, without waiting for the next window. Does not shift the schedule.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The job id to run."
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_audit_timeline",
+      "title": "Audit Timeline",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Findings over time for a job (optionally one device): each run with its severity counts and the new/worsened/resolved deltas, newest first, plus the change between the two most recent runs in detail. This is how you answer 'when did this start getting worse' — the single run an auditor prints cannot.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "description": "Which job's history to show."
+          },
+          "device": {
+            "description": "Restrict to one device.",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "How many runs to show. Default 20.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 200
+          }
+        },
+        "required": ["job_id", "limit"],
         "additionalProperties": false
       }
     },

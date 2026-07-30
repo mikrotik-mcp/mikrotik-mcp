@@ -116,6 +116,7 @@ import { drDrillTools } from "./dr-drill";
 import { safeModeTools } from "./safe-mode";
 import { txnTools } from "./txn";
 import { rolloutTools } from "./rollout";
+import { scheduleTools } from "./schedule";
 import { schedulerTools } from "./scheduler";
 import { serverPulseTools } from "./server-pulse";
 import { capabilityTools } from "./capability";
@@ -1209,6 +1210,15 @@ export const moduleCatalog: ModuleInfo[] = [
       "Apply one change across N routers as canary → wave → fleet, with a health gate and soak " +
       "between waves and automatic revert of everything already changed on the first failure.",
     tools: rolloutTools,
+  },
+  {
+    label: "Scheduled Audits",
+    slug: "schedule",
+    group: "System & Ops",
+    description:
+      "Run the existing auditors on a cron with no human in the loop, keep every result as a " +
+      "timeline, and report only what CHANGED since the previous run — new, worsened, resolved.",
+    tools: scheduleTools,
   },
   {
     label: "Change Plan",
