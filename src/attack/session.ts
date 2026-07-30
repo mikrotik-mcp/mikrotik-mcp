@@ -17,6 +17,7 @@ import { correlate, mergeIncident } from "./correlate";
 import type { Incident } from "./correlate";
 import { DEFAULT_DETECTOR_CONFIG, runDetectors } from "./detectors";
 import type { DetectionInput, Signal, Unavailable } from "./detectors";
+import { getDeviceStatus } from "../observability/health";
 import { executePlan, readScanList } from "./execute";
 import { dedupe, parseLog } from "./parse";
 import type { LogEvent } from "./parse";
@@ -95,21 +96,60 @@ export function policyFromConfig(): ResponsePolicy {
   };
 }
 
+/**
+ * Which devices a sweep should read.
+ *
+ * `online` uses the dashboard's health probe rather than trying each device and
+ * timing out: on a fleet with a router down, a sweep that waits for every dead
+ * SSH connection takes longer than the poll interval and the next tick is
+ * skipped — so the one device that IS being attacked goes unread.
+ *
+ * A device the probe has not reached yet (`reachable: null`) is INCLUDED. Never
+ * probed is not the same as known-offline, and silently skipping it would be a
+ * blind spot that looks like a clean result.
+ */
+export function resolveTargets(spec: { devices?: string[]; onlineOnly?: boolean }): {
+  targets: string[];
+  skipped: string[];
+} {
+  const all = spec.devices ?? listDevices().names;
+  if (!spec.onlineOnly) return { targets: all, skipped: [] };
+  const targets: string[] = [];
+  const skipped: string[] = [];
+  for (const device of all) {
+    if (getDeviceStatus(device).reachable === false) skipped.push(device);
+    else targets.push(device);
+  }
+  return { targets, skipped };
+}
+
 export interface SweepResult {
   incidents: Incident[];
   unavailable: Unavailable[];
   devices: { device: string; ok: boolean; events: number; error?: string }[];
   responses: { incidentId: string; action: string; detail: string }[];
+  /** Devices left out because the health probe says they are offline. */
+  skipped: string[];
 }
 
 /** Detect across every device once. */
 export async function sweep(
-  options: { devices?: string[]; windowMinutes?: number; now?: number; respond?: boolean } = {},
+  options: {
+    devices?: string[];
+    /** Skip devices the health probe currently reports as unreachable. */
+    onlineOnly?: boolean;
+    windowMinutes?: number;
+    now?: number;
+    respond?: boolean;
+  } = {},
 ): Promise<SweepResult> {
   const cfg = getConfig().attacks;
   const now = options.now ?? Date.now();
   const windowMinutes = options.windowMinutes ?? cfg.windowMinutes;
-  const targets = options.devices ?? listDevices().names;
+  const { targets, skipped } = resolveTargets({
+    devices: options.devices,
+    onlineOnly: options.onlineOnly,
+  });
 
   const store = await attackStore().catch(() => null);
   const signals: Signal[] = [];
@@ -226,7 +266,7 @@ export async function sweep(
     }
   }
 
-  return { incidents, unavailable, devices: deviceResults, responses };
+  return { incidents, unavailable, devices: deviceResults, responses, skipped };
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;

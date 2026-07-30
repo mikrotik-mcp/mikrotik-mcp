@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "4.24.0",
+  "version": "5.0.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
   "toolCount": 885,
   "tools": [
@@ -14861,7 +14861,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Reads recent logs from every configured device, runs the attack detectors, and correlates what they find into incidents — brute force, credential spraying, a login that SUCCEEDED after failures, port scans, management ports answering the internet, and unexplained changes to security-relevant configuration. Read-only: it changes nothing on any device. One source hitting several routers is reported as ONE incident, which is the pattern no single router can see. Detectors whose input is missing say so and name the fix, rather than reporting a quiet network.",
+      "description": "Reads recent logs from every configured device, runs the attack detectors, and correlates what they find into incidents — brute force, credential spraying, a login that SUCCEEDED after failures, port scans, management ports answering the internet, and unexplained changes to security-relevant configuration. Read-only: it changes nothing on any device. One source hitting several routers is reported as ONE incident, which is the pattern no single router can see. Detectors whose input is missing say so and name the fix, rather than reporting a quiet network. Pass `devices` for one router, or `online_only` to skip the ones currently unreachable — any device left out is named in the result.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -14873,6 +14873,11 @@
               "type": "string"
             }
           },
+          "online_only": {
+            "default": false,
+            "description": "Skip devices the health probe currently reports as unreachable. A device not yet probed is still scanned — never probed is not the same as known-offline.",
+            "type": "boolean"
+          },
           "window_minutes": {
             "description": "How far back to read. Default from config (10).",
             "type": "integer",
@@ -14880,6 +14885,7 @@
             "maximum": 1440
           }
         },
+        "required": ["online_only"],
         "additionalProperties": false
       }
     },

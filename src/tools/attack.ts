@@ -60,9 +60,17 @@ export const attackTools: ToolModule = [
       "changes to security-relevant configuration. Read-only: it changes nothing on any device. " +
       "One source hitting several routers is reported as ONE incident, which is the pattern no " +
       "single router can see. Detectors whose input is missing say so and name the fix, rather " +
-      "than reporting a quiet network.",
+      "than reporting a quiet network. Pass `devices` for one router, or `online_only` to skip " +
+      "the ones currently unreachable — any device left out is named in the result.",
     inputSchema: {
       devices: z.array(z.string()).optional().describe("Limit to these devices (default: all)."),
+      online_only: z
+        .boolean()
+        .default(false)
+        .describe(
+          "Skip devices the health probe currently reports as unreachable. A device not yet " +
+            "probed is still scanned — never probed is not the same as known-offline.",
+        ),
       window_minutes: z.coerce
         .number()
         .int()
@@ -77,6 +85,7 @@ export const attackTools: ToolModule = [
       // for anything to be changed.
       const result = await sweep({
         devices: a.devices,
+        onlineOnly: a.online_only,
         windowMinutes: a.window_minutes,
         respond: false,
       });
@@ -87,6 +96,11 @@ export const attackTools: ToolModule = [
         `Scanned ${result.devices.length} device(s), ${result.devices.reduce((n, d) => n + d.events, 0)} log event(s).`,
       );
       for (const f of failed) lines.push(`  ✗ ${f.device}: ${f.error}`);
+      if (result.skipped.length > 0) {
+        // Named, not silently omitted: a device left out of a scan is a device
+        // this result says nothing about.
+        lines.push(`  Skipped as unreachable: ${result.skipped.join(", ")}`);
+      }
       lines.push("");
 
       if (result.incidents.length === 0) {

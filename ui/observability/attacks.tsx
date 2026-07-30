@@ -13,6 +13,11 @@
  *     entry at all.
  *   • **Detector status** — including the ones that could NOT run and the single
  *     thing that would fix each. Silence must never read as safety.
+ *   • **Schedule an audit** — attack detection answers "is someone attacking me
+ *     now"; a scheduled audit answers "did my posture get worse". Someone looking
+ *     at an incident is exactly the person who should arm the second one, so the
+ *     shortcut lives here and writes to the existing Schedules feature rather than
+ *     growing a second scheduler.
  */
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -40,6 +45,14 @@ const CONFIDENCE_TYPE: Record<string, GeistType> = {
 };
 
 const STAGES = ["recon", "attempt", "breach", "persistence"] as const;
+
+/** The schedules people actually want, in the words they'd use. */
+const CRON_PRESETS = [
+  { cron: "0 3 * * *", label: "Every day at 03:00" },
+  { cron: "0 */6 * * *", label: "Every 6 hours" },
+  { cron: "0 * * * *", label: "Every hour" },
+  { cron: "0 8 * * 1", label: "Mondays at 08:00" },
+] as const;
 
 function stamp(ms: number): string {
   return new Date(ms).toLocaleString(undefined, {
@@ -170,16 +183,34 @@ export function AttacksView(): ReactNode {
     timeout: string;
   } | null>(null);
   const [scanning, setScanning] = useState(false);
+  /** "" = every device · "__online" = only the reachable ones · else one name. */
+  const [scope, setScope] = useState("");
+  const [deviceList, setDeviceList] = useState<{ name: string; reachable: boolean | null }[]>([]);
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const [schedulable, setSchedulable] = useState<{ tool: string; summary: string }[]>([]);
+  const [jobCount, setJobCount] = useState(0);
+  const [auditTool, setAuditTool] = useState("");
+  const [auditCron, setAuditCron] = useState<string>(CRON_PRESETS[0].cron);
+  const [scheduling, setScheduling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     try {
-      const [main, src] = await Promise.all([
+      const [main, src, devs, sched] = await Promise.all([
         api<AttacksPayload>("/api/attacks?hours=168"),
         api<{ sources: AttackSource[] }>("/api/attacks/sources"),
+        api<{ devices: { name: string; reachable: boolean | null }[] }>("/api/attacks/devices"),
+        api<{
+          jobs: { id: string }[];
+          schedulable: { tool: string; summary: string }[];
+        }>("/api/schedules"),
       ]);
       setPayload(main);
       setSources(src.sources ?? []);
+      setDeviceList(devs.devices ?? []);
+      setSchedulable(sched.schedulable ?? []);
+      setJobCount(sched.jobs?.length ?? 0);
+      setAuditTool((current) => current || (sched.schedulable?.[0]?.tool ?? ""));
       setError(main.error ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -193,12 +224,24 @@ export function AttacksView(): ReactNode {
   const scan = async (): Promise<void> => {
     setScanning(true);
     try {
-      const res = await postJson<{ unavailable: AttackUnavailable[]; incidents: AttackIncident[] }>(
-        "/api/attacks/scan",
-        {},
-      );
+      const body =
+        scope === "" ? {} : scope === "__online" ? { onlineOnly: true } : { devices: [scope] };
+      const res = await postJson<{
+        unavailable: AttackUnavailable[];
+        incidents: AttackIncident[];
+        devices: { device: string; ok: boolean; events: number; error?: string }[];
+        skipped: string[];
+      }>("/api/attacks/scan", body);
+
       setUnavailable(res.unavailable ?? []);
-      toast.success(`Scan complete — ${res.incidents?.length ?? 0} incident(s)`);
+      setSkipped(res.skipped ?? []);
+      const read = (res.devices ?? []).filter((d) => d.ok).length;
+      const failed = (res.devices ?? []).filter((d) => !d.ok);
+      toast.success(
+        `Scanned ${read} device(s) — ${res.incidents?.length ?? 0} incident(s)${
+          failed.length > 0 ? ` · ${failed.length} unreachable` : ""
+        }`,
+      );
       await load();
     } catch (e) {
       toast.error(`Scan failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -243,6 +286,36 @@ export function AttacksView(): ReactNode {
     }
   };
 
+  const scheduleAudit = async (): Promise<void> => {
+    if (!auditTool) return;
+    setScheduling(true);
+    try {
+      // Writes to the existing Schedules feature — same endpoint, same guards,
+      // same READ-only enforcement. This page is a shortcut, not a second
+      // scheduler with its own idea of the rules.
+      const target = scope === "" || scope === "__online" ? "all" : scope;
+      const suffix = target === "all" ? "fleet" : target;
+      const res = await postJson<{ job?: { id: string }; error?: string }>("/api/schedules", {
+        id: `${auditTool.replace(/_/g, "-")}-${suffix}`.slice(0, 60),
+        cron: auditCron,
+        tool: auditTool,
+        devices: target === "all" ? "all" : [target],
+        notifyOn: ["new", "worsened"],
+      });
+      if (res.error) toast.error(res.error);
+      else {
+        toast.success(
+          `Scheduled ${auditTool} — the first run is only a baseline, comparisons start with the second`,
+        );
+        await load();
+      }
+    } catch (e) {
+      toast.error(`Could not schedule: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setScheduling(false);
+    }
+  };
+
   const unblock = async (address: string): Promise<void> => {
     try {
       const res = await fetch(`/api/attacks/responses/${encodeURIComponent(address)}`, {
@@ -258,6 +331,9 @@ export function AttacksView(): ReactNode {
 
   const now = Date.now();
   const incidents = payload?.incidents ?? [];
+  // A device that has never been probed counts as reachable here, matching the
+  // server: never probed is not the same as known-offline.
+  const onlineCount = deviceList.filter((d) => d.reachable !== false).length;
   const totals = useMemo(
     () => ({
       confirmed: incidents.filter((i) => i.confidence === "confirmed").length,
@@ -329,11 +405,35 @@ export function AttacksView(): ReactNode {
       <Panel
         title="Incidents"
         extra={
-          <Button size="sm" loading={scanning} onClick={() => void scan()}>
-            Scan now
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+              aria-label="Which devices to scan"
+            >
+              <option value="">All devices ({deviceList.length})</option>
+              <option value="__online">Only reachable ({onlineCount})</option>
+              {deviceList.map((d) => (
+                <option key={d.name} value={d.name}>
+                  {d.name}
+                  {d.reachable === false ? " (offline)" : d.reachable === null ? " (unprobed)" : ""}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" loading={scanning} onClick={() => void scan()}>
+              Scan now
+            </Button>
+          </div>
         }
       >
+        {skipped.length > 0 && (
+          <p className="mb-3 rounded border border-amber-500/50 bg-amber-500/5 p-2 text-xs">
+            Not scanned because the health probe reports them unreachable:{" "}
+            <span className="font-mono">{skipped.join(", ")}</span>. This result says nothing about
+            them.
+          </p>
+        )}
         {pending && (
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded border border-red-500/50 bg-red-500/5 p-3 text-sm">
             <span>
@@ -370,6 +470,66 @@ export function AttacksView(): ReactNode {
         )}
       </Panel>
 
+      <Panel
+        title="Schedule an audit"
+        extra={
+          <a
+            href="#schedules"
+            className="text-xs text-muted-foreground underline underline-offset-2"
+          >
+            {jobCount > 0 ? `${jobCount} job(s) — open Schedules` : "open Schedules"}
+          </a>
+        }
+      >
+        <p className="mb-3 text-sm text-muted-foreground">
+          Attack detection answers <i>is someone attacking me right now</i>. A scheduled audit
+          answers <i>did my posture get worse</i> — it runs on its own and reports only what changed
+          since the last run. The device picker above chooses the scope.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={auditTool}
+            onChange={(e) => setAuditTool(e.target.value)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            aria-label="Which auditor to schedule"
+          >
+            {schedulable.map((a) => (
+              <option key={a.tool} value={a.tool}>
+                {a.tool}
+              </option>
+            ))}
+          </select>
+          <select
+            value={auditCron}
+            onChange={(e) => setAuditCron(e.target.value)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            aria-label="How often"
+          >
+            {CRON_PRESETS.map((c) => (
+              <option key={c.cron} value={c.cron}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-muted-foreground">
+            on {scope === "" || scope === "__online" ? "all devices" : scope}
+          </span>
+          <Button
+            size="sm"
+            loading={scheduling}
+            onClick={() => void scheduleAudit()}
+            disabled={schedulable.length === 0}
+          >
+            Schedule it
+          </Button>
+        </div>
+        {auditTool && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {schedulable.find((a) => a.tool === auditTool)?.summary}
+          </p>
+        )}
+      </Panel>
+
       {unavailable.length > 0 && (
         <Panel
           title="Detectors that could not run"
@@ -395,32 +555,68 @@ export function AttacksView(): ReactNode {
           <p className="text-sm text-muted-foreground">No attacker addresses recorded yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            {/*
+              Every cell carries its own horizontal padding and an explicit
+              vertical alignment. Without both, the detector list wraps to a
+              second line and drags the incident count out of line with its row.
+            */}
+            <table className="w-full border-separate border-spacing-0 text-sm">
               <thead className="text-xs text-muted-foreground">
-                <tr className="border-b border-border">
-                  <th className="py-1 text-left">Source</th>
-                  <th className="py-1 text-left">Where</th>
-                  <th className="py-1 text-left">Devices</th>
-                  <th className="py-1 text-right">Incidents</th>
-                  <th className="py-1 text-left">Detectors</th>
-                  <th className="py-1 text-right">Last seen</th>
-                  <th className="py-1" />
+                <tr>
+                  <th className="border-b border-border py-1.5 pr-4 text-left font-medium">
+                    Source
+                  </th>
+                  <th className="border-b border-border px-4 py-1.5 text-left font-medium">
+                    Where
+                  </th>
+                  <th className="border-b border-border px-4 py-1.5 text-left font-medium">
+                    Devices
+                  </th>
+                  <th className="w-px whitespace-nowrap border-b border-border px-4 py-1.5 text-right font-medium">
+                    Incidents
+                  </th>
+                  <th className="border-b border-border px-4 py-1.5 text-left font-medium">
+                    Detectors
+                  </th>
+                  <th className="w-px whitespace-nowrap border-b border-border px-4 py-1.5 text-right font-medium">
+                    Last seen
+                  </th>
+                  <th className="w-px border-b border-border py-1.5 pl-4" />
                 </tr>
               </thead>
               <tbody>
                 {sources.map((s) => (
-                  <tr key={s.source} className="border-b border-border/50">
-                    <td className="py-1 font-mono text-xs">{s.source}</td>
-                    <td className="py-1 text-xs text-muted-foreground">
+                  <tr key={s.source}>
+                    <td className="border-b border-border/50 py-2 pr-4 align-top font-mono text-xs">
+                      {s.source}
+                    </td>
+                    <td className="whitespace-nowrap border-b border-border/50 px-4 py-2 align-top text-xs text-muted-foreground">
                       {s.geo ? `${s.geo.country}${s.geo.city ? ` · ${s.geo.city}` : ""}` : "—"}
                     </td>
-                    <td className="py-1 text-xs">{s.devices.join(", ")}</td>
-                    <td className="py-1 text-right tabular-nums">{s.incidents}</td>
-                    <td className="py-1 text-xs text-muted-foreground">{s.detectors.join(", ")}</td>
-                    <td className="py-1 text-right text-xs text-muted-foreground">
+                    <td className="border-b border-border/50 px-4 py-2 align-top text-xs">
+                      {s.devices.join(", ")}
+                    </td>
+                    <td className="whitespace-nowrap border-b border-border/50 px-4 py-2 text-right align-top tabular-nums">
+                      {s.incidents}
+                    </td>
+                    <td className="border-b border-border/50 px-4 py-2 align-top">
+                      {/* Chips, not a joined string: eight comma-separated
+                          detector names wrap into an unreadable paragraph. */}
+                      <span className="flex flex-wrap gap-1">
+                        {s.detectors.map((d) => (
+                          <span
+                            key={d}
+                            className="whitespace-nowrap rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                          >
+                            {d}
+                          </span>
+                        ))}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap border-b border-border/50 px-4 py-2 text-right align-top text-xs text-muted-foreground">
                       {relative(s.lastTs, now)}
                     </td>
-                    <td className="py-1 text-right">
+                    <td className="border-b border-border/50 py-2 pl-4 text-right align-top">
                       {s.blocked && <Badge type="success">blocked</Badge>}
                     </td>
                   </tr>

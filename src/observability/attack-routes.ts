@@ -13,13 +13,14 @@
  * through the same `decide()` guards the tool does — the dashboard must not be
  * a way around a refusal.
  */
-import { getConfig } from "../core/runtime";
+import { getConfig, listDevices } from "../core/runtime";
 import { logger } from "../logger";
 import { executePlan, revokeBlock } from "../attack/execute";
 import { decide, isNeverBlock, isPlan, neverBlockSet } from "../attack/respond";
 import { buildGuards, policyFromConfig, sweep } from "../attack/session";
 import { attackStore } from "../attack/store";
 import { getDeviceGeo } from "./geo";
+import { getDeviceStatus } from "./health";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -144,12 +145,39 @@ export async function attackRoutes(req: Request, url: URL): Promise<Response | n
   }
 
   if (p === "/api/attacks/scan" && req.method === "POST") {
-    logger.info("attack sweep requested from the dashboard");
-    const result = await sweep({ respond: false });
+    const body = (await req.json().catch(() => ({}))) as {
+      devices?: string[];
+      onlineOnly?: boolean;
+    };
+    const scope = body.devices?.length
+      ? body.devices.join(", ")
+      : body.onlineOnly
+        ? "reachable devices"
+        : "every device";
+    logger.info(`attack sweep requested from the dashboard (${scope})`);
+    // Never responds from here: a scan is a read, and the operator has not
+    // asked for anything to be changed.
+    const result = await sweep({
+      devices: body.devices?.length ? body.devices : undefined,
+      onlineOnly: body.onlineOnly,
+      respond: false,
+    });
     return json({
       incidents: result.incidents,
       unavailable: result.unavailable,
       devices: result.devices,
+      skipped: result.skipped,
+    });
+  }
+
+  if (p === "/api/attacks/devices" && req.method === "GET") {
+    // The page's device picker: every configured device with the reachability
+    // the health probe last saw, so "only online" means something specific.
+    return json({
+      devices: listDevices().names.map((name) => ({
+        name,
+        reachable: getDeviceStatus(name).reachable,
+      })),
     });
   }
 
