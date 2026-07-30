@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "export_policy_report",
+  "type": "object",
+  "properties": {
+    "format": {
+      "default": "markdown",
+      "type": "string",
+      "enum": ["markdown", "json", "sarif"]
+    },
+    "device": {
+      "description": "Which device's report, when several were checked",
+      "type": "string"
+    },
+    "artifact": {
+      "description": "SARIF artifact path the findings point at (default `<device>.rsc`)",
+      "type": "string"
+    }
+  },
+  "required": ["format"],
+  "additionalProperties": false
+}

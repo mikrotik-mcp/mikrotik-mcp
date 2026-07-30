@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "run_policy_check",
+  "type": "object",
+  "properties": {
+    "tag": {
+      "description": "Only evaluate rules carrying this tag",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

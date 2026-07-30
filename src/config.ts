@@ -301,6 +301,22 @@ export const FlowsConfigSchema = z.object({
 });
 export type FlowsConfig = z.infer<typeof FlowsConfigSchema>;
 
+/**
+ * Policy-as-code: where to find rule files.
+ *
+ * Globs are deliberately simple (a directory, or `dir/*.yaml`) — the pattern
+ * comes from config and the files it names are untrusted input, so a full glob
+ * engine would add both a dependency and a path-traversal surface to a feature
+ * whose entire point is being safe to run in CI.
+ */
+export const PolicyConfigSchema = z.object({
+  /** Rule-file locations. A bare directory loads every .yaml/.yml/.json in it. */
+  paths: z.array(z.string()).default(["./mikrotik-policies/*.yaml"]),
+  /** Also load the bundled starter pack shipped with the server. */
+  includeStarterPack: z.boolean().default(true),
+});
+export type PolicyConfig = z.infer<typeof PolicyConfigSchema>;
+
 export const DashboardConfigSchema = z.object({
   /** Master switch. When false, zero overhead and no SQLite is loaded. */
   enabled: z.boolean().default(false),
@@ -409,6 +425,8 @@ export const MikrotikConfigSchema = z.object({
   alerts: AlertsConfigSchema.optional(),
   /** NetFlow/IPFIX collection (opt-in; binds a UDP port only when enabled). */
   flows: FlowsConfigSchema.default(() => FlowsConfigSchema.parse({})),
+  /** Policy-as-code rule files (read-only linting against config snapshots). */
+  policy: PolicyConfigSchema.default(() => PolicyConfigSchema.parse({})),
   /**
    * SSH connection pooling — keeps one persistent connection per device and
    * reuses it across tool calls, saving the handshake cost. Enabled by default.
@@ -784,6 +802,14 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     dbPath: pick("memory-db", "MIKROTIK_MEMORY__DB_PATH"),
   });
 
+  // 7) Policy-as-code rule files. `MIKROTIK_POLICY_PATHS` / `--policy-paths`
+  // carries a comma-separated list; left unset, the schema default applies.
+  const policyPaths = csv(pick("policy-paths", "MIKROTIK_POLICY_PATHS"));
+  const policy = {
+    ...(policyPaths ? { paths: policyPaths } : {}),
+    includeStarterPack: boolOpt(pick("policy-starter-pack", "MIKROTIK_POLICY__STARTER_PACK")),
+  };
+
   // S3 is opt-in: only attach the block when something meaningful is set, so an
   // unconfigured deployment leaves `config.s3` undefined and the tools inert.
   const hasS3 = !!(s3.accessKeyId || s3.bucket || s3.endpoint);
@@ -799,6 +825,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     tools,
     ssh,
     memory,
+    policy,
     ...(hasS3 ? { s3 } : {}),
   };
 

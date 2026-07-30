@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "check_policy_snapshot",
+  "type": "object",
+  "properties": {
+    "snapshot_id": {
+      "description": "Snapshot id to evaluate",
+      "type": "string"
+    },
+    "config_text": {
+      "description": "Raw `/export` text to evaluate instead",
+      "type": "string"
+    },
+    "device": {
+      "description": "Label the report with this device name",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

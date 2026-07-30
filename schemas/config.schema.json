@@ -461,6 +461,28 @@
       "required": ["enabled", "port", "db", "retentionHours", "rollupDays", "maxRows"],
       "additionalProperties": false
     },
+    "policy": {
+      "default": {
+        "paths": ["./mikrotik-policies/*.yaml"],
+        "includeStarterPack": true
+      },
+      "type": "object",
+      "properties": {
+        "paths": {
+          "default": ["./mikrotik-policies/*.yaml"],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "includeStarterPack": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": ["paths", "includeStarterPack"],
+      "additionalProperties": false
+    },
     "ssh": {
       "default": {
         "keepAlive": true,
@@ -567,6 +589,7 @@
     "mcp",
     "dashboard",
     "flows",
+    "policy",
     "ssh",
     "readOnly",
     "tools",

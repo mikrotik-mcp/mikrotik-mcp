@@ -1,0 +1,180 @@
+version: 1
+name: MikroTik baseline hardening
+# The bundled starter pack. Every rule here is drawn from a check the Security
+# Hardening and Compliance Auditor modules already make, restated in the policy
+# language so the file doubles as a worked example of the schema.
+#
+# Copy it, edit it, and point `policy.paths` at your own copy — these are a
+# starting position, not a standard.
+policies:
+  # ── Management plane ─────────────────────────────────────────────────────
+  - id: telnet-disabled
+    severity: critical
+    description: Telnet must be disabled — it carries credentials in clear text.
+    remediation: /ip service set telnet disabled=yes
+    match: { section: /ip/service, where: { name: telnet } }
+    assert: { field: disabled, equals: "yes" }
+    tags: [management, cis]
+
+  - id: ftp-disabled
+    severity: high
+    description: The FTP service must be disabled unless a device genuinely serves files.
+    remediation: /ip service set ftp disabled=yes
+    match: { section: /ip/service, where: { name: ftp } }
+    assert: { field: disabled, equals: "yes" }
+    tags: [management]
+
+  - id: ssh-strong-crypto
+    severity: high
+    description: SSH must use strong crypto (disables the legacy ciphers and 1024-bit DH).
+    remediation: /ip ssh set strong-crypto=yes
+    match: { section: /ip/ssh, settings: true }
+    assert: { field: strong-crypto, equals: "yes" }
+    tags: [management, crypto]
+
+  - id: ssh-forwarding-off
+    severity: medium
+    description: SSH TCP forwarding turns a router into a tunnel endpoint; leave it off unless a jump host needs it.
+    remediation: /ip ssh set forwarding-enabled=no
+    match: { section: /ip/ssh, settings: true }
+    assert:
+      none_of:
+        - { field: forwarding-enabled, equals: both }
+    tags: [management]
+
+  - id: no-default-admin
+    severity: critical
+    description: The stock `admin` account must be renamed or removed.
+    remediation: Create a named account with full policy, then /user remove admin
+    match: { section: /user, where: { name: admin } }
+    # Reaching this rule at all means an account literally named `admin` exists.
+    assert: { count: { exactly: 0 } }
+    on_empty: pass
+    tags: [accounts]
+
+  - id: users-have-comments
+    severity: low
+    description: Every account should say who it belongs to.
+    remediation: /user set <name> comment="owner"
+    match: { section: /user }
+    assert: { field: comment, present: true }
+    tags: [accounts, hygiene]
+
+  # ── Discovery & neighbour exposure ───────────────────────────────────────
+  - id: neighbor-discovery-scoped
+    severity: medium
+    description: Neighbour discovery must be limited to an interface list, not left on all interfaces.
+    remediation: /ip neighbor discovery-settings set discover-interface-list=LAN
+    match: { section: /ip/neighbor/discovery-settings, settings: true }
+    assert: { field: discover-interface-list, not_in: [all, none] }
+    tags: [discovery]
+
+  - id: mac-server-scoped
+    severity: medium
+    description: MAC-Telnet must be restricted to a management interface list.
+    remediation: /tool mac-server set allowed-interface-list=LAN
+    match: { section: /tool/mac-server, settings: true }
+    assert:
+      none_of:
+        - { field: allowed-interface-list, equals: all }
+    tags: [discovery, management]
+
+  - id: bandwidth-server-off
+    severity: low
+    description: The bandwidth-test server should be disabled when not actively testing.
+    remediation: /tool bandwidth-server set enabled=no
+    match: { section: /tool/bandwidth-server, settings: true }
+    assert: { field: enabled, equals: "no" }
+    tags: [services]
+
+  # ── Firewall ─────────────────────────────────────────────────────────────
+  - id: input-chain-has-drop
+    severity: critical
+    description: The input chain must end in an explicit drop — an implicit accept is not a firewall.
+    remediation: /ip firewall filter add chain=input action=drop comment="default deny"
+    match: { section: /ip/firewall/filter, where: { chain: input, action: drop } }
+    assert: { count: { min: 1 } }
+    tags: [firewall, default-deny]
+
+  - id: no-bare-input-accept
+    severity: critical
+    description: An input-chain accept must be scoped by address-list, interface list or connection state.
+    remediation: Add src-address-list=, in-interface-list= or connection-state= to the rule.
+    match: { section: /ip/firewall/filter, where: { chain: input, action: accept } }
+    assert:
+      any_of:
+        - { field: src-address-list, present: true }
+        - { field: in-interface-list, present: true }
+        - { field: connection-state, contains: established }
+        - { field: in-interface, present: true }
+    tags: [firewall]
+
+  - id: no-disabled-firewall-rules
+    severity: low
+    description: A disabled firewall rule is dead weight that hides intent — delete it or enable it.
+    remediation: Remove the rule, or enable it if it is still needed.
+    match: { section: /ip/firewall/filter }
+    # `none_of` rather than `not_equals`: a missing field fails every value
+    # predicate, and most rules simply omit `disabled=`. "must not be yes"
+    # (absent counts as fine) is `none_of`; "present and different" is
+    # `not_equals`. This is the single most common authoring mistake.
+    assert:
+      none_of:
+        - { field: disabled, equals: "yes" }
+    tags: [firewall, hygiene]
+
+  - id: ipv6-firewall-present
+    severity: high
+    description: A device with IPv6 addresses must also filter IPv6 — an IPv4-only firewall is half a firewall.
+    remediation: /ipv6 firewall filter add chain=input action=drop
+    match: { section: /ipv6/firewall/filter, where: { chain: input, action: drop } }
+    assert: { count: { min: 1 } }
+    on_empty: fail
+    tags: [firewall, ipv6]
+
+  # ── Kernel & routing ─────────────────────────────────────────────────────
+  - id: rp-filter-enabled
+    severity: high
+    description: Reverse-path filtering must be on, so spoofed source addresses are dropped.
+    remediation: /ip settings set rp-filter=strict
+    match: { section: /ip/settings, settings: true }
+    assert: { field: rp-filter, in: [strict, loose] }
+    tags: [kernel, anti-spoof]
+
+  - id: no-ip-forwarding-of-source-routes
+    severity: medium
+    description: Source-routed packets must not be accepted.
+    remediation: /ip settings set accept-source-route=no
+    match: { section: /ip/settings, settings: true }
+    assert:
+      none_of:
+        - { field: accept-source-route, equals: "yes" }
+    tags: [kernel]
+
+  # ── Time & logging ───────────────────────────────────────────────────────
+  - id: ntp-client-enabled
+    severity: medium
+    description: NTP must be enabled — every log timestamp and certificate check depends on it.
+    remediation: /system ntp client set enabled=yes servers=...
+    match: { section: /system/ntp/client, settings: true }
+    assert: { field: enabled, equals: "yes" }
+    tags: [time]
+
+  - id: remote-logging-configured
+    severity: medium
+    description: At least one logging action must ship logs off the device; local logs die with the router.
+    remediation: /system logging action add name=remote target=remote remote=<syslog-host>
+    match: { section: /system/logging/action, where: { target: remote } }
+    assert: { count: { min: 1 } }
+    on_empty: fail
+    tags: [logging]
+
+  - id: dns-not-open-resolver
+    severity: high
+    description: Remote DNS requests must be off, or the router becomes an open resolver for amplification attacks.
+    remediation: /ip dns set allow-remote-requests=no (or firewall port 53 on the WAN)
+    match: { section: /ip/dns, settings: true }
+    assert:
+      none_of:
+        - { field: allow-remote-requests, equals: "yes" }
+    tags: [dns, amplification]

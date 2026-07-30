@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "validate_policy_file",
+  "type": "object",
+  "properties": {
+    "content": {
+      "description": "Rule file text (YAML or JSON)",
+      "type": "string"
+    },
+    "path": {
+      "description": "Path to a rule file to read instead",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

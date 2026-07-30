@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "explain_policy_finding",
+  "type": "object",
+  "properties": {
+    "rule_id": {
+      "type": "string",
+      "description": "Rule id from the report"
+    },
+    "device": {
+      "description": "Which device's report, when several were checked",
+      "type": "string"
+    }
+  },
+  "required": ["rule_id"],
+  "additionalProperties": false
+}

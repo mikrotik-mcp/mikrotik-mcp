@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "4.24.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 860,
+  "toolCount": 866,
   "tools": [
     {
       "name": "find_tools",
@@ -15881,6 +15881,170 @@
           }
         },
         "required": ["dns_name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_policies",
+      "title": "List Loaded Policy Rules",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists every loaded policy rule file and the rules inside it — id, severity, what it asserts and which section it applies to. Rules come from `policy.paths` (or MIKROTIK_POLICY_PATHS) plus the bundled starter pack. A file that failed validation is listed WITH its errors rather than dropped, so a policy set that silently shrank is visible. Contacts no device.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tag": {
+            "description": "Only rules carrying this tag",
+            "type": "string"
+          },
+          "severity": {
+            "description": "Only rules of this severity",
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low", "info"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "validate_policy_file",
+      "title": "Validate a Policy Rule File",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Schema-checks a policy rule file — as inline text or a path — and reports each problem with the path into the document (`policies.2.assert.field`), so a rule file can be authored iteratively without running it against anything. Catches what silently breaks a rule set: duplicate ids, two predicates in one leaf, an unknown key, an over-long or invalid regex. Contacts no device and reads no config.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Rule file text (YAML or JSON)",
+            "type": "string"
+          },
+          "path": {
+            "description": "Path to a rule file to read instead",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check_policy_snapshot",
+      "title": "Check Policies Against a Snapshot",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Evaluates the loaded policy rules against a STORED configuration snapshot — no device is contacted at all, which is what makes this runnable in CI. Pass `snapshot_id` (from list_config_snapshots), or `config_text` to check an export you already have. Reports a compliance score, the failing rules by severity, and the offending config line for each. A rule matching nothing is reported as NOT APPLICABLE, never as a pass.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "description": "Snapshot id to evaluate",
+            "type": "string"
+          },
+          "config_text": {
+            "description": "Raw `/export` text to evaluate instead",
+            "type": "string"
+          },
+          "device": {
+            "description": "Label the report with this device name",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "run_policy_check",
+      "title": "Run a Policy Check on a Device",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Captures the device's current configuration (`/export terse`, a read-only print — it writes nothing and leaves no file on the router) and evaluates every loaded policy rule against it. This is the live version of check_policy_snapshot: same rules, same report, freshest config. Nothing is ever written to the device — remediation belongs to the hardening and change-plan tools, and keeping this read-only is what makes it safe to run against production.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tag": {
+            "description": "Only evaluate rules carrying this tag",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "explain_policy_finding",
+      "title": "Explain a Policy Finding",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Explains one finding from the most recent policy check in depth: the rule, the offending configuration line, why it failed (expected versus actual) and the remediation. Use it after run_policy_check or check_policy_snapshot when a finding needs to become an action. Reads the cached report — no device is contacted.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "description": "Rule id from the report"
+          },
+          "device": {
+            "description": "Which device's report, when several were checked",
+            "type": "string"
+          }
+        },
+        "required": ["rule_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_policy_report",
+      "title": "Export the Policy Report",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Renders the most recent policy check as Markdown, JSON or **SARIF 2.1.0**. SARIF is the format GitHub code-scanning ingests, so a router's configuration can be linted in a pull request exactly like source code — each finding lands on the line of the export that caused it. Reads the cached report; no device is contacted.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "format": {
+            "default": "markdown",
+            "type": "string",
+            "enum": ["markdown", "json", "sarif"]
+          },
+          "device": {
+            "description": "Which device's report, when several were checked",
+            "type": "string"
+          },
+          "artifact": {
+            "description": "SARIF artifact path the findings point at (default `<device>.rsc`)",
+            "type": "string"
+          }
+        },
+        "required": ["format"],
         "additionalProperties": false
       }
     },

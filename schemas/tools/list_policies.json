@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "list_policies",
+  "type": "object",
+  "properties": {
+    "tag": {
+      "description": "Only rules carrying this tag",
+      "type": "string"
+    },
+    "severity": {
+      "description": "Only rules of this severity",
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low", "info"]
+    }
+  },
+  "additionalProperties": false
+}

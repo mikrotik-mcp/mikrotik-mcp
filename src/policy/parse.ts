@@ -135,6 +135,17 @@ function parseFields(tokens: string[]): { fields: Record<string, string>; flags:
   const fields: Record<string, string> = {};
   const flags: string[] = [];
 
+  // RouterOS `set` (and `remove`/`enable`/…) take a POSITIONAL selector first:
+  // `/ip service set telnet disabled=yes` names the item as a bare token, not as
+  // `name=telnet`. Surface it as `name` so a rule can say
+  // `where: {name: telnet}` — without this, every rule about a named service or
+  // a numbered rule silently matches nothing, which reads as "not applicable"
+  // and quietly disappears from the report.
+  const [first] = tokens;
+  if (first !== undefined && !first.includes("=") && !first.startsWith("!")) {
+    if (!tokens.some((t) => t.startsWith("name="))) fields.name = unquote(first);
+  }
+
   for (const token of tokens) {
     const eq = token.indexOf("=");
     if (eq <= 0) {

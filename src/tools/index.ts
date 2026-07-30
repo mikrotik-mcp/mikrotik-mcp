@@ -33,6 +33,7 @@ import { dot1xClientTools } from "./dot1x-client";
 import { firewallAuditTools } from "./firewall-audit";
 import { securityShieldTools } from "./security-shield";
 import { securityHardeningTools } from "./security-hardening";
+import { policyTools } from "./policy";
 import { portScanDetectionTools } from "./port-scan-detection";
 import { portKnockTools } from "./port-knock";
 import { firewallFilterTools } from "./firewall-filter";
@@ -688,6 +689,15 @@ export const moduleCatalog: ModuleInfo[] = [
       "Certificate lifecycle helpers: a one-call expiry audit and Let's Encrypt issuance/renewal " +
       "via RouterOS's ACME client — so a TLS cert never silently lapses.",
     tools: certStewardTools,
+  },
+  {
+    label: "Policy Engine",
+    slug: "policy",
+    group: "Security",
+    description:
+      "Policy-as-code: evaluate an organisation's OWN compliance rules (YAML) against a config " +
+      "snapshot — offline, read-only, CI-able, with Markdown/JSON/SARIF output.",
+    tools: policyTools,
   },
   {
     label: "Compliance Auditor",

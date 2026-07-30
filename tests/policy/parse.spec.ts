@@ -290,3 +290,23 @@ unset 0 comment`,
     expect(model.unparsed).toEqual([]);
   });
 });
+
+describe("positional selectors", () => {
+  test("`set <name>` surfaces the item name as a `name` field", () => {
+    // /ip service names its items positionally: `set telnet disabled=yes`.
+    const model = parseExport(`/ip service\nset telnet disabled=yes\nset www address=10.0.0.0/8`);
+    const records = recordsOf(model, "/ip/service");
+    expect(records.map((r) => r.fields.name)).toEqual(["telnet", "www"]);
+    expect(records[0].fields.disabled).toBe("yes");
+  });
+
+  test("an explicit name= wins over the positional token", () => {
+    const model = parseExport(`/interface bridge\nadd name=bridge1 protocol-mode=rstp`);
+    expect(recordsOf(model, "/interface/bridge")[0].fields.name).toBe("bridge1");
+  });
+
+  test("a numeric selector is recorded as-is", () => {
+    const model = parseExport(`/ip firewall filter\nset 0 disabled=yes`);
+    expect(recordsOf(model, "/ip/firewall/filter")[0].fields.name).toBe("0");
+  });
+});
