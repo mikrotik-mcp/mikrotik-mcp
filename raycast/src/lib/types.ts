@@ -796,3 +796,42 @@ export interface ScheduleRegression {
   worsened: { finding: ScheduleFinding; from: string; to: string }[];
   resolved: ScheduleFinding[];
 }
+
+// ── Config narrative (Explain) ──────────────────────────────────────────────
+export interface NarrativeRole {
+  role: string;
+  label: string;
+  score: number;
+  signals: { signal: string; section: string; weight: number }[];
+}
+
+export interface NarrativeExposureRow {
+  what: string;
+  kind: string;
+  detail: string;
+  from: string;
+  severity: "critical" | "high" | "medium" | "low";
+  line: number;
+}
+
+export interface DeviceNarrativePayload {
+  device?: string;
+  identity: {
+    name?: string;
+    version?: string;
+    model?: string;
+    roles: { primary: NarrativeRole | null; secondary: NarrativeRole[] };
+  };
+  interfaces: { name: string; kind: string; disabled: boolean }[];
+  subnets: { cidr: string; interface: string }[];
+  exposure: NarrativeExposureRow[];
+  unknowns: { section: string; what: string; line: number }[];
+  stats: { recordCount: number; unparsedLines: number };
+}
+
+export interface ExplainPayload {
+  narrative: DeviceNarrativePayload;
+  markdown: string;
+  mermaid: string;
+  source: string;
+}

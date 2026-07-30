@@ -128,6 +128,13 @@
       "mode": "view"
     },
     {
+      "name": "explain",
+      "title": "Explain",
+      "description": "Plain-language architecture document for a router, from its configuration",
+      "icon": "extension-icon.png",
+      "mode": "view"
+    },
+    {
       "name": "policies",
       "title": "Policies",
       "description": "Policy-as-code findings and compliance score per device",
