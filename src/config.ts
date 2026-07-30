@@ -317,6 +317,34 @@ export const PolicyConfigSchema = z.object({
 });
 export type PolicyConfig = z.infer<typeof PolicyConfigSchema>;
 
+/**
+ * Scheduled audits — recurring READ-only audits run by the MCP host, with each
+ * run diffed against the previous one so the operator hears about *changes*, not
+ * a nightly restatement of a known posture.
+ *
+ * The limits here exist because an unattended loop has no operator to notice it
+ * misbehaving: `concurrency` stops a fleet sweep from being a thundering herd of
+ * SSH sessions, and `timeoutMs` stops one wedged device from holding a job open
+ * until the next occurrence collides with it.
+ */
+export const SchedulesConfigSchema = z.object({
+  /** Master switch. Off means no timer is armed and no job ever runs. */
+  enabled: z.boolean().default(false),
+  /** Job definitions, validated by `src/schedule/model.ts` at load. */
+  jobs: z.array(z.unknown()).default([]),
+  /** Concurrent device audits within one job. */
+  concurrency: z.coerce.number().int().positive().max(64).default(4),
+  /** Per-device wall-clock budget before the audit is abandoned. */
+  timeoutMs: z.coerce.number().int().positive().default(600_000),
+  /** Upper bound on the random start delay used to stagger a fleet sweep. */
+  jitterMs: z.coerce.number().int().nonnegative().default(3_000),
+  /** How often the scheduler wakes to check what is due. */
+  tickSeconds: z.coerce.number().int().positive().default(30),
+  /** Default run-history retention for jobs that don't set their own. */
+  retainDays: z.coerce.number().int().positive().default(90),
+});
+export type SchedulesConfig = z.infer<typeof SchedulesConfigSchema>;
+
 export const DashboardConfigSchema = z.object({
   /** Master switch. When false, zero overhead and no SQLite is loaded. */
   enabled: z.boolean().default(false),
@@ -427,6 +455,8 @@ export const MikrotikConfigSchema = z.object({
   flows: FlowsConfigSchema.default(() => FlowsConfigSchema.parse({})),
   /** Policy-as-code rule files (read-only linting against config snapshots). */
   policy: PolicyConfigSchema.default(() => PolicyConfigSchema.parse({})),
+  /** Recurring READ-only audits with run-over-run diffing (opt-in). */
+  schedules: SchedulesConfigSchema.default(() => SchedulesConfigSchema.parse({})),
   /**
    * SSH connection pooling — keeps one persistent connection per device and
    * reuses it across tool calls, saving the handshake cost. Enabled by default.
@@ -497,6 +527,18 @@ function parseFlags(argv: string[]): Record<string, string> {
   return out;
 }
 
+/**
+ * Config-file blocks that have no env/flag equivalent and are handed to the
+ * schema verbatim.
+ *
+ * These are the feature blocks whose content is a rule/job list rather than a
+ * handful of scalars — there is no sensible `--alert-rules` flag for a nested
+ * YAML-shaped array, so the file is the only way to set them. Without this
+ * passthrough they parse fine and are then thrown away, which reads as "my
+ * alerts config does nothing".
+ */
+const PASSTHROUGH_BLOCKS = ["alerts", "flows", "policy", "schedules"] as const;
+
 /** Parse a multi-device source (JSON file or inline JSON) into a devices map. */
 function parseDevicesSource(
   raw: string,
@@ -513,6 +555,8 @@ function parseDevicesSource(
   readOnly?: boolean;
   disableUpdateCheck?: boolean;
   backupDir?: string;
+  /** {@link PASSTHROUGH_BLOCKS} present in the file, handed to zod as-is. */
+  blocks: Record<string, unknown>;
 } {
   let json: unknown;
   try {
@@ -560,7 +604,14 @@ function parseDevicesSource(
   const disableUpdateCheck =
     structured && typeof obj.disableUpdateCheck === "boolean" ? obj.disableUpdateCheck : undefined;
   const backupDir = structured && typeof obj.backupDir === "string" ? obj.backupDir : undefined;
+  const blocks: Record<string, unknown> = {};
+  if (structured) {
+    for (const key of PASSTHROUGH_BLOCKS) {
+      if (obj[key] && typeof obj[key] === "object") blocks[key] = obj[key];
+    }
+  }
   return {
+    blocks,
     devices,
     defaultDevice,
     s3,
@@ -682,6 +733,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
   let fileReadOnly: boolean | undefined;
   let fileDisableUpdateCheck: boolean | undefined;
   let fileBackupDir: string | undefined;
+  let fileBlocks: Record<string, unknown> = {};
   if (configFile || devicesInline) {
     const src = configFile
       ? parseDevicesSource(configFile, true)
@@ -698,6 +750,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     fileReadOnly = src.readOnly;
     fileDisableUpdateCheck = src.disableUpdateCheck;
     fileBackupDir = src.backupDir;
+    fileBlocks = src.blocks;
   }
 
   // 3) Optional S3 storage. Credentials follow Bun's native S3 lookup order
@@ -805,16 +858,28 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
   // 7) Policy-as-code rule files. `MIKROTIK_POLICY_PATHS` / `--policy-paths`
   // carries a comma-separated list; left unset, the schema default applies.
   const policyPaths = csv(pick("policy-paths", "MIKROTIK_POLICY_PATHS"));
-  const policy = {
+  const policy = overlay(fileBlocks.policy as Record<string, unknown> | undefined, {
     ...(policyPaths ? { paths: policyPaths } : {}),
     includeStarterPack: boolOpt(pick("policy-starter-pack", "MIKROTIK_POLICY__STARTER_PACK")),
-  };
+  });
+
+  // 8) Scheduled audits. The job list only comes from the config file (or the
+  // tools at runtime); env/flags carry the operational limits.
+  const schedules = overlay(fileBlocks.schedules as Record<string, unknown> | undefined, {
+    enabled: boolOpt(pick("schedules", "MIKROTIK_SCHEDULES__ENABLED")),
+    concurrency: pick("schedules-concurrency", "MIKROTIK_SCHEDULES__CONCURRENCY"),
+    timeoutMs: pick("schedules-timeout-ms", "MIKROTIK_SCHEDULES__TIMEOUT_MS"),
+    tickSeconds: pick("schedules-tick-seconds", "MIKROTIK_SCHEDULES__TICK_SECONDS"),
+    retainDays: pick("schedules-retain-days", "MIKROTIK_SCHEDULES__RETAIN_DAYS"),
+  });
 
   // S3 is opt-in: only attach the block when something meaningful is set, so an
   // unconfigured deployment leaves `config.s3` undefined and the tools inert.
   const hasS3 = !!(s3.accessKeyId || s3.bucket || s3.endpoint);
 
   const raw = {
+    // File-only blocks first, so anything assembled from env/flags below wins.
+    ...fileBlocks,
     devices: Object.keys(devices).length ? devices : { default: {} },
     defaultDevice: defaultDevice ?? "default",
     mcp,
@@ -826,6 +891,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     ssh,
     memory,
     policy,
+    schedules,
     ...(hasS3 ? { s3 } : {}),
   };
 

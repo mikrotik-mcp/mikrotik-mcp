@@ -483,6 +483,69 @@
       "required": ["paths", "includeStarterPack"],
       "additionalProperties": false
     },
+    "schedules": {
+      "default": {
+        "enabled": false,
+        "jobs": [],
+        "concurrency": 4,
+        "timeoutMs": 600000,
+        "jitterMs": 3000,
+        "tickSeconds": 30,
+        "retainDays": 90
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "jobs": {
+          "default": [],
+          "type": "array",
+          "items": {}
+        },
+        "concurrency": {
+          "default": 4,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 64
+        },
+        "timeoutMs": {
+          "default": 600000,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "jitterMs": {
+          "default": 3000,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "tickSeconds": {
+          "default": 30,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "retainDays": {
+          "default": 90,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "enabled",
+        "jobs",
+        "concurrency",
+        "timeoutMs",
+        "jitterMs",
+        "tickSeconds",
+        "retainDays"
+      ],
+      "additionalProperties": false
+    },
     "ssh": {
       "default": {
         "keepAlive": true,
@@ -590,6 +653,7 @@
     "dashboard",
     "flows",
     "policy",
+    "schedules",
     "ssh",
     "readOnly",
     "tools",
