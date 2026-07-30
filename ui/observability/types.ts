@@ -784,3 +784,80 @@ export interface SnapshotRow {
   ts: number;
   label?: string;
 }
+
+// ── Attack detection ────────────────────────────────────────────────────────
+export type AttackStage = "recon" | "attempt" | "breach" | "persistence";
+export type AttackConfidence = "low" | "medium" | "high" | "confirmed";
+
+export interface AttackEvidence {
+  ts: number | null;
+  device: string;
+  message: string;
+  detector: string;
+}
+
+export interface AttackIncident {
+  id: string;
+  source: string;
+  devices: string[];
+  stage: AttackStage;
+  confidence: AttackConfidence;
+  severity: string;
+  firstTs: number;
+  lastTs: number;
+  detectors: string[];
+  narrative: string;
+  recommendations: string[];
+  evidence: AttackEvidence[];
+  spoofableOnly: boolean;
+  signalCount: number;
+  blocked?: boolean;
+}
+
+export interface AttackResponse {
+  id: number;
+  incidentId: string;
+  action: string;
+  source: string;
+  devices: string[];
+  timeout: string;
+  list: string;
+  reason: string;
+  ts: number;
+  expiresAt?: number;
+  ok: boolean;
+  error?: string;
+  revokedAt?: number;
+}
+
+export interface AttackPosture {
+  enabled: boolean;
+  mode: "detect" | "respond";
+  autoRespondTo: string[];
+  minConfidence: string;
+}
+
+export interface AttacksPayload {
+  incidents: AttackIncident[];
+  responses: AttackResponse[];
+  posture: AttackPosture;
+  error?: string;
+}
+
+export interface AttackSource {
+  source: string;
+  devices: string[];
+  detectors: string[];
+  firstTs: number;
+  lastTs: number;
+  incidents: number;
+  worst: string;
+  blocked: boolean;
+  geo: { countryCode: string; country: string; city?: string } | null;
+}
+
+export interface AttackUnavailable {
+  detector: string;
+  reason: string;
+  fix?: string;
+}

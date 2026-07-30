@@ -74,6 +74,7 @@ import { PoliciesView } from "./policies";
 import { SimulatorView } from "./simulator";
 import { SchedulesView } from "./schedules";
 import { ExplainView } from "./explain";
+import { AttacksView } from "./attacks";
 import { MemoryView } from "./memory";
 import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
@@ -129,6 +130,7 @@ type ViewId =
   | "simulator"
   | "schedules"
   | "explain"
+  | "attacks"
   | "txn"
   | "plan"
   | "s3"
@@ -150,6 +152,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "flows", label: "Flows", sub: "NetFlow/IPFIX top talkers, conversations & anomalies" },
   { id: "snapshots", label: "Snapshots", sub: "Config history & time-travel diff" },
   { id: "drift", label: "Drift Guard", sub: "Golden config baselines & live drift detection" },
+  {
+    id: "attacks",
+    label: "Attacks",
+    sub: "Live attack incidents, evidence and guarded blocking",
+  },
   {
     id: "policies",
     label: "Policies",
@@ -247,6 +254,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   simulator: MONO_ACCENT,
   schedules: MONO_ACCENT,
   explain: MONO_ACCENT,
+  attacks: MONO_ACCENT,
   txn: MONO_ACCENT,
   plan: MONO_ACCENT,
   s3: MONO_ACCENT,
@@ -338,6 +346,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Empty page? Read the collector strip first — 'templates pending' means v9/IPFIX data arrived before the layout that decodes it, and resolves on the next refresh.",
       "Set it up with the setup-traffic-flow prompt: start the collector, then point the router at this host.",
       "Flows are cheap and aggregate; use Packets (TZSP) when you need to see inside a specific conversation.",
+    ],
+  },
+  attacks: {
+    what: "Watches every device's log for brute force, credential spraying, a login that SUCCEEDED after failures, port scans and unexplained config changes, and correlates them into incidents with evidence.",
+    tips: [
+      "Detect-only is the default — the banner says whether anything would actually be blocked.",
+      "Evidence is one click away on every incident: an incident that cannot show its work should not be acted on.",
+      '"Detectors that could not run" matters most — a quiet result from a detector with no input is not a safe network.',
     ],
   },
   policies: {
@@ -686,6 +702,12 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M4 12h10" />
         <path d="M4 18h4" />
         <path d="m14 15 3 3 5-6" />
+      </>
+    ),
+    attacks: (
+      <>
+        <path d="M12 3 4 6v6c0 4.4 3.4 7.9 8 9 4.6-1.1 8-4.6 8-9V6Z" />
+        <path d="m9.5 12 2 2 3.5-4" />
       </>
     ),
     explain: (
@@ -1697,6 +1719,9 @@ function App(): ReactNode {
 
         {/* ── Config narrative ── */}
         {view === "explain" && <ExplainView />}
+
+        {/* ── Attack detection ── */}
+        {view === "attacks" && <AttacksView />}
 
         {/* ── Flows ── */}
         {view === "flows" && <FlowsView />}
