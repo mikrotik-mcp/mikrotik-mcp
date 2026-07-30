@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "configure_attack_response",
+  "type": "object",
+  "properties": {
+    "check_address": {
+      "description": "Ask whether this address would be refused, and why.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

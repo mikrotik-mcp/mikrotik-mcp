@@ -363,6 +363,9 @@ Higher-level workflows built on top of the per-scope tools:
 - **[Config Narrative](docs/config-narrative.md)** — turn a router's configuration into a
   plain-language architecture document with a topology diagram, and explain what the
   difference between two snapshots actually means.
+- **[Attack Detection](docs/attack-detection.md)** — watch the fleet's logs for brute
+  force, credential spraying and a login that succeeded after failures, correlate them
+  into incidents with evidence, and block the source reversibly when you ask.
 - **[Config Snapshots](docs/config-snapshots.md)** — store `/export` snapshots and
   time-travel diff any two, or one against the live device.
 - **[Firewall Audit](docs/firewall-audit.md)** — find shadowed, broad, missing-default-drop,
@@ -437,6 +440,7 @@ Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_L
 | **[Staged Fleet Rollout](docs/fleet-rollout.md)**                   | Canary → wave → fleet with health gates and auto-revert      |
 | **[Change Plan & Dry-Run](docs/change-plan.md)**                    | Preview commands, apply with the exact diff + auto-rollback  |
 | **[Traffic Flow](docs/traffic-flow.md)**                            | NetFlow/IPFIX collection + top-talker analytics              |
+| **[Attack Detection](docs/attack-detection.md)**                    | Live attack incidents from logs; guarded, timed blocking     |
 | **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                       |
 | **[Security Hardening](docs/security-hardening.md)**                | Per-category audit+remediate, snapshot + Safe-Mode           |
 | **[Scheduled Audits](docs/scheduled-audits.md)**                    | Auditors on a cron, alerting only on run-over-run changes    |

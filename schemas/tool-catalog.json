@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "4.24.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 878,
+  "toolCount": 885,
   "tools": [
     {
       "name": "find_tools",
@@ -14849,6 +14849,210 @@
           }
         },
         "required": ["include_nat", "include_mangle"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "scan_for_attacks",
+      "title": "Scan for Attacks Now",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Reads recent logs from every configured device, runs the attack detectors, and correlates what they find into incidents — brute force, credential spraying, a login that SUCCEEDED after failures, port scans, management ports answering the internet, and unexplained changes to security-relevant configuration. Read-only: it changes nothing on any device. One source hitting several routers is reported as ONE incident, which is the pattern no single router can see. Detectors whose input is missing say so and name the fix, rather than reporting a quiet network.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "devices": {
+            "description": "Limit to these devices (default: all).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "window_minutes": {
+            "description": "How far back to read. Default from config (10).",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 1440
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_attack_incidents",
+      "title": "List Attack Incidents",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists recorded attack incidents newest-first: attacker address, how far they got (recon → attempt → breach → persistence), how much the evidence justifies believing it, which devices they touched, and when. Use get_attack_incident for the evidence behind one. Reads stored history — it does not contact any device.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "hours": {
+            "default": 24,
+            "description": "How far back.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 8760
+          },
+          "min_confidence": {
+            "description": "Only incidents at or above this confidence.",
+            "type": "string",
+            "enum": ["low", "medium", "high", "confirmed"]
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 500
+          }
+        },
+        "required": ["hours", "limit"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_attack_incident",
+      "title": "Attack Incident Detail",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "One incident in full: the story, every piece of evidence with its raw log line and timestamp, which detectors fired, the devices affected, and the existing tools that address it. Use this before deciding whether to block someone — an incident that cannot show its work should not be acted on.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Incident id from list_attack_incidents."
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "block_attacker",
+      "title": "Block an Attacker",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Blocks an attacker by adding their address to the `mcp-attack-block` address list on every affected device, behind a single raw-chain drop rule created once per device. DRY RUN unless confirm=true. Timed by default so a wrong block expires on its own; a permanent block needs an explicit timeout of ''. REFUSED, whatever you pass, when: the evidence is only spoofable (a forged flood would let the attacker choose the victim), the address is this server's own management path or a device or its gateway/resolver, or the per-hour response cap has been reached. A confirmed breach escalates instead — blocking the source does not undo someone already being in.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "type": "string",
+            "description": "Incident to act on, from list_attack_incidents."
+          },
+          "timeout": {
+            "description": "How long, e.g. '1h', '1d00:00:00'. Empty string means permanent (needs confirm).",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "Actually apply it. Default false = dry run.",
+            "type": "boolean"
+          }
+        },
+        "required": ["incident_id", "confirm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unblock_attacker",
+      "title": "Unblock an Address",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Removes an address from the attack block list on every device it was applied to, and marks the response as revoked so the history still explains what happened and why it was undone. Use when a block turns out to have caught something legitimate.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "The blocked address."
+          },
+          "devices": {
+            "description": "Devices to clear (default: the ones the block was applied to).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["address"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_attack_responses",
+      "title": "List Attack Responses",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Every block this server has applied: what, why, from which incident, on which devices, and when it expires. An entry in a device's address list that nobody can explain is worse than no entry at all, so this is the record that makes automatic blocking reversible.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "active_only": {
+            "default": true,
+            "description": "Only blocks still in force.",
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 500
+          }
+        },
+        "required": ["active_only", "limit"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "configure_attack_response",
+      "title": "Show Attack Response Policy",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Shows the current detection and response policy: the mode, thresholds, which detectors may respond automatically, the per-hour cap, and the never-block list including the entries derived from your own deployment. Also checks a specific address against the never-block rules, which is the fastest way to answer 'why did it refuse to block that?'. The policy itself lives in the `attacks` config block — edit it there or in the dashboard, so a change survives a restart.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "check_address": {
+            "description": "Ask whether this address would be refused, and why.",
+            "type": "string"
+          }
+        },
         "additionalProperties": false
       }
     },

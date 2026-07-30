@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "scan_for_attacks",
+  "type": "object",
+  "properties": {
+    "devices": {
+      "description": "Limit to these devices (default: all).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "window_minutes": {
+      "description": "How far back to read. Default from config (10).",
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 1440
+    }
+  },
+  "additionalProperties": false
+}

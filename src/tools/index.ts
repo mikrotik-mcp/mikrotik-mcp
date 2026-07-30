@@ -118,6 +118,7 @@ import { txnTools } from "./txn";
 import { rolloutTools } from "./rollout";
 import { scheduleTools } from "./schedule";
 import { explainTools } from "./explain";
+import { attackTools } from "./attack";
 import { schedulerTools } from "./scheduler";
 import { serverPulseTools } from "./server-pulse";
 import { capabilityTools } from "./capability";
@@ -645,6 +646,16 @@ export const moduleCatalog: ModuleInfo[] = [
       "Plain-language firewall audit: shadowed/unreachable rules, broad accepts, missing " +
       "default-drop, duplicates and dead rules, with a risk score (`firewall_audit`).",
     tools: firewallAuditTools,
+  },
+  {
+    label: "Attack Detection",
+    slug: "attack",
+    group: "Security",
+    description:
+      "Watch the fleet's logs for brute force, credential spraying, a login that SUCCEEDED after " +
+      "failures, port scans and unexplained config changes; correlate them into incidents with " +
+      "evidence, and block the source with a timed, reversible, rate-limited entry when asked.",
+    tools: attackTools,
   },
   {
     label: "Security Shield",

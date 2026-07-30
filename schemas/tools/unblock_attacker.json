@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "unblock_attacker",
+  "type": "object",
+  "properties": {
+    "address": {
+      "type": "string",
+      "description": "The blocked address."
+    },
+    "devices": {
+      "description": "Devices to clear (default: the ones the block was applied to).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["address"],
+  "additionalProperties": false
+}

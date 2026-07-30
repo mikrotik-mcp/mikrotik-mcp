@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "block_attacker",
+  "type": "object",
+  "properties": {
+    "incident_id": {
+      "type": "string",
+      "description": "Incident to act on, from list_attack_incidents."
+    },
+    "timeout": {
+      "description": "How long, e.g. '1h', '1d00:00:00'. Empty string means permanent (needs confirm).",
+      "type": "string"
+    },
+    "confirm": {
+      "default": false,
+      "description": "Actually apply it. Default false = dry run.",
+      "type": "boolean"
+    }
+  },
+  "required": ["incident_id", "confirm"],
+  "additionalProperties": false
+}

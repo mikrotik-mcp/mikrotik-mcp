@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "list_attack_responses",
+  "type": "object",
+  "properties": {
+    "active_only": {
+      "default": true,
+      "description": "Only blocks still in force.",
+      "type": "boolean"
+    },
+    "limit": {
+      "default": 50,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 500
+    }
+  },
+  "required": ["active_only", "limit"],
+  "additionalProperties": false
+}

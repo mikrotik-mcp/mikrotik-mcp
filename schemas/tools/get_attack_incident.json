@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_attack_incident",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Incident id from list_attack_incidents."
+    }
+  },
+  "required": ["id"],
+  "additionalProperties": false
+}

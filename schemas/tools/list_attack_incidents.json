@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "list_attack_incidents",
+  "type": "object",
+  "properties": {
+    "hours": {
+      "default": 24,
+      "description": "How far back.",
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 8760
+    },
+    "min_confidence": {
+      "description": "Only incidents at or above this confidence.",
+      "type": "string",
+      "enum": ["low", "medium", "high", "confirmed"]
+    },
+    "limit": {
+      "default": 50,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 500
+    }
+  },
+  "required": ["hours", "limit"],
+  "additionalProperties": false
+}
