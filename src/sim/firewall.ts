@@ -269,7 +269,10 @@ export function ruleMatches(
   };
 }
 
-/** Terminal actions — traversal stops when one matches. */
+/** Which table a chain belongs to — its actions mean different things. */
+export type TableKind = "filter" | "nat" | "mangle";
+
+/** Terminal actions in the FILTER table — traversal stops when one matches. */
 const TERMINAL: Record<string, Verdict> = {
   accept: "accept",
   drop: "drop",
@@ -278,6 +281,45 @@ const TERMINAL: Record<string, Verdict> = {
   fasttrack: "accept",
   "fasttrack-connection": "accept",
 };
+
+/**
+ * Terminal actions in the NAT table. These are not verdicts — the packet
+ * continues either way — but they end traversal of the NAT chain, and the rule
+ * they stop on is the one whose rewrite applies. Modelling them as "unknown
+ * actions" made every masquerading config report UNKNOWN, which a test caught.
+ */
+const NAT_TERMINAL: Record<string, Verdict> = {
+  accept: "accept",
+  masquerade: "accept",
+  "src-nat": "accept",
+  "dst-nat": "accept",
+  netmap: "accept",
+  redirect: "accept",
+  same: "accept",
+};
+
+/**
+ * Mangle actions this model recognises. `mark-routing` is the only one whose
+ * effect is modelled (§2); the others are recognised so they do not poison a
+ * verdict, but their marks are not tracked.
+ */
+const MANGLE_TERMINAL: Record<string, Verdict> = {
+  accept: "accept",
+  "mark-routing": "accept",
+  "mark-connection": "accept",
+  "mark-packet": "accept",
+  "change-mss": "accept",
+  "change-ttl": "accept",
+  "change-dscp": "accept",
+  route: "accept",
+  "strip-ipv4-options": "accept",
+};
+
+function terminalFor(kind: TableKind): Record<string, Verdict> {
+  if (kind === "nat") return NAT_TERMINAL;
+  if (kind === "mangle") return MANGLE_TERMINAL;
+  return TERMINAL;
+}
 
 /** Actions that record something and continue down the chain. */
 const PASSTHROUGH = new Set([
@@ -306,9 +348,12 @@ export function traverseChain(
   rules: FirewallRule[],
   chain: string,
   packet: SimPacket,
+  kind: TableKind = "filter",
 ): ChainResult {
   const steps: TraversalStep[] = [];
   const unmodelled: Unmodelled[] = [];
+  const terminal = terminalFor(kind);
+  const section = `/ip/firewall/${kind}`;
   let budget = MAX_STEPS;
 
   const walk = (name: string, depth: number): { verdict: Verdict; decidedBy?: FirewallRule } => {
@@ -336,7 +381,7 @@ export function traverseChain(
         // outcome is no longer knowable — so stop and say so, rather than
         // continuing as if the rule were absent.
         unmodelled.push({
-          section: "/ip/firewall/filter",
+          section,
           what: why,
           line: rule.line,
           detail: `chain ${name} rule #${rule.index} (action=${rule.action})`,
@@ -410,7 +455,7 @@ export function traverseChain(
         continue;
       }
 
-      const verdict = TERMINAL[action];
+      const verdict = terminal[action];
       if (verdict) {
         steps.push({
           chain: name,
@@ -425,7 +470,7 @@ export function traverseChain(
 
       // An action this model does not know. It might be terminal.
       unmodelled.push({
-        section: "/ip/firewall/filter",
+        section,
         what: `action=${action}`,
         line: rule.line,
         detail: "unknown action; it may or may not be terminal",

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "explain_rule_reachability",
+  "type": "object",
+  "properties": {
+    "snapshot_id": {
+      "type": "string"
+    },
+    "config_text": {
+      "type": "string"
+    },
+    "chain": {
+      "description": "Restrict to one chain, e.g. `input`",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

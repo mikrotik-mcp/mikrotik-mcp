@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "simulate_packet",
+  "type": "object",
+  "properties": {
+    "src_address": {
+      "type": "string",
+      "description": "Source IPv4 address, e.g. \"192.168.88.50\""
+    },
+    "dst_address": {
+      "type": "string",
+      "description": "Destination IPv4 address, e.g. \"8.8.8.8\""
+    },
+    "protocol": {
+      "default": "tcp",
+      "description": "\"tcp\", \"udp\", \"icmp\" or a protocol number",
+      "type": "string"
+    },
+    "src_port": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535
+    },
+    "dst_port": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535
+    },
+    "in_interface": {
+      "type": "string",
+      "description": "Interface the packet arrives on, e.g. `bridge`"
+    },
+    "connection_state": {
+      "default": "new",
+      "description": "DECLARED, not inferred — this model has no connection-tracking table",
+      "type": "string",
+      "enum": ["new", "established", "related", "invalid"]
+    },
+    "connection_mark": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "description": "Evaluate against a stored snapshot",
+      "type": "string"
+    },
+    "config_text": {
+      "description": "Evaluate against raw `/export` text",
+      "type": "string"
+    }
+  },
+  "required": ["src_address", "dst_address", "protocol", "in_interface", "connection_state"],
+  "additionalProperties": false
+}

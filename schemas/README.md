@@ -7,7 +7,7 @@ edit by hand — regenerate instead.
 | File                 | Contents                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------ |
 | `config.schema.json` | The runtime configuration object (env vars / CLI flags).                                   |
-| `tool-catalog.json`  | Every one of the 866 tools: `name`, `risk`, `title`, `description`, and input JSON Schema. |
+| `tool-catalog.json`  | Every one of the 870 tools: `name`, `risk`, `title`, `description`, and input JSON Schema. |
 | `tools/<name>.json`  | The input JSON Schema for a single tool.                                                   |
 
 `risk` is derived from the MCP tool annotations:

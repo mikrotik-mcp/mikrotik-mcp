@@ -365,6 +365,8 @@ Higher-level workflows built on top of the per-scope tools:
   pairs; audits read-only, fixes dry-run + snapshot + Safe-Mode first.
 - **[Policy-as-Code](docs/policy-as-code.md)** — write your own compliance rules in
   YAML and lint a config snapshot offline; Markdown/JSON/SARIF, read-only, CI-able.
+- **[Offline Simulator](docs/simulator.md)** — trace a hypothetical packet through NAT,
+  routing and firewall against a snapshot; reports UNKNOWN rather than guessing.
 - **[Traffic Flow](docs/traffic-flow.md)** — NetFlow/IPFIX collection and continuous
   top-talker / conversation / application analytics; flow metadata only, no payload.
 - **[Port-Scan Detection](docs/port-scan-detection.md)** · **[Packet Capture Studio](docs/packet-capture.md)** ·
@@ -432,6 +434,7 @@ Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_L
 | **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                      |
 | **[Security Hardening](docs/security-hardening.md)**                | Per-category audit+remediate, snapshot + Safe-Mode          |
 | **[Policy-as-Code](docs/policy-as-code.md)**                        | Your own YAML compliance rules, linted offline → SARIF      |
+| **[Offline Simulator](docs/simulator.md)**                          | Trace a packet through firewall + routing, no device        |
 | **[VPN guide](docs/vpn-guide.md)**                                  | Every tunnel type + how to build it                         |
 | [Prompts](docs/prompts.md)                                          | The 9 guided workflows                                      |
 | [Architecture](docs/architecture.md) · [Security](docs/security.md) | How it's built · credentials & risk gating                  |

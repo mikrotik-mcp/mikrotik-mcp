@@ -34,6 +34,7 @@ import { firewallAuditTools } from "./firewall-audit";
 import { securityShieldTools } from "./security-shield";
 import { securityHardeningTools } from "./security-hardening";
 import { policyTools } from "./policy";
+import { simulateTools } from "./simulate";
 import { portScanDetectionTools } from "./port-scan-detection";
 import { portKnockTools } from "./port-knock";
 import { firewallFilterTools } from "./firewall-filter";
@@ -689,6 +690,16 @@ export const moduleCatalog: ModuleInfo[] = [
       "Certificate lifecycle helpers: a one-call expiry audit and Let's Encrypt issuance/renewal " +
       "via RouterOS's ACME client — so a TLS cert never silently lapses.",
     tools: certStewardTools,
+  },
+  {
+    label: "Simulator",
+    slug: "simulator",
+    group: "Security",
+    description:
+      "Offline packet simulator: trace a hypothetical packet through NAT, routing and firewall " +
+      "against a config snapshot — no device touched. Reports UNKNOWN rather than guessing when " +
+      "the path crosses something it does not model.",
+    tools: simulateTools,
   },
   {
     label: "Policy Engine",

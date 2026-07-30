@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "simulate_suite",
+  "type": "object",
+  "properties": {
+    "packets": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "What this flow is, e.g. \"LAN → internet\""
+          },
+          "src_address": {
+            "type": "string"
+          },
+          "dst_address": {
+            "type": "string"
+          },
+          "protocol": {
+            "default": "tcp",
+            "type": "string"
+          },
+          "src_port": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "dst_port": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "in_interface": {
+            "type": "string"
+          },
+          "connection_state": {
+            "default": "new",
+            "type": "string",
+            "enum": ["new", "established", "related", "invalid"]
+          },
+          "expect": {
+            "type": "string",
+            "enum": ["accept", "drop", "reject"],
+            "description": "The verdict this flow must get"
+          }
+        },
+        "required": [
+          "name",
+          "src_address",
+          "dst_address",
+          "protocol",
+          "in_interface",
+          "connection_state",
+          "expect"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "config_text": {
+      "type": "string"
+    }
+  },
+  "required": ["packets"],
+  "additionalProperties": false
+}

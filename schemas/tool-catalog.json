@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "4.24.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 866,
+  "toolCount": 870,
   "tools": [
     {
       "name": "find_tools",
@@ -15881,6 +15881,260 @@
           }
         },
         "required": ["dns_name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "simulate_packet",
+      "title": "Simulate a Packet",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Traces a hypothetical packet through the router's NAT, routing and firewall — WITHOUT sending anything or changing anything. Answers 'would this get through, and which rule decides?' before Safe Mode is ever opened. Returns a step-by-step traversal naming each rule's chain, index and source line, so the reasoning can be checked rather than trusted. Reads a stored snapshot (`snapshot_id`), supplied text (`config_text`), or captures the live config with a read-only `/export terse`. Models IPv4 filter/NAT/routing only: no raw table, no queues, no layer7, no IPv6, and no live connection tracking (`connection_state` is declared by you, not inferred). Anything on the path that is out of scope downgrades the verdict to UNKNOWN rather than guessing.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "src_address": {
+            "type": "string",
+            "description": "Source IPv4 address, e.g. \"192.168.88.50\""
+          },
+          "dst_address": {
+            "type": "string",
+            "description": "Destination IPv4 address, e.g. \"8.8.8.8\""
+          },
+          "protocol": {
+            "default": "tcp",
+            "description": "\"tcp\", \"udp\", \"icmp\" or a protocol number",
+            "type": "string"
+          },
+          "src_port": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "dst_port": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "in_interface": {
+            "type": "string",
+            "description": "Interface the packet arrives on, e.g. `bridge`"
+          },
+          "connection_state": {
+            "default": "new",
+            "description": "DECLARED, not inferred — this model has no connection-tracking table",
+            "type": "string",
+            "enum": ["new", "established", "related", "invalid"]
+          },
+          "connection_mark": {
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Evaluate against a stored snapshot",
+            "type": "string"
+          },
+          "config_text": {
+            "description": "Evaluate against raw `/export` text",
+            "type": "string"
+          }
+        },
+        "required": ["src_address", "dst_address", "protocol", "in_interface", "connection_state"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "simulate_change",
+      "title": "Simulate a Config Change",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Applies proposed configuration lines to a COPY of the config in memory, re-traces the same packet, and reports whether the verdict changed and at which step the paths diverged. This is the tool for 'would this rule break the VPN?' — pair it with plan_changes so a change is evaluated before it is applied. Nothing is sent to any device: the change exists only inside this simulation. Models IPv4 filter/NAT/routing only: no raw table, no queues, no layer7, no IPv6, and no live connection tracking (`connection_state` is declared by you, not inferred). Anything on the path that is out of scope downgrades the verdict to UNKNOWN rather than guessing.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "src_address": {
+            "type": "string",
+            "description": "Source IPv4 address, e.g. \"192.168.88.50\""
+          },
+          "dst_address": {
+            "type": "string",
+            "description": "Destination IPv4 address, e.g. \"8.8.8.8\""
+          },
+          "protocol": {
+            "default": "tcp",
+            "description": "\"tcp\", \"udp\", \"icmp\" or a protocol number",
+            "type": "string"
+          },
+          "src_port": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "dst_port": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "in_interface": {
+            "type": "string",
+            "description": "Interface the packet arrives on, e.g. `bridge`"
+          },
+          "connection_state": {
+            "default": "new",
+            "description": "DECLARED, not inferred — this model has no connection-tracking table",
+            "type": "string",
+            "enum": ["new", "established", "related", "invalid"]
+          },
+          "connection_mark": {
+            "type": "string"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Proposed export lines, e.g. `/ip firewall filter` then `add action=drop ...`"
+          },
+          "snapshot_id": {
+            "type": "string"
+          },
+          "config_text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "src_address",
+          "dst_address",
+          "protocol",
+          "in_interface",
+          "connection_state",
+          "changes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "explain_rule_reachability",
+      "title": "Explain Firewall Rule Reachability",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Static analysis, no packet needed: which firewall rules can NEVER match because an earlier terminal rule in the same chain already matches everything they would? Deliberately conservative — only an exact-superset relation counts, because a false 'this rule is dead' gets a working rule deleted, which is worse than missing one. Complements firewall_audit's shadow detection with the simulator's own matcher model.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "type": "string"
+          },
+          "config_text": {
+            "type": "string"
+          },
+          "chain": {
+            "description": "Restrict to one chain, e.g. `input`",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "simulate_suite",
+      "title": "Run a Packet Suite",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Runs a set of packets with their EXPECTED verdicts — a regression test for the firewall. Declare the flows that must work ('LAN can reach the internet', 'WAN cannot reach SSH') and any change that breaks one is caught here rather than in production. Each packet reports pass/fail with the deciding rule; an UNKNOWN verdict counts as a failure, because a flow whose fate the model cannot determine is not a flow you have verified. Models IPv4 filter/NAT/routing only: no raw table, no queues, no layer7, no IPv6, and no live connection tracking (`connection_state` is declared by you, not inferred). Anything on the path that is out of scope downgrades the verdict to UNKNOWN rather than guessing.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "packets": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "What this flow is, e.g. \"LAN → internet\""
+                },
+                "src_address": {
+                  "type": "string"
+                },
+                "dst_address": {
+                  "type": "string"
+                },
+                "protocol": {
+                  "default": "tcp",
+                  "type": "string"
+                },
+                "src_port": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "dst_port": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "in_interface": {
+                  "type": "string"
+                },
+                "connection_state": {
+                  "default": "new",
+                  "type": "string",
+                  "enum": ["new", "established", "related", "invalid"]
+                },
+                "expect": {
+                  "type": "string",
+                  "enum": ["accept", "drop", "reject"],
+                  "description": "The verdict this flow must get"
+                }
+              },
+              "required": [
+                "name",
+                "src_address",
+                "dst_address",
+                "protocol",
+                "in_interface",
+                "connection_state",
+                "expect"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "snapshot_id": {
+            "type": "string"
+          },
+          "config_text": {
+            "type": "string"
+          }
+        },
+        "required": ["packets"],
         "additionalProperties": false
       }
     },
