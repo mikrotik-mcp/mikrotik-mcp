@@ -254,6 +254,9 @@ export function tracePacket(input: TraceInput): TraceResult {
 
   // 1. dstnat, BEFORE the routing decision.
   applyNat(model, packet, "dstnat", result);
+  // Record it, so a `connection-nat-state=dstnat` matcher downstream is a fact
+  // rather than an unknown.
+  packet.dstnatApplied = result.nat.some((n) => n.stage === "dstnat");
 
   // 2. mangle prerouting: a routing mark selects an alternate table.
   const table = applyMangleRoutingMark(model, packet, result);
@@ -282,9 +285,47 @@ export function tracePacket(input: TraceInput): TraceResult {
       return finish(result);
     }
     if (routing.outcome === "no-route") {
+      if (model.dynamicRouteSources.length > 0) {
+        // The export cannot see a DHCP/PPP/OSPF-learned route, so "dropped, no
+        // route" would be a confident answer about something the model simply
+        // cannot know. This is the divergence Phase 4 found on a real router.
+        result.unmodelled.push({
+          section: "/ip/route",
+          what: "dynamically-learned routes",
+          line: 0,
+          detail: `${model.dynamicRouteSources.join(", ")} — their routes are not in an export`,
+        });
+        result.verdict = "unknown";
+        result.summary = routing.reason;
+        return finish(result);
+      }
       result.verdict = "drop";
       result.summary = `no route to ${packet.dstAddress} — the packet is dropped (ICMP unreachable)`;
       return finish(result);
+    }
+    if (routing.outcome === "routed" && routing.route) {
+      // Route LIVENESS cannot be read from an export. A static route whose
+      // gateway is unreachable is inactive on the device and the packet falls
+      // through to a lower-priority route — found on a real router, where the
+      // model picked a route the device had deactivated. Both "unresolvable
+      // next-hop" and "check-gateway" are that same uncertainty.
+      if (routing.route.kind === "static" && routing.outInterface === undefined) {
+        result.unmodelled.push({
+          section: "/ip/route",
+          what: "route liveness",
+          line: routing.route.line,
+          detail:
+            `the next-hop ${routing.route.gateway ?? "(none)"} is not on a connected network, so this route may be ` +
+            "inactive on the device and the packet may take a different one",
+        });
+      } else if (routing.route.checkGateway) {
+        result.unmodelled.push({
+          section: "/ip/route",
+          what: "check-gateway liveness",
+          line: routing.route.line,
+          detail: `check-gateway=${routing.route.checkGateway} — an export cannot say whether this route is currently active`,
+        });
+      }
     }
     if (routing.outcome === "ecmp") {
       // The egress is genuinely unknowable, and every out-interface rule below

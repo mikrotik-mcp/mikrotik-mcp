@@ -65,6 +65,13 @@ function egressFor(model: SimModel, route: SimRoute): { iface?: string; note?: s
   }
   const connected = model.addresses.find((a) => !a.disabled && inCidr(gatewayIp, a.network));
   if (connected) return { iface: connected.interface };
+
+  // A VPS-style `address=203.0.113.9 network=10.0.0.1` declares its gateway
+  // on-link through `network=`, even though the gateway is nowhere near the
+  // address's own subnet. Found on a real device, where ignoring it left the
+  // egress interface unresolved for the only route that mattered.
+  const declared = model.addresses.find((a) => !a.disabled && a.declaredNetwork === gatewayIp);
+  if (declared) return { iface: declared.interface };
   return {
     note: `gateway ${formatIp(gatewayIp)} is not on any connected network — it resolves through another route, which v1 does not follow`,
   };
@@ -88,6 +95,18 @@ export function selectRoute(model: SimModel, dstAddress: string, table = "main")
 
   const matching = eligible(model, table).filter((r) => inCidr(dst, r.dst));
   if (matching.length === 0) {
+    // An export does not contain dynamically-learned routes. If this device has
+    // something that learns them, "no route" is not a fact — it is the limit of
+    // what the export can say.
+    if (model.dynamicRouteSources.length > 0) {
+      return {
+        outcome: "no-route",
+        candidates: [],
+        reason:
+          `no route to ${dstAddress} IN THE EXPORT — but this device runs ${model.dynamicRouteSources.join(", ")}, ` +
+          "whose routes are learned at runtime and never appear in a configuration export, so the real device may well have one",
+      };
+    }
     const hint =
       table === "main"
         ? ""

@@ -103,11 +103,74 @@ simulate_suite packets='[
 An `UNKNOWN` verdict counts as a **failure** in a suite: a flow whose fate the
 model cannot determine is not a flow you have verified.
 
-## Fidelity
+## Fidelity report
 
-See the fidelity report below (added in Phase 4). Until a prediction has been
-checked against a real device, treat the simulator as a reading aid rather than
-an oracle — which is why the dashboard surface is gated on that measurement.
+Measured against **two live RouterOS 7 devices** (a home router with a DHCP WAN,
+policy routing and a 24-rule firewall; a hosted VPS with an on-link /32 and a
+WireGuard tunnel). Ground truth is the device's own active routing table
+(`/ip route print terse where active=yes`) and `check_route_path`, both
+read-only.
+
+A third device was unreachable at the time of measurement, and the blueprint's
+"five varied exports" was therefore not met — this is two, and it is worth
+repeating the exercise on more.
+
+### Routing decisions: 12 destinations across both devices
+
+| Result                     | Count |                                      |
+| -------------------------- | ----: | ------------------------------------ |
+| Matched the device exactly |    10 | same egress interface and next-hop   |
+| Reported `UNKNOWN`/limited |     2 | correctly declined to answer (below) |
+| **Confidently wrong**      | **0** | —                                    |
+
+The two it declined are the interesting ones, and both were _silent wrong
+answers_ before this pass:
+
+1. **A DHCP-learned default route.** The home router reaches the internet via a
+   route its DHCP client installed; that route is **not in `/export`**. The
+   simulator used to answer "dropped, no route" for every internet-bound packet
+   on the commonest setup there is. It now detects a DHCP/PPPoE/OSPF/BGP source
+   in the config and says so, and a trace with no route on such a device is
+   `UNKNOWN`, not a drop.
+
+2. **Route liveness.** The export contained a static route whose gateway is not
+   reachable, so the device had deactivated it and used a different one. An
+   export cannot express "is this route currently active", so a route with an
+   unresolvable next-hop — or with `check-gateway` set — now downgrades the
+   verdict rather than being taken at face value.
+
+Two model bugs were fixed as a direct result:
+
+- **`/ip address … network=`** is now honoured. A hosted VPS commonly has
+  `address=203.0.113.33 network=10.0.0.1` — a /32 whose gateway is declared
+  on-link and is nowhere near its own subnet. Ignoring `network=` left the egress
+  interface unresolved for the only route that mattered on that device.
+- **`connection-nat-state`** is now evaluated instead of being unknown. The
+  trace runs dstnat before the filter chain, so "has this been dstnat'ed" is a
+  fact by then — and it was the _first rule of the real forward chain_, so
+  leaving it unknown made every trace on that device `UNKNOWN`.
+
+### Firewall traversal
+
+Verdicts on the real 24-rule chain complete without hitting an unmodelled
+matcher, except where the config genuinely uses one (`ipsec-policy` on two
+accept rules, `tcp-flags` on an MSS-clamp rule). Those paths report `UNKNOWN`
+with the specific matcher named.
+
+There is an honest limit here: firewall ground truth was derived by reading the
+rules, not by injecting packets into the live device. Routing has a real oracle;
+the filter chain does not, short of a lab.
+
+### What the numbers mean
+
+The headline is not "10/12". It is **zero confidently-wrong answers** — every
+case the model could not get right, it declined, named the reason and pointed at
+the line. That is the property this feature is for; a higher match rate bought by
+guessing would be worse.
+
+The regressions found here are pinned in `tests/sim/fidelity.spec.ts` against
+anonymised reproductions of the real config structures, so a live router's
+lesson cannot be quietly undone later.
 
 ## Architecture
 

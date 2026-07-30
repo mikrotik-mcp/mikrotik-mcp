@@ -34,6 +34,15 @@ export interface SimAddress {
   address: number;
   /** The connected network. */
   network: Cidr;
+  /**
+   * RouterOS's explicit `network=` property, when the export carries one.
+   *
+   * A VPS commonly gets `address=203.0.113.9 network=10.0.0.1` — a /32 address
+   * whose gateway is declared ON-LINK by this field and is nowhere near the
+   * address's own network. Without it the model cannot resolve that gateway to
+   * an interface, which is a real divergence found on a real device.
+   */
+  declaredNetwork?: number;
   interface: string;
   disabled: boolean;
   line: number;
@@ -72,6 +81,17 @@ export interface FirewallRule {
 
 export interface SimModel {
   interfaces: string[];
+  /**
+   * Config that produces routes the export does NOT contain — a DHCP client,
+   * a PPP/PPPoE client, OSPF, BGP. Their routes are learned at runtime, so a
+   * model built from `/export` alone is missing them.
+   *
+   * Found by checking a real device: a home router's default route comes from
+   * its DHCP client, so the simulator confidently reported "no route" for every
+   * internet-bound packet. Recording the source turns that confident wrong
+   * answer into an honest UNKNOWN.
+   */
+  dynamicRouteSources: string[];
   addresses: SimAddress[];
   routes: SimRoute[];
   /** Address-list name → member matchers (text form; matched by `ip.matchAddress`). */
@@ -231,6 +251,7 @@ export function buildModel(exportText: string): SimModel {
     addresses.push({
       address: host,
       network,
+      declaredNetwork: hostOf(record.fields.network ?? "") ?? undefined,
       interface: iface,
       disabled: yes(record.fields.disabled),
       line: record.line,
@@ -340,6 +361,27 @@ export function buildModel(exportText: string): SimModel {
     interfaceLists.set(list, [...(interfaceLists.get(list) ?? []), iface]);
   }
 
+  // Sources of routes that exist at runtime but never appear in an export.
+  const dynamicRouteSources: string[] = [];
+  const DYNAMIC_SOURCES: [string, string][] = [
+    ["/ip/dhcp-client", "DHCP client"],
+    ["/interface/pppoe-client", "PPPoE client"],
+    ["/interface/l2tp-client", "L2TP client"],
+    ["/interface/sstp-client", "SSTP client"],
+    ["/interface/ovpn-client", "OpenVPN client"],
+    ["/routing/ospf/instance", "OSPF"],
+    ["/routing/bgp/connection", "BGP"],
+    ["/routing/rip/instance", "RIP"],
+  ];
+  for (const [section, label] of DYNAMIC_SOURCES) {
+    for (const record of recordsOf(config, section)) {
+      if (record.op !== "add" || yes(record.fields.disabled)) continue;
+      const where = record.fields.interface ? ` on ${record.fields.interface}` : "";
+      const note = `${label}${where}`;
+      if (!dynamicRouteSources.includes(note)) dynamicRouteSources.push(note);
+    }
+  }
+
   const filter = rulesOf(recordsOf(config, "/ip/firewall/filter"), unmodelled);
   const nat = rulesOf(recordsOf(config, "/ip/firewall/nat"), unmodelled);
   const mangle = rulesOf(recordsOf(config, "/ip/firewall/mangle"), unmodelled);
@@ -358,6 +400,7 @@ export function buildModel(exportText: string): SimModel {
 
   return {
     interfaces: [...interfaces].sort(),
+    dynamicRouteSources,
     addresses,
     routes,
     addressLists,

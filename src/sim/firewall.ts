@@ -28,6 +28,13 @@ export interface SimPacket {
   connectionMark?: string;
   /** Set by the trace once the routing decision is known. */
   outInterface?: string;
+  /**
+   * Whether dstnat has already rewritten this packet — set by the trace, which
+   * runs the dstnat chain before the filter chain. This makes
+   * `connection-nat-state=dstnat` genuinely evaluable rather than unknown, which
+   * matters because it is the first rule of many real forward chains.
+   */
+  dstnatApplied?: boolean;
 }
 
 export type Verdict = "accept" | "drop" | "reject" | "unknown";
@@ -73,6 +80,7 @@ const EVALUATED = new Set([
   "out-interface-list",
   "connection-state",
   "connection-mark",
+  "connection-nat-state",
 ]);
 
 /**
@@ -249,6 +257,18 @@ export function ruleMatches(
       case "connection-mark":
         result = (packet.connectionMark ?? "no-mark") === value;
         break;
+      case "connection-nat-state": {
+        // The trace runs dstnat BEFORE the filter chain, so dstnat state is
+        // known here. srcnat runs after, so it is not — and saying "no" would
+        // be a guess about something that has not happened yet.
+        const wants = value.split(",").map((v) => v.trim());
+        if (wants.includes("srcnat")) {
+          result = "unknown";
+          break;
+        }
+        result = wants.includes("dstnat") ? packet.dstnatApplied === true : "unknown";
+        break;
+      }
       default:
         result = "unknown";
     }
