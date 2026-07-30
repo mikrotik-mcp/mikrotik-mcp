@@ -72,6 +72,7 @@ import { TransactionsView } from "./transactions";
 import { FlowsView } from "./flows";
 import { PoliciesView } from "./policies";
 import { SimulatorView } from "./simulator";
+import { SchedulesView } from "./schedules";
 import { MemoryView } from "./memory";
 import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
@@ -125,6 +126,7 @@ type ViewId =
   | "drift"
   | "policies"
   | "simulator"
+  | "schedules"
   | "txn"
   | "plan"
   | "s3"
@@ -155,6 +157,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     id: "simulator",
     label: "Simulator",
     sub: "Trace a hypothetical packet — no device touched",
+  },
+  {
+    id: "schedules",
+    label: "Schedules",
+    sub: "Auditors on a cron — alerting only on what changed",
   },
   {
     id: "txn",
@@ -231,6 +238,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   drift: MONO_ACCENT,
   policies: MONO_ACCENT,
   simulator: MONO_ACCENT,
+  schedules: MONO_ACCENT,
   txn: MONO_ACCENT,
   plan: MONO_ACCENT,
   s3: MONO_ACCENT,
@@ -338,6 +346,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "UNKNOWN is not a pass: the model met something it does not implement and declined to guess.",
       "Connection state is declared, not inferred — say `established` if that is what you mean.",
       "Reachability needs no packet: it shows which rules can never match.",
+    ],
+  },
+  schedules: {
+    what: "Runs the auditors on a cron with nobody in the loop, keeps every result, and reports only what CHANGED since the previous run — new, worsened, resolved.",
+    tips: [
+      "Unchanged findings are silent by design; an audit that reports 40 findings nightly gets muted.",
+      "The first run is only a baseline — the useful output arrives on the second.",
+      "Empty heat-calendar cells mean no run that day, which is not the same as a clean one.",
     ],
   },
   txn: {
@@ -654,6 +670,14 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M4 12h10" />
         <path d="M4 18h4" />
         <path d="m14 15 3 3 5-6" />
+      </>
+    ),
+    schedules: (
+      <>
+        <circle cx="12" cy="13" r="8" />
+        <path d="M12 9v4l2.5 2" />
+        <path d="M5 3 2.5 5.5" />
+        <path d="m19 3 2.5 2.5" />
       </>
     ),
     policies: (
@@ -1643,6 +1667,9 @@ function App(): ReactNode {
 
         {/* ── Simulator ── */}
         {view === "simulator" && <SimulatorView />}
+
+        {/* ── Scheduled audits ── */}
+        {view === "schedules" && <SchedulesView />}
 
         {/* ── Flows ── */}
         {view === "flows" && <FlowsView />}

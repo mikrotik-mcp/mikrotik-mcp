@@ -645,3 +645,60 @@ export interface SimSuiteRun {
   passed: number;
   total: number;
 }
+
+// ── Scheduled audits ────────────────────────────────────────────────────────
+export type ScheduleOutcome = "ok" | "failed" | "skipped" | "timeout";
+export interface ScheduleFinding {
+  id: string;
+  severity: string;
+  title: string;
+  device?: string;
+  detail?: string;
+}
+export interface ScheduleJobRow {
+  id: string;
+  cron: string;
+  cronText: string;
+  tool: string;
+  devices: string[] | "all";
+  notifyOn: string[];
+  enabled: boolean;
+  retainDays: number;
+  createdAt: number;
+  nextRun: number | null;
+  lastRun: {
+    startedAt: number;
+    finishedAt: number;
+    outcome: ScheduleOutcome;
+    device?: string;
+    error?: string;
+  } | null;
+  posture: {
+    total: number;
+    worst: string | null;
+    bySeverity: Record<string, number>;
+    devices: number;
+  };
+  runCount: number;
+}
+export interface SchedulePoint {
+  at: number;
+  jobId: string;
+  device?: string;
+  outcome: ScheduleOutcome;
+  total: number;
+  bySeverity: Record<string, number>;
+  added: number;
+  worsened: number;
+  resolved: number;
+  durationMs: number;
+}
+export interface ScheduleRegression {
+  jobId: string;
+  device: string;
+  at: number;
+  summary: string;
+  added: ScheduleFinding[];
+  worsened: { finding: ScheduleFinding; from: string; to: string }[];
+  resolved: ScheduleFinding[];
+}

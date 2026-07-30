@@ -161,6 +161,7 @@ import { flowRoutes } from "./flow-routes";
 import { rolloutRoutes } from "./rollout-routes";
 import { policyRoutes } from "./policy-routes";
 import { simRoutes } from "./sim-routes";
+import { scheduleRoutes } from "./schedule-routes";
 import { subscribeRollout } from "./rollout-hub";
 import { subscribeTxn } from "./txn-hub";
 import { alertRoutes } from "./alert-routes";
@@ -1598,6 +1599,9 @@ export async function runDashboard(
 
     const simResp = await simRoutes(req, url);
     if (simResp) return simResp;
+
+    const scheduleResp = await scheduleRoutes(req, url);
+    if (scheduleResp) return scheduleResp;
 
     // `getEventStore()` rather than the `db` binding below, which is declared
     // later in this function — alerting's rule preview replays stored events.
