@@ -108,6 +108,44 @@ export function isAbsenceTrigger(t: Trigger): t is AbsenceTriggerT {
   return "absence" in t;
 }
 
+/**
+ * Event kinds that carry a STATE, and the states they use.
+ *
+ * These are the kinds where one emission means "it started" and another means
+ * "it stopped". A rule that matches both can never resolve — the resolved event
+ * re-satisfies the condition — so it fires once and then stays firing forever.
+ */
+const STATEFUL_EVENTS: Partial<Record<EventTriggerT["event"], string[]>> = {
+  device_state: ["online", "offline"],
+  drift: ["detected", "resolved"],
+};
+
+/**
+ * Non-fatal problems with a rule — things that will not stop it loading but will
+ * make it behave in a way its author did not intend.
+ *
+ * The one that matters: an event rule on a stateful kind with no `to` filter
+ * matches the "it recovered" event as well as the "it broke" one, so the
+ * condition never clears and the alert never resolves. That is a permanently
+ * red banner, which is how people learn to ignore banners. Rejecting it outright
+ * would break configs that already exist, so it is surfaced as a warning
+ * everywhere a rule is listed.
+ */
+export function ruleWarnings(rule: AlertRule): string[] {
+  const warnings: string[] = [];
+  if (isEventTrigger(rule.when)) {
+    const states = STATEFUL_EVENTS[rule.when.event];
+    if (states && rule.when.to === undefined) {
+      warnings.push(
+        `'${rule.when.event}' events carry a state (${states.join(" / ")}) and this rule has no ` +
+          `\`to\` filter, so it also matches the recovery event — it will fire once and never ` +
+          `resolve. Add \`to: ${states[states.length - 1] === "resolved" ? "detected" : "offline"}\`.`,
+      );
+    }
+  }
+  return warnings;
+}
+
 // ── Condition input ─────────────────────────────────────────────────────────
 
 /** A window aggregate, for `metric` rules. */

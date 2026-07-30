@@ -11,6 +11,7 @@
 import { getAlertEngine } from "../alerts/engine";
 import { deliver, redactChannels } from "../alerts/channels";
 import {
+  ruleWarnings,
   AlertRuleSchema,
   isMuted,
   parseDuration,
@@ -51,6 +52,8 @@ function ruleRow(
     mutedUntil: rule.mutedUntil,
     status,
     since,
+    /** Non-fatal authoring problems — chiefly "this rule can never resolve". */
+    warnings: ruleWarnings(rule),
   };
 }
 

@@ -12,7 +12,14 @@ import { z } from "zod";
 import { DESTRUCTIVE, READ, WRITE, WRITE_IDEMPOTENT, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { ANY_SUBJECT, getAlertEngine } from "../alerts/engine";
-import { AlertRuleSchema, CHANNELS, isMuted, parseDuration, SEVERITIES } from "../alerts/model";
+import {
+  AlertRuleSchema,
+  CHANNELS,
+  isMuted,
+  parseDuration,
+  ruleWarnings,
+  SEVERITIES,
+} from "../alerts/model";
 import type { AlertRule } from "../alerts/model";
 import { deliver, redactChannels } from "../alerts/channels";
 import { getConfig } from "../core/runtime";
@@ -39,13 +46,19 @@ function renderRules(): string {
     // A rule tracking several devices shows one line per device — state is keyed
     // by (rule, subject), so "firing" always names what it is firing about.
     const on = subject === ANY_SUBJECT ? "" : `  on ${subject}`;
+    // A rule that can never resolve is worth saying out loud wherever rules are
+    // listed — it looks identical to a healthy one until it has been stuck red
+    // for a week.
+    const warnings = ruleWarnings(rule)
+      .map((w) => `\n  WARNING:  ${w}`)
+      .join("");
     return (
       `${rule.id}${on}  [${rule.severity}]  ${status}\n` +
       `  when:     ${trigger}\n` +
       `  channels: ${rule.channels.join(", ")}\n` +
       `  for:      ${rule.for ?? "0 (fire immediately)"}   cooldown: ${rule.cooldown}${
         rule.description ? `\n  note:     ${rule.description}` : ""
-      }`
+      }${warnings}`
     );
   });
   const firing = rows.filter((r) => r.state.status === "firing").length;

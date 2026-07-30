@@ -33,6 +33,8 @@ interface AlertRuleRow {
   mutedUntil?: number;
   status: RuleStatus;
   since: number;
+  /** Non-fatal authoring problems, chiefly "this rule can never resolve". */
+  warnings?: string[];
 }
 
 interface AlertsPayload {
@@ -333,6 +335,13 @@ export function AlertsView(): ReactNode {
                 <div className="text-muted-foreground font-mono text-[11px]">
                   {describeTrigger(r.when)}
                 </div>
+                {/* A rule that can never resolve looks identical to a healthy one
+                    until it has been stuck red for a week — say so here. */}
+                {(r.warnings ?? []).map((w) => (
+                  <div key={w} className="text-warning text-[11px]">
+                    ⚠ {w}
+                  </div>
+                ))}
                 <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-[10px]">
                   <span>for {r.for ?? "0s"}</span>
                   <span>cooldown {r.cooldown}</span>
