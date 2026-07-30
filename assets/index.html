@@ -6,11 +6,11 @@
     <title>@usex/mikrotik-mcp — drive your MikroTik with words</title>
     <meta
       name="description"
-      content="@usex/mikrotik-mcp v3.14.0 — a Bun-native Model Context Protocol (MCP) server that exposes MikroTik RouterOS as 706 risk-annotated AI tools across 111 modules, plus higher-level workflows: terraform-style change planning with Safe-Mode dry-run, live packet capture, a firewall auditor, config snapshots with time-travel diff, MNDP discovery and a real-time dashboard."
+      content="@usex/mikrotik-mcp v4.24.0 — a Bun-native Model Context Protocol (MCP) server that exposes MikroTik RouterOS as 885 risk-annotated AI tools across 137 modules, plus higher-level workflows: live attack detection from device logs, scheduled audits that report only what changed, plain-language config narratives, an offline packet simulator, policy-as-code linting, cross-device transactions, staged fleet rollouts, NetFlow analytics and a real-time dashboard."
     />
     <meta
       name="keywords"
-      content="mikrotik, mikrotik mcp, routeros, mcp server, model context protocol, bun, ssh, mac-telnet, firewall audit, packet capture, tzsp, change plan, dry run, config snapshot, wireguard, ipv6, mndp, ai tools, claude, network automation, ali torki"
+      content="mikrotik, mikrotik mcp, routeros, mcp server, model context protocol, bun, ssh, mac-telnet, firewall audit, attack detection, brute force detection, intrusion detection, scheduled audits, policy as code, firewall simulator, netflow, ipfix, packet capture, tzsp, change plan, dry run, config snapshot, wireguard, ipv6, mndp, ai tools, claude, network automation, ali torki"
     />
     <meta name="author" content="Ali Torki" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
@@ -29,7 +29,7 @@
     />
     <meta
       property="og:description"
-      content="v3.14.0 — 706 risk-annotated RouterOS tools over SSH, plus a change-plan dry-run engine, live packet capture, firewall audit, config snapshots and live observability. Bun-native, with transactional Safe Mode."
+      content="v4.24.0 — 885 risk-annotated RouterOS tools over SSH, plus attack detection from live logs, scheduled audits that alert only on regressions, config-to-narrative documentation, an offline firewall simulator and live observability. Bun-native, with transactional Safe Mode."
     />
     <meta property="og:url" content="https://github.com/mikrotik-mcp/mikrotik-mcp" />
     <meta
@@ -45,7 +45,7 @@
     <meta name="twitter:title" content="@usex/mikrotik-mcp — MikroTik RouterOS, driven by AI" />
     <meta
       name="twitter:description"
-      content="706 risk-annotated RouterOS tools + terraform-style change planning, live packet capture, firewall audit and snapshots. Bun-native MCP server with Safe Mode."
+      content="885 risk-annotated RouterOS tools + live attack detection, scheduled audits, config narratives, an offline simulator and change planning. Bun-native MCP server with Safe Mode."
     />
     <meta
       name="twitter:image"
@@ -61,8 +61,8 @@
         "name": "@usex/mikrotik-mcp",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Cross-platform (Bun >= 1.3)",
-        "description": "A Bun-native Model Context Protocol server that exposes MikroTik RouterOS as 706 risk-annotated AI tools across 111 modules, with a change-plan dry-run engine, live packet capture, a firewall auditor, config snapshots and a real-time dashboard.",
-        "softwareVersion": "3.14.0",
+        "description": "A Bun-native Model Context Protocol server that exposes MikroTik RouterOS as 885 risk-annotated AI tools across 137 modules, with live attack detection, scheduled autonomous audits, config-to-narrative documentation, an offline packet simulator, policy-as-code linting, cross-device transactions and a real-time dashboard.",
+        "softwareVersion": "4.24.0",
         "license": "https://opensource.org/licenses/MIT",
         "url": "https://github.com/mikrotik-mcp/mikrotik-mcp",
         "downloadUrl": "https://www.npmjs.com/package/@usex/mikrotik-mcp",
@@ -1948,7 +1948,7 @@
           </text>
         </g>
       </svg>
-      <div class="pl-cap">MikroTik · MCP · <span data-version>v3.15.0</span></div>
+      <div class="pl-cap">MikroTik · MCP · <span data-version>v4.24.0</span></div>
       <div class="pl-bar"></div>
     </div>
 
@@ -1963,7 +1963,7 @@
         <a href="https://github.com/mikrotik-mcp/mikrotik-mcp" data-hover>GitHub ↗</a>
       </div>
       <a class="ver" href="https://github.com/mikrotik-mcp/mikrotik-mcp/releases" data-hover
-        ><span data-version>v3.15.0</span></a
+        ><span data-version>v4.24.0</span></a
       >
     </nav>
 
@@ -1977,15 +1977,16 @@
           <span class="line"><span class="w">with&nbsp;words.</span></span>
         </h1>
         <p class="sub">
-          <b><span data-dyn-text="tools">715</span> risk-annotated tools</b> across
-          <b><span data-dyn-text="modules">112</span> modules</b> turn one — or a whole fleet — of
+          <b><span data-dyn-text="tools">885</span> risk-annotated tools</b> across
+          <b><span data-dyn-text="modules">137</span> modules</b> turn one — or a whole fleet — of
           MikroTik devices into something your AI can read, configure and secure in plain language.
-          Now with a <b>change-plan dry-run engine</b>, <b>live packet capture</b>, a
-          <b>firewall auditor</b> and <b>config snapshots</b>.
+          Now it watches too: <b>attack detection</b> from the devices' own logs,
+          <b>scheduled audits</b> that report only what changed, and an
+          <b>offline simulator</b> that answers "would this get through?" without touching the wire.
         </p>
         <div class="cta-row">
           <a class="btn primary" href="#workflows" data-hover data-magnetic>
-            <span class="lbl">See what's new in v<span data-version-bare>3.15.0</span></span>
+            <span class="lbl">See what's new in v<span data-version-bare>4.24.0</span></span>
           </a>
           <a
             class="btn ghost"
@@ -2010,29 +2011,33 @@
     <!-- MARQUEE -->
     <div class="marquee" aria-hidden="true">
       <div class="track">
-        <span class="fill">FIREWALL AUDIT</span><span>·</span><span>CHANGE PLAN</span
-        ><span class="fill">·</span><span>PACKET CAPTURE</span><span>·</span
-        ><span class="fill">SNAPSHOTS</span><span>·</span><span>MNDP DISCOVERY</span
-        ><span class="fill">·</span><span>WIREGUARD</span><span>·</span
-        ><span class="fill">SAFE MODE</span><span>·</span><span>TOPOLOGY</span
-        ><span class="fill">·</span><span>IPv6</span><span>·</span>
+        <span class="fill">ATTACK DETECTION</span><span>·</span><span>SCHEDULED AUDITS</span
+        ><span class="fill">·</span><span>CONFIG NARRATIVE</span><span>·</span
+        ><span class="fill">OFFLINE SIMULATOR</span><span>·</span><span>POLICY-AS-CODE</span
+        ><span class="fill">·</span><span>FIREWALL AUDIT</span><span>·</span
+        ><span class="fill">CHANGE PLAN</span><span>·</span><span>NETFLOW</span
+        ><span class="fill">·</span><span>FLEET ROLLOUT</span><span>·</span
+        ><span class="fill">TRANSACTIONS</span><span>·</span><span>PACKET CAPTURE</span
+        ><span class="fill">·</span><span>SNAPSHOTS</span><span>·</span><span>WIREGUARD</span
+        ><span class="fill">·</span><span>SAFE MODE</span><span>·</span><span>IPv6</span
+        ><span class="fill">·</span>
       </div>
     </div>
 
     <!-- STATS -->
     <section class="wrap stats" id="tools">
       <div class="stat">
-        <div class="num" data-count="715" data-suffix="+" data-dyn-count="tools">
+        <div class="num" data-count="885" data-suffix="+" data-dyn-count="tools">
           <span>0</span><span class="suffix"></span>
         </div>
         <div class="lbl">tools exposed</div>
       </div>
       <div class="stat">
-        <div class="num" data-count="112" data-dyn-count="modules"><span>0</span></div>
+        <div class="num" data-count="137" data-dyn-count="modules"><span>0</span></div>
         <div class="lbl">RouterOS modules</div>
       </div>
       <div class="stat">
-        <div class="num" data-count="6"><span>0</span></div>
+        <div class="num" data-count="10"><span>0</span></div>
         <div class="lbl">flagship workflows</div>
       </div>
       <div class="stat">
@@ -2041,13 +2046,13 @@
       </div>
     </section>
 
-    <!-- WORKFLOWS (NEW in 3.15.0) -->
+    <!-- WORKFLOWS -->
     <section class="wrap" id="workflows">
       <div class="head">
-        <span class="eyebrow">New in <span data-version-bare>3.15.0</span></span>
+        <span class="eyebrow">New in <span data-version-bare>4.24.0</span></span>
         <h2 data-reveal>
           Beyond the catalog: workflows that <span class="ital">think</span> before they touch the
-          wire.
+          wire — and that keep watching after they do.
         </h2>
       </div>
       <div class="flows">
@@ -2173,6 +2178,89 @@
           </div>
         </article>
 
+        <!-- attack detection -->
+        <article class="flow" data-hover style="--accent: var(--coral)">
+          <div class="tagline">Attack Detection</div>
+          <h3>It reads the logs so nobody has to</h3>
+          <p>
+            Correlates brute force, credential spraying and
+            <b>a login that succeeded after failures</b> into incidents with evidence — across the
+            whole fleet, so one source hitting three routers is one story. Blocks are timed,
+            reversible and refused when the source could be forged. <b>Detect-only</b> until you say
+            otherwise.
+          </p>
+          <div class="viz">
+            <div class="difflines">
+              <div class="dl mut">203.0.113.7 · edge, core · confirmed</div>
+              <div class="dl diff-del">! 240 failed logins in 5 min (api, ssh)</div>
+              <div class="dl diff-del">! logged in as admin after 12 failures</div>
+              <div class="dl diff-add">+ blocked 1h · mcp-attack-block</div>
+              <div class="dl mut">guard: spoofable evidence never auto-blocks</div>
+            </div>
+          </div>
+        </article>
+
+        <!-- scheduled audits -->
+        <article class="flow" data-hover style="--accent: var(--amber)">
+          <div class="tagline">Scheduled Audits</div>
+          <h3>Tell me what changed, not what is</h3>
+          <p>
+            Runs the auditors on a cron with nobody in the loop and compares every run with the
+            last. <b>New, worsened and resolved</b> reach you; unchanged findings stay silent — an
+            audit that reports forty findings nightly is muted by week two.
+          </p>
+          <div class="viz">
+            <div class="findings">
+              <div><i class="sev-hi"></i>new: SSH open to 0.0.0.0/0</div>
+              <div><i class="sev-md"></i>worse: cert expires in 6 days</div>
+              <div><i class="sev-lo"></i>fixed: default-drop restored</div>
+              <div><i class="sev-lo"></i>18 unchanged — not reported</div>
+            </div>
+          </div>
+        </article>
+
+        <!-- config narrative -->
+        <article class="flow" data-hover style="--accent: var(--sky)">
+          <div class="tagline">Config Narrative</div>
+          <h3>The document that should have been in the wiki</h3>
+          <p>
+            <code>explain_device</code> turns a config into plain language: what the box is
+            <i>for</i>, its VLANs and subnets, what each firewall chain does, and — first, because
+            it is what people read — <b>what is exposed to the internet</b>. With a Mermaid topology
+            diagram, and an honest list of what it did not recognise.
+          </p>
+          <div class="viz">
+            <div class="difflines">
+              <div class="dl mut">Primary role: Edge router · also Switch, Wi-Fi</div>
+              <div class="dl diff-del">! www reachable from anyone (port 80)</div>
+              <div class="dl mut">VLAN 40 guest · 192.0.2.0/24 · DHCP</div>
+              <div class="dl diff-add">+ forward chain ends in drop</div>
+              <div class="dl mut">not covered: /queue/tree, /tool/netwatch</div>
+            </div>
+          </div>
+        </article>
+
+        <!-- offline simulator -->
+        <article class="flow" data-hover style="--accent: var(--lime)">
+          <div class="tagline">Offline Simulator</div>
+          <h3>Would this packet get through?</h3>
+          <p>
+            Trace a hypothetical packet through NAT, routing and the firewall against a
+            <b>snapshot</b> — no device in the loop. When it meets something it does not model it
+            reports <b>UNKNOWN</b> rather than guessing, which is the only way a simulator earns
+            trust.
+          </p>
+          <div class="viz">
+            <div class="difflines">
+              <div class="dl mut">tcp 10.10.0.9:5001 → 203.0.113.5:443</div>
+              <div class="dl diff-add">+ dstnat: no match</div>
+              <div class="dl diff-add">+ route: 0.0.0.0/0 via ether1</div>
+              <div class="dl diff-add">+ forward #2 accept (established)</div>
+              <div class="dl mut">verdict: ACCEPT · decided by filter/forward #2</div>
+            </div>
+          </div>
+        </article>
+
         <!-- config studio -->
         <article class="flow" data-hover style="--accent: var(--teal)">
           <div class="tagline">Config Studio</div>
@@ -2193,9 +2281,9 @@
       <div class="domains-intro wrap">
         <span class="eyebrow">The surface</span>
         <h2>
-          <span data-dyn-text="tools">715</span> tools.
-          <span data-dyn-text="modules">112</span> modules.<br /><span class="ital"
-            >Thirteen domains.</span
+          <span data-dyn-text="tools">885</span> tools.
+          <span data-dyn-text="modules">137</span> modules.<br /><span class="ital"
+            >Fourteen domains.</span
           >
         </h2>
         <p class="domains-hint">Scroll to traverse <span class="arrow">→</span></p>
@@ -2293,7 +2381,7 @@
     <section class="dash" id="dashboard" aria-label="Observability dashboard tour">
       <div class="wrap head">
         <span class="eyebrow">Watch it work</span>
-        <h2 data-reveal>Seventeen screens that show what the AI just did to your router.</h2>
+        <h2 data-reveal>Twenty-five screens that show what the AI just did to your router.</h2>
         <p class="dash-lede">
           <code>mikrotik-mcp serve --dashboard</code> opens a localhost UI on port 9090 that records
           every tool call as it happens — inputs, outputs, latency, target device, risk — with every
@@ -2430,7 +2518,7 @@
     <!-- OUTRO -->
     <section class="wrap outro">
       <span class="eyebrow" style="justify-content: center"
-        ><span data-version>v3.15.0</span> · MIT</span
+        ><span data-version>v4.24.0</span> · MIT</span
       >
       <h2 data-reveal-html>Configuration<br /><span class="grad">as conversation.</span></h2>
       <p>
@@ -2465,7 +2553,7 @@
           title="@usex/mikrotik-mcp"
           ><b>@usex/mikrotik-mcp</b></a
         >
-        · <span data-version>v3.15.0</span></span
+        · <span data-version>v4.24.0</span></span
       >
       <span
         >∴
@@ -2522,7 +2610,7 @@
       })();
 
       // Tool & module counts come straight from the generated docs header
-      // ("**715 tools** across **112 modules**"). A Range request grabs just the
+      // ("**885 tools** across **137 modules**"). A Range request grabs just the
       // first bytes so we never download the whole (large) reference file.
       (async function loadLiveCounts() {
         const applyCounts = (counts) => {
@@ -3139,18 +3227,24 @@
       const DOMAINS = [
         {
           n: "Security",
-          c: 8,
+          c: 14,
           tags: [
+            "Attack Detection",
+            "Policy-as-Code",
+            "Security Hardening",
+            "Security Shield",
             "Firewall — Filter",
             "Firewall — NAT",
             "Firewall — Audit",
+            "Port-Scan Detection",
+            "Threat Feed",
             "Address Lists",
             "Certificates",
             "IP Services",
             "802.1X — Server",
             "802.1X — Client",
           ],
-          new: ["Firewall — Audit"],
+          new: ["Attack Detection", "Policy-as-Code"],
         },
         {
           n: "Addressing & Routing",
@@ -3205,8 +3299,15 @@
         { n: "QoS", c: 2, tags: ["Queues / QoS", "Queues — Interface"] },
         {
           n: "System & Ops",
-          c: 15,
+          c: 22,
           tags: [
+            "Scheduled Audits",
+            "Cross-Device Transactions",
+            "Fleet Rollout",
+            "Config Narrative",
+            "Offline Simulator",
+            "Traffic Flow",
+            "Drift Guard",
             "System",
             "Users",
             "Scheduler / Scripts",
@@ -3220,7 +3321,14 @@
             "Safe Mode",
             "Network Tools",
           ],
-          new: ["Config Snapshots", "Change Plan", "Neighbors / MNDP"],
+          new: [
+            "Scheduled Audits",
+            "Cross-Device Transactions",
+            "Fleet Rollout",
+            "Config Narrative",
+            "Offline Simulator",
+            "Traffic Flow",
+          ],
         },
         {
           n: "Tools",

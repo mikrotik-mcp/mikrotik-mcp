@@ -1,20 +1,20 @@
 <div align="center">
   <img src="assets/logo.svg" alt="@usex/mikrotik-mcp" width="440" />
-  <p><strong>Drive one or more MikroTik routers in plain language — 819 risk-annotated tools your AI can call, over SSH.</strong><br/>
-  Firewall · routing · DHCP/DNS · wireless · QoS · a complete VPN suite · transactional Safe Mode · and a live observability dashboard that watches every call.</p>
+  <p><strong>Drive one or more MikroTik routers in plain language — 885 risk-annotated tools your AI can call, over SSH.</strong><br/>
+  Firewall · routing · DHCP/DNS · wireless · QoS · a complete VPN suite · transactional Safe Mode · live attack detection · and an observability dashboard that watches every call.</p>
 
   <p>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-7C3AED.svg"></a>
     <img alt="Runtime: Bun" src="https://img.shields.io/badge/runtime-Bun%20%E2%89%A5%201.3-06B6D4.svg">
     <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-6366F1.svg">
-    <img alt="MCP" src="https://img.shields.io/badge/MCP-819%20tools-1F2937.svg">
+    <img alt="MCP" src="https://img.shields.io/badge/MCP-885%20tools-1F2937.svg">
     <a href="docs/"><img alt="Docs" src="https://img.shields.io/badge/docs-reference-7C3AED.svg"></a>
   </p>
 </div>
 
 ---
 
-`@usex/mikrotik-mcp` turns **MikroTik RouterOS** into **819 [Model Context Protocol](https://modelcontextprotocol.io)
+`@usex/mikrotik-mcp` turns **MikroTik RouterOS** into **885 [Model Context Protocol](https://modelcontextprotocol.io)
 tools** any MCP client (Claude Desktop, Claude Code, Cursor, …) can call to read and
 configure your router by talking to it. It reaches the device over **plain SSH** — no
 agent, no package to install on RouterOS — runs on **[Bun](https://bun.sh)**, and
@@ -46,9 +46,23 @@ Then just ask:
 
 ## Highlights
 
-- 🧰 **819 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
+- 🧰 **885 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
   L3 (addressing, routing, DHCP, DNS), security (firewall, NAT, address-lists,
   certificates), QoS, and system ops (users, logs, backups, scheduler).
+- 🛡️ **Attack detection** — reads every device's log, correlates brute force,
+  credential spraying and _a login that succeeded after failures_ into incidents with
+  evidence, and can block the source with a timed, reversible entry. Detect-only until
+  you say otherwise. [→](docs/attack-detection.md)
+- ⏱️ **Scheduled audits** — run the auditors on a cron with nobody in the loop, and
+  hear only about what **changed** since the last run: new, worsened, resolved.
+  [→](docs/scheduled-audits.md)
+- 📖 **`explain_device`** — turns a config into the architecture document that should
+  have been in the wiki (topology diagram, what's exposed, what each chain does), and
+  explains what the difference between two snapshots actually _means_.
+  [→](docs/config-narrative.md)
+- 🧪 **Offline simulator** — trace a hypothetical packet through NAT, routing and
+  firewall against a snapshot, with no device in the loop. Reports UNKNOWN rather than
+  guessing. [→](docs/simulator.md)
 - 📊 **Live observability dashboard** — a localhost web UI that shows **every tool
   call the AI makes** in real time: inputs, outputs, latency, errors, per-device
   analytics. Secrets redacted. [Jump to it ↓](#-observability-dashboard)
@@ -225,9 +239,12 @@ of them, across every transport**. Why you'll want it on:
   <img src="assets/screenshots/web/dashboard-devices.webp" alt="Observability dashboard — devices & connectivity" width="820" />
 </div>
 
-It also carries **Config Studio** (edit the config JSON with autocomplete + safe-apply
-auto-rollback), a **live topology map** from MNDP discovery, a **releases/upgrade**
-timeline, and a **reload/restart** button. Everything persists to a Bun-native SQLite
+It also carries a page per flagship workflow — **Attacks** (live incidents, the evidence
+behind each, guarded blocking), **Schedules** (audit posture over time and what regressed),
+**Explain** (the architecture document with its topology diagram), **Policies**,
+**Simulator**, **Transactions**, **Flows** and **Rollout** — plus **Config Studio** (edit
+the config JSON with autocomplete + safe-apply auto-rollback), a **live topology map** from
+MNDP discovery, a **releases/upgrade** timeline, and a **reload/restart** button. Everything persists to a Bun-native SQLite
 store on your machine — no external database. Binds to loopback (`127.0.0.1`) by default;
 set a bearer token (`--dashboard-token`) to expose it safely.
 
@@ -331,18 +348,24 @@ Full reference: **[docs/observability.md](docs/observability.md)**.
 
 ## The tool catalog
 
-**819 tools across 111 modules.** Full, always-current reference (parameters + risk per
+**885 tools across 137 modules.** Full, always-current reference (parameters + risk per
 tool) is generated from source: **[docs/tools-reference.md](docs/tools-reference.md)**.
 
-| Group                    | Tools | Modules                                                                                          |
-| ------------------------ | ----: | ------------------------------------------------------------------------------------------------ |
-| **Interfaces**           |    41 | interfaces, VLAN, bridge, wireless, PoE                                                          |
-| **Addressing & Routing** |    46 | IP addresses, IP pools, routing, DHCP, DNS                                                       |
-| **Dynamic Routing**      |    99 | router-id, tables, rules, next-hops, filters, BFD, BGP, OSPF, RIP, PIM-SM, IGMP proxy, GMP, RPKI |
-| **Security**             |    34 | firewall filter, NAT, address-lists, certificates, IP services                                   |
-| **VPN & Tunneling**      |    96 | WireGuard, IPsec, PPP, L2TP, PPTP, SSTP, OpenVPN, GRE/IPIP/EoIP/VXLAN                            |
-| **QoS**                  |    19 | queue types, queue trees, simple queues                                                          |
-| **System & Ops**         |   102 | system, network tools, scheduler/scripts, users, logs, backup, Safe Mode                         |
+| Group                    | Tools | Modules                                                                                                           |
+| ------------------------ | ----: | ----------------------------------------------------------------------------------------------------------------- |
+| **System & Ops**         |   182 | system, network tools, scheduler/scripts, users, logs, backup, Safe Mode, transactions, rollout, scheduled audits |
+| **Security**             |   125 | firewall filter, NAT, address-lists, certificates, IP services, hardening, policy-as-code, attack detection       |
+| **VPN & Tunneling**      |   108 | WireGuard, IPsec, PPP, L2TP, PPTP, SSTP, OpenVPN, GRE/IPIP/EoIP/VXLAN                                             |
+| **Dynamic Routing**      |    99 | router-id, tables, rules, next-hops, filters, BFD, BGP, OSPF, RIP, PIM-SM, IGMP proxy, GMP, RPKI                  |
+| **IPv6**                 |    90 | addressing, DHCPv6, ND, neighbours, pools, routes, firewall filter/NAT/mangle/raw                                 |
+| **Tools**                |    67 | ping, traceroute, bandwidth test, sniffer, traffic generator, RoMON, Wake-on-LAN, SMS                             |
+| **Addressing & Routing** |    62 | IP addresses, IP pools, routing, DHCP, DNS                                                                        |
+| **Interfaces**           |    56 | interfaces, VLAN, bridge, wireless, PoE                                                                           |
+| **AAA**                  |    34 | RADIUS, User Manager, 802.1X                                                                                      |
+| **QoS**                  |    23 | queue types, queue trees, simple queues                                                                           |
+| **Switch**               |    18 | switch settings, ports, rules, port isolation                                                                     |
+| **Discovery & Meta**     |     9 | tool gateway (find/describe/invoke), server pulse, capability probe                                               |
+| **Memory**               |     9 | persistent knowledge graph                                                                                        |
 
 ## Beyond the catalog
 
