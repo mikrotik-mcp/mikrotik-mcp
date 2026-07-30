@@ -71,6 +71,7 @@ import { DriftView } from "./drift";
 import { TransactionsView } from "./transactions";
 import { FlowsView } from "./flows";
 import { PoliciesView } from "./policies";
+import { SimulatorView } from "./simulator";
 import { MemoryView } from "./memory";
 import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
@@ -123,6 +124,7 @@ type ViewId =
   | "snapshots"
   | "drift"
   | "policies"
+  | "simulator"
   | "txn"
   | "plan"
   | "s3"
@@ -148,6 +150,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     id: "policies",
     label: "Policies",
     sub: "Your own compliance rules, linted against config",
+  },
+  {
+    id: "simulator",
+    label: "Simulator",
+    sub: "Trace a hypothetical packet — no device touched",
   },
   {
     id: "txn",
@@ -223,6 +230,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   snapshots: MONO_ACCENT,
   drift: MONO_ACCENT,
   policies: MONO_ACCENT,
+  simulator: MONO_ACCENT,
   txn: MONO_ACCENT,
   plan: MONO_ACCENT,
   s3: MONO_ACCENT,
@@ -322,6 +330,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "A rule matching nothing is NOT-APPLICABLE, never a pass — that is what keeps the score honest.",
       '"Must not be yes" is none_of + equals; not_equals also requires the field to be present.',
       "Export as SARIF to lint a router's config in a pull request like source code.",
+    ],
+  },
+  simulator: {
+    what: 'Trace a hypothetical packet through NAT, routing and firewall against the config — offline, read-only. Answers "would this get through, and which rule decides?" before anything is changed.',
+    tips: [
+      "UNKNOWN is not a pass: the model met something it does not implement and declined to guess.",
+      "Connection state is declared, not inferred — say `established` if that is what you mean.",
+      "Reachability needs no packet: it shows which rules can never match.",
     ],
   },
   txn: {
@@ -630,6 +646,14 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z" />
         <path d="M9 12l2 2 4-4" />
         <path d="M12 6v2M12 16v2M6 12h2M16 12h2" />
+      </>
+    ),
+    simulator: (
+      <>
+        <path d="M4 6h6" />
+        <path d="M4 12h10" />
+        <path d="M4 18h4" />
+        <path d="m14 15 3 3 5-6" />
       </>
     ),
     policies: (
@@ -1616,6 +1640,9 @@ function App(): ReactNode {
 
         {/* ── Policies ── */}
         {view === "policies" && <PoliciesView />}
+
+        {/* ── Simulator ── */}
+        {view === "simulator" && <SimulatorView />}
 
         {/* ── Flows ── */}
         {view === "flows" && <FlowsView />}

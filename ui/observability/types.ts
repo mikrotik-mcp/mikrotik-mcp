@@ -573,3 +573,75 @@ export interface PolicyResultRow {
   bySeverity: Record<PolicySeverity, number>;
   findings: PolicyFinding[];
 }
+
+// ── Simulator (`/api/sim`) ──────────────────────────────────────────────────
+export type SimVerdict = "accept" | "drop" | "reject" | "unknown";
+export interface SimStep {
+  chain: string;
+  index: number;
+  action: string;
+  line: number;
+  raw: string;
+  note: string;
+}
+export interface SimUnmodelled {
+  section: string;
+  what: string;
+  line: number;
+  detail?: string;
+}
+export interface SimTrace {
+  verdict: SimVerdict;
+  path: string;
+  steps: SimStep[];
+  nat: { stage: string; rule: number; line: number; note: string }[];
+  unmodelled: SimUnmodelled[];
+  confidence: "high" | "medium" | "low";
+  summary: string;
+  routing?: { outcome: string; reason: string; outInterface?: string; gateway?: string };
+}
+export interface SimPacketPayload {
+  source: string;
+  result: SimTrace;
+  coverage: {
+    unmodelled: SimUnmodelled[];
+    unparsedLines: number;
+    dynamicRouteSources: string[];
+  };
+  error?: string;
+}
+export interface SimChangePayload {
+  source: string;
+  before: SimTrace;
+  after: SimTrace;
+  diff: { changed: boolean; divergedAt?: number; summary: string };
+  error?: string;
+}
+export interface SimReachabilityRule {
+  chain: string;
+  index: number;
+  action: string;
+  line: number;
+  raw: string;
+  disabled: boolean;
+  unreachable: boolean;
+  shadowedBy?: number;
+  why?: string;
+}
+export interface SimSuiteEntry {
+  name: string;
+  expect: "accept" | "drop" | "reject";
+  packet: Record<string, unknown>;
+}
+export interface SimSuite {
+  id: string;
+  name: string;
+  packets: SimSuiteEntry[];
+  updated: number;
+}
+export interface SimSuiteRun {
+  suite: { id: string; name: string };
+  results: { name: string; expect: string; verdict: SimVerdict; ok: boolean; summary: string }[];
+  passed: number;
+  total: number;
+}
