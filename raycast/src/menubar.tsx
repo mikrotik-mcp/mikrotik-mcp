@@ -26,6 +26,8 @@ import type {
   AlertsPayload,
   DeviceInfo,
   DevicesPayload,
+  AttackIncidentRow,
+  AttacksPayload,
   RolloutRecord,
   ScheduleJobRow,
   ScheduleRegression,
@@ -40,6 +42,15 @@ const ALERT_TINT: Record<AlertSeverity, Color> = {
   high: Color.Orange,
   critical: Color.Red,
 };
+
+/** Block an attacker from the menu bar. Always a dry run first — see below. */
+async function blockAttacker(id: string, confirm: boolean): Promise<Response> {
+  return fetch(withToken(`/api/attacks/${encodeURIComponent(id)}/respond`), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ confirm }),
+  });
+}
 
 /** Trigger a scheduled audit off-schedule. Read-only — it runs a READ auditor. */
 async function runSchedule(id: string): Promise<void> {
@@ -91,6 +102,7 @@ export default function Command() {
   const regressionQ = useApi<{ regressions: ScheduleRegression[] }>(
     "/api/schedules/regressions?limit=3",
   );
+  const attackQ = useApi<AttacksPayload>("/api/attacks?hours=24");
 
   const devices = devicesQ.data?.devices ?? [];
   const enabled = devices.filter((d) => !d.disabled);
@@ -130,6 +142,17 @@ export default function Command() {
   const regressions = regressionQ.data?.regressions ?? [];
   const lastRegression = regressions[0];
 
+  // An attack in progress outranks everything else on this list. `confirmed`
+  // means someone actually got in, so it gets the glyph and the tint.
+  const incidents = attackQ.data?.incidents ?? [];
+  const liveAttacks = incidents.filter(
+    (i) => i.confidence === "confirmed" || i.confidence === "high",
+  );
+  const breached = incidents.some((i) => i.confidence === "confirmed");
+  const detectOnly =
+    attackQ.data?.posture.enabled === true &&
+    attackQ.data.posture.mode === "detect";
+
   const alerts = offline.length + hot.length;
   const health: Health = unreachable
     ? "bad"
@@ -147,7 +170,9 @@ export default function Command() {
       ? "MikroTik"
       : `${online.length}/${total}${alerts > 0 ? ` ⚠${alerts}` : ""}${
           activeRollouts.length > 0 ? " ⟳" : ""
-        }${critical > 0 ? ` ⚑${critical}` : ""}`;
+        }${critical > 0 ? ` ⚑${critical}` : ""}${
+          liveAttacks.length > 0 ? ` ☣${liveAttacks.length}` : ""
+        }`;
 
   // Keep the root-search subtitle in sync for background glances.
   useEffect(() => {
@@ -191,9 +216,11 @@ export default function Command() {
       // means the title stays stable during the refresh, so there is no flicker.
       isLoading={devicesQ.isLoading || statsQ.isLoading || eventsQ.isLoading}
       icon={
-        worst
-          ? { source: Icon.Bell, tintColor: ALERT_TINT[worst] }
-          : { source: Icon.Wifi, tintColor: HEALTH_TINT[health] }
+        breached
+          ? { source: Icon.ExclamationMark, tintColor: Color.Red }
+          : worst
+            ? { source: Icon.Bell, tintColor: ALERT_TINT[worst] }
+            : { source: Icon.Wifi, tintColor: HEALTH_TINT[health] }
       }
       title={title}
       tooltip={
@@ -256,6 +283,47 @@ export default function Command() {
               }
             />
           ))}
+        </MenuBarExtra.Section>
+      ) : null}
+
+      {liveAttacks.length > 0 ? (
+        <MenuBarExtra.Section title={`Attacks (${liveAttacks.length})`}>
+          {liveAttacks.slice(0, 4).map((incident: AttackIncidentRow) => (
+            <MenuBarExtra.Item
+              key={incident.id}
+              icon={{
+                source:
+                  incident.confidence === "confirmed"
+                    ? Icon.ExclamationMark
+                    : Icon.Warning,
+                tintColor:
+                  incident.confidence === "confirmed"
+                    ? Color.Red
+                    : Color.Orange,
+              }}
+              title={incident.source || "(config change)"}
+              subtitle={`${incident.stage} · ${incident.confidence} · ${incident.devices.join(", ")}`}
+              // First press is a DRY RUN: the dashboard answers with the plan and
+              // nothing is changed. Blocking from a menu bar on one press is how
+              // an operator locks themselves out at a glance.
+              onAction={() => void blockAttacker(incident.id, false)}
+              tooltip={`${incident.narrative}\n\nPress to prepare a block (dry run — confirm in the dashboard)`}
+              alternate={
+                <MenuBarExtra.Item
+                  icon={Icon.Globe}
+                  title="Open in Dashboard"
+                  onAction={() => open(withToken("/#attacks"))}
+                />
+              }
+            />
+          ))}
+          {detectOnly ? (
+            <MenuBarExtra.Item
+              icon={{ source: Icon.Eye, tintColor: Color.Yellow }}
+              title="Detect-only — nothing is being blocked"
+              onAction={() => open(withToken("/#attacks"))}
+            />
+          ) : null}
         </MenuBarExtra.Section>
       ) : null}
 
@@ -442,6 +510,7 @@ export default function Command() {
             statsQ.revalidate();
             eventsQ.revalidate();
             scheduleQ.revalidate();
+            attackQ.revalidate();
             regressionQ.revalidate();
           }}
         />

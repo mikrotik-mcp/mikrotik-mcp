@@ -17,19 +17,26 @@
  *     only update the subtitle — a dashboard restart must not read as "everything
  *     went offline".
  *
- * It also announces AUDIT REGRESSIONS from the scheduled audits, on the same
- * schedule and with the same seed-silently rule. Regressions belong here rather
- * than in a command of their own: the whole point of a scheduled audit is that
- * nobody goes looking for it, so the notification has to arrive on its own.
+ * It also announces AUDIT REGRESSIONS and ATTACK INCIDENTS, on the same schedule
+ * and with the same seed-silently rule. Both belong here rather than in commands
+ * of their own: the whole point of a scheduled audit — and of attack detection —
+ * is that nobody goes looking for it, so the notification has to arrive on its
+ * own. An attack you have to go and check for is an attack you find tomorrow.
  */
 import { LocalStorage, updateCommandMetadata } from "@raycast/api";
 import { api } from "./lib/api";
 import { notify } from "./lib/notify";
-import type { DevicesPayload, ScheduleRegression } from "./lib/types";
+import type {
+  AttacksPayload,
+  DevicesPayload,
+  ScheduleRegression,
+} from "./lib/types";
 
 const STATE_KEY = "monitor-devices:reachability";
 /** Newest regression already announced, so each one is reported exactly once. */
 const REGRESSION_KEY = "monitor-devices:last-regression";
+/** Incident ids already announced, so an ongoing attack notifies once. */
+const ATTACK_KEY = "monitor-devices:announced-attacks";
 
 type State = Record<string, boolean>;
 
@@ -66,6 +73,59 @@ async function announceRegressions(): Promise<void> {
     fresh.map((r) =>
       notify(`Audit regression on ${r.device}`, `${r.jobId}: ${r.summary}`),
     ),
+  );
+}
+
+/**
+ * Announce attack incidents that have not been announced before.
+ *
+ * Keyed on the incident id rather than a timestamp: an incident STAYS open while
+ * an attacker keeps trying, and re-announcing it every two minutes for an hour
+ * is how a notification channel gets muted on the one night it mattered.
+ *
+ * Only `high` and `confirmed` reach a notification. Everything else is on the
+ * dashboard, where looking at it is a choice.
+ */
+async function announceAttacks(): Promise<void> {
+  let payload: AttacksPayload;
+  try {
+    payload = await api<AttacksPayload>("/api/attacks?hours=6");
+  } catch {
+    return;
+  }
+  const incidents = (payload.incidents ?? []).filter(
+    (i) => i.confidence === "confirmed" || i.confidence === "high",
+  );
+  if (incidents.length === 0) return;
+
+  const raw = await LocalStorage.getItem<string>(ATTACK_KEY);
+  let announced: string[] = [];
+  try {
+    if (raw) announced = JSON.parse(raw) as string[];
+  } catch {
+    announced = [];
+  }
+  const seen = new Set(announced);
+  const fresh = incidents.filter((i) => !seen.has(i.id));
+
+  // Keep the id list bounded; the oldest ones can never recur under a new id.
+  await LocalStorage.setItem(
+    ATTACK_KEY,
+    JSON.stringify([...incidents.map((i) => i.id), ...announced].slice(0, 200)),
+  );
+  if (!raw) return; // first run seeds silently
+
+  await Promise.all(
+    fresh
+      .slice(0, 3)
+      .map((i) =>
+        notify(
+          i.confidence === "confirmed"
+            ? `Attack CONFIRMED on ${i.devices.join(", ")}`
+            : `Attack on ${i.devices.join(", ")}`,
+          `${i.source || "a config change"}: ${i.narrative.slice(0, 180)}`,
+        ),
+      ),
   );
 }
 
@@ -118,7 +178,7 @@ export default async function Command(): Promise<void> {
     }
   }
 
-  await Promise.all([...flips, announceRegressions()]);
+  await Promise.all([...flips, announceRegressions(), announceAttacks()]);
   await LocalStorage.setItem(STATE_KEY, JSON.stringify(next));
   await updateCommandMetadata({
     subtitle:

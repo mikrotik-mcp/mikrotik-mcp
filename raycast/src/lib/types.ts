@@ -835,3 +835,29 @@ export interface ExplainPayload {
   mermaid: string;
   source: string;
 }
+
+// ── Attack detection ────────────────────────────────────────────────────────
+export interface AttackIncidentRow {
+  id: string;
+  source: string;
+  devices: string[];
+  stage: string;
+  confidence: "low" | "medium" | "high" | "confirmed";
+  severity: string;
+  firstTs: number;
+  lastTs: number;
+  detectors: string[];
+  narrative: string;
+  spoofableOnly: boolean;
+  blocked?: boolean;
+}
+
+export interface AttacksPayload {
+  incidents: AttackIncidentRow[];
+  posture: {
+    enabled: boolean;
+    mode: "detect" | "respond";
+    autoRespondTo: string[];
+    minConfidence: string;
+  };
+}
