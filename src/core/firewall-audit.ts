@@ -19,6 +19,7 @@
  * `ipaddr.js` library (correct for both IPv4 and IPv6).
  */
 import * as ipaddr from "ipaddr.js";
+import { firewallFindingId } from "../schedule/identity";
 
 export type Severity = "high" | "medium" | "low";
 
@@ -64,6 +65,15 @@ export interface AuditFinding {
   ruleIndex?: number;
   /** A related rule (e.g. the shadowing rule). */
   relatedIndex?: number;
+  /**
+   * Content-derived identity, stable across runs and across reorders.
+   *
+   * `ruleIndex` is a POSITION and shifts whenever anything above it changes, so
+   * it cannot be the identity of a finding tracked over time — scheduled audits
+   * diff by this id, and an index-based one would report every reorder as a full
+   * set of new findings (docs/tasks/09 §2). Assigned by `auditFirewall`.
+   */
+  findingId?: string;
   title: string;
   detail: string;
   suggestion: string;
@@ -505,6 +515,20 @@ export function auditFirewall(input: {
   if (input.filter) findings.push(...auditFilter(input.filter));
   if (input.nat) findings.push(...auditTransform(input.nat, "nat"));
   if (input.mangle) findings.push(...auditTransform(input.mangle, "mangle"));
+
+  // Identify each finding by WHAT it is about, not where the rule sits. Done
+  // here rather than at each push site so no future finding can forget it.
+  const byTable = { filter: input.filter, nat: input.nat, mangle: input.mangle };
+  for (const finding of findings) {
+    const table = byTable[finding.table] ?? [];
+    finding.findingId = firewallFindingId({
+      kind: finding.kind,
+      table: finding.table,
+      chain: finding.chain,
+      rule: table.find((r) => r.index === finding.ruleIndex),
+      related: table.find((r) => r.index === finding.relatedIndex),
+    });
+  }
 
   // Sort by severity (high → low), then table, then rule index.
   const sevRank: Record<Severity, number> = { high: 0, medium: 1, low: 2 };

@@ -214,12 +214,32 @@ Flags: X - disabled
     });
     const f = auditCategory("firewall_default_deny", s);
     // Both fire here: the trap (re-enable) AND no-default-deny (insert tail).
-    expect(ids(f)).toContain("disabled_enforcement:input:1");
+    // The id names what the rule MATCHES, not where it sits — an index-based id
+    // would make every reorder look like a fresh critical finding to the
+    // scheduled-audit diff (docs/tasks/09 §2).
+    const trapId = "disabled_enforcement:input:chain=input action=drop protocol=tcp dst-port=8291";
+    expect(ids(f)).toContain(trapId);
     expect(ids(f)).toContain("default_deny:input");
-    const trap = f.find((x) => x.finding_id === "disabled_enforcement:input:1")!;
+    const trap = f.find((x) => x.finding_id === trapId)!;
     const tail = f.find((x) => x.finding_id === "default_deny:input")!;
     expect(trap.fix![0]).toMatch(/^\/ip firewall filter enable/);
     expect(tail.fix!.some((c) => c.startsWith("/ip firewall filter add"))).toBe(true);
+  });
+
+  test("the disabled-drop finding_id survives the rule moving position", () => {
+    // Same two rules, with an unrelated rule inserted above them. The finding is
+    // about the same drop, so its id must not change.
+    const moved = state({
+      firewallFilter: fw(`
+Flags: X - disabled
+ 0    chain=input action=accept connection-state=established,related
+ 1    chain=input action=accept protocol=tcp dst-port=8291
+ 2 X  chain=input action=drop protocol=tcp dst-port=8291
+`),
+    });
+    expect(ids(auditCategory("firewall_default_deny", moved))).toContain(
+      "disabled_enforcement:input:chain=input action=drop protocol=tcp dst-port=8291",
+    );
   });
 
   test("does not flag a disabled drop that is NOT preceded by a matching accept", () => {

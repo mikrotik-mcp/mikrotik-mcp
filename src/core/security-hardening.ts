@@ -350,7 +350,11 @@ function auditDefaultDeny(state: DeviceSecurityState): Finding[] {
     // makes the chain LOOK protected. Individually confirmable (separate id).
     for (const drop of a.disabledEnforcementDrops) {
       findings.push({
-        finding_id: `disabled_enforcement:${chain}:${drop.index}`,
+        // Identified by what the rule MATCHES, not by where it sits: a rule
+        // moving from #3 to #5 is the same rule, and an index-based id would
+        // make every reorder look like a fresh critical finding to the
+        // scheduled-audit diff (docs/tasks/09 §2).
+        finding_id: `disabled_enforcement:${chain}:${ruleSignature(drop)}`,
         category: "firewall_default_deny",
         severity: "critical",
         confidence: "proven",
