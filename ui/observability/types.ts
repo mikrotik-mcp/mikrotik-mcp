@@ -702,3 +702,85 @@ export interface ScheduleRegression {
   worsened: { finding: ScheduleFinding; from: string; to: string }[];
   resolved: ScheduleFinding[];
 }
+
+// ── Config narrative (Explain) ──────────────────────────────────────────────
+export interface NarrativeRole {
+  role: string;
+  label: string;
+  score: number;
+  signals: { signal: string; role: string; weight: number; section: string }[];
+}
+export interface NarrativeInterfaceRow {
+  name: string;
+  kind: string;
+  parent?: string;
+  vlanId?: number;
+  lists: string[];
+  addresses: string[];
+  comment?: string;
+  disabled: boolean;
+  purpose?: string;
+}
+export interface NarrativeSubnetRow {
+  cidr: string;
+  interface: string;
+  routerAddress: string;
+  vlanId?: number;
+  dhcp?: { server: string; pool?: string; ranges: string[]; gateway?: string; dns?: string };
+  reservations: { address: string; macAddress?: string; comment?: string }[];
+}
+export interface NarrativeExposureRow {
+  what: string;
+  kind: string;
+  detail: string;
+  from: string;
+  severity: "critical" | "high" | "medium" | "low";
+  line: number;
+}
+export interface DeviceNarrativePayload {
+  device?: string;
+  generatedAt?: number;
+  identity: {
+    name?: string;
+    version?: string;
+    model?: string;
+    exportedAt?: string;
+    roles: { primary: NarrativeRole | null; secondary: NarrativeRole[] };
+  };
+  interfaces: NarrativeInterfaceRow[];
+  subnets: NarrativeSubnetRow[];
+  wans: {
+    interface: string;
+    addressing: string;
+    gateway?: string;
+    distance?: number;
+    nat: string;
+  }[];
+  chains: { chain: string; table: string; ruleCount: number; defaultAction: string }[];
+  exposure: NarrativeExposureRow[];
+  tunnels: { name: string; kind: string; peers: string[]; subnets: string[]; disabled: boolean }[];
+  services: { name: string; enabled: boolean; port?: string; availableFrom?: string }[];
+  unknowns: { section: string; what: string; line: number; detail?: string }[];
+  stats: { recordCount: number; unparsedLines: number; sections: number };
+}
+export interface ExplainPayload {
+  narrative: DeviceNarrativePayload;
+  markdown: string;
+  mermaid: string;
+  source: string;
+}
+export interface NarrativeDiffPayload {
+  diff: {
+    identical: boolean;
+    changes: { summary: string; impact: string; severity: string; detail?: string }[];
+  };
+  markdown: string;
+  before: string;
+  after: string;
+}
+export interface SnapshotRow {
+  id: string;
+  device: string;
+  ts: number;
+  label?: string;
+}

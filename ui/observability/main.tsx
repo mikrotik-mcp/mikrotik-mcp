@@ -73,6 +73,7 @@ import { FlowsView } from "./flows";
 import { PoliciesView } from "./policies";
 import { SimulatorView } from "./simulator";
 import { SchedulesView } from "./schedules";
+import { ExplainView } from "./explain";
 import { MemoryView } from "./memory";
 import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
@@ -127,6 +128,7 @@ type ViewId =
   | "policies"
   | "simulator"
   | "schedules"
+  | "explain"
   | "txn"
   | "plan"
   | "s3"
@@ -152,6 +154,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     id: "policies",
     label: "Policies",
     sub: "Your own compliance rules, linted against config",
+  },
+  {
+    id: "explain",
+    label: "Explain",
+    sub: "Config → architecture document, diagram and consequence diffs",
   },
   {
     id: "simulator",
@@ -239,6 +246,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   policies: MONO_ACCENT,
   simulator: MONO_ACCENT,
   schedules: MONO_ACCENT,
+  explain: MONO_ACCENT,
   txn: MONO_ACCENT,
   plan: MONO_ACCENT,
   s3: MONO_ACCENT,
@@ -338,6 +346,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "A rule matching nothing is NOT-APPLICABLE, never a pass — that is what keeps the score honest.",
       '"Must not be yes" is none_of + equals; not_equals also requires the field to be present.',
       "Export as SARIF to lint a router's config in a pull request like source code.",
+    ],
+  },
+  explain: {
+    what: "Turns a router's configuration into the architecture document that should have been in the wiki: what the box is for, topology, addressing, firewall, and what is exposed to the internet.",
+    tips: [
+      "Exposure is shown first because it is the part people actually read.",
+      '"What this document does not cover" lists the menus it did not analyse — that is where the surprises live.',
+      "Compare mode explains the CONSEQUENCE of a change; Snapshots shows which lines moved.",
     ],
   },
   simulator: {
@@ -670,6 +686,14 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M4 12h10" />
         <path d="M4 18h4" />
         <path d="m14 15 3 3 5-6" />
+      </>
+    ),
+    explain: (
+      <>
+        <path d="M4 5h11a2 2 0 0 1 2 2v13" />
+        <path d="M4 5v13a2 2 0 0 0 2 2h11" />
+        <path d="M8 9h6" />
+        <path d="M8 13h4" />
       </>
     ),
     schedules: (
@@ -1670,6 +1694,9 @@ function App(): ReactNode {
 
         {/* ── Scheduled audits ── */}
         {view === "schedules" && <SchedulesView />}
+
+        {/* ── Config narrative ── */}
+        {view === "explain" && <ExplainView />}
 
         {/* ── Flows ── */}
         {view === "flows" && <FlowsView />}
