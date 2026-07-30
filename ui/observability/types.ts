@@ -506,3 +506,70 @@ export interface RolloutUpdate {
   devices: RolloutDevice[];
   gates: RolloutGate[];
 }
+
+// ── Policy engine (`/api/policies`) ─────────────────────────────────────────
+export type PolicySeverity = "critical" | "high" | "medium" | "low" | "info";
+export type PolicyStatus = "pass" | "fail" | "not-applicable";
+export interface PolicyRule {
+  id: string;
+  severity: PolicySeverity;
+  description?: string;
+  remediation?: string;
+  match: { section: string; where?: Record<string, string | number | boolean>; settings?: boolean };
+  assert: unknown;
+  on_empty: string;
+  tags: string[];
+}
+export interface PolicyFileInfo {
+  path: string;
+  name?: string;
+  ok: boolean;
+  issues: { path: string; message: string }[];
+  policies: PolicyRule[];
+}
+export interface PolicyCatalog {
+  files: PolicyFileInfo[];
+  ruleCount: number;
+  duplicateIds: string[];
+  emptyPatterns: string[];
+  paths: string[];
+}
+export interface PolicyFinding {
+  ruleId: string;
+  severity: PolicySeverity;
+  status: PolicyStatus;
+  description?: string;
+  remediation?: string;
+  tags: string[];
+  device?: string;
+  section: string;
+  line?: number;
+  evidence?: string;
+  reason: string;
+}
+export interface PolicySummary {
+  total: number;
+  passed: number;
+  failed: number;
+  notApplicable: number;
+  bySeverity: Record<PolicySeverity, number>;
+  score: number;
+}
+export interface PolicyRunReport {
+  device: string;
+  summary?: PolicySummary;
+  findings?: PolicyFinding[];
+  markdown?: string;
+  error?: string;
+}
+export interface PolicyResultRow {
+  id: number;
+  device: string;
+  ts: number;
+  score: number;
+  passed: number;
+  failed: number;
+  notApplicable: number;
+  bySeverity: Record<PolicySeverity, number>;
+  findings: PolicyFinding[];
+}

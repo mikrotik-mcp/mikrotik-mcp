@@ -159,6 +159,7 @@ import { driftRoutes } from "./drift-routes";
 import { txnRoutes } from "./txn-routes";
 import { flowRoutes } from "./flow-routes";
 import { rolloutRoutes } from "./rollout-routes";
+import { policyRoutes } from "./policy-routes";
 import { subscribeRollout } from "./rollout-hub";
 import { subscribeTxn } from "./txn-hub";
 import { alertRoutes } from "./alert-routes";
@@ -1590,6 +1591,9 @@ export async function runDashboard(
 
     const rolloutResp = await rolloutRoutes(req, url);
     if (rolloutResp) return rolloutResp;
+
+    const policyResp = await policyRoutes(req, url);
+    if (policyResp) return policyResp;
 
     // `getEventStore()` rather than the `db` binding below, which is declared
     // later in this function — alerting's rule preview replays stored events.

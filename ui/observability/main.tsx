@@ -70,6 +70,7 @@ import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
 import { TransactionsView } from "./transactions";
 import { FlowsView } from "./flows";
+import { PoliciesView } from "./policies";
 import { MemoryView } from "./memory";
 import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
@@ -121,6 +122,7 @@ type ViewId =
   | "flows"
   | "snapshots"
   | "drift"
+  | "policies"
   | "txn"
   | "plan"
   | "s3"
@@ -142,6 +144,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "flows", label: "Flows", sub: "NetFlow/IPFIX top talkers, conversations & anomalies" },
   { id: "snapshots", label: "Snapshots", sub: "Config history & time-travel diff" },
   { id: "drift", label: "Drift Guard", sub: "Golden config baselines & live drift detection" },
+  {
+    id: "policies",
+    label: "Policies",
+    sub: "Your own compliance rules, linted against config",
+  },
   {
     id: "txn",
     label: "Transactions",
@@ -215,6 +222,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   flows: MONO_ACCENT,
   snapshots: MONO_ACCENT,
   drift: MONO_ACCENT,
+  policies: MONO_ACCENT,
   txn: MONO_ACCENT,
   plan: MONO_ACCENT,
   s3: MONO_ACCENT,
@@ -306,6 +314,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Empty page? Read the collector strip first — 'templates pending' means v9/IPFIX data arrived before the layout that decodes it, and resolves on the next refresh.",
       "Set it up with the setup-traffic-flow prompt: start the collector, then point the router at this host.",
       "Flows are cheap and aggregate; use Packets (TZSP) when you need to see inside a specific conversation.",
+    ],
+  },
+  policies: {
+    what: "Policy-as-code: your organisation's own compliance rules, written as YAML and evaluated against a config snapshot. Read-only — it never changes a device.",
+    tips: [
+      "A rule matching nothing is NOT-APPLICABLE, never a pass — that is what keeps the score honest.",
+      '"Must not be yes" is none_of + equals; not_equals also requires the field to be present.',
+      "Export as SARIF to lint a router's config in a pull request like source code.",
     ],
   },
   txn: {
@@ -614,6 +630,13 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z" />
         <path d="M9 12l2 2 4-4" />
         <path d="M12 6v2M12 16v2M6 12h2M16 12h2" />
+      </>
+    ),
+    policies: (
+      <>
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+        <path d="M14 3v5h5" />
+        <path d="m9 14 2 2 4-4" />
       </>
     ),
     txn: (
@@ -1590,6 +1613,9 @@ function App(): ReactNode {
 
         {/* ── Drift Guard ── */}
         {view === "drift" && <DriftView />}
+
+        {/* ── Policies ── */}
+        {view === "policies" && <PoliciesView />}
 
         {/* ── Flows ── */}
         {view === "flows" && <FlowsView />}
