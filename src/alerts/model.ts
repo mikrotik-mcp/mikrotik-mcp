@@ -58,6 +58,7 @@ const EventTrigger = z.object({
     "transaction",
     "policy",
     "audit",
+    "attack",
   ]),
   /** For `device_state`: the state entered. For `drift`: `detected`/`resolved`. */
   to: z.string().optional(),

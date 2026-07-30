@@ -318,6 +318,48 @@ export const PolicyConfigSchema = z.object({
 export type PolicyConfig = z.infer<typeof PolicyConfigSchema>;
 
 /**
+ * Attack detection & response.
+ *
+ * `mode` is the setting that matters and it defaults to `detect`: the feature
+ * watches, records and alerts, and changes nothing on a device until someone
+ * deliberately turns responses on. An unattended loop that can write to a router
+ * is a footgun, and the limits below exist because nobody is watching when they
+ * matter — see `docs/tasks/11` §4 for the three failure modes each one prevents.
+ */
+export const AttacksConfigSchema = z.object({
+  /** Master switch. Off means no polling and no detection at all. */
+  enabled: z.boolean().default(false),
+  /**
+   * `detect` records and alerts only. `respond` additionally applies the timed
+   * blocks the guards allow. Defaults to `detect`, deliberately.
+   */
+  mode: z.enum(["detect", "respond"]).default("detect"),
+  /** How often the fleet is swept. */
+  pollSeconds: z.coerce.number().int().positive().default(120),
+  /** How far back each sweep reads. Must exceed pollSeconds so windows overlap. */
+  windowMinutes: z.coerce.number().int().positive().default(10),
+  /** Devices swept at once. */
+  concurrency: z.coerce.number().int().positive().max(32).default(4),
+  /** Minimum confidence before an automatic response is considered. */
+  minConfidence: z.enum(["medium", "high", "confirmed"]).default("high"),
+  /** How long an automatic block lasts. A wrong block must expire on its own. */
+  blockTimeout: z.string().default("1h"),
+  /** Automatic responses per device per hour, beyond which it refuses loudly. */
+  maxBlocksPerHour: z.coerce.number().int().positive().default(6),
+  /** Addresses and CIDRs that may never be blocked, whatever the evidence. */
+  neverBlock: z.array(z.string()).default([]),
+  /** Detectors permitted to trigger an automatic response. */
+  autoRespondTo: z.array(z.string()).default(["brute-force", "credential-spray"]),
+  /** Days of successful logins before "a new admin source" means anything. */
+  learningDays: z.coerce.number().int().positive().default(7),
+  /** Also read the on-device port-scan address list each sweep. */
+  readScanList: z.boolean().default(true),
+  /** How long incidents are kept. */
+  retainDays: z.coerce.number().int().positive().default(90),
+});
+export type AttacksConfig = z.infer<typeof AttacksConfigSchema>;
+
+/**
  * Scheduled audits — recurring READ-only audits run by the MCP host, with each
  * run diffed against the previous one so the operator hears about *changes*, not
  * a nightly restatement of a known posture.
@@ -457,6 +499,8 @@ export const MikrotikConfigSchema = z.object({
   policy: PolicyConfigSchema.default(() => PolicyConfigSchema.parse({})),
   /** Recurring READ-only audits with run-over-run diffing (opt-in). */
   schedules: SchedulesConfigSchema.default(() => SchedulesConfigSchema.parse({})),
+  /** Attack detection; detect-only unless `mode` says otherwise (opt-in). */
+  attacks: AttacksConfigSchema.default(() => AttacksConfigSchema.parse({})),
   /**
    * SSH connection pooling — keeps one persistent connection per device and
    * reuses it across tool calls, saving the handshake cost. Enabled by default.
@@ -537,7 +581,7 @@ function parseFlags(argv: string[]): Record<string, string> {
  * passthrough they parse fine and are then thrown away, which reads as "my
  * alerts config does nothing".
  */
-const PASSTHROUGH_BLOCKS = ["alerts", "flows", "policy", "schedules"] as const;
+const PASSTHROUGH_BLOCKS = ["alerts", "flows", "policy", "schedules", "attacks"] as const;
 
 /** Parse a multi-device source (JSON file or inline JSON) into a devices map. */
 function parseDevicesSource(
@@ -865,6 +909,19 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
 
   // 8) Scheduled audits. The job list only comes from the config file (or the
   // tools at runtime); env/flags carry the operational limits.
+  // 9) Attack detection. The job of the env/flags is the operational limits;
+  // `neverBlock` and `autoRespondTo` are lists and come from the config file.
+  const attacks = overlay(fileBlocks.attacks as Record<string, unknown> | undefined, {
+    enabled: boolOpt(pick("attacks", "MIKROTIK_ATTACKS__ENABLED")),
+    mode: pick("attacks-mode", "MIKROTIK_ATTACKS__MODE"),
+    pollSeconds: pick("attacks-poll-seconds", "MIKROTIK_ATTACKS__POLL_SECONDS"),
+    windowMinutes: pick("attacks-window-minutes", "MIKROTIK_ATTACKS__WINDOW_MINUTES"),
+    concurrency: pick("attacks-concurrency", "MIKROTIK_ATTACKS__CONCURRENCY"),
+    minConfidence: pick("attacks-min-confidence", "MIKROTIK_ATTACKS__MIN_CONFIDENCE"),
+    blockTimeout: pick("attacks-block-timeout", "MIKROTIK_ATTACKS__BLOCK_TIMEOUT"),
+    maxBlocksPerHour: pick("attacks-max-blocks-per-hour", "MIKROTIK_ATTACKS__MAX_BLOCKS_PER_HOUR"),
+  });
+
   const schedules = overlay(fileBlocks.schedules as Record<string, unknown> | undefined, {
     enabled: boolOpt(pick("schedules", "MIKROTIK_SCHEDULES__ENABLED")),
     concurrency: pick("schedules-concurrency", "MIKROTIK_SCHEDULES__CONCURRENCY"),
@@ -892,6 +949,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     memory,
     policy,
     schedules,
+    attacks,
     ...(hasS3 ? { s3 } : {}),
   };
 

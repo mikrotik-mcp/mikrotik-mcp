@@ -29,6 +29,7 @@ import { printBanner } from "./cli-logo";
 import { AlertEngine, setAlertEngine } from "./alerts/engine";
 import { startAlertSampler, stopAlertSampler } from "./alerts/sampler";
 import { startScheduler, stopScheduler } from "./schedule/session";
+import { startAttackDetection, stopAttackDetection } from "./attack/session";
 import { parseRules } from "./alerts/model";
 
 const HELP = `${SERVER_NAME} v${VERSION} — MikroTik RouterOS MCP server
@@ -239,6 +240,14 @@ async function main(): Promise<void> {
     logger.error(`Scheduled audits disabled: ${e instanceof Error ? e.message : String(e)}`);
   });
 
+  // Attack detection: opt-in via the `attacks` config block, and detect-only
+  // unless `mode` says otherwise — nothing is changed on a device by default.
+  try {
+    startAttackDetection();
+  } catch (e) {
+    logger.error(`Attack detection disabled: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   // Close pooled SSH connections on shutdown so the device sees a clean
   // disconnect (vs. a TCP RST that RouterOS logs as a broken session).
   let shuttingDown = false;
@@ -250,6 +259,7 @@ async function main(): Promise<void> {
     closeMemoryStore();
     stopAlertSampler();
     stopScheduler();
+    stopAttackDetection();
     process.exit(0);
   };
   process.on("SIGINT", () => shutdown("SIGINT"));

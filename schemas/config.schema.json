@@ -546,6 +546,114 @@
       ],
       "additionalProperties": false
     },
+    "attacks": {
+      "default": {
+        "enabled": false,
+        "mode": "detect",
+        "pollSeconds": 120,
+        "windowMinutes": 10,
+        "concurrency": 4,
+        "minConfidence": "high",
+        "blockTimeout": "1h",
+        "maxBlocksPerHour": 6,
+        "neverBlock": [],
+        "autoRespondTo": ["brute-force", "credential-spray"],
+        "learningDays": 7,
+        "readScanList": true,
+        "retainDays": 90
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "mode": {
+          "default": "detect",
+          "type": "string",
+          "enum": ["detect", "respond"]
+        },
+        "pollSeconds": {
+          "default": 120,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "windowMinutes": {
+          "default": 10,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "concurrency": {
+          "default": 4,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 32
+        },
+        "minConfidence": {
+          "default": "high",
+          "type": "string",
+          "enum": ["medium", "high", "confirmed"]
+        },
+        "blockTimeout": {
+          "default": "1h",
+          "type": "string"
+        },
+        "maxBlocksPerHour": {
+          "default": 6,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "neverBlock": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "autoRespondTo": {
+          "default": ["brute-force", "credential-spray"],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "learningDays": {
+          "default": 7,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "readScanList": {
+          "default": true,
+          "type": "boolean"
+        },
+        "retainDays": {
+          "default": 90,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "enabled",
+        "mode",
+        "pollSeconds",
+        "windowMinutes",
+        "concurrency",
+        "minConfidence",
+        "blockTimeout",
+        "maxBlocksPerHour",
+        "neverBlock",
+        "autoRespondTo",
+        "learningDays",
+        "readScanList",
+        "retainDays"
+      ],
+      "additionalProperties": false
+    },
     "ssh": {
       "default": {
         "keepAlive": true,
@@ -654,6 +762,7 @@
     "flows",
     "policy",
     "schedules",
+    "attacks",
     "ssh",
     "readOnly",
     "tools",
