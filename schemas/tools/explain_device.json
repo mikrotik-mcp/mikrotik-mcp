@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "explain_device",
+  "type": "object",
+  "properties": {
+    "snapshot_id": {
+      "description": "Explain a stored snapshot instead of the live device",
+      "type": "string"
+    },
+    "config_text": {
+      "description": "Explain this raw `/export` text instead",
+      "type": "string"
+    },
+    "diagram": {
+      "default": true,
+      "description": "Include the Mermaid topology diagram",
+      "type": "boolean"
+    }
+  },
+  "required": ["diagram"],
+  "additionalProperties": false
+}

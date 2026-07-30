@@ -10,6 +10,7 @@
  * Deterministic: same narrative in, byte-identical Markdown out. `render` never
  * reads a clock — `generatedAt` comes from the narrative, stamped by the caller.
  */
+import { actionPastTense } from "./analyze";
 import type { DeviceNarrative } from "./analyze";
 import { topologyMermaid } from "./mermaid";
 
@@ -242,7 +243,7 @@ function firewallSection(n: DeviceNarrative): string[] {
       }. ${
         chain.defaultAction === "unknown"
           ? "There is no catch-all rule at the end."
-          : `Anything not matched is **${chain.defaultAction}ed**.`
+          : `Anything not matched is **${actionPastTense(chain.defaultAction)}**.`
       }`,
       "",
     );

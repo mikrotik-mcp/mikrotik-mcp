@@ -86,6 +86,25 @@ export interface NarrativeChain {
   summary: string[];
 }
 
+/**
+ * Past tense of a chain's default action, for prose.
+ *
+ * Naive `${action}ed` yields "droped" — a typo that ships in every rendered
+ * document and every diff line, so the forms live here once.
+ */
+export function actionPastTense(action: NarrativeChain["defaultAction"]): string {
+  switch (action) {
+    case "accept":
+      return "accepted";
+    case "drop":
+      return "dropped";
+    case "reject":
+      return "rejected";
+    default:
+      return "handled by the RouterOS default";
+  }
+}
+
 export interface NarrativeExposure {
   /** What is reachable: a service name or a forwarded port. */
   what: string;
@@ -393,16 +412,18 @@ function analyzeSubnets(model: ConfigModel): NarrativeSubnet[] {
       interface: iface,
       routerAddress: host === null ? address : formatIp(host),
       vlanId: vlanIds.get(iface),
-      dhcp:
-        server || network
-          ? {
-              server: server?.fields.name ?? "(unnamed)",
-              pool: poolName,
-              ranges: poolName ? (pools.get(poolName) ?? []) : [],
-              gateway: network?.fields.gateway,
-              dns: network?.fields["dns-server"],
-            }
-          : undefined,
+      // A DHCP SERVER is what hands out addresses. `/ip dhcp-server network`
+      // alone is only the options for a scope — treating it as "DHCP present"
+      // would report a subnet as served when nothing answers a request on it.
+      dhcp: server
+        ? {
+            server: server.fields.name ?? "(unnamed)",
+            pool: poolName,
+            ranges: poolName ? (pools.get(poolName) ?? []) : [],
+            gateway: network?.fields.gateway,
+            dns: network?.fields["dns-server"],
+          }
+        : undefined,
       reservations: leases
         .filter((l) => {
           const leaseIp = l.fields.address ? hostOf(l.fields.address) : null;

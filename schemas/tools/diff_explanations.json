@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "diff_explanations",
+  "type": "object",
+  "properties": {
+    "before_snapshot_id": {
+      "description": "The earlier snapshot",
+      "type": "string"
+    },
+    "after_snapshot_id": {
+      "description": "The later snapshot",
+      "type": "string"
+    },
+    "before_text": {
+      "description": "The earlier `/export` text",
+      "type": "string"
+    },
+    "after_text": {
+      "description": "The later `/export` text",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

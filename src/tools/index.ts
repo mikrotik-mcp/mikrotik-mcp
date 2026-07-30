@@ -117,6 +117,7 @@ import { safeModeTools } from "./safe-mode";
 import { txnTools } from "./txn";
 import { rolloutTools } from "./rollout";
 import { scheduleTools } from "./schedule";
+import { explainTools } from "./explain";
 import { schedulerTools } from "./scheduler";
 import { serverPulseTools } from "./server-pulse";
 import { capabilityTools } from "./capability";
@@ -165,6 +166,16 @@ export const moduleCatalog: ModuleInfo[] = [
       "surface a specific tool: search by intent (`find_tools`), inspect a schema (`describe_tool`), " +
       "and run any tool by name with full validation (`invoke_tool`).",
     tools: toolGatewayTools,
+  },
+  {
+    label: "Config Narrative",
+    slug: "explain",
+    group: "Discovery & Meta",
+    description:
+      "Turns a router's configuration into a plain-language architecture document — role, VLANs, " +
+      "internet path, what each firewall chain does, what is exposed, tunnels — with a Mermaid " +
+      "topology diagram, and explains the CONSEQUENCES of the difference between two snapshots.",
+    tools: explainTools,
   },
   {
     label: "Server Pulse",

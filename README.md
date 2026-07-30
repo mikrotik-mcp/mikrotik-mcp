@@ -360,6 +360,9 @@ Higher-level workflows built on top of the per-scope tools:
 - **[Scheduled Audits](docs/scheduled-audits.md)** — run the auditors on a cron with
   nobody in the loop and alert only on what changed since the previous run: new,
   worsened, resolved.
+- **[Config Narrative](docs/config-narrative.md)** — turn a router's configuration into a
+  plain-language architecture document with a topology diagram, and explain what the
+  difference between two snapshots actually means.
 - **[Config Snapshots](docs/config-snapshots.md)** — store `/export` snapshots and
   time-travel diff any two, or one against the live device.
 - **[Firewall Audit](docs/firewall-audit.md)** — find shadowed, broad, missing-default-drop,
@@ -420,30 +423,31 @@ Full table (HTTP host, allow-lists, timeouts, dashboard options, `MIKROTIK_LOG_L
 
 ## Documentation
 
-| Doc                                                                 |                                                             |
-| ------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [Getting started](docs/getting-started.md)                          | Install, verify, first run                                  |
-| [Configuration](docs/configuration.md)                              | Every env var & flag                                        |
-| [Device capabilities](docs/capabilities.md)                         | What a router supports; how tools are gated on it           |
-| [Alerting](docs/alerting.md)                                        | Rules that reach out — Slack, Discord, ntfy, webhook, MCP   |
-| [Multiple devices](docs/multi-device.md)                            | Manage several routers; per-call targeting                  |
-| [Connecting clients](docs/connecting-clients.md)                    | Claude Desktop, stdio, HTTP                                 |
-| **[Observability](docs/observability.md)**                          | Real-time dashboard: live feed + analytics, SQLite          |
-| [Safe Mode](docs/safe-mode.md)                                      | Transactional changes                                       |
-| **[Cross-Device Transactions](docs/transactions.md)**               | Two-phase commit across several routers                     |
-| **[Staged Fleet Rollout](docs/fleet-rollout.md)**                   | Canary → wave → fleet with health gates and auto-revert     |
-| **[Change Plan & Dry-Run](docs/change-plan.md)**                    | Preview commands, apply with the exact diff + auto-rollback |
-| **[Traffic Flow](docs/traffic-flow.md)**                            | NetFlow/IPFIX collection + top-talker analytics             |
-| **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                      |
-| **[Security Hardening](docs/security-hardening.md)**                | Per-category audit+remediate, snapshot + Safe-Mode          |
-| **[Scheduled Audits](docs/scheduled-audits.md)**                    | Auditors on a cron, alerting only on run-over-run changes   |
-| **[Policy-as-Code](docs/policy-as-code.md)**                        | Your own YAML compliance rules, linted offline → SARIF      |
-| **[Offline Simulator](docs/simulator.md)**                          | Trace a packet through firewall + routing, no device        |
-| **[VPN guide](docs/vpn-guide.md)**                                  | Every tunnel type + how to build it                         |
-| [Prompts](docs/prompts.md)                                          | The 9 guided workflows                                      |
-| [Architecture](docs/architecture.md) · [Security](docs/security.md) | How it's built · credentials & risk gating                  |
-| [Tool reference](docs/tools-reference.md)                           | The full generated catalog                                  |
-| [Development](docs/development.md) · [Docker](docs/docker.md)       | Build, test, deploy                                         |
+| Doc                                                                 |                                                              |
+| ------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [Getting started](docs/getting-started.md)                          | Install, verify, first run                                   |
+| [Configuration](docs/configuration.md)                              | Every env var & flag                                         |
+| [Device capabilities](docs/capabilities.md)                         | What a router supports; how tools are gated on it            |
+| [Alerting](docs/alerting.md)                                        | Rules that reach out — Slack, Discord, ntfy, webhook, MCP    |
+| [Multiple devices](docs/multi-device.md)                            | Manage several routers; per-call targeting                   |
+| [Connecting clients](docs/connecting-clients.md)                    | Claude Desktop, stdio, HTTP                                  |
+| **[Observability](docs/observability.md)**                          | Real-time dashboard: live feed + analytics, SQLite           |
+| [Safe Mode](docs/safe-mode.md)                                      | Transactional changes                                        |
+| **[Cross-Device Transactions](docs/transactions.md)**               | Two-phase commit across several routers                      |
+| **[Staged Fleet Rollout](docs/fleet-rollout.md)**                   | Canary → wave → fleet with health gates and auto-revert      |
+| **[Change Plan & Dry-Run](docs/change-plan.md)**                    | Preview commands, apply with the exact diff + auto-rollback  |
+| **[Traffic Flow](docs/traffic-flow.md)**                            | NetFlow/IPFIX collection + top-talker analytics              |
+| **[Firewall Audit](docs/firewall-audit.md)**                        | Shadowed/broad/dead rules, risk-scored                       |
+| **[Security Hardening](docs/security-hardening.md)**                | Per-category audit+remediate, snapshot + Safe-Mode           |
+| **[Scheduled Audits](docs/scheduled-audits.md)**                    | Auditors on a cron, alerting only on run-over-run changes    |
+| **[Policy-as-Code](docs/policy-as-code.md)**                        | Your own YAML compliance rules, linted offline → SARIF       |
+| **[Config Narrative](docs/config-narrative.md)**                    | Config → architecture doc + Mermaid; consequence-level diffs |
+| **[Offline Simulator](docs/simulator.md)**                          | Trace a packet through firewall + routing, no device         |
+| **[VPN guide](docs/vpn-guide.md)**                                  | Every tunnel type + how to build it                          |
+| [Prompts](docs/prompts.md)                                          | The 9 guided workflows                                       |
+| [Architecture](docs/architecture.md) · [Security](docs/security.md) | How it's built · credentials & risk gating                   |
+| [Tool reference](docs/tools-reference.md)                           | The full generated catalog                                   |
+| [Development](docs/development.md) · [Docker](docs/docker.md)       | Build, test, deploy                                          |
 
 ## Security
 

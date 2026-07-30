@@ -145,9 +145,10 @@ firewall under per-device Safe Mode, and verifies with `ping` from both. Require
 
 ### `backup-and-document`
 
-Read-mostly: creates a binary backup and a text export, then gathers the
-configuration with read tools into a structured Markdown report. Takes no
-arguments.
+Read-mostly: creates a binary backup and a text export, then calls
+`explain_device` for the architecture write-up and adds the live facts an export
+cannot carry (uptime, which tunnels are actually up, expiring certificates).
+Takes no arguments.
 
 | Argument | Required | Description |
 | -------- | :------: | ----------- |

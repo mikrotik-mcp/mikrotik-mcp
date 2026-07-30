@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "4.24.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 875,
+  "toolCount": 878,
   "tools": [
     {
       "name": "find_tools",
@@ -86,6 +86,114 @@
           }
         },
         "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "explain_device",
+      "title": "Explain a Device",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Writes a plain-language architecture document for a router: what it is FOR (inferred from the configuration, with the signals shown), what VLANs and subnets exist, how it reaches the internet, what each firewall chain actually does, WHAT IS EXPOSED TO THE INTERNET, every tunnel, and which management services are reachable — plus a Mermaid topology diagram. Reads the live device (`/export`, a read-only print that writes nothing), or a stored snapshot with `snapshot_id`, or raw text with `config_text`. Prefer this over dumping `/export` into the conversation: it is a fraction of the size, already analysed, and identical across runs so two dates can be compared. Anything the analyser does not recognise is listed rather than silently omitted.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "description": "Explain a stored snapshot instead of the live device",
+            "type": "string"
+          },
+          "config_text": {
+            "description": "Explain this raw `/export` text instead",
+            "type": "string"
+          },
+          "diagram": {
+            "default": true,
+            "description": "Include the Mermaid topology diagram",
+            "type": "boolean"
+          }
+        },
+        "required": ["diagram"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "explain_section",
+      "title": "Explain One Area in Depth",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "The same analysis as explain_device, narrowed to one area: `firewall`, `addressing`, `topology`, `internet`, `exposure`, `vpn`, `services`, `identity`, or `unknowns`. Use it when the question is about one part of the router and the whole document would be noise — 'what does the forward chain actually do', 'what is exposed', 'which VLANs exist'. Reads the live device by default; pass `snapshot_id` or `config_text` to analyse a stored or supplied configuration.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string",
+            "enum": [
+              "identity",
+              "exposure",
+              "topology",
+              "addressing",
+              "internet",
+              "firewall",
+              "vpn",
+              "services",
+              "unknowns"
+            ],
+            "description": "Which area to explain"
+          },
+          "snapshot_id": {
+            "description": "Explain a stored snapshot instead of the live device",
+            "type": "string"
+          },
+          "config_text": {
+            "description": "Explain this raw `/export` text instead",
+            "type": "string"
+          }
+        },
+        "required": ["section"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "diff_explanations",
+      "title": "Explain What Changed",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Compares two configurations and reports the CONSEQUENCES of the difference in plain language — 'the forward chain no longer ends in a drop, so anything not matched is now allowed', 'VLAN 40 was added and can reach the internet through the existing NAT rule'. This is the question a reviewer actually has; diff_config_snapshots answers the different question of which LINES changed, and a moved rule looks unremarkable there. Pass two snapshot ids, or two raw exports, or one of each. Leaving the AFTER side out compares a snapshot against the device as it is right now, which is the usual way to ask 'what has changed since we documented this'. Changes are ordered most consequential first, and security changes are called out as such.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "before_snapshot_id": {
+            "description": "The earlier snapshot",
+            "type": "string"
+          },
+          "after_snapshot_id": {
+            "description": "The later snapshot",
+            "type": "string"
+          },
+          "before_text": {
+            "description": "The earlier `/export` text",
+            "type": "string"
+          },
+          "after_text": {
+            "description": "The later `/export` text",
+            "type": "string"
+          }
+        },
         "additionalProperties": false
       }
     },

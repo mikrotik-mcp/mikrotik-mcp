@@ -14,24 +14,34 @@ change is creating a backup/export.
    written on the router's flash. Give it a descriptive `label` (e.g. `pre-audit`).
 2. **Device restore point** — `create_backup` (binary, for full restore) and
    `create_export` (text `.rsc`, for review/diff). List them with `list_backups`.
-3. **Inventory** — gather the configuration with read tools and organize it:
-   - System: `get_system_identity`, `get_system_resources`, `get_routerboard`,
-     `get_installed_packages`.
-   - L2/L3: `list_interfaces`, `list_vlan_interfaces`, `list_bridges`,
-     `list_ip_addresses`, `list_ip_pools`.
-   - Services: `list_dhcp_servers`, `get_dns_settings`, `list_dns_static`,
-     `list_ip_services`.
-   - Routing: `list_routes`, `get_routing_table`.
-   - Security: `list_filter_rules`, `list_nat_rules`, `list_address_lists`,
-     `list_users`, `list_certificates`.
-   - VPN/QoS: `list_wireguard_interfaces` + `list_wireguard_peers`,
-     `list_simple_queues`, `list_queue_trees`.
-   - Containers: `list_containers` (if the container feature is enabled).
-   - Automation: `list_schedulers`, `list_scripts`.
+3. **The write-up** — call `explain_device`. It analyses the configuration on the
+   MCP host and returns a finished architecture document: inferred role with the
+   signals behind it, topology with a Mermaid diagram, addressing and DHCP
+   scopes, the internet path, what each firewall chain does, what is exposed to
+   the internet, tunnels, management services, and an explicit list of anything
+   it did not recognise.
 
-Produce a structured Markdown report: a one-paragraph overview, a table of
-interfaces and addressing, the firewall posture, and a "things worth reviewing"
-section (defaults left in place, disabled-but-present rules, expiring certs —
-check `list_certificates` for any expiring within 30 days).
+   Do **not** pull `/export` into the conversation to write this by hand. The
+   tool's output is a fraction of the size, already analysed, and identical
+   across runs — which is what lets `diff_explanations` compare two dates later.
+   Use `explain_section` when the user asks about one area rather than the whole
+   router.
+
+4. **Fill the gaps `explain_device` deliberately leaves.** A configuration export
+   describes what is _defined_, never what is _running_, so add the live facts it
+   cannot know:
+   - `get_system_resources`, `get_routerboard`, `get_installed_packages` — uptime,
+     hardware, what is actually installed.
+   - `list_certificates` — flag anything expiring within 30 days.
+   - `get_wireguard_status`, `list_ipsec_active_peers` — which tunnels are up
+     right now, as opposed to merely configured.
+   - `list_schedulers`, `list_scripts` — scheduled automation.
+5. **Things worth reviewing** — run `firewall_audit` and
+   `run_security_hardening_audit` and summarise their findings rather than
+   re-deriving them by eye. Read the narrative's "what this document does not
+   cover" section aloud to the user: that is the part nobody understood, and it
+   is where the surprises live.
+
+Present the narrative first, then the live facts, then the review section.
 Reference the snapshot id and backup/export filenames you created so the user
 knows their restore points.

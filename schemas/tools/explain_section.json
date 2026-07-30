@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "explain_section",
+  "type": "object",
+  "properties": {
+    "section": {
+      "type": "string",
+      "enum": [
+        "identity",
+        "exposure",
+        "topology",
+        "addressing",
+        "internet",
+        "firewall",
+        "vpn",
+        "services",
+        "unknowns"
+      ],
+      "description": "Which area to explain"
+    },
+    "snapshot_id": {
+      "description": "Explain a stored snapshot instead of the live device",
+      "type": "string"
+    },
+    "config_text": {
+      "description": "Explain this raw `/export` text instead",
+      "type": "string"
+    }
+  },
+  "required": ["section"],
+  "additionalProperties": false
+}
