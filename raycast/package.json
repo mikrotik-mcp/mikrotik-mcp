@@ -128,6 +128,13 @@
       "mode": "view"
     },
     {
+      "name": "policies",
+      "title": "Policies",
+      "description": "Policy-as-code findings and compliance score per device",
+      "icon": "extension-icon.png",
+      "mode": "view"
+    },
+    {
       "name": "transactions",
       "title": "Transactions",
       "description": "Cross-device two-phase commit \u2014 swimlane, assertions, abort",
