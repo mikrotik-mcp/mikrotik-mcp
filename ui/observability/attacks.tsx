@@ -13,6 +13,9 @@
  *     entry at all.
  *   • **Detector status** — including the ones that could NOT run and the single
  *     thing that would fix each. Silence must never read as safety.
+ *   • **Charts** — pressure over time, how much of it is real, and who is behind
+ *     it. All three are computed from the incidents already on the page: no extra
+ *     request, and no chart that can disagree with the table under it.
  *   • **Schedule an audit** — attack detection answers "is someone attacking me
  *     now"; a scheduled audit answers "did my posture get worse". Someone looking
  *     at an incident is exactly the person who should arm the second one, so the
@@ -23,6 +26,10 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, postJson } from "./api";
 import { Panel, StatCard } from "./atoms";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import type { ChartConfig } from "@/components/ui/chart";
+import { RiskDonut } from "./charts";
 import { Badge, Button, Dot } from "./geist";
 import type { GeistType } from "./geist";
 import { toast } from "./toast-action";
@@ -45,6 +52,9 @@ const CONFIDENCE_TYPE: Record<string, GeistType> = {
 };
 
 const STAGES = ["recon", "attempt", "breach", "persistence"] as const;
+
+/** Worst first, so the donut reads the same way the incident list does. */
+const CONFIDENCE_ORDER = ["confirmed", "high", "medium", "low"] as const;
 
 /** The schedules people actually want, in the words they'd use. */
 const CRON_PRESETS = [
@@ -90,6 +100,156 @@ function StageTrack({ stage }: { stage: string }): ReactNode {
         </span>
       ))}
     </div>
+  );
+}
+
+/** Chart palette, keyed to the confidence a finding claims. */
+const CONFIDENCE_COLOR: Record<string, string> = {
+  confirmed: "var(--destructive)",
+  high: "var(--chart-4)",
+  medium: "var(--chart-2)",
+  low: "var(--chart-3)",
+};
+
+const timelineConfig = {
+  confirmed: { label: "confirmed", color: "var(--destructive)" },
+  high: { label: "high", color: "var(--chart-4)" },
+  other: { label: "medium / low", color: "var(--chart-2)" },
+} satisfies ChartConfig;
+
+/** `Jul 30` — a day bucket's label. */
+const dayLabel = (t: number): string =>
+  new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+/**
+ * Attack pressure per day, stacked by confidence.
+ *
+ * Bars rather than an area: incidents are counted events on discrete days, and
+ * an area between two daily points draws a slope that implies attacks happening
+ * at times nothing was observed.
+ *
+ * Every day in the range gets a bucket, including the empty ones — dropping them
+ * would compress a quiet week and a busy one into the same picture.
+ */
+function AttackTimeline({
+  incidents,
+  days,
+}: {
+  incidents: AttackIncident[];
+  days: number;
+}): ReactNode {
+  const data = useMemo(() => {
+    const DAY = 86_400_000;
+    // LOCAL midnight, not `floor(ms / DAY)`: that floors to UTC, and every bar
+    // would sit under the wrong label for anyone whose offset is not zero.
+    const startOfDay = (ms: number): number => {
+      const d = new Date(ms);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime();
+    };
+    const today = startOfDay(Date.now());
+    const buckets = new Map<
+      number,
+      { t: number; confirmed: number; high: number; other: number }
+    >();
+    for (let i = days - 1; i >= 0; i--) {
+      const t = startOfDay(today - i * DAY);
+      buckets.set(t, { t, confirmed: 0, high: 0, other: 0 });
+    }
+    for (const incident of incidents) {
+      // Bucketed by when it STARTED: that is the day something began, which is
+      // the question a trend answers.
+      const t = startOfDay(incident.firstTs);
+      const bucket = buckets.get(t);
+      if (!bucket) continue;
+      if (incident.confidence === "confirmed") bucket.confirmed++;
+      else if (incident.confidence === "high") bucket.high++;
+      else bucket.other++;
+    }
+    return [...buckets.values()];
+  }, [incidents, days]);
+
+  if (incidents.length === 0) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">No incidents to chart.</p>;
+  }
+
+  return (
+    <ChartContainer config={timelineConfig} className="h-[200px] w-full">
+      <BarChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+        <XAxis
+          dataKey="t"
+          tickFormatter={dayLabel}
+          tick={{ fontSize: 10 }}
+          tickLine={false}
+          axisLine={false}
+          minTickGap={24}
+        />
+        <YAxis
+          tick={{ fontSize: 10 }}
+          tickLine={false}
+          axisLine={false}
+          width={30}
+          allowDecimals={false}
+        />
+        <ChartTooltip
+          content={<ChartTooltipContent labelFormatter={(v) => dayLabel(Number(v))} />}
+        />
+        <Bar dataKey="confirmed" stackId="a" fill="var(--color-confirmed)" radius={[0, 0, 0, 0]} />
+        <Bar dataKey="high" stackId="a" fill="var(--color-high)" radius={[0, 0, 0, 0]} />
+        <Bar dataKey="other" stackId="a" fill="var(--color-other)" radius={[3, 3, 0, 0]} />
+      </BarChart>
+    </ChartContainer>
+  );
+}
+
+/** Who is doing it — the busiest sources, worst first. */
+function TopAttackers({ sources }: { sources: AttackSource[] }): ReactNode {
+  const data = useMemo(
+    () =>
+      [...sources]
+        .sort((a, b) => b.incidents - a.incidents)
+        .slice(0, 6)
+        .map((s) => ({
+          source: s.source,
+          incidents: s.incidents,
+          // A blocked source stays on the chart, greyed: removing it would make
+          // the pressure look like it stopped on its own.
+          fill: s.blocked ? "var(--muted-foreground)" : "var(--destructive)",
+        })),
+    [sources],
+  );
+
+  if (data.length === 0) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">No sources yet.</p>;
+  }
+
+  return (
+    <ChartContainer
+      config={{ incidents: { label: "incidents" } } satisfies ChartConfig}
+      className="h-[200px] w-full"
+    >
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
+        <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+        <XAxis
+          type="number"
+          tick={{ fontSize: 10 }}
+          tickLine={false}
+          axisLine={false}
+          allowDecimals={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="source"
+          tick={{ fontSize: 10 }}
+          tickLine={false}
+          axisLine={false}
+          width={116}
+        />
+        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+        <Bar dataKey="incidents" radius={[0, 3, 3, 0]} />
+      </BarChart>
+    </ChartContainer>
   );
 }
 
@@ -399,6 +559,45 @@ export function AttacksView(): ReactNode {
       {error && (
         <Panel title="Attack detection unavailable">
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </Panel>
+      )}
+
+      {incidents.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Panel
+              title="Attack pressure"
+              extra={
+                <span className="text-xs text-muted-foreground">incidents per day · 7 days</span>
+              }
+            >
+              <AttackTimeline incidents={incidents} days={7} />
+            </Panel>
+          </div>
+          <Panel
+            title="How much is real"
+            extra={<span className="text-xs text-muted-foreground">by confidence</span>}
+          >
+            <RiskDonut
+              segments={CONFIDENCE_ORDER.map((c) => ({
+                label: c,
+                value: incidents.filter((i) => i.confidence === c).length,
+                color: CONFIDENCE_COLOR[c],
+              }))}
+              centerLabel="incidents"
+            />
+          </Panel>
+        </div>
+      )}
+
+      {sources.length > 0 && (
+        <Panel
+          title="Top attackers"
+          extra={
+            <span className="text-xs text-muted-foreground">blocked sources shown greyed</span>
+          }
+        >
+          <TopAttackers sources={sources} />
         </Panel>
       )}
 
