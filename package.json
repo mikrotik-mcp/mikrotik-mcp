@@ -1,6 +1,6 @@
 {
   "name": "@usex/mikrotik-mcp",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "MCP server for MikroTik RouterOS — 780+ tools over SSH for firewall, NAT, routing, DHCP, DNS, WireGuard, wireless, QoS and more.",
   "keywords": [
     "ai",
