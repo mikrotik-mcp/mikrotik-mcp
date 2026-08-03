@@ -426,6 +426,13 @@ function configPayload(): unknown {
     s3: cfg.s3,
     dashboard: cfg.dashboard,
     ssh: cfg.ssh,
+    // Feature blocks — without these an editor round-trip silently resets them
+    // to their Zod defaults (dropping alert channels, jobs, incidents config…).
+    alerts: cfg.alerts,
+    flows: cfg.flows,
+    policy: cfg.policy,
+    schedules: cfg.schedules,
+    attacks: cfg.attacks,
     readOnly: cfg.readOnly,
     tools: cfg.tools,
     memory: cfg.memory,

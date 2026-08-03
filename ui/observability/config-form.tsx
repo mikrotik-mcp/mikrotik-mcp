@@ -28,20 +28,36 @@ const uniq = (a: string[]): string[] => [...new Set(a)];
 const str = (v: unknown): string =>
   v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
 
+/** Read a possibly-dotted key (`channels.slack.url`) off an object. */
+const getIn = (o: Cfg, key: string): unknown =>
+  key.split(".").reduce<unknown>((acc, k) => asObj(acc)[k], o);
+
+/**
+ * Immutably write a possibly-dotted key. An empty value deletes the leaf, and a
+ * parent left with no keys is deleted too — so clearing `channels.slack.url`
+ * removes the whole `slack` channel rather than persisting `{}`, which the
+ * schema would reject (`url` is required on a channel that exists).
+ */
+function setIn(o: Cfg, key: string, val: unknown): Cfg {
+  const [head, ...rest] = key.split(".");
+  const next = { ...o };
+  if (rest.length === 0) {
+    if (val === undefined || val === "") delete next[head];
+    else next[head] = val;
+    return next;
+  }
+  const child = setIn(asObj(next[head]), rest.join("."), val);
+  if (Object.keys(child).length === 0) delete next[head];
+  else next[head] = child;
+  return next;
+}
+
 function sectionObj(cfg: Cfg, s: CfgSection): Cfg {
   return s.path ? asObj(cfg[s.path]) : cfg;
 }
 function setField(cfg: Cfg, s: CfgSection, key: string, val: unknown): Cfg {
-  if (s.path) {
-    const obj = { ...asObj(cfg[s.path]) };
-    if (val === undefined || val === "") delete obj[key];
-    else obj[key] = val;
-    return { ...cfg, [s.path]: obj };
-  }
-  const next = { ...cfg };
-  if (val === undefined || val === "") delete next[key];
-  else next[key] = val;
-  return next;
+  if (s.path) return { ...cfg, [s.path]: setIn(asObj(cfg[s.path]), key, val) };
+  return setIn(cfg, key, val);
 }
 function isActive(cfg: Cfg, s: CfgSection): boolean {
   if (!s.enable) return true;
@@ -61,10 +77,25 @@ function FieldRow({
   value: unknown;
   onChange: (v: unknown) => void;
 }): ReactNode {
-  const id = `f_${field.key}`;
+  const id = `f_${field.key.replace(/\./g, "_")}`;
   const isBool = field.type === "bool";
   let control: ReactNode;
-  if (field.type === "bool") {
+  if (field.type === "list") {
+    control = (
+      <Input
+        id={id}
+        placeholder={field.placeholder}
+        value={arr(value).join(", ")}
+        onChange={(e) => {
+          const items = e.target.value
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          onChange(items.length ? items : undefined);
+        }}
+      />
+    );
+  } else if (field.type === "bool") {
     control = <Switch checked={value === true} onCheckedChange={onChange} />;
   } else if (field.type === "select") {
     control = (
@@ -133,7 +164,12 @@ function FieldForm({
   return (
     <div className="mt-1 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-3">
       {basic.map((f) => (
-        <FieldRow key={f.key} field={f} value={value[f.key]} onChange={(v) => onField(f.key, v)} />
+        <FieldRow
+          key={f.key}
+          field={f}
+          value={getIn(value, f.key)}
+          onChange={(v) => onField(f.key, v)}
+        />
       ))}
       {adv.length > 0 && (
         <>
@@ -150,7 +186,7 @@ function FieldForm({
               <FieldRow
                 key={f.key}
                 field={f}
-                value={value[f.key]}
+                value={getIn(value, f.key)}
                 onChange={(v) => onField(f.key, v)}
               />
             ))}
@@ -162,7 +198,11 @@ function FieldForm({
 
 // ── object section card + edit sheet ─────────────────────────────────────────
 
-const DEFAULT_S3: Cfg = { prefix: "", presignExpiresIn: 3600 };
+/** Seed object for a presence-toggled section switched on with nothing stashed. */
+const SECTION_DEFAULTS: Record<string, Cfg> = {
+  s3: { prefix: "", presignExpiresIn: 3600 },
+  alerts: { enabled: true, rules: [], channels: {} },
+};
 
 function sectionSummary(cfg: Cfg, s: CfgSection): string {
   const o = sectionObj(cfg, s);
@@ -179,6 +219,22 @@ function sectionSummary(cfg: Cfg, s: CfgSection): string {
           "not configured"
       : "";
   if (s.id === "memory") return pick("dbPath");
+  if (s.id === "alerts") {
+    if (!isActive(cfg, s)) return "";
+    const chans = Object.keys(asObj(o.channels));
+    return [
+      chans.length ? chans.join(" · ") : "no channels",
+      `${arr(o.rules).length} rule${arr(o.rules).length === 1 ? "" : "s"}`,
+    ].join(" · ");
+  }
+  if (s.id === "attacks")
+    return `${pick("mode") || "detect"} · every ${pick("pollSeconds") || "?"}s · block ${pick("blockTimeout") || "?"}`;
+  if (s.id === "schedules")
+    return `${arr(o.jobs).length} job${arr(o.jobs).length === 1 ? "" : "s"} · ${pick("concurrency") || "?"} at once`;
+  if (s.id === "flows")
+    return `udp/${pick("port") || "?"} · raw ${pick("retentionHours") || "?"}h · rollups ${pick("rollupDays") || "?"}d`;
+  if (s.id === "policy")
+    return `${arr(o.paths).length} path${arr(o.paths).length === 1 ? "" : "s"}${o.includeStarterPack === false ? "" : " · starter pack"}`;
   if (s.id === "general")
     return `${cfg.readOnly ? "read-only" : "read-write"}${cfg.disableUpdateCheck ? " · no update check" : ""}`;
   return "";
@@ -202,7 +258,7 @@ function ObjectCard({
       if (on)
         onChange({
           ...cfg,
-          [section.path!]: stash.current ?? (section.id === "s3" ? DEFAULT_S3 : {}),
+          [section.path!]: stash.current ?? SECTION_DEFAULTS[section.id] ?? {},
         });
       else {
         stash.current = asObj(cfg[section.path!]);
@@ -303,10 +359,7 @@ function DeviceSheet({
   const dev = asObj(devices[name]);
 
   const setDev = (key: string, v: unknown): void => {
-    const nd = { ...dev };
-    if (v === undefined || v === "") delete nd[key];
-    else nd[key] = v;
-    onChange({ ...cfg, devices: { ...devices, [name]: nd } });
+    onChange({ ...cfg, devices: { ...devices, [name]: setIn(dev, key, v) } });
   };
 
   // Rename the device key from `name` to the typed value. Returns false (and

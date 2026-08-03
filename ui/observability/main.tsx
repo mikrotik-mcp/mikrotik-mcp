@@ -16,6 +16,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { api, deleteEvents, postJson } from "./api";
 import {
+  BookOpen,
   Check,
   HelpCircle,
   Network,
@@ -82,6 +83,7 @@ import { ReleasesView } from "./releases";
 import { CapsmanView } from "./capsman";
 import { PacketCapture } from "./packet-capture";
 import { S3Manage } from "./s3";
+import { Sheet } from "./sheet";
 import { SnapshotsView } from "./snapshots";
 import { TopologyMap } from "./topology";
 import { SSHPoolPanel } from "./ssh-pool";
@@ -835,6 +837,7 @@ function App(): ReactNode {
   const [topology, setTopology] = useState<TopologyPayload | null>(null);
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
   const [editingConfig, setEditingConfig] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   // A device entry seeded from the topology map's "Add to config →" action.
   const [seed, setSeed] = useState<{ name: string; body: Record<string, unknown> } | null>(null);
   const [feed, setFeed] = useState<ToolEvent[]>([]);
@@ -885,6 +888,9 @@ function App(): ReactNode {
   const [view, setViewState] = useState<ViewId>(initialView);
   const setView = useCallback((next: ViewId): void => {
     setViewState(next);
+    // The Field Guide sheet only renders under the Config view; without this it
+    // would silently stay "open" and pop back the next time you navigate there.
+    setGuideOpen(false);
     try {
       if (viewFromHash() !== next) location.hash = next;
       localStorage.setItem(VIEW_STORE_KEY, next);
@@ -1288,6 +1294,9 @@ function App(): ReactNode {
   const mcp = (config?.mcp ?? {}) as Record<string, unknown>;
   const dash = (config?.dashboard ?? {}) as Record<string, unknown>;
   const ssh = (config?.ssh ?? {}) as Record<string, unknown>;
+  const attacks = (config?.attacks ?? {}) as Record<string, unknown>;
+  const schedules = (config?.schedules ?? {}) as Record<string, unknown>;
+  const flows = (config?.flows ?? {}) as Record<string, unknown>;
   // `""` means "no filter"; the Select wrapper maps it onto a Radix-safe sentinel.
   const sel = (key: keyof Filter, label: string, opts: string[]): ReactNode => (
     <Select
@@ -1747,15 +1756,26 @@ function App(): ReactNode {
                 title="Configuration"
                 className="reveal"
                 extra={
-                  <Button
-                    size="sm"
-                    ghost
-                    onClick={() => setEditingConfig((v) => !v)}
-                    title="Edit the config JSON with autocomplete, validation and safe-apply"
-                    icon={editingConfig ? undefined : <Pencil />}
-                  >
-                    {editingConfig ? "View" : "Edit config"}
-                  </Button>
+                  <span className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      ghost
+                      onClick={() => setGuideOpen(true)}
+                      title="Every config option, documented from the schema"
+                      icon={<BookOpen />}
+                    >
+                      Field guide
+                    </Button>
+                    <Button
+                      size="sm"
+                      ghost
+                      onClick={() => setEditingConfig((v) => !v)}
+                      title="Edit the config JSON with autocomplete, validation and safe-apply"
+                      icon={editingConfig ? undefined : <Pencil />}
+                    >
+                      {editingConfig ? "View" : "Edit config"}
+                    </Button>
+                  </span>
                 }
               >
                 {editingConfig ? (
@@ -1794,6 +1814,10 @@ function App(): ReactNode {
                       <span>capture: {dash.captureBody ? "on" : "off"}</span>
                       <span>s3: {config.s3 ? "configured" : "off"}</span>
                       <span>ssh pool: {ssh.keepAlive !== false ? "on" : "off"}</span>
+                      <span>alerts: {config.alerts ? "on" : "off"}</span>
+                      <span>attacks: {attacks.enabled ? sval(attacks.mode) : "off"}</span>
+                      <span>schedules: {schedules.enabled ? "on" : "off"}</span>
+                      <span>flows: {flows.enabled ? `udp/${sval(flows.port)}` : "off"}</span>
                     </div>
                     <details>
                       <summary className="cursor-pointer text-sm">
@@ -1855,17 +1879,15 @@ function App(): ReactNode {
                 />
               </Panel>
 
-              <Panel
-                title="Field guide"
-                className="reveal"
-                extra={
-                  <span className="text-muted-foreground text-[11px]">
-                    every config option, documented from the schema
-                  </span>
-                }
-              >
-                <FieldGuidePanel />
-              </Panel>
+              {guideOpen && (
+                <Sheet
+                  title="📖 Field guide"
+                  subtitle="Every config option, documented from the schema"
+                  onClose={() => setGuideOpen(false)}
+                >
+                  <FieldGuidePanel />
+                </Sheet>
+              )}
             </section>
           ) : (
             <EmptyState icon={<Spinner />} title="Loading configuration…" />
