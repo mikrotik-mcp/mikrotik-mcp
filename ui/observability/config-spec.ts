@@ -4,7 +4,8 @@
  * Hand-authored (not derived from the JSON schema) so labels, help text, grouping
  * and "advanced" collapsing read well for non-technical users — cross-checked
  * against `schemas/config.schema.json` (the Field Guide still documents the raw
- * schema). Mirrors `raycast/src/config-spec.ts`; keep the two in sync.
+ * schema). Mirrors `raycast/src/config-spec.ts`; keep the two in sync
+ * (`tests/observability/config-spec.spec.ts` fails if they drift).
  */
 
 export interface CfgField {

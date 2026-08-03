@@ -4,13 +4,16 @@
  * Hand-authored (not derived from the JSON schema) so labels, help text, grouping
  * and "advanced" collapsing read well for non-technical users — cross-checked
  * against `schemas/config.schema.json` (the Field Guide still documents the raw
- * schema). Mirrors `raycast/src/config-spec.ts`; keep the two in sync.
+ * schema). Mirrors `ui/observability/config-spec.ts`; keep the two in sync
+ * (`tests/observability/config-spec.spec.ts` fails if they drift).
  */
 
 export interface CfgField {
+  /** Key on the section object. Dotted (`channels.slack.url`) for nested blocks. */
   key: string;
   label: string;
-  type: "text" | "number" | "password" | "bool" | "select";
+  /** `list` edits a `string[]` as a comma-separated text field. */
+  type: "text" | "number" | "password" | "bool" | "select" | "list";
   options?: string[];
   placeholder?: string;
   help?: string;
@@ -65,6 +68,13 @@ export const DEVICE_FIELDS: CfgField[] = [
     help: "Free-text label.",
   },
   {
+    key: "tags",
+    label: "Tags",
+    type: "list",
+    placeholder: "branch, eu",
+    help: "Labels for selecting groups of devices in staged fleet rollouts.",
+  },
+  {
     key: "keyFilename",
     label: "SSH key file",
     type: "text",
@@ -93,6 +103,40 @@ export const DEVICE_FIELDS: CfgField[] = [
     help: "Name of another device to use as an SSH bastion.",
   },
   {
+    key: "jumpHost.host",
+    label: "Jump host (bastion)",
+    type: "text",
+    advanced: true,
+    help: "Inline bastion for hosts that are not themselves configured devices. Prefer “Jump via device” when it is one.",
+  },
+  {
+    key: "jumpHost.port",
+    label: "Jump host port",
+    type: "number",
+    advanced: true,
+    placeholder: "22",
+  },
+  {
+    key: "jumpHost.username",
+    label: "Jump host user",
+    type: "text",
+    advanced: true,
+    placeholder: "admin",
+  },
+  {
+    key: "jumpHost.password",
+    label: "Jump host password",
+    type: "password",
+    secret: true,
+    advanced: true,
+  },
+  {
+    key: "jumpHost.keyFilename",
+    label: "Jump host key file",
+    type: "text",
+    advanced: true,
+  },
+  {
     key: "mac",
     label: "MAC address",
     type: "text",
@@ -112,6 +156,27 @@ export const DEVICE_FIELDS: CfgField[] = [
     type: "number",
     advanced: true,
     placeholder: "20561",
+  },
+  {
+    key: "api",
+    label: "Use REST API",
+    type: "bool",
+    advanced: true,
+    help: "RouterOS 7.9+. Runs mappable commands over HTTPS for structured JSON, falling back to SSH for /export, Safe Mode and interactive tools. Needs the www-ssl service enabled.",
+  },
+  {
+    key: "apiPort",
+    label: "REST port",
+    type: "number",
+    advanced: true,
+    placeholder: "443",
+  },
+  {
+    key: "apiInsecureTls",
+    label: "Accept self-signed TLS",
+    type: "bool",
+    advanced: true,
+    help: "RouterOS ships a self-signed certificate, so most devices need this — it disables certificate verification, so enable it deliberately.",
   },
 ];
 
@@ -146,6 +211,13 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         label: "MCP App Views",
         type: "bool",
         help: "Expose rich App-view metadata to compatible clients.",
+      },
+      {
+        key: "capabilityGating",
+        label: "Capability gating",
+        type: "select",
+        options: ["off", "annotate", "filter"],
+        help: "How tools a device cannot run are surfaced: annotate marks them, filter hides them (single-device only). The call-time guard applies either way.",
       },
       {
         key: "toolPageSize",
@@ -289,6 +361,256 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     enable: { key: "enabled", label: "Memory" },
     blurb: "Persistent knowledge graph the AI can read and write.",
     fields: [{ key: "dbPath", label: "Database path", type: "text" }],
+  },
+  {
+    id: "alerts",
+    title: "Alerts",
+    icon: "🔔",
+    kind: "object",
+    path: "alerts",
+    enable: { presence: true, label: "Alerting" },
+    blurb:
+      "Where alerts are delivered. Rules themselves are managed in the Alerts view.",
+    fields: [
+      {
+        key: "enabled",
+        label: "Deliver alerts",
+        type: "bool",
+        help: "Off keeps the rules but sends nothing.",
+      },
+      { key: "channels.slack.url", label: "Slack webhook URL", type: "text" },
+      {
+        key: "channels.discord.url",
+        label: "Discord webhook URL",
+        type: "text",
+      },
+      { key: "channels.ntfy.url", label: "ntfy topic URL", type: "text" },
+      {
+        key: "channels.ntfy.token",
+        label: "ntfy token",
+        type: "password",
+        secret: true,
+      },
+      {
+        key: "channels.webhook.url",
+        label: "Generic webhook URL",
+        type: "text",
+      },
+      {
+        key: "channels.webhook.method",
+        label: "Webhook method",
+        type: "text",
+        advanced: true,
+        placeholder: "POST",
+      },
+      {
+        key: "maxHistory",
+        label: "History kept (records)",
+        type: "number",
+        advanced: true,
+        placeholder: "5000",
+      },
+    ],
+  },
+  {
+    id: "attacks",
+    title: "Attack Detection",
+    icon: "🛡️",
+    kind: "object",
+    path: "attacks",
+    enable: { key: "enabled", label: "Attack detection" },
+    blurb:
+      "Sweep the fleet for attacks. Detect-only until you switch the mode.",
+    fields: [
+      {
+        key: "mode",
+        label: "Mode",
+        type: "select",
+        options: ["detect", "respond"],
+        help: "detect records and alerts only; respond also applies timed blocks.",
+      },
+      {
+        key: "minConfidence",
+        label: "Min confidence to respond",
+        type: "select",
+        options: ["medium", "high", "confirmed"],
+      },
+      {
+        key: "pollSeconds",
+        label: "Sweep interval (s)",
+        type: "number",
+        placeholder: "120",
+      },
+      {
+        key: "windowMinutes",
+        label: "Look-back window (min)",
+        type: "number",
+        placeholder: "10",
+        help: "Must exceed the sweep interval so consecutive windows overlap.",
+      },
+      {
+        key: "blockTimeout",
+        label: "Block duration",
+        type: "text",
+        placeholder: "1h",
+        help: "A wrong block must expire on its own.",
+      },
+      {
+        key: "maxBlocksPerHour",
+        label: "Max blocks / hour",
+        type: "number",
+        placeholder: "6",
+      },
+      {
+        key: "neverBlock",
+        label: "Never block",
+        type: "list",
+        placeholder: "10.0.0.0/8, 192.168.88.10",
+        help: "Addresses and CIDRs that may never be blocked, whatever the evidence.",
+      },
+      {
+        key: "autoRespondTo",
+        label: "Auto-respond to",
+        type: "list",
+        placeholder: "brute-force, credential-spray",
+        help: "Detectors permitted to trigger an automatic response.",
+      },
+      {
+        key: "concurrency",
+        label: "Devices swept at once",
+        type: "number",
+        advanced: true,
+      },
+      {
+        key: "learningDays",
+        label: "Baseline learning (days)",
+        type: "number",
+        advanced: true,
+        help: "Days of successful logins before “a new admin source” means anything.",
+      },
+      {
+        key: "readScanList",
+        label: "Read on-device scan list",
+        type: "bool",
+        advanced: true,
+      },
+      {
+        key: "retainDays",
+        label: "Incident retention (days)",
+        type: "number",
+        advanced: true,
+      },
+    ],
+  },
+  {
+    id: "schedules",
+    title: "Scheduled Audits",
+    icon: "⏱️",
+    kind: "object",
+    path: "schedules",
+    enable: { key: "enabled", label: "Scheduled audits" },
+    blurb:
+      "Recurring read-only audits, diffed run over run. Jobs are managed in the Schedules view.",
+    fields: [
+      {
+        key: "concurrency",
+        label: "Jobs at once",
+        type: "number",
+        placeholder: "4",
+      },
+      {
+        key: "timeoutMs",
+        label: "Job timeout (ms)",
+        type: "number",
+        placeholder: "600000",
+        help: "Stops one wedged device from holding a job open into the next occurrence.",
+      },
+      {
+        key: "tickSeconds",
+        label: "Scheduler tick (s)",
+        type: "number",
+        advanced: true,
+      },
+      {
+        key: "jitterMs",
+        label: "Start jitter (ms)",
+        type: "number",
+        advanced: true,
+        help: "Spreads jobs that share an occurrence.",
+      },
+      {
+        key: "retainDays",
+        label: "Run history (days)",
+        type: "number",
+        advanced: true,
+      },
+    ],
+  },
+  {
+    id: "flows",
+    title: "Traffic Flows",
+    icon: "🌊",
+    kind: "object",
+    path: "flows",
+    enable: { key: "enabled", label: "Flow collector" },
+    blurb: "NetFlow/IPFIX collector. Binds a UDP port only while enabled.",
+    fields: [
+      {
+        key: "port",
+        label: "Collector UDP port",
+        type: "number",
+        placeholder: "2055",
+        help: "The port devices export to (RouterOS defaults to 2055).",
+      },
+      {
+        key: "db",
+        label: "Database path",
+        type: "text",
+        help: "`:memory:` for an ephemeral store.",
+      },
+      {
+        key: "retentionHours",
+        label: "Raw retention (hours)",
+        type: "number",
+        placeholder: "24",
+      },
+      {
+        key: "rollupDays",
+        label: "Rollup retention (days)",
+        type: "number",
+        advanced: true,
+        placeholder: "30",
+      },
+      {
+        key: "maxRows",
+        label: "Max raw rows",
+        type: "number",
+        advanced: true,
+        help: "Hard cap; the oldest rows are evicted first (and logged).",
+      },
+    ],
+  },
+  {
+    id: "policy",
+    title: "Policy as Code",
+    icon: "📜",
+    kind: "object",
+    path: "policy",
+    blurb: "Where compliance rule files are loaded from.",
+    fields: [
+      {
+        key: "paths",
+        label: "Rule file paths",
+        type: "list",
+        placeholder: "./mikrotik-policies/*.yaml",
+        help: "A bare directory loads every .yaml/.yml/.json in it.",
+      },
+      {
+        key: "includeStarterPack",
+        label: "Include starter pack",
+        type: "bool",
+      },
+    ],
   },
   {
     id: "modules",

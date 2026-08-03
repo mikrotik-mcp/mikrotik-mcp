@@ -4,9 +4,13 @@
  * in the browser — the control just edits a property the server then rejects or
  * drops, so the round-trip silently loses the setting. These checks are the
  * cheapest place to catch that.
+ *
+ * The Raycast extension renders the same form from its own hand-kept copy of the
+ * spec, so the last check pins the two files to each other.
  */
 import { describe, expect, it } from "vite-plus/test";
 import schema from "../../schemas/config.schema.json" with { type: "json" };
+import * as raycastSpec from "../../raycast/src/config-spec";
 import { CONFIG_SECTIONS, DEVICE_FIELDS } from "../../ui/observability/config-spec";
 import type { CfgField } from "../../ui/observability/config-spec";
 
@@ -66,5 +70,12 @@ describe("config form spec ↔ schema", () => {
       (k) => !covered.has(k) && !elsewhere.has(k),
     );
     expect(missing, "new config blocks must be added to CONFIG_SECTIONS").toEqual([]);
+  });
+
+  it("the Raycast copy of the spec matches", () => {
+    expect(raycastSpec.DEVICE_FIELDS, "raycast/src/config-spec.ts drifted").toEqual(DEVICE_FIELDS);
+    expect(raycastSpec.CONFIG_SECTIONS, "raycast/src/config-spec.ts drifted").toEqual(
+      CONFIG_SECTIONS,
+    );
   });
 });

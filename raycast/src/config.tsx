@@ -73,6 +73,30 @@ const uniq = (a: string[]): string[] => [...new Set(a)];
 const str = (v: unknown): string =>
   v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
 
+/** Read a possibly-dotted key (`channels.slack.url`) off an object. */
+const getIn = (o: Cfg, key: string): unknown =>
+  key.split(".").reduce<unknown>((acc, k) => asObj(acc)[k], o);
+
+/**
+ * Immutably write a possibly-dotted key. An empty value deletes the leaf, and a
+ * parent left with no keys is deleted too — so clearing `channels.slack.url`
+ * removes the whole `slack` channel rather than persisting `{}`, which the
+ * schema would reject (`url` is required on a channel that exists).
+ */
+function setIn(o: Cfg, key: string, val: unknown): Cfg {
+  const [head, ...rest] = key.split(".");
+  const next = { ...o };
+  if (rest.length === 0) {
+    if (val === undefined || val === "") delete next[head];
+    else next[head] = val;
+    return next;
+  }
+  const child = setIn(asObj(next[head]), rest.join("."), val);
+  if (Object.keys(child).length === 0) delete next[head];
+  else next[head] = child;
+  return next;
+}
+
 function sectionObj(cfg: Cfg, s: CfgSection): Cfg {
   return s.path ? asObj(cfg[s.path]) : cfg;
 }
@@ -82,17 +106,14 @@ function isActive(cfg: Cfg, s: CfgSection): boolean {
   return sectionObj(cfg, s)[s.enable.key ?? "enabled"] !== false;
 }
 function setSecField(cfg: Cfg, s: CfgSection, key: string, val: unknown): Cfg {
-  if (s.path) {
-    const obj = { ...asObj(cfg[s.path]) };
-    if (val === undefined || val === "") delete obj[key];
-    else obj[key] = val;
-    return { ...cfg, [s.path]: obj };
-  }
-  const next = { ...cfg };
-  if (val === undefined || val === "") delete next[key];
-  else next[key] = val;
-  return next;
+  if (s.path) return { ...cfg, [s.path]: setIn(asObj(cfg[s.path]), key, val) };
+  return setIn(cfg, key, val);
 }
+/** Seed object for a presence-toggled section switched on with nothing stashed. */
+const SECTION_DEFAULTS: Record<string, Cfg> = {
+  s3: { prefix: "", presignExpiresIn: 3600 },
+  alerts: { enabled: true, rules: [], channels: {} },
+};
 const SECTION_ICON: Record<string, Icon> = {
   devices: Icon.HardDrive,
   mcp: Icon.Terminal,
@@ -100,17 +121,41 @@ const SECTION_ICON: Record<string, Icon> = {
   ssh: Icon.Plug,
   s3: Icon.Box,
   memory: Icon.Stars,
+  alerts: Icon.Bell,
+  attacks: Icon.Shield,
+  schedules: Icon.Clock,
+  flows: Icon.Waveform,
+  policy: Icon.Document,
   modules: Icon.List,
   general: Icon.Gear,
 };
 
+/** Form ids can't carry the dots of a nested key, so flatten them. */
+const fid = (key: string): string => key.replace(/\./g, "__");
+
+/** Coerce one submitted Form value to its config shape (`undefined` deletes). */
+function fieldValue(f: CfgField, raw: unknown): unknown {
+  if (f.type === "bool") return raw === true;
+  if (f.type === "number")
+    return raw === "" || raw == null ? undefined : Number(raw);
+  if (f.type === "list") {
+    const items = String(raw ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return items.length ? items : undefined;
+  }
+  return raw === "" || raw == null ? undefined : raw;
+}
+
 /** Render one CfgField as the matching Raycast Form control. */
 function fieldControl(f: CfgField, cur: unknown) {
+  const id = fid(f.key);
   if (f.type === "bool")
     return (
       <Form.Checkbox
-        key={f.key}
-        id={f.key}
+        key={id}
+        id={id}
         label={f.label}
         defaultValue={cur === true}
       />
@@ -118,8 +163,8 @@ function fieldControl(f: CfgField, cur: unknown) {
   if (f.type === "select")
     return (
       <Form.Dropdown
-        key={f.key}
-        id={f.key}
+        key={id}
+        id={id}
         title={f.label}
         defaultValue={str(cur) || f.options?.[0]}
       >
@@ -131,8 +176,8 @@ function fieldControl(f: CfgField, cur: unknown) {
   if (f.type === "password")
     return (
       <Form.PasswordField
-        key={f.key}
-        id={f.key}
+        key={id}
+        id={id}
         title={f.label}
         placeholder={
           cur === REDACTED ? "unchanged — leave blank to keep" : undefined
@@ -141,11 +186,11 @@ function fieldControl(f: CfgField, cur: unknown) {
     );
   return (
     <Form.TextField
-      key={f.key}
-      id={f.key}
+      key={id}
+      id={id}
       title={f.label}
       placeholder={f.placeholder}
-      defaultValue={cur == null ? "" : str(cur)}
+      defaultValue={f.type === "list" ? cfgArr(cur).join(", ") : str(cur)}
       info={f.help}
     />
   );
@@ -719,17 +764,9 @@ function SectionScreen({
                 }
               }
               for (const f of section.fields) {
-                let v: unknown = values[f.key];
-                if (f.type === "bool") v = v === true;
-                else if (f.type === "number")
-                  v = v === "" || v == null ? undefined : Number(v);
-                if (f.secret && (v === "" || v == null)) continue;
-                next = setSecField(
-                  next,
-                  section,
-                  f.key,
-                  v === "" ? undefined : v,
-                );
+                const raw = values[fid(f.key)];
+                if (f.secret && (raw === "" || raw == null)) continue;
+                next = setSecField(next, section, f.key, fieldValue(f, raw));
               }
               onChange(next);
               pop();
@@ -746,7 +783,7 @@ function SectionScreen({
           defaultValue={active}
         />
       )}
-      {section.fields.map((f) => fieldControl(f, obj[f.key]))}
+      {section.fields.map((f) => fieldControl(f, getIn(obj, f.key)))}
     </Form>
   );
 }
@@ -781,7 +818,7 @@ function DeviceForm({
                 });
                 return;
               }
-              const d: Cfg = isNew
+              let d: Cfg = isNew
                 ? {
                     host: "192.168.88.1",
                     port: 22,
@@ -791,12 +828,9 @@ function DeviceForm({
                   }
                 : { ...dev };
               for (const f of DEVICE_FIELDS) {
-                let v: unknown = values[f.key];
-                if (f.type === "number")
-                  v = v === "" || v == null ? undefined : Number(v);
-                if (f.secret && (v === "" || v == null)) continue;
-                if (v === "" || v == null) delete d[f.key];
-                else d[f.key] = v;
+                const raw = values[fid(f.key)];
+                if (f.secret && (raw === "" || raw == null)) continue;
+                d = setIn(d, f.key, fieldValue(f, raw));
               }
               onChange({ ...cfg, devices: { ...devices, [nm]: d } });
               pop();
@@ -808,7 +842,7 @@ function DeviceForm({
       {isNew && (
         <Form.TextField id="__name" title="Name" placeholder="core-router" />
       )}
-      {DEVICE_FIELDS.map((f) => fieldControl(f, dev[f.key]))}
+      {DEVICE_FIELDS.map((f) => fieldControl(f, getIn(dev, f.key)))}
     </Form>
   );
 }
@@ -1227,9 +1261,7 @@ function Editor({
           ...cfg,
           [s.path!]: Object.keys(sectionObj(cfg, s)).length
             ? cfg[s.path!]
-            : s.id === "s3"
-              ? { prefix: "", presignExpiresIn: 3600 }
-              : {},
+            : (SECTION_DEFAULTS[s.id] ?? {}),
         });
       else {
         const c = { ...cfg };
