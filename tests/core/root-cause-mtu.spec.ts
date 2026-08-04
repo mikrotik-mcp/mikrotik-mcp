@@ -197,6 +197,38 @@ describe("analyzeRootCause — MTU/MSS correlation", () => {
     expect(rc?.fixes.some((f) => f.includes("mtu=1440"))).toBe(true);
   });
 
+  test("the MTU fix targets each tunnel's own RouterOS menu", () => {
+    const rc = analyzeRootCause(
+      data({
+        tunnelInterfaces: [
+          iface({ name: "gre-b", type: "gre-tunnel", mtu: 1500 }),
+          iface({ name: "eoip-b", type: "eoip-tunnel", mtu: 1500 }),
+          iface({ name: "wg-site", type: "wg", mtu: 1500 }),
+        ],
+      }),
+    ).rootCauses.find((c) => c.cause === "MTU/MSS black hole on tunnel");
+
+    expect(rc?.fixes).toEqual(
+      expect.arrayContaining([
+        '/interface gre set [find name="gre-b"] mtu=1476',
+        '/interface eoip set [find name="eoip-b"] mtu=1458',
+        '/interface wireguard set [find name="wg-site"] mtu=1440',
+      ]),
+    );
+    // `/interface ethernet` never matches a tunnel by name.
+    expect(rc?.fixes.some((f) => f.includes("/interface ethernet"))).toBe(false);
+  });
+
+  test("a PPP-family tunnel gets a max-mtu pointer, not a bogus mtu= command", () => {
+    const rc = analyzeRootCause(
+      data({ tunnelInterfaces: [iface({ name: "l2tp-in1", type: "l2tp-in", mtu: 1500 })] }),
+    ).rootCauses.find((c) => c.cause === "MTU/MSS black hole on tunnel");
+
+    const fix = rc?.fixes.find((f) => f.includes("l2tp-in1"));
+    expect(fix).toContain("max-mtu=1400");
+    expect(fix?.startsWith("#")).toBe(true);
+  });
+
   test("a healthy tunnel produces no MTU root cause", () => {
     const ok = data({
       ping: { sent: 5, received: 5, lossPct: 0 },

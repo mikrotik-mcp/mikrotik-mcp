@@ -689,17 +689,31 @@ export function analyzeRootCause(data: DiagnosticData): DiagnosisReport {
 
 // ── MTU / MSS analysis ──────────────────────────────────────────────────────
 
+interface TunnelOverhead {
+  /** Matched against the RouterOS `type` field as a substring. */
+  match: string;
+  bytes: number;
+  label: string;
+  /**
+   * RouterOS menu whose `set … mtu=` takes a plain MTU. Absent for the PPP
+   * family, where the knob is `max-mtu`/`max-mru` on the client interface or
+   * the server settings — a server-side session interface is dynamic and
+   * cannot be set at all, so no single command fits.
+   */
+  path?: string;
+}
+
 /**
  * Encapsulation overhead in bytes per tunnel type, matched against the RouterOS
  * `type` field as a substring. Ordered longest-match-first is unnecessary — the
  * keys don't overlap.
  */
-const TUNNEL_OVERHEAD: { match: string; bytes: number; label: string }[] = [
-  { match: "gre", bytes: 24, label: "GRE" },
-  { match: "ipip", bytes: 20, label: "IPIP" },
-  { match: "eoip", bytes: 42, label: "EoIP" },
-  { match: "vxlan", bytes: 50, label: "VXLAN" },
-  { match: "wg", bytes: 60, label: "WireGuard" },
+const TUNNEL_OVERHEAD: TunnelOverhead[] = [
+  { match: "gre", bytes: 24, label: "GRE", path: "/interface gre" },
+  { match: "ipip", bytes: 20, label: "IPIP", path: "/interface ipip" },
+  { match: "eoip", bytes: 42, label: "EoIP", path: "/interface eoip" },
+  { match: "vxlan", bytes: 50, label: "VXLAN", path: "/interface vxlan" },
+  { match: "wg", bytes: 60, label: "WireGuard", path: "/interface wireguard" },
   // PPP-family: PPP/L2TP/PPTP/SSTP/OVPN headers plus (commonly) an IPsec wrap.
   { match: "l2tp", bytes: 100, label: "L2TP" },
   { match: "pptp", bytes: 100, label: "PPTP" },
@@ -710,7 +724,7 @@ const TUNNEL_OVERHEAD: { match: string; bytes: number; label: string }[] = [
 /** Tunnel types whose MSS is clamped by the PPP profile, not by mangle. */
 const PPP_FAMILY = /l2tp|pptp|sstp|ovpn|pppoe/;
 
-function tunnelOverhead(type: string): { bytes: number; label: string } | undefined {
+function tunnelOverhead(type: string): TunnelOverhead | undefined {
   const t = type.toLowerCase();
   return TUNNEL_OVERHEAD.find((o) => t.includes(o.match));
 }
@@ -850,6 +864,21 @@ export function analyzeTunnelMtu(data: DiagnosticData): MtuFindings {
 function suggestedMtu(type: string, pppoeWan: boolean): number | undefined {
   const o = tunnelOverhead(type);
   return o ? (pppoeWan ? 1492 : 1500) - o.bytes : undefined;
+}
+
+/**
+ * The RouterOS command that lowers one tunnel's MTU. Each tunnel type lives in
+ * its own menu, so the menu comes from the overhead table rather than being
+ * guessed — `/interface ethernet set [find name="gre-1"]` matches nothing.
+ * PPP-family tunnels have no `path` and get a pointer instead of a command.
+ */
+function mtuFixCommand(iface: InterfaceSnapshot, mtu: number): string {
+  const o = tunnelOverhead(iface.type);
+  if (o?.path) return `${o.path} set [find name="${iface.name}"] mtu=${mtu}`;
+  return (
+    `# ${iface.name} (${o?.label ?? iface.type}): set max-mtu=${mtu} max-mru=${mtu} on the ` +
+    "client interface, or on the server settings for an inbound session"
+  );
 }
 
 // ── Correlation engine ──────────────────────────────────────────────────────
@@ -1080,9 +1109,8 @@ function correlateRootCauses(
       confidence: bothProblems || pingOk ? "high" : "medium",
       evidence: mtu.evidence.filter((e) => e.severity === "warning"),
       fixes: [
-        ...mtu.oversizedMtu.map(
-          (o) =>
-            `/interface ${o.iface.type.includes("wg") ? "wireguard" : "ethernet"} set [find name="${o.iface.name}"] mtu=${suggestedMtu(o.iface.type, pppoeWan) ?? o.budget}`,
+        ...mtu.oversizedMtu.map((o) =>
+          mtuFixCommand(o.iface, suggestedMtu(o.iface.type, pppoeWan) ?? o.budget),
         ),
         ...(mtu.unclamped.length > 0
           ? [
