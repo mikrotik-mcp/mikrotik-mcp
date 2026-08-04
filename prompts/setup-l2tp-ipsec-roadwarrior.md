@@ -33,7 +33,19 @@ Build order:
 4. **Enable the server** — `set_l2tp_server` with `enabled=true`,
    `default_profile=l2tp-profile`, `use_ipsec=required`, and a strong
    `ipsec_secret` (this is the IPsec pre-shared key clients enter).
-   `authentication=mschap2`.
+   `authentication=mschap2`. Also set on the same call:
+   - `max_mtu`/`max_mru` = **1400** (L2TP + IPsec ESP overhead easily exceeds
+     100 bytes; leaving 1450 causes the "connects fine, transfers stall" symptom),
+   - `keepalive_timeout` = **30** — dead client sessions otherwise linger and hold
+     their pool address until the default timeout expires.
+
+   The `change_tcp_mss=yes` set on the profile in step 2 makes MSS follow the
+   negotiated MTU automatically — that is the PPP-family equivalent of a
+   `change-mss` mangle rule, and it is why L2TP does not need one. If clients
+   still stall on large transfers, add the mangle rule anyway
+   (`create_mangle_rule`: `chain=forward`, `protocol=tcp`, `tcp_flags=syn`,
+   `tcp_mss=1400-65535`, `action=change-mss`, `new_mss=clamp-to-pmtu`).
+
 5. **Firewall** — accept UDP 500, UDP 4500, UDP 1701, and IP protocol 50 (ESP)
    on the input chain from the internet; allow the {{vpn_pool}} range to reach the
    LAN/internet in the forward chain as required. Apply under `enable_safe_mode`,

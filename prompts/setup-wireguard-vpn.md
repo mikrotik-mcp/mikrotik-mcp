@@ -42,5 +42,26 @@ Steps:
 5. **Client config** — call `generate_wireguard_client_config` with the server
    public key, {{endpoint}}, the listen port, and the assigned client address, and
    present the resulting `[Interface]/[Peer]` config for the user to import.
+6. **Keepalive** — set `persistent_keepalive` to `25` on every peer
+   (`add_wireguard_peer`/`update_wireguard_peer`) and `client_keepalive=25s` in the
+   generated client config. Roaming clients sit behind NAT; a UDP mapping typically
+   expires after ~30 s of silence, after which the server cannot reach the client
+   until the client speaks first. 25 s keeps the mapping alive.
+7. **MTU / MSS** — the step most WireGuard deployments skip, and the reason a VPN
+   "works" for logins but stalls on file transfers, photo/video uploads and some
+   web pages:
+   - WireGuard adds ~60 bytes. Set the interface MTU to **1420**
+     (`update_wireguard_interface`); use **1412** on a PPPoE WAN, or **1280** when
+     the path is unknown — 1280 always fits.
+   - MTU alone is not enough. Endpoints derive their TCP MSS from _their own_ NIC
+     MTU, so a 1460-byte-MSS session still emits oversized packets with DF set;
+     mid-path routers drop rather than fragment and the ICMP "fragmentation needed"
+     is often filtered — a PMTU black hole. Clamp it with `create_mangle_rule`:
+     `chain=forward`, `protocol=tcp`, `tcp_flags=syn`, `tcp_mss=1400-65535`,
+     `action=change-mss`, `new_mss=clamp-to-pmtu`. WireGuard has no per-interface
+     MSS setting, so mangle is the only place this can be fixed.
+   - Verify: `ping` a host across the tunnel with size 1400 and `do-not-fragment`.
+     Small pings succeeding while this fails is the black-hole signature.
 
-Report the server public key, the peer you added, and the full client config.
+Report the server public key, the peer you added, the MTU/MSS/keepalive values
+applied, and the full client config.

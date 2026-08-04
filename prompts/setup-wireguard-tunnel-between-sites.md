@@ -123,11 +123,14 @@ Per side, under Safe Mode (`enable_safe_mode` `device=<name>` → edits → veri
 WireGuard adds ~60 bytes of overhead. Small pings work but large flows (TLS, file
 transfer) stall if MTU is wrong:
 
-- Set the wg interface MTU to **1420** (1412 if the WAN is PPPoE) via
+- Set the wg interface MTU to **1420** (1412 if the WAN is PPPoE, 1280 if the path
+  is unknown/multi-hop — 1280 is the always-safe floor) via
   `update_wireguard_interface`.
-- Clamp TCP MSS on the `forward` chain (`create_filter_rule` mangle
-  `action=change-mss new-mss=clamp-to-pmtu tcp-flags=syn`) or set it per the
-  interface MTU, so TCP sessions negotiate a size that fits.
+- Clamp TCP MSS with `create_mangle_rule` (**not** `create_filter_rule` — only the
+  mangle table has `change-mss`): `chain=forward`, `protocol=tcp`,
+  `tcp_flags=syn`, `tcp_mss=1400-65535`, `action=change-mss`,
+  `new_mss=clamp-to-pmtu`. WireGuard has no per-interface MSS option, so this
+  mangle rule is the only place to fix MSS.
 
 ## 8. Verify end to end
 

@@ -118,6 +118,15 @@ export interface DiagnosticData {
 
   // ── VPN / tunnels ─────────────────────────────────────────────────────
   tunnelInterfaces: InterfaceSnapshot[];
+  /** Mangle rules — used to detect a TCP MSS clamp (`action=change-mss`). */
+  mangleRules: FirewallRuleSnapshot[];
+  /** WireGuard peers, for the persistent-keepalive / NAT-timeout check. */
+  wireguardPeers: WireguardPeerSnapshot[];
+  /**
+   * Names of PPP profiles with `change-tcp-mss` NOT enabled. PPP-family tunnels
+   * (l2tp/pptp/sstp/ovpn/pppoe) clamp MSS via their profile rather than mangle.
+   */
+  pppProfilesMissingMssClamp: string[];
 }
 
 export interface InterfaceSnapshot {
@@ -132,6 +141,19 @@ export interface InterfaceSnapshot {
   linkDowns: number;
   lastLinkDownTime?: string;
   mtu: number;
+  /** Negotiated/effective MTU. RouterOS reports `mtu=auto` on some tunnel types. */
+  actualMtu?: number;
+  /** `clamp-tcp-mss` — present on GRE/IPIP/EoIP. */
+  clampTcpMss?: boolean;
+}
+
+export interface WireguardPeerSnapshot {
+  interface: string;
+  publicKey: string;
+  endpoint?: string;
+  /** Seconds; 0 / undefined means keepalive is off. */
+  persistentKeepalive: number;
+  disabled: boolean;
 }
 
 export interface RouteSnapshot {
@@ -616,6 +638,10 @@ export function analyzeRootCause(data: DiagnosticData): DiagnosisReport {
     });
   }
 
+  // ── 11. MTU / MSS black-hole analysis ─────────────────────────────────
+  const mtuFindings = analyzeTunnelMtu(data);
+  evidence.push(...mtuFindings.evidence);
+
   // ── Correlate evidence into root causes ───────────────────────────────
   correlateRootCauses(data, evidence, rootCauses);
 
@@ -659,6 +685,171 @@ export function analyzeRootCause(data: DiagnosticData): DiagnosisReport {
     rootCauses,
     dimensionSummary,
   };
+}
+
+// ── MTU / MSS analysis ──────────────────────────────────────────────────────
+
+/**
+ * Encapsulation overhead in bytes per tunnel type, matched against the RouterOS
+ * `type` field as a substring. Ordered longest-match-first is unnecessary — the
+ * keys don't overlap.
+ */
+const TUNNEL_OVERHEAD: { match: string; bytes: number; label: string }[] = [
+  { match: "gre", bytes: 24, label: "GRE" },
+  { match: "ipip", bytes: 20, label: "IPIP" },
+  { match: "eoip", bytes: 42, label: "EoIP" },
+  { match: "vxlan", bytes: 50, label: "VXLAN" },
+  { match: "wg", bytes: 60, label: "WireGuard" },
+  // PPP-family: PPP/L2TP/PPTP/SSTP/OVPN headers plus (commonly) an IPsec wrap.
+  { match: "l2tp", bytes: 100, label: "L2TP" },
+  { match: "pptp", bytes: 100, label: "PPTP" },
+  { match: "sstp", bytes: 100, label: "SSTP" },
+  { match: "ovpn", bytes: 100, label: "OpenVPN" },
+];
+
+/** Tunnel types whose MSS is clamped by the PPP profile, not by mangle. */
+const PPP_FAMILY = /l2tp|pptp|sstp|ovpn|pppoe/;
+
+function tunnelOverhead(type: string): { bytes: number; label: string } | undefined {
+  const t = type.toLowerCase();
+  return TUNNEL_OVERHEAD.find((o) => t.includes(o.match));
+}
+
+export interface MtuFindings {
+  evidence: Evidence[];
+  /** Running tunnels with no MSS clamp reaching them. */
+  unclamped: InterfaceSnapshot[];
+  /** Running tunnels whose MTU leaves no room for their own encapsulation. */
+  oversizedMtu: { iface: InterfaceSnapshot; effective: number; budget: number; label: string }[];
+  /** Enabled WireGuard peers with persistent-keepalive off. */
+  keepaliveOff: WireguardPeerSnapshot[];
+}
+
+/**
+ * Detect the PMTU black-hole trio: oversized tunnel MTU, missing TCP MSS clamp,
+ * and WireGuard peers with no persistent-keepalive.
+ *
+ * Pure — safe to call more than once on the same data.
+ */
+export function analyzeTunnelMtu(data: DiagnosticData): MtuFindings {
+  const evidence: Evidence[] = [];
+  const unclamped: InterfaceSnapshot[] = [];
+  const oversizedMtu: MtuFindings["oversizedMtu"] = [];
+
+  const tunnels = data.tunnelInterfaces.filter((t) => !t.disabled);
+
+  // A clamp rule anywhere in forward/postrouting covers every forwarded flow,
+  // so it is checked once rather than per tunnel.
+  const clampRules = data.mangleRules.filter((r) => r.action === "change-mss" && !r.disabled);
+  const globalClamp = clampRules.some(
+    (r) => r.chain === "forward" || r.chain === "postrouting" || r.chain === "output",
+  );
+  const strandedClamp = clampRules.length > 0 && !globalClamp;
+
+  // PPPoE on the WAN costs another 8 bytes on top of the tunnel's own overhead.
+  const pppoeWan = data.interfaces.some((i) => i.type.toLowerCase().includes("pppoe"));
+  const pathBudget = pppoeWan ? 1492 : 1500;
+
+  // Every PPP profile clamping means whichever profile a PPP tunnel uses clamps,
+  // without needing to resolve the interface→profile mapping.
+  // ponytail: if some profiles clamp and others don't we warn and name them —
+  // per-interface profile resolution would need a query per tunnel.
+  const pppClampedEverywhere = data.pppProfilesMissingMssClamp.length === 0;
+
+  for (const t of tunnels) {
+    const overhead = tunnelOverhead(t.type);
+    if (!overhead) continue;
+
+    const effective = t.actualMtu ?? t.mtu;
+    const budget = pathBudget - overhead.bytes;
+    if (effective > budget) {
+      oversizedMtu.push({ iface: t, effective, budget, label: overhead.label });
+      evidence.push({
+        dimension: "vpn",
+        severity: "warning",
+        summary:
+          `Tunnel ${t.name} MTU ${effective} exceeds the ${budget}-byte budget for ` +
+          `${overhead.label} (${overhead.bytes} B overhead${pppoeWan ? " + PPPoE 8 B" : ""})`,
+        detail:
+          "Packets at this size need fragmentation the transit path will not perform, " +
+          "so they are dropped silently.",
+        reference: t.name,
+      });
+    }
+
+    const covered =
+      t.clampTcpMss === true ||
+      globalClamp ||
+      (PPP_FAMILY.test(t.type.toLowerCase()) && pppClampedEverywhere);
+    if (!covered) {
+      unclamped.push(t);
+      evidence.push({
+        dimension: "vpn",
+        severity: "warning",
+        summary: `Tunnel ${t.name} (${overhead.label}) has no TCP MSS clamp`,
+        detail:
+          "Hosts derive their MSS from their own LAN MTU and set DF, so full-size " +
+          "segments enter the tunnel and are dropped in transit. Small flows (ping, " +
+          "logins) work; large ones (file transfer, photo/video upload, TLS) stall.",
+        reference: t.name,
+      });
+    }
+  }
+
+  if (strandedClamp) {
+    evidence.push({
+      dimension: "vpn",
+      severity: "warning",
+      summary:
+        `A change-mss rule exists but only in chain '${clampRules[0].chain}' — ` +
+        "transit traffic is clamped in forward/postrouting, not there",
+    });
+  }
+
+  if (data.pppProfilesMissingMssClamp.length > 0 && tunnels.some((t) => PPP_FAMILY.test(t.type))) {
+    evidence.push({
+      dimension: "vpn",
+      severity: "warning",
+      summary: `PPP profile(s) without change-tcp-mss: ${data.pppProfilesMissingMssClamp.join(", ")}`,
+      detail:
+        "PPP-family tunnels (L2TP/PPTP/SSTP/OpenVPN/PPPoE) clamp MSS through their " +
+        "profile. Sessions using these profiles are unprotected.",
+    });
+  }
+
+  const keepaliveOff = data.wireguardPeers.filter((p) => !p.disabled && p.persistentKeepalive <= 0);
+  if (keepaliveOff.length > 0) {
+    evidence.push({
+      dimension: "vpn",
+      severity: "warning",
+      summary: `${keepaliveOff.length} WireGuard peer(s) have persistent-keepalive off`,
+      detail:
+        "NAT and stateful firewalls drop idle UDP mappings after ~30 s. Without " +
+        "keepalive the peer becomes unreachable from this side until it transmits.",
+      reference: keepaliveOff[0].interface,
+    });
+  }
+
+  if (
+    tunnels.length > 0 &&
+    unclamped.length === 0 &&
+    oversizedMtu.length === 0 &&
+    keepaliveOff.length === 0
+  ) {
+    evidence.push({
+      dimension: "vpn",
+      severity: "ok",
+      summary: `MTU/MSS sane on all ${tunnels.length} tunnel(s)`,
+    });
+  }
+
+  return { evidence, unclamped, oversizedMtu, keepaliveOff };
+}
+
+/** Suggested MTU for a tunnel type, given the path budget. */
+function suggestedMtu(type: string, pppoeWan: boolean): number | undefined {
+  const o = tunnelOverhead(type);
+  return o ? (pppoeWan ? 1492 : 1500) - o.bytes : undefined;
 }
 
 // ── Correlation engine ──────────────────────────────────────────────────────
@@ -861,6 +1052,68 @@ function correlateRootCauses(
       confidence: "high",
       evidence: evidence.filter((e) => e.dimension === "vpn" && e.severity === "critical"),
       fixes: realDownTunnels.map((t) => `/interface enable [find name="${t.name}"]`),
+      dimensions: ["vpn"],
+    });
+  }
+
+  // ── Pattern: MTU/MSS mismatch → tunnel black-holes large packets
+  // Recomputed rather than threaded through — analyzeTunnelMtu is pure and the
+  // interface list is a handful of rows.
+  const mtu = analyzeTunnelMtu(data);
+  const pppoeWan = data.interfaces.some((i) => i.type.toLowerCase().includes("pppoe"));
+  if (mtu.unclamped.length > 0 || mtu.oversizedMtu.length > 0) {
+    const names = [
+      ...new Set([...mtu.unclamped, ...mtu.oversizedMtu.map((o) => o.iface)].map((t) => t.name)),
+    ];
+    // Reachable-but-broken is the signature: small packets pass, large ones die.
+    const bothProblems = mtu.unclamped.length > 0 && mtu.oversizedMtu.length > 0;
+    const pingOk = data.ping?.lossPct === 0;
+    causes.push({
+      cause: "MTU/MSS black hole on tunnel",
+      explanation:
+        `Tunnel(s) ${names.join(", ")} carry traffic larger than the path can deliver. ` +
+        "Encapsulation shrinks the usable MTU, but hosts still negotiate a TCP MSS from " +
+        "their own LAN MTU and set the don't-fragment bit; transit routers drop the " +
+        "oversized packets and the ICMP 'fragmentation needed' reply is commonly filtered, " +
+        "so the sender never learns to back off. The result is a tunnel that pings clean " +
+        "and passes logins while file transfers, media uploads and some HTTPS sites hang.",
+      confidence: bothProblems || pingOk ? "high" : "medium",
+      evidence: mtu.evidence.filter((e) => e.severity === "warning"),
+      fixes: [
+        ...mtu.oversizedMtu.map(
+          (o) =>
+            `/interface ${o.iface.type.includes("wg") ? "wireguard" : "ethernet"} set [find name="${o.iface.name}"] mtu=${suggestedMtu(o.iface.type, pppoeWan) ?? o.budget}`,
+        ),
+        ...(mtu.unclamped.length > 0
+          ? [
+              "# Clamp TCP MSS for every forwarded flow (covers all tunnel types):",
+              "/ip firewall mangle add chain=forward protocol=tcp tcp-flags=syn " +
+                'tcp-mss=1400-65535 action=change-mss new-mss=clamp-to-pmtu comment="clamp MSS to PMTU"',
+              "# PPP-family tunnels (L2TP/PPTP/SSTP/OVPN) can clamp via their profile instead:",
+              "/ppp profile set [find] change-tcp-mss=yes",
+            ]
+          : []),
+      ],
+      dimensions: ["vpn", "firewall"],
+    });
+  }
+
+  // ── Pattern: WireGuard peer with no keepalive → NAT mapping expires
+  if (mtu.keepaliveOff.length > 0) {
+    causes.push({
+      cause: "WireGuard peer unreachable after idle (no persistent-keepalive)",
+      explanation:
+        `${mtu.keepaliveOff.length} enabled peer(s) have persistent-keepalive off: ` +
+        `${mtu.keepaliveOff.map((p) => `${p.interface}/${p.publicKey.slice(0, 12)}…`).join(", ")}. ` +
+        "WireGuard is silent when idle, so the NAT/firewall mapping the peer punched " +
+        "expires (typically ~30 s) and this side can no longer initiate. The tunnel " +
+        "appears to work whenever the peer starts the traffic and to be down otherwise.",
+      confidence: "medium",
+      evidence: evidence.filter((e) => e.dimension === "vpn" && e.severity === "warning"),
+      fixes: mtu.keepaliveOff.map(
+        (p) =>
+          `/interface wireguard peers set [find public-key="${p.publicKey}"] persistent-keepalive=25s`,
+      ),
       dimensions: ["vpn"],
     });
   }

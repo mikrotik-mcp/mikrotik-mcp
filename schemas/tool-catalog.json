@@ -24868,7 +24868,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Autonomously investigate a network problem across all diagnostic dimensions: connectivity (ping), interface state & error counters, routing table & BGP/OSPF neighbors, firewall rules & hit counters, NAT & connection tracking, ARP/DHCP state, DNS resolution, CPU/memory pressure, system logs, and VPN tunnel state. Correlates the evidence to deliver ranked root-cause hypotheses with confidence levels, plain-language explanations, and exact RouterOS fix commands. Pass an IP address, hostname, or symptom description as the target. For hop-by-hop path analysis use `trace_path`; for log-specific investigation use `correlate_events`; for fix commands only use `suggest_fix`.",
+      "description": "Autonomously investigate a network problem across all diagnostic dimensions: connectivity (ping), interface state & error counters, routing table & BGP/OSPF neighbors, firewall rules & hit counters, NAT & connection tracking, ARP/DHCP state, DNS resolution, CPU/memory pressure, system logs, and VPN tunnel state — including the tunnel MTU / TCP-MSS-clamp / WireGuard-keepalive checks that catch a PMTU black hole (tunnel pings fine but large transfers, uploads and some HTTPS hang). Correlates the evidence to deliver ranked root-cause hypotheses with confidence levels, plain-language explanations, and exact RouterOS fix commands. Pass an IP address, hostname, or symptom description as the target. For hop-by-hop path analysis use `trace_path`; for log-specific investigation use `correlate_events`; for fix commands only use `suggest_fix`.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

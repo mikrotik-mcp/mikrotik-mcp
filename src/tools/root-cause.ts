@@ -20,6 +20,7 @@ import type {
   LogEntry,
   RouteSnapshot,
   RoutingNeighbor,
+  WireguardPeerSnapshot,
 } from "../core/root-cause";
 import { READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -48,6 +49,8 @@ async function collectInterfaces(ctx: ToolContext): Promise<InterfaceSnapshot[]>
     linkDowns: num(r["link-downs"]),
     lastLinkDownTime: r["last-link-down-time"],
     mtu: num(r.mtu) || 1500,
+    actualMtu: num(r["actual-mtu"]) || undefined,
+    clampTcpMss: r["clamp-tcp-mss"] === undefined ? undefined : isYes(r["clamp-tcp-mss"]),
   }));
 }
 
@@ -220,7 +223,41 @@ async function collectTunnels(ctx: ToolContext): Promise<InterfaceSnapshot[]> {
     rxErrors: num(r["rx-error"]),
     linkDowns: num(r["link-downs"]),
     mtu: num(r.mtu) || 1500,
+    actualMtu: num(r["actual-mtu"]) || undefined,
+    clampTcpMss: r["clamp-tcp-mss"] === undefined ? undefined : isYes(r["clamp-tcp-mss"]),
   }));
+}
+
+/** Collect mangle rules — the MSS clamp lives here. */
+async function collectMangleRules(ctx: ToolContext): Promise<FirewallRuleSnapshot[]> {
+  const raw = await safe("/ip firewall mangle print detail", ctx);
+  if (!raw) return [];
+  return parseRecords(raw).rows.map(parseFirewallRow);
+}
+
+/** Collect WireGuard peers for the persistent-keepalive check. */
+async function collectWireguardPeers(ctx: ToolContext): Promise<WireguardPeerSnapshot[]> {
+  const raw = await safe("/interface wireguard peers print detail", ctx);
+  if (!raw || isEmpty(raw)) return [];
+  return parseRecords(raw).rows.map((r) => ({
+    interface: r.interface ?? "",
+    publicKey: r["public-key"] ?? "",
+    endpoint: r["endpoint-address"] || undefined,
+    // RouterOS prints durations ("25s", "1m"); num() takes the leading number,
+    // which is close enough for an on/off test.
+    persistentKeepalive: num(r["persistent-keepalive"]),
+    disabled: (r.flags ?? "").includes("X") || r.disabled === "true",
+  }));
+}
+
+/** PPP profiles that do NOT clamp MSS — PPP-family tunnels rely on this. */
+async function collectPppProfilesMissingMssClamp(ctx: ToolContext): Promise<string[]> {
+  const raw = await safe("/ppp profile print detail", ctx);
+  if (!raw || isEmpty(raw)) return [];
+  return parseRecords(raw)
+    .rows.filter((r) => !isYes(r["change-tcp-mss"]))
+    .map((r) => r.name ?? "")
+    .filter(Boolean);
 }
 
 /** Full diagnostic data collection across all dimensions. */
@@ -248,6 +285,9 @@ async function collectDiagnosticData(
     resourceRaw,
     logs,
     tunnels,
+    mangleRules,
+    wireguardPeers,
+    pppProfilesMissingMssClamp,
   ] = await Promise.all([
     dims.has("connectivity")
       ? safe(`/ping ${quoteValue(target)} count=5`, ctx)
@@ -281,6 +321,11 @@ async function collectDiagnosticData(
     dims.has("resources") ? safe("/system resource print", ctx) : Promise.resolve(""),
     dims.has("logs") ? collectLogs(target, ctx) : Promise.resolve([]),
     dims.has("vpn") ? collectTunnels(ctx) : Promise.resolve([]),
+    // The MSS clamp lives in mangle, so the VPN dimension needs it too — a
+    // vpn-only run must still be able to tell "clamped" from "unclamped".
+    dims.has("vpn") || dims.has("firewall") ? collectMangleRules(ctx) : Promise.resolve([]),
+    dims.has("vpn") ? collectWireguardPeers(ctx) : Promise.resolve([]),
+    dims.has("vpn") ? collectPppProfilesMissingMssClamp(ctx) : Promise.resolve([]),
   ]);
 
   // Parse ping
@@ -325,6 +370,9 @@ async function collectDiagnosticData(
     rosVersion: resKv.version ?? "",
     relevantLogs: logs,
     tunnelInterfaces: tunnels,
+    mangleRules,
+    wireguardPeers,
+    pppProfilesMissingMssClamp,
   };
 }
 
@@ -344,7 +392,9 @@ export const rootCauseTools: ToolModule = [
       "Autonomously investigate a network problem across all diagnostic dimensions: " +
       "connectivity (ping), interface state & error counters, routing table & BGP/OSPF " +
       "neighbors, firewall rules & hit counters, NAT & connection tracking, ARP/DHCP " +
-      "state, DNS resolution, CPU/memory pressure, system logs, and VPN tunnel state. " +
+      "state, DNS resolution, CPU/memory pressure, system logs, and VPN tunnel state — " +
+      "including the tunnel MTU / TCP-MSS-clamp / WireGuard-keepalive checks that catch a " +
+      "PMTU black hole (tunnel pings fine but large transfers, uploads and some HTTPS hang). " +
       "Correlates the evidence to deliver ranked root-cause hypotheses with confidence " +
       "levels, plain-language explanations, and exact RouterOS fix commands. " +
       "Pass an IP address, hostname, or symptom description as the target. " +

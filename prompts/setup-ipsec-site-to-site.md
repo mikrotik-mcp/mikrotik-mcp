@@ -47,8 +47,20 @@ identical on both ends):
    accepted from {{peer_address}} on the input chain, and add a NAT _bypass_
    (accept/no-nat) rule so {{local_subnet}}→{{remote_subnet}} traffic is NOT
    masqueraded. Apply firewall edits under `enable_safe_mode`.
-7. **Verify** — `get_ipsec_active_peers` and `get_ipsec_installed_sa` to confirm
-   the tunnel established; `ping` a remote host with src-address in {{local_subnet}}.
+7. **MTU / MSS** — policy-mode IPsec has no interface whose MTU you can lower, so
+   MSS clamping is the _only_ lever, and skipping it is the classic "tunnel is up
+   but large transfers hang" failure. ESP tunnel mode costs ~73 bytes (more with
+   NAT-T/UDP-4500). Add `create_mangle_rule`: `chain=forward`, `protocol=tcp`,
+   `tcp_flags=syn`, `tcp_mss=1400-65535`, `action=change-mss`,
+   `new_mss=clamp-to-pmtu` — or a fixed `new_mss=1360` when the path MTU is known
+   and PMTU discovery is unreliable. Endpoints size their MSS from their own LAN
+   MTU and set DF; without the clamp those packets are dropped in transit and the
+   ICMP "fragmentation needed" is usually filtered, so the sender never learns.
+8. **Verify** — `get_ipsec_active_peers` and `get_ipsec_installed_sa` to confirm
+   the tunnel established; `ping` a remote host with src-address in
+   {{local_subnet}}. Then repeat with size 1400 and `do-not-fragment` — small
+   pings passing while large ones fail means the MSS clamp in step 7 is missing or
+   not matching.
 
 Present the matching parameter set for the remote engineer and the exact tool
 calls before applying. Never echo the pre-shared key back in plaintext beyond
