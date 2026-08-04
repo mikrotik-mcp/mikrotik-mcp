@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "mikrotik-mcp",
   "display_name": "MikroTik MCP",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "MCP server for MikroTik RouterOS — 780+ tools over SSH for firewall, NAT, routing, DHCP, DNS, WireGuard, wireless, QoS and more.",
   "long_description": "Exposes a MikroTik RouterOS device as several hundred risk-annotated MCP tools, one module per RouterOS scope, so an MCP client can read and configure a router in natural language.\n\nEvery tool reaches the device through a single choke point over SSH, and every command is built with an escaping command builder rather than string concatenation, so tool arguments cannot break out of the command they are interpolated into. Each tool carries a risk annotation (read, write, idempotent write, destructive, dangerous) that the host surfaces before the call runs.\n\nThe bundle vendors the Bun runtime it was built against, so the host needs no Bun, Node or npm install of its own.",
   "author": "Ali Torki",
