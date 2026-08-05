@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "map_l2_fabric",
+  "type": "object",
+  "properties": {
+    "interface_filter": {
+      "description": "Only show ports whose name contains this substring.",
+      "type": "string"
+    },
+    "role": {
+      "description": "Only show ports classified with this role.",
+      "type": "string",
+      "enum": ["access", "uplink", "hybrid"]
+    },
+    "summary_only": {
+      "description": "Show per-port counts without listing individual hosts.",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

@@ -86,6 +86,7 @@ import { S3Manage } from "./s3";
 import { Sheet } from "./sheet";
 import { SnapshotsView } from "./snapshots";
 import { TopologyMap } from "./topology";
+import { AccessView, AdvisoryView, FabricView } from "./posture";
 import { SSHPoolPanel } from "./ssh-pool";
 import { useWhatsNew, WhatsNewModal } from "./whats-new";
 import type {
@@ -124,6 +125,9 @@ type ViewId =
   | "clients"
   | "aaa"
   | "topology"
+  | "fabric"
+  | "vulns"
+  | "access"
   | "packets"
   | "flows"
   | "snapshots"
@@ -150,6 +154,13 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "clients", label: "Clients", sub: "Connected LAN devices — usage, block/allow, pin IP" },
   { id: "aaa", label: "RADIUS & UM", sub: "RADIUS client & User Manager RADIUS server" },
   { id: "topology", label: "Topology", sub: "Layer-2 neighbours via MNDP / CDP / LLDP" },
+  { id: "fabric", label: "L2 Fabric", sub: "Which host sits on which physical bridge port" },
+  {
+    id: "vulns",
+    label: "Vulnerabilities",
+    sub: "Published CVEs matched to this version, ranked by real exposure",
+  },
+  { id: "access", label: "Access Scope", sub: "What this session may call — and what it blocked" },
   { id: "packets", label: "Packets", sub: "Live TZSP capture & decode" },
   { id: "flows", label: "Flows", sub: "NetFlow/IPFIX top talkers, conversations & anomalies" },
   { id: "snapshots", label: "Snapshots", sub: "Config history & time-travel diff" },
@@ -248,6 +259,9 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   clients: MONO_ACCENT,
   aaa: MONO_ACCENT,
   topology: MONO_ACCENT,
+  fabric: MONO_ACCENT,
+  vulns: MONO_ACCENT,
+  access: MONO_ACCENT,
   packets: MONO_ACCENT,
   flows: MONO_ACCENT,
   snapshots: MONO_ACCENT,
@@ -316,6 +330,30 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Solid nodes are configured devices; faint nodes are discovered-but-unmanaged neighbours.",
       "Use “Add to config →” on an unmanaged neighbour to pre-fill it in the Config editor.",
       "Drag to pan; the layout settles automatically as new neighbours arrive.",
+    ],
+  },
+  fabric: {
+    what: "Port-level Layer-2 occupancy: which hosts sit behind each bridge port, named from DHCP leases, ARP, the neighbour cache and the hardware vendor prefix.",
+    tips: [
+      "Unlike Topology (MNDP/LLDP only), this sees every host that has passed a frame — printers, IoT, laptops.",
+      "Ports are classified by occupancy: one host is access, many is an uplink or a downstream switch.",
+      "Search by MAC, IP or hostname to answer “which port is this plugged into?”.",
+    ],
+  },
+  vulns: {
+    what: "Published RouterOS advisories matched against the version this device runs, then ranked by whether the affected service is actually enabled and reachable.",
+    tips: [
+      "“Reachable” means the vulnerable service is on with no source-address restriction — patch those first.",
+      "Mitigated findings are hidden by default: the version matches, but the affected service is off.",
+      "A clean result only means nothing in the bundled dataset matched — check the vendor feed for newer advisories.",
+    ],
+  },
+  access: {
+    what: "The caller boundary enforced on this session — the risk ceiling, device allow/deny lists and tool globs — plus every call that was blocked by it.",
+    tips: [
+      "Enable it with `access.enabled` in the server config; `readOnly` is the blunter, all-or-nothing alternative.",
+      "A session can restrict itself further with the narrow_access_scope tool — that operation is one-way.",
+      "Denials record the exact rule that blocked the call, so a scope that is too tight is obvious rather than mysterious.",
     ],
   },
   packets: {
@@ -674,6 +712,27 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <circle cx="5" cy="19" r="2.4" />
         <circle cx="19" cy="19" r="2.4" />
         <path d="M12 7.4 6.4 16.6M12 7.4 17.6 16.6" />
+      </>
+    ),
+    fabric: (
+      <>
+        <rect x="3" y="4" width="18" height="5" rx="1.4" />
+        <path d="M7 9v4M12 9v4M17 9v4" />
+        <rect x="4" y="13" width="6" height="4" rx="1" />
+        <rect x="14" y="13" width="6" height="4" rx="1" />
+      </>
+    ),
+    vulns: (
+      <>
+        <path d="M12 3 4 6v6c0 4.4 3.4 7.6 8 9 4.6-1.4 8-4.6 8-9V6z" />
+        <path d="M12 9v4" />
+        <circle cx="12" cy="16" r="0.6" />
+      </>
+    ),
+    access: (
+      <>
+        <rect x="4" y="10" width="16" height="10" rx="2" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3" />
       </>
     ),
     packets: <path d="M3 12h4l2-7 4 14 2-7h6" />,
@@ -1716,6 +1775,15 @@ function App(): ReactNode {
 
         {/* ── Drift Guard ── */}
         {view === "drift" && <DriftView />}
+
+        {/* ── L2 Fabric: hosts by physical port ── */}
+        {view === "fabric" && <FabricView />}
+
+        {/* ── Known vulnerabilities ── */}
+        {view === "vulns" && <AdvisoryView />}
+
+        {/* ── Caller access scope ── */}
+        {view === "access" && <AccessView />}
 
         {/* ── Policies ── */}
         {view === "policies" && <PoliciesView />}

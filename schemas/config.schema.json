@@ -686,6 +686,59 @@
       "default": false,
       "type": "boolean"
     },
+    "access": {
+      "default": {
+        "enabled": false,
+        "devices": [],
+        "denyDevices": [],
+        "tools": [],
+        "denyTools": []
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "maxRisk": {
+          "type": "string",
+          "enum": ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"]
+        },
+        "devices": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "denyDevices": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tools": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "denyTools": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": ["enabled", "devices", "denyDevices", "tools", "denyTools"],
+      "additionalProperties": false
+    },
     "tools": {
       "default": {
         "enabledModules": [],
@@ -765,6 +818,7 @@
     "attacks",
     "ssh",
     "readOnly",
+    "access",
     "tools",
     "memory",
     "disableUpdateCheck"

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_access_scope",
+  "type": "object",
+  "properties": {
+    "denials": {
+      "description": "How many recent denials to include (default 10, 0 to omit).",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 200
+    }
+  },
+  "additionalProperties": false
+}

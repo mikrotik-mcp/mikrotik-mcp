@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "locate_host_port",
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "MAC address, IP address, or hostname/identity substring to locate."
+    }
+  },
+  "required": ["query"],
+  "additionalProperties": false
+}

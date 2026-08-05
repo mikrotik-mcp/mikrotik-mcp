@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.3.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 885,
+  "toolCount": 891,
   "tools": [
     {
       "name": "find_tools",
@@ -25218,6 +25218,198 @@
           "lldp_vlan_info": {
             "description": "Include the Port VLAN ID and VLAN Name TLVs in LLDP frames.",
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "map_l2_fabric",
+      "title": "Map Hosts to Physical Switch Ports",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Builds a PORT-LEVEL Layer-2 map: which hosts are behind each bridge port, joined from the bridge host table (`/interface bridge host`), ARP, DHCP leases and the neighbour cache so every MAC gets a real name — hostname, RouterOS identity, IP or hardware vendor. Also classifies each port as access (one host), uplink (many hosts, or a discovered network device behind it) or hybrid. Use this to answer 'what is plugged into ether5', to find unexpected devices on the fabric, or to spot an unmanaged switch someone added. This is different from list_neighbors, which only sees MNDP/CDP/LLDP speakers — the bridge host table sees EVERY host that has passed a frame, including printers, IoT and laptops. Read-only.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "interface_filter": {
+            "description": "Only show ports whose name contains this substring.",
+            "type": "string"
+          },
+          "role": {
+            "description": "Only show ports classified with this role.",
+            "type": "string",
+            "enum": ["access", "uplink", "hybrid"]
+          },
+          "summary_only": {
+            "description": "Show per-port counts without listing individual hosts.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "locate_host_port",
+      "title": "Find Which Port a Host Is Plugged Into",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Locates a specific host on the Layer-2 fabric and reports the exact bridge port it is reachable through. Accepts a MAC address (any separator style), an IP address, or a hostname/identity substring. This is the 'my printer is 192.168.1.40, which switch port is it on?' lookup — it resolves the IP to a MAC via ARP/DHCP and then to a port via the bridge host table. Returns every match, since a MAC can legitimately appear behind an uplink as well as on its access port. Read-only.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "MAC address, IP address, or hostname/identity substring to locate."
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "audit_known_vulnerabilities",
+      "title": "Audit Device Against Known RouterOS Advisories",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Cross-references the RouterOS version this device runs against published security advisories (CVEs), then RANKS each match by whether the affected surface is actually reachable — reading `/ip service` to see if the vulnerable service is enabled and whether it is restricted to a management subnet. This is the difference between 'you are behind on patches' and 'this specific hole is open to the internet right now'. Returns each matching advisory with its severity, CVSS, effective risk score, exposure, the exact version that fixes it, and the remediation steps. Read-only — reads `/system resource`, `/ip service` and `/system package`, changes nothing. Use `firmware_check` for 'is there a newer release'; use this for 'does it matter'. Set `all_devices` to audit the whole fleet at once.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "all_devices": {
+            "description": "Audit every configured device instead of just the target device.",
+            "type": "boolean"
+          },
+          "min_severity": {
+            "description": "Only report findings at or above this severity.",
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"]
+          },
+          "include_mitigated": {
+            "description": "Include advisories whose affected service is disabled (default false — these are matches on version alone and are not currently reachable).",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_security_advisories",
+      "title": "List the Bundled RouterOS Advisory Dataset",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists the RouterOS security advisories this server checks against, with their affected version ranges, severity, CVSS, exposure conditions and remediation. Contacts NO device — it is the reference dataset itself, useful for answering 'what does the audit actually cover?' and for checking whether a specific CVE is in scope before trusting a clean audit result. Use audit_known_vulnerabilities to evaluate these against a real device.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id_filter": {
+            "description": "Match an advisory id (substring, e.g. `2023`).",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_access_scope",
+      "title": "Show the Active Access Scope",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Reports the access scope currently enforced on this session: the maximum risk tier that may be invoked, which devices may be targeted, which tool-name globs are allowed or denied, and when the scope expires. Also lists recent DENIED calls with the rule that blocked each one. Call this after an 'Access denied' result to see exactly what the boundary is instead of guessing, and before attempting a batch of writes to confirm they are permitted. Contacts no device.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "denials": {
+            "description": "How many recent denials to include (default 10, 0 to omit).",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 200
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "narrow_access_scope",
+      "title": "Narrow This Session's Access Scope",
+      "risk": "write-idempotent",
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Voluntarily restricts what THIS session may do for the rest of its life — lower the risk ceiling, limit which devices may be targeted, restrict tool names, or set an expiry. Useful before handing control to an unattended loop, or to self-limit to read-only while investigating a production issue. This operation is STRICTLY ONE-WAY: every field can only make the scope narrower, and there is no tool that widens it again — only the operator's server configuration sets the ceiling, and restarting the session is the only way back. Values that would widen the scope are silently clamped to the current one. Contacts no device.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "max_risk": {
+            "description": "Highest risk tier to allow from now on. Ignored if it is higher than the current ceiling. READ is the most restrictive.",
+            "type": "string",
+            "enum": ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"]
+          },
+          "devices": {
+            "description": "Restrict to these device keys (intersected with any current restriction).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deny_devices": {
+            "description": "Device keys to forbid outright (added to any existing denials).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tools": {
+            "description": "Tool-name globs to permit, e.g. ['list_*','get_*','diagnose'].",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deny_tools": {
+            "description": "Tool-name globs to forbid (added to any existing denials).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expires_in_minutes": {
+            "description": "Expire the scope after this many minutes (max 7 days).",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 10080
+          },
+          "label": {
+            "description": "A note recorded with the scope, shown in denials.",
+            "type": "string"
           }
         },
         "additionalProperties": false

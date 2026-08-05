@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "narrow_access_scope",
+  "type": "object",
+  "properties": {
+    "max_risk": {
+      "description": "Highest risk tier to allow from now on. Ignored if it is higher than the current ceiling. READ is the most restrictive.",
+      "type": "string",
+      "enum": ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"]
+    },
+    "devices": {
+      "description": "Restrict to these device keys (intersected with any current restriction).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "deny_devices": {
+      "description": "Device keys to forbid outright (added to any existing denials).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tools": {
+      "description": "Tool-name globs to permit, e.g. ['list_*','get_*','diagnose'].",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "deny_tools": {
+      "description": "Tool-name globs to forbid (added to any existing denials).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expires_in_minutes": {
+      "description": "Expire the scope after this many minutes (max 7 days).",
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 10080
+    },
+    "label": {
+      "description": "A note recorded with the scope, shown in denials.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

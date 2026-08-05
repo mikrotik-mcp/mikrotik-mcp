@@ -156,6 +156,7 @@ import {
 import { isMacTelnetDevice } from "../core/transport";
 import { VERSION } from "../version";
 import { driftRoutes } from "./drift-routes";
+import { postureRoutes } from "./posture-routes";
 import { txnRoutes } from "./txn-routes";
 import { flowRoutes } from "./flow-routes";
 import { rolloutRoutes } from "./rollout-routes";
@@ -1593,6 +1594,9 @@ export async function runDashboard(
 
     const driftResp = await driftRoutes(req, url);
     if (driftResp) return driftResp;
+
+    const postureResp = await postureRoutes(req, url);
+    if (postureResp) return postureResp;
 
     const txnResp = await txnRoutes(req, url);
     if (txnResp) return txnResp;

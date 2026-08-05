@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "audit_known_vulnerabilities",
+  "type": "object",
+  "properties": {
+    "all_devices": {
+      "description": "Audit every configured device instead of just the target device.",
+      "type": "boolean"
+    },
+    "min_severity": {
+      "description": "Only report findings at or above this severity.",
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"]
+    },
+    "include_mitigated": {
+      "description": "Include advisories whose affected service is disabled (default false — these are matches on version alone and are not currently reachable).",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

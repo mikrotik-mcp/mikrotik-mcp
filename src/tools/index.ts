@@ -68,6 +68,9 @@ import { l2tpTools } from "./l2tp";
 import { logTools } from "./logs";
 import { systemLoggingTools } from "./logging";
 import { neighborTools } from "./neighbor";
+import { l2FabricTools } from "./l2-fabric";
+import { advisoryTools } from "./advisories";
+import { accessTools } from "./access";
 import { networkToolTools } from "./network-tools";
 import { sshTestTools } from "./ssh-test";
 import { packetCaptureTools } from "./packet-capture";
@@ -979,6 +982,34 @@ export const moduleCatalog: ModuleInfo[] = [
       "Discovered Layer-2 neighbours and discovery settings — the data behind the topology map " +
       "(`/ip neighbor`, MNDP/CDP/LLDP).",
     tools: neighborTools,
+  },
+  {
+    label: "L2 Fabric Map",
+    slug: "l2-fabric",
+    group: "System & Ops",
+    description:
+      "Port-level Layer-2 map: which host sits on which bridge port, joined from the bridge host " +
+      "table, ARP, DHCP leases and the neighbour cache, with access/uplink classification. Sees " +
+      "every host that has passed a frame — not just MNDP/LLDP speakers.",
+    tools: l2FabricTools,
+  },
+  {
+    label: "Vulnerability Audit",
+    slug: "advisories",
+    group: "Security",
+    description:
+      "Published RouterOS advisories (CVEs) matched against the running version and ranked by " +
+      "whether the affected service is actually enabled and reachable.",
+    tools: advisoryTools,
+  },
+  {
+    label: "Access Scope",
+    slug: "access",
+    group: "Discovery & Meta",
+    description:
+      "Caller-scoped access control: inspect the risk/device/tool boundary enforced on this " +
+      "session, review denied calls, and voluntarily narrow the scope (one-way).",
+    tools: accessTools,
   },
   // ── Tools (`/tool`) ──────────────────────────────────────────────────────
   {
