@@ -479,6 +479,37 @@ export const ToolFilterSchema = z.object({
 });
 export type ToolFilter = z.infer<typeof ToolFilterSchema>;
 
+/**
+ * Caller-scoped access control — a risk ceiling, device allow/deny lists and
+ * tool globs enforced at the single call choke point in the registry.
+ *
+ * This is the grant an operator hands to an autonomous session: broader than
+ * `readOnly: true` (which withholds every write tool from the whole process),
+ * narrower than unrestricted. A running session may narrow it further via
+ * `narrow_access_scope`, and can never widen it back — the configuration here
+ * is the ceiling for the process lifetime.
+ */
+export const AccessConfigSchema = z.object({
+  /** Master switch. Off by default — every existing deployment is unaffected. */
+  enabled: z.boolean().default(false),
+  /**
+   * Highest risk tier callers may invoke. `READ` is equivalent to `readOnly`
+   * but enforced per call (with an audited denial) rather than by hiding tools.
+   */
+  maxRisk: z.enum(["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"]).optional(),
+  /** Device keys callers may target. Empty = every configured device. */
+  devices: z.array(z.string()).default([]),
+  /** Device keys callers may never target (wins over `devices`). */
+  denyDevices: z.array(z.string()).default([]),
+  /** Tool-name globs callers may invoke, e.g. `["list_*", "get_*"]`. Empty = all. */
+  tools: z.array(z.string()).default([]),
+  /** Tool-name globs callers may never invoke (wins over `tools`). */
+  denyTools: z.array(z.string()).default([]),
+  /** Free-text note shown in denial messages and the dashboard audit view. */
+  label: z.string().optional(),
+});
+export type AccessConfig = z.infer<typeof AccessConfigSchema>;
+
 export const MikrotikConfigSchema = z.object({
   /** Named devices the server can reach. Always has at least one entry. */
   devices: z
@@ -513,6 +544,12 @@ export const MikrotikConfigSchema = z.object({
    * destructive tool from the surface entirely.
    */
   readOnly: z.boolean().default(false),
+  /**
+   * Caller-scoped access control (opt-in). Unlike `readOnly`, which removes
+   * tools from the surface entirely, this keeps the full catalog discoverable
+   * and denies out-of-scope CALLS with an auditable reason the model can act on.
+   */
+  access: AccessConfigSchema.default(() => AccessConfigSchema.parse({})),
   /**
    * Tool-surface curation — expose only the scopes a deployment needs so the
    * client's tool search reliably surfaces every matching tool (see

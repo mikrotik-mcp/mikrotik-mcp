@@ -485,6 +485,65 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     ],
   },
   {
+    id: "access",
+    title: "Access Scope",
+    icon: "🔐",
+    kind: "object",
+    path: "access",
+    blurb:
+      "Bound what a caller may do: a risk ceiling, device allow/deny lists and tool globs, " +
+      "enforced per call with an audited denial. Unlike read-only mode, the full tool catalog " +
+      "stays discoverable — out-of-scope calls are refused with a reason the model can act on.",
+    fields: [
+      { key: "enabled", label: "Enforce access scope", type: "bool" },
+      {
+        key: "maxRisk",
+        label: "Maximum risk",
+        type: "select",
+        options: ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"],
+        help: "Highest tier a caller may invoke. READ is equivalent to read-only mode.",
+      },
+      {
+        key: "devices",
+        label: "Allowed devices",
+        type: "list",
+        placeholder: "lab, branch-1",
+        help: "Config keys a caller may target. Empty = every configured device.",
+      },
+      {
+        key: "denyDevices",
+        label: "Denied devices",
+        type: "list",
+        placeholder: "edge-prod",
+        help: "Never targetable. Wins over the allow-list.",
+      },
+      {
+        key: "tools",
+        label: "Allowed tools",
+        type: "list",
+        placeholder: "list_*, get_*, diagnose",
+        advanced: true,
+        help: "Tool-name globs (`*` wildcard). Empty = all tools.",
+      },
+      {
+        key: "denyTools",
+        label: "Denied tools",
+        type: "list",
+        placeholder: "reset_*, restore_*",
+        advanced: true,
+        help: "Never callable. Wins over the allow-list.",
+      },
+      {
+        key: "label",
+        label: "Scope label",
+        type: "text",
+        placeholder: "unattended-loop",
+        advanced: true,
+        help: "Shown in denial messages and the Access Scope dashboard view.",
+      },
+    ],
+  },
+  {
     id: "modules",
     title: "Tool Modules",
     icon: "🧩",

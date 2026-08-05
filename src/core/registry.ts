@@ -11,8 +11,9 @@ import { containsRawParserError, indicatesFailure } from "./routeros";
 import { buildRecordsView } from "./routeros-parse";
 import { toolUiMeta, uiViewUri } from "./ui-meta";
 import type { UiLink } from "./ui-meta";
-import { getConfig, resolvedTarget } from "./runtime";
+import { getConfig, resolveDeviceName, resolvedTarget } from "./runtime";
 import type { DeviceDirectoryEntry } from "./runtime";
+import { evaluateAccess, getAccessPolicy, recordDenial } from "./access";
 import { explainUnmet } from "./capability";
 import type { ToolRequires } from "./capability";
 import { getCapabilities, peekCapabilities } from "./capability-cache";
@@ -353,6 +354,36 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
         // Peel injected selectors off before handing args to the handler.
         const { device, reason, ...rest } = args as { device?: unknown; reason?: unknown };
         const deviceName = typeof device === "string" ? device : undefined;
+
+        // ── Access scope. First guard in the chain, before any device I/O and
+        // before the capability probe: an out-of-scope call must not be able to
+        // open a connection to a router it was never allowed to touch. The
+        // device is RESOLVED first so an alias cannot slip past a device
+        // allow-list that names config keys.
+        const policy = getAccessPolicy();
+        if (policy.enabled) {
+          const resolvedDevice = def.noDevice ? undefined : resolveDeviceName(deviceName);
+          const decision = evaluateAccess(policy, {
+            tool: def.name,
+            risk,
+            device: resolvedDevice,
+            now: Date.now(),
+          });
+          if (!decision.allowed) {
+            const text = `Access denied: ${decision.reason}`;
+            recordDenial({
+              ts: Date.now(),
+              tool: def.name,
+              risk,
+              device: resolvedDevice,
+              rule: decision.rule ?? "tool",
+              reason: decision.reason ?? text,
+            });
+            logger.warn(`Access denied for ${def.name}: ${decision.reason}`);
+            return { content: [{ type: "text", text }], isError: true };
+          }
+        }
+
         const ctx = createContext(sendLog, deviceName);
         // For state-changing tools on a multi-device server, stamp the result
         // with the exact router this call hit — per-call proof of targeting so
