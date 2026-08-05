@@ -56,7 +56,7 @@
     "prepack": "bunup && chmod +x dist/cli.js && bun run build:ui && bun run gen",
     "auth-check": "bun run --bun src/cli.ts auth-check",
     "gen:schemas": "bun run --bun scripts/gen-schemas.ts && vp fmt --write schemas",
-    "gen:docs": "bun run --bun scripts/gen-tool-docs.ts",
+    "gen:docs": "bun run --bun scripts/gen-tool-docs.ts && vp fmt --write docs/tools-reference.md",
     "gen": "bun run --bun gen:schemas && bun run --bun gen:docs",
     "start": "bun run --bun src/cli.ts serve",
     "discover": "bun run --bun scripts/discover-macs.ts",
