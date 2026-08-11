@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fmikrotik-mcp.svg)](https://mcptoplist.com/server/glama%2Fmikrotik-mcp)
+
 <div align="center">
   <img src="assets/logo.svg" alt="@usex/mikrotik-mcp" width="440" />
   <p><strong>Drive one or more MikroTik routers in plain language — 885 risk-annotated tools your AI can call, over SSH.</strong><br/>
