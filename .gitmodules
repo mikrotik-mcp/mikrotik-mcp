@@ -1,0 +1,3 @@
+[submodule "website-docs"]
+	path = website-docs
+	url = git@github.com:mikrotik-mcp/docs.git
