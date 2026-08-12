@@ -366,7 +366,8 @@ export const routingOspfTools: ToolModule = [
       "Bind interfaces or network prefixes to an OSPF area (`/routing ospf interface-template add`). " +
       "Match links via `interfaces` (interface or interface-list name) and/or `networks` (prefix, " +
       "e.g. '10.0.0.0/24'). `type` sets the link model: broadcast (LAN), ptp (point-to-point), " +
-      "ptmp, ptmp-broadcast, nbma, or virtual-link. `passive=true` advertises the subnet without forming OSPF adjacencies " +
+      "ptp-unnumbered (point-to-point over an unnumbered link), ptmp, ptmp-broadcast, nbma, or " +
+      "virtual-link. `passive=true` advertises the subnet without forming OSPF adjacencies " +
       "(for stub networks). `auth`/`auth_id`/`auth_key` enable per-interface authentication; `hello_interval` " +
       "e.g. '10s', `dead_interval` e.g. '40s'. " +
       "Requires the area to already exist (add_ospf_area). " +
@@ -381,7 +382,15 @@ export const routingOspfTools: ToolModule = [
       cost: z.number().int().optional().describe("Output cost / metric"),
       priority: z.number().int().optional().describe("DR election priority (0 = never DR)"),
       type: z
-        .enum(["broadcast", "ptp", "ptmp", "ptmp-broadcast", "nbma", "virtual-link"])
+        .enum([
+          "broadcast",
+          "ptp",
+          "ptp-unnumbered",
+          "ptmp",
+          "ptmp-broadcast",
+          "nbma",
+          "virtual-link",
+        ])
         .optional(),
       passive: z.boolean().optional(),
       hello_interval: z.string().optional().describe('e.g. "10s"'),

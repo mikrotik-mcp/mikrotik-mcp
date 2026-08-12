@@ -29,7 +29,15 @@
     },
     "type": {
       "type": "string",
-      "enum": ["broadcast", "ptp", "ptmp", "ptmp-broadcast", "nbma", "virtual-link"]
+      "enum": [
+        "broadcast",
+        "ptp",
+        "ptp-unnumbered",
+        "ptmp",
+        "ptmp-broadcast",
+        "nbma",
+        "virtual-link"
+      ]
     },
     "passive": {
       "type": "boolean"
