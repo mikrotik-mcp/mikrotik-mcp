@@ -7,6 +7,10 @@
       "type": "string",
       "description": "\"*N\" or \"N\" from list output e.g. \"*2\""
     },
+    "public_key": {
+      "description": "The peer's base64 public key — re-key a peer in place instead of removing and re-adding it (which would lose the rest of its configuration).",
+      "type": "string"
+    },
     "allowed_address": {
       "type": "string"
     },

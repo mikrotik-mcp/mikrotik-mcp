@@ -13,6 +13,19 @@ import {
   commandUnsupported,
   Cmd,
 } from "../core/routeros";
+import { notFoundMessage, ruleResolver } from "./_resolve-rule-id";
+
+/**
+ * `/ip route` ids move. Every add/remove renumbers the row positions, and a
+ * `.id` can be reassigned over time, so a `route_id` is resolved to a concrete
+ * `.id` immediately before it is used — never interpolated straight into a
+ * command. Without this, `set <N>` edits row N while the verification read
+ * (`where .id=<N>`) matches nothing, so the tool edits one route and reports
+ * another.
+ */
+const resolveRouteId = ruleResolver("/ip route");
+
+const routeNotFound = (id: string): string => notFoundMessage("Route", id, "list_routes");
 
 /**
  * RouterOS v7 dropped v6's `type=` property on `/ip route`: `blackhole` is a
@@ -88,12 +101,14 @@ async function setRouteDisabled(
   ctx: Parameters<typeof executeMikrotikCommand>[1],
 ): Promise<string> {
   ctx.info(`Updating route: route_id=${routeId}`);
+  const id = await resolveRouteId(routeId, ctx);
+  if (!id) return routeNotFound(routeId);
   const result = await executeMikrotikCommand(
-    `/ip route set ${routeId} disabled=${yesno(disabled)}`,
+    `/ip route set ${id} disabled=${yesno(disabled)}`,
     ctx,
   );
   if (looksLikeError(result)) return `Failed to update route: ${result}`;
-  const details = await executeMikrotikCommand(`/ip route print detail where .id=${routeId}`, ctx);
+  const details = await executeMikrotikCommand(`/ip route print detail where .id=${id}`, ctx);
   return `Route updated successfully:\n\n${details}`;
 }
 
@@ -206,13 +221,10 @@ export const routeTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Getting route details: route_id=${a.route_id}`);
-      const result = await executeMikrotikCommand(
-        `/ip route print detail where .id=${a.route_id}`,
-        ctx,
-      );
-      return isEmpty(result)
-        ? `Route with ID '${a.route_id}' not found.`
-        : `ROUTE DETAILS:\n\n${result}`;
+      const id = await resolveRouteId(a.route_id, ctx);
+      if (!id) return routeNotFound(a.route_id);
+      const result = await executeMikrotikCommand(`/ip route print detail where .id=${id}`, ctx);
+      return isEmpty(result) ? routeNotFound(a.route_id) : `ROUTE DETAILS:\n\n${result}`;
     },
   }),
 
@@ -258,7 +270,9 @@ export const routeTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating route: route_id=${a.route_id}`);
-      const base = `/ip route set ${a.route_id}`;
+      const id = await resolveRouteId(a.route_id, ctx);
+      if (!id) return routeNotFound(a.route_id);
+      const base = `/ip route set ${id}`;
       const cmd = new Cmd(base);
       if (a.dst_address) cmd.set("dst-address", a.dst_address);
       if (a.gateway) cmd.set("gateway", a.gateway);
@@ -293,11 +307,10 @@ export const routeTools: ToolModule = [
       const result = await executeMikrotikCommand(built, ctx);
       if (looksLikeError(result)) return `Failed to update route: ${result}`;
 
-      const details = await executeMikrotikCommand(
-        `/ip route print detail where .id=${a.route_id}`,
-        ctx,
-      );
-      return `Route updated successfully:\n\n${details}`;
+      const details = await executeMikrotikCommand(`/ip route print detail where .id=${id}`, ctx);
+      // Name the resolved .id: when the caller passed a row position, this is
+      // the only way they can tell WHICH route actually changed.
+      return `Route ${id} updated successfully:\n\n${details}`;
     },
   }),
 
@@ -315,15 +328,16 @@ export const routeTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Removing route: route_id=${a.route_id}`);
-      const count = await executeMikrotikCommand(
-        `/ip route print count-only where .id=${a.route_id}`,
-        ctx,
-      );
-      if (count.trim() === "0") return `Route with ID '${a.route_id}' not found.`;
+      const id = await resolveRouteId(a.route_id, ctx);
+      if (!id) return routeNotFound(a.route_id);
 
-      const result = await executeMikrotikCommand(`/ip route remove ${a.route_id}`, ctx);
+      // Show what is about to be deleted, resolved to its .id — a row position
+      // that drifted between the caller's list and this call would otherwise
+      // delete a neighbouring route with no trace of which one it was.
+      const doomed = await executeMikrotikCommand(`/ip route print detail where .id=${id}`, ctx);
+      const result = await executeMikrotikCommand(`/ip route remove ${id}`, ctx);
       if (looksLikeError(result)) return `Failed to remove route: ${result}`;
-      return `Route with ID '${a.route_id}' removed successfully.`;
+      return `Route ${id} removed successfully. Removed entry was:\n\n${doomed}`;
     },
   }),
 

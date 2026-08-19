@@ -347,6 +347,46 @@ function parseDetailRecords(lines: string[]): Record<string, string>[] {
 }
 
 /**
+ * Keep only the `print detail` records whose parsed fields satisfy `predicate`,
+ * returning the ORIGINAL text of the surviving records (preamble/flag legend
+ * intact) rather than a re-rendered table.
+ *
+ * This exists so a tool can filter on something RouterOS's `print where` cannot
+ * express. The device-side `where` accepts only space-separated conjunctive
+ * terms — it has no `or` and no parentheses, so a clause like
+ * `(in-interface~"x" or out-interface~"x")` is not a narrower query, it is a
+ * query that silently matches nothing. Filtering here keeps such a search
+ * honest at the cost of transferring the full list first.
+ *
+ * Returns "" when nothing matches, so `isEmpty()` handles it like any other
+ * empty device reply.
+ */
+export function filterDetailBlocks(
+  text: string,
+  predicate: (row: Record<string, string>) => boolean,
+): string {
+  const lines = text.split(/\r?\n/);
+  // Everything before the first indexed record — the flag legend and column
+  // headers — is context that belongs on any non-empty result.
+  const firstRecord = lines.findIndex((l) => INDEX_LINE.test(l));
+  if (firstRecord === -1) return text;
+
+  const preamble = lines.slice(0, firstRecord);
+  const blocks: string[][] = [];
+  for (const line of lines.slice(firstRecord)) {
+    if (INDEX_LINE.test(line) || blocks.length === 0) blocks.push([]);
+    blocks[blocks.length - 1].push(line);
+  }
+
+  const kept = blocks.filter((block) => {
+    const [row] = parseDetailRecords(block);
+    return row ? predicate(row) : false;
+  });
+  if (kept.length === 0) return "";
+  return [...preamble, ...kept.flat()].join("\n");
+}
+
+/**
  * Parse columnar `print` output by slicing each data row at the header's column
  * start positions (robust to values that contain spaces, unlike a naive split).
  * The leading `#` column also absorbs any flag letters, which we split back out.

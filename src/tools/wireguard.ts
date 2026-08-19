@@ -11,6 +11,19 @@ import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { notFoundMessage, ruleResolver } from "./_resolve-rule-id";
+
+/**
+ * Peer ids drift: removing any peer renumbers the row positions below it, and a
+ * `.id` is reassigned over time. Resolve `peer_id` to a concrete `.id` right
+ * before use so the write and its verification read address the same peer —
+ * `set <N>` takes a bare number as a row position while `where .id=<N>` matches
+ * nothing, so the unresolved form edited one peer and reported another.
+ */
+const resolvePeerId = ruleResolver("/interface wireguard peers");
+
+const peerNotFound = (id: string): string =>
+  notFoundMessage("WireGuard peer", id, "list_wireguard_peers");
 
 export const wireguardTools: ToolModule = [
   // ── WireGuard Interface Management ────────────────────────────────────────
@@ -201,9 +214,10 @@ export const wireguardTools: ToolModule = [
     title: "Remove WireGuard Interface",
     annotations: DESTRUCTIVE,
     description:
-      "Permanently deletes a WireGuard tunnel interface (`/interface wireguard remove`) by name." +
-      " Verifies existence first with count-only; removing the interface also removes all its associated peers." +
-      " For removing only a specific peer without touching the interface use remove_wireguard_peer.",
+      "Permanently deletes a WireGuard tunnel interface (`/interface wireguard remove`) by name," +
+      " together with every peer bound to it. Verifies existence first with count-only." +
+      " For removing only a specific peer without touching the interface use remove_wireguard_peer." +
+      " Reports how many peers were removed alongside the interface.",
     inputSchema: { name: z.string() },
     async handler(a, ctx) {
       ctx.info(`Removing WireGuard interface: name=${a.name}`);
@@ -213,12 +227,39 @@ export const wireguardTools: ToolModule = [
       );
       if (count.trim() === "0") return `WireGuard interface '${a.name}' not found.`;
 
+      // RouterOS does NOT cascade this: peers survive the removal of their
+      // interface and are left pointing at a now-dead name, which then shows up
+      // in `list_wireguard_peers` as a phantom row with a raw `*N` where the
+      // interface name should be. Delete the peers FIRST — after the interface
+      // is gone, `[find interface=...]` no longer matches them and the orphans
+      // can only be cleaned up by internal .id.
+      const peerCount = (
+        await executeMikrotikCommand(
+          `/interface wireguard peers print count-only where interface="${a.name}"`,
+          ctx,
+        )
+      ).trim();
+      if (peerCount !== "0" && !looksLikeError(peerCount)) {
+        const peerResult = await executeMikrotikCommand(
+          `/interface wireguard peers remove [find interface="${a.name}"]`,
+          ctx,
+        );
+        if (looksLikeError(peerResult)) {
+          return (
+            `Failed to remove the peers bound to '${a.name}': ${peerResult}\n` +
+            "The interface was NOT removed — removing it now would orphan those peers."
+          );
+        }
+      }
+
       const result = await executeMikrotikCommand(
         `/interface wireguard remove [find name="${a.name}"]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove WireGuard interface: ${result}`;
-      return `WireGuard interface '${a.name}' removed successfully.`;
+      const peers =
+        peerCount === "0" ? "no peers were bound to it" : `${peerCount} peer(s) removed`;
+      return `WireGuard interface '${a.name}' removed successfully (${peers}).`;
     },
   }),
 
@@ -412,13 +453,13 @@ export const wireguardTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Getting WireGuard peer details: peer_id=${a.peer_id}`);
+      const id = await resolvePeerId(a.peer_id, ctx);
+      if (!id) return peerNotFound(a.peer_id);
       const result = await executeMikrotikCommand(
-        `/interface wireguard peers print detail where .id=${a.peer_id}`,
+        `/interface wireguard peers print detail where .id=${id}`,
         ctx,
       );
-      return isEmpty(result)
-        ? `WireGuard peer with ID '${a.peer_id}' not found.`
-        : `WIREGUARD PEER DETAILS:\n\n${result}`;
+      return isEmpty(result) ? peerNotFound(a.peer_id) : `WIREGUARD PEER DETAILS:\n\n${result}`;
     },
   }),
 
@@ -439,6 +480,13 @@ export const wireguardTools: ToolModule = [
       '  Pass "" for endpoint_address or preshared_key to clear them.',
     inputSchema: {
       peer_id: z.string().describe('"*N" or "N" from list output e.g. "*2"'),
+      public_key: z
+        .string()
+        .optional()
+        .describe(
+          "The peer's base64 public key — re-key a peer in place instead of removing and " +
+            "re-adding it (which would lose the rest of its configuration).",
+        ),
       allowed_address: z.string().optional(),
       endpoint_address: z.string().optional(),
       endpoint_port: z.number().int().optional(),
@@ -476,8 +524,11 @@ export const wireguardTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating WireGuard peer: peer_id=${a.peer_id}`);
-      const base = `/interface wireguard peers set ${a.peer_id}`;
+      const id = await resolvePeerId(a.peer_id, ctx);
+      if (!id) return peerNotFound(a.peer_id);
+      const base = `/interface wireguard peers set ${id}`;
       const cmd = new Cmd(base)
+        .raw(a.public_key !== undefined ? `public-key=${quoteValue(a.public_key)}` : null)
         .raw(
           a.allowed_address !== undefined
             ? `allowed-address=${quoteValue(a.allowed_address)}`
@@ -539,10 +590,10 @@ export const wireguardTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to update WireGuard peer: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface wireguard peers print detail where .id=${a.peer_id}`,
+        `/interface wireguard peers print detail where .id=${id}`,
         ctx,
       );
-      return `WireGuard peer updated successfully:\n\n${details}`;
+      return `WireGuard peer ${id} updated successfully:\n\n${details}`;
     },
   }),
 
@@ -561,18 +612,18 @@ export const wireguardTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Removing WireGuard peer: peer_id=${a.peer_id}`);
-      const count = await executeMikrotikCommand(
-        `/interface wireguard peers print count-only where .id=${a.peer_id}`,
-        ctx,
-      );
-      if (count.trim() === "0") return `WireGuard peer with ID '${a.peer_id}' not found.`;
+      const id = await resolvePeerId(a.peer_id, ctx);
+      if (!id) return peerNotFound(a.peer_id);
 
-      const result = await executeMikrotikCommand(
-        `/interface wireguard peers remove ${a.peer_id}`,
+      // Capture what is about to be deleted so a drifted row position is
+      // visible in the result rather than silently taking out a neighbour.
+      const doomed = await executeMikrotikCommand(
+        `/interface wireguard peers print detail where .id=${id}`,
         ctx,
       );
+      const result = await executeMikrotikCommand(`/interface wireguard peers remove ${id}`, ctx);
       if (looksLikeError(result)) return `Failed to remove WireGuard peer: ${result}`;
-      return `WireGuard peer '${a.peer_id}' removed successfully.`;
+      return `WireGuard peer ${id} removed successfully. Removed entry was:\n\n${doomed}`;
     },
   }),
 
@@ -592,12 +643,11 @@ export const wireguardTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Enabling WireGuard peer: peer_id=${a.peer_id}`);
-      const result = await executeMikrotikCommand(
-        `/interface wireguard peers enable ${a.peer_id}`,
-        ctx,
-      );
+      const id = await resolvePeerId(a.peer_id, ctx);
+      if (!id) return peerNotFound(a.peer_id);
+      const result = await executeMikrotikCommand(`/interface wireguard peers enable ${id}`, ctx);
       if (looksLikeError(result)) return `Failed to enable WireGuard peer: ${result}`;
-      return `WireGuard peer '${a.peer_id}' enabled successfully.`;
+      return `WireGuard peer ${id} enabled successfully.`;
     },
   }),
 
@@ -617,12 +667,11 @@ export const wireguardTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Disabling WireGuard peer: peer_id=${a.peer_id}`);
-      const result = await executeMikrotikCommand(
-        `/interface wireguard peers disable ${a.peer_id}`,
-        ctx,
-      );
+      const id = await resolvePeerId(a.peer_id, ctx);
+      if (!id) return peerNotFound(a.peer_id);
+      const result = await executeMikrotikCommand(`/interface wireguard peers disable ${id}`, ctx);
       if (looksLikeError(result)) return `Failed to disable WireGuard peer: ${result}`;
-      return `WireGuard peer '${a.peer_id}' disabled successfully.`;
+      return `WireGuard peer ${id} disabled successfully.`;
     },
   }),
 

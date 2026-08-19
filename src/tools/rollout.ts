@@ -18,7 +18,7 @@ import type { ToolModule } from "../core/registry";
 import { peekCapabilities } from "../core/capability-cache";
 import { compareVersions, parseVersion } from "../core/firmware-lifecycle";
 import type { ParsedVersion } from "../core/firmware-lifecycle";
-import { getConfig, resolveDeviceName } from "../core/runtime";
+import { getConfig, resolveDeviceName, tryResolveDeviceName } from "../core/runtime";
 import { logger } from "../logger";
 import { publishRollout } from "../observability/rollout-hub";
 import {
@@ -107,7 +107,13 @@ export function resolveTargets(targets: string[] | z.infer<typeof selectorSchema
   const notes: string[] = [];
 
   if (Array.isArray(targets)) {
-    const unknown = targets.filter((t) => !(resolveDeviceName(t) in cfg.devices));
+    // `tryResolveDeviceName`, not `resolveDeviceName`: this branch REPORTS the
+    // unknown names as a plan error rather than throwing on the first one, so it
+    // needs the non-throwing resolver. (The old code called the resolver when it
+    // still fell back to the default — which always returned a real key, so the
+    // filter never matched and an unknown target sailed through as the default
+    // device.)
+    const unknown = targets.filter((t) => !tryResolveDeviceName(t));
     if (unknown.length > 0) {
       return { devices: [], notes, error: `unknown device(s): ${unknown.join(", ")}` };
     }

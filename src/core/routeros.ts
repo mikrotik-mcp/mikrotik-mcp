@@ -287,10 +287,53 @@ export function placeBeforeError(result: string, placeBefore?: string): string |
 export function portConflictError(result: string, port?: number): string | undefined {
   if (!/configured elsewhere/i.test(result)) return undefined;
   const other = result.match(/\*\d+\s*=\s*([A-Za-z][\w-]*)/)?.[1];
-  const which = port != null ? `port ${port}` : "that port";
+  // "configured elsewhere" is RouterOS's generic multi-target rejection, not a
+  // port-specific one — it is also what comes back when a `[find …]` selector
+  // matched several rows. Claiming a port collision when the caller never set a
+  // port sent people hunting for a conflict that does not exist (and made a
+  // plain `disabled=true` look like it was refused over a port).
+  if (port == null) {
+    return (
+      `the device rejected this change with 'configured elsewhere' — the command targeted more ` +
+      `than one row, or the value is owned by another item${
+        other ? ` (RouterOS named '${other}')` : ""
+      }. No port was being changed, so this is not a port collision.`
+    );
+  }
   return other
-    ? `${which} is already used by the '${other}' service — two services can't share a port. Pick a different port, or change/disable '${other}' first (disable_ip_service / set_ip_service).`
-    : `${which} is already in use elsewhere — two items can't share it. Pick a different port, or free it on the conflicting item first.`;
+    ? `port ${port} is already used by the '${other}' service — two services can't share a port. Pick a different port, or change/disable '${other}' first (disable_ip_service / set_ip_service).`
+    : `port ${port} is already in use elsewhere — two items can't share it. Pick a different port, or free it on the conflicting item first.`;
+}
+
+/**
+ * Explain RouterOS's "input does not match any value of interface" rejection.
+ *
+ * `in-interface`/`out-interface` accept an interface NAME only. The two values
+ * people reach for instead — an interface LIST (`WAN`, `LAN`) and a firewall
+ * chain — both produce this same opaque message, which names neither the
+ * offending field nor the fix. Returns guidance naming the field and the
+ * `*_interface_list` alternative, or `undefined` when the error is something
+ * else.
+ *
+ * @param fields  The interface-ish arguments the call actually sent, in
+ *                tool-parameter naming (`in_interface`), so the message can
+ *                point at the parameter the caller wrote rather than at the
+ *                RouterOS property name they never typed.
+ */
+export function interfaceValueError(
+  result: string,
+  fields: { name: string; value?: string }[],
+): string | undefined {
+  if (!/input does not match any value of interface/i.test(result)) return undefined;
+  const sent = fields.filter((f) => f.value !== undefined && f.value !== "");
+  if (sent.length === 0) return undefined;
+  const which = sent.map((f) => `${f.name}='${f.value ?? ""}'`).join(", ");
+  const listHint = sent.map((f) => `${f.name}_list`).join(" / ");
+  return (
+    `the device rejected an interface value (${which}) — it is not the name of an interface ` +
+    `on this router. If you meant an interface LIST (e.g. WAN, LAN), use ${listHint} instead; ` +
+    "list_interfaces shows the valid interface names."
+  );
 }
 
 /**

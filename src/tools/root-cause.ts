@@ -63,14 +63,23 @@ async function collectRoutes(ctx: ToolContext): Promise<{
   const raw = await safe("/ip route print detail", ctx);
   if (!raw) return { routes: [], count: 0, hasDefault: false };
   const rows = parseRecords(raw).rows;
+  // Read the flag letter OR the explicit property. The property test used to be
+  // `=== "true"`, which a console `print detail` never produces — it prints
+  // `active=yes` — so the fallback was dead and detection depended entirely on
+  // the flags being parsed off the index line. When they weren't, a healthy
+  // STATIC default route (`As`) was reported as "no default route". `isYes`
+  // accepts both spellings RouterOS uses.
   const routes: RouteSnapshot[] = rows.map((r) => ({
     dst: r["dst-address"] ?? "",
     gateway: r.gateway ?? "",
     distance: num(r.distance),
-    active: (r.flags ?? "").includes("A") || r.active === "true",
-    dynamic: (r.flags ?? "").includes("D") || r.dynamic === "true",
+    active: (r.flags ?? "").includes("A") || isYes(r.active),
+    dynamic: (r.flags ?? "").includes("D") || isYes(r.dynamic),
   }));
-  const hasDefault = routes.some((r) => r.dst === "0.0.0.0/0" && r.active);
+  // A default route may be written either way; `::/0` is the IPv6 spelling and
+  // shows up here when the table is dual-stack.
+  const isDefaultDst = (dst: string): boolean => dst === "0.0.0.0/0" || dst === "0.0.0.0/0*";
+  const hasDefault = routes.some((r) => isDefaultDst(r.dst) && r.active);
   return { routes, count: routes.length, hasDefault };
 }
 

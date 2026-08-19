@@ -43,7 +43,8 @@ export const speedTestTools: ToolModule = [
       // `/tool speed-test` params are: address, test-duration, connection-count,
       // user, password. It has NO `direction` (it always tests both ways) and the
       // duration param is `test-duration`, not `duration`.
-      const cmd = new Cmd(`/tool speed-test address=${a.address}`)
+      const cmd = new Cmd("/tool speed-test")
+        .set("address", a.address)
         .set("test-duration", `${a.duration}s`)
         .opt("connection-count", a.connection_count)
         .opt("user", a.user)

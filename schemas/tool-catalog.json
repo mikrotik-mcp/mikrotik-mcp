@@ -12782,7 +12782,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Gets the full detail of one IPv4 firewall FILTER rule (`/ip firewall filter`) by id — every matcher, action, counter and flag. For IPv6 use get_ipv6_filter_rule. rule_id: preferably the `.id` from list_filter_rules e.g. \"*1F\". A bare number like \"3\" is tried as `.id=*3` first, then as the positional row index if no `.id` matches.",
+      "description": "Gets the full detail of one IPv4 firewall FILTER rule (`/ip firewall filter`) by id — every matcher, action, counter and flag. For IPv6 use get_ipv6_filter_rule. rule_id: preferably the `.id` from list_filter_rules e.g. \"*1F\". A bare number like \"3\" is read as the positional ROW INDEX and resolved to whatever `.id` currently sits there — it is never treated as `.id=*3`, since a `*N` id is hex and reassigned over time. Row positions shift whenever a rule is added, removed or moved, so prefer the `.id`.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -17664,7 +17664,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Permanently deletes a WireGuard tunnel interface (`/interface wireguard remove`) by name. Verifies existence first with count-only; removing the interface also removes all its associated peers. For removing only a specific peer without touching the interface use remove_wireguard_peer.",
+      "description": "Permanently deletes a WireGuard tunnel interface (`/interface wireguard remove`) by name, together with every peer bound to it. Verifies existence first with count-only. For removing only a specific peer without touching the interface use remove_wireguard_peer. Reports how many peers were removed alongside the interface.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -17872,6 +17872,10 @@
           "peer_id": {
             "type": "string",
             "description": "\"*N\" or \"N\" from list output e.g. \"*2\""
+          },
+          "public_key": {
+            "description": "The peer's base64 public key — re-key a peer in place instead of removing and re-adding it (which would lose the rest of its configuration).",
+            "type": "string"
           },
           "allowed_address": {
             "type": "string"

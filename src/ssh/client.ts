@@ -29,6 +29,23 @@ import { logger } from "../logger";
  */
 const RUN_IDLE_TIMEOUT_MS = 60_000;
 
+/**
+ * Absolute wall-clock ceiling on a single `run()` that did not ask for its own
+ * `maxMs` cap.
+ *
+ * The idle watchdog above is re-armed by every chunk, so a command that dribbles
+ * output forever — or one whose channel stays open behind a slow paged read —
+ * can sit there indefinitely without ever looking "idle". That is how a call
+ * ends up wedged for minutes and burns the whole session waiting. This deadline
+ * is never re-armed: whatever else happens, a command either finishes or fails
+ * with a real error inside this window.
+ *
+ * Deliberately below the multi-minute patience of a typical MCP client, so the
+ * failure surfaces as a tool error the model can act on rather than as a silent
+ * stall it cannot distinguish from slowness.
+ */
+const RUN_HARD_TIMEOUT_MS = 120_000;
+
 export interface SSHClientOptions {
   host: string;
   username: string;
@@ -245,9 +262,11 @@ export class MikroTikSSHClient {
         let settled = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         let idleTimer: ReturnType<typeof setTimeout> | undefined;
+        let hardTimer: ReturnType<typeof setTimeout> | undefined;
         const clearTimers = (): void => {
           if (timer) clearTimeout(timer);
           if (idleTimer) clearTimeout(idleTimer);
+          if (hardTimer) clearTimeout(hardTimer);
         };
         const finish = (): void => {
           if (settled) return;
@@ -311,6 +330,28 @@ export class MikroTikSSHClient {
             }
             finish();
           }, opts.maxMs);
+        } else {
+          // No caller-supplied cap: enforce the absolute deadline. Unlike the
+          // idle watchdog this is armed ONCE and never re-armed, so a command
+          // that trickles output forever still terminates. It FAILS rather than
+          // resolving with whatever arrived — a partial `print` that looks like a
+          // complete one is worse than an error, because the model would go on
+          // to make decisions from a truncated view of the device.
+          hardTimer = setTimeout(() => {
+            try {
+              stream.signal("INT");
+            } catch {
+              /* RouterOS may not honour signals */
+            }
+            const got = Buffer.concat(stdout).length;
+            fail(
+              new Error(
+                `MikroTik command exceeded the ${RUN_HARD_TIMEOUT_MS / 1000}s hard timeout and was ` +
+                  `aborted (${got} bytes received, output discarded as incomplete). ` +
+                  `Command: ${command.slice(0, 120)}`,
+              ),
+            );
+          }, RUN_HARD_TIMEOUT_MS);
         }
         stream
           .on("close", finish)

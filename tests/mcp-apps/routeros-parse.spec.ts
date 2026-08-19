@@ -15,6 +15,7 @@ import {
   parseRecords,
   parseDisks,
   buildRecordsView,
+  filterDetailBlocks,
 } from "../../src/core/routeros-parse";
 
 describe("parseKeyValues", () => {
@@ -379,5 +380,48 @@ describe("parseRouterosDate / parseCertExpiry", () => {
     expect(byName.server).toBe(30); // Jan 31 − Jan 1
     expect(byName["old-ca"]).toBe(-31); // expired
     expect(byName["unsigned-template"]).toBeNull(); // no invalid-after
+  });
+});
+
+describe("filterDetailBlocks", () => {
+  // A realistic `/ip firewall filter print detail` reply: the interface fields
+  // are absent on rules that don't match on them, which is exactly why the
+  // device-side `where` could not express this search.
+  const RULES = [
+    "Flags: X - disabled, I - invalid, D - dynamic",
+    " 0    chain=input action=accept connection-state=established,related log=no",
+    " 1    chain=forward action=drop in-interface=ether1 protocol=tcp dst-port=23 log=no",
+    " 2    chain=forward action=accept out-interface=ether1 protocol=udp log=no",
+    " 3    chain=forward action=drop in-interface-list=WAN log=no",
+  ].join("\n");
+
+  it("keeps only matching records and preserves their original text", () => {
+    const out = filterDetailBlocks(RULES, (r) => r.protocol === "tcp");
+    expect(out).toContain("dst-port=23");
+    expect(out).not.toContain("protocol=udp");
+    // The flag legend is context for whatever survived, so it rides along.
+    expect(out).toContain("Flags: X - disabled");
+  });
+
+  it("matches either interface direction, including the list forms", () => {
+    const onEther1 = filterDetailBlocks(RULES, (r) =>
+      [r["in-interface"], r["out-interface"]].some((v) => (v ?? "").includes("ether1")),
+    );
+    expect(onEther1).toContain("dst-port=23"); // in-interface
+    expect(onEther1).toContain("protocol=udp"); // out-interface
+    expect(onEther1).not.toContain("in-interface-list=WAN");
+
+    const onWan = filterDetailBlocks(RULES, (r) => (r["in-interface-list"] ?? "").includes("WAN"));
+    expect(onWan).toContain("in-interface-list=WAN");
+  });
+
+  it("returns empty (not the whole list) when nothing matches", () => {
+    // The failure mode this guards: a filter that silently degrades to "no
+    // filter" is far worse than one that honestly returns nothing.
+    expect(filterDetailBlocks(RULES, (r) => r.protocol === "icmp")).toBe("");
+  });
+
+  it("passes through output that has no indexed records", () => {
+    expect(filterDetailBlocks("no such item", () => false)).toBe("no such item");
   });
 });

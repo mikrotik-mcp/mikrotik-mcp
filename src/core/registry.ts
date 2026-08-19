@@ -11,7 +11,13 @@ import { containsRawParserError, indicatesFailure } from "./routeros";
 import { buildRecordsView } from "./routeros-parse";
 import { toolUiMeta, uiViewUri } from "./ui-meta";
 import type { UiLink } from "./ui-meta";
-import { getConfig, resolveDeviceName, resolvedTarget } from "./runtime";
+import {
+  getConfig,
+  resolveDeviceName,
+  resolvedTarget,
+  tryResolveDeviceName,
+  unknownDeviceMessage,
+} from "./runtime";
 import type { DeviceDirectoryEntry } from "./runtime";
 import { evaluateAccess, getAccessPolicy, recordDenial } from "./access";
 import { explainUnmet } from "./capability";
@@ -279,6 +285,38 @@ export function gatingDecision(
   return { prefix: `[unavailable on this device: ${unmet}]` };
 }
 
+/**
+ * The named HTML entities a model reaches for when it "helpfully" escapes text.
+ *
+ * Deliberately narrow: only the five that stand for characters RouterOS accepts
+ * verbatim. A numeric-entity sweep or a broad `&\w+;` pattern would flag values
+ * that are legitimately about markup, and the point is to catch escaping the
+ * caller did not intend, not to police the content of comments.
+ */
+const HTML_ENTITIES = /&(amp|lt|gt|quot|#0?39|apos);/i;
+
+/**
+ * Find a write argument carrying HTML-escaped text, returning an actionable
+ * message naming the field — or `undefined` when everything is clean.
+ *
+ * Only string values are inspected, one level deep; nothing in the tool surface
+ * nests user text deeper than that.
+ */
+function htmlEscapedArgument(args: Record<string, unknown>): string | undefined {
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value !== "string") continue;
+    const hit = value.match(HTML_ENTITIES);
+    if (!hit) continue;
+    return (
+      `'${key}' contains HTML-escaped text (${hit[0]}). RouterOS stores it literally, so the ` +
+      `value would be saved with "${hit[0]}" in it and every later exact lookup ` +
+      `(e.g. [find comment="…"]) would fail to match. Send the character itself ` +
+      `(&, <, >, ", ') — quoting and escaping for the console is handled automatically.`
+    );
+  }
+  return undefined;
+}
+
 export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): RegisterableTool {
   return {
     name: def.name,
@@ -354,6 +392,39 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
         // Peel injected selectors off before handing args to the handler.
         const { device, reason, ...rest } = args as { device?: unknown; reason?: unknown };
         const deviceName = typeof device === "string" ? device : undefined;
+
+        // Fail-closed device targeting. The `device` argument is a free-form
+        // string by design (the device set is mutable at runtime, tool schemas
+        // are not), so an unknown name is caught HERE — before the access-policy
+        // check, the capability probe, the device stamp, or any connection.
+        // Everything below this line may assume `deviceName` names a real,
+        // enabled device. Validated eagerly rather than left to the connector so
+        // a name that is never used to open a connection (a tool that only reads
+        // cached state) still reports the typo instead of quietly using the
+        // default router.
+        if (!def.noDevice && deviceName !== undefined && !tryResolveDeviceName(deviceName)) {
+          const text = `Error: ${unknownDeviceMessage(deviceName)}`;
+          logger.error(text);
+          sendLog?.("error", text);
+          return { content: [{ type: "text", text }], isError: true };
+        }
+
+        // Reject HTML-escaped text before it is written to the device. RouterOS
+        // stores `&amp;` / `&lt;` / `&quot;` literally, so an escaped comment is
+        // silently corrupted AT REST: every later `[find comment="…"]` lookup
+        // against the real text misses it, which is why callers end up forced
+        // onto fuzzy `~` matching. Caught centrally rather than in each of the
+        // ~100 tools that take a `comment`, and only on write — a read filter
+        // may legitimately search for the literal string.
+        if (risk !== "READ") {
+          const escaped = htmlEscapedArgument(rest);
+          if (escaped) {
+            const text = `Error: ${escaped}`;
+            logger.error(text);
+            sendLog?.("error", text);
+            return { content: [{ type: "text", text }], isError: true };
+          }
+        }
 
         // ── Access scope. First guard in the chain, before any device I/O and
         // before the capability probe: an out-of-scope call must not be able to

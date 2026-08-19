@@ -9,6 +9,7 @@ import {
   listDevices,
   resolveDeviceName,
   setConfig,
+  tryResolveDeviceName,
 } from "../src/core/runtime";
 
 const SAVED = { ...process.env };
@@ -100,10 +101,23 @@ describe("device resolution", () => {
     expect(d.default).toBe("site-a");
   });
 
-  test("resolveDeviceName falls back to the default", () => {
+  test("resolveDeviceName defaults only for an OMITTED name", () => {
     expect(resolveDeviceName(undefined)).toBe("site-a");
     expect(resolveDeviceName("site-b")).toBe("site-b");
-    expect(resolveDeviceName("nope")).toBe("site-a");
+  });
+
+  // Fail-closed: the whole point. A name the config does not know must never
+  // degrade into "run it on the default router" — that silently retargets a
+  // write at the wrong physical device.
+  test("resolveDeviceName THROWS on an unknown name instead of defaulting", () => {
+    expect(() => resolveDeviceName("nope")).toThrow(/Unknown device 'nope'/);
+    expect(() => resolveDeviceName("nope")).toThrow(/NOT run against the default device/);
+  });
+
+  test("tryResolveDeviceName reports unknown as undefined without throwing", () => {
+    expect(tryResolveDeviceName("site-b")).toBe("site-b");
+    expect(tryResolveDeviceName("nope")).toBeUndefined();
+    expect(tryResolveDeviceName(undefined)).toBeUndefined();
   });
 
   test("getDevice returns the right host and throws on unknown names", () => {

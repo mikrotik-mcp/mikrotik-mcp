@@ -93,26 +93,66 @@ export function deviceLabels(): string[] {
   return out;
 }
 
-/**
- * Resolve a (possibly undefined) device name to a concrete, existing config key.
- * Accepts a config key OR a device's free-text label; falls back to the default.
- * Only resolves to enabled devices.
- *
- * Matching is EXACT (key first, then label) — never fuzzy/substring — so a name
- * like "Ali Home" can never collapse onto a different device such as "home".
- */
-export function resolveDeviceName(name?: string): string {
-  if (name) {
-    if (name in active.devices && isEnabled(active.devices[name])) return name;
-    const byLabel = deviceKeyForLabel(name);
-    if (byLabel) return byLabel;
-  }
-  // Fallback: first enabled device, preferring the configured default.
+/** The default target: the configured default when enabled, else the first enabled device. */
+function defaultDeviceKey(): string {
   if (active.defaultDevice in active.devices && isEnabled(active.devices[active.defaultDevice])) {
     return active.defaultDevice;
   }
   const firstEnabled = Object.entries(active.devices).find(([, dc]) => isEnabled(dc));
   return firstEnabled ? firstEnabled[0] : active.defaultDevice;
+}
+
+/**
+ * Resolve a device name to a config key WITHOUT falling back — `undefined` when
+ * the name matches no enabled device. Callers that must tolerate an unknown name
+ * (HTTP query strings, plan validation that reports unknown targets itself) use
+ * this; everything that is about to touch a router uses {@link resolveDeviceName}.
+ *
+ * Matching is EXACT (key first, then label) — never fuzzy/substring — so a name
+ * like "Ali Home" can never collapse onto a different device such as "home".
+ */
+export function tryResolveDeviceName(name?: string): string | undefined {
+  if (!name) return undefined;
+  if (name in active.devices && isEnabled(active.devices[name])) return name;
+  return deviceKeyForLabel(name);
+}
+
+/**
+ * Resolve a (possibly undefined) device name to a concrete, existing config key.
+ * Accepts a config key OR a device's free-text label. An omitted name uses the
+ * configured default.
+ *
+ * FAIL-CLOSED: a name that matches no enabled device THROWS. It must never
+ * degrade to the default router — a typo'd or stale device name silently
+ * retargeting a write at whichever device happens to be first is the one bug
+ * class here that can misconfigure the wrong physical device. `getDevice()`
+ * already threw for this, but every caller resolved the name first and then
+ * handed the laundered key to `getDevice`, so that guard could never fire.
+ *
+ * Matching is EXACT (key first, then label) — never fuzzy/substring — so a name
+ * like "Ali Home" can never collapse onto a different device such as "home".
+ */
+export function resolveDeviceName(name?: string): string {
+  if (!name) return defaultDeviceKey();
+  const resolved = tryResolveDeviceName(name);
+  if (resolved) return resolved;
+  throw new Error(unknownDeviceMessage(name));
+}
+
+/** The error text for a name that resolves to no enabled device. */
+export function unknownDeviceMessage(name: string): string {
+  const enabled = listDevices().names;
+  // A name that IS configured but disabled gets its own message: "unknown" would
+  // send the caller hunting for a typo that isn't there.
+  const disabled = name in active.devices && !isEnabled(active.devices[name]);
+  if (disabled) {
+    return `Device '${name}' is disabled. Enable it from the dashboard or config file. Enabled devices: ${enabled.join(", ")}`;
+  }
+  return (
+    `Unknown device '${name}'. Enabled devices: ${enabled.join(", ") || "(none)"}. ` +
+    "Call list_mikrotik_devices for the authoritative current set — this was NOT run against " +
+    "the default device."
+  );
 }
 
 /** One row of the human-facing device directory shown in the `device` selector. */
@@ -169,11 +209,9 @@ export function resolvedTarget(name?: string): {
  * label, or if the device is disabled.
  */
 export function getDevice(name?: string): DeviceConfig {
-  if (name && !(name in active.devices) && !deviceKeyForLabel(name)) {
-    throw new Error(
-      `Unknown device '${name}'. Configured devices: ${Object.keys(active.devices).join(", ")}`,
-    );
-  }
+  // `resolveDeviceName` is the single gate for unknown/disabled names — it
+  // throws rather than falling back, so there is no second check to keep in
+  // sync here (an earlier duplicate check was dead: callers resolved first).
   const key = resolveDeviceName(name);
   const dc = active.devices[key];
   if (!dc) throw new Error(`No device configuration available for '${key}'.`);

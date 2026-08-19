@@ -16,12 +16,14 @@ import {
   looksLikeError,
   isEmpty,
   placeBeforeError,
+  interfaceValueError,
   extractCreatedId,
   readBackUnavailable,
   Cmd,
 } from "../core/routeros";
+import { filterDetailBlocks } from "../core/routeros-parse";
 import type { ToolContext } from "../core/context";
-import { ruleResolver } from "./_resolve-rule-id";
+import { listItemIds, ruleResolver } from "./_resolve-rule-id";
 
 const isDigits = (s: string): boolean => /^\d+$/.test(s);
 
@@ -186,7 +188,13 @@ async function updateFilterRule(
   if (!id) return `Firewall filter rule '${a.rule_id}' not found.`;
   const cmd = `/ip firewall filter set ${id} ${updates.join(" ")}`;
   const result = await executeMikrotikCommand(cmd, ctx);
-  if (looksLikeError(result)) return `Failed to update firewall filter rule: ${result}`;
+  if (looksLikeError(result)) {
+    const hint = interfaceValueError(result, [
+      { name: "in_interface", value: a.in_interface },
+      { name: "out_interface", value: a.out_interface },
+    ]);
+    return `Failed to update firewall filter rule: ${hint ?? result}`;
+  }
 
   const details = await executeMikrotikCommand(
     `/ip firewall filter print detail where .id=${id}`,
@@ -400,7 +408,12 @@ export const firewallFilterTools: ToolModule = [
 
       // A device error (e.g. a bad place-before) — surface it, never "created".
       if (looksLikeError(trimmed)) {
-        const hint = placeBeforeError(trimmed, a.place_before);
+        const hint =
+          placeBeforeError(trimmed, a.place_before) ??
+          interfaceValueError(trimmed, [
+            { name: "in_interface", value: a.in_interface },
+            { name: "out_interface", value: a.out_interface },
+          ]);
         return `Failed to create firewall filter rule: ${hint ?? trimmed}`;
       }
 
@@ -464,17 +477,17 @@ export const firewallFilterTools: ToolModule = [
         `Listing firewall filter rules with filters: chain=${a.chain_filter}, action=${a.action_filter}`,
       );
 
+      // Device-side `where` handles only what it can express reliably: plain
+      // equality on properties every rule carries. RouterOS's print filter has
+      // no `or` and no parentheses, and a `~` match against a property the rule
+      // never set does not match — so `protocol` and the interface fields
+      // (absent on any rule that doesn't match on them) were filtering
+      // everything out instead of narrowing. Those run client-side below.
       const filters: string[] = [];
       if (a.chain_filter) filters.push(`chain=${a.chain_filter}`);
       if (a.action_filter) filters.push(`action=${a.action_filter}`);
       if (a.src_address_filter) filters.push(`src-address~"${a.src_address_filter}"`);
       if (a.dst_address_filter) filters.push(`dst-address~"${a.dst_address_filter}"`);
-      if (a.protocol_filter) filters.push(`protocol=${a.protocol_filter}`);
-      if (a.interface_filter) {
-        filters.push(
-          `(in-interface~"${a.interface_filter}" or out-interface~"${a.interface_filter}")`,
-        );
-      }
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");
@@ -482,10 +495,35 @@ export const firewallFilterTools: ToolModule = [
       // Use `print detail` so the output includes `.id` values (e.g. *0, *1F).
       // Plain `print` shows only positional row numbers in the `#` column, and
       // users often mistake those for `.id` — leading to silent wrong-rule lookups.
-      const result = await executeMikrotikCommand(
+      const raw = await executeMikrotikCommand(
         `/ip firewall filter print detail${whereClause(filters)}`,
         ctx,
       );
+
+      const protocolWanted = a.protocol_filter?.toLowerCase();
+      const interfaceWanted = a.interface_filter?.toLowerCase();
+      const result =
+        protocolWanted || interfaceWanted
+          ? filterDetailBlocks(raw, (row) => {
+              if (protocolWanted && (row.protocol ?? "").toLowerCase() !== protocolWanted) {
+                return false;
+              }
+              if (interfaceWanted) {
+                // Matches either direction, and the list forms too — a rule that
+                // matches "WAN" via in-interface-list is a rule on that interface
+                // as far as the caller is concerned.
+                const hit = [
+                  row["in-interface"],
+                  row["out-interface"],
+                  row["in-interface-list"],
+                  row["out-interface-list"],
+                ].some((v) => (v ?? "").toLowerCase().includes(interfaceWanted));
+                if (!hit) return false;
+              }
+              return true;
+            })
+          : raw;
+
       return isEmpty(result)
         ? "No firewall filter rules found matching the criteria."
         : `FIREWALL FILTER RULES:\n\n${result}`;
@@ -500,7 +538,9 @@ export const firewallFilterTools: ToolModule = [
       "Gets the full detail of one IPv4 firewall FILTER rule (`/ip firewall filter`) by id — " +
       "every matcher, action, counter and flag. For IPv6 use get_ipv6_filter_rule. " +
       'rule_id: preferably the `.id` from list_filter_rules e.g. "*1F". A bare number like "3" ' +
-      "is tried as `.id=*3` first, then as the positional row index if no `.id` matches.",
+      "is read as the positional ROW INDEX and resolved to whatever `.id` currently sits there — " +
+      "it is never treated as `.id=*3`, since a `*N` id is hex and reassigned over time. Row " +
+      "positions shift whenever a rule is added, removed or moved, so prefer the `.id`.",
     inputSchema: {
       rule_id: z.string().describe('Rule .id e.g. "*1F", or bare position number e.g. "3"'),
     },
@@ -644,12 +684,40 @@ export const firewallFilterTools: ToolModule = [
       const id = await resolveFilterRuleId(a.rule_id, ctx);
       if (!id) return `Firewall filter rule '${a.rule_id}' not found.`;
 
+      const before = await listItemIds("/ip firewall filter", ctx);
       const result = await executeMikrotikCommand(
         `/ip firewall filter move ${id} destination=${a.destination}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to move firewall filter rule: ${result}`;
-      return `Firewall filter rule '${a.rule_id}' (${id}) moved to position ${a.destination}.`;
+
+      // RouterOS silently no-ops a `move` whose destination is out of range or
+      // already the rule's position — it returns nothing, exactly like success.
+      // Reporting the requested position on that basis is a lie the caller acts
+      // on (they believe the ordering changed), so read the order back and
+      // report where the rule ACTUALLY is.
+      const after = await listItemIds("/ip firewall filter", ctx);
+      const from = before.indexOf(id);
+      const to = after.indexOf(id);
+      if (to === -1) {
+        return `Firewall filter rule ${id} moved, but it could not be located afterwards — verify with list_filter_rules.`;
+      }
+      if (to === a.destination) {
+        return `Firewall filter rule '${a.rule_id}' (${id}) moved to position ${to}.`;
+      }
+      if (to === from) {
+        return (
+          `NO CHANGE: firewall filter rule '${a.rule_id}' (${id}) is still at position ${to} — ` +
+          `RouterOS ignored the move to ${a.destination}. Destination is 0-based and counts ` +
+          `ALL rules in the menu (${after.length} total), not just this rule's chain; a ` +
+          "destination at or past the end, or equal to the current position, does nothing."
+        );
+      }
+      return (
+        `Firewall filter rule '${a.rule_id}' (${id}) moved from position ${from} to ${to} ` +
+        `(requested ${a.destination} — RouterOS places the rule BEFORE the item currently at ` +
+        "the destination index, so the final index can differ when moving downward)."
+      );
     },
   }),
 

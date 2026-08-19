@@ -103,8 +103,17 @@ describe("portConflictError", () => {
     expect(msg).toContain("port 1996");
     expect(msg).toContain("'telnet'");
   });
-  test("falls back gracefully without a port or named item", () => {
-    expect(portConflictError("failure: this is configured elsewhere")).toContain("that port");
+  // With no port in play the failure cannot BE a port collision — most often it
+  // is a `[find …]` selector that matched several rows. Saying "port" there sent
+  // callers hunting for a conflict that does not exist.
+  test("does not blame a port when no port was being set", () => {
+    const msg = portConflictError("failure: this is configured elsewhere");
+    expect(msg).toContain("more than one row");
+    expect(msg).toContain("not a port collision");
+    expect(msg).not.toContain("that port");
+  });
+  test("still names the row RouterOS pointed at when no port was set", () => {
+    expect(portConflictError(err)).toContain("'telnet'");
   });
   test("returns undefined for unrelated errors", () => {
     expect(portConflictError("failure: already have such entry", 22)).toBeUndefined();

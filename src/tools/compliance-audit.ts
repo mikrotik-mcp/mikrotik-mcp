@@ -211,7 +211,12 @@ export const complianceAuditTools: ToolModule = [
 
       // Audit each device — sequential to avoid overwhelming connections
       const results: { device: string; report: ComplianceReport; text: string }[] = [];
-      const failTally = new Map<string, number>();
+      // Keyed by check id; `label` is the FAILING result's own wording, kept
+      // because a check's `title` states the desired PASS condition ("Telnet
+      // disabled"). Printing that title under "MOST COMMON FAILURES" says the
+      // exact opposite of what happened — it reads as though telnet is disabled
+      // on those devices, when the check failed because it is enabled.
+      const failTally = new Map<string, { count: number; label: string; status: string }>();
 
       for (const deviceName of targets) {
         const resolved = resolveDeviceName(deviceName);
@@ -230,7 +235,13 @@ export const complianceAuditTools: ToolModule = [
           // Tally failures across fleet
           for (const e of report.evaluatedChecks) {
             if (e.result.status === "fail" || e.result.status === "warn") {
-              failTally.set(e.check.id, (failTally.get(e.check.id) ?? 0) + 1);
+              const prev = failTally.get(e.check.id);
+              failTally.set(e.check.id, {
+                count: (prev?.count ?? 0) + 1,
+                label: e.result.label,
+                // A "fail" anywhere in the fleet outranks a "warn" for labelling.
+                status: prev?.status === "fail" ? "fail" : e.result.status,
+              });
             }
           }
         } catch (err) {
@@ -289,12 +300,19 @@ export const complianceAuditTools: ToolModule = [
 
       // Most common failures
       if (failTally.size > 0) {
-        const sorted = [...failTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const sorted = [...failTally.entries()]
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 10);
         lines.push("── MOST COMMON FAILURES ───────────────────────────────────────");
-        for (const [id, count] of sorted) {
+        for (const [id, { count, label, status }] of sorted) {
           const check = ALL_CHECKS.find((c) => c.id === id);
+          // Show what is WRONG (the failing result's label), not the check's
+          // pass-state title. The title is appended as "should be: …" so the
+          // desired end state is still visible without being mistaken for the
+          // current one.
+          const want = check?.title ? `  (should be: ${check.title})` : "";
           lines.push(
-            `  ${String(count).padStart(2)}/${targets.length} devices  ${id.padEnd(30)}  ${check?.title ?? ""}`,
+            `  ${String(count).padStart(2)}/${targets.length} devices  ${status.toUpperCase().padEnd(4)}  ${id.padEnd(30)}  ${label}${want}`,
           );
         }
         lines.push("");

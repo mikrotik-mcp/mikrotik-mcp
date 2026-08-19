@@ -11,6 +11,20 @@ import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { looksLikeError, isEmpty, portConflictError, Cmd } from "../core/routeros";
 
+/**
+ * Select exactly the ONE configurable `/ip service` row for a name.
+ *
+ * A bare `[find name="telnet"]` can match more than one row: RouterOS also
+ * carries dynamic service entries (flagged `D`), and handing `set`/`disable`
+ * two ids makes the device reject the whole command with
+ * `failure: this is configured elsewhere (/ip/service/set *0 = telnet)`.
+ * That failure is indistinguishable at a glance from a port collision, so it
+ * used to surface as a bogus "that port is already used by …" message and
+ * blocked hardening outright. `and !dynamic` narrows to the static row; when no
+ * dynamic row exists it selects the same single row as before.
+ */
+const staticService = (name: string): string => `[find name="${name}" and !dynamic]`;
+
 export const ipServiceTools: ToolModule = [
   defineTool({
     name: "list_ip_services",
@@ -62,7 +76,7 @@ export const ipServiceTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating IP service: name=${a.name}`);
-      const cmd = new Cmd(`/ip service set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/ip service set ${staticService(a.name)}`)
         .opt("port", a.port)
         .opt("address", a.address)
         .bool("disabled", a.disabled)
@@ -98,7 +112,7 @@ export const ipServiceTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling IP service: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ip service enable [find name="${a.name}"]`,
+        `/ip service enable ${staticService(a.name)}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable IP service: ${result}`;
@@ -118,7 +132,7 @@ export const ipServiceTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling IP service: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ip service disable [find name="${a.name}"]`,
+        `/ip service disable ${staticService(a.name)}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable IP service: ${result}`;
