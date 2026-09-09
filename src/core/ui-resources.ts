@@ -13,7 +13,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerAppResource, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
+import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { UI_DIST_DIR } from "../paths";
 import { uiViewUri } from "./ui-meta";
 
@@ -95,8 +95,9 @@ export function registerUiResources(server: McpServer): number {
   for (const view of UI_VIEWS) {
     const uri = uiViewUri(view.id);
     const file = join(UI_DIST_DIR, `${view.id}.html`);
-    registerAppResource(
-      server,
+    // ext-apps 2's registration helper targets SDK 2. Register with our SDK 1
+    // server directly, preserving the MCP Apps MIME type and resource metadata.
+    server.registerResource(
       view.name,
       uri,
       { description: view.description, mimeType: RESOURCE_MIME_TYPE },

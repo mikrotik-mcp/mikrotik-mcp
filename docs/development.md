@@ -37,9 +37,29 @@ All scripts are defined in `package.json`.
 
 ## Testing & type-checking
 
+Type-checking uses **TypeScript 7**: `@typescript/native` is an npm alias for
+`typescript@^7.0.2` and supplies the local `tsc` executable. Run `bun install`
+before checking types so scripts use the project compiler.
+
+The `typescript` dependency aliases `@typescript/typescript6`, which preserves
+the compiler API needed by build tools such as bunup's declaration tooling.
+It supplies `tsc6` without replacing TypeScript 7's `tsc`. This follows the
+[official side-by-side setup](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/).
+Both packages are development dependencies; the Bun server does not require a
+TypeScript compiler at runtime.
+
+Vite+ supplies the Vitest runner. Keep `@vitest/ui` and `@vitest/coverage-v8`
+at the same version as that runner (currently `4.1.11` with Vite+ `0.3.1`),
+rather than upgrading those plugins independently to the newest major.
+
+MCP App frontends use `ext-apps` 2 with its `@modelcontextprotocol/client` and
+`@modelcontextprotocol/core` peers. The server still uses SDK 1 and registers
+HTML resources directly with `server.registerResource`, preserving the MCP Apps
+MIME type; the `ext-apps` 2 server helper is typed for SDK 2.
+
 ```bash
-bun test            # behavior
-bun run test:types  # tsc --noEmit, no emit, just type safety
+bun run test        # offline Vitest suite
+bun run test:types  # TypeScript 7: tsc --noEmit
 ```
 
 ## Building

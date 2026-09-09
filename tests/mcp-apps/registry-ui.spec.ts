@@ -7,6 +7,9 @@
  * fallback. No device or network is touched.
  */
 import { describe, it, expect } from "vite-plus/test";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { defineTool, READ, WRITE } from "../../src/core/registry";
 import {
   toolUiMeta,
@@ -14,7 +17,7 @@ import {
   UI_RESOURCE_URI_LEGACY_KEY,
   OPENAI_OUTPUT_TEMPLATE_KEY,
 } from "../../src/core/ui-meta";
-import { uiViewUri, UI_VIEWS } from "../../src/core/ui-resources";
+import { registerUiResources, uiViewUri, UI_VIEWS } from "../../src/core/ui-resources";
 
 interface Captured {
   name: string;
@@ -199,6 +202,34 @@ describe("defineTool — auto records view for read tools", () => {
 });
 
 describe("UI view registry", () => {
+  it("lists and reads MCP App resources through the installed server SDK", async () => {
+    const server = new McpServer({ name: "resource-test", version: "1.0.0" });
+    const client = new Client({ name: "resource-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    registerUiResources(server);
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+      const { resources } = await client.listResources();
+      expect(resources).toHaveLength(UI_VIEWS.length);
+      for (const view of UI_VIEWS) {
+        const uri = uiViewUri(view.id);
+        expect(resources.find((r) => r.uri === uri)).toMatchObject({
+          name: view.name,
+          description: view.description,
+          mimeType: UI_RESOURCE_MIME_TYPE,
+        });
+        const { contents } = await client.readResource({ uri });
+        expect(contents[0]).toMatchObject({ uri, mimeType: UI_RESOURCE_MIME_TYPE });
+        const content = contents[0];
+        expect("text" in content ? content.text : undefined).toMatch(/<html/i);
+      }
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("builds a stable ui:// uri from a view id", () => {
     expect(uiViewUri("dashboard")).toBe("ui://mikrotik/dashboard.html");
   });
