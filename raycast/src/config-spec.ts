@@ -628,7 +628,13 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         key: "maxRisk",
         label: "Maximum risk",
         type: "select",
-        options: ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"],
+        options: [
+          "READ",
+          "WRITE",
+          "WRITE_IDEMPOTENT",
+          "DESTRUCTIVE",
+          "DANGEROUS",
+        ],
         help: "Highest tier a caller may invoke. READ is equivalent to read-only mode.",
       },
       {

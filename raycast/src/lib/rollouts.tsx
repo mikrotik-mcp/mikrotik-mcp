@@ -38,7 +38,10 @@ import type {
 
 const ALERTED_KEY = "rollouts:alerted-halts";
 
-const OUTCOME_META: Record<RolloutOutcome | "LIVE", { color: Color; icon: Icon; blurb: string }> = {
+const OUTCOME_META: Record<
+  RolloutOutcome | "LIVE",
+  { color: Color; icon: Icon; blurb: string }
+> = {
   completed: {
     color: Color.Green,
     icon: Icon.CheckCircle,
@@ -52,7 +55,8 @@ const OUTCOME_META: Record<RolloutOutcome | "LIVE", { color: Color; icon: Icon; 
   halted: {
     color: Color.Orange,
     icon: Icon.Pause,
-    blurb: "Stopped at a failed gate — the devices already changed are still changed.",
+    blurb:
+      "Stopped at a failed gate — the devices already changed are still changed.",
   },
   reverted: {
     color: Color.SecondaryText,
@@ -108,15 +112,24 @@ async function act(
 
   const toast = await showToast({
     style: Toast.Style.Animated,
-    title: verb === "hold" ? "Holding…" : verb === "resume" ? "Resuming…" : "Aborting…",
+    title:
+      verb === "hold"
+        ? "Holding…"
+        : verb === "resume"
+          ? "Resuming…"
+          : "Aborting…",
   });
   try {
-    const res = await postJson<{ error?: string; outcome?: string; held?: boolean }>(
-      `/api/rollout/${encodeURIComponent(id)}/${verb}`,
-      {},
-    );
+    const res = await postJson<{
+      error?: string;
+      outcome?: string;
+      held?: boolean;
+    }>(`/api/rollout/${encodeURIComponent(id)}/${verb}`, {});
     if (res.error) throw new Error(res.error);
-    toast.style = res.outcome === "needs-attention" ? Toast.Style.Failure : Toast.Style.Success;
+    toast.style =
+      res.outcome === "needs-attention"
+        ? Toast.Style.Failure
+        : Toast.Style.Success;
     toast.title = res.outcome ?? (verb === "hold" ? "Held" : "Done");
     onDone();
   } catch (e) {
@@ -125,7 +138,13 @@ async function act(
   }
 }
 
-function RolloutDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
+function RolloutDetail({
+  id,
+  onChanged,
+}: {
+  id: string;
+  onChanged: () => void;
+}) {
   const { data, isLoading, revalidate } = usePromise(
     (r: string) =>
       api<{ rollout: RolloutRecord; events: RolloutEventRow[] }>(
@@ -230,7 +249,10 @@ function RolloutDetail({ id, onChanged }: { id: string; onChanged: () => void })
               />
             </>
           )}
-          <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#plan")} />
+          <Action.OpenInBrowser
+            title="Open in Dashboard"
+            url={withToken("/#plan")}
+          />
           <Action.CopyToClipboard title="Copy Rollout ID" content={id} />
         </ActionPanel>
       }
@@ -260,7 +282,9 @@ function useHaltAlerts(rows: RolloutRecord[]): void {
       await Promise.all(
         fresh.map((r) =>
           notify(
-            r.outcome === "needs-attention" ? "Rollout NEEDS ATTENTION" : "Rollout halted",
+            r.outcome === "needs-attention"
+              ? "Rollout NEEDS ATTENTION"
+              : "Rollout halted",
             `${r.label ?? r.id}: ${OUTCOME_META[stateOf(r)].blurb}`,
           ),
         ),
@@ -269,7 +293,9 @@ function useHaltAlerts(rows: RolloutRecord[]): void {
       await LocalStorage.setItem(
         ALERTED_KEY,
         JSON.stringify(
-          [...new Set([...alerted, ...fresh.map((r) => r.id)])].filter((id) => keep.includes(id)),
+          [...new Set([...alerted, ...fresh.map((r) => r.id)])].filter((id) =>
+            keep.includes(id),
+          ),
         ),
       );
     })();
@@ -278,7 +304,9 @@ function useHaltAlerts(rows: RolloutRecord[]): void {
 
 /** The rollout rows, for embedding in a List (Change Plan's rollout section). */
 export function RolloutSection(): ReactNode {
-  const { data, revalidate } = useApi<{ rollouts: RolloutRecord[] }>("/api/rollout?limit=15");
+  const { data, revalidate } = useApi<{ rollouts: RolloutRecord[] }>(
+    "/api/rollout?limit=15",
+  );
   usePolling(revalidate, 10000);
   const rows = data?.rollouts ?? [];
   useHaltAlerts(rows);
@@ -288,7 +316,9 @@ export function RolloutSection(): ReactNode {
   return (
     <List.Section
       title="Fleet rollouts"
-      subtitle={live.length > 0 ? `${live.length} in flight` : `${rows.length} recorded`}
+      subtitle={
+        live.length > 0 ? `${live.length} in flight` : `${rows.length} recorded`
+      }
     >
       {rows.map((r) => {
         const meta = OUTCOME_META[stateOf(r)];
@@ -336,8 +366,15 @@ export function RolloutSection(): ReactNode {
                     />
                   </>
                 )}
-                <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#plan")} />
-                <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={revalidate} />
+                <Action.OpenInBrowser
+                  title="Open in Dashboard"
+                  url={withToken("/#plan")}
+                />
+                <Action
+                  title="Refresh"
+                  icon={Icon.ArrowClockwise}
+                  onAction={revalidate}
+                />
               </ActionPanel>
             }
           />

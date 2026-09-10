@@ -34,7 +34,7 @@ export function DiffDetail(props: {
   title?: string;
   navigationTitle?: string;
   isLoading?: boolean;
-  actions?: ReactNode;
+  actions?: Detail.Props["actions"];
 }): ReactNode {
   return (
     <Detail

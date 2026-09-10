@@ -71,19 +71,32 @@ function emptyReason(health: FlowHealth | undefined): string {
 }
 
 /** Per-key series from the timeline, for the row sparkline. */
-function seriesFor(timeline: FlowTimelinePayload | undefined, key: string): number[] {
+function seriesFor(
+  timeline: FlowTimelinePayload | undefined,
+  key: string,
+): number[] {
   if (!timeline) return [];
   return timeline.buckets.map((b) => b.series[key] ?? 0);
 }
 
-function TalkerDetail({ entry, window }: { entry: FlowTopEntry; window: string }) {
+function TalkerDetail({
+  entry,
+  window,
+}: {
+  entry: FlowTopEntry;
+  window: string;
+}) {
   const { data, isLoading } = usePromise(
-    (w: string) => api<{ conversations: FlowConversation[] }>(`/api/flows/conversations?window=${w}&limit=50`),
+    (w: string) =>
+      api<{ conversations: FlowConversation[] }>(
+        `/api/flows/conversations?window=${w}&limit=50`,
+      ),
     [window],
   );
   // The address may appear on either side of a conversation.
   const rows = (data?.conversations ?? []).filter(
-    (c) => c.src === entry.key || c.dst === entry.key || entry.key.includes(c.src),
+    (c) =>
+      c.src === entry.key || c.dst === entry.key || entry.key.includes(c.src),
   );
 
   const chart = rows.length
@@ -124,7 +137,10 @@ function TalkerDetail({ entry, window }: { entry: FlowTopEntry; window: string }
       actions={
         <ActionPanel>
           <Action.CopyToClipboard title="Copy Address" content={entry.key} />
-          <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#flows")} />
+          <Action.OpenInBrowser
+            title="Open in Dashboard"
+            url={withToken("/#flows")}
+          />
         </ActionPanel>
       }
     />
@@ -135,7 +151,9 @@ export default function Command() {
   const [window, setWindow] = useState<string>("1h");
   const [dimension, setDimension] = useState<string>("source");
 
-  const top = useApi<FlowTopPayload>(`/api/flows/top?window=${window}&dimension=${dimension}&limit=25`);
+  const top = useApi<FlowTopPayload>(
+    `/api/flows/top?window=${window}&dimension=${dimension}&limit=25`,
+  );
   const timeline = useApi<FlowTimelinePayload>(
     `/api/flows/timeline?window=${window}&dimension=${dimension}&topN=10`,
   );
@@ -177,11 +195,18 @@ export default function Command() {
           }
         >
           {rows.map((r) => {
-            const spark = sparklineIcon(seriesFor(timeline.data, r.key), Color.Blue);
+            const spark = sparklineIcon(
+              seriesFor(timeline.data, r.key),
+              Color.Blue,
+            );
             return (
               <List.Item
                 key={r.key}
-                icon={{ source: Icon.Dot, tintColor: r.key === "other" ? Color.SecondaryText : Color.Blue }}
+                icon={{
+                  source: Icon.Dot,
+                  tintColor:
+                    r.key === "other" ? Color.SecondaryText : Color.Blue,
+                }}
                 title={r.key}
                 subtitle={`${(r.share * 100).toFixed(1)}%`}
                 accessories={[
@@ -195,19 +220,35 @@ export default function Command() {
                       icon={Icon.Sidebar}
                       target={<TalkerDetail entry={r} window={window} />}
                     />
-                    <ActionPanel.Submenu title="Group by Dimension" icon={Icon.Filter}>
+                    <ActionPanel.Submenu
+                      title="Group by Dimension"
+                      icon={Icon.Filter}
+                    >
                       {DIMENSIONS.map((d) => (
-                        <Action key={d.id} title={d.label} onAction={() => setDimension(d.id)} />
+                        <Action
+                          key={d.id}
+                          title={d.label}
+                          onAction={() => setDimension(d.id)}
+                        />
                       ))}
                     </ActionPanel.Submenu>
-                    <Action.CopyToClipboard title="Copy Address" content={r.key} />
-                    <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#flows")} />
+                    <Action.CopyToClipboard
+                      title="Copy Address"
+                      content={r.key}
+                    />
+                    <Action.OpenInBrowser
+                      title="Open in Dashboard"
+                      url={withToken("/#flows")}
+                    />
                     <Action
                       title="Refresh"
                       icon={Icon.ArrowClockwise}
                       onAction={() => {
                         top.revalidate();
-                        void showToast({ style: Toast.Style.Success, title: "Refreshed" });
+                        void showToast({
+                          style: Toast.Style.Success,
+                          title: "Refreshed",
+                        });
                       }}
                     />
                   </ActionPanel>

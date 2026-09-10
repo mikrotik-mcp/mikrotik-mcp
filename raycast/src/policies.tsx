@@ -10,7 +10,16 @@
  * Everything here is read-only: the policy engine never writes to a device, so
  * the only action that touches a router is Run check, which captures an export.
  */
-import { Action, ActionPanel, Color, Detail, Icon, List, Toast, showToast } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Color,
+  Detail,
+  Icon,
+  List,
+  Toast,
+  showToast,
+} from "@raycast/api";
 import { useState } from "react";
 import { postJson, withToken } from "./lib/api";
 import { showFailureToast } from "./lib/confirm";
@@ -23,7 +32,13 @@ import type {
   PolicySeverity,
 } from "./lib/types";
 
-const SEVERITY_ORDER: PolicySeverity[] = ["critical", "high", "medium", "low", "info"];
+const SEVERITY_ORDER: PolicySeverity[] = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+];
 
 const SEVERITY_COLOR: Record<PolicySeverity, Color> = {
   critical: Color.Red,
@@ -52,8 +67,12 @@ function FindingDetail({ finding }: { finding: PolicyFinding }) {
     `## Why it failed`,
     "",
     finding.reason,
-    finding.evidence ? `\n## Offending configuration\n\n\`\`\`\n${finding.evidence}\n\`\`\`` : "",
-    finding.remediation ? `\n## Fix\n\n\`\`\`\n${finding.remediation}\n\`\`\`` : "",
+    finding.evidence
+      ? `\n## Offending configuration\n\n\`\`\`\n${finding.evidence}\n\`\`\``
+      : "",
+    finding.remediation
+      ? `\n## Fix\n\n\`\`\`\n${finding.remediation}\n\`\`\``
+      : "",
     finding.tags.length > 0 ? `\n_Tags: ${finding.tags.join(", ")}_` : "",
   ].join("\n");
 
@@ -63,9 +82,18 @@ function FindingDetail({ finding }: { finding: PolicyFinding }) {
       navigationTitle={`Policy · ${finding.ruleId}`}
       actions={
         <ActionPanel>
-          <Action.CopyToClipboard title="Copy Remediation" content={finding.remediation ?? finding.reason} />
-          <Action.CopyToClipboard title="Copy Rule ID" content={finding.ruleId} />
-          <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#policies")} />
+          <Action.CopyToClipboard
+            title="Copy Remediation"
+            content={finding.remediation ?? finding.reason}
+          />
+          <Action.CopyToClipboard
+            title="Copy Rule ID"
+            content={finding.ruleId}
+          />
+          <Action.OpenInBrowser
+            title="Open in Dashboard"
+            url={withToken("/#policies")}
+          />
         </ActionPanel>
       }
     />
@@ -78,7 +106,9 @@ export default function Command() {
   const [running, setRunning] = useState(false);
 
   const catalog = useApi<PolicyCatalog>("/api/policies");
-  const results = useApi<{ results: PolicyResultRow[] }>("/api/policies/results?limit=200");
+  const results = useApi<{ results: PolicyResultRow[] }>(
+    "/api/policies/results?limit=200",
+  );
 
   const rows = results.data?.results ?? [];
   const devices = [...new Set(rows.map((r) => r.device))];
@@ -86,7 +116,9 @@ export default function Command() {
   // Prefer the findings from a check just run in this session; fall back to the
   // stored history, which keeps only failures.
   const fromRun = reports.flatMap((r) =>
-    (r.findings ?? []).filter((f) => f.status === "fail").map((f) => ({ ...f, device: r.device })),
+    (r.findings ?? [])
+      .filter((f) => f.status === "fail")
+      .map((f) => ({ ...f, device: r.device })),
   );
   const latestPerDevice = devices.map(
     (d) => rows.filter((r) => r.device === d).sort((a, b) => b.ts - a.ts)[0],
@@ -100,15 +132,21 @@ export default function Command() {
 
   const run = async (): Promise<void> => {
     setRunning(true);
-    const toast = await showToast({ style: Toast.Style.Animated, title: "Running policy check…" });
+    const toast = await showToast({
+      style: Toast.Style.Animated,
+      title: "Running policy check…",
+    });
     try {
-      const res = await postJson<{ reports: PolicyRunReport[]; error?: string }>(
-        "/api/policies/run",
-        device === "all" ? {} : { devices: [device] },
-      );
+      const res = await postJson<{
+        reports: PolicyRunReport[];
+        error?: string;
+      }>("/api/policies/run", device === "all" ? {} : { devices: [device] });
       if (res.error) throw new Error(res.error);
       setReports(res.reports ?? []);
-      const failed = (res.reports ?? []).reduce((n, r) => n + (r.summary?.failed ?? 0), 0);
+      const failed = (res.reports ?? []).reduce(
+        (n, r) => n + (r.summary?.failed ?? 0),
+        0,
+      );
       toast.style = failed > 0 ? Toast.Style.Failure : Toast.Style.Success;
       toast.title = failed > 0 ? `${failed} rule(s) failing` : "All rules pass";
       results.revalidate();
@@ -123,7 +161,10 @@ export default function Command() {
   const actions = (
     <ActionPanel>
       <Action title="Run Check" icon={Icon.Play} onAction={() => void run()} />
-      <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#policies")} />
+      <Action.OpenInBrowser
+        title="Open in Dashboard"
+        url={withToken("/#policies")}
+      />
       <Action
         title="Refresh"
         icon={Icon.ArrowClockwise}
@@ -150,7 +191,10 @@ export default function Command() {
         ) : undefined
       }
     >
-      <List.Section title="Compliance" subtitle={`${catalog.data?.ruleCount ?? 0} rule(s) loaded`}>
+      <List.Section
+        title="Compliance"
+        subtitle={`${catalog.data?.ruleCount ?? 0} rule(s) loaded`}
+      >
         {latestPerDevice
           .filter((r) => device === "all" || r.device === device)
           .map((r) => (
@@ -180,11 +224,18 @@ export default function Command() {
         const forSeverity = findings.filter((f) => f.severity === severity);
         if (forSeverity.length === 0) return null;
         return (
-          <List.Section key={severity} title={severity} subtitle={`${forSeverity.length}`}>
+          <List.Section
+            key={severity}
+            title={severity}
+            subtitle={`${forSeverity.length}`}
+          >
             {forSeverity.map((f, i) => (
               <List.Item
                 key={`${f.device}-${f.ruleId}-${f.line ?? i}`}
-                icon={{ source: Icon.ExclamationMark, tintColor: SEVERITY_COLOR[severity] }}
+                icon={{
+                  source: Icon.ExclamationMark,
+                  tintColor: SEVERITY_COLOR[severity],
+                }}
                 title={f.ruleId}
                 subtitle={f.description ?? f.reason}
                 accessories={[
@@ -198,12 +249,19 @@ export default function Command() {
                       icon={Icon.Sidebar}
                       target={<FindingDetail finding={f} />}
                     />
-                    <Action title="Run Check" icon={Icon.Play} onAction={() => void run()} />
+                    <Action
+                      title="Run Check"
+                      icon={Icon.Play}
+                      onAction={() => void run()}
+                    />
                     <Action.CopyToClipboard
                       title="Copy Remediation"
                       content={f.remediation ?? f.reason}
                     />
-                    <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#policies")} />
+                    <Action.OpenInBrowser
+                      title="Open in Dashboard"
+                      url={withToken("/#policies")}
+                    />
                   </ActionPanel>
                 }
               />

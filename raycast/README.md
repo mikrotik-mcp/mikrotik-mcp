@@ -54,11 +54,24 @@ Open any command's preferences (⌘,) and set:
 
 ## Development
 
-This extension is a Bun-workspace member of the mikrotik-mcp repo. Its TypeScript and Prettier
-come from the repo root; ESLint stays local (Raycast's config). From `raycast/`:
+This extension has its own npm dependencies and lockfile, separate from the
+Bun MCP server. Run these commands from `raycast/`:
+
+`react` and `react-dom` are pinned to `19.2.1`, matching the React runtime of the
+installed Raycast host. Charts use `react-dom/server` to render SVG, so upgrading
+React DOM independently of the host causes an incompatible-versions error.
+When updating these packages, verify the host runtime version first and keep
+both exact versions aligned with it.
 
 ```bash
+npm ci           # install the extension's locked dependencies
 npm run dev      # ray develop (hot reload)
-npm run build    # ray build
+npm run build    # type-check, then build command executables
 npm run lint     # ray lint
 ```
+
+If Raycast reports **Missing executable. You might need to build the extension**,
+run `npm run build` in this directory. Then run `npm run dev` to import this
+checkout into Raycast and refresh its development commands. Installing packages
+alone does not compile the command entry points. See the
+[Raycast CLI documentation](https://developers.raycast.com/information/developer-tools/cli).

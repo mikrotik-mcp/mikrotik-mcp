@@ -146,7 +146,11 @@ export default function Command() {
           subtitle="Paste commands for a risk-scored preview — no device is touched"
           actions={
             <ActionPanel>
-              <Action.Push title="Plan Changes" icon={Icon.Play} target={<PlanForm />} />
+              <Action.Push
+                title="Plan Changes"
+                icon={Icon.Play}
+                target={<PlanForm />}
+              />
             </ActionPanel>
           }
         />

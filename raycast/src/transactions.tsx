@@ -75,7 +75,9 @@ function cell(
   device: string,
 ): string {
   const last = events
-    .filter((e) => e.kind === column && (column === "verify" || e.device === device))
+    .filter(
+      (e) => e.kind === column && (column === "verify" || e.device === device),
+    )
     .at(-1);
   if (last) return last.ok ? "✅" : "❌";
 
@@ -121,7 +123,9 @@ function detailMarkdown(txn: TxnRecord, events: TxnEvent[]): string {
   const recovery =
     txn.state === "PARTIAL"
       ? `\n## Recovery\n\n${txn.participants
-          .filter((p) => p.stage === "committed" || p.stage === "rollback-failed")
+          .filter(
+            (p) => p.stage === "committed" || p.stage === "rollback-failed",
+          )
           .map(
             (p) =>
               `- \`diff_config_snapshots ${p.snapshotId ?? "<no snapshot>"} live\` on **${p.device}**`,
@@ -150,7 +154,9 @@ function detailMarkdown(txn: TxnRecord, events: TxnEvent[]): string {
     `| Participant | prepare | verify | commit | snapshot |`,
     `| --- | :---: | :---: | :---: | --- |`,
     ...lanes,
-    txn.warnings.length ? `\n${txn.warnings.map((w) => `> ⚠️ ${w}`).join("\n>\n")}` : "",
+    txn.warnings.length
+      ? `\n${txn.warnings.map((w) => `> ⚠️ ${w}`).join("\n>\n")}`
+      : "",
     recovery,
     `\n## Assertions\n\n${assertions}`,
     timeline,
@@ -160,7 +166,9 @@ function detailMarkdown(txn: TxnRecord, events: TxnEvent[]): string {
 function TxnDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
   const { data, isLoading, revalidate } = usePromise(
     (t: string) =>
-      api<{ transaction: TxnRecord; events: TxnEvent[] }>(`/api/txn/${encodeURIComponent(t)}`),
+      api<{ transaction: TxnRecord; events: TxnEvent[] }>(
+        `/api/txn/${encodeURIComponent(t)}`,
+      ),
     [id],
   );
   // A live transaction moves while you watch it; a finished one never changes.
@@ -179,13 +187,18 @@ function TxnDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
               title="Abort Transaction"
               icon={Icon.Undo}
               style={Action.Style.Destructive}
-              onAction={() => void abortTxn(id, () => {
-                revalidate();
-                onChanged();
-              })}
+              onAction={() =>
+                void abortTxn(id, () => {
+                  revalidate();
+                  onChanged();
+                })
+              }
             />
           )}
-          <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#txn")} />
+          <Action.OpenInBrowser
+            title="Open in Dashboard"
+            url={withToken("/#txn")}
+          />
           <Action.CopyToClipboard title="Copy Transaction ID" content={id} />
         </ActionPanel>
       }
@@ -205,14 +218,18 @@ async function abortTxn(id: string, onDone: () => void): Promise<void> {
   });
   if (!ok) return;
 
-  const toast = await showToast({ style: Toast.Style.Animated, title: "Aborting…" });
+  const toast = await showToast({
+    style: Toast.Style.Animated,
+    title: "Aborting…",
+  });
   try {
     const res = await postJson<{ state?: TxnTerminalState; error?: string }>(
       `/api/txn/${encodeURIComponent(id)}/abort`,
       {},
     );
     if (res.error) throw new Error(res.error);
-    toast.style = res.state === "PARTIAL" ? Toast.Style.Failure : Toast.Style.Success;
+    toast.style =
+      res.state === "PARTIAL" ? Toast.Style.Failure : Toast.Style.Success;
     toast.title = res.state ?? "Aborted";
     onDone();
   } catch (e) {
@@ -243,7 +260,9 @@ function usePartialAlerts(rows: TxnRecord[]): void {
           notify(
             "Transaction PARTIAL",
             `${p.label ?? p.id}: ${p.participants
-              .filter((x) => x.stage === "committed" || x.stage === "rollback-failed")
+              .filter(
+                (x) => x.stage === "committed" || x.stage === "rollback-failed",
+              )
               .map((x) => x.device)
               .join(", ")} committed and need a manual restore`,
           ),
@@ -252,16 +271,21 @@ function usePartialAlerts(rows: TxnRecord[]): void {
       const keep = rows.map((r) => r.id);
       await LocalStorage.setItem(
         ALERTED_KEY,
-        JSON.stringify([...new Set([...alerted, ...fresh.map((p) => p.id)])].filter((id) => keep.includes(id))),
+        JSON.stringify(
+          [...new Set([...alerted, ...fresh.map((p) => p.id)])].filter((id) =>
+            keep.includes(id),
+          ),
+        ),
       );
     })();
   }, [rows]);
 }
 
 export default function Command() {
-  const { data, isLoading, revalidate } = useApi<{ transactions: TxnRecord[]; error?: string }>(
-    "/api/txn",
-  );
+  const { data, isLoading, revalidate } = useApi<{
+    transactions: TxnRecord[];
+    error?: string;
+  }>("/api/txn");
   usePolling(revalidate, 10000);
   const rows = data?.transactions ?? [];
   usePartialAlerts(rows);
@@ -303,8 +327,15 @@ export default function Command() {
                       onAction={() => void abortTxn(t.id, revalidate)}
                     />
                   )}
-                  <Action.OpenInBrowser title="Open in Dashboard" url={withToken("/#txn")} />
-                  <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={revalidate} />
+                  <Action.OpenInBrowser
+                    title="Open in Dashboard"
+                    url={withToken("/#txn")}
+                  />
+                  <Action
+                    title="Refresh"
+                    icon={Icon.ArrowClockwise}
+                    onAction={revalidate}
+                  />
                 </ActionPanel>
               }
             />
