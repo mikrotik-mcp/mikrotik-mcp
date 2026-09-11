@@ -1,9 +1,101 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "5.6.0",
+  "version": "5.5.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 891,
+  "toolCount": 894,
   "tools": [
+    {
+      "name": "create_investigation",
+      "title": "Investigate a Client and Service",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Read client DHCP/ARP/bridge evidence and VLAN/interface/DNS/route/firewall/NAT context from the selected router and up to two explicit additional routers. Run three router-originated ICMP probes and save a local case. Never changes router configuration or starts captures. WRITE reflects local persistence. Application health remains UNVERIFIED; no endpoint probe is installed. IPv4 or colon-separated MAC clients only. Returns JSON evidence with timestamps, unknowns and next tests.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "ipv4",
+                "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?:[\\da-f]{2}:){5}[\\da-f]{2}$"
+              }
+            ]
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^[a-z\\d](?:[a-z\\d.-]*[a-z\\d])?$"
+          },
+          "service": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "vantage_devices": {
+            "default": [],
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": ["client", "target", "service", "vantage_devices"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_investigations",
+      "title": "List Client Investigations",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "List up to 100 saved cases for the selected primary device. Cases requiring denied device access are omitted. No router I/O.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_investigation",
+      "title": "Read a Client Investigation",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read a case by UUID under its primary device. Rechecks access to all evidence devices. Historical evidence is not a current health check.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
     {
       "name": "find_tools",
       "title": "Find Tools (catalog search)",

@@ -59,6 +59,7 @@ import { AaaView } from "./aaa";
 import { ChangePlanView } from "./change-plan";
 import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
+import { InvestigationsView } from "./investigations";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
 import { ConfigEditor } from "./config-editor";
 import { ConnectivityGraph, DeviceCard } from "./connectivity";
@@ -123,6 +124,7 @@ type ViewId =
   | "overview"
   | "devices"
   | "clients"
+  | "investigations"
   | "aaa"
   | "topology"
   | "fabric"
@@ -152,6 +154,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "overview", label: "Overview", sub: "Calls, latency & risk at a glance" },
   { id: "devices", label: "Devices", sub: "Connectivity radar & system health" },
   { id: "clients", label: "Clients", sub: "Connected LAN devices — usage, block/allow, pin IP" },
+  {
+    id: "investigations",
+    label: "Investigations",
+    sub: "Client and service evidence across routers",
+  },
   { id: "aaa", label: "RADIUS & UM", sub: "RADIUS client & User Manager RADIUS server" },
   { id: "topology", label: "Topology", sub: "Layer-2 neighbours via MNDP / CDP / LLDP" },
   { id: "fabric", label: "L2 Fabric", sub: "Which host sits on which physical bridge port" },
@@ -257,6 +264,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   overview: MONO_ACCENT,
   devices: MONO_ACCENT,
   clients: MONO_ACCENT,
+  investigations: MONO_ACCENT,
   aaa: MONO_ACCENT,
   topology: MONO_ACCENT,
   fabric: MONO_ACCENT,
@@ -313,6 +321,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Pick the router (top-right) to inspect its connected devices; filter by IP, MAC or name.",
       "Click a device to open its live ↓/↑ traffic chart — needs a simple queue targeting its IP.",
       "Block/allow is enforced by MAC, so it survives the device changing IP; “Pin IP” makes its lease static.",
+    ],
+  },
+  investigations: {
+    what: "Saved client/service investigations with explicitly scoped router evidence and unperformed next experiments.",
+    tips: [
+      "Opening history never queries routers.",
+      "A successful router ping does not prove the client application works.",
+      "Unknown evidence is never treated as a healthy zero.",
     ],
   },
   aaa: {
@@ -698,6 +714,12 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <circle cx="9" cy="8" r="3" />
         <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
         <path d="M16 7.5a2.5 2.5 0 0 1 0 5M17.5 19a4.5 4.5 0 0 0-2-3.6" />
+      </>
+    ),
+    investigations: (
+      <>
+        <circle cx="10" cy="10" r="6" />
+        <path d="m15 15 6 6M7 10h6M10 7v6" />
       </>
     ),
     aaa: (
@@ -1726,6 +1748,7 @@ function App(): ReactNode {
 
         {/* ── Clients ── */}
         {view === "clients" && <ClientsView />}
+        {view === "investigations" && <InvestigationsView />}
 
         {/* ── RADIUS & User Manager ── */}
         {view === "aaa" && <AaaView />}

@@ -480,8 +480,7 @@ function useBulkTraffic(deviceName: string): BulkTraffic {
       };
       ws.onclose = () => {
         if (closed) return;
-        if (opened)
-          setTimeout(connectWs, 2000); // was working — reconnect
+        if (opened) setTimeout(connectWs, 2000); // was working — reconnect
         else connectSse(); // never opened — fall to SSE
       };
     };
@@ -826,6 +825,20 @@ export function ClientsView(): ReactNode {
           </div>
         )}
 
+        {selectedDevice && (
+          <a
+            className="inline-flex rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+            href={(() => {
+              const url = new URL(location.href);
+              url.searchParams.set("investigationDevice", deviceName);
+              url.searchParams.set("investigationClient", selectedDevice.ip || selectedDevice.mac);
+              url.hash = "investigations";
+              return url.toString();
+            })()}
+          >
+            Investigate this client and service
+          </a>
+        )}
         {selectedDevice && (
           <DeviceDetail
             device={selectedDevice}

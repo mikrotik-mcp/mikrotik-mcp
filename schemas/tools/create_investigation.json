@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "create_investigation",
+  "type": "object",
+  "properties": {
+    "client": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "ipv4",
+          "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+        },
+        {
+          "type": "string",
+          "pattern": "^(?:[\\da-f]{2}:){5}[\\da-f]{2}$"
+        }
+      ]
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[a-z\\d](?:[a-z\\d.-]*[a-z\\d])?$"
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "vantage_devices": {
+      "default": [],
+      "maxItems": 2,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": ["client", "target", "service", "vantage_devices"],
+  "additionalProperties": false
+}

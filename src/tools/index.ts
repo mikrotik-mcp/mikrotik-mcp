@@ -8,6 +8,7 @@ import type { ToolModule } from "../core/registry";
 
 import { addressListTools } from "./address-list";
 import { connectedDeviceTools } from "./connected-devices";
+import { investigationTools } from "./investigations";
 import { appViewTools } from "./app-views";
 import { backupTools } from "./backup";
 import { localBackupTools } from "./local-backup";
@@ -160,6 +161,14 @@ export interface ModuleInfo {
 }
 
 export const moduleCatalog: ModuleInfo[] = [
+  {
+    label: "Client Investigations",
+    slug: "investigations",
+    group: "System & Ops",
+    description:
+      "Persistent client/service cases with multi-router evidence, explicit unknowns and next experiments; never equates router ICMP with application health.",
+    tools: investigationTools,
+  },
   // ── Tool gateway (always-discoverable search + dispatch over the full catalog) ─
   {
     label: "Tool Gateway",

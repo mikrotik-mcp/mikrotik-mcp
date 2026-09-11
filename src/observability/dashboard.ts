@@ -55,6 +55,7 @@ import {
   writeBackup,
 } from "../backups/vault";
 import { createContext } from "../core/context";
+import { investigationRoutes } from "./investigation-routes";
 import {
   allowDevice,
   blockDevice,
@@ -1582,6 +1583,9 @@ export async function runDashboard(
 
     const clientsResp = await clientsRoutes(req, url);
     if (clientsResp) return clientsResp;
+
+    const investigationResp = await investigationRoutes(req, url);
+    if (investigationResp) return investigationResp;
 
     const aaaResp = await aaaRoutes(req, url);
     if (aaaResp) return aaaResp;

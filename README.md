@@ -1,20 +1,20 @@
 <div align="center">
   <img src="assets/logo.svg" alt="@usex/mikrotik-mcp" width="440" />
-  <p><strong>Drive one or more MikroTik routers in plain language — 885 risk-annotated tools your AI can call, over SSH.</strong><br/>
+  <p><strong>Drive one or more MikroTik routers in plain language — 894 risk-annotated tools your AI can call, over SSH.</strong><br/>
   Firewall · routing · DHCP/DNS · wireless · QoS · a complete VPN suite · transactional Safe Mode · live attack detection · and an observability dashboard that watches every call.</p>
 
   <p>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-7C3AED.svg"></a>
     <img alt="Runtime: Bun" src="https://img.shields.io/badge/runtime-Bun%20%E2%89%A5%201.3-06B6D4.svg">
     <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-6366F1.svg">
-    <img alt="MCP" src="https://img.shields.io/badge/MCP-885%20tools-1F2937.svg">
+    <img alt="MCP" src="https://img.shields.io/badge/MCP-894%20tools-1F2937.svg">
     <a href="docs/"><img alt="Docs" src="https://img.shields.io/badge/docs-reference-7C3AED.svg"></a>
   </p>
 </div>
 
 ---
 
-`@usex/mikrotik-mcp` turns **MikroTik RouterOS** into **885 [Model Context Protocol](https://modelcontextprotocol.io)
+`@usex/mikrotik-mcp` turns **MikroTik RouterOS** into **894 [Model Context Protocol](https://modelcontextprotocol.io)
 tools** any MCP client (Claude Desktop, Claude Code, Cursor, …) can call to read and
 configure your router by talking to it. It reaches the device over **plain SSH** — no
 agent, no package to install on RouterOS — runs on **[Bun](https://bun.sh)**, and
@@ -46,7 +46,11 @@ Then just ask:
 
 ## Highlights
 
-- 🧰 **885 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
+- **Client/service investigations** — save multi-router DHCP/ARP/bridge and network
+  evidence with timestamps, explicit unknowns and next experiments. Router ICMP
+  success never masquerades as verified application health.
+  [Guide](docs/client-investigations.md) · [Delivery tracker](docs/enterprise-roadmap.md)
+- 🧰 **894 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
   L3 (addressing, routing, DHCP, DNS), security (firewall, NAT, address-lists,
   certificates), QoS, and system ops (users, logs, backups, scheduler).
 - 🛡️ **Attack detection** — reads every device's log, correlates brute force,
@@ -348,7 +352,7 @@ Full reference: **[docs/observability.md](docs/observability.md)**.
 
 ## The tool catalog
 
-**885 tools across 137 modules.** Full, always-current reference (parameters + risk per
+**894 tools across 141 modules.** Full, always-current reference (parameters + risk per
 tool) is generated from source: **[docs/tools-reference.md](docs/tools-reference.md)**.
 
 | Group                    | Tools | Modules                                                                                                           |
