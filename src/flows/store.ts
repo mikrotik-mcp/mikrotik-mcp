@@ -35,6 +35,8 @@ export interface FlowQuery {
   exporter?: string;
   /** Match either endpoint. */
   address?: string;
+  /** Exact original-direction tuple; never infer NAT or match a different client. */
+  tuple?: { src: string; dst: string; srcPort: number; dstPort: number; protocol: number };
   limit?: number;
 }
 
@@ -129,6 +131,8 @@ interface FlowRow {
   packets: number;
   tcp_flags: number | null;
   version: number;
+  input_if: number | null;
+  output_if: number | null;
 }
 
 function rowToRecord(r: FlowRow): FlowRecord {
@@ -145,6 +149,8 @@ function rowToRecord(r: FlowRow): FlowRecord {
     packets: r.packets,
     tcpFlags: r.tcp_flags ?? undefined,
     version: r.version,
+    inputIf: r.input_if ?? undefined,
+    outputIf: r.output_if ?? undefined,
   };
 }
 
@@ -167,13 +173,19 @@ class SqliteFlowStore implements FlowStore {
     db.run("PRAGMA journal_mode = WAL");
     db.run("PRAGMA synchronous = NORMAL");
     for (const stmt of SCHEMA_STATEMENTS) db.run(stmt);
+    // Additive migration: old records genuinely have no interface evidence.
+    const columns = new Set(
+      (db.query("PRAGMA table_info(flows)").all() as { name: string }[]).map((c) => c.name),
+    );
+    for (const name of ["input_if", "output_if"])
+      if (!columns.has(name)) db.run(`ALTER TABLE flows ADD COLUMN ${name} INTEGER`);
   }
 
   insert(records: FlowRecord[]): void {
     if (records.length === 0) return;
     const insertFlow = this.db.query(
-      `INSERT INTO flows (start, end, exporter, src, dst, src_port, dst_port, protocol, bytes, packets, tcp_flags, version)
-       VALUES ($start,$end,$exporter,$src,$dst,$srcPort,$dstPort,$protocol,$bytes,$packets,$tcpFlags,$version)`,
+      `INSERT INTO flows (start, end, exporter, src, dst, src_port, dst_port, protocol, bytes, packets, tcp_flags, version, input_if, output_if)
+       VALUES ($start,$end,$exporter,$src,$dst,$srcPort,$dstPort,$protocol,$bytes,$packets,$tcpFlags,$version,$inputIf,$outputIf)`,
     );
     // Rollups are an upsert per (minute, tuple): the same conversation reported
     // by several exports in one minute must ADD, not replace.
@@ -201,6 +213,8 @@ class SqliteFlowStore implements FlowStore {
           $packets: r.packets,
           $tcpFlags: r.tcpFlags ?? null,
           $version: r.version,
+          $inputIf: r.inputIf ?? null,
+          $outputIf: r.outputIf ?? null,
         });
         upsertRollup.run({
           $minute: Math.floor(r.start / MINUTE) * MINUTE,
@@ -239,6 +253,12 @@ class SqliteFlowStore implements FlowStore {
     if (q.address) {
       clauses.push("(src = $address OR dst = $address)");
       params.$address = q.address;
+    }
+    if (q.tuple) {
+      clauses.push(
+        "src = $src AND dst = $dst AND src_port = $srcPort AND dst_port = $dstPort AND protocol = $protocol",
+      );
+      for (const [key, value] of Object.entries(q.tuple)) params[`$${key}`] = value;
     }
     params.$limit = q.limit ?? 100_000;
     const rows = this.db

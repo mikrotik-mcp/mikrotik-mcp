@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.5.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 901,
+  "toolCount": 903,
   "tools": [
     {
       "name": "trace_round_trip",
@@ -308,6 +308,90 @@
           }
         },
         "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "inspect_flow_path",
+      "title": "Inspect Exported Client Flow Path",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read the last five minutes of exact IPv4 TCP/UDP five-tuple NetFlow/IPFIX evidence for the selected router. Reports exporter input/output ifIndex and resolves up to eight explicitly named interfaces with read-only OID queries. Requires a unique configured IPv4 host matching the exporter sender. Never enables capture, changes configuration or generates traffic. Unauthenticated UDP exports, current name mappings and no-match results are not proof of VPN encryption, packet loss or application delivery. NAT aliases are not inferred.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "format": "ipv4",
+            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+          },
+          "destination": {
+            "type": "string",
+            "format": "ipv4",
+            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+          },
+          "source_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "destination_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "protocol": {
+            "type": "string",
+            "enum": ["tcp", "udp"]
+          },
+          "interface_names": {
+            "default": [],
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "required": [
+          "client",
+          "destination",
+          "source_port",
+          "destination_port",
+          "protocol",
+          "interface_names"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_client_flow_candidates",
+      "title": "List Recent Client Flow Tuples",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "List up to 50 recent exported TCP/UDP tuples originating from an exact client IPv4 on the selected router, including ephemeral source ports, for inspect_flow_path. Reads local NetFlow/IPFIX storage only; does not query the client or router. Requires unambiguous exporter host binding. Missing records do not mean no traffic.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "format": "ipv4",
+            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+          }
+        },
+        "required": ["client"],
         "additionalProperties": false
       }
     },

@@ -49,6 +49,8 @@ Then just ask:
 - **Round-trip path lab** — model explicit forward/reverse static IPv4 paths across
   fresh snapshots, with per-hop evidence and declared asymmetry. NAT or unsupported
   state stops with UNKNOWN; modelled forwarding is not live connectivity.
+  A guided three-step editor selects routers, dated captures and interfaces without
+  writing JSON, with an optional mirrored return path and plain-language result labels.
   [Guide](docs/round-trip-paths.md)
 - **Service health contracts** — approved DNS/TCP/TLS/HTTPS endpoint checks from the
   MCP host, optional fresh-export packet regressions, historical evidence, explicit
@@ -58,6 +60,11 @@ Then just ask:
   evidence with timestamps, explicit unknowns and next experiments. Router ICMP
   success never masquerades as verified application health.
   [Guide](docs/client-investigations.md) · [Delivery tracker](docs/enterprise-roadmap.md)
+- **Exported client-flow paths** — select a recent TCP/UDP flow and visualize its
+  reported ingress/exit, with named VPN-interface lookup and colored JSON evidence.
+  Uses existing NetFlow/IPFIX exports; never enables capture or changes router settings.
+  Missing telemetry remains unknown, not a fabricated blocking hop.
+  [Flow-path guide](docs/client-flow-paths.md)
 - 🧰 **901 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
   L3 (addressing, routing, DHCP, DNS), security (firewall, NAT, address-lists,
   certificates), QoS, and system ops (users, logs, backups, scheduler).

@@ -1,0 +1,81 @@
+@keyframes investigation-shield-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.investigation-result .tunnel-emblem {
+  animation: investigation-shield-float 4s ease-in-out infinite;
+}
+.investigation-result[data-motion="off"] .tunnel-emblem {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .investigation-result .tunnel-emblem {
+    animation: none;
+  }
+}
+.flow-export-panel {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--card);
+}
+.flow-export-branch {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--background);
+}
+.flow-export-stations {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1rem minmax(0, 1fr) 1rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+.flow-export-station {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.8rem;
+}
+.flow-export-station span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.flow-export-station strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.flow-export-station small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.flow-export-exit {
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+}
+.flow-export-branch[data-vpn="yes"] .flow-export-exit {
+  border-color: color-mix(in srgb, var(--chart-5) 45%, transparent);
+  background: color-mix(in srgb, var(--chart-5) 7%, transparent);
+}
+.flow-export-arrow {
+  width: 1rem;
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px) {
+  .flow-export-stations {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .flow-export-arrow {
+    transform: rotate(90deg);
+    margin: auto;
+  }
+}

@@ -21,6 +21,31 @@ and source lines, **not mutation identifiers**.
 
 ## Inputs
 
+### Guided dashboard (no JSON required)
+
+The page explains why request and reply paths both matter, then provides three steps:
+
+1. Enter client/destination IPv4, protocol and ports. The default source port 49152
+   is explicitly hypothetical, not a detected live connection.
+2. Add outbound routers in order. Select saved configurations by date/label, then
+   select entry and exit interfaces from that exact snapshot. Move/remove steps with
+   labelled controls. At most eight routers per direction are supported.
+3. Keep the explicitly labelled mirrored-return assumption, or uncheck it to edit
+   the return path independently. Mirroring reverses order and swaps entry/exit.
+
+No snapshots are automatically captured and no routers are queried. The read-only
+`GET /api/round-trip/options` lists authorized devices and their latest 20 snapshot
+choices (up to 128 devices). With explicit `device` and `id`, it returns only interface
+names from an owned snapshot, never the export body or credentials. Missing choices,
+stale captures, inconsistent capture dates and invalid paths have actionable messages.
+
+Evidence age/skew limits remain enforced. Their controls and a generated colored JSON
+preview are optional, collapsed by default. Results distinguish **Allowed in the model**,
+**Blocked in the model** and **Cannot determine**, with separate request/reply cards.
+Technical JSON and snapshot provenance are expandable, not prerequisites for use.
+
+### MCP input
+
 First capture/select snapshots using the existing snapshot workflow. Select the
 first forward router as the MCP `device`. Replace the example names and IDs:
 

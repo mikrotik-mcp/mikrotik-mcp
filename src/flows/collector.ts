@@ -19,9 +19,8 @@
 import { createSocket } from "node:dgram";
 import type { Socket } from "node:dgram";
 import { logger } from "../logger";
-import { decodeFlowPacket } from "./decode";
 import type { FlowRecord } from "./decode";
-import { TemplateRegistry } from "./templates";
+import { ExporterFlowDecoder } from "./exporter-decoder";
 import type { FlowStore } from "./store";
 
 export const DEFAULT_FLOW_PORT = 2055;
@@ -59,7 +58,7 @@ class FlowCollector {
   private socket: Socket | null = null;
   private port = DEFAULT_FLOW_PORT;
   private startedAt: number | null = null;
-  private readonly registry = new TemplateRegistry();
+  private readonly decoder = new ExporterFlowDecoder();
   private store: FlowStore | null = null;
   private queue: FlowRecord[] = [];
   private flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -128,7 +127,7 @@ class FlowCollector {
   }
 
   private reset(): void {
-    this.registry.clear();
+    this.decoder.clear();
     this.queue = [];
     this.packets = 0;
     this.flows = 0;
@@ -141,7 +140,7 @@ class FlowCollector {
     this.packets++;
     this.exporters.set(from, (this.exporters.get(from) ?? 0) + 1);
 
-    const result = decodeFlowPacket(datagram, this.registry, Date.now());
+    const result = this.decoder.decode(datagram, from, Date.now());
     if (result.error) {
       this.decodeErrors++;
       this.lastError = `${from}: ${result.error}`;
@@ -195,9 +194,7 @@ class FlowCollector {
       flows: this.flows,
       decodeErrors: this.decodeErrors,
       lastError: this.lastError,
-      templates: this.registry.size,
-      templatesPending: this.registry.pendingCount,
-      templatesDropped: this.registry.droppedCount,
+      ...this.decoder.stats(),
       exporters: Object.fromEntries(this.exporters),
       queued: this.queue.length,
     };

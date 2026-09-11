@@ -41,11 +41,50 @@ function fixture(command: string): Promise<string> {
   return Promise.resolve("");
 }
 describe("client investigations", () => {
+  test("preserves tunnel flags and immediate gateways without collecting secrets", async () => {
+    const read = vi.fn((command: string) =>
+      command.startsWith("/interface print")
+        ? Promise.resolve('0 R name=office type=wg private-key="secret"')
+        : command.startsWith("/ip route print")
+          ? Promise.resolve(
+              "0 As dst-address=0.0.0.0/0 gateway=10.0.0.1 immediate-gw=10.0.0.1%office",
+            )
+          : fixture(command),
+    );
+    const result = await collectInvestigation(input, ctx, read);
+    expect(result.evidence.find((e) => e.source === "interfaces")?.rows[0].flags).toBe("R");
+    expect(result.evidence.find((e) => e.source === "routes")?.rows[0]["immediate-gw"]).toBe(
+      "10.0.0.1%office",
+    );
+    expect(read).toHaveBeenCalledTimes(13);
+    expect(JSON.stringify(result)).not.toContain("secret");
+  });
+  test("collects interface addresses and policy records through bounded read-only queries", async () => {
+    const read = vi.fn((command: string) =>
+      command.startsWith("/ip address print")
+        ? Promise.resolve(
+            '0 address=10.0.0.1/30 network=10.0.0.0 interface=office comment="private"',
+          )
+        : command.startsWith("/ip firewall mangle print")
+          ? Promise.resolve(
+              '0 chain=prerouting action=mark-routing new-routing-mark=VPN src-address=192.0.2.10 passthrough=no comment="private"',
+            )
+          : command.startsWith("/routing rule print")
+            ? Promise.resolve("0 action=lookup-only-in-table table=VPN src-address=192.0.2.10/32")
+            : fixture(command),
+    );
+    const c = await collectInvestigation(input, ctx, read);
+    expect(c.evidence.find((e) => e.source === "ip-addresses")?.rows[0].interface).toBe("office");
+    expect(c.evidence.find((e) => e.source === "mangle")?.rows[0]["new-routing-mark"]).toBe("VPN");
+    expect(c.evidence.find((e) => e.source === "routing-rules")?.rows[0].table).toBe("VPN");
+    expect(JSON.stringify(c)).not.toContain("private");
+    expect(read).toHaveBeenCalledTimes(13);
+  });
   test("joins client evidence, strips comments and never equates ping with application health", async () => {
     const read = vi.fn(fixture);
     const result = await collectInvestigation(input, ctx, read);
     expect(result.clientOutcome).toBe("unverified");
-    expect(result.evidence).toHaveLength(10);
+    expect(result.evidence).toHaveLength(13);
     expect(result.evidence.find((e) => e.source === "dhcp")?.rows).toHaveLength(1);
     expect(result.evidence.find((e) => e.source === "bridge-host")?.rows[0]["on-interface"]).toBe(
       "ether2",
@@ -97,8 +136,8 @@ describe("client investigations", () => {
       fixture,
     );
     expect(result.devices).toEqual(["edge", "core"]);
-    expect(result.evidence).toHaveLength(20);
-    expect(result.evidence.filter((e) => e.device === "core")).toHaveLength(10);
+    expect(result.evidence).toHaveLength(26);
+    expect(result.evidence.filter((e) => e.device === "core")).toHaveLength(13);
   });
   test("joins lowercase MAC clients and limits bulky tables", async () => {
     const result = await collectInvestigation(

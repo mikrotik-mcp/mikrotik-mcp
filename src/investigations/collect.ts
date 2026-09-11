@@ -25,12 +25,27 @@ const sources = [
     "/interface bridge vlan",
     "bridge,vlan-ids,tagged,untagged,current-tagged,current-untagged",
   ],
-  ["interfaces", "/interface", "name,type,running,disabled,mtu"],
-  ["routes", "/ip route", "dst-address,gateway,routing-table,distance,active,disabled"],
+  ["interfaces", "/interface", "name,type,running,disabled,mtu,flags"],
+  ["ip-addresses", "/ip address", "address,network,interface,disabled,flags"],
+  [
+    "routes",
+    "/ip route",
+    "dst-address,gateway,immediate-gw,routing-table,distance,active,disabled,flags",
+  ],
   [
     "filter",
     "/ip firewall filter",
     "chain,action,src-address,dst-address,in-interface,out-interface,in-interface-list,out-interface-list,protocol,dst-port,disabled",
+  ],
+  [
+    "mangle",
+    "/ip firewall mangle",
+    "chain,action,src-address,dst-address,src-address-list,dst-address-list,in-interface,out-interface,in-interface-list,out-interface-list,protocol,src-port,dst-port,connection-mark,new-connection-mark,new-routing-mark,passthrough,disabled,flags",
+  ],
+  [
+    "routing-rules",
+    "/routing rule",
+    "src-address,dst-address,interface,routing-mark,table,action,disabled,flags",
   ],
   [
     "nat",

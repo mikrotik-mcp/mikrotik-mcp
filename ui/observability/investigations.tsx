@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Search, ArrowRight, AlertCircle, Clock } from "lucide-react";
+import { Search, ArrowRight, Clock, Network, Router } from "lucide-react";
 import type { Investigation } from "../../src/investigations/model";
 import { api, postJson } from "./api";
+import { InvestigationClients } from "./investigation-clients";
+import { Select } from "./geist";
+import { Checkbox } from "./components/ui/checkbox";
+import { InvestigationResult } from "./investigation-result";
 
 type CaseSummary = Omit<Investigation, "evidence" | "nextTests"> & {
   evidenceCount: number;
@@ -13,6 +17,7 @@ const field =
 
 /** One case workspace: explicit scope, historical evidence and the next unperformed experiments. */
 export function InvestigationsView(): ReactNode {
+  const vantageId = useId();
   const seed = new URLSearchParams(location.search);
   const [device, setDevice] = useState(seed.get("investigationDevice") ?? "");
   const [devices, setDevices] = useState<string[]>([]);
@@ -111,33 +116,30 @@ export function InvestigationsView(): ReactNode {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (busy || !device || !devices.includes(device)) return;
             void create();
           }}
           className="grid gap-4 sm:grid-cols-2"
         >
           <label className="grid gap-1.5 text-xs font-medium">
             Access router
-            <select
-              className={field}
+            <Select
+              className="w-full"
+              aria-label="Access router"
               value={device}
-              disabled={busy}
-              onChange={(e) => {
+              disabled={busy || !devices.length}
+              placeholder="Select a router"
+              options={devices.map((name) => ({ value: name, label: name }))}
+              onValueChange={(name) => {
                 generation.current++;
-                setDevice(e.target.value);
+                setDevice(name);
+                setClient("");
                 setSelected(null);
                 setCases([]);
                 setVantages([]);
                 setError("");
               }}
-              required
-            >
-              <option value="" disabled>
-                Select a router
-              </option>
-              {devices.map((d) => (
-                <option key={d}>{d}</option>
-              ))}
-            </select>
+            />
           </label>
           <label className="grid gap-1.5 text-xs font-medium">
             Client IPv4 or MAC
@@ -145,11 +147,18 @@ export function InvestigationsView(): ReactNode {
               className={field}
               value={client}
               onChange={(e) => setClient(e.target.value)}
-              placeholder="192.168.88.20"
+              placeholder="Select below or enter IPv4 / MAC"
               required
               disabled={busy}
             />
           </label>
+          <InvestigationClients
+            key={device}
+            device={device}
+            value={client}
+            disabled={busy}
+            onSelect={setClient}
+          />
           <label className="grid gap-1.5 text-xs font-medium">
             Destination hostname or IPv4
             <input
@@ -173,29 +182,87 @@ export function InvestigationsView(): ReactNode {
               disabled={busy}
             />
           </label>
-          <fieldset className="sm:col-span-2">
-            <legend className="mb-2 text-xs font-medium">
-              Additional router perspectives · optional, up to two
-            </legend>
-            <div className="flex flex-wrap gap-4">
+          <fieldset
+            aria-describedby={`${vantageId}-help`}
+            className="min-w-0 rounded-xl border border-border bg-background/50 p-4 sm:col-span-2"
+          >
+            <legend className="sr-only">Additional router perspectives</legend>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-medium">
+                <Network aria-hidden="true" className="size-4 text-muted-foreground" />
+                Additional router perspectives
+              </div>
+              <span
+                aria-live="polite"
+                className="rounded-md border border-border bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground"
+              >
+                {vantages.length} / 2 selected
+              </span>
+            </div>
+            <p
+              id={`${vantageId}-help`}
+              className="mt-2 text-xs leading-relaxed text-muted-foreground"
+            >
+              Optional · Compare evidence from up to two other routers. Selecting a router does not
+              contact it.
+            </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {devices
                 .filter((d) => d !== device)
-                .map((d) => (
-                  <label className="flex items-center gap-2 text-sm" key={d}>
-                    <input
-                      type="checkbox"
-                      checked={vantages.includes(d)}
-                      disabled={busy || (!vantages.includes(d) && vantages.length >= 2)}
-                      onChange={(e) =>
-                        setVantages((v) =>
-                          e.target.checked ? [...v, d] : v.filter((x) => x !== d),
-                        )
-                      }
-                    />
-                    {d}
-                  </label>
-                ))}
+                .map((d) => {
+                  const checked = vantages.includes(d);
+                  const atLimit = !checked && vantages.length >= 2;
+                  const disabled = busy || atLimit;
+                  const id = `${vantageId}-${encodeURIComponent(d)}`;
+                  return (
+                    <label
+                      key={d}
+                      htmlFor={id}
+                      className={`flex min-w-0 items-center gap-3 rounded-lg border p-3 transition-colors motion-reduce:transition-none focus-within:outline-2 focus-within:outline-ring ${
+                        checked ? "border-primary/40 bg-muted" : "border-border bg-card"
+                      } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:border-primary/40 hover:bg-muted/70"}`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`flex size-9 shrink-0 items-center justify-center rounded-lg border ${checked ? "border-primary/20 bg-background text-primary" : "border-border text-muted-foreground"}`}
+                      >
+                        <Router className="size-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-mono text-xs font-medium" title={d}>
+                          {d}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-muted-foreground">
+                          {checked
+                            ? "Included in investigation"
+                            : atLimit
+                              ? "Two-router limit reached"
+                              : "Add another perspective"}
+                        </span>
+                      </span>
+                      <Checkbox
+                        id={id}
+                        aria-label={`Include ${d} as an additional router`}
+                        checked={checked}
+                        disabled={disabled}
+                        className="shrink-0"
+                        onCheckedChange={(next) =>
+                          setVantages((current) => {
+                            if (next !== true) return current.filter((name) => name !== d);
+                            if (current.includes(d) || current.length >= 2) return current;
+                            return [...current, d];
+                          })
+                        }
+                      />
+                    </label>
+                  );
+                })}
             </div>
+            {!devices.some((d) => d !== device) && (
+              <p className="mt-3 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+                No additional routers available. You can investigate using the access router alone.
+              </p>
+            )}
           </fieldset>
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
             <button
@@ -251,56 +318,11 @@ export function InvestigationsView(): ReactNode {
           </div>
         </aside>
         {selected ? (
-          <article className="min-w-0 space-y-4">
-            <header className="rounded-xl border border-border bg-card p-5">
-              <h3 className="text-lg font-semibold">{selected.service}</h3>
-              <p className="mt-1 break-words font-mono text-xs text-muted-foreground">
-                {selected.client} → {selected.target}
-              </p>
-              <p className="mt-3 flex items-center gap-2 text-sm text-warning">
-                <AlertCircle className="size-4 shrink-0" />
-                Client application health: unverified
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Historical evidence collected {new Date(selected.createdAt).toLocaleString()}.
-                Router success does not prove client success.
-              </p>
-            </header>
-            {selected.evidence.map((e) => (
-              <details key={e.id} className="rounded-xl border border-border bg-card p-4">
-                <summary className="cursor-pointer text-sm">
-                  <span className="font-semibold">
-                    {e.device} / {e.source}
-                  </span>
-                  <span className="ml-3 text-xs text-muted-foreground">
-                    {e.state} · {e.rows.length} records{e.truncated ? " · truncated" : ""}
-                  </span>
-                </summary>
-                <p className="mt-3 text-sm text-muted-foreground">{e.summary}</p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {new Date(e.startedAt).toLocaleTimeString()} —{" "}
-                  {new Date(e.finishedAt).toLocaleTimeString()}
-                </p>
-                {e.rows.length > 0 && (
-                  <pre className="mt-3 max-h-80 overflow-auto rounded-lg bg-muted p-3 text-xs">
-                    {JSON.stringify(e.rows, null, 2)}
-                  </pre>
-                )}
-              </details>
-            ))}
-            <section className="rounded-xl border border-border bg-card p-5">
-              <h4 className="text-sm font-semibold">Next experiments · not performed</h4>
-              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-                {selected.nextTests.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-            </section>
-          </article>
+          <InvestigationResult investigation={selected} />
         ) : (
           <div className="rounded-xl border border-dashed border-border px-6 py-16 text-center text-sm text-muted-foreground">
-            Select a saved case or collect new evidence. No device is queried just by opening this
-            page.
+            Select a saved case or collect new evidence. The client picker reads DHCP/ARP records;
+            investigation probes run only when you create a case.
           </div>
         )}
       </div>
