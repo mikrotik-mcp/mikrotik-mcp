@@ -61,6 +61,7 @@ import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
 import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
+import { RoundTripView } from "./round-trip";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
 import { ConfigEditor } from "./config-editor";
 import { ConnectivityGraph, DeviceCard } from "./connectivity";
@@ -127,6 +128,7 @@ type ViewId =
   | "clients"
   | "investigations"
   | "service-contracts"
+  | "round-trip"
   | "aaa"
   | "topology"
   | "fabric"
@@ -168,6 +170,7 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   },
   { id: "aaa", label: "RADIUS & UM", sub: "RADIUS client & User Manager RADIUS server" },
   { id: "topology", label: "Topology", sub: "Layer-2 neighbours via MNDP / CDP / LLDP" },
+  { id: "round-trip", label: "Round-trip Lab", sub: "Forward and return paths across snapshots" },
   { id: "fabric", label: "L2 Fabric", sub: "Which host sits on which physical bridge port" },
   {
     id: "vulns",
@@ -273,6 +276,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   clients: MONO_ACCENT,
   investigations: MONO_ACCENT,
   "service-contracts": MONO_ACCENT,
+  "round-trip": MONO_ACCENT,
   aaa: MONO_ACCENT,
   topology: MONO_ACCENT,
   fabric: MONO_ACCENT,
@@ -345,6 +349,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Only administrator-approved endpoints can be probed.",
       "PASS proves checks from this host, not a branch client's experience.",
       "Unknown evidence cannot pass a service gate.",
+    ],
+  },
+  "round-trip": {
+    what: "Offline static IPv4 transit modelling across explicit forward and reverse router paths.",
+    tips: [
+      "Use exact, recent snapshot IDs for all routers.",
+      "NAT and unsupported paths stop with UNKNOWN.",
+      "MODELLED does not prove live delivery or endpoint health.",
     ],
   },
   aaa: {
@@ -742,6 +754,11 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       <>
         <path d="m12 3 8 3v5c0 5-5 8-8 10-3-2-8-5-8-10V6Z" />
         <path d="m8 12 3 3 5-6" />
+      </>
+    ),
+    "round-trip": (
+      <>
+        <path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4" />
       </>
     ),
     aaa: (
@@ -1772,6 +1789,7 @@ function App(): ReactNode {
         {view === "clients" && <ClientsView />}
         {view === "investigations" && <InvestigationsView />}
         {view === "service-contracts" && <ServiceContractsView />}
+        {view === "round-trip" && <RoundTripView />}
 
         {/* ── RADIUS & User Manager ── */}
         {view === "aaa" && <AaaView />}

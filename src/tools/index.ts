@@ -10,6 +10,7 @@ import { addressListTools } from "./address-list";
 import { connectedDeviceTools } from "./connected-devices";
 import { investigationTools } from "./investigations";
 import { serviceContractTools } from "./service-contracts";
+import { roundTripTools } from "./round-trip";
 import { appViewTools } from "./app-views";
 import { backupTools } from "./backup";
 import { localBackupTools } from "./local-backup";
@@ -162,6 +163,14 @@ export interface ModuleInfo {
 }
 
 export const moduleCatalog: ModuleInfo[] = [
+  {
+    label: "Multi-Router Round Trip",
+    slug: "round-trip",
+    group: "System & Ops",
+    description:
+      "Explicit forward/reverse static transit paths with snapshot freshness, per-hop evidence and fail-closed modelling boundaries.",
+    tools: roundTripTools,
+  },
   {
     label: "Service Health Contracts",
     slug: "service-contracts",

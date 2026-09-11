@@ -1,20 +1,20 @@
 <div align="center">
   <img src="assets/logo.svg" alt="@usex/mikrotik-mcp" width="440" />
-  <p><strong>Drive one or more MikroTik routers in plain language — 900 risk-annotated tools your AI can call, over SSH.</strong><br/>
+  <p><strong>Drive one or more MikroTik routers in plain language — 901 risk-annotated tools your AI can call, over SSH.</strong><br/>
   Firewall · routing · DHCP/DNS · wireless · QoS · a complete VPN suite · transactional Safe Mode · live attack detection · and an observability dashboard that watches every call.</p>
 
   <p>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-7C3AED.svg"></a>
     <img alt="Runtime: Bun" src="https://img.shields.io/badge/runtime-Bun%20%E2%89%A5%201.3-06B6D4.svg">
     <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-6366F1.svg">
-    <img alt="MCP" src="https://img.shields.io/badge/MCP-900%20tools-1F2937.svg">
+    <img alt="MCP" src="https://img.shields.io/badge/MCP-901%20tools-1F2937.svg">
     <a href="docs/"><img alt="Docs" src="https://img.shields.io/badge/docs-reference-7C3AED.svg"></a>
   </p>
 </div>
 
 ---
 
-`@usex/mikrotik-mcp` turns **MikroTik RouterOS** into **900 [Model Context Protocol](https://modelcontextprotocol.io)
+`@usex/mikrotik-mcp` turns **MikroTik RouterOS** into **901 [Model Context Protocol](https://modelcontextprotocol.io)
 tools** any MCP client (Claude Desktop, Claude Code, Cursor, …) can call to read and
 configure your router by talking to it. It reaches the device over **plain SSH** — no
 agent, no package to install on RouterOS — runs on **[Bun](https://bun.sh)**, and
@@ -46,6 +46,10 @@ Then just ask:
 
 ## Highlights
 
+- **Round-trip path lab** — model explicit forward/reverse static IPv4 paths across
+  fresh snapshots, with per-hop evidence and declared asymmetry. NAT or unsupported
+  state stops with UNKNOWN; modelled forwarding is not live connectivity.
+  [Guide](docs/round-trip-paths.md)
 - **Service health contracts** — approved DNS/TCP/TLS/HTTPS endpoint checks from the
   MCP host, optional fresh-export packet regressions, historical evidence, explicit
   scheduled enrollment and fail-closed rollout gates. Disabled until targets are
@@ -54,7 +58,7 @@ Then just ask:
   evidence with timestamps, explicit unknowns and next experiments. Router ICMP
   success never masquerades as verified application health.
   [Guide](docs/client-investigations.md) · [Delivery tracker](docs/enterprise-roadmap.md)
-- 🧰 **900 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
+- 🧰 **901 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
   L3 (addressing, routing, DHCP, DNS), security (firewall, NAT, address-lists,
   certificates), QoS, and system ops (users, logs, backups, scheduler).
 - 🛡️ **Attack detection** — reads every device's log, correlates brute force,
@@ -356,24 +360,24 @@ Full reference: **[docs/observability.md](docs/observability.md)**.
 
 ## The tool catalog
 
-**900 tools across 142 modules.** Full, always-current reference (parameters + risk per
+**901 tools across 143 modules.** Full, always-current reference (parameters + risk per
 tool) is generated from source: **[docs/tools-reference.md](docs/tools-reference.md)**.
 
-| Group                    | Tools | Modules                                                                                                           |
-| ------------------------ | ----: | ----------------------------------------------------------------------------------------------------------------- |
-| **System & Ops**         |   182 | system, network tools, scheduler/scripts, users, logs, backup, Safe Mode, transactions, rollout, scheduled audits |
-| **Security**             |   125 | firewall filter, NAT, address-lists, certificates, IP services, hardening, policy-as-code, attack detection       |
-| **VPN & Tunneling**      |   108 | WireGuard, IPsec, PPP, L2TP, PPTP, SSTP, OpenVPN, GRE/IPIP/EoIP/VXLAN                                             |
-| **Dynamic Routing**      |    99 | router-id, tables, rules, next-hops, filters, BFD, BGP, OSPF, RIP, PIM-SM, IGMP proxy, GMP, RPKI                  |
-| **IPv6**                 |    90 | addressing, DHCPv6, ND, neighbours, pools, routes, firewall filter/NAT/mangle/raw                                 |
-| **Tools**                |    67 | ping, traceroute, bandwidth test, sniffer, traffic generator, RoMON, Wake-on-LAN, SMS                             |
-| **Addressing & Routing** |    62 | IP addresses, IP pools, routing, DHCP, DNS                                                                        |
-| **Interfaces**           |    56 | interfaces, VLAN, bridge, wireless, PoE                                                                           |
-| **AAA**                  |    34 | RADIUS, User Manager, 802.1X                                                                                      |
-| **QoS**                  |    23 | queue types, queue trees, simple queues                                                                           |
-| **Switch**               |    18 | switch settings, ports, rules, port isolation                                                                     |
-| **Discovery & Meta**     |     9 | tool gateway (find/describe/invoke), server pulse, capability probe                                               |
-| **Memory**               |     9 | persistent knowledge graph                                                                                        |
+| Group                    | Tools | Modules                                                                                                                        |
+| ------------------------ | ----: | ------------------------------------------------------------------------------------------------------------------------------ |
+| **System & Ops**         |   194 | system, network tools, investigations, service contracts, round-trip paths, Safe Mode, transactions, rollout, scheduled audits |
+| **Security**             |   127 | firewall filter, NAT, address-lists, certificates, IP services, hardening, policy-as-code, attack detection                    |
+| **VPN & Tunneling**      |   108 | WireGuard, IPsec, PPP, L2TP, PPTP, SSTP, OpenVPN, GRE/IPIP/EoIP/VXLAN                                                          |
+| **Dynamic Routing**      |    99 | router-id, tables, rules, next-hops, filters, BFD, BGP, OSPF, RIP, PIM-SM, IGMP proxy, GMP, RPKI                               |
+| **IPv6**                 |    90 | addressing, DHCPv6, ND, neighbours, pools, routes, firewall filter/NAT/mangle/raw                                              |
+| **Tools**                |    67 | ping, traceroute, bandwidth test, sniffer, traffic generator, RoMON, Wake-on-LAN, SMS                                          |
+| **Addressing & Routing** |    62 | IP addresses, IP pools, routing, DHCP, DNS                                                                                     |
+| **Interfaces**           |    56 | interfaces, VLAN, bridge, wireless, PoE                                                                                        |
+| **AAA**                  |    34 | RADIUS, User Manager, 802.1X                                                                                                   |
+| **QoS**                  |    23 | queue types, queue trees, simple queues                                                                                        |
+| **Switch**               |    18 | switch settings, ports, rules, port isolation                                                                                  |
+| **Discovery & Meta**     |    11 | tool gateway (find/describe/invoke), server pulse, capability probe                                                            |
+| **Memory**               |     9 | persistent knowledge graph                                                                                                     |
 
 ## Beyond the catalog
 

@@ -57,6 +57,7 @@ import {
 import { createContext } from "../core/context";
 import { investigationRoutes } from "./investigation-routes";
 import { serviceContractRoutes } from "./service-contract-routes";
+import { roundTripRoutes } from "./round-trip-routes";
 import {
   allowDevice,
   blockDevice,
@@ -1590,6 +1591,9 @@ export async function runDashboard(
 
     const serviceContractResp = await serviceContractRoutes(req, url);
     if (serviceContractResp) return serviceContractResp;
+
+    const roundTripResp = await roundTripRoutes(req, url);
+    if (roundTripResp) return roundTripResp;
 
     const aaaResp = await aaaRoutes(req, url);
     if (aaaResp) return aaaResp;

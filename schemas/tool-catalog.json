@@ -2,8 +2,154 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.5.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 900,
+  "toolCount": 901,
   "tools": [
+    {
+      "name": "trace_round_trip",
+      "title": "Model a Multi-Router Round Trip",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Trace an explicit IPv4 forward and reverse transit path across up to eight routers using exact saved snapshot IDs. Shows per-hop firewall/routing evidence, declared asymmetry and snapshot provenance. All devices are authorized before snapshot lookup. Static no-NAT scope: NAT, dynamic routing, incomplete evidence and unmodelled constructs stop with UNKNOWN. Freshness/skew checks are enforced. No network requests or router writes. MODELLED never means live connectivity; the return leg assumes established conntrack and a replying host.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "snapshots": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "device": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": ["device", "id"],
+              "additionalProperties": false
+            }
+          },
+          "forward": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "device": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "ingress": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "egress": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": ["device", "ingress", "egress"],
+              "additionalProperties": false
+            }
+          },
+          "reverse": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "device": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "ingress": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "egress": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              },
+              "required": ["device", "ingress", "egress"],
+              "additionalProperties": false
+            }
+          },
+          "packet": {
+            "type": "object",
+            "properties": {
+              "srcAddress": {
+                "type": "string",
+                "format": "ipv4",
+                "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+              },
+              "dstAddress": {
+                "type": "string",
+                "format": "ipv4",
+                "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+              },
+              "protocol": {
+                "default": "tcp",
+                "type": "string",
+                "enum": ["tcp", "udp", "icmp"]
+              },
+              "srcPort": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "dstPort": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "required": ["srcAddress", "dstAddress", "protocol"],
+            "additionalProperties": false
+          },
+          "maxAgeSeconds": {
+            "default": 900,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "maxSkewSeconds": {
+            "default": 120,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "snapshots",
+          "forward",
+          "reverse",
+          "packet",
+          "maxAgeSeconds",
+          "maxSkewSeconds"
+        ],
+        "additionalProperties": false
+      }
+    },
     {
       "name": "audit_service_contracts",
       "title": "Audit Enrolled Service Contracts",
