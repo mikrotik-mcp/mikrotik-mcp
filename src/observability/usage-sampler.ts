@@ -123,6 +123,7 @@ export async function sampleUsageOnce(store: UsageStore): Promise<void> {
   if (inFlight) return;
   inFlight = true;
   const ts = Date.now();
+  let phase = "sampling pass";
   try {
     const cfg = getConfig();
     await Promise.all(
@@ -136,7 +137,12 @@ export async function sampleUsageOnce(store: UsageStore): Promise<void> {
         }
       }),
     );
+    phase = "retention cleanup";
     store.pruneSamples(ts - USAGE_RETENTION_MS);
+  } catch (e) {
+    // Timer callers intentionally do not await this pass. Keep storage failures
+    // observable without turning a background task into an unhandled rejection.
+    logger.warn(`[${SERVER_TAG}] usage ${phase} failed; next pass will retry: ${String(e)}`);
   } finally {
     inFlight = false;
   }

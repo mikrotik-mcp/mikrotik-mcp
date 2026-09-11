@@ -1,0 +1,85 @@
+import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
+import { MikrotikConfigSchema } from "../src/config";
+import { getConfig, setConfig } from "../src/core/runtime";
+import {
+  sampleUsageOnce,
+  startUsageSampler,
+  stopUsageSampler,
+  MIN_USAGE_INTERVAL_MS,
+} from "../src/observability/usage-sampler";
+import type { UsageStore } from "../src/observability/usage-store";
+import { logger } from "../src/logger";
+
+const read = vi.hoisted(() => vi.fn(async () => ""));
+vi.mock("../src/core/connector", () => ({ executeMikrotikCommand: read }));
+const original = getConfig();
+const busyError = Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY", errno: 5 });
+function store() {
+  return {
+    recordClientSamples: vi.fn(),
+    upsertSessions: vi.fn(() => 0),
+    clientDailyUsage: vi.fn(() => []),
+    umUserDailyUsage: vi.fn(() => []),
+    umUsers: vi.fn(() => []),
+    heatmap: vi.fn(() => []),
+    pruneSamples: vi.fn(() => 0),
+    close: vi.fn(),
+  } satisfies UsageStore;
+}
+beforeEach(() => {
+  setConfig(
+    MikrotikConfigSchema.parse({ defaultDevice: "edge", devices: { edge: { host: "192.0.2.1" } } }),
+  );
+  read.mockReset().mockResolvedValue("");
+  vi.spyOn(logger, "warn").mockImplementation(() => {});
+});
+afterEach(() => {
+  stopUsageSampler();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  setConfig(original);
+});
+test("retention contention never rejects the background pass, and the next pass recovers", async () => {
+  const db = store();
+  vi.mocked(db.pruneSamples).mockImplementationOnce(() => {
+    throw busyError;
+  });
+  await expect(sampleUsageOnce(db)).resolves.toBeUndefined();
+  expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("retention cleanup"));
+  await sampleUsageOnce(db);
+  expect(db.pruneSamples).toHaveBeenCalledTimes(2);
+});
+test("non-lock retention errors remain visible without killing the sampler", async () => {
+  const db = store();
+  vi.mocked(db.pruneSamples).mockImplementation(() => {
+    throw new Error("disk I/O error");
+  });
+  await expect(sampleUsageOnce(db)).resolves.toBeUndefined();
+  expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("disk I/O error"));
+});
+test("a sample write failure is logged and retention still runs", async () => {
+  const db = store();
+  read.mockResolvedValue("0 target=192.0.2.10/32 bytes=1/2");
+  vi.mocked(db.recordClientSamples).mockImplementation(() => {
+    throw busyError;
+  });
+  await expect(sampleUsageOnce(db)).resolves.toBeUndefined();
+  expect(logger.warn).toHaveBeenCalledWith(
+    expect.stringContaining("usage sample failed for 'edge'"),
+  );
+  expect(db.pruneSamples).toHaveBeenCalledTimes(1);
+});
+test("immediate and periodic timer passes survive retention failures", async () => {
+  vi.useFakeTimers();
+  const db = store();
+  vi.mocked(db.pruneSamples).mockImplementation(() => {
+    throw busyError;
+  });
+  startUsageSampler(db, MIN_USAGE_INTERVAL_MS);
+  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(MIN_USAGE_INTERVAL_MS);
+  expect(db.pruneSamples).toHaveBeenCalledTimes(2);
+  stopUsageSampler();
+  await vi.advanceTimersByTimeAsync(MIN_USAGE_INTERVAL_MS);
+  expect(db.pruneSamples).toHaveBeenCalledTimes(2);
+});

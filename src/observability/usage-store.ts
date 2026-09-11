@@ -93,7 +93,7 @@ export interface UsageStore {
   umUsers(device: string): string[];
   /** Per-day connection counts since `sinceTs` (one user, or all users when null). */
   heatmap(device: string, user: string | null, sinceTs: number): DayCount[];
-  /** Drop client snapshots older than `olderThanTs`. Sessions are never pruned. */
+  /** Drop up to 5,000 expired client snapshots per pass. Sessions are never pruned. */
   pruneSamples(olderThanTs: number): number;
   close(): void;
 }
@@ -128,6 +128,9 @@ class SqliteUsageStore implements UsageStore {
   private readonly db: Database;
   constructor(db: Database) {
     this.db = db;
+    // SQLite calls are synchronous: tolerate brief contention without blocking
+    // the MCP event loop for seconds. Persistent locks retry on the next pass.
+    db.run("PRAGMA busy_timeout = 100");
     db.run("PRAGMA journal_mode = WAL");
     db.run("PRAGMA synchronous = NORMAL");
     for (const stmt of SCHEMA_STATEMENTS) db.run(stmt);
@@ -221,7 +224,12 @@ class SqliteUsageStore implements UsageStore {
   }
 
   pruneSamples(olderThanTs: number): number {
-    const res = this.db.query("DELETE FROM usage_samples WHERE ts < $t").run({ $t: olderThanTs });
+    // Bound each write transaction; subsequent sampling passes drain any backlog.
+    const res = this.db
+      .query(`DELETE FROM usage_samples WHERE rowid IN (
+      SELECT rowid FROM usage_samples WHERE ts < $t ORDER BY ts LIMIT 5000
+    )`)
+      .run({ $t: olderThanTs });
     return Number(res.changes ?? 0);
   }
 
@@ -241,5 +249,10 @@ export async function openUsageStore(path: string): Promise<UsageStore> {
   }
   const { Database } = await import("bun:sqlite");
   const db = new Database(path, { create: true });
-  return new SqliteUsageStore(db);
+  try {
+    return new SqliteUsageStore(db);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
