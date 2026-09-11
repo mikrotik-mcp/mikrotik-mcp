@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { z } from "zod";
+import { ServiceProbeConfigSchema } from "./service-contracts/model";
 
 /**
  * Default observability DB location: `~/.mikrotik-mcp/events.db`. `homedir()`
@@ -511,6 +512,8 @@ export const AccessConfigSchema = z.object({
 export type AccessConfig = z.infer<typeof AccessConfigSchema>;
 
 export const MikrotikConfigSchema = z.object({
+  /** Administrator-approved service probe destinations; no probes allowed by default. */
+  serviceProbes: ServiceProbeConfigSchema.default(() => ServiceProbeConfigSchema.parse({})),
   /** Named devices the server can reach. Always has at least one entry. */
   devices: z
     .record(z.string(), DeviceConfigSchema)
@@ -618,7 +621,14 @@ function parseFlags(argv: string[]): Record<string, string> {
  * passthrough they parse fine and are then thrown away, which reads as "my
  * alerts config does nothing".
  */
-const PASSTHROUGH_BLOCKS = ["alerts", "flows", "policy", "schedules", "attacks"] as const;
+const PASSTHROUGH_BLOCKS = [
+  "alerts",
+  "flows",
+  "policy",
+  "schedules",
+  "attacks",
+  "serviceProbes",
+] as const;
 
 /** Parse a multi-device source (JSON file or inline JSON) into a devices map. */
 function parseDevicesSource(

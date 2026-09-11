@@ -14,6 +14,7 @@ import type { RolloutStore } from "./store";
 import type { RolloutState } from "./model";
 
 export interface LiveRollout {
+  serviceContracts?: { id: string; device: string }[];
   state: RolloutState;
   /** Commands this rollout applies to every device. */
   commands: string[];

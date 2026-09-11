@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "create_service_contract",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "checks": {
+      "minItems": 1,
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxLatencyMs": {
+            "default": 2000,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "expectedStatus": {
+            "default": [200],
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 200,
+              "maximum": 599
+            }
+          }
+        },
+        "required": ["target", "maxLatencyMs", "expectedStatus"],
+        "additionalProperties": false
+      }
+    },
+    "packetSuiteId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    }
+  },
+  "required": ["name", "checks"],
+  "additionalProperties": false
+}

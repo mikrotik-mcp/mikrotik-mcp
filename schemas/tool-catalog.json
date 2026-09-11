@@ -2,8 +2,169 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.5.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 894,
+  "toolCount": 900,
   "tools": [
+    {
+      "name": "audit_service_contracts",
+      "title": "Audit Enrolled Service Contracts",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Run the administrator-enrolled service contracts for this device (serviceProbes.scheduled) and return stable failures/unknowns for scheduled-audit regression notifications. New contracts are not enrolled automatically. At most five contracts and ten network checks; no router configuration writes.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_service_probe_targets",
+      "title": "List Approved Service Probe Targets",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "List the service probe aliases approved by the server administrator. Probes originate from the MCP host, not the router or client. No network request is made. Empty by default; edit serviceProbes.targets in the server config to enable explicitly bounded endpoints.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "create_service_contract",
+      "title": "Create a Service Health Contract",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Save an immutable device-owned contract of DNS/TCP/TLS/HTTPS checks against administrator-approved aliases, latency thresholds and expected HTTPS status codes. Optionally attach a saved packet suite evaluated against a fresh device export. Definition only: no probes or router writes. To revise a contract, create a new one and select its new ID explicitly.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "checks": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "maxLatencyMs": {
+                  "default": 2000,
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "expectedStatus": {
+                  "default": [200],
+                  "minItems": 1,
+                  "maxItems": 10,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 200,
+                    "maximum": 599
+                  }
+                }
+              },
+              "required": ["target", "maxLatencyMs", "expectedStatus"],
+              "additionalProperties": false
+            }
+          },
+          "packetSuiteId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": ["name", "checks"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_service_contracts",
+      "title": "List Service Health Contracts",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read up to 100 local service contract definitions owned by the selected device. No probes are run.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "run_service_contract",
+      "title": "Check a Service Health Contract",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Run and record bounded DNS/TCP/TLS/HTTPS checks from the MCP host against server-approved, IP-pinned targets. No redirects, request credentials or response bodies. Report PASS/FAIL/UNKNOWN per check, not blanket client health. An optional packet suite reads a fresh /export terse from its device for this run; never tests an old baseline after a change. No router configuration writes. Unknown never passes a rollout gate. For scheduled checks, explicitly enroll contracts and schedule audit_service_contracts.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "service_contract_history",
+      "title": "Read Service Contract History",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read the latest 100 recorded service checks for a contract owned by the selected device. A historical passing run is not a current gate result.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
     {
       "name": "create_investigation",
       "title": "Investigate a Client and Service",
@@ -30843,6 +31004,27 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "service_contracts": {
+            "description": "Optional service contracts: must pass before any change and after every wave. Probes originate from the MCP host, not the router. Unknown blocks the gate.",
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "device": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["id", "device"],
+              "additionalProperties": false
+            }
+          },
           "commands": {
             "anyOf": [
               {
@@ -31015,7 +31197,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Schedules an audit to run on its own and report only what changed since the previous run. Only READ auditors can be scheduled — this is enforced, not advisory: an unattended loop that can write to a router is a footgun, so schedule the audit and wire the alert to a human instead. Cron is the restricted 5-field form (minute hour day-of-month month day-of-week) with *, ranges, lists and step syntax.\n\nSchedulable auditors:\n  run_security_hardening_audit — Device security posture — services, firewall defaults, credentials, helpers.\n  run_compliance_audit — Scored pass/fail compliance checks across 10 categories.\n  firewall_audit — Shadowed, unreachable, overly-broad and dead firewall rules.\n  run_policy_check — Loaded policy-as-code rules against the device's live configuration.",
+      "description": "Schedules an audit to run on its own and report only what changed since the previous run. Only READ auditors can be scheduled — this is enforced, not advisory: an unattended loop that can write to a router is a footgun, so schedule the audit and wire the alert to a human instead. Cron is the restricted 5-field form (minute hour day-of-month month day-of-week) with *, ranges, lists and step syntax.\n\nSchedulable auditors:\n  audit_service_contracts — Enrolled service contracts: live MCP-host probes, optional fresh-export simulation, explicit unknowns.\n  run_security_hardening_audit — Device security posture — services, firewall defaults, credentials, helpers.\n  run_compliance_audit — Scored pass/fail compliance checks across 10 categories.\n  firewall_audit — Shadowed, unreachable, overly-broad and dead firewall rules.\n  run_policy_check — Loaded policy-as-code rules against the device's live configuration.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

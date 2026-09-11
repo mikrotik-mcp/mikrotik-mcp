@@ -27,6 +27,7 @@ import { fetchInterfaceListMembers, fetchRules } from "../tools/firewall-audit";
 import { fetchSecurityState } from "../tools/security-hardening";
 import { complianceFindingId, hardeningFindingId, policyFindingId } from "./identity";
 import type { AuditFinding, Severity } from "./model";
+import { auditServiceContracts } from "../service-contracts/audit";
 
 export interface AuditAdapter {
   /** The MCP tool this schedules — also what the runner risk-checks. */
@@ -54,6 +55,12 @@ function severity(value: string | undefined): Severity {
 }
 
 const ADAPTERS: AuditAdapter[] = [
+  {
+    tool: "audit_service_contracts",
+    summary:
+      "Enrolled service contracts: live MCP-host probes, optional fresh-export simulation, explicit unknowns.",
+    run: (_ctx, device) => auditServiceContracts(device),
+  },
   {
     tool: "run_security_hardening_audit",
     summary: "Device security posture — services, firewall defaults, credentials, helpers.",

@@ -9,6 +9,7 @@ import type { ToolModule } from "../core/registry";
 import { addressListTools } from "./address-list";
 import { connectedDeviceTools } from "./connected-devices";
 import { investigationTools } from "./investigations";
+import { serviceContractTools } from "./service-contracts";
 import { appViewTools } from "./app-views";
 import { backupTools } from "./backup";
 import { localBackupTools } from "./local-backup";
@@ -161,6 +162,14 @@ export interface ModuleInfo {
 }
 
 export const moduleCatalog: ModuleInfo[] = [
+  {
+    label: "Service Health Contracts",
+    slug: "service-contracts",
+    group: "System & Ops",
+    description:
+      "Administrator-approved DNS/TCP/TLS/HTTPS service checks, immutable contracts, history and fail-closed rollout gates with explicit MCP-host perspective.",
+    tools: serviceContractTools,
+  },
   {
     label: "Client Investigations",
     slug: "investigations",

@@ -2,13 +2,14 @@
 import { randomUUID } from "node:crypto";
 import type { ToolContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
-import { evaluateAccess, getAccessPolicy } from "../core/access";
+import { assertDeviceAccess as assertCaseAccess } from "../core/scoped-access";
 import { resolveDeviceName } from "../core/runtime";
 import { Cmd, isEmpty, looksLikeError } from "../core/routeros";
 import { parseKeyValues, parseRecords } from "../core/routeros-parse";
 import { parsePingSummary } from "../tools/dr-drill";
 import { investigationInput, nextTests } from "./model";
 import type { CaseEvidence, Investigation } from "./model";
+export { assertDeviceAccess as assertCaseAccess } from "../core/scoped-access";
 
 type Reader = (command: string, ctx: ToolContext, opts: { maxMs: number }) => Promise<string>;
 const sources = [
@@ -38,15 +39,6 @@ const sources = [
   ],
 ] as const;
 const busy = new Set<string>();
-
-/** Check every vantage point and historical evidence device, not just the default router. */
-export function assertCaseAccess(devices: string[], tool: string, risk: "READ" | "WRITE"): void {
-  for (const name of devices) {
-    const device = resolveDeviceName(name);
-    const decision = evaluateAccess(getAccessPolicy(), { device, tool, risk, now: Date.now() });
-    if (!decision.allowed) throw new Error(decision.reason);
-  }
-}
 
 /** Gather a point-in-time case without changing router configuration or launching packet captures. */
 export async function collectInvestigation(

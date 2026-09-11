@@ -13,6 +13,8 @@
  * across devices that are INDEPENDENT.
  */
 import { z } from "zod";
+import { withServiceGate } from "../service-contracts/gate";
+import { runServiceContract } from "../service-contracts/run";
 import { DANGEROUS, READ, WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { peekCapabilities } from "../core/capability-cache";
@@ -195,7 +197,11 @@ async function advance(
   const run = await runRollout({
     state: entry.state,
     commands: entry.commands,
-    executor: createDeviceExecutor(ctx, entry.state.id),
+    executor: withServiceGate(
+      createDeviceExecutor(ctx, entry.state.id),
+      entry.serviceContracts ?? [],
+      runServiceContract,
+    ),
     onEvent: ({ action, state }) => {
       entry.state = state;
       const device = "device" in action ? action.device : undefined;
@@ -322,6 +328,13 @@ export const rolloutTools: ToolModule = [
       "High blast radius — run plan_rollout first and show a human the output. " +
       "Returns a rollout id; follow it with rollout_status, stop it with abort_rollout.",
     inputSchema: {
+      service_contracts: z
+        .array(z.object({ id: z.uuid(), device: z.string().min(1) }))
+        .max(10)
+        .optional()
+        .describe(
+          "Optional service contracts: must pass before any change and after every wave. Probes originate from the MCP host, not the router. Unknown blocks the gate.",
+        ),
       commands: z
         .union([z.array(z.string()), z.string()])
         .describe("RouterOS commands to apply to every device"),
@@ -353,8 +366,29 @@ export const rolloutTools: ToolModule = [
 
       // The gate needs to know which routers were ALREADY unreachable, or one
       // long-dead device halts every rollout forever.
+      const serviceContracts = (a.service_contracts ?? []).map(
+        (ref: { id: string; device: string }) => ({
+          id: ref.id,
+          device: resolveDeviceName(ref.device),
+        }),
+      );
+      if (
+        serviceContracts.some((ref: { device: string }) => !selection.devices.includes(ref.device))
+      )
+        throw new Error("Service contract owners must be among the rollout targets");
+      if (serviceContracts.length && a.strategy?.onFailure === "continue")
+        throw new Error("Service contract gates cannot be used with onFailure=continue");
+      for (const ref of serviceContracts) {
+        const check = await runServiceContract(ref.id, ref.device);
+        if (check.status !== "pass")
+          throw new Error(
+            `Service contract ${ref.id} failed preflight; no rollout changes were applied`,
+          );
+      }
       ctx.info(`Probing ${selection.devices.length} device(s) for the pre-rollout baseline`);
       const baseline = await probeReachability(selection.devices);
+      if (serviceContracts.some((ref: { device: string }) => !baseline[ref.device]))
+        throw new Error("A service contract owner is unreachable; no rollout changes were applied");
       const offline = Object.entries(baseline)
         .filter(([, up]) => !up)
         .map(([name]) => name);
@@ -366,11 +400,16 @@ export const rolloutTools: ToolModule = [
         baseline,
       });
       const entry = putRollout({
+        serviceContracts,
         state,
         commands,
         ts: Date.now(),
         label: a.label,
       });
+      if (serviceContracts.length)
+        state.notes.push(
+          `Service gates (MCP-host perspective): ${serviceContracts.map((ref: { id: string; device: string }) => `${ref.device}/${ref.id}`).join(", ")}`,
+        );
       await persistRollout(entry);
       logger.info(`Rollout ${state.id} started over ${selection.devices.length} device(s)`);
 

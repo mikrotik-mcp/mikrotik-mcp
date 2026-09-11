@@ -60,6 +60,7 @@ import { ChangePlanView } from "./change-plan";
 import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
 import { InvestigationsView } from "./investigations";
+import { ServiceContractsView } from "./service-contracts";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
 import { ConfigEditor } from "./config-editor";
 import { ConnectivityGraph, DeviceCard } from "./connectivity";
@@ -125,6 +126,7 @@ type ViewId =
   | "devices"
   | "clients"
   | "investigations"
+  | "service-contracts"
   | "aaa"
   | "topology"
   | "fabric"
@@ -158,6 +160,11 @@ const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     id: "investigations",
     label: "Investigations",
     sub: "Client and service evidence across routers",
+  },
+  {
+    id: "service-contracts",
+    label: "Service Health",
+    sub: "Approved endpoint checks, contracts and evidence",
   },
   { id: "aaa", label: "RADIUS & UM", sub: "RADIUS client & User Manager RADIUS server" },
   { id: "topology", label: "Topology", sub: "Layer-2 neighbours via MNDP / CDP / LLDP" },
@@ -265,6 +272,7 @@ const VIEW_ACCENT: Record<ViewId, [string, string]> = {
   devices: MONO_ACCENT,
   clients: MONO_ACCENT,
   investigations: MONO_ACCENT,
+  "service-contracts": MONO_ACCENT,
   aaa: MONO_ACCENT,
   topology: MONO_ACCENT,
   fabric: MONO_ACCENT,
@@ -329,6 +337,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Opening history never queries routers.",
       "A successful router ping does not prove the client application works.",
       "Unknown evidence is never treated as a healthy zero.",
+    ],
+  },
+  "service-contracts": {
+    what: "Immutable service contracts with explicit MCP-host DNS/TCP/TLS/HTTPS checks and optional fresh-export packet simulation.",
+    tips: [
+      "Only administrator-approved endpoints can be probed.",
+      "PASS proves checks from this host, not a branch client's experience.",
+      "Unknown evidence cannot pass a service gate.",
     ],
   },
   aaa: {
@@ -720,6 +736,12 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       <>
         <circle cx="10" cy="10" r="6" />
         <path d="m15 15 6 6M7 10h6M10 7v6" />
+      </>
+    ),
+    "service-contracts": (
+      <>
+        <path d="m12 3 8 3v5c0 5-5 8-8 10-3-2-8-5-8-10V6Z" />
+        <path d="m8 12 3 3 5-6" />
       </>
     ),
     aaa: (
@@ -1749,6 +1771,7 @@ function App(): ReactNode {
         {/* ── Clients ── */}
         {view === "clients" && <ClientsView />}
         {view === "investigations" && <InvestigationsView />}
+        {view === "service-contracts" && <ServiceContractsView />}
 
         {/* ── RADIUS & User Manager ── */}
         {view === "aaa" && <AaaView />}

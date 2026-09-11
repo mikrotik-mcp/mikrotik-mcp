@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { createContext } from "../core/context";
 import { investigationTools } from "../tools/investigations";
+import { readOperationBody, DashboardInputError } from "./bounded-request";
 
 export async function investigationRoutes(req: Request, url: URL): Promise<Response | null> {
   if (!url.pathname.startsWith("/api/investigations")) return null;
@@ -20,7 +21,7 @@ export async function investigationRoutes(req: Request, url: URL): Promise<Respo
       : "list_investigations";
   const tool = investigationTools.find((t) => t.name === name)!;
   try {
-    const raw = req.method === "POST" ? await req.text() : "";
+    const raw = req.method === "POST" ? await readOperationBody(req) : "";
     if (raw.length > 8192) return Response.json({ error: "Request too large" }, { status: 413 });
     const args = z
       .object(tool.inputSchema)
@@ -33,6 +34,8 @@ export async function investigationRoutes(req: Request, url: URL): Promise<Respo
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   } catch (e) {
+    if (e instanceof DashboardInputError)
+      return Response.json({ error: e.message }, { status: e.status });
     return Response.json(
       {
         error:

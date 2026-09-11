@@ -3,6 +3,84 @@
   "title": "MikrotikConfig",
   "type": "object",
   "properties": {
+    "serviceProbes": {
+      "default": {
+        "scheduled": {},
+        "targets": {},
+        "timeoutMs": 5000
+      },
+      "type": "object",
+      "properties": {
+        "scheduled": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "targets": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z\\d_-]{1,64}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["dns", "tcp", "tls", "https"]
+              },
+              "host": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 253,
+                "pattern": "^[a-z\\d](?:[a-z\\d.-]*[a-z\\d])?$"
+              },
+              "port": {
+                "default": 443,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "path": {
+                "default": "/health",
+                "type": "string",
+                "maxLength": 1024
+              },
+              "addresses": {
+                "minItems": 1,
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["kind", "host", "port", "path", "addresses"],
+            "additionalProperties": false
+          }
+        },
+        "timeoutMs": {
+          "default": 5000,
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000
+        }
+      },
+      "required": ["scheduled", "targets", "timeoutMs"],
+      "additionalProperties": false
+    },
     "devices": {
       "default": {
         "default": {
@@ -808,6 +886,7 @@
     }
   },
   "required": [
+    "serviceProbes",
     "devices",
     "defaultDevice",
     "mcp",
