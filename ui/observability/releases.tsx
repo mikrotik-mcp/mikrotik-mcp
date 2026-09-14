@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ReleaseDowngradeButton } from "./release-actions";
+import "./releases.css";
 
 type Relation = "current" | "newer" | "older";
 
@@ -237,89 +239,81 @@ export function ReleasesView(): ReactNode {
         </div>
       )}
 
-      <div className="relative pl-6">
-        <div className="bg-border absolute top-2 bottom-2 left-[9px] w-px" aria-hidden="true" />
-        <div className="flex flex-col gap-3">
-          {data.releases.map((r) => {
-            const isOpen = expanded.has(r.version);
-            const isCurrent = r.relation === "current";
-            const isLatest = r.version === data.latestVersion;
-            const v = verb(r.relation);
-            return (
-              <div key={r.version} className="relative">
-                <span
-                  className={cn(
-                    "absolute top-3.5 -left-[21px] z-10 grid size-[19px] place-items-center rounded-full ring-4 ring-card",
-                    isCurrent
-                      ? "bg-emerald-500"
-                      : isLatest
-                        ? "bg-brand"
-                        : r.relation === "newer"
-                          ? "bg-brand/60"
-                          : "bg-muted-foreground/40",
-                  )}
-                  title={isCurrent ? "You are here" : r.relation}
-                >
-                  {isCurrent && <Check className="size-3 text-white" />}
+      <ol className="release-timeline" aria-label="Release history">
+        {data.releases.map((r) => {
+          const isOpen = expanded.has(r.version);
+          const isCurrent = r.relation === "current";
+          const isLatest = r.version === data.latestVersion;
+          const v = verb(r.relation);
+          return (
+            <li key={r.version}>
+              <div className="release-timeline-rail" aria-hidden="true">
+                <span className="release-timeline-node" data-relation={r.relation}>
+                  {isCurrent ? <Check className="size-3" /> : <i />}
                 </span>
+              </div>
 
-                <div
-                  className={cn(
-                    "rounded-lg border bg-card transition-colors",
-                    isCurrent && "border-emerald-500/40",
-                    isLatest && !isCurrent && "border-brand/40",
+              <div
+                className={cn(
+                  "min-w-0 rounded-lg border bg-card transition-colors",
+                  isCurrent && "border-emerald-500/40",
+                  isLatest && !isCurrent && "border-brand/40",
+                )}
+              >
+                <div className="release-row-header flex flex-wrap items-center gap-x-3 gap-y-1.5 p-3.5">
+                  <button
+                    type="button"
+                    onClick={() => toggle(r.version)}
+                    className="flex items-baseline gap-2 text-left"
+                    title={isOpen ? "Hide notes" : "Show notes"}
+                  >
+                    <span className="text-foreground text-lg font-bold tracking-tight">
+                      v{r.version}
+                    </span>
+                    <span className="text-muted-foreground text-xs">{fmtDate(r.publishedAt)}</span>
+                  </button>
+
+                  {isCurrent && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500 uppercase">
+                      current
+                    </span>
                   )}
-                >
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 p-3.5">
-                    <button
-                      type="button"
-                      onClick={() => toggle(r.version)}
-                      className="flex items-baseline gap-2 text-left"
-                      title={isOpen ? "Hide notes" : "Show notes"}
-                    >
-                      <span className="text-foreground text-lg font-bold tracking-tight">
-                        v{r.version}
-                      </span>
-                      <span className="text-muted-foreground text-xs">
-                        {fmtDate(r.publishedAt)}
-                      </span>
-                    </button>
+                  {isLatest && !isCurrent && (
+                    <span className="bg-brand/10 text-brand rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase">
+                      latest
+                    </span>
+                  )}
+                  {r.prerelease && (
+                    <span className="text-muted-foreground rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase">
+                      pre-release
+                    </span>
+                  )}
 
-                    {isCurrent && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500 uppercase">
-                        current
-                      </span>
-                    )}
-                    {isLatest && !isCurrent && (
-                      <span className="bg-brand/10 text-brand rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase">
-                        latest
-                      </span>
-                    )}
-                    {r.prerelease && (
-                      <span className="text-muted-foreground rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase">
-                        pre-release
-                      </span>
-                    )}
+                  <span className="flex-1" />
 
-                    <span className="flex-1" />
-
-                    <a
-                      href={r.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
-                      title="Open on GitHub"
-                    >
-                      <ExternalLink className="size-3.5" />
-                    </a>
-                    <Button onClick={() => toggle(r.version)}>
-                      {isOpen ? "Hide notes" : "Notes"}
-                    </Button>
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+                    title="Open on GitHub"
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                  <Button onClick={() => toggle(r.version)}>
+                    {isOpen ? "Hide notes" : "Notes"}
+                  </Button>
+                  {r.relation === "older" ? (
+                    <ReleaseDowngradeButton
+                      version={r.version}
+                      disabled={busy}
+                      onReview={() => setPending(r)}
+                    />
+                  ) : (
                     <Button
                       onClick={() => setPending(r)}
                       disabled={busy}
                       className={cn(
-                        r.relation === "older" && "text-destructive",
                         r.relation === "newer" &&
                           "bg-brand text-brand-foreground hover:bg-brand/90 border-transparent",
                       )}
@@ -327,19 +321,19 @@ export function ReleasesView(): ReactNode {
                     >
                       {v.icon} {v.label}
                     </Button>
-                  </div>
-
-                  {isOpen && (
-                    <div className="border-t px-4 py-3.5">
-                      <Notes body={r.body} />
-                    </div>
                   )}
                 </div>
+
+                {isOpen && (
+                  <div className="border-t px-4 py-3.5">
+                    <Notes body={r.body} />
+                  </div>
+                )}
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </li>
+          );
+        })}
+      </ol>
 
       <AlertDialog open={pending !== null} onOpenChange={(o) => !o && setPending(null)}>
         <AlertDialogContent>
