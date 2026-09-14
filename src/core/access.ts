@@ -23,6 +23,9 @@
  * policy holder at the bottom touches the active configuration.
  */
 import { getConfig, onConfigChanged } from "./runtime";
+import { globMatch } from "./tool-pattern";
+
+export { globMatch } from "./tool-pattern";
 
 /** Risk tiers in ascending order of blast radius. Mirrors the registry presets. */
 export const RISK_ORDER = [
@@ -59,6 +62,8 @@ export interface AccessScope {
    * so an alias cannot be used to slip past the list.
    */
   devices?: string[];
+  /** Internal intersection result: unlike an empty configured list, grants no devices. */
+  noDevices?: boolean;
   /** Device keys this scope may never target. Wins over `devices`. */
   denyDevices?: string[];
   /**
@@ -66,6 +71,8 @@ export interface AccessScope {
    * `*` matches any run of characters; matching is case-insensitive.
    */
   tools?: string[];
+  /** Additional allow-lists to satisfy together; preserves intersected glob semantics. */
+  toolAllowGroups?: string[][];
   /** Tool-name globs this scope may never invoke. Wins over `tools`. */
   denyTools?: string[];
   /**
@@ -111,16 +118,6 @@ export interface AccessDecision {
  * regex metacharacter except `*` is escaped, so a pattern is data, never a
  * pattern-injection vector into the matcher itself.
  */
-export function globMatch(pattern: string, name: string): boolean {
-  const rx = new RegExp(
-    `^${pattern
-      .toLowerCase()
-      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/\*/g, ".*")}$`,
-  );
-  return rx.test(name.toLowerCase());
-}
-
 function matchesAny(patterns: string[] | undefined, name: string): boolean {
   return (patterns ?? []).some((p) => globMatch(p, name));
 }
@@ -165,7 +162,21 @@ export function evaluateAccess(policy: AccessPolicy, req: AccessRequest): Access
     };
   }
 
+  if ((s.toolAllowGroups ?? []).some((group) => !matchesAny(group, req.tool))) {
+    return {
+      allowed: false,
+      rule: "tool",
+      reason: `Tool '${req.tool}' does not satisfy every configured and session tool allow-list${where}.`,
+    };
+  }
+
   if (req.device !== undefined) {
+    if (s.noDevices)
+      return {
+        allowed: false,
+        rule: "device",
+        reason: `No devices remain in the intersection of the configured and session access scopes${where}.`,
+      };
     if ((s.denyDevices ?? []).some((d) => d.toLowerCase() === req.device!.toLowerCase())) {
       return {
         allowed: false,
@@ -235,13 +246,19 @@ export function narrowScope(base: AccessScope, requested: AccessScope): AccessSc
     return b.filter((x) => lower.has(x.toLowerCase()));
   };
   out.devices = intersect(base.devices, requested.devices);
-  // Tool allow-lists are globs, so a literal set intersection is wrong: `list_*`
-  // and `list_ip_*` have no common STRING but a real common meaning. Keeping
-  // both lists and requiring a name to satisfy each would need an AND-list the
-  // evaluator does not model, so the narrower approach is to keep the REQUESTED
-  // list when one is given — it can only be checked against, never around, and
-  // the base's deny-list survives untouched below.
+  if (
+    base.noDevices ||
+    requested.noDevices ||
+    (base.devices?.length && requested.devices?.length && !out.devices?.length)
+  )
+    out.noDevices = true;
+  // Globs cannot be intersected as literal strings. Retain additional groups
+  // as AND constraints instead of replacing a narrower operator allow-list.
   out.tools = requested.tools && requested.tools.length > 0 ? requested.tools : base.tools;
+  const groups = [...(base.toolAllowGroups ?? []), ...(requested.toolAllowGroups ?? [])];
+  if (base.tools?.length && requested.tools?.length) groups.push(base.tools);
+  if (groups.length)
+    out.toolAllowGroups = [...new Map(groups.map((g) => [JSON.stringify(g), g])).values()];
 
   out.denyDevices = [...new Set([...(base.denyDevices ?? []), ...(requested.denyDevices ?? [])])];
   out.denyTools = [...new Set([...(base.denyTools ?? []), ...(requested.denyTools ?? [])])];
@@ -302,14 +319,23 @@ onConfigChanged(adoptConfiguredPolicy);
 adoptConfiguredPolicy();
 
 /** The effective policy: configured base, intersected with any runtime narrowing. */
-export function getAccessPolicy(): AccessPolicy {
-  if (!sessionNarrowing) return basePolicy;
+export function previewAccessPolicy(policy: AccessPolicy): AccessPolicy {
+  if (!sessionNarrowing) return policy;
   return {
     // A narrowing implies enforcement even if the base was permissive —
     // otherwise asking for less would grant more.
     enabled: true,
-    scope: narrowScope(basePolicy.scope, sessionNarrowing),
+    scope: narrowScope(policy.scope, sessionNarrowing),
   };
+}
+
+/** Read-only preview and runtime enforcement use the same session intersection. */
+export function getAccessPolicy(): AccessPolicy {
+  return previewAccessPolicy(basePolicy);
+}
+
+export function hasSessionNarrowing(): boolean {
+  return sessionNarrowing !== undefined;
 }
 
 /** Narrow the current session. Returns the resulting effective scope. */

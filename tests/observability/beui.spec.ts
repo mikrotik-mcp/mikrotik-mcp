@@ -16,6 +16,7 @@ test("retained BeUI collections match installed components and retain their lice
     "animated-sidebar",
     "button",
     "checkbox",
+    "combobox",
     "dynamic-island",
     "expandable-action-bar",
     "input",

@@ -26,18 +26,18 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir, networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
-import { serve } from "bun";
 import type { Server, ServerWebSocket } from "bun";
+import { serve } from "bun";
 import { z } from "zod";
+import type { DashboardConfig, MikrotikConfig } from "../config";
 import {
   DEFAULT_SNAPSHOT_DB,
   DeviceConfigSchema,
-  MikrotikConfigSchema,
-  ToolFilterSchema,
   getConfigSource,
   loadConfig,
+  MikrotikConfigSchema,
+  ToolFilterSchema,
 } from "../config";
-import type { DashboardConfig, MikrotikConfig } from "../config";
 import { moduleCatalog } from "../tools";
 import { applyModuleToggle, moduleSurface } from "./modules";
 import { atomicWrite, mergeSecrets, serializeConfig } from "../config-write";
@@ -85,14 +85,14 @@ import {
   updateAaaEntity,
 } from "../tools/aaa-data";
 import { normalizeExport } from "../snapshots/format";
-import { openSnapshotStore } from "../snapshots/store";
 import type { SnapshotStore } from "../snapshots/store";
+import { openSnapshotStore } from "../snapshots/store";
 import { getConfig, resolveDeviceName, setConfig } from "../core/runtime";
 import { fetchAllReleases, fetchLatestRelease } from "../core/update-check";
 import { logger } from "../logger";
 import { UI_DIST_DIR } from "../paths";
-import { createConfigAdmin, validateConfig } from "./config-admin";
 import type { ConfigAdmin } from "./config-admin";
+import { createConfigAdmin, validateConfig } from "./config-admin";
 import {
   AUTO_RETENTION,
   deleteVersion,
@@ -102,8 +102,8 @@ import {
   readVersion,
   recordVersion,
 } from "./config-history";
-import { redact, riskOf } from "./event";
 import type { Risk, ToolEvent } from "./event";
+import { redact, riskOf } from "./event";
 import { listPrompts } from "../prompts";
 import {
   buildChannelPlanCommands,
@@ -133,13 +133,13 @@ import { getDeviceGeo, startGeoLookups, stopGeoLookups } from "./geo";
 import { flagSvg } from "./flags";
 import { configureRecorder, getEventStore, subscribe, subscriberCount } from "./recorder";
 import { subscribeTraffic } from "./traffic-hub";
-import { openSqliteStore } from "./store";
 import type { EventFilter, EventStore } from "./store";
-import { openCapsmanStore } from "./capsman-store";
+import { openSqliteStore } from "./store";
 import type { CapsmanStore } from "./capsman-store";
+import { openCapsmanStore } from "./capsman-store";
 import { startCapsmanSampler, stopCapsmanSampler } from "./capsman-sampler";
-import { openUsageStore } from "./usage-store";
 import type { UsageStore } from "./usage-store";
+import { openUsageStore } from "./usage-store";
 import {
   getUsageSamplerInterval,
   setUsageSamplerInterval,
@@ -160,6 +160,7 @@ import { isMacTelnetDevice } from "../core/transport";
 import { VERSION } from "../version";
 import { driftRoutes } from "./drift-routes";
 import { postureRoutes } from "./posture-routes";
+import { createAccessSettingsRoutes } from "./access-settings";
 import { txnRoutes } from "./txn-routes";
 import { flowRoutes } from "./flow-routes";
 import { rolloutRoutes } from "./rollout-routes";
@@ -421,28 +422,10 @@ function topologyPayload(): unknown {
  * clobbering the omitted blocks: `POST /api/config` validates the whole schema,
  * so any section missing here would be reset to its Zod default on save.
  */
-function configPayload(): unknown {
-  const cfg = getConfig();
-  return redact({
-    devices: cfg.devices,
-    defaultDevice: cfg.defaultDevice,
-    mcp: cfg.mcp,
-    s3: cfg.s3,
-    dashboard: cfg.dashboard,
-    ssh: cfg.ssh,
-    // Feature blocks — without these an editor round-trip silently resets them
-    // to their Zod defaults (dropping alert channels, jobs, incidents config…).
-    alerts: cfg.alerts,
-    flows: cfg.flows,
-    policy: cfg.policy,
-    schedules: cfg.schedules,
-    attacks: cfg.attacks,
-    readOnly: cfg.readOnly,
-    tools: cfg.tools,
-    memory: cfg.memory,
-    backupDir: cfg.backupDir,
-    disableUpdateCheck: cfg.disableUpdateCheck,
-  });
+export function configPayload(): unknown {
+  // Never enumerate sections: a partial round-trip would reset access and any
+  // newly introduced feature block to its default when Config Studio saves.
+  return redact(getConfig());
 }
 
 /**
@@ -1541,6 +1524,8 @@ export async function runDashboard(
     return bearer === cfg.token || url.searchParams.get("token") === cfg.token;
   };
 
+  const accessSettingsRoutes = createAccessSettingsRoutes(configAdmin);
+
   /** Route all dashboard API requests; exceptions bubble to the caller. */
   async function dashboardRoute(
     req: Request,
@@ -1571,6 +1556,8 @@ export async function runDashboard(
 
     // Config Studio routes are independent of the event store, so dispatch
     // them before the recorder guard below.
+    const accessResp = await accessSettingsRoutes(req, url);
+    if (accessResp) return accessResp;
     const configResp = await configRoutes(req, url, ca);
     if (configResp) return configResp;
 

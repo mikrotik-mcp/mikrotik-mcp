@@ -4,6 +4,23 @@
   "license": "MIT",
   "components": [
     {
+      "slug": "combobox",
+      "category": "motion",
+      "source": "https://beui.dev/r/combobox",
+      "updated": "2026-08-22",
+      "files": [
+        "components/motion/combobox.tsx",
+        "components/motion/combobox/content.tsx",
+        "components/motion/combobox/context.tsx",
+        "components/motion/combobox/list.tsx",
+        "components/motion/combobox/trigger.tsx",
+        "components/motion/combobox/use-active-option.ts",
+        "components/motion/popover-position.ts",
+        "lib/utils.ts",
+        "lib/ease.ts"
+      ]
+    },
+    {
       "slug": "button",
       "category": "motion",
       "source": "https://beui.dev/r/button",

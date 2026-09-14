@@ -4,7 +4,7 @@ Official registry: https://beui.dev/r (retrieved 2026-09-14).
 Upstream: https://github.com/starc007/ui-components. MIT license: `LICENSE`.
 The UI build embeds this license into the self-contained dashboard HTML.
 
-The local registry retains **16 collections** (17 component source files),
+The local registry retains **17 collections** (24 component source files),
 including shared component dependencies, after removing unused component demos.
 `registry-manifest.json` records the retained collections' URLs, upstream update
 dates and file paths. Internal imports are namespaced and shared files deduplicated.
@@ -23,6 +23,9 @@ Live Feed uses AnimatedBadge for call risk/result and ExpandableActionBar for
 pause, export, filter clearing and selection-aware deletion requests. The separate
 delete confirmation remains mandatory. PullToRefresh powers explicit read-only
 refresh handles in Overview, Devices and Live Feed, with a keyboard button too.
+Access Scope uses the searchable Combobox for allowed/blocked tool rules, with
+removable exact-name and glob tokens. Catalog filtering shares the server matcher;
+search scans the whole catalog while mounting at most 80 tool options at once.
 
 `operations-island.tsx` uses DynamicIsland and DynamicIslandView as a fixed
 cross-page companion with Pulse, Routers and Activity views. It consumes the

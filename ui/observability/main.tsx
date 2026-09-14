@@ -9,8 +9,8 @@
  * makes. Charts are hand-rolled SVG (no chart library). A `?token=` in the URL
  * is forwarded to every API call and the live stream when the server requires it.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -18,9 +18,9 @@ import { api, deleteEvents, postJson } from "./api";
 import {
   BookOpen,
   Check,
+  ChevronRight,
   HelpCircle,
   Menu,
-  ChevronRight,
   Network,
   Pencil,
   Radar,
@@ -40,7 +40,7 @@ import {
 import { Button as UiButton, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Toaster, toast } from "@/components/ui/sonner";
+import { toast, Toaster } from "@/components/ui/sonner";
 import {
   Table,
   TableBody,
@@ -62,8 +62,8 @@ import {
   AnimatedSidebarTrigger,
 } from "./components/beui/registry/components/motion/animated-sidebar";
 import { AnimatedBadge } from "./components/beui/registry/components/motion/animated-badge";
-import { VIEWS, viewGroup, parseViewHash } from "./navigation";
 import type { ViewId } from "./navigation";
+import { parseViewHash, viewGroup, VIEWS } from "./navigation";
 import { BackupsView } from "./backups";
 import { AaaView } from "./aaa";
 import { ChangePlanView } from "./change-plan";
@@ -100,7 +100,8 @@ import { S3Manage } from "./s3";
 import { Sheet } from "./sheet";
 import { SnapshotsView } from "./snapshots";
 import { TopologyMap } from "./topology";
-import { AccessView, AdvisoryView, FabricView } from "./posture";
+import { AdvisoryView, FabricView } from "./posture";
+import { AccessView } from "./access-view";
 import { SSHPoolPanel } from "./ssh-pool";
 import { useWhatsNew, WhatsNewModal } from "./whats-new";
 import type {

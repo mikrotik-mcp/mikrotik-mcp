@@ -9,16 +9,16 @@
  * it.
  */
 import { z } from "zod";
-import { RISK_ORDER, getAccessPolicy, narrowSession, recentDenials } from "../core/access";
 import type { AccessScope } from "../core/access";
-import { READ, WRITE_IDEMPOTENT, defineTool } from "../core/registry";
+import { getAccessPolicy, narrowSession, recentDenials, RISK_ORDER } from "../core/access";
 import type { ToolModule } from "../core/registry";
+import { defineTool, READ, WRITE_IDEMPOTENT } from "../core/registry";
 
 function renderScope(scope: AccessScope): string[] {
   const lines: string[] = [];
   lines.push(`  max risk    : ${scope.maxRisk ?? "(no ceiling)"}`);
   lines.push(
-    `  devices     : ${scope.devices && scope.devices.length > 0 ? scope.devices.join(", ") : "(all configured)"}`,
+    `  devices     : ${scope.noDevices ? "(none: scopes do not overlap)" : scope.devices && scope.devices.length > 0 ? scope.devices.join(", ") : "(all configured)"}`,
   );
   if (scope.denyDevices && scope.denyDevices.length > 0) {
     lines.push(`  denied devs : ${scope.denyDevices.join(", ")}`);
@@ -29,6 +29,8 @@ function renderScope(scope: AccessScope): string[] {
   if (scope.denyTools && scope.denyTools.length > 0) {
     lines.push(`  denied tools: ${scope.denyTools.join(", ")}`);
   }
+  for (const group of scope.toolAllowGroups ?? [])
+    lines.push(`  also match  : ${group.join(", ")}`);
   lines.push(
     `  expires     : ${scope.expiresAt ? new Date(scope.expiresAt).toISOString() : "(never)"}`,
   );

@@ -374,7 +374,7 @@ switches, selects, tabs, tooltips, loaders, theme toggle and animated numbers.
 Animated Sidebar adds a collapsible icon rail while retaining search and pins.
 Live Feed uses Animated Badges and an Expandable Action Bar; Overview, Devices
 and Live Feed offer read-only Pull to Refresh with a keyboard-accessible button.
-The local BeUI registry retains the 16 collections used by the dashboard and
+The local BeUI registry retains the 17 collections used by the dashboard and
 their supporting components; unused component demonstrations have been removed.
 The fixed **Operations Island** expands into live activity, router checks and
 recent tool completions, using existing data without extra probes or configuration
@@ -382,6 +382,12 @@ changes. Missing and stale observations are explicitly labelled.
 For frontend development, `bun run dev:dashboard` connects
 the UI on port 9191 to the existing dashboard backend on port 9091.
 See the [dashboard design system](docs/dashboard-design.md).
+
+**Access Scope settings** can be edited directly in the dashboard: configure risk
+ceilings, router allow/block lists and tool-name patterns, preview permission
+decisions without executing tools, then review and apply with a 60-second
+auto-revert window. The page distinguishes the operator policy, runtime session
+restrictions and server read-only mode. See [Access Scope settings](docs/access-scope-settings.md).
 
 ## The tool catalog
 

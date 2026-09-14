@@ -110,6 +110,42 @@ describe("evaluateAccess", () => {
 });
 
 describe("narrowScope — one-way narrowing", () => {
+  test("disjoint device allow-lists mean none, not all, even after repeated narrowing", () => {
+    const scope = narrowScope({ devices: ["a"] }, { devices: ["b"] });
+    expect(scope.noDevices).toBe(true);
+    for (const device of ["a", "b", "c"]) {
+      expect(
+        evaluateAccess(policy(scope), { tool: "get_identity", risk: "READ", device, now: NOW })
+          .allowed,
+      ).toBe(false);
+      expect(
+        evaluateAccess(policy(narrowScope(scope, { devices: [device] })), {
+          tool: "get_identity",
+          risk: "READ",
+          device,
+          now: NOW,
+        }).allowed,
+      ).toBe(false);
+    }
+    expect(
+      evaluateAccess(policy(scope), { tool: "get_access_scope", risk: "READ", now: NOW }).allowed,
+    ).toBe(true);
+  });
+  test("allow-list globs intersect semantically and cannot be widened with a wildcard", () => {
+    const scope = narrowScope({ tools: ["list_ip_*"] }, { tools: ["list_*"] });
+    const next = narrowScope(scope, { tools: ["*"] });
+    for (const s of [scope, next]) {
+      expect(
+        evaluateAccess(policy(s), { tool: "list_ip_routes", risk: "READ", now: NOW }).allowed,
+      ).toBe(true);
+      expect(
+        evaluateAccess(policy(s), { tool: "list_users", risk: "READ", now: NOW }).allowed,
+      ).toBe(false);
+      expect(
+        evaluateAccess(policy(s), { tool: "remove_route", risk: "WRITE", now: NOW }).allowed,
+      ).toBe(false);
+    }
+  });
   test("takes the lower risk ceiling in both directions", () => {
     expect(narrowScope({ maxRisk: "DESTRUCTIVE" }, { maxRisk: "READ" }).maxRisk).toBe("READ");
     // The property that matters: asking for MORE cannot grant more.

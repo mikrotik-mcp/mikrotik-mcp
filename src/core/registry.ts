@@ -2,15 +2,16 @@
  * Tool declaration + registration layer.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolAnnotations, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
+import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { ZodRawShape } from "zod";
+import { z } from "zod";
+import type { SendLog, ToolContext } from "./context";
 import { createContext } from "./context";
-import type { ToolContext, SendLog } from "./context";
 import { containsRawParserError, indicatesFailure } from "./routeros";
 import { buildRecordsView } from "./routeros-parse";
-import { toolUiMeta, uiViewUri } from "./ui-meta";
 import type { UiLink } from "./ui-meta";
+import { toolUiMeta, uiViewUri } from "./ui-meta";
+import type { DeviceDirectoryEntry } from "./runtime";
 import {
   getConfig,
   resolveDeviceName,
@@ -18,10 +19,9 @@ import {
   tryResolveDeviceName,
   unknownDeviceMessage,
 } from "./runtime";
-import type { DeviceDirectoryEntry } from "./runtime";
 import { evaluateAccess, getAccessPolicy, recordDenial } from "./access";
-import { explainUnmet } from "./capability";
 import type { ToolRequires } from "./capability";
+import { explainUnmet } from "./capability";
 import { getCapabilities, peekCapabilities } from "./capability-cache";
 import { logger } from "../logger";
 import { riskOf } from "../observability/event";
@@ -224,6 +224,8 @@ export interface RegisterableTool {
   annotations: ToolAnnotations;
   inputSchema?: ZodRawShape;
   description: string;
+  /** Server-only tools do not participate in device access checks. */
+  noDevice?: boolean;
   /** Present when the tool renders an MCP App view. */
   ui?: UiLink;
   /** Device requirements, if the tool declared any. */
@@ -324,6 +326,7 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
     description: def.description,
     annotations: def.annotations,
     inputSchema: def.inputSchema,
+    noDevice: def.noDevice,
     ui: def.ui,
     requires: def.requires,
     handler: def.handler,
