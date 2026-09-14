@@ -138,6 +138,11 @@ bun run build:mcp --target linux-x64 # or one target · build:mcp:all for every 
 Full options: **[docs/configuration.md](docs/configuration.md)** · MCPB details:
 **[docs/getting-started.md](docs/getting-started.md)**.
 
+Discovery failures with `ctx.deferred.push` on 5.7.0 can result from mixed Zod
+versions, not router connectivity. Builds now bundle the MCP SDK and Zod together
+and check the built tool catalog with `bun run test:built`. Existing installations
+need a rebuilt release and an MCP process restart to receive this fix.
+
 ## Simple usage — by scenario
 
 Once the server is wired into your client, everything below is a **plain-language

@@ -48,13 +48,13 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bunup && chmod +x dist/cli.js && bun run build:ui",
+    "build": "bunup && chmod +x dist/cli.js && bun run test:built && bun run build:ui",
     "build:ui": "bun run --bun scripts/build-ui.ts",
     "build:mcp": "bun run --bun scripts/build-mcpb.ts",
     "build:mcp:all": "bun run --bun scripts/build-mcpb.ts --all",
     "dev": "bunup --watch",
     "dev:dashboard": "bunx vp dev -c ui/vite.observability.config.ts",
-    "prepack": "bunup && chmod +x dist/cli.js && bun run build:ui && bun run gen",
+    "prepack": "bun run build && bun run gen",
     "auth-check": "bun run --bun src/cli.ts auth-check",
     "gen:schemas": "bun run --bun scripts/gen-schemas.ts && vp fmt --write schemas",
     "gen:docs": "bun run --bun scripts/gen-tool-docs.ts && vp fmt --write docs/tools-reference.md",
@@ -74,6 +74,7 @@
     "security:all": "bun run security:audit && bun run security:licenses",
     "prepublish:security": "npm run security:all",
     "test": "vp test run",
+    "test:built": "bun run --bun scripts/check-mcp-build.ts",
     "test:watch": "vp test",
     "test:coverage": "vp test --ui --coverage --watch",
     "release": "release-it",
