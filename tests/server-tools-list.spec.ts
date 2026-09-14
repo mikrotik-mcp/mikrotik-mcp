@@ -20,7 +20,7 @@ afterEach(() => {
 describe("tools/list over the real MCP transport (offline)", () => {
   for (const capabilityGating of ["off", "annotate", "filter"] as const) {
     for (const appViews of [false, true]) {
-      test.each([0, 37])(
+      test.each([0, 37, 50, 100])(
         `${capabilityGating}, appViews=${appViews}, pageSize=%i lists the full catalog`,
         async (toolPageSize) => {
           setConfig(
@@ -43,18 +43,26 @@ describe("tools/list over the real MCP transport (offline)", () => {
             await client.connect(clientTransport);
             const tools: Tool[] = [];
             const cursors = new Set<string>();
+            const total = allToolModules.flat().length;
+            const expectedPages = toolPageSize === 0 ? 1 : Math.ceil(total / toolPageSize);
+            let pages = 0;
             let cursor: string | undefined;
             do {
               const page = await client.listTools(cursor ? { cursor } : undefined);
-              expect(page.tools.length).toBeGreaterThan(0);
-              if (toolPageSize > 0) expect(page.tools.length).toBeLessThanOrEqual(toolPageSize);
+              expect(page.tools.length).toBe(
+                toolPageSize === 0 ? total : Math.min(toolPageSize, total - tools.length),
+              );
+              pages += 1;
+              expect(pages).toBeLessThanOrEqual(expectedPages);
               tools.push(...page.tools);
               cursor = page.nextCursor;
+              if (toolPageSize === 0) expect(cursor).toBeUndefined();
               if (cursor) {
                 expect(cursors.has(cursor), "pagination must make progress").toBe(false);
                 cursors.add(cursor);
               }
             } while (cursor);
+            expect(pages).toBe(expectedPages);
 
             expect(tools.map((tool) => tool.name).sort()).toEqual(
               allToolModules

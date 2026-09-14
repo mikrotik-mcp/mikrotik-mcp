@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { loadConfig } from "../../src/config";
+import { loadConfig, McpServerSettingsSchema } from "../../src/config";
 
 const dirs: string[] = [];
 function cfgFile(obj: unknown): string {
@@ -46,8 +46,23 @@ describe("loadConfig — config-file mcp block", () => {
     expect(cfg.mcp.appViews).toBe(true);
   });
 
-  test("honours mcp.toolPageSize from the config file", () => {
-    const cfg = loadConfig([`--config=${cfgFile({ ...DEVICES, mcp: { toolPageSize: 150 } })}`]);
-    expect(cfg.mcp.toolPageSize).toBe(150);
+  test.each([0, 50, 100, 150])(
+    "honours mcp.toolPageSize=%i from the config file",
+    (toolPageSize) => {
+      const cfg = loadConfig([`--config=${cfgFile({ ...DEVICES, mcp: { toolPageSize } })}`]);
+      expect(cfg.mcp.toolPageSize).toBe(toolPageSize);
+    },
+  );
+
+  test("defaults to an unpaginated catalog when toolPageSize is omitted", () => {
+    const cfg = loadConfig([`--config=${cfgFile(DEVICES)}`]);
+    expect(cfg.mcp.toolPageSize).toBe(0);
   });
+
+  test.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects invalid page size %s before server creation",
+    (toolPageSize) => {
+      expect(McpServerSettingsSchema.safeParse({ toolPageSize }).success).toBe(false);
+    },
+  );
 });

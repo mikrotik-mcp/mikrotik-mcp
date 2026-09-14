@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 const transpiler = new globalThis.Bun.Transpiler({ loader: "js", target: "bun" });
@@ -37,14 +38,17 @@ const expected = allToolModules
   .map((tool) => tool.name)
   .sort();
 
-for (const capabilityGating of ["annotate", "off"] as const) {
+const cases = (["annotate", "off"] as const).flatMap((capabilityGating) =>
+  [0, 50, 100].map((toolPageSize) => ({ capabilityGating, toolPageSize })),
+);
+for (const { capabilityGating, toolPageSize } of cases) {
   setConfig(
     MikrotikConfigSchema.parse({
       devices: { offline: { host: "127.0.0.1", port: 1 } },
       defaultDevice: "offline",
       disableUpdateCheck: true,
       memory: { enabled: false },
-      mcp: { capabilityGating, toolPageSize: 0 },
+      mcp: { capabilityGating, toolPageSize },
     }),
   );
   const { server } = createServer();
@@ -53,8 +57,30 @@ for (const capabilityGating of ["annotate", "off"] as const) {
   try {
     await server.connect(serverTransport);
     await client.connect(clientTransport);
-    const { tools, nextCursor } = await client.listTools();
-    assert.equal(nextCursor, undefined);
+    const tools: Tool[] = [];
+    const cursors = new Set<string>();
+    const expectedPages = toolPageSize === 0 ? 1 : Math.ceil(expected.length / toolPageSize);
+    let pages = 0;
+    let cursor: string | undefined;
+    do {
+      const page = await client.listTools(cursor ? { cursor } : undefined);
+      assert.equal(
+        page.tools.length,
+        toolPageSize === 0
+          ? expected.length
+          : Math.min(toolPageSize, expected.length - tools.length),
+      );
+      pages += 1;
+      assert(pages <= expectedPages, "Pagination must finish within the expected page count");
+      tools.push(...page.tools);
+      cursor = page.nextCursor;
+      if (toolPageSize === 0) assert.equal(cursor, undefined);
+      if (cursor) {
+        assert(!cursors.has(cursor), "Pagination must make progress");
+        cursors.add(cursor);
+      }
+    } while (cursor);
+    assert.equal(pages, expectedPages);
     assert.deepEqual(tools.map((tool) => tool.name).sort(), expected);
     for (const tool of tools) assert.equal(tool.inputSchema.type, "object");
     assert.deepEqual(
@@ -66,7 +92,7 @@ for (const capabilityGating of ["annotate", "off"] as const) {
       },
     );
     process.stdout.write(
-      `✓ Built MCP: ${tools.length} tools, capabilityGating=${capabilityGating}\n`,
+      `✓ Built MCP: ${tools.length} tools in ${pages} page(s), pageSize=${toolPageSize}, capabilityGating=${capabilityGating}\n`,
     );
   } finally {
     await client.close();
