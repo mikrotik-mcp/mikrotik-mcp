@@ -2,6 +2,7 @@ import * as React from "react";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 import { Slot } from "radix-ui";
+import { Button as BeuiButton } from "../beui/registry/components/motion/button";
 
 import { cn } from "@/lib/utils";
 
@@ -43,18 +44,40 @@ function Button({
   size = "default",
   asChild = false,
   ...props
-}: React.ComponentProps<"button"> &
+}: Omit<
+  React.ComponentProps<"button">,
+  "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart"
+> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean;
   }) {
-  const Comp = asChild ? Slot.Root : "button";
+  if (asChild)
+    return <Slot.Root className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 
   return (
-    <Comp
+    <BeuiButton
+      ripple
+      pressScale={0.96}
+      variant={
+        variant === "default"
+          ? "primary"
+          : variant === "outline" || variant === "secondary"
+            ? variant
+            : "ghost"
+      }
+      size={
+        size === "lg"
+          ? "lg"
+          : size === "sm" || size === "xs"
+            ? "sm"
+            : size?.startsWith("icon")
+              ? "icon"
+              : "md"
+      }
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size }), "rounded-xl", className)}
       {...props}
     />
   );

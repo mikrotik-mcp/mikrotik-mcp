@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, postJson } from "./api";
 import { Panel, StatCard } from "./atoms";
-import { Badge, Button, Dot } from "./geist";
+import { Badge, Button, Dot, Select } from "./geist";
 import type { GeistType } from "./geist";
 import { renderMarkdown } from "./markdown";
 import { toast } from "./toast-action";
@@ -302,29 +302,23 @@ export function ExplainView(): ReactNode {
         title="Explain a device"
         extra={
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
               value={device}
-              onChange={(e) => setDevice(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              {devices.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-            <select
+              onValueChange={setDevice}
+              size="sm"
+              aria-label="Device to explain"
+              options={devices.map((d) => ({ value: d, label: d }))}
+            />
+            <Select
               value={snapshot}
-              onChange={(e) => setSnapshot(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              <option value="">live device</option>
-              {deviceSnapshots.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label ?? s.id}
-                </option>
-              ))}
-            </select>
+              onValueChange={setSnapshot}
+              size="sm"
+              aria-label="Configuration source"
+              options={[
+                { value: "", label: "live device" },
+                ...deviceSnapshots.map((s) => ({ value: s.id, label: s.label ?? s.id })),
+              ]}
+            />
             <Button size="sm" loading={loading} onClick={() => void explain()}>
               Explain
             </Button>
@@ -388,31 +382,27 @@ export function ExplainView(): ReactNode {
           }
         >
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <select
+            <Select
               value={beforeSnapshot}
-              onChange={(e) => setBeforeSnapshot(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2"
-            >
-              <option value="">pick a baseline…</option>
-              {deviceSnapshots.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label ?? s.id}
-                </option>
-              ))}
-            </select>
+              onValueChange={setBeforeSnapshot}
+              size="sm"
+              aria-label="Baseline configuration"
+              options={[
+                { value: "", label: "pick a baseline…" },
+                ...deviceSnapshots.map((s) => ({ value: s.id, label: s.label ?? s.id })),
+              ]}
+            />
             <span className="text-muted-foreground">→</span>
-            <select
+            <Select
               value={afterSnapshot}
-              onChange={(e) => setAfterSnapshot(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2"
-            >
-              <option value="">the device as it is now</option>
-              {deviceSnapshots.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label ?? s.id}
-                </option>
-              ))}
-            </select>
+              onValueChange={setAfterSnapshot}
+              size="sm"
+              aria-label="Comparison configuration"
+              options={[
+                { value: "", label: "the device as it is now" },
+                ...deviceSnapshots.map((s) => ({ value: s.id, label: s.label ?? s.id })),
+              ]}
+            />
           </div>
           {diff && (
             <div className="mt-4">

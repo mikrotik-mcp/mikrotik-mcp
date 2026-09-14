@@ -30,7 +30,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
 import { RiskDonut } from "./charts";
-import { Badge, Button, Dot } from "./geist";
+import { Badge, Button, Dot, Select } from "./geist";
 import type { GeistType } from "./geist";
 import { toast } from "./toast-action";
 import type { AttackIncident, AttackSource, AttackUnavailable, AttacksPayload } from "./types";
@@ -605,21 +605,26 @@ export function AttacksView(): ReactNode {
         title="Incidents"
         extra={
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
               value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+              onValueChange={setScope}
+              size="sm"
               aria-label="Which devices to scan"
-            >
-              <option value="">All devices ({deviceList.length})</option>
-              <option value="__online">Only reachable ({onlineCount})</option>
-              {deviceList.map((d) => (
-                <option key={d.name} value={d.name}>
-                  {d.name}
-                  {d.reachable === false ? " (offline)" : d.reachable === null ? " (unprobed)" : ""}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: "", label: `All devices (${deviceList.length})` },
+                { value: "__online", label: `Only reachable (${onlineCount})` },
+                ...deviceList.map((d) => ({
+                  value: d.name,
+                  label:
+                    d.name +
+                    (d.reachable === false
+                      ? " (offline)"
+                      : d.reachable === null
+                        ? " (unprobed)"
+                        : ""),
+                })),
+              ]}
+            />
             <Button size="sm" loading={scanning} onClick={() => void scan()}>
               Scan now
             </Button>
@@ -686,30 +691,20 @@ export function AttacksView(): ReactNode {
           since the last run. The device picker above chooses the scope.
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <Select
             value={auditTool}
-            onChange={(e) => setAuditTool(e.target.value)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            onValueChange={setAuditTool}
+            size="sm"
             aria-label="Which auditor to schedule"
-          >
-            {schedulable.map((a) => (
-              <option key={a.tool} value={a.tool}>
-                {a.tool}
-              </option>
-            ))}
-          </select>
-          <select
+            options={schedulable.map((a) => ({ value: a.tool, label: a.tool }))}
+          />
+          <Select
             value={auditCron}
-            onChange={(e) => setAuditCron(e.target.value)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+            onValueChange={setAuditCron}
+            size="sm"
             aria-label="How often"
-          >
-            {CRON_PRESETS.map((c) => (
-              <option key={c.cron} value={c.cron}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+            options={CRON_PRESETS.map((c) => ({ value: c.cron, label: c.label }))}
+          />
           <span className="text-xs text-muted-foreground">
             on {scope === "" || scope === "__online" ? "all devices" : scope}
           </span>

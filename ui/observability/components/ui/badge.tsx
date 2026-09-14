@@ -2,6 +2,7 @@ import * as React from "react";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 import { Slot } from "radix-ui";
+import { AnimatedBadge } from "../beui/registry/components/motion/animated-badge";
 
 import { cn } from "@/lib/utils";
 
@@ -31,11 +32,16 @@ function Badge({
   variant = "default",
   asChild = false,
   ...props
-}: React.ComponentProps<"span"> & VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "span";
+}: Omit<React.ComponentProps<"span">, "onDrag" | "onDragStart" | "onDragEnd" | "onAnimationStart"> &
+  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+  if (asChild)
+    return <Slot.Root className={cn(badgeVariants({ variant }), className)} {...props} />;
 
   return (
-    <Comp
+    <AnimatedBadge
+      status={variant === "destructive" ? "danger" : variant === "default" ? "info" : "neutral"}
+      size="sm"
+      showIcon={false}
       data-slot="badge"
       data-variant={variant}
       className={cn(badgeVariants({ variant }), className)}

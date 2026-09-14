@@ -9,8 +9,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Moon, Sun } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ThemeToggle as BeuiThemeToggle } from "./components/beui/registry/components/motion/theme-toggle";
 
 const STORE_KEY = "mt-theme";
 
@@ -46,17 +45,11 @@ export function useTheme(): [Theme, (t: Theme) => void] {
 
 /** A single icon button that flips between light and dark. */
 export function ThemeToggle(): ReactNode {
-  const [theme, setTheme] = useTheme();
-  const next = theme === "dark" ? "light" : "dark";
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      onClick={() => setTheme(next)}
-      title={`Switch to ${next} theme`}
-      aria-label={`Switch to ${next} theme`}
-    >
-      {theme === "dark" ? <Sun /> : <Moon />}
-    </Button>
+    <BeuiThemeToggle
+      variant="circle"
+      className="size-9 rounded-md hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+      iconClassName="size-4"
+    />
   );
 }

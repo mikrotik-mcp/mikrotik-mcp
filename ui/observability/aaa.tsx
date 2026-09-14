@@ -953,10 +953,7 @@ export function AaaView(): ReactNode {
         }
       >
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
-          <TabsList
-            variant="line"
-            className="mb-3.5 h-auto w-full flex-wrap justify-start border-b border-border"
-          >
+          <TabsList className="mb-3.5 h-auto w-full flex-wrap justify-start border-b border-border">
             {TABS.map((t) => (
               <TabsTrigger key={t.id} value={t.id}>
                 {t.label}

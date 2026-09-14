@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, Cable, Network, RefreshCw, ShieldCheck, ShieldOff } from "lucide-react";
 import { api } from "./api";
 import { Panel } from "./atoms";
-import { Button } from "./geist";
+import { Button, Select } from "./geist";
 
 // ── Shared bits ──────────────────────────────────────────────────────────────
 
@@ -38,18 +38,16 @@ function DevicePicker({
   }, []);
   if (names.length <= 1) return null;
   return (
-    <select
-      className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+    <Select
+      size="sm"
+      aria-label="Device"
       value={value ?? ""}
-      onChange={(e) => onChange(e.target.value || undefined)}
-    >
-      <option value="">(default device)</option>
-      {names.map((n) => (
-        <option key={n} value={n}>
-          {n}
-        </option>
-      ))}
-    </select>
+      onValueChange={(next) => onChange(next || undefined)}
+      options={[
+        { value: "", label: "(default device)" },
+        ...names.map((n) => ({ value: n, label: n })),
+      ]}
+    />
   );
 }
 

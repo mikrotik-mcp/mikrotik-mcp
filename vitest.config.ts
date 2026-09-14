@@ -14,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   resolve: {
-    alias: { bun: resolve(here, "tests/_stubs/bun.ts") },
+    alias: { bun: resolve(here, "tests/_stubs/bun.ts"), "@": resolve(here, "ui/observability") },
   },
   test: {
     include: ["tests/**/*.spec.ts"],

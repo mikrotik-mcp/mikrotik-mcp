@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, postJson } from "./api";
 import { Panel, StatCard } from "./atoms";
-import { Badge, Button, Dot, Input } from "./geist";
+import { Badge, Button, Dot, Input, Select } from "./geist";
 import type { GeistType } from "./geist";
 import { toast } from "./toast-action";
 import type {
@@ -275,17 +275,15 @@ export function SimulatorView(): ReactNode {
           </Field>
           <label className="flex flex-col gap-1 text-xs">
             <span className="text-muted-foreground">Connection state (declared)</span>
-            <select
-              className="h-9 rounded-md border bg-transparent px-2 text-sm"
+            <Select
+              aria-label="Connection state (declared)"
               value={form.connectionState}
-              onChange={(e) => set("connectionState", e.target.value)}
-            >
-              {["new", "established", "related", "invalid"].map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+              onValueChange={(next) => set("connectionState", next)}
+              options={["new", "established", "related", "invalid"].map((s) => ({
+                value: s,
+                label: s,
+              }))}
+            />
           </label>
           <div className="flex items-end">
             <Button onClick={() => void run()} loading={busy}>

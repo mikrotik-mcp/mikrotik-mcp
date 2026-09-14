@@ -4,7 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, postJson } from "./api";
 import { Panel } from "./atoms";
-import { Button, Input } from "./geist";
+import { Button, Input, Select } from "./geist";
 import { toast } from "./toast-action";
 
 // ── Tool Modules view ────────────────────────────────────────────────────────
@@ -288,19 +288,16 @@ export function ModulesView(): ReactNode {
             onChange={(e) => setQuery(e.target.value)}
           />
           {capDevices.length > 0 && (
-            <select
-              className="border-border bg-card text-muted-foreground h-8 rounded-md border px-2 text-[11px]"
+            <Select
+              size="sm"
               value={capDevice}
-              onChange={(e) => setCapDevice(e.target.value)}
-              title="Dim modules the selected device cannot run. Only devices whose capabilities have been probed appear here — probe one from the Devices page."
-            >
-              <option value="">availability: all devices</option>
-              {capDevices.map((d) => (
-                <option key={d} value={d}>
-                  availability: {d}
-                </option>
-              ))}
-            </select>
+              onValueChange={setCapDevice}
+              aria-label="Module availability by probed device"
+              options={[
+                { value: "", label: "availability: all devices" },
+                ...capDevices.map((d) => ({ value: d, label: `availability: ${d}` })),
+              ]}
+            />
           )}
           <span className="flex-1" />
           <Button

@@ -1,0 +1,162 @@
+{
+  "source": "https://beui.dev/r",
+  "retrieved": "2026-09-14",
+  "license": "MIT",
+  "components": [
+    {
+      "slug": "button",
+      "category": "motion",
+      "source": "https://beui.dev/r/button",
+      "updated": "2026-08-25",
+      "files": [
+        "components/motion/button/index.tsx",
+        "components/motion/button/base.tsx",
+        "lib/ease.ts",
+        "lib/hooks/use-hover-capable.ts",
+        "lib/utils.ts"
+      ]
+    },
+    {
+      "slug": "tabs",
+      "category": "motion",
+      "source": "https://beui.dev/r/tabs",
+      "updated": "2026-09-11",
+      "files": ["components/motion/tabs.tsx", "lib/ease.ts", "lib/utils.ts"]
+    },
+    {
+      "slug": "switch",
+      "category": "motion",
+      "source": "https://beui.dev/r/switch",
+      "updated": "2026-06-10",
+      "files": ["components/motion/switch.tsx", "lib/utils.ts"]
+    },
+    {
+      "slug": "input",
+      "category": "motion",
+      "source": "https://beui.dev/r/input",
+      "updated": "2026-08-28",
+      "files": ["components/motion/input.tsx", "lib/utils.ts"]
+    },
+    {
+      "slug": "select",
+      "category": "motion",
+      "source": "https://beui.dev/r/select",
+      "updated": "2026-07-13",
+      "files": ["components/motion/select.tsx", "lib/ease.ts", "lib/utils.ts"]
+    },
+    {
+      "slug": "checkbox",
+      "category": "motion",
+      "source": "https://beui.dev/r/checkbox",
+      "updated": "2026-07-01",
+      "files": ["components/motion/checkbox.tsx", "lib/ease.ts", "lib/utils.ts"]
+    },
+    {
+      "slug": "pull-to-refresh",
+      "category": "motion",
+      "source": "https://beui.dev/r/pull-to-refresh",
+      "updated": "2026-07-17",
+      "files": [
+        "components/motion/pull-to-refresh.tsx",
+        "lib/ease.ts",
+        "lib/touch.ts",
+        "lib/utils.ts"
+      ]
+    },
+    {
+      "slug": "shared-layout-bg",
+      "category": "motion",
+      "source": "https://beui.dev/r/shared-layout-bg",
+      "updated": "2026-07-29",
+      "files": ["components/motion/shared-layout-bg.tsx", "lib/ease.ts", "lib/utils.ts"]
+    },
+    {
+      "slug": "animated-sidebar",
+      "category": "motion",
+      "source": "https://beui.dev/r/animated-sidebar",
+      "updated": "2026-08-20",
+      "files": [
+        "components/motion/animated-sidebar.tsx",
+        "components/motion/shared-layout-bg.tsx",
+        "lib/ease.ts",
+        "lib/utils.ts"
+      ]
+    },
+    {
+      "slug": "tooltip",
+      "category": "motion",
+      "source": "https://beui.dev/r/tooltip",
+      "updated": "2026-07-13",
+      "files": [
+        "components/motion/tooltip.tsx",
+        "lib/ease.ts",
+        "lib/hooks/use-dismiss.ts",
+        "lib/hooks/use-hover-gesture.ts",
+        "lib/hooks/use-tap-gesture.ts",
+        "lib/utils.ts",
+        "lib/touch.ts"
+      ]
+    },
+    {
+      "slug": "animated-badge",
+      "category": "motion",
+      "source": "https://beui.dev/r/animated-badge",
+      "updated": "2026-06-10",
+      "files": ["components/motion/animated-badge.tsx", "lib/ease.ts", "lib/utils.ts"]
+    },
+    {
+      "slug": "action-swap",
+      "category": "motion",
+      "source": "https://beui.dev/r/action-swap",
+      "updated": "2026-06-28",
+      "files": ["components/motion/action-swap.tsx", "lib/ease.ts", "lib/utils.ts"]
+    },
+    {
+      "slug": "theme-toggle",
+      "category": "motion",
+      "source": "https://beui.dev/r/theme-toggle",
+      "updated": "2026-06-20",
+      "files": [
+        "components/motion/theme-toggle.tsx",
+        "components/motion/action-swap.tsx",
+        "lib/ease.ts",
+        "lib/utils.ts"
+      ]
+    },
+    {
+      "slug": "loader",
+      "category": "motion",
+      "source": "https://beui.dev/r/loader",
+      "updated": "2026-07-13",
+      "files": ["components/motion/loader.tsx", "lib/ease.ts", "lib/utils.ts"]
+    },
+    {
+      "slug": "dynamic-island",
+      "category": "blocks",
+      "source": "https://beui.dev/r/dynamic-island",
+      "updated": "2026-07-13",
+      "files": [
+        "components/motion/dynamic-island.tsx",
+        "lib/ease.ts",
+        "lib/utils.ts",
+        "components/motion/button/index.tsx",
+        "components/motion/button/base.tsx",
+        "lib/hooks/use-hover-capable.ts"
+      ]
+    },
+    {
+      "slug": "expandable-action-bar",
+      "category": "blocks",
+      "source": "https://beui.dev/r/expandable-action-bar",
+      "updated": "2026-06-22",
+      "files": [
+        "components/motion/expandable-action-bar.tsx",
+        "lib/hooks/use-dismiss.ts",
+        "lib/hooks/use-hover-gesture.ts",
+        "lib/hooks/use-tap-gesture.ts",
+        "lib/utils.ts",
+        "lib/touch.ts"
+      ]
+    }
+  ]
+}

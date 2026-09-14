@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Monitor, RefreshCw, Search } from "lucide-react";
 import { api } from "./api";
+import { Button } from "./components/ui/button";
 import { clientIdentifier, filterClientOptions } from "./investigation-client-options";
 import type { ClientOption } from "./investigation-client-options";
 
@@ -55,7 +56,9 @@ export function InvestigationClients({
             {loading ? "…" : failed ? "Unavailable" : clients.length}
           </span>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           type="button"
           disabled={!device || loading || disabled}
           onClick={() => {
@@ -70,7 +73,7 @@ export function InvestigationClients({
             className={`size-3.5 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`}
           />
           Refresh
-        </button>
+        </Button>
       </div>
       <div className="p-3">
         <label className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 focus-within:outline-2 focus-within:outline-ring">

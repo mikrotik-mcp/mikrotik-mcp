@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { ShieldCheck, Activity, Play } from "lucide-react";
+import { ShieldCheck, Activity, Play, Router } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ContractRun, ServiceContract } from "../../src/service-contracts/model";
 import { api, postJson } from "./api";
 
@@ -13,6 +23,7 @@ const button =
 export function ServiceContractsView(): ReactNode {
   const [devices, setDevices] = useState<string[]>([]);
   const [device, setDevice] = useState("");
+  const [deviceLoad, setDeviceLoad] = useState<"loading" | "ready" | "error">("loading");
   const [contracts, setContracts] = useState<ServiceContract[]>([]);
   const [targets, setTargets] = useState<{ name: string; kind: string }[]>([]);
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
@@ -31,11 +42,15 @@ export function ServiceContractsView(): ReactNode {
       .then((r) => {
         if (!stopped) {
           setDevices(r.devices.map((d) => d.name));
-          setDevice(r.defaultDevice);
+          setDevice(r.devices.some((item) => item.name === r.defaultDevice) ? r.defaultDevice : "");
+          setDeviceLoad("ready");
         }
       })
       .catch(() => {
-        if (!stopped) setError("Could not load configured devices.");
+        if (!stopped) {
+          setDeviceLoad("error");
+          setError("Could not load configured devices.");
+        }
       });
     return () => {
       stopped = true;
@@ -123,25 +138,50 @@ export function ServiceContractsView(): ReactNode {
             the client or branch.
           </p>
         </div>
-        <label className="grid gap-1 text-xs text-muted-foreground">
+        <label
+          htmlFor="service-contract-router"
+          className="grid w-full gap-1.5 text-xs text-muted-foreground sm:w-56"
+        >
           Owning router
-          <select
-            className={control}
+          <Select
             value={device}
-            disabled={busy}
-            onChange={(e) => {
-              setDevice(e.target.value);
+            disabled={busy || deviceLoad !== "ready" || !devices.length}
+            onValueChange={(value) => {
+              setDevice(value);
               setContracts([]);
+              setTargets([]);
               setRuns([]);
               setSelected("");
               setSelectedTargets([]);
               setError("");
             }}
           >
-            {devices.map((d) => (
-              <option key={d}>{d}</option>
-            ))}
-          </select>
+            <SelectTrigger
+              id="service-contract-router"
+              className="w-full bg-background"
+              aria-busy={deviceLoad === "loading"}
+            >
+              <Router size={15} aria-hidden="true" />
+              <SelectValue
+                placeholder={
+                  deviceLoad === "loading"
+                    ? "Loading routers…"
+                    : deviceLoad === "error"
+                      ? "Routers unavailable"
+                      : devices.length
+                        ? "Select a router"
+                        : "No routers configured"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent position="popper" align="end">
+              {devices.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {d}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       </header>
       {error && (
@@ -161,8 +201,7 @@ export function ServiceContractsView(): ReactNode {
       >
         <label className="grid gap-1 text-xs font-medium">
           Contract name
-          <input
-            className={control}
+          <Input
             value={name}
             maxLength={120}
             required
@@ -173,8 +212,7 @@ export function ServiceContractsView(): ReactNode {
         </label>
         <label className="grid gap-1 text-xs font-medium">
           Maximum latency (ms)
-          <input
-            className={control}
+          <Input
             type="number"
             min={1}
             max={10000}
@@ -200,15 +238,15 @@ export function ServiceContractsView(): ReactNode {
                   key={t.name}
                   className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
+                    aria-label={t.name}
                     checked={selectedTargets.includes(t.name)}
                     disabled={
                       busy || (!selectedTargets.includes(t.name) && selectedTargets.length >= 10)
                     }
-                    onChange={(e) =>
+                    onCheckedChange={(checked) =>
                       setSelectedTargets((v) =>
-                        e.target.checked ? [...v, t.name] : v.filter((n) => n !== t.name),
+                        checked === true ? [...v, t.name] : v.filter((n) => n !== t.name),
                       )
                     }
                   />
@@ -221,8 +259,7 @@ export function ServiceContractsView(): ReactNode {
         </fieldset>
         <label className="grid gap-1 text-xs font-medium">
           Saved packet suite ID · optional
-          <input
-            className={control}
+          <Input
             value={suite}
             disabled={busy}
             onChange={(e) => setSuite(e.target.value)}
@@ -230,9 +267,13 @@ export function ServiceContractsView(): ReactNode {
           />
         </label>
         <div className="flex items-end">
-          <button className={button} disabled={busy || !device || !selectedTargets.length}>
+          <Button
+            type="submit"
+            className={button}
+            disabled={busy || !device || !selectedTargets.length}
+          >
             Save contract
-          </button>
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground sm:col-span-2">
           Saving never runs probes. HTTPS checks created here expect status 200; MCP supports other
@@ -255,13 +296,18 @@ export function ServiceContractsView(): ReactNode {
               </p>
               <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{c.id}</p>
               <div className="mt-4 flex gap-2">
-                <button className={button} disabled={busy} onClick={() => void show(c.id, true)}>
+                <Button className={button} disabled={busy} onClick={() => void show(c.id, true)}>
                   <Play className="size-3" />
                   Run checks
-                </button>
-                <button className={control} disabled={busy} onClick={() => void show(c.id)}>
+                </Button>
+                <Button
+                  variant="outline"
+                  className={control}
+                  disabled={busy}
+                  onClick={() => void show(c.id)}
+                >
                   View history
-                </button>
+                </Button>
               </div>
             </article>
           ))}

@@ -106,7 +106,13 @@ function main(): void {
     const htmlPath = join(BUILD_DIR, entry.name, "index.html");
     if (!existsSync(htmlPath)) continue;
     const out = join(OUT_DIR, `${entry.name}.html`);
-    writeFileSync(out, inline(htmlPath));
+    // The dashboard ships as a single HTML file; keep vendored UI attribution
+    // inside that artifact even when the source tree is absent from the bundle.
+    const attribution =
+      entry.name === "observability"
+        ? `<!-- beUI\n${readFileSync(join(PROJECT_ROOT, "ui/observability/components/beui/LICENSE"), "utf8")}\n-->\n`
+        : "";
+    writeFileSync(out, attribution + inline(htmlPath));
     const kb = (readFileSync(out).byteLength / 1024).toFixed(1);
     log(`  ✓ dist/ui/${entry.name}.html (${kb} kB, self-contained)`);
     count++;

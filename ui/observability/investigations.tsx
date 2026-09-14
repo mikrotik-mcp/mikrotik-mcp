@@ -6,6 +6,7 @@ import { api, postJson } from "./api";
 import { InvestigationClients } from "./investigation-clients";
 import { Select } from "./geist";
 import { Checkbox } from "./components/ui/checkbox";
+import { Button } from "./components/ui/button";
 import { InvestigationResult } from "./investigation-result";
 
 type CaseSummary = Omit<Investigation, "evidence" | "nextTests"> & {
@@ -265,13 +266,14 @@ export function InvestigationsView(): ReactNode {
             )}
           </fieldset>
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-            <button
+            <Button
+              type="submit"
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-ring"
               disabled={busy || !device}
             >
               {busy ? "Collecting evidence…" : "Create investigation"}
               <ArrowRight className="size-4" />
-            </button>
+            </Button>
             <span className="text-xs text-muted-foreground">
               Three ICMP probes per router. No client-side probe.
             </span>
@@ -301,19 +303,20 @@ export function InvestigationsView(): ReactNode {
           )}
           <div className="grid gap-2">
             {cases.map((c) => (
-              <button
+              <Button
+                variant="ghost"
                 key={c.id}
                 disabled={busy}
                 onClick={() => void open(c.id)}
                 aria-pressed={selected?.id === c.id}
-                className="rounded-lg border border-border p-3 text-left hover:bg-muted aria-pressed:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                className="grid h-auto justify-items-start gap-1 whitespace-normal rounded-lg border border-border p-3 text-left hover:bg-muted aria-pressed:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <span className="block truncate text-sm font-medium">{c.service}</span>
                 <span className="block font-mono text-xs text-muted-foreground">{c.client}</span>
                 <span className="mt-2 block text-xs text-muted-foreground">
                   {new Date(c.createdAt).toLocaleString()} · {c.unknownCount} unknown
                 </span>
-              </button>
+              </Button>
             ))}
           </div>
         </aside>
