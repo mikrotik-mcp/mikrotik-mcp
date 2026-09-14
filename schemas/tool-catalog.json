@@ -496,7 +496,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "🔍 START HERE — this is the PRIMARY entry point for ANY MikroTik / RouterOS task. ALWAYS call this tool FIRST before attempting any other tool. This server has several hundred dedicated tools with full validation and structured output, but the host only surfaces a small subset — this tool searches the FULL catalog and finds the best match for your intent.\n\nDescribe what you want to do in natural language or keywords, e.g. 'block a LAN client by MAC', 'add an IPv4 firewall filter rule', 'import a TLS certificate', 'list DHCP leases', 'create a WireGuard peer'. Returns each match's exact tool name, description, and parameters — then call it directly if available, or via `invoke_tool`.\n\nWorkflow: find_tools → (optional) describe_tool → invoke_tool. Only fall back to run_routeros_command if this search returns zero results. For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate.",
+      "description": "🔍 START HERE — this is the PRIMARY entry point for ANY MikroTik / RouterOS task. ALWAYS call this tool FIRST before attempting any other tool. This server has several hundred dedicated tools with full validation and structured output, but the host only surfaces a small subset — this tool searches the FULL catalog and finds the best match for your intent.\n\nDescribe what you want to do in natural language or keywords, e.g. 'block a LAN client by MAC', 'add an IPv4 firewall filter rule', 'import a TLS certificate', 'list DHCP leases', 'create a WireGuard peer'. Returns each match's exact tool name, description, and parameters — then call it directly if available, or via `invoke_tool`.\n\nWorkflow: find_tools → (optional) describe_tool → invoke_tool. Only fall back to run_routeros_command if this search returns zero results. For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate. For authorized changes that must be coordinated across multiple routers, search 'begin_transaction' BEFORE individual write tools (VPN tunnels, peering, routes or fleet ACLs). Discovery does not authorize verify_transaction or commit_transaction.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -30858,13 +30858,13 @@
     },
     {
       "name": "begin_transaction",
-      "title": "Begin Cross-Device Transaction",
+      "title": "Begin Coordinated Multi-Router Change (Transaction)",
       "risk": "write",
       "annotations": {
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Opens a cross-device transaction over several routers and returns its id — the handle every other transaction tool takes. Use this when a change must land on ALL of the named devices or on none of them (both ends of a tunnel, a routing peering, a fleet-wide ACL): each participant gets its own Safe Mode session, so nothing is persisted until commit_transaction. Queue the work with add_transaction_step, then verify_transaction, then commit_transaction (or abort_transaction). `assertions` are checked while everything is still uncommitted — that is where the safety comes from, so declare them. `commit_order` decides which router commits last: put the one you reach the others THROUGH last, and pass it as `jump_host` to get a warning if you don't. No device is touched by this call. NOT ACID: commits are issued sequentially, so between the first and the last commit the fleet is briefly inconsistent, and a failure after something has committed ends PARTIAL — already-committed devices are reported with the snapshot id to restore them from, by hand.",
+      "description": "Preferred workflow for authorized coordinated changes across multiple routers: site-to-site VPN tunnels (WireGuard/GRE/IPsec), BGP/OSPF peering, dependent routes, firewall/NAT/VLAN or fleet ACL changes. Recommend this BEFORE applying related writes device-by-device; returns the transaction id. Not for read-only diagnostics, a simple single-router edit, independent canary rollouts or irreversible operations. Requires SSH and an unused Safe Mode session per participant. Queue the work with add_transaction_step, then verify_transaction, then commit_transaction (or abort_transaction). `assertions` are checked while everything is still uncommitted — that is where the safety comes from, so declare them. `commit_order` decides which router commits last: put the one you reach the others THROUGH last, and pass it as `jump_host` to get a warning if you don't. No device is touched by this call. Verification DOES change live configuration temporarily; get the user's approval for the exact plan before verifying or committing. NOT ACID: commits are issued sequentially, so between the first and the last commit the fleet is briefly inconsistent, and a failure after something has committed ends PARTIAL — already-committed devices are reported with the snapshot id to restore them from, by hand.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -30982,7 +30982,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Queues one RouterOS command against one participant of an open transaction. Nothing runs yet — the command is applied inside that device's Safe Mode session when verify_transaction or commit_transaction prepares the fleet, so it can still be abandoned with no trace. Call once per command; order is preserved per device. Steps can only be added before the fleet is prepared.",
+      "description": "Queues one RouterOS command against one participant of an open transaction. Nothing runs yet — the command is applied inside that device's Safe Mode session when verify_transaction prepares the fleet. Queue approved commands here instead of running individual write tools outside the coordinated transaction. Call once per command; order is preserved per device. Steps can only be added before the fleet is prepared; resolve required keys and addresses first. Do not queue reboots, upgrades or commands with irreversible/external effects.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -31012,7 +31012,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "PREPARE + VERIFY: opens a Safe Mode session on every participant, snapshots each device, applies its queued steps, then evaluates the declared assertions against the result — all while NOTHING is committed. This is where the safety of a cross-device change comes from: a step that errors or an assertion that fails rolls the entire fleet back automatically and returns ABORTED, having changed nothing anywhere. On success the fleet is left PREPARED and waiting: call commit_transaction to persist or abort_transaction to discard. Annotated WRITE, not read-only: it does stage changes on the devices (auto-reverted on failure or disconnect), so it is not an inspection call.",
+      "description": "PREPARE + VERIFY: opens a Safe Mode session on every participant, snapshots each device, applies its queued steps, then evaluates the declared assertions against the result — all while NOTHING is committed. This is where the safety of a cross-device change comes from: a step that errors or an assertion that fails triggers rollback of the staged changes. Inspect the per-device rollback result; staging already affects live traffic. On success the fleet is left PREPARED and waiting: call commit_transaction to persist or abort_transaction to discard. Annotated WRITE, not read-only: it does stage changes on the devices (auto-reverted on failure or disconnect), so it is not an inspection call. Require approval for the exact plan first. Declare meaningful assertions; an empty set is not evidence of correctness.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -31034,7 +31034,7 @@
         "destructiveHint": true,
         "openWorldHint": false
       },
-      "description": "Commits every participant, in the transaction's commit order. If the fleet has not been prepared yet this runs PREPARE and VERIFY first, so a failure before the first commit still ends ABORTED with nothing changed. Once a device HAS committed, a later failure cannot be undone cleanly: the coordinator reports PARTIAL and names each device's state and the snapshot id to restore it from. High blast radius and not repeatable — prefer verify_transaction first and read its output. NOT ACID: commits are issued sequentially, so between the first and the last commit the fleet is briefly inconsistent, and a failure after something has committed ends PARTIAL — already-committed devices are reported with the snapshot id to restore them from, by hand.",
+      "description": "Commits every participant, in the transaction's commit order. If the fleet has not been prepared yet this runs PREPARE and VERIFY first, so a failure before the first commit still ends ABORTED before commit; inspect rollback evidence because staging may have affected live traffic. Once a device HAS committed, a later failure cannot be undone cleanly: the coordinator reports PARTIAL and names each device's state and the snapshot id to restore it from. High blast radius and not repeatable: call verify_transaction first, inspect every result, and commit only when the user's approval covers this exact plan. Never auto-commit merely because verification passed. Report txn_id and the dashboard Transactions timeline. NOT ACID: commits are issued sequentially, so between the first and the last commit the fleet is briefly inconsistent, and a failure after something has committed ends PARTIAL — already-committed devices are reported with the snapshot id to restore them from, by hand.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -31056,7 +31056,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Rolls back every participant of an open transaction — closes each Safe Mode session so RouterOS reverts the staged changes, leaving no trace. This is the clean exit and is always safe to call while the transaction is prepared-but-uncommitted. If some devices already committed (a PARTIAL transaction), those cannot be reverted this way; the report names them and the snapshot to restore them from.",
+      "description": "Rolls back every participant of an open transaction — closes each Safe Mode session so RouterOS can revert the staged changes. Use this for your own transaction when the plan is cancelled or commit is not approved. Inspect rollback evidence; do not assume live traffic was unaffected or that arbitrary command effects are reversible. If some devices already committed (a PARTIAL transaction), those cannot be reverted this way; the report names them and the snapshot to restore them from.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

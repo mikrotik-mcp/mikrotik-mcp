@@ -50,6 +50,16 @@ describe("find_tools", () => {
     const out = await run("find_tools", { query: "zzzqqq nonsense xyzzy" });
     expect(out).toMatch(/No tools matched|run_routeros_command/);
   });
+
+  test.each([
+    "begin_transaction",
+    "coordinated multi router change",
+    "cross device VPN transaction",
+    "fleet ACL transaction",
+  ])("discovers the transaction entry point: %s", async (query) => {
+    const out = await run("find_tools", { query });
+    expect(out).toMatch(/\d+\. begin_transaction\s+\[txn\]/);
+  });
 });
 
 describe("describe_tool", () => {

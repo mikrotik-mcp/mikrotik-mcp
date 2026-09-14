@@ -1,7 +1,7 @@
 ---
 name: build-tunnel-transactionally
 title: Build a site-to-site tunnel as one cross-device transaction
-description: Configure both ends of a tunnel under coordinated Safe Mode — verified while still uncommitted, then committed everywhere or rolled back everywhere. Never a half-built tunnel.
+description: Preferred coordinated workflow for both ends of an approved site-to-site tunnel — stage, verify, then commit with explicit approval; partial commits require manual recovery.
 arguments:
   - name: site_a
     description: Configured device name of the first router (one end of the tunnel).
@@ -15,7 +15,7 @@ arguments:
 ---
 
 Build a tunnel between **{{site_a}}** and **{{site_b}}** as a single
-cross-device transaction, so it either works on both ends or exists on neither.
+cross-device transaction, verifying both ends before issuing sequential commits.
 
 Tunnel to build: {{tunnel}}
 
@@ -35,14 +35,15 @@ Follow these steps:
 
 2. **Open the transaction.** Call `begin_transaction` with
    `devices=["{{site_a}}", "{{site_b}}"]`, a `label`, and — this is the part that
-   makes it safe — `assertions` that prove the tunnel actually works:
+   improves verification — `assertions` for the expected router-side state:
    - `{"kind": "ping", "from": "{{site_a}}", "to": "<{{site_b}} tunnel address>"}`
    - `{"kind": "wireguard-peer-handshake", "device": "{{site_a}}", "peer": "<{{site_b}} public key>"}`
      (WireGuard only)
-   - `{"kind": "reachable", "device": "{{site_b}}"}` — cheap insurance that the
+   - `{"kind": "reachable", "device": "{{site_b}}"}` — evidence that the
      far end is still answering after its own changes.
      Set `jump_host` if one router is reached through the other; the tool warns
-     when it is not committed last.
+     when it is not committed last. Set `commit_order` explicitly with that
+     participant last. Assertions do not prove client application health.
 
 3. **Queue every command.** One `add_transaction_step` per RouterOS command,
    naming the participant it runs on. Nothing executes yet. Cover both ends
@@ -51,15 +52,17 @@ Follow these steps:
 
 4. **Prepare and verify.** Call `verify_transaction`. This snapshots each device,
    applies its steps inside Safe Mode, and runs the assertions against the
-   still-uncommitted fleet. If anything fails, everything is rolled back
-   automatically and the result is `ABORTED` — nothing changed anywhere. Report
-   which assertion failed and fix the plan before retrying.
+   still-uncommitted fleet. This changes live traffic and requires prior approval;
+   it is not a read-only check. Failure triggers rollback attempts. Report every
+   participant's state and rollback evidence before considering a revised plan.
 
-5. **Commit.** Only after a clean verify, call `commit_transaction`. Read the
+5. **Commit.** Only after a clean verify and approval covering this exact commit,
+   call `commit_transaction`. Read the
    terminal state out loud:
    - `COMMITTED` — both ends persisted; confirm with a final `ping` and
      `get_wireguard_status`.
-   - `ABORTED` — nothing changed; safe to retry.
+   - `ABORTED` — no participant committed; inspect rollback results and live state
+     before proposing a retry. Staged changes may already have affected traffic.
    - `PARTIAL` — **tell the user immediately and stop**. Name each device's state
      and the snapshot id in the report; the fix is a manual restore
      (`diff_config_snapshots <id> live`, then `config_reconcile` or

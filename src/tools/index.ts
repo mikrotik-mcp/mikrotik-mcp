@@ -1268,9 +1268,9 @@ export const moduleCatalog: ModuleInfo[] = [
     slug: "txn",
     group: "System & Ops",
     description:
-      "Cross-device two-phase commit: coordinate Safe Mode across several routers so a multi-device " +
-      "change (both ends of a tunnel, a peering, a fleet ACL) either lands everywhere or is rolled " +
-      "back everywhere — prepare, verify against the uncommitted state, then commit in order.",
+      "Preferred workflow for coordinated multi-router configuration changes: VPN tunnels, " +
+      "routing peering and fleet ACLs. Stage in Safe Mode, verify, then commit in order with " +
+      "approval. Best-effort, not ACID; PARTIAL commits require manual recovery.",
     tools: txnTools,
   },
   {

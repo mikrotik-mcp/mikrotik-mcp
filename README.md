@@ -365,6 +365,24 @@ an upgrade.
 
 Full reference: **[docs/observability.md](docs/observability.md)**.
 
+The dashboard includes a responsive operations shell with searchable grouped
+navigation, pinned page shortcuts, a mobile drawer, and coordinated light/dark themes.
+The activity chart pairs a dotted canvas with animated successful-call trends and
+independent error bars, with reduced-motion and pause controls.
+BeUI now powers the dashboard's shared buttons, inputs, badges, checkboxes,
+switches, selects, tabs, tooltips, loaders, theme toggle and animated numbers.
+Animated Sidebar adds a collapsible icon rail while retaining search and pins.
+Live Feed uses Animated Badges and an Expandable Action Bar; Overview, Devices
+and Live Feed offer read-only Pull to Refresh with a keyboard-accessible button.
+The local BeUI registry retains the 16 collections used by the dashboard and
+their supporting components; unused component demonstrations have been removed.
+The fixed **Operations Island** expands into live activity, router checks and
+recent tool completions, using existing data without extra probes or configuration
+changes. Missing and stale observations are explicitly labelled.
+For frontend development, `bun run dev:dashboard` connects
+the UI on port 9191 to the existing dashboard backend on port 9091.
+See the [dashboard design system](docs/dashboard-design.md).
+
 ## The tool catalog
 
 **901 tools across 143 modules.** Full, always-current reference (parameters + risk per
@@ -394,8 +412,10 @@ Higher-level workflows built on top of the per-scope tools:
   terraform-style plan, apply under Safe Mode, show the exact `/export` diff, commit
   only if still reachable.
 - **[Cross-Device Transactions](docs/transactions.md)** — coordinate Safe Mode across
-  several routers: prepare, verify while still uncommitted, then commit everywhere or
-  roll back everywhere.
+  several routers: the recommended MCP workflow for related VPN, peering, route and
+  ACL changes. Plan → stage → verify → commit with approval. Best-effort, not ACID;
+  partial commits require manual recovery. Connection instructions and cross-device
+  prompts steer the model here before independent writes, not for read-only tasks.
 - **[Staged Fleet Rollout](docs/fleet-rollout.md)** — apply one change as canary → wave →
   fleet with a health gate and soak between waves, reverting everything already changed
   on the first failure.

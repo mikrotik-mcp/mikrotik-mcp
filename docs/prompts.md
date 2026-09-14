@@ -3,7 +3,16 @@
 MCP **prompts** are reusable, parameterized workflows a user can invoke by name
 (e.g. "harden this router"). Unlike tools — which the model calls — a prompt
 produces a ready-to-run instruction message that the model then executes using
-the tools. This server ships **9 prompts**.
+the tools. The current catalog is available through `prompts/list`.
+
+Cross-device tunnel, BGP/OSPF peering and safe-change prompts receive shared
+[transaction guidance](./transactions.md#when-the-assistant-should-choose-it) from
+the loader. For approved related writes on multiple managed SSH routers, the
+assistant should plan with the technical recipe but execute through
+`begin_transaction` → `add_transaction_step` → `verify_transaction` → an approved
+`commit_transaction` (or `abort_transaction`). Read-only tasks do not use this flow;
+verification is a live write, not an offline check. The same guidance appears in
+the dashboard's prompt catalog. Existing endpoint arguments are still substituted.
 
 ## How prompts are authored
 

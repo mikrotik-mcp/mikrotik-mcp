@@ -2,8 +2,47 @@
 
 [Safe Mode](./safe-mode.md) makes a change to **one** router reversible. A
 transaction extends that across **several** routers: a change that spans devices
-— both ends of a tunnel, a routing peering, a fleet-wide ACL — either lands
-everywhere or is rolled back everywhere.
+— both ends of a tunnel, a routing peering, a fleet-wide ACL — is staged and
+verified before sequential commits. This reduces half-applied changes; it cannot
+guarantee all-or-nothing outcomes across routers.
+
+## When the assistant should choose it
+
+Transactions are the preferred workflow for **authorized, related writes on two
+or more managed SSH routers**: both VPN endpoints, dependent routes, routing
+peering, or coordinated firewall/NAT/VLAN/ACL edits. They are not a reason to
+change more devices or create artificial dashboard activity.
+
+| Task                                                    | Preferred workflow                      |
+| ------------------------------------------------------- | --------------------------------------- |
+| Inspect or diagnose devices                             | Dedicated read tools; no transaction    |
+| Change one router                                       | Single-device change plan / Safe Mode   |
+| Coordinate related writes across routers                | Transactions with meaningful assertions |
+| Independent canary/wave deployment                      | Staged fleet rollout                    |
+| Reboot, firmware upgrade, irreversible external effects | Separate approved workflow              |
+
+The MCP initialization instructions recommend this workflow only when at least
+two enabled SSH devices and all five transaction tools are exposed in a writable
+session. `find_tools` explicitly points coordinated changes to `begin_transaction`;
+its searchable title/description include multi-router change, VPN, peering and ACL
+intent. The prompt loader adds the same execution guidance to cross-device tunnel,
+BGP/OSPF peering and safe-change recipes, without changing diagnostic prompts.
+Recipe commands become queued steps, not independent writes or per-device commits.
+
+The recommendation is guidance, **not new execution permission or a runtime
+approval gate**. Present the exact participant list, commands, assertions, backups
+and commit order first. `begin_transaction` and `add_transaction_step` touch no
+router; **`verify_transaction` changes live configuration**. Commit only after a
+clean verification and approval covering that exact plan. Empty assertions prove
+nothing. Do not take over another operator's Safe Mode session. Resolve required
+keys/addresses before preparing; adding steps after preparation is not supported.
+
+Report the transaction id and refer to the dashboard's **Transactions** timeline.
+On `PARTIAL` or uncertain rollback, stop and report every participant and snapshot
+id; obtain direction for recovery rather than retrying or restoring automatically.
+Reconnect the MCP client after deploying an updated server to receive refreshed
+initialization instructions and tool descriptions. Prompt guidance is shared by
+`prompts/get` and the dashboard's prompt catalog. Model adoption is not guaranteed.
 
 The failure it removes: configured device-by-device, a change whose second half
 fails leaves the first half live. A half-built tunnel, or worse, a firewall rule
@@ -16,8 +55,8 @@ Five tools, in the **Transactions** module (System & Ops):
 | `begin_transaction`    | WRITE     | Opens a transaction over N devices; returns its id        |
 | `add_transaction_step` | WRITE     | Queues one command for one participant (nothing runs yet) |
 | `verify_transaction`   | WRITE     | Prepares every device, asserts against uncommitted state  |
-| `commit_transaction`   | DANGEROUS | Commits all, compensating on a partial failure            |
-| `abort_transaction`    | WRITE     | Rolls every participant back, clean                       |
+| `commit_transaction`   | DANGEROUS | Commits sequentially; reports manual recovery on PARTIAL  |
+| `abort_transaction`    | WRITE     | Requests rollback of staged, uncommitted participants     |
 
 ## Honest limits — read this first
 
@@ -41,27 +80,28 @@ The design compensates by doing the hard work **before** anyone commits.
 
 ```
 PREPARE   per device: capture /export snapshot → enable Safe Mode → apply steps
-          any failure → roll every prepared device back → ABORTED (clean)
+          any failure → attempt rollback of prepared devices → inspect report
 
 VERIFY    run the declared assertions while everything is still uncommitted
-          any assertion fails → roll all back → ABORTED (clean)
+          any assertion fails → attempt rollback → inspect report
 
 COMMIT    commit each device in commit order
-          a failure after the first commit → compensating restore of the
-          committed ones (reverse order) → PARTIAL (loud, needs a human)
+          a failure after the first commit → report snapshots for manual restore
+          of committed devices → PARTIAL (needs a human)
 ```
 
 Three terminal states, and every tool names which one occurred:
 
-| State       | Meaning                                                                |
-| ----------- | ---------------------------------------------------------------------- |
-| `COMMITTED` | Every participant persisted its changes.                               |
-| `ABORTED`   | **Nothing changed anywhere.** The clean failure — safe to retry.       |
-| `PARTIAL`   | Some devices committed. Needs a human; the report names each snapshot. |
+| State       | Meaning                                                                             |
+| ----------- | ----------------------------------------------------------------------------------- |
+| `COMMITTED` | Every participant persisted its changes.                                            |
+| `ABORTED`   | No participant committed; inspect rollback evidence and live state before retrying. |
+| `PARTIAL`   | Some devices committed. Needs a human; the report names each snapshot.              |
 
 A transaction that reached compensation reports `PARTIAL` **even when every
-restore succeeded** — those devices really did commit, and the fleet really was
-inconsistent for that window. Only a fleet that never changed reports `ABORTED`.
+restore succeeded** in a test executor — those devices really did commit. The
+production executor does not replay snapshots automatically. Staged changes may
+affect traffic even when the transaction never commits.
 
 ## Commit order
 

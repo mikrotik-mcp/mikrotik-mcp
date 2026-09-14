@@ -137,19 +137,21 @@ function resolveAll(devices: string[]): string[] {
 export const txnTools: ToolModule = [
   defineTool({
     name: "begin_transaction",
-    title: "Begin Cross-Device Transaction",
+    title: "Begin Coordinated Multi-Router Change (Transaction)",
     annotations: WRITE,
     description:
-      `Opens a cross-device transaction over several routers and returns its id — the handle every ` +
-      `other transaction tool takes. Use this when a change must land on ALL of the named devices ` +
-      `or on none of them (both ends of a tunnel, a routing peering, a fleet-wide ACL): each ` +
-      `participant gets its own Safe Mode session, so nothing is persisted until commit_transaction. ` +
+      `Preferred workflow for authorized coordinated changes across multiple routers: site-to-site ` +
+      `VPN tunnels (WireGuard/GRE/IPsec), BGP/OSPF peering, dependent routes, firewall/NAT/VLAN or fleet ACL changes. ` +
+      `Recommend this BEFORE applying related writes device-by-device; returns the transaction id. ` +
+      `Not for read-only diagnostics, a simple single-router edit, independent canary rollouts or ` +
+      `irreversible operations. Requires SSH and an unused Safe Mode session per participant. ` +
       `Queue the work with add_transaction_step, then verify_transaction, then commit_transaction ` +
       `(or abort_transaction). ` +
       `\`assertions\` are checked while everything is still uncommitted — that is where the safety ` +
       `comes from, so declare them. \`commit_order\` decides which router commits last: put the one ` +
       `you reach the others THROUGH last, and pass it as \`jump_host\` to get a warning if you don't. ` +
-      `No device is touched by this call. ${LIMITS}`,
+      `No device is touched by this call. Verification DOES change live configuration temporarily; ` +
+      `get the user's approval for the exact plan before verifying or committing. ${LIMITS}`,
     inputSchema: {
       devices: z
         .array(z.string())
@@ -218,9 +220,11 @@ export const txnTools: ToolModule = [
     description:
       "Queues one RouterOS command against one participant of an open transaction. Nothing runs " +
       "yet — the command is applied inside that device's Safe Mode session when verify_transaction " +
-      "or commit_transaction prepares the fleet, so it can still be abandoned with no trace. " +
+      "prepares the fleet. Queue approved commands here instead of running individual write tools " +
+      "outside the coordinated transaction. " +
       "Call once per command; order is preserved per device. " +
-      "Steps can only be added before the fleet is prepared.",
+      "Steps can only be added before the fleet is prepared; resolve required keys and addresses first. " +
+      "Do not queue reboots, upgrades or commands with irreversible/external effects.",
     inputSchema: {
       txn_id: z.string().describe("Transaction id from begin_transaction"),
       target_device: z.string().describe("Which participant this command runs on"),
@@ -261,12 +265,13 @@ export const txnTools: ToolModule = [
       "PREPARE + VERIFY: opens a Safe Mode session on every participant, snapshots each device, " +
       "applies its queued steps, then evaluates the declared assertions against the result — all " +
       "while NOTHING is committed. This is where the safety of a cross-device change comes from: a " +
-      "step that errors or an assertion that fails rolls the entire fleet back automatically and " +
-      "returns ABORTED, having changed nothing anywhere. " +
+      "step that errors or an assertion that fails triggers rollback of the staged changes. " +
+      "Inspect the per-device rollback result; staging already affects live traffic. " +
       "On success the fleet is left PREPARED and waiting: call commit_transaction to persist or " +
       "abort_transaction to discard. " +
       "Annotated WRITE, not read-only: it does stage changes on the devices (auto-reverted on " +
-      "failure or disconnect), so it is not an inspection call.",
+      "failure or disconnect), so it is not an inspection call. Require approval for the exact " +
+      "plan first. Declare meaningful assertions; an empty set is not evidence of correctness.",
     inputSchema: {
       txn_id: z.string().describe("Transaction id from begin_transaction"),
     },
@@ -279,7 +284,7 @@ export const txnTools: ToolModule = [
         return report(
           a.txn_id,
           run,
-          "ABORTED — prepare or verification failed; every device was rolled back and NOTHING was changed.",
+          "ABORTED — prepare or verification failed before commit. Inspect the per-device rollback results; staged changes may have affected live traffic.",
         );
       }
       if (run.state !== undefined)
@@ -288,9 +293,12 @@ export const txnTools: ToolModule = [
       return report(
         a.txn_id,
         run,
-        "PREPARED and VERIFIED — all assertions passed and the changes are staged but NOT committed. " +
-          `Call commit_transaction ${a.txn_id} to persist, or abort_transaction to discard. ` +
-          "The Safe Mode sessions stay open until then; if this server loses them, RouterOS reverts everything.",
+        `${
+          run.txn.assertions.length > 0
+            ? "PREPARED and VERIFIED — declared assertions passed; changes are staged but NOT committed. "
+            : "PREPARED — no assertions declared; correctness is UNVERIFIED. Changes are NOT committed. "
+        }With approval covering this exact plan, call commit_transaction ${a.txn_id}; otherwise abort_transaction to discard. ` +
+          `The Safe Mode sessions stay open until then; if this server loses them, RouterOS reverts everything.`,
       );
     },
   }),
@@ -302,10 +310,12 @@ export const txnTools: ToolModule = [
     description:
       `Commits every participant, in the transaction's commit order. If the fleet has not been ` +
       `prepared yet this runs PREPARE and VERIFY first, so a failure before the first commit still ` +
-      `ends ABORTED with nothing changed. ` +
+      `ends ABORTED before commit; inspect rollback evidence because staging may have affected live traffic. ` +
       `Once a device HAS committed, a later failure cannot be undone cleanly: the coordinator ` +
       `reports PARTIAL and names each device's state and the snapshot id to restore it from. ` +
-      `High blast radius and not repeatable — prefer verify_transaction first and read its output. ${LIMITS}`,
+      `High blast radius and not repeatable: call verify_transaction first, inspect every result, ` +
+      `and commit only when the user's approval covers this exact plan. Never auto-commit merely ` +
+      `because verification passed. Report txn_id and the dashboard Transactions timeline. ${LIMITS}`,
     inputSchema: {
       txn_id: z.string().describe("Transaction id from begin_transaction"),
     },
@@ -321,7 +331,7 @@ export const txnTools: ToolModule = [
           return report(
             a.txn_id,
             run,
-            "ABORTED — the transaction failed before anything was committed; nothing changed on any device.",
+            "ABORTED — the transaction failed before commit. Inspect rollback results and live state before proposing a retry.",
           );
         default:
           return report(
@@ -341,8 +351,9 @@ export const txnTools: ToolModule = [
     annotations: WRITE,
     description:
       "Rolls back every participant of an open transaction — closes each Safe Mode session so " +
-      "RouterOS reverts the staged changes, leaving no trace. This is the clean exit and is always " +
-      "safe to call while the transaction is prepared-but-uncommitted. " +
+      "RouterOS can revert the staged changes. Use this for your own transaction when the plan " +
+      "is cancelled or commit is not approved. Inspect rollback evidence; do not assume live " +
+      "traffic was unaffected or that arbitrary command effects are reversible. " +
       "If some devices already committed (a PARTIAL transaction), those cannot be reverted this " +
       "way; the report names them and the snapshot to restore them from.",
     inputSchema: {
@@ -359,7 +370,7 @@ export const txnTools: ToolModule = [
         a.txn_id,
         run,
         run.state === "ABORTED"
-          ? "ABORTED — every participant was rolled back; nothing was changed."
+          ? "ABORTED — no participant committed. Inspect the per-device rollback evidence; staging may have affected live traffic."
           : `${run.state ?? "OPEN"} — abort could not return the fleet to clean; see the per-device state below.`,
       );
     },

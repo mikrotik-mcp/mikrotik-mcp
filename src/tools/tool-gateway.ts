@@ -110,7 +110,10 @@ export const toolGatewayTools: ToolModule = [
       "then call it directly if available, or via `invoke_tool`.\n\n" +
       "Workflow: find_tools → (optional) describe_tool → invoke_tool. " +
       "Only fall back to run_routeros_command if this search returns zero results. " +
-      "For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate.",
+      "For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate. " +
+      "For authorized changes that must be coordinated across multiple routers, search " +
+      "'begin_transaction' BEFORE individual write tools (VPN tunnels, peering, routes or fleet ACLs). " +
+      "Discovery does not authorize verify_transaction or commit_transaction.",
     inputSchema: {
       query: z
         .string()

@@ -26,6 +26,7 @@ import { z } from "zod";
 import type { DeviceDirectoryEntry } from "../core/runtime";
 import { logger } from "../logger";
 import { PROMPTS_DIR } from "../paths";
+import { transactionPromptGuidance } from "../txn/guidance";
 
 export interface PromptArg {
   name: string;
@@ -82,7 +83,7 @@ function parseFrontmatter(raw: string): ParsedPrompt | null {
     title: meta.title ?? meta.name,
     description: meta.description ?? "",
     arguments: args,
-    body: body.trim(),
+    body: transactionPromptGuidance(meta.name, body.trim()),
   };
 }
 

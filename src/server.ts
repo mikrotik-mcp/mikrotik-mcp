@@ -12,6 +12,7 @@ import { loadFileCacheSync, updateSummaryLine } from "./core/update-check";
 import { listDevices, deviceDirectory, deviceLabels, getConfig } from "./core/runtime";
 import { registerPrompts } from "./prompts";
 import { selectToolModules } from "./tools";
+import { TRANSACTION_TOOL_NAMES, TRANSACTION_WORKFLOW } from "./txn/guidance";
 import {
   VERSION,
   SERVER_NAME,
@@ -44,7 +45,7 @@ Tool discovery — MANDATORY workflow:
 Safety model — tools are annotated by risk:
   • readOnlyHint     → inspection only, no changes
   • destructiveHint  → removes or replaces configuration
-Before a batch of risky changes, consider enable_safe_mode: RouterOS then holds
+Before a single-device batch of risky changes, consider enable_safe_mode: RouterOS then holds
 every change in memory and auto-reverts if the session drops, so a mistake that
 locks you out is undone automatically. commit_safe_mode persists; rollback
 discards. Prefer specific filters on list_* tools to keep output small.
@@ -77,9 +78,10 @@ const MULTI_DEVICE_INSTRUCTIONS = `
 
 Multiple devices are configured: {{names}} (default: {{default}}). Every tool
 accepts an optional "device" argument to choose which router it runs on; omit it
-to use the default. Use list_mikrotik_devices to see them. For cross-device work
-(e.g. a tunnel between two routers) configure each side by passing the matching
-"device", then verify reachability with ping/traceroute from each end.`;
+to use the default. Use list_mikrotik_devices to see them. Resolve every named
+participant explicitly; never substitute the default for an unknown device.
+For related multi-router writes, choose the coordinated execution workflow before
+changing the first router. Read-only checks still target each device separately.`;
 
 // Persistent knowledge-graph memory usage protocol. Injected into the server
 // instructions ONLY when memory is enabled. Without this the model never learns
@@ -121,6 +123,8 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
 
   const { names, default: defaultDevice } = listDevices();
   const readOnly = getConfig().readOnly;
+  const toolModules = selectToolModules(getConfig().tools);
+  const availableTools = new Set(toolModules.flatMap((mod) => mod.map((tool) => tool.name)));
   let instructions =
     names.length > 1
       ? INSTRUCTIONS +
@@ -129,6 +133,17 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
           defaultDevice,
         )
       : INSTRUCTIONS;
+
+  // Promote only a usable workflow; do not direct a read-only or curated session
+  // toward write tools it does not expose. This performs no device I/O.
+  const sshParticipants = names.filter((name) => !getConfig().devices[name]?.mac);
+  if (
+    !readOnly &&
+    sshParticipants.length > 1 &&
+    TRANSACTION_TOOL_NAMES.every((name) => availableTools.has(name))
+  ) {
+    instructions += `\n\n${TRANSACTION_WORKFLOW}`;
+  }
 
   // Teach the model the recall/record loop only when the knowledge graph is live;
   // otherwise the memory_* tools are inert and the instruction would be a lie.
@@ -186,7 +201,6 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
   // Curate the tool surface to the configured scopes (default: the full catalog)
   // so the client's tool-discovery search reliably surfaces every matching tool
   // on a several-hundred-tool server.
-  const toolModules = selectToolModules(getConfig().tools);
   const toolCount = registerTools(server, toolModules, {
     sendLog,
     deviceNames: names,
