@@ -11,99 +11,18 @@ import type { ReactNode } from "react";
 import {
   Area,
   AreaChart,
-  CartesianGrid,
   Cell,
   Pie,
   PieChart,
   PolarAngleAxis,
   RadialBar,
   RadialBarChart,
-  XAxis,
   YAxis,
 } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
 
-/** A short HH:MM label for an epoch-ms timestamp. */
-const hhmm = (t: number): string =>
-  new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
-
-const activityConfig = {
-  ok: { label: "ok", color: "var(--chart-1)" },
-  // Red for errors is a deliberate functional colour; `destructive` is the
-  // matching semantic token (there is no red among --chart-1…5).
-  error: { label: "error", color: "var(--destructive)" },
-} satisfies ChartConfig;
-
-/** Stacked area of OK vs error tool-calls over time (replaces the old bar TimeSeries). */
-export function ActivityChart({
-  series,
-}: {
-  series: { t: number; ok: number; error: number }[];
-}): ReactNode {
-  return (
-    <ChartContainer config={activityConfig} className="h-[200px] w-full">
-      <AreaChart data={series} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-        <defs>
-          <linearGradient id="fillOk" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-ok)" stopOpacity={0.5} />
-            <stop offset="100%" stopColor="var(--color-ok)" stopOpacity={0.04} />
-          </linearGradient>
-          <linearGradient id="fillErr" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-error)" stopOpacity={0.55} />
-            <stop offset="100%" stopColor="var(--color-error)" stopOpacity={0.05} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid vertical={false} strokeDasharray="3 3" />
-        <XAxis
-          dataKey="t"
-          tickFormatter={hhmm}
-          tick={{ fontSize: 10 }}
-          tickLine={false}
-          axisLine={false}
-          minTickGap={48}
-        />
-        <YAxis
-          tick={{ fontSize: 10 }}
-          tickLine={false}
-          axisLine={false}
-          width={34}
-          allowDecimals={false}
-        />
-        <ChartTooltip
-          content={
-            <ChartTooltipContent
-              labelFormatter={(_value, payload) => {
-                const t = (payload?.[0]?.payload as { t?: number } | undefined)?.t;
-                return typeof t === "number" ? hhmm(t) : "";
-              }}
-            />
-          }
-        />
-        <Area
-          type="monotone"
-          dataKey="ok"
-          name="ok"
-          stackId="1"
-          stroke="var(--color-ok)"
-          fill="url(#fillOk)"
-          strokeWidth={2}
-          isAnimationActive={false}
-        />
-        <Area
-          type="monotone"
-          dataKey="error"
-          name="error"
-          stackId="1"
-          stroke="var(--color-error)"
-          fill="url(#fillErr)"
-          strokeWidth={2}
-          isAnimationActive={false}
-        />
-      </AreaChart>
-    </ChartContainer>
-  );
-}
+export { ActivityChart } from "./activity-chart";
 
 /** Donut of risk/status segments with a centered total (replaces the old SVG Donut). */
 export function RiskDonut({
