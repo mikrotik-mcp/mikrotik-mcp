@@ -12,8 +12,9 @@ export const withToken = (path: string): string =>
   TOKEN ? `${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(TOKEN)}` : path;
 
 /** GET a JSON resource, forwarding the token; throws on a non-2xx response. */
-export async function api<T>(path: string): Promise<T> {
+export async function api<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(withToken(path), {
+    signal,
     headers: TOKEN ? { authorization: `Bearer ${TOKEN}` } : {},
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);

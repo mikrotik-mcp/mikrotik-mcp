@@ -2,6 +2,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite-plus";
+import { DASHBOARD_API_PATH } from "./observability/dev-routing";
 
 /**
  * Dedicated build for the React observability dashboard.
@@ -18,10 +19,21 @@ import { defineConfig } from "vite-plus";
  */
 const here = dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
-  root: here,
+export default defineConfig(({ command }) => ({
+  // Serve the actual SPA, including its hash routes, instead of a mock fixture.
+  root: command === "serve" ? resolve(here, "observability") : here,
   base: "./",
   plugins: [tailwindcss()],
+  server: {
+    host: "127.0.0.1",
+    port: 9191,
+    strictPort: true,
+    open: false,
+    proxy: {
+      // Do not proxy the frontend module /api.ts along with backend /api/*.
+      [DASHBOARD_API_PATH]: { target: "http://127.0.0.1:9091", ws: true, changeOrigin: true },
+    },
+  },
   // `@/*` → the dashboard's own directory, matching the shadcn aliases in
   // components.json and the `paths` entry in the root tsconfig.
   resolve: {
@@ -38,4 +50,4 @@ export default defineConfig({
       output: { codeSplitting: false },
     },
   },
-});
+}));

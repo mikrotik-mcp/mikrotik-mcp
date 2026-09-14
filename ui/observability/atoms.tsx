@@ -25,9 +25,9 @@ export function Panel({
   className?: string;
 }): ReactNode {
   return (
-    <Card className={cn("gap-0 py-5", className)}>
+    <Card className={cn("dashboard-panel gap-0 py-5", className)}>
       {title != null && (
-        <CardHeader className="flex flex-row items-center gap-3 px-5 pb-3">
+        <CardHeader className="flex flex-row flex-wrap items-center gap-3 px-5 pb-3">
           <CardTitle className="text-base font-semibold">{title}</CardTitle>
           {extra != null && (
             <>
@@ -60,7 +60,7 @@ export function StatCard({
   cls?: string;
 }): ReactNode {
   return (
-    <Card className="gap-1 px-4 py-3">
+    <Card className="dashboard-stat gap-2 px-4 py-4">
       <p className="text-muted-foreground text-xs tracking-wide uppercase">{k}</p>
       <div className={cn("text-2xl font-semibold tabular-nums", cls)}>
         {v}

@@ -10,7 +10,7 @@
  * is forwarded to every API call and the live stream when the server requires it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -19,13 +19,12 @@ import {
   BookOpen,
   Check,
   HelpCircle,
+  Menu,
+  ChevronRight,
   Network,
-  Pause,
   Pencil,
-  Play,
   Radar,
   Search,
-  Trash2,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -54,6 +53,17 @@ import { cn } from "@/lib/utils";
 import { HBars, Panel, StatCard } from "./atoms";
 import { DEFAULT_FEED_LIMIT, FEED_LIMITS } from "./prefs";
 import { ThemeToggle } from "./theme";
+import { DashboardSidebar, StreamStatus } from "./dashboard-shell";
+import { OperationsIsland } from "./operations-island";
+import { DashboardRefresh } from "./dashboard-refresh";
+import { FeedActions } from "./feed-actions";
+import {
+  AnimatedSidebarProvider,
+  AnimatedSidebarTrigger,
+} from "./components/beui/registry/components/motion/animated-sidebar";
+import { AnimatedBadge } from "./components/beui/registry/components/motion/animated-badge";
+import { VIEWS, viewGroup, parseViewHash } from "./navigation";
+import type { ViewId } from "./navigation";
 import { BackupsView } from "./backups";
 import { AaaView } from "./aaa";
 import { ChangePlanView } from "./change-plan";
@@ -62,6 +72,7 @@ import { ClientsView } from "./clients";
 import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
 import { RoundTripView } from "./round-trip";
+import { PageBoundary } from "./page-boundary";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
 import { ConfigEditor } from "./config-editor";
 import { ConnectivityGraph, DeviceCard } from "./connectivity";
@@ -122,111 +133,7 @@ function download(name: string, text: string, mime: string): void {
 }
 
 // ── view navigation ─────────────────────────────────────────────────────────
-type ViewId =
-  | "overview"
-  | "devices"
-  | "clients"
-  | "investigations"
-  | "service-contracts"
-  | "round-trip"
-  | "aaa"
-  | "topology"
-  | "fabric"
-  | "vulns"
-  | "access"
-  | "packets"
-  | "flows"
-  | "snapshots"
-  | "drift"
-  | "policies"
-  | "simulator"
-  | "schedules"
-  | "explain"
-  | "attacks"
-  | "txn"
-  | "plan"
-  | "s3"
-  | "backups"
-  | "modules"
-  | "config"
-  | "memory"
-  | "alerts"
-  | "releases"
-  | "capsman"
-  | "feed";
-const VIEWS: { id: ViewId; label: string; sub: string }[] = [
-  { id: "overview", label: "Overview", sub: "Calls, latency & risk at a glance" },
-  { id: "devices", label: "Devices", sub: "Connectivity radar & system health" },
-  { id: "clients", label: "Clients", sub: "Connected LAN devices — usage, block/allow, pin IP" },
-  {
-    id: "investigations",
-    label: "Investigations",
-    sub: "Client and service evidence across routers",
-  },
-  {
-    id: "service-contracts",
-    label: "Service Health",
-    sub: "Approved endpoint checks, contracts and evidence",
-  },
-  { id: "aaa", label: "RADIUS & UM", sub: "RADIUS client & User Manager RADIUS server" },
-  { id: "topology", label: "Topology", sub: "Layer-2 neighbours via MNDP / CDP / LLDP" },
-  { id: "round-trip", label: "Round-trip Lab", sub: "Forward and return paths across snapshots" },
-  { id: "fabric", label: "L2 Fabric", sub: "Which host sits on which physical bridge port" },
-  {
-    id: "vulns",
-    label: "Vulnerabilities",
-    sub: "Published CVEs matched to this version, ranked by real exposure",
-  },
-  { id: "access", label: "Access Scope", sub: "What this session may call — and what it blocked" },
-  { id: "packets", label: "Packets", sub: "Live TZSP capture & decode" },
-  { id: "flows", label: "Flows", sub: "NetFlow/IPFIX top talkers, conversations & anomalies" },
-  { id: "snapshots", label: "Snapshots", sub: "Config history & time-travel diff" },
-  { id: "drift", label: "Drift Guard", sub: "Golden config baselines & live drift detection" },
-  {
-    id: "attacks",
-    label: "Attacks",
-    sub: "Live attack incidents, evidence and guarded blocking",
-  },
-  {
-    id: "policies",
-    label: "Policies",
-    sub: "Your own compliance rules, linted against config",
-  },
-  {
-    id: "explain",
-    label: "Explain",
-    sub: "Config → architecture document, diagram and consequence diffs",
-  },
-  {
-    id: "simulator",
-    label: "Simulator",
-    sub: "Trace a hypothetical packet — no device touched",
-  },
-  {
-    id: "schedules",
-    label: "Schedules",
-    sub: "Auditors on a cron — alerting only on what changed",
-  },
-  {
-    id: "txn",
-    label: "Transactions",
-    sub: "Cross-device two-phase commit — prepare, verify, commit everywhere",
-  },
-  { id: "plan", label: "Change Plan", sub: "Dry-run intended RouterOS commands" },
-  { id: "s3", label: "S3 Backups", sub: "List, download & delete S3 backup objects" },
-  { id: "backups", label: "Backups", sub: "Local config vault — create, restore, manage" },
-  { id: "modules", label: "Modules", sub: "Enable/disable tool modules — curate the surface" },
-  { id: "config", label: "Config", sub: "Effective configuration & safe editor" },
-  { id: "memory", label: "Memory", sub: "Knowledge graph — entities, relations & observations" },
-  {
-    id: "alerts",
-    label: "Alerts",
-    sub: "Rules that reach out — Slack, Discord, ntfy, webhook, MCP",
-  },
-  { id: "releases", label: "Releases", sub: "Update, downgrade & read every version's notes" },
-  { id: "capsman", label: "CAPsMAN", sub: "Wi-Fi fabric: coverage, weak signal, load, FT & HA" },
-  { id: "feed", label: "Live Feed", sub: "Every tool call, in real time" },
-];
+// Navigation metadata is shared with the responsive shell.
 /** Valid view ids — used to validate a hash/stored route before trusting it. */
 const VIEW_IDS = new Set<ViewId>(VIEWS.map((v) => v.id));
 /** localStorage key remembering the last-visited page. */
@@ -235,8 +142,7 @@ const VIEW_STORE_KEY = "mt-view";
 /** The bare view id in the URL hash (`#devices` / `#/devices` → `devices`). */
 function viewFromHash(): ViewId | null {
   try {
-    const id = location.hash.replace(/^#\/?/, "") as ViewId;
-    return VIEW_IDS.has(id) ? id : null;
+    return parseViewHash(location.hash);
   } catch {
     return null;
   }
@@ -259,50 +165,7 @@ function initialView(): ViewId {
   return "overview";
 }
 
-/**
- * Per-domain accent for each page. Drives the page's title gradient, the active
- * nav item, the help button, and assorted accents via the `--page-accent` /
- * `--page-accent-2` CSS variables set on `.main[data-view]`. Colour-coding the
- * pages makes the dashboard feel alive and helps orientation at a glance.
- */
-// Monochrome chrome: every page uses the same foreground→muted accent, so the
-// sidebar, title, nav, glow and focus rings carry zero colour (only functional
-// status colours — error/ok — remain, elsewhere). These are token references,
-// not literals, so the accent inverts with the light/dark theme.
-const MONO_ACCENT: [string, string] = ["var(--foreground)", "var(--muted-foreground)"];
-const VIEW_ACCENT: Record<ViewId, [string, string]> = {
-  overview: MONO_ACCENT,
-  devices: MONO_ACCENT,
-  clients: MONO_ACCENT,
-  investigations: MONO_ACCENT,
-  "service-contracts": MONO_ACCENT,
-  "round-trip": MONO_ACCENT,
-  aaa: MONO_ACCENT,
-  topology: MONO_ACCENT,
-  fabric: MONO_ACCENT,
-  vulns: MONO_ACCENT,
-  access: MONO_ACCENT,
-  packets: MONO_ACCENT,
-  flows: MONO_ACCENT,
-  snapshots: MONO_ACCENT,
-  drift: MONO_ACCENT,
-  policies: MONO_ACCENT,
-  simulator: MONO_ACCENT,
-  schedules: MONO_ACCENT,
-  explain: MONO_ACCENT,
-  attacks: MONO_ACCENT,
-  txn: MONO_ACCENT,
-  plan: MONO_ACCENT,
-  s3: MONO_ACCENT,
-  backups: MONO_ACCENT,
-  modules: MONO_ACCENT,
-  config: MONO_ACCENT,
-  memory: MONO_ACCENT,
-  alerts: MONO_ACCENT,
-  releases: MONO_ACCENT,
-  capsman: MONO_ACCENT,
-  feed: MONO_ACCENT,
-};
+// Shared visual accents are theme tokens, independent of status colours.
 
 /**
  * Per-page help content. Every page exposes a collapsible "About this page"
@@ -949,6 +812,8 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
 
 // ── app ──────────────────────────────────────────────────────────────────────
 function App(): ReactNode {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [devices, setDevices] = useState<DevicesPayload | null>(null);
@@ -987,6 +852,11 @@ function App(): ReactNode {
   );
   const [paused, setPaused] = useState(false);
   const [liveMode, setLiveMode] = useState<LiveMode>("off");
+  const [lastLiveEvent, setLastLiveEvent] = useState<ToolEvent | null>(null);
+  const [lastLiveEventAt, setLastLiveEventAt] = useState<number | null>(null);
+  const [statsAt, setStatsAt] = useState<number | null>(null);
+  const [poolAt, setPoolAt] = useState<number | null>(null);
+  const [alertsAt, setAlertsAt] = useState<number | null>(null);
   const [selected, setSelected] = useState<ToolEvent | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   // Per-device counter bumped on each live event — feeds the connectivity graph's
@@ -1090,6 +960,8 @@ function App(): ReactNode {
   useLiveStream(
     useCallback((e: ToolEvent) => {
       if (pausedRef.current) return;
+      setLastLiveEvent(e);
+      setLastLiveEventAt(Date.now());
       setFeed((f) => [e, ...f].slice(0, FEED_CAP));
       const dev = e.device;
       if (dev) setPulses((p) => ({ ...p, [dev]: (p[dev] ?? 0) + 1 }));
@@ -1106,6 +978,48 @@ function App(): ReactNode {
       .then((r) => setFeed(r.events))
       .catch(() => {});
   }, []);
+
+  const refreshContext = useRef("");
+  refreshContext.current = `${view}:${windowMs}`;
+  const refreshDashboard = async () => {
+    const requestContext = refreshContext.current;
+    const signal = AbortSignal.timeout(10_000);
+    if (view === "feed") {
+      if (pausedRef.current) return;
+      const before = new Set(feed.map((event) => event.id));
+      const [backlog, metadata] = await Promise.all([
+        api<{ events: ToolEvent[] }>(`/api/events?limit=${FEED_CAP}`, signal),
+        api<Meta>("/api/meta", signal),
+      ]);
+      if (refreshContext.current !== requestContext || pausedRef.current) return;
+      setMeta(metadata);
+      setFeed((current) =>
+        [
+          ...new Map(
+            [...current.filter((event) => !before.has(event.id)), ...backlog.events].map(
+              (event) => [event.id, event],
+            ),
+          ).values(),
+        ]
+          .sort((a, b) => b.ts - a.ts)
+          .slice(0, FEED_CAP),
+      );
+    } else if (view === "devices") {
+      const value = await api<DevicesPayload>("/api/devices", signal);
+      if (refreshContext.current === requestContext) setDevices(value);
+    } else if (view === "overview") {
+      const [value, metadata, fleet] = await Promise.all([
+        api<Stats>(`/api/stats?window=${windowMs}&buckets=60`, signal),
+        api<Meta>("/api/meta", signal),
+        api<DevicesPayload>("/api/devices", signal),
+      ]);
+      if (refreshContext.current !== requestContext) return;
+      setStats(value);
+      setStatsAt(Date.now());
+      setMeta(metadata);
+      setDevices(fleet);
+    }
+  };
 
   // Initial load.
   useEffect(() => {
@@ -1127,7 +1041,10 @@ function App(): ReactNode {
   // Analytics + devices polling.
   const refreshStats = useCallback(() => {
     void api<Stats>(`/api/stats?window=${windowMs}&buckets=60`)
-      .then(setStats)
+      .then((value) => {
+        setStats(value);
+        setStatsAt(Date.now());
+      })
       .catch(() => {});
   }, [windowMs]);
   useEffect(() => {
@@ -1141,7 +1058,10 @@ function App(): ReactNode {
         .then(setDevices)
         .catch(() => {});
       void api<SSHPoolPayload>("/api/ssh-pool")
-        .then(setSshPool)
+        .then((value) => {
+          setSshPool(value);
+          setPoolAt(Date.now());
+        })
         .catch(() => {});
       void api<TopologyPayload>("/api/topology")
         .then(setTopology)
@@ -1219,13 +1139,16 @@ function App(): ReactNode {
   // Firing-alert count for the nav badge. Polled rather than streamed: alerts
   // change on the order of minutes, and a dedicated socket message type for a
   // single integer is not worth the protocol surface.
-  const [firingCount, setFiringCount] = useState(0);
+  const [firingCount, setFiringCount] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
     const poll = async (): Promise<void> => {
       try {
         const res = await api<{ active?: unknown[] }>("/api/alerts");
-        if (live) setFiringCount(res.active?.length ?? 0);
+        if (live) {
+          setFiringCount(Array.isArray(res.active) ? res.active.length : null);
+          setAlertsAt(Date.now());
+        }
       } catch {
         /* alerting may not be configured — the badge simply stays hidden */
       }
@@ -1431,836 +1354,821 @@ function App(): ReactNode {
   const cur = VIEWS.find((v) => v.id === view) ?? VIEWS[0];
 
   return (
-    <div
-      className="bg-background text-foreground grid min-h-screen grid-cols-[240px_1fr]"
-      ref={rootRef}
-      data-view={view}
-      style={
-        {
-          "--page-accent": VIEW_ACCENT[view][0],
-          "--page-accent-2": VIEW_ACCENT[view][1],
-        } as CSSProperties
-      }
+    <AnimatedSidebarProvider
+      className="contents"
+      open={sidebarOpen}
+      onOpenChange={setSidebarOpen}
+      openMobile={mobileNavOpen}
+      onOpenMobileChange={setMobileNavOpen}
+      style={{
+        "--sidebar-width": "252px",
+        "--sidebar-width-icon": "76px",
+        "--sidebar-width-mobile": "300px",
+      }}
     >
-      {/* sidebar nav */}
-      <aside className="bg-card sticky top-0 flex h-screen flex-col gap-4 border-r p-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-foreground text-background grid size-9 shrink-0 place-items-center rounded-md">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="size-5">
-              <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 12 L4 5 M12 12 L20 5 M12 12 L12 20" />
-                <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
-                <circle cx="4" cy="5" r="1.9" fill="currentColor" stroke="none" />
-                <circle cx="20" cy="5" r="1.9" fill="currentColor" stroke="none" />
-                <circle cx="12" cy="20" r="1.9" fill="currentColor" stroke="none" />
-              </g>
-            </svg>
-          </div>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <b className="truncate text-sm">MikroTik MCP</b>
-            <small
-              className={cn(
-                "text-muted-foreground inline-flex items-center gap-1 text-[11px]",
-                whatsNew.release && "hover:text-foreground cursor-pointer",
-              )}
-              title={whatsNew.release ? "View release notes" : undefined}
-              onClick={whatsNew.release ? () => whatsNew.openModal() : undefined}
+      <div
+        className="dashboard-shell bg-background text-foreground"
+        ref={rootRef}
+        data-view={view}
+        data-nav-collapsed={!sidebarOpen}
+      >
+        <a
+          className="shell-skip-link"
+          href="#dashboard-content"
+          onClick={(event) => {
+            event.preventDefault();
+            document.getElementById("dashboard-content")?.focus();
+          }}
+        >
+          Skip to content
+        </a>
+        <DashboardSidebar
+          view={view}
+          onNavigate={setView}
+          renderIcon={(id) => <NavIcon name={id} />}
+          onMobileOpenChange={setMobileNavOpen}
+          liveMode={liveMode}
+          version={meta?.version}
+          transport={meta?.transport}
+          eventCount={meta?.total}
+          feedCount={feed.length}
+          firingCount={firingCount ?? 0}
+          releaseAvailable={whatsNew.showIndicator}
+          onReleaseNotes={whatsNew.release ? () => whatsNew.openModal() : undefined}
+          controls={<ReloadServerButton />}
+        />
+
+        {/* main content */}
+        <main
+          id="dashboard-content"
+          tabIndex={-1}
+          className="shell-main flex min-w-0 flex-col gap-5"
+          data-view={view}
+        >
+          <div className="shell-topbar">
+            <AnimatedSidebarTrigger
+              className="shell-menu-button"
+              id="shell-menu-toggle"
+              aria-label="Toggle navigation"
+              title="Toggle navigation (⌘/Ctrl B)"
             >
-              {meta?.version ? `v${meta.version}` : "Observability"}
-              {whatsNew.showIndicator && (
-                <span
-                  className="bg-brand inline-block size-1.5 rounded-full"
-                  title={`v${whatsNew.release?.version} available`}
-                />
-              )}
-            </small>
-          </div>
-          <span className="flex-1" />
-          <ThemeToggle />
-        </div>
-        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors",
-                "[&_svg]:size-4 [&_svg]:shrink-0",
-                view === v.id
-                  ? "bg-accent text-accent-foreground font-medium"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-              )}
-              onClick={() => setView(v.id)}
-            >
-              <NavIcon name={v.id} />
-              <span className="truncate">{v.label}</span>
-              {v.id === "alerts" &&
-                firingCount > 0 && (
-                  // Visible from every page, not just the Alerts one — an alert
-                  // nobody navigates to is an alert nobody sees.
-                  <span
-                    key={firingCount}
-                    className="bg-destructive text-background animate-in zoom-in-50 ml-auto rounded-full px-1.5 py-0.5 text-[10px] tabular-nums"
-                    title={`${firingCount} alert${firingCount === 1 ? "" : "s"} firing`}
-                  >
-                    {firingCount}
-                  </span>
-                )}
-              {v.id === "feed" &&
-                feed.length > 0 && (
-                  // `key={feed.length}` remounts the badge on every change so the
-                  // pop animation replays each time a new event arrives.
-                  <span
-                    key={feed.length}
-                    className="bg-brand text-brand-foreground animate-in zoom-in-50 ml-auto rounded-full px-1.5 py-0.5 text-[10px] tabular-nums"
-                  >
-                    {feed.length > 999 ? "999+" : feed.length}
-                  </span>
-                )}
-            </button>
-          ))}
-        </nav>
-        <div className="flex flex-col gap-1.5 border-t pt-3">
-          <ReloadServerButton />
-          <span
-            className="inline-flex items-center gap-2 text-[11px]"
-            title="Live transport: WebSocket (preferred) or SSE fallback"
-          >
-            <Dot type={liveMode === "off" ? "secondary" : "success"} pulse={liveMode !== "off"} />
-            {liveMode === "off" ? "offline" : `live · ${liveMode}`}
-          </span>
-          <small className="text-muted-foreground text-[11px]">
-            {meta ? `${num(meta.total)} events · ${meta.transport}` : "connecting…"}
-          </small>
-        </div>
-      </aside>
-
-      {/* main content */}
-      <main className="flex min-w-0 flex-col gap-5 p-6" data-view={view}>
-        <header className="reveal flex flex-wrap items-center gap-3">
-          <div className="flex min-w-0 flex-col">
-            <h1 className="truncate text-xl font-semibold">{cur.label}</h1>
-            <small className="text-muted-foreground text-xs">{cur.sub}</small>
-          </div>
-          <span className="flex-1" />
-          {view === "overview" && (
-            <Select
-              size="sm"
-              aria-label="Stats time window"
-              value={String(windowMs)}
-              onValueChange={(v) => setWindowMs(Number(v))}
-              options={WINDOWS.map(([label, val]) => ({
-                value: String(val),
-                label: `window: ${label}`,
-              }))}
-            />
-          )}
-          <Button
-            size="sm"
-            ghost
-            type={helpOpen.has(view) ? "accent" : "default"}
-            onClick={() => toggleHelp(view)}
-            aria-expanded={helpOpen.has(view)}
-            title="About this page"
-            icon={<HelpCircle />}
-          >
-            Help
-          </Button>
-        </header>
-
-        {helpOpen.has(view) && <HelpPanel view={view} />}
-
-        {/* ── Overview ── */}
-        {view === "overview" && (
-          <section className="grid content-start gap-[18px]">
-            <div className="reveal grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
-              {stats ? (
-                <>
-                  <StatCard k="Calls (window)" v={num(stats.total)} />
-                  <StatCard k="Calls / min" v={stats.callsPerMin.toFixed(1)} />
-                  <StatCard
-                    k="Error rate"
-                    v={`${(stats.errorRate * 100).toFixed(1)}%`}
-                    sub={`${stats.errors} err`}
-                    cls={errCls}
-                  />
-                  <StatCard k="Avg latency" v={ms(stats.latency.avg)} />
-                  <StatCard k="p95 latency" v={ms(stats.latency.p95)} />
-                  <StatCard k="p99 latency" v={ms(stats.latency.p99)} />
-                  <StatCard k="Distinct tools" v={num(stats.distinctTools)} />
-                  <StatCard k="Output volume" v={bytes(stats.outputBytes)} />
-                </>
-              ) : (
-                <StatCard k="Loading…" v="—" />
-              )}
+              <Menu />
+            </AnimatedSidebarTrigger>
+            <div className="shell-breadcrumb">
+              <span>Workspace</span>
+              <ChevronRight size={13} aria-hidden="true" />
+              <b>{viewGroup(view).label}</b>
             </div>
+            <div className="shell-topbar-actions">
+              <StreamStatus mode={liveMode} />
+              <span className="shell-toolbar-divider" />
+              <ThemeToggle />
+            </div>
+          </div>
+          <header className="shell-page-header flex flex-wrap items-center gap-3">
+            <div className="shell-page-title">
+              <span className="shell-page-icon" aria-hidden="true">
+                <NavIcon name={view} />
+              </span>
+              <div className="min-w-0">
+                <span className="shell-eyebrow">
+                  {viewGroup(view).label} / {cur.label}
+                </span>
+                <h1>{cur.label}</h1>
+                <p className="text-muted-foreground">{cur.sub}</p>
+              </div>
+            </div>
+            <span className="flex-1" />
+            {view === "overview" && (
+              <Select
+                size="sm"
+                aria-label="Stats time window"
+                value={String(windowMs)}
+                onValueChange={(v) => setWindowMs(Number(v))}
+                options={WINDOWS.map(([label, val]) => ({
+                  value: String(val),
+                  label: `window: ${label}`,
+                }))}
+              />
+            )}
+            <Button
+              size="sm"
+              ghost
+              type={helpOpen.has(view) ? "accent" : "default"}
+              onClick={() => toggleHelp(view)}
+              aria-expanded={helpOpen.has(view)}
+              title="About this page"
+              icon={<HelpCircle />}
+            >
+              Help
+            </Button>
+          </header>
 
-            <div className="reveal grid grid-cols-1 gap-4 xl:grid-cols-3">
-              <Panel title="Calls over time" className="xl:col-span-2">
-                {stats ? (
-                  <ActivityChart series={stats.series} />
-                ) : (
-                  <div className="text-muted-foreground text-[11px]">no data</div>
-                )}
-              </Panel>
-              {stats && (
-                <>
-                  <Panel title="By risk">
-                    <RiskDonut
-                      segments={(Object.keys(stats.byRisk) as Risk[]).map((r) => ({
-                        label: r,
-                        value: stats.byRisk[r],
-                        color: RISK_COLOR[r],
-                      }))}
-                    />
-                  </Panel>
-                  <Panel title="Top tools" className="xl:col-span-2">
-                    <HBars
-                      rows={stats.byTool.map((t) => ({
-                        label: t.tool,
-                        value: t.count,
-                        sub: `${t.count}× · ${ms(t.p95Ms)} p95${t.errors ? ` · ${t.errors} err` : ""}`,
-                        color: t.errors ? "var(--destructive)" : undefined,
-                      }))}
-                    />
-                  </Panel>
-                  <Panel title="Status">
-                    <RiskDonut
-                      centerLabel="calls"
-                      segments={[
-                        { label: "ok", value: feedStatus.ok, color: "var(--muted-foreground)" },
-                        { label: "error", value: feedStatus.error, color: "var(--destructive)" },
-                      ]}
-                    />
-                  </Panel>
-                  <Panel title="By device">
-                    {stats.byDevice.length ? (
-                      <HBars
-                        rows={stats.byDevice.map((d) => ({ label: d.device, value: d.count }))}
-                      />
+          {helpOpen.has(view) && <HelpPanel view={view} />}
+          <PageBoundary key={view}>
+            <DashboardRefresh
+              enabled={["overview", "devices", "feed"].includes(view)}
+              disabled={view === "feed" && paused}
+              onRefresh={refreshDashboard}
+            >
+              {/* ── Overview ── */}
+              {view === "overview" && (
+                <section className="grid content-start gap-[18px]">
+                  <div className="overview-metrics reveal grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
+                    {stats ? (
+                      <>
+                        <StatCard k="Calls (window)" v={num(stats.total)} />
+                        <StatCard k="Calls / min" v={stats.callsPerMin.toFixed(1)} />
+                        <StatCard
+                          k="Error rate"
+                          v={`${(stats.errorRate * 100).toFixed(1)}%`}
+                          sub={`${stats.errors} err`}
+                          cls={errCls}
+                        />
+                        <StatCard k="Avg latency" v={ms(stats.latency.avg)} />
+                        <StatCard k="p95 latency" v={ms(stats.latency.p95)} />
+                        <StatCard k="p99 latency" v={ms(stats.latency.p99)} />
+                        <StatCard k="Distinct tools" v={num(stats.distinctTools)} />
+                        <StatCard k="Output volume" v={bytes(stats.outputBytes)} />
+                      </>
                     ) : (
-                      <div className="text-muted-foreground text-[11px]">single device</div>
+                      <StatCard k="Loading…" v="—" />
                     )}
-                  </Panel>
-                  <Panel title="Recent errors">
-                    {feedErrors.length ? (
-                      <div className="flex flex-col gap-2">
-                        {feedErrors.slice(0, 8).map((e) => (
-                          <div
-                            className="hover:bg-accent/50 grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-md px-1 py-0.5"
-                            key={e.id}
-                            onClick={() => void openDetail(e)}
+                  </div>
+
+                  <div className="reveal grid grid-cols-1 gap-4 xl:grid-cols-3">
+                    <Panel title="Calls over time" className="xl:col-span-2">
+                      {stats ? (
+                        <ActivityChart series={stats.series} />
+                      ) : (
+                        <div className="text-muted-foreground text-[11px]">no data</div>
+                      )}
+                    </Panel>
+                    {stats && (
+                      <>
+                        <Panel title="By risk">
+                          <RiskDonut
+                            segments={(Object.keys(stats.byRisk) as Risk[]).map((r) => ({
+                              label: r,
+                              value: stats.byRisk[r],
+                              color: RISK_COLOR[r],
+                            }))}
+                          />
+                        </Panel>
+                        <Panel title="Top tools" className="xl:col-span-2">
+                          <HBars
+                            rows={stats.byTool.map((t) => ({
+                              label: t.tool,
+                              value: t.count,
+                              sub: `${t.count}× · ${ms(t.p95Ms)} p95${t.errors ? ` · ${t.errors} err` : ""}`,
+                              color: t.errors ? "var(--destructive)" : undefined,
+                            }))}
+                          />
+                        </Panel>
+                        <Panel title="Status">
+                          <RiskDonut
+                            centerLabel="calls"
+                            segments={[
+                              {
+                                label: "ok",
+                                value: feedStatus.ok,
+                                color: "var(--muted-foreground)",
+                              },
+                              {
+                                label: "error",
+                                value: feedStatus.error,
+                                color: "var(--destructive)",
+                              },
+                            ]}
+                          />
+                        </Panel>
+                        <Panel title="By device">
+                          {stats.byDevice.length ? (
+                            <HBars
+                              rows={stats.byDevice.map((d) => ({
+                                label: d.device,
+                                value: d.count,
+                              }))}
+                            />
+                          ) : (
+                            <div className="text-muted-foreground text-[11px]">single device</div>
+                          )}
+                        </Panel>
+                        <Panel title="Recent errors">
+                          {feedErrors.length ? (
+                            <div className="flex flex-col gap-2">
+                              {feedErrors.slice(0, 8).map((e) => (
+                                <div
+                                  className="hover:bg-accent/50 grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-md px-1 py-0.5"
+                                  key={e.id}
+                                  onClick={() => void openDetail(e)}
+                                >
+                                  <span className="text-muted-foreground text-[11px]">
+                                    {clock(e.ts)}
+                                  </span>
+                                  <span
+                                    className="text-destructive min-w-0 truncate text-xs"
+                                    title={e.error ?? e.output}
+                                  >
+                                    {e.tool}: {e.error ?? e.output ?? "error"}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-muted-foreground text-[11px]">no errors 🎉</div>
+                          )}
+                        </Panel>
+                      </>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* ── Devices ── */}
+              {view === "devices" &&
+                (devices && devices.devices.length > 0 ? (
+                  <section className="grid content-start gap-[18px]">
+                    {/* search + status filter — keeps a large fleet navigable */}
+                    <div className="reveal flex flex-wrap items-center gap-2">
+                      <Input
+                        className="min-w-[180px] flex-1"
+                        type="search"
+                        placeholder="Search devices by name or address…"
+                        value={deviceQuery}
+                        onChange={(e) => setDeviceQuery(e.target.value)}
+                      />
+                      <div className="bg-muted flex gap-0.5 rounded-md p-0.5">
+                        {(["all", "online", "offline"] as const).map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            className={cn(
+                              "rounded-sm px-2.5 py-1 text-xs transition-colors",
+                              deviceFilter === f
+                                ? "bg-background text-foreground shadow-xs"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                            onClick={() => setDeviceFilter(f)}
                           >
-                            <span className="text-muted-foreground text-[11px]">{clock(e.ts)}</span>
-                            <span
-                              className="text-destructive min-w-0 truncate text-xs"
-                              title={e.error ?? e.output}
-                            >
-                              {e.tool}: {e.error ?? e.output ?? "error"}
-                            </span>
-                          </div>
+                            {f === "all"
+                              ? `All ${deviceCounts.total}`
+                              : f === "online"
+                                ? `Online ${deviceCounts.online}`
+                                : `Offline ${deviceCounts.offline}`}
+                          </button>
                         ))}
                       </div>
-                    ) : (
-                      <div className="text-muted-foreground text-[11px]">no errors 🎉</div>
-                    )}
-                  </Panel>
-                </>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* ── Devices ── */}
-        {view === "devices" &&
-          (devices && devices.devices.length > 0 ? (
-            <section className="grid content-start gap-[18px]">
-              {/* search + status filter — keeps a large fleet navigable */}
-              <div className="reveal flex flex-wrap items-center gap-2">
-                <Input
-                  className="min-w-[180px] flex-1"
-                  type="search"
-                  placeholder="Search devices by name or address…"
-                  value={deviceQuery}
-                  onChange={(e) => setDeviceQuery(e.target.value)}
-                />
-                <div className="bg-muted flex gap-0.5 rounded-md p-0.5">
-                  {(["all", "online", "offline"] as const).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      className={cn(
-                        "rounded-sm px-2.5 py-1 text-xs transition-colors",
-                        deviceFilter === f
-                          ? "bg-background text-foreground shadow-xs"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                      onClick={() => setDeviceFilter(f)}
-                    >
-                      {f === "all"
-                        ? `All ${deviceCounts.total}`
-                        : f === "online"
-                          ? `Online ${deviceCounts.online}`
-                          : `Offline ${deviceCounts.offline}`}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-muted-foreground text-[11px]">
-                  {shownDevices.length}/{deviceCounts.total} shown
-                </span>
-              </div>
-
-              {/* connectivity radar — collapsible so it doesn't dominate a big fleet */}
-              <details
-                className="bg-card reveal rounded-lg border p-4"
-                open={deviceCounts.total <= 8}
-              >
-                <summary className="cursor-pointer text-sm font-medium">
-                  Connectivity radar
-                  <span className="text-muted-foreground text-[11px]">
-                    {" "}
-                    · {deviceCounts.online} online · {deviceCounts.offline} offline ·{" "}
-                    {deviceCounts.total} total
-                  </span>
-                </summary>
-                <ConnectivityGraph payload={devices} pulses={pulses} />
-              </details>
-
-              {/* SSH connection pool panel */}
-              <SSHPoolPanel devices={shownDevices} poolPayload={sshPool} />
-
-              {/* responsive device grid (filtered) */}
-              {shownDevices.length === 0 ? (
-                <EmptyState
-                  className="reveal"
-                  icon={<Search className="size-6" />}
-                  title="No devices match"
-                  sub="Try a different search or status filter."
-                />
-              ) : (
-                <div className="reveal grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4">
-                  {shownDevices.map((d) => (
-                    <DeviceCard
-                      key={d.name}
-                      d={d}
-                      allNames={devices.devices.map((x) => x.name)}
-                      capabilities={capabilities[d.name] ?? null}
-                      onToggle={toggleDevice}
-                      onTest={testDevice}
-                      onReconnect={reconnectDevice}
-                      onProbeCapabilities={probeCapabilities}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* system health (filtered) */}
-              {shownDevices.length > 0 && (
-                <Panel
-                  title="Device system health"
-                  className="reveal"
-                  extra={
-                    <span className="text-muted-foreground text-[11px]">
-                      CPU · memory · disk · latency · live probe
-                    </span>
-                  }
-                >
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] gap-3">
-                    {shownDevices.map((d) => (
-                      <DeviceHealthCard key={d.name} d={d} />
-                    ))}
-                  </div>
-                </Panel>
-              )}
-            </section>
-          ) : (
-            <EmptyState
-              icon={<Network className="size-6" />}
-              title="No devices configured"
-              body={
-                <Note type="secondary" label="Tip">
-                  Add a device to your config to see connectivity and system health here.
-                </Note>
-              }
-            />
-          ))}
-
-        {/* ── Clients ── */}
-        {view === "clients" && <ClientsView />}
-        {view === "investigations" && <InvestigationsView />}
-        {view === "service-contracts" && <ServiceContractsView />}
-        {view === "round-trip" && <RoundTripView />}
-
-        {/* ── RADIUS & User Manager ── */}
-        {view === "aaa" && <AaaView />}
-
-        {/* ── Topology ── */}
-        {view === "topology" &&
-          (topology && topology.nodes.length > 0 ? (
-            // The map brings its own toolbar, HUD and inspector, so it gets the
-            // page rather than sitting inside a Panel's second frame.
-            <section className="reveal grid content-start gap-[18px]">
-              <TopologyMap
-                topo={topology}
-                onOnboard={(name, body) => {
-                  setSeed({ name, body });
-                  setEditingConfig(true);
-                  setView("config");
-                }}
-              />
-            </section>
-          ) : (
-            <EmptyState
-              icon={<Radar className="size-6" />}
-              title="No neighbours discovered yet"
-              sub="Layer-2 neighbours (MNDP / CDP / LLDP) appear here as the device reports them."
-            />
-          ))}
-
-        {/* ── Packets ── */}
-        {view === "packets" && (
-          <section className="grid content-start gap-[18px]">
-            <Panel
-              title="Packet capture"
-              className="reveal"
-              extra={
-                <span className="text-muted-foreground text-[11px]">
-                  live TZSP decode · /tool sniffer streaming
-                </span>
-              }
-            >
-              <PacketCapture />
-            </Panel>
-          </section>
-        )}
-
-        {/* ── Snapshots ── */}
-        {view === "snapshots" && <SnapshotsView />}
-
-        {/* ── Drift Guard ── */}
-        {view === "drift" && <DriftView />}
-
-        {/* ── L2 Fabric: hosts by physical port ── */}
-        {view === "fabric" && <FabricView />}
-
-        {/* ── Known vulnerabilities ── */}
-        {view === "vulns" && <AdvisoryView />}
-
-        {/* ── Caller access scope ── */}
-        {view === "access" && <AccessView />}
-
-        {/* ── Policies ── */}
-        {view === "policies" && <PoliciesView />}
-
-        {/* ── Simulator ── */}
-        {view === "simulator" && <SimulatorView />}
-
-        {/* ── Scheduled audits ── */}
-        {view === "schedules" && <SchedulesView />}
-
-        {/* ── Config narrative ── */}
-        {view === "explain" && <ExplainView />}
-
-        {/* ── Attack detection ── */}
-        {view === "attacks" && <AttacksView />}
-
-        {/* ── Flows ── */}
-        {view === "flows" && <FlowsView />}
-        {view === "txn" && <TransactionsView />}
-
-        {/* ── Change Plan ── */}
-        {view === "plan" && <ChangePlanView />}
-
-        {/* ── S3 Backups ── */}
-        {view === "s3" && <S3Manage />}
-
-        {/* ── Local Backups ── */}
-        {view === "backups" && <BackupsView />}
-
-        {/* ── Tool Modules ── */}
-        {view === "modules" && <ModulesView />}
-
-        {/* ── Config ── */}
-        {view === "config" &&
-          (config ? (
-            <section className="grid content-start gap-[18px]">
-              <Panel
-                title="Configuration"
-                className="reveal"
-                extra={
-                  <span className="flex items-center gap-1.5">
-                    <Button
-                      size="sm"
-                      ghost
-                      onClick={() => setGuideOpen(true)}
-                      title="Every config option, documented from the schema"
-                      icon={<BookOpen />}
-                    >
-                      Field guide
-                    </Button>
-                    <Button
-                      size="sm"
-                      ghost
-                      onClick={() => setEditingConfig((v) => !v)}
-                      title="Edit the config JSON with autocomplete, validation and safe-apply"
-                      icon={editingConfig ? undefined : <Pencil />}
-                    >
-                      {editingConfig ? "View" : "Edit config"}
-                    </Button>
-                  </span>
-                }
-              >
-                {editingConfig ? (
-                  <ConfigEditor
-                    key={seed ? `seed-${seed.name}` : "config"}
-                    initial={
-                      seed
-                        ? {
-                            ...config,
-                            devices: {
-                              ...(config.devices as Record<string, unknown>),
-                              [seed.name]: seed.body,
-                            },
-                          }
-                        : config
-                    }
-                    onClose={() => {
-                      setEditingConfig(false);
-                      setSeed(null);
-                    }}
-                    onReload={() => {
-                      setSeed(null);
-                      void api<Record<string, unknown>>("/api/config")
-                        .then(setConfig)
-                        .catch(() => {});
-                    }}
-                  />
-                ) : (
-                  <>
-                    <div className="text-muted-foreground mb-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-                      <span>transport: {sval(mcp.transport)}</span>
-                      <span>read-only: {config.readOnly ? "yes" : "no"}</span>
-                      <span>
-                        dashboard: {sval(dash.host)}:{sval(dash.port)}
+                      <span className="text-muted-foreground text-[11px]">
+                        {shownDevices.length}/{deviceCounts.total} shown
                       </span>
-                      <span>capture: {dash.captureBody ? "on" : "off"}</span>
-                      <span>s3: {config.s3 ? "configured" : "off"}</span>
-                      <span>ssh pool: {ssh.keepAlive !== false ? "on" : "off"}</span>
-                      <span>alerts: {config.alerts ? "on" : "off"}</span>
-                      <span>attacks: {attacks.enabled ? sval(attacks.mode) : "off"}</span>
-                      <span>schedules: {schedules.enabled ? "on" : "off"}</span>
-                      <span>flows: {flows.enabled ? `udp/${sval(flows.port)}` : "off"}</span>
                     </div>
-                    <details>
-                      <summary className="cursor-pointer text-sm">
-                        Full effective configuration (secrets redacted)
+
+                    {/* connectivity radar — collapsible so it doesn't dominate a big fleet */}
+                    <details
+                      className="bg-card reveal rounded-lg border p-4"
+                      open={deviceCounts.total <= 8}
+                    >
+                      <summary className="cursor-pointer text-sm font-medium">
+                        Connectivity radar
+                        <span className="text-muted-foreground text-[11px]">
+                          {" "}
+                          · {deviceCounts.online} online · {deviceCounts.offline} offline ·{" "}
+                          {deviceCounts.total} total
+                        </span>
                       </summary>
-                      <JsonView value={config} maxHeight={340} />
+                      <ConnectivityGraph payload={devices} pulses={pulses} />
                     </details>
-                  </>
-                )}
-              </Panel>
 
-              <Panel
-                title="Dashboard preferences"
-                className="reveal"
-                extra={
-                  <span className="text-muted-foreground text-[11px]">
-                    saved to <code>dashboard.feedLimit</code> in the config
-                  </span>
-                }
-              >
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex min-w-0 flex-col">
-                    {/* The Select carries its own aria-label; this is a caption. */}
-                    <Label className="text-[12.5px]">Live Feed rows</Label>
-                    <span className="text-muted-foreground text-[11px]">
-                      How many matching calls the feed table renders. Up to {num(FEED_CAP)} are kept
-                      in memory regardless; this only bounds what is drawn.
-                    </span>
-                  </div>
-                  <span className="flex-1" />
-                  <Select
-                    size="sm"
-                    aria-label="Live Feed rows"
-                    value={String(feedLimit)}
-                    onValueChange={(v) => void setFeedLimit(Number(v))}
-                    options={FEED_LIMITS.map((n) => ({
-                      value: String(n),
-                      label: `${num(n)} rows${n === DEFAULT_FEED_LIMIT ? " (default)" : ""}`,
-                    }))}
+                    {/* SSH connection pool panel */}
+                    <SSHPoolPanel devices={shownDevices} poolPayload={sshPool} />
+
+                    {/* responsive device grid (filtered) */}
+                    {shownDevices.length === 0 ? (
+                      <EmptyState
+                        className="reveal"
+                        icon={<Search className="size-6" />}
+                        title="No devices match"
+                        sub="Try a different search or status filter."
+                      />
+                    ) : (
+                      <div className="reveal grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4">
+                        {shownDevices.map((d) => (
+                          <DeviceCard
+                            key={d.name}
+                            d={d}
+                            allNames={devices.devices.map((x) => x.name)}
+                            capabilities={capabilities[d.name] ?? null}
+                            onToggle={toggleDevice}
+                            onTest={testDevice}
+                            onReconnect={reconnectDevice}
+                            onProbeCapabilities={probeCapabilities}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* system health (filtered) */}
+                    {shownDevices.length > 0 && (
+                      <Panel
+                        title="Device system health"
+                        className="reveal"
+                        extra={
+                          <span className="text-muted-foreground text-[11px]">
+                            CPU · memory · disk · latency · live probe
+                          </span>
+                        }
+                      >
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] gap-3">
+                          {shownDevices.map((d) => (
+                            <DeviceHealthCard key={d.name} d={d} />
+                          ))}
+                        </div>
+                      </Panel>
+                    )}
+                  </section>
+                ) : (
+                  <EmptyState
+                    icon={<Network className="size-6" />}
+                    title="No devices configured"
+                    body={
+                      <Note type="secondary" label="Tip">
+                        Add a device to your config to see connectivity and system health here.
+                      </Note>
+                    }
                   />
-                </div>
-              </Panel>
+                ))}
 
-              <Panel
-                title="Version history"
-                className="reveal"
-                extra={
-                  <span className="text-muted-foreground text-[11px]">
-                    point-in-time snapshots · diff &amp; restore
-                  </span>
-                }
-              >
-                <ConfigHistoryPanel
-                  onRestored={() =>
-                    void api<Record<string, unknown>>("/api/config")
-                      .then(setConfig)
-                      .catch(() => {})
-                  }
-                />
-              </Panel>
+              {/* ── Clients ── */}
+              {view === "clients" && <ClientsView />}
+              {view === "investigations" && <InvestigationsView />}
+              {view === "service-contracts" && <ServiceContractsView />}
+              {view === "round-trip" && <RoundTripView />}
 
-              {guideOpen && (
-                <Sheet
-                  title="📖 Field guide"
-                  subtitle="Every config option, documented from the schema"
-                  onClose={() => setGuideOpen(false)}
-                >
-                  <FieldGuidePanel />
-                </Sheet>
-              )}
-            </section>
-          ) : (
-            <EmptyState icon={<Spinner />} title="Loading configuration…" />
-          ))}
+              {/* ── RADIUS & User Manager ── */}
+              {view === "aaa" && <AaaView />}
 
-        {/* ── Memory ── */}
-        {view === "memory" && <MemoryView />}
-        {view === "alerts" && <AlertsView />}
+              {/* ── Topology ── */}
+              {view === "topology" &&
+                (topology && topology.nodes.length > 0 ? (
+                  // The map brings its own toolbar, HUD and inspector, so it gets the
+                  // page rather than sitting inside a Panel's second frame.
+                  <section className="reveal grid content-start gap-[18px]">
+                    <TopologyMap
+                      topo={topology}
+                      onOnboard={(name, body) => {
+                        setSeed({ name, body });
+                        setEditingConfig(true);
+                        setView("config");
+                      }}
+                    />
+                  </section>
+                ) : (
+                  <EmptyState
+                    icon={<Radar className="size-6" />}
+                    title="No neighbours discovered yet"
+                    sub="Layer-2 neighbours (MNDP / CDP / LLDP) appear here as the device reports them."
+                  />
+                ))}
 
-        {/* ── Releases & Updates ── */}
-        {view === "releases" && <ReleasesView />}
-
-        {/* ── CAPsMAN Wi-Fi fabric ── */}
-        {view === "capsman" && <CapsmanView />}
-
-        {/* ── Live Feed ── */}
-        {view === "feed" && (
-          <Panel
-            className="reveal"
-            title="Live tool calls"
-            extra={
-              <span className="text-muted-foreground text-[11px]">
-                {num(shownRows.length)} shown
-                {visible.length > shownRows.length && ` of ${num(visible.length)} matching`} ·{" "}
-                {num(feed.length)} buffered
-              </span>
-            }
-          >
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Input
-                className="min-w-[180px] flex-1"
-                type="search"
-                placeholder="Search tool / input / output / error…"
-                value={filter.q}
-                onChange={(e) => setFilter((f) => ({ ...f, q: e.target.value }))}
-              />
-              {sel("tool", "all tools", meta?.tools ?? [])}
-              {sel("risk", "all risk", [
-                "READ",
-                "WRITE",
-                "WRITE_IDEMPOTENT",
-                "DESTRUCTIVE",
-                "DANGEROUS",
-              ])}
-              {sel("device", "all devices", meta?.devices ?? [])}
-              {sel("status", "all status", ["ok", "error"])}
-              {/* time window selector lives in the Overview header */}
-              <Button
-                size="sm"
-                ghost
-                type={paused ? "accent" : "default"}
-                onClick={() => setPaused((p) => !p)}
-                icon={paused ? <Play /> : <Pause />}
-              >
-                {paused ? "Resume" : "Pause"}
-              </Button>
-              <Button
-                size="sm"
-                ghost
-                onClick={() => exportRows("csv")}
-                title={
-                  selectedIds.size
-                    ? `Export ${selectedIds.size} selected row${selectedIds.size === 1 ? "" : "s"} as CSV`
-                    : "Export all visible rows as CSV"
-                }
-              >
-                CSV{selectedIds.size ? ` (${selectedIds.size})` : ""}
-              </Button>
-              <Button
-                size="sm"
-                ghost
-                onClick={() => exportRows("json")}
-                title={
-                  selectedIds.size
-                    ? `Export ${selectedIds.size} selected row${selectedIds.size === 1 ? "" : "s"} as JSON`
-                    : "Export all visible rows as JSON"
-                }
-              >
-                JSON{selectedIds.size ? ` (${selectedIds.size})` : ""}
-              </Button>
-              <Button
-                size="sm"
-                ghost
-                onClick={() => setFilter({ tool: "", risk: "", device: "", status: "", q: "" })}
-              >
-                Clear
-              </Button>
-              {confirmingDelete && selectedIds.size > 0 ? (
-                <>
-                  <Button
-                    size="sm"
-                    type="error"
-                    onClick={() => void deleteSelected()}
-                    icon={<Check />}
+              {/* ── Packets ── */}
+              {view === "packets" && (
+                <section className="grid content-start gap-[18px]">
+                  <Panel
+                    title="Packet capture"
+                    className="reveal"
+                    extra={
+                      <span className="text-muted-foreground text-[11px]">
+                        live TZSP decode · /tool sniffer streaming
+                      </span>
+                    }
                   >
-                    Confirm delete ({selectedIds.size})
-                  </Button>
-                  <Button size="sm" ghost onClick={() => setConfirmingDelete(false)}>
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  size="sm"
-                  ghost
-                  disabled={selectedIds.size === 0}
-                  onClick={() => setConfirmingDelete(true)}
-                  title="Delete the selected rows"
-                  icon={<Trash2 />}
-                >
-                  Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-                </Button>
+                    <PacketCapture />
+                  </Panel>
+                </section>
               )}
-            </div>
-            {visible.length === 0 ? (
-              hasFilters ? (
-                <EmptyState
-                  icon={<Search className="size-6" />}
-                  title="No calls match your filters"
-                  sub={`${feed.length} call${feed.length === 1 ? "" : "s"} buffered — try widening the search or the risk / device / status filters.`}
-                  body={
-                    <Button
-                      size="sm"
-                      ghost
-                      className="mt-2"
-                      onClick={() =>
-                        setFilter({ tool: "", risk: "", device: "", status: "", q: "" })
+
+              {/* ── Snapshots ── */}
+              {view === "snapshots" && <SnapshotsView />}
+
+              {/* ── Drift Guard ── */}
+              {view === "drift" && <DriftView />}
+
+              {/* ── L2 Fabric: hosts by physical port ── */}
+              {view === "fabric" && <FabricView />}
+
+              {/* ── Known vulnerabilities ── */}
+              {view === "vulns" && <AdvisoryView />}
+
+              {/* ── Caller access scope ── */}
+              {view === "access" && <AccessView />}
+
+              {/* ── Policies ── */}
+              {view === "policies" && <PoliciesView />}
+
+              {/* ── Simulator ── */}
+              {view === "simulator" && <SimulatorView />}
+
+              {/* ── Scheduled audits ── */}
+              {view === "schedules" && <SchedulesView />}
+
+              {/* ── Config narrative ── */}
+              {view === "explain" && <ExplainView />}
+
+              {/* ── Attack detection ── */}
+              {view === "attacks" && <AttacksView />}
+
+              {/* ── Flows ── */}
+              {view === "flows" && <FlowsView />}
+              {view === "txn" && <TransactionsView />}
+
+              {/* ── Change Plan ── */}
+              {view === "plan" && <ChangePlanView />}
+
+              {/* ── S3 Backups ── */}
+              {view === "s3" && <S3Manage />}
+
+              {/* ── Local Backups ── */}
+              {view === "backups" && <BackupsView />}
+
+              {/* ── Tool Modules ── */}
+              {view === "modules" && <ModulesView />}
+
+              {/* ── Config ── */}
+              {view === "config" &&
+                (config ? (
+                  <section className="grid content-start gap-[18px]">
+                    <Panel
+                      title="Configuration"
+                      className="reveal"
+                      extra={
+                        <span className="flex items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            ghost
+                            onClick={() => setGuideOpen(true)}
+                            title="Every config option, documented from the schema"
+                            icon={<BookOpen />}
+                          >
+                            Field guide
+                          </Button>
+                          <Button
+                            size="sm"
+                            ghost
+                            onClick={() => setEditingConfig((v) => !v)}
+                            title="Edit the config JSON with autocomplete, validation and safe-apply"
+                            icon={editingConfig ? undefined : <Pencil />}
+                          >
+                            {editingConfig ? "View" : "Edit config"}
+                          </Button>
+                        </span>
                       }
                     >
-                      Clear filters
-                    </Button>
-                  }
-                />
-              ) : (
-                <EmptyState
-                  icon={
-                    <Dot
-                      type={liveMode === "off" ? "secondary" : "success"}
-                      pulse={liveMode !== "off"}
-                      className="size-3"
-                    />
-                  }
-                  title={liveMode === "off" ? "Not connected" : "Listening for tool calls…"}
-                  sub={
-                    liveMode === "off"
-                      ? "The live stream is offline — it will reconnect automatically."
-                      : "Tool calls the LLM makes against this server stream in here in real time."
-                  }
-                />
-              )
-            ) : (
-              <div className="max-h-[60vh] overflow-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-7">
-                        <Checkbox
-                          aria-label="Select all shown rows"
-                          // Radix models the tri-state directly, so the old
-                          // `ref.indeterminate` DOM poke is no longer needed.
-                          checked={
-                            allShownSelected ? true : someShownSelected ? "indeterminate" : false
+                      {editingConfig ? (
+                        <ConfigEditor
+                          key={seed ? `seed-${seed.name}` : "config"}
+                          initial={
+                            seed
+                              ? {
+                                  ...config,
+                                  devices: {
+                                    ...(config.devices as Record<string, unknown>),
+                                    [seed.name]: seed.body,
+                                  },
+                                }
+                              : config
                           }
-                          onCheckedChange={toggleSelectAll}
+                          onClose={() => {
+                            setEditingConfig(false);
+                            setSeed(null);
+                          }}
+                          onReload={() => {
+                            setSeed(null);
+                            void api<Record<string, unknown>>("/api/config")
+                              .then(setConfig)
+                              .catch(() => {});
+                          }}
                         />
-                      </TableHead>
-                      <TableHead>time</TableHead>
-                      <TableHead>tool</TableHead>
-                      <TableHead>risk</TableHead>
-                      <TableHead>device</TableHead>
-                      <TableHead className="text-right">dur</TableHead>
-                      <TableHead>status</TableHead>
-                      <TableHead>output</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {shownRows.map((e) => (
-                      <TableRow
-                        key={e.id}
-                        data-state={selectedIds.has(e.id) ? "selected" : undefined}
-                        className={cn("cursor-pointer", e.isError && "bg-destructive/8")}
-                        onClick={() => void openDetail(e)}
-                      >
-                        <TableCell onClick={(ev) => ev.stopPropagation()}>
-                          <Checkbox
-                            aria-label="Select row (Shift-click to select a range)"
-                            checked={selectedIds.has(e.id)}
-                            onPointerDown={(ev) => {
-                              shiftHeldRef.current = ev.shiftKey;
-                            }}
-                            onCheckedChange={() => selectRow(e.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="tabular-nums">{clock(e.ts)}</TableCell>
-                        <TableCell>{e.tool}</TableCell>
-                        <TableCell>
-                          <span
-                            className={cn(
-                              "rounded-full border px-1.5 py-0.5 text-[10px]",
-                              RISK_CLASS[e.risk],
-                            )}
-                          >
-                            {e.risk.replace("WRITE_IDEMPOTENT", "WRITE·I")}
-                          </span>
-                        </TableCell>
-                        <TableCell>{e.device ?? "—"}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {ms(e.durationMs)}
-                        </TableCell>
-                        <TableCell>
-                          <span
-                            className={e.isError ? "text-destructive" : "text-muted-foreground"}
-                          >
-                            {e.isError ? "error" : "ok"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground max-w-[24rem] truncate">
-                          {e.isError ? (
-                            (e.error ?? "error")
-                          ) : e.reason ? (
-                            <span className="italic">{e.reason}</span>
-                          ) : (
-                            e.output || "—"
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </Panel>
-        )}
-      </main>
+                      ) : (
+                        <>
+                          <div className="text-muted-foreground mb-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                            <span>transport: {sval(mcp.transport)}</span>
+                            <span>read-only: {config.readOnly ? "yes" : "no"}</span>
+                            <span>
+                              dashboard: {sval(dash.host)}:{sval(dash.port)}
+                            </span>
+                            <span>capture: {dash.captureBody ? "on" : "off"}</span>
+                            <span>s3: {config.s3 ? "configured" : "off"}</span>
+                            <span>ssh pool: {ssh.keepAlive !== false ? "on" : "off"}</span>
+                            <span>alerts: {config.alerts ? "on" : "off"}</span>
+                            <span>attacks: {attacks.enabled ? sval(attacks.mode) : "off"}</span>
+                            <span>schedules: {schedules.enabled ? "on" : "off"}</span>
+                            <span>flows: {flows.enabled ? `udp/${sval(flows.port)}` : "off"}</span>
+                          </div>
+                          <details>
+                            <summary className="cursor-pointer text-sm">
+                              Full effective configuration (secrets redacted)
+                            </summary>
+                            <JsonView value={config} maxHeight={340} />
+                          </details>
+                        </>
+                      )}
+                    </Panel>
 
-      {whatsNew.showModal && whatsNew.release && (
-        <WhatsNewModal release={whatsNew.release} onDismiss={whatsNew.dismissRelease} />
-      )}
-      {selected && <DetailDrawer event={selected} onClose={() => setSelected(null)} />}
-      <Toaster />
-    </div>
+                    <Panel
+                      title="Dashboard preferences"
+                      className="reveal"
+                      extra={
+                        <span className="text-muted-foreground text-[11px]">
+                          saved to <code>dashboard.feedLimit</code> in the config
+                        </span>
+                      }
+                    >
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex min-w-0 flex-col">
+                          {/* The Select carries its own aria-label; this is a caption. */}
+                          <Label className="text-[12.5px]">Live Feed rows</Label>
+                          <span className="text-muted-foreground text-[11px]">
+                            How many matching calls the feed table renders. Up to {num(FEED_CAP)}{" "}
+                            are kept in memory regardless; this only bounds what is drawn.
+                          </span>
+                        </div>
+                        <span className="flex-1" />
+                        <Select
+                          size="sm"
+                          aria-label="Live Feed rows"
+                          value={String(feedLimit)}
+                          onValueChange={(v) => void setFeedLimit(Number(v))}
+                          options={FEED_LIMITS.map((n) => ({
+                            value: String(n),
+                            label: `${num(n)} rows${n === DEFAULT_FEED_LIMIT ? " (default)" : ""}`,
+                          }))}
+                        />
+                      </div>
+                    </Panel>
+
+                    <Panel
+                      title="Version history"
+                      className="reveal"
+                      extra={
+                        <span className="text-muted-foreground text-[11px]">
+                          point-in-time snapshots · diff &amp; restore
+                        </span>
+                      }
+                    >
+                      <ConfigHistoryPanel
+                        onRestored={() =>
+                          void api<Record<string, unknown>>("/api/config")
+                            .then(setConfig)
+                            .catch(() => {})
+                        }
+                      />
+                    </Panel>
+
+                    {guideOpen && (
+                      <Sheet
+                        title="📖 Field guide"
+                        subtitle="Every config option, documented from the schema"
+                        onClose={() => setGuideOpen(false)}
+                      >
+                        <FieldGuidePanel />
+                      </Sheet>
+                    )}
+                  </section>
+                ) : (
+                  <EmptyState icon={<Spinner />} title="Loading configuration…" />
+                ))}
+
+              {/* ── Memory ── */}
+              {view === "memory" && <MemoryView />}
+              {view === "alerts" && <AlertsView />}
+
+              {/* ── Releases & Updates ── */}
+              {view === "releases" && <ReleasesView />}
+
+              {/* ── CAPsMAN Wi-Fi fabric ── */}
+              {view === "capsman" && <CapsmanView />}
+
+              {/* ── Live Feed ── */}
+              {view === "feed" && (
+                <Panel
+                  className="reveal"
+                  title="Live tool calls"
+                  extra={
+                    <span className="text-muted-foreground text-[11px]">
+                      {num(shownRows.length)} shown
+                      {visible.length > shownRows.length &&
+                        ` of ${num(visible.length)} matching`} ·{" "}
+                      {num(feed.length)} buffered
+                    </span>
+                  }
+                >
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <Input
+                      className="min-w-[180px] flex-1"
+                      type="search"
+                      placeholder="Search tool / input / output / error…"
+                      value={filter.q}
+                      onChange={(e) => setFilter((f) => ({ ...f, q: e.target.value }))}
+                    />
+                    {sel("tool", "all tools", meta?.tools ?? [])}
+                    {sel("risk", "all risk", [
+                      "READ",
+                      "WRITE",
+                      "WRITE_IDEMPOTENT",
+                      "DESTRUCTIVE",
+                      "DANGEROUS",
+                    ])}
+                    {sel("device", "all devices", meta?.devices ?? [])}
+                    {sel("status", "all status", ["ok", "error"])}
+                    <FeedActions
+                      paused={paused}
+                      count={selectedIds.size}
+                      onPause={() => setPaused((p) => !p)}
+                      onExport={exportRows}
+                      onClear={() =>
+                        setFilter({ tool: "", risk: "", device: "", status: "", q: "" })
+                      }
+                      onDelete={() => setConfirmingDelete(true)}
+                    />
+                    {confirmingDelete && selectedIds.size > 0 ? (
+                      <>
+                        <Button
+                          size="sm"
+                          type="error"
+                          onClick={() => void deleteSelected()}
+                          icon={<Check />}
+                        >
+                          Confirm delete ({selectedIds.size})
+                        </Button>
+                        <Button size="sm" ghost onClick={() => setConfirmingDelete(false)}>
+                          Cancel
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                  {visible.length === 0 ? (
+                    hasFilters ? (
+                      <EmptyState
+                        icon={<Search className="size-6" />}
+                        title="No calls match your filters"
+                        sub={`${feed.length} call${feed.length === 1 ? "" : "s"} buffered — try widening the search or the risk / device / status filters.`}
+                        body={
+                          <Button
+                            size="sm"
+                            ghost
+                            className="mt-2"
+                            onClick={() =>
+                              setFilter({ tool: "", risk: "", device: "", status: "", q: "" })
+                            }
+                          >
+                            Clear filters
+                          </Button>
+                        }
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={
+                          <Dot
+                            type={liveMode === "off" ? "secondary" : "success"}
+                            pulse={liveMode !== "off"}
+                            className="size-3"
+                          />
+                        }
+                        title={liveMode === "off" ? "Not connected" : "Listening for tool calls…"}
+                        sub={
+                          liveMode === "off"
+                            ? "The live stream is offline — it will reconnect automatically."
+                            : "Tool calls the LLM makes against this server stream in here in real time."
+                        }
+                      />
+                    )
+                  ) : (
+                    <div className="max-h-[60vh] overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-7">
+                              <Checkbox
+                                aria-label="Select all shown rows"
+                                // Radix models the tri-state directly, so the old
+                                // `ref.indeterminate` DOM poke is no longer needed.
+                                checked={
+                                  allShownSelected
+                                    ? true
+                                    : someShownSelected
+                                      ? "indeterminate"
+                                      : false
+                                }
+                                onCheckedChange={toggleSelectAll}
+                              />
+                            </TableHead>
+                            <TableHead>time</TableHead>
+                            <TableHead>tool</TableHead>
+                            <TableHead>risk</TableHead>
+                            <TableHead>device</TableHead>
+                            <TableHead className="text-right">dur</TableHead>
+                            <TableHead>status</TableHead>
+                            <TableHead>output</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {shownRows.map((e) => (
+                            <TableRow
+                              key={e.id}
+                              data-state={selectedIds.has(e.id) ? "selected" : undefined}
+                              className={cn("cursor-pointer", e.isError && "bg-destructive/8")}
+                              onClick={() => void openDetail(e)}
+                            >
+                              <TableCell onClick={(ev) => ev.stopPropagation()}>
+                                <Checkbox
+                                  aria-label="Select row (Shift-click to select a range)"
+                                  checked={selectedIds.has(e.id)}
+                                  onPointerDown={(ev) => {
+                                    shiftHeldRef.current = ev.shiftKey;
+                                  }}
+                                  onCheckedChange={() => selectRow(e.id)}
+                                />
+                              </TableCell>
+                              <TableCell className="tabular-nums">{clock(e.ts)}</TableCell>
+                              <TableCell>{e.tool}</TableCell>
+                              <TableCell>
+                                <AnimatedBadge
+                                  size="sm"
+                                  showIcon={false}
+                                  pulse={false}
+                                  status={
+                                    e.risk === "READ"
+                                      ? "success"
+                                      : e.risk === "DANGEROUS"
+                                        ? "danger"
+                                        : e.risk === "DESTRUCTIVE"
+                                          ? "warning"
+                                          : "info"
+                                  }
+                                  className={cn("h-5 px-1.5 text-[10px]", RISK_CLASS[e.risk])}
+                                >
+                                  {e.risk.replace("WRITE_IDEMPOTENT", "WRITE·I")}
+                                </AnimatedBadge>
+                              </TableCell>
+                              <TableCell>{e.device ?? "—"}</TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {ms(e.durationMs)}
+                              </TableCell>
+                              <TableCell>
+                                <AnimatedBadge
+                                  size="sm"
+                                  pulse={false}
+                                  status={e.isError ? "danger" : "success"}
+                                  className="h-5 px-1.5 text-[10px]"
+                                >
+                                  {e.isError ? "error" : "ok"}
+                                </AnimatedBadge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground max-w-[24rem] truncate">
+                                {e.isError ? (
+                                  (e.error ?? "error")
+                                ) : e.reason ? (
+                                  <span className="italic">{e.reason}</span>
+                                ) : (
+                                  e.output || "—"
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </Panel>
+              )}
+            </DashboardRefresh>
+          </PageBoundary>
+        </main>
+
+        <OperationsIsland
+          mode={liveMode}
+          paused={paused}
+          liveEvent={lastLiveEvent}
+          liveEventAt={lastLiveEventAt}
+          events={feed}
+          stats={stats}
+          statsAt={statsAt}
+          devices={devices}
+          pool={sshPool}
+          poolAt={poolAt}
+          alerts={firingCount}
+          alertsAt={alertsAt}
+          onNavigate={setView}
+          onEvent={(event) => void openDetail(event)}
+        />
+        {whatsNew.showModal && whatsNew.release && (
+          <WhatsNewModal release={whatsNew.release} onDismiss={whatsNew.dismissRelease} />
+        )}
+        {selected && <DetailDrawer event={selected} onClose={() => setSelected(null)} />}
+        <Toaster />
+      </div>
+    </AnimatedSidebarProvider>
   );
 }
 

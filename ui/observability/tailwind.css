@@ -4,17 +4,15 @@
  * Unlike the in-chat MCP App views (which inherit the host's tokens via
  * `ui/shared/base.css`), the dashboard is a standalone localhost page and owns
  * its full design system: Preflight, the shadcn token vocabulary, both colour
- * schemes, and one monospace voice for headings and data alike.
+ * schemes, readable interface typography, and monospace for technical data.
  *
  * Two token families live here and they mean different things:
  *
  *   --accent  is shadcn's MUTED HOVER SURFACE (`hover:bg-accent`). It is NOT a
  *             brand colour. An earlier revision aliased it to the bright
  *             per-view accent, which lights up every hover state.
- *   --brand   is the per-view accent (nav, focus ring, chart series). It is set
- *             inline on `.main[data-view]` as `--page-accent` from `VIEW_ACCENT`
- *             in `main.tsx`, and falls back to the foreground so a view that
- *             declares no accent stays monochrome.
+ *   --brand   is the signal-blue identity (nav, focus ring, chart series),
+ *             separate from success/warning/error semantics.
  */
 /* Must precede every other rule: `@import url()` is only legal at the top of a
    stylesheet. Kept in CSS (not an index.html <link>) because the build inliner
@@ -24,40 +22,42 @@
 @import "tw-animate-css";
 /* SVG geometry, filters and @keyframes that utilities cannot express. */
 @import "./viz.css";
+@import "./dashboard-shell.css";
 
 /* shadcn's dark variant keys off a `.dark` class on <html>, set by main.tsx. */
 @custom-variant dark (&:is(.dark *));
 
 /* ── Light ────────────────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
+  --background: #f1f5fa;
+  --foreground: #172b46;
   --card: #ffffff;
-  --card-foreground: #0a0a0a;
+  --card-foreground: #172b46;
   --popover: #ffffff;
-  --popover-foreground: #0a0a0a;
-  /* Geist's inverted primary: a near-black solid button on light. */
-  --primary: #0a0a0a;
-  --primary-foreground: #fafafa;
-  --secondary: #f4f4f5;
-  --secondary-foreground: #0a0a0a;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --accent: #f4f4f5;
-  --accent-foreground: #0a0a0a;
+  --popover-foreground: #172b46;
+  --primary: #245bd6;
+  --primary-foreground: #ffffff;
+  --secondary: #e8eef7;
+  --secondary-foreground: #172b46;
+  --muted: #eaf0f7;
+  --muted-foreground: #5c6e86;
+  --accent: #e7eefb;
+  --accent-foreground: #172b46;
   --destructive: #e5484d;
   --destructive-foreground: #ffffff;
   --success: #18794e;
   --warning: #ab6400;
-  --border: #e4e4e7;
-  --input: #e4e4e7;
-  --radius: 0.5rem;
+  --border: #d8e1ed;
+  --input: #c8d4e4;
+  --radius: 0.65rem;
+  --shell-sidebar: #f8fafd;
+  --shell-selected: #e5edfc;
+  --shell-shadow: 0 3px 12px #233f6310, 0 1px 2px #233f6308;
 
-  /* Per-view accent, overridden inline on `.main[data-view]`. */
-  --page-accent: var(--foreground);
-  --page-accent-2: var(--muted-foreground);
+  --page-accent: #245bd6;
+  --page-accent-2: #427db3;
   --brand: var(--page-accent);
-  --brand-foreground: var(--background);
+  --brand-foreground: #ffffff;
   --ring: var(--brand);
 
   /* Data-visualisation palette, shared by recharts and the SVG views. */
@@ -87,26 +87,32 @@
 
 /* ── Dark (the dashboard's historical default) ────────────────────────────── */
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --card: #111111;
-  --card-foreground: #ededed;
-  --popover: #111111;
-  --popover-foreground: #ededed;
-  --primary: #ededed;
-  --primary-foreground: #0a0a0a;
-  --secondary: #1a1a1a;
-  --secondary-foreground: #ededed;
-  --muted: #1a1a1a;
-  --muted-foreground: #a1a1a1;
-  --accent: #1a1a1a;
-  --accent-foreground: #ededed;
+  --background: #0d1422;
+  --foreground: #e6edf8;
+  --card: #141e30;
+  --card-foreground: #e6edf8;
+  --popover: #1a263b;
+  --popover-foreground: #e6edf8;
+  --primary: #94b9ff;
+  --primary-foreground: #101e35;
+  --secondary: #1e2c42;
+  --secondary-foreground: #e6edf8;
+  --muted: #1c293e;
+  --muted-foreground: #9daec5;
+  --accent: #23344f;
+  --accent-foreground: #e6edf8;
   --destructive: #ff5c5c;
   --destructive-foreground: #ffffff;
   --success: #2dd4a7;
   --warning: #f5a623;
-  --border: #2a2a2a;
-  --input: #2a2a2a;
+  --border: #2a3951;
+  --input: #3b4e6b;
+  --page-accent: #94b9ff;
+  --page-accent-2: #81c5d7;
+  --brand-foreground: #101e35;
+  --shell-sidebar: #111a2b;
+  --shell-selected: #223858;
+  --shell-shadow: 0 4px 18px #02081624, 0 1px 0 #ffffff04 inset;
 
   /* Geist's vibrant series, legible on near-black. */
   --chart-1: #3291ff;
@@ -162,7 +168,7 @@
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
-  --font-sans: var(--font-mt);
+  --font-sans: "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: var(--font-mt);
 }
 
@@ -176,7 +182,20 @@
   }
 
   body {
-    @apply bg-background text-foreground font-mono antialiased;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-mt);
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
 }
 
