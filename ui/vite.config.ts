@@ -1,6 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
+import { REPORT_VIEW_TOOLS } from "../src/core/report-views";
 
 /**
  * Build config for the MCP App views (run via `vp build -c ui/vite.config.ts`,
@@ -28,6 +29,9 @@ const ALL_VIEWS: Record<string, string> = {
   "firewall-audit": resolve(here, "firewall-audit/index.html"),
   "connected-devices": resolve(here, "connected-devices/index.html"),
   aaa: resolve(here, "aaa/index.html"),
+  ...Object.fromEntries(
+    Object.keys(REPORT_VIEW_TOOLS).map((id) => [id, resolve(here, `${id}/index.html`)]),
+  ),
 };
 
 // When MCP_VIEW is set, build only that view as a single-entry build so

@@ -208,11 +208,13 @@ function render(): void {
 // ── bridge ──────────────────────────────────────────────────────────────────
 const app = new App({ name: "mikrotik-dashboard", version: "1.0.0" });
 
-function adopt(structured: unknown): void {
+function adopt(structured: unknown): boolean {
   if (structured && typeof structured === "object" && "device" in structured) {
     current = structured as Dashboard;
     render();
+    return true;
   }
+  return false;
 }
 
 async function refresh(): Promise<void> {
@@ -230,13 +232,6 @@ async function refresh(): Promise<void> {
   }
 }
 
-app.ontoolresult = (result) => {
-  console.warn("[dashboard] ontoolresult", result);
-  adopt((result as { structuredContent?: unknown }).structuredContent);
-};
-app.ontoolinput = () => {
-  if (!current) render();
-};
 app.onhostcontextchanged = (ctx) => {
   if (ctx.theme) applyDocumentTheme(ctx.theme);
   if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
@@ -250,4 +245,4 @@ app.onteardown = async () => ({});
 
 applyDocumentTheme(getDocumentTheme());
 render();
-void connectApp(app, "dashboard", root);
+void connectApp(app, "dashboard", root, adopt);

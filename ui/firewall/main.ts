@@ -186,7 +186,7 @@ function render(): void {
 
 const app = new App({ name: "mikrotik-firewall", version: "1.0.0" });
 
-function adopt(structured: unknown): void {
+function adopt(structured: unknown): boolean {
   if (
     structured &&
     typeof structured === "object" &&
@@ -194,7 +194,9 @@ function adopt(structured: unknown): void {
   ) {
     view = structured as FirewallView;
     render();
+    return true;
   }
+  return false;
 }
 
 async function refresh(): Promise<void> {
@@ -212,12 +214,8 @@ async function refresh(): Promise<void> {
   }
 }
 
-app.ontoolresult = (result) => adopt((result as { structuredContent?: unknown }).structuredContent);
-app.ontoolinput = () => {
-  if (!view) render();
-};
 wireHostContext(app);
 app.onteardown = async () => ({});
 
 render();
-void connectApp(app, "firewall", root);
+void connectApp(app, "firewall", root, adopt);

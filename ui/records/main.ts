@@ -303,7 +303,7 @@ function render(): void {
 // ── bridge ──────────────────────────────────────────────────────────────────
 const app = new App({ name: "mikrotik-records", version: "1.0.0" });
 
-function adopt(structured: unknown): void {
+function adopt(structured: unknown): boolean {
   if (
     structured &&
     typeof structured === "object" &&
@@ -312,7 +312,9 @@ function adopt(structured: unknown): void {
     view = structured as RecordsView;
     selected = null;
     render();
+    return true;
   }
+  return false;
 }
 
 async function refresh(): Promise<void> {
@@ -340,10 +342,6 @@ function setAuto(ms: number): void {
   render();
 }
 
-app.ontoolresult = (result) => {
-  console.warn("[records] ontoolresult", result);
-  adopt((result as { structuredContent?: unknown }).structuredContent);
-};
 app.ontoolinput = (input) => {
   // Remember the arguments so Refresh re-runs the same query.
   if (input && typeof input === "object" && "arguments" in input) {
@@ -352,7 +350,6 @@ app.ontoolinput = (input) => {
       unknown
     >;
   }
-  if (!view) render();
 };
 wireHostContext(app);
 app.onteardown = async () => {
@@ -361,4 +358,4 @@ app.onteardown = async () => {
 };
 
 render();
-void connectApp(app, "records", root);
+void connectApp(app, "records", root, adopt);

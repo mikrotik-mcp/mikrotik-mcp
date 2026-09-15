@@ -139,6 +139,55 @@ describe("defineTool — UI-enabled tools", () => {
 describe("defineTool — auto records view for read tools", () => {
   const recordsUri = uiViewUri("records");
 
+  it("delivers empty, textual, custom and failed results through the real SDK", async () => {
+    const server = new McpServer({ name: "result-test", version: "1.0.0" });
+    const client = new Client({ name: "result-client", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const handlers = {
+      list_empty_probe: () => "",
+      get_text_probe: () => "No matching records.",
+      get_custom_probe: () => ({ text: "Custom summary", structuredContent: { custom: true } }),
+      get_error_probe: () => {
+        throw new Error("SSH timeout");
+      },
+    };
+    for (const [name, handler] of Object.entries(handlers)) {
+      defineTool({
+        name,
+        title: name,
+        description: "offline probe",
+        annotations: READ,
+        handler,
+      }).register(server);
+    }
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+      const { tools } = await client.listTools();
+      expect(tools.every((t) => t.outputSchema && t._meta?.ui)).toBe(true);
+      const empty = await client.callTool({ name: "list_empty_probe", arguments: {} });
+      expect(empty.isError).not.toBe(true);
+      expect(empty.structuredContent).toMatchObject({
+        __mikrotikView: "records",
+        rows: [],
+        raw: "",
+      });
+      const text = await client.callTool({ name: "get_text_probe", arguments: {} });
+      expect(text.structuredContent).toMatchObject({
+        __mikrotikView: "records",
+        raw: "No matching records.",
+      });
+      const custom = await client.callTool({ name: "get_custom_probe", arguments: {} });
+      expect(custom.structuredContent).toEqual({ custom: true });
+      const error = await client.callTool({ name: "get_error_probe", arguments: {} });
+      expect(error.isError).toBe(true);
+      expect(error.content).toContainEqual({ type: "text", text: "Error: SSH timeout" });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("attaches the records view + structuredContent to a list_* read tool", async () => {
     const tool = defineTool({
       name: "list_widgets",
@@ -231,7 +280,7 @@ describe("UI view registry", () => {
   });
 
   it("builds a stable ui:// uri from a view id", () => {
-    expect(uiViewUri("dashboard")).toBe("ui://mikrotik/dashboard.html");
+    expect(uiViewUri("dashboard")).toBe("ui://mikrotik/dashboard.html?v=2");
   });
 
   it("has at least one view with unique ids", () => {

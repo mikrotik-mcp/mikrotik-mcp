@@ -37,7 +37,8 @@ export const OPENAI_OUTPUT_TEMPLATE_KEY = "openai/outputTemplate";
  * `node:fs` + the ext-apps server). `ui-resources` re-exports this.
  */
 export function uiViewUri(id: string): string {
-  return `ui://mikrotik/${id}.html`;
+  // Host caches key on the resource URI. Revise when the HTML/data contract changes.
+  return `ui://mikrotik/${id}.html?v=2`;
 }
 
 /** Links a tool to an MCP App view resource. */

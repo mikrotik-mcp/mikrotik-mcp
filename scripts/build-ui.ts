@@ -18,6 +18,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { PROJECT_ROOT } from "../src/paths";
+import { REPORT_VIEW_TOOLS } from "../src/core/report-views";
 
 const log = (msg: string): void => void process.stdout.write(`${msg}\n`);
 
@@ -33,6 +34,7 @@ const MCP_VIEWS = [
   "firewall-audit",
   "connected-devices",
   "aaa",
+  ...Object.keys(REPORT_VIEW_TOOLS),
 ];
 
 /** Inline `<script src>` / `<link rel=stylesheet>` referenced by an HTML file. */

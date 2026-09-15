@@ -80,6 +80,41 @@ export const UI_VIEWS: UiView[] = [
       "Full RADIUS client + built-in User Manager RADIUS server management: servers, users, " +
       "profiles, limitations, NAS clients, assignments, sessions and settings, with add/edit/remove.",
   },
+  {
+    id: "investigations",
+    name: "MikroTik Client Investigations",
+    description:
+      "Client attachment, router-scoped evidence, exported flow interfaces and unresolved visibility gaps.",
+  },
+  {
+    id: "round-trip",
+    name: "MikroTik Round-trip Lab",
+    description:
+      "Forward and return snapshot paths with named interfaces, modelled boundaries and unknown hops. Not live packet proof.",
+  },
+  {
+    id: "service-health",
+    name: "MikroTik Service Health",
+    description:
+      "Approved endpoint checks, contract definitions and historical PASS/FAIL/UNKNOWN evidence from the MCP host.",
+  },
+  {
+    id: "fabric",
+    name: "MikroTik Layer-2 Fabric",
+    description: "Bridge-port occupancy, attached clients and inferred access/uplink roles.",
+  },
+  {
+    id: "operations",
+    name: "MikroTik Change Operations",
+    description:
+      "Read-only presentation of plans, transaction results, rollout progress, scope and drift. No apply/commit controls.",
+  },
+  {
+    id: "reports",
+    name: "MikroTik Evidence Reports",
+    description:
+      "Readable diagnostic, compliance, security, simulation and traffic reports with searchable evidence and JSON export.",
+  },
 ];
 
 /** Placeholder served when a view's HTML hasn't been built yet. */

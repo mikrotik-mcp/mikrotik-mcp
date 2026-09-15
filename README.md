@@ -46,6 +46,12 @@ Then just ask:
 
 ## Highlights
 
+- **MCP App workspaces** — 13 host-themed views, with dedicated investigation,
+  round-trip, service-health, L2 fabric, operations and report workspaces alongside
+  the existing device, interface, firewall and record views. Responsive grids,
+  named path interfaces, expandable evidence and colored JSON keep results readable
+  inside compatible MCP clients. New report views never execute or replay tools.
+  [View guide](docs/mcp-app-workspaces.md)
 - **Round-trip path lab** — model explicit forward/reverse static IPv4 paths across
   fresh snapshots, with per-hop evidence and declared asymmetry. NAT or unsupported
   state stops with UNKNOWN; modelled forwarding is not live connectivity.

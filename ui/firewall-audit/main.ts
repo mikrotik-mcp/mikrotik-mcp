@@ -193,7 +193,7 @@ function render(): void {
   root.replaceChildren(header, content, footer);
 }
 
-function adopt(structured: unknown): void {
+function adopt(structured: unknown): boolean {
   if (
     structured &&
     typeof structured === "object" &&
@@ -201,7 +201,9 @@ function adopt(structured: unknown): void {
   ) {
     view = structured as AuditView;
     render();
+    return true;
   }
+  return false;
 }
 
 async function refresh(): Promise<void> {
@@ -219,12 +221,8 @@ async function refresh(): Promise<void> {
   }
 }
 
-app.ontoolresult = (result) => adopt((result as { structuredContent?: unknown }).structuredContent);
-app.ontoolinput = () => {
-  if (!view) render();
-};
 wireHostContext(app);
 app.onteardown = async () => ({});
 
 render();
-void connectApp(app, "firewall-audit", root);
+void connectApp(app, "firewall-audit", root, adopt);

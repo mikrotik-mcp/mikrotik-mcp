@@ -538,7 +538,11 @@ function render(): void {
   });
 
   const children: Node[] = [
-    h("div", { class: "aaa-titlebar" }, h("div", { class: "aaa-title" }, "RADIUS & User Manager")),
+    h(
+      "header",
+      { class: "aaa-titlebar" },
+      h("h1", { class: "aaa-title" }, "RADIUS & User Manager"),
+    ),
     tabs,
   ];
   if (error) children.push(h("div", { class: "aaa-error" }, error));
@@ -586,14 +590,16 @@ function render(): void {
 }
 
 // ── bridge ────────────────────────────────────────────────────────────────────
-app.ontoolresult = (result) => {
-  const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent;
+function adopt(structured: unknown): boolean {
+  if (!structured || typeof structured !== "object") return false;
+  const sc = structured as Record<string, unknown>;
   if (sc?.__mikrotikView === "aaa-settings") adoptSettings(sc);
-  else adoptSection(sc);
+  else if (sc.__mikrotikView === "aaa-section") adoptSection(sc);
+  else return false;
   render();
-};
-app.ontoolinput = () => render();
+  return true;
+}
 wireHostContext(app);
 
 render();
-void connectApp(app, "aaa", root);
+void connectApp(app, "aaa", root, adopt);

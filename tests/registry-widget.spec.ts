@@ -1,12 +1,6 @@
 /**
- * Auto-records widget gating.
- *
- * Every `list_*`/`get_*`/`show_*`/`print_*` read tool may auto-attach the shared
- * "records" MCP App view. But attaching it to a NON-TABULAR read (a message like
- * "no PoE-out hardware", a "not found" reply, a single sentence) renders a blank
- * widget AND makes the host suppress the text answer ("rendered an interactive
- * widget"). The registry must only attach the widget when the output actually
- * parsed into rows; otherwise it returns plain text so the answer stays visible.
+ * Auto-records results must fulfil the advertised view contract, even when no
+ * rows were parsed. The host may already have loaded the view from tool metadata.
  */
 import { describe, expect, test } from "vite-plus/test";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -35,7 +29,7 @@ async function drive(tool: RegisterableTool, args: Record<string, unknown> = {})
 }
 
 describe("auto-records widget gating", () => {
-  test("a non-tabular read returns plain text, NOT a blank widget", async () => {
+  test("a non-tabular read supplies raw text to the already-advertised view", async () => {
     const tool = defineTool({
       name: "list_widget_probe_message",
       title: "Probe",
@@ -45,10 +39,28 @@ describe("auto-records widget gating", () => {
       handler: () => "PoE input is healthy on this board.",
     });
     const res = await drive(tool);
-    // No widget attached → the host shows the real text, not "rendered a widget".
-    expect(res.structuredContent).toBeUndefined();
+    expect(res.structuredContent).toMatchObject({
+      __mikrotikView: "records",
+      rows: [],
+      raw: "PoE input is healthy on this board.",
+    });
     expect(res.content[0]).toMatchObject({ type: "text" });
     expect((res.content[0] as { text: string }).text).toContain("PoE input is healthy");
+  });
+
+  test("an empty read supplies an explicit empty records payload", async () => {
+    const res = await drive(
+      defineTool({
+        name: "list_widget_probe_empty",
+        title: "Probe",
+        description: "probe",
+        annotations: READ,
+        inputSchema: {},
+        handler: () => "",
+      }),
+    );
+    expect(res.structuredContent).toMatchObject({ __mikrotikView: "records", rows: [], raw: "" });
+    expect(res.isError).not.toBe(true);
   });
 
   test("a tabular read still attaches the records widget", async () => {
@@ -84,9 +96,7 @@ describe("output schema on MCP App tools (matches the ext-apps examples)", () =>
     expect(cfg._meta).toBeDefined();
   });
 
-  test("the AUTO-records view does NOT declare an outputSchema", () => {
-    // It legitimately omits structuredContent for non-tabular reads, so a
-    // declared output schema would make the SDK throw.
+  test("the AUTO-records view declares an outputSchema", () => {
     const tool = defineTool({
       name: "list_probe_auto",
       title: "Probe",
@@ -96,7 +106,7 @@ describe("output schema on MCP App tools (matches the ext-apps examples)", () =>
       handler: () => "some rows",
     });
     const { cfg } = register(tool);
-    expect(cfg.outputSchema).toBeUndefined();
+    expect(cfg.outputSchema).toBeDefined();
     expect(cfg._meta).toBeDefined(); // still advertises the auto records ui
   });
 

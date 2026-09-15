@@ -9,6 +9,7 @@ import type { SendLog, ToolContext } from "./context";
 import { createContext } from "./context";
 import { containsRawParserError, indicatesFailure } from "./routeros";
 import { buildRecordsView } from "./routeros-parse";
+import { buildReportView, reportViewForTool, REPORT_VIEW_META } from "./report-views";
 import type { UiLink } from "./ui-meta";
 import { toolUiMeta, uiViewUri } from "./ui-meta";
 import type { DeviceDirectoryEntry } from "./runtime";
@@ -39,7 +40,7 @@ import { isRecording, recordToolCall } from "../observability/recorder";
 const AUTO_RECORDS_VERB = /^(list|get|show|print)_/;
 
 /**
- * Permissive output schema attached to EXPLICIT MCP App tools. The ext-apps
+ * Permissive output schema attached to MCP App tools. The ext-apps
  * examples always pair `_meta.ui` with an `outputSchema` so the host recognises
  * the tool as a structured-output widget and reliably delivers
  * `structuredContent` to the view. Our app-view payloads vary by tool, so this
@@ -58,6 +59,8 @@ function effectiveUi(def: { name: string; annotations: ToolAnnotations; ui?: UiL
   auto: boolean;
 } {
   if (def.ui) return { ui: def.ui, auto: false };
+  const report = reportViewForTool(def.name);
+  if (report) return { ui: { resourceUri: uiViewUri(report), visibility: ["model"] }, auto: true };
   if (def.annotations.readOnlyHint === true && AUTO_RECORDS_VERB.test(def.name)) {
     return { ui: { resourceUri: uiViewUri("records"), visibility: ["model", "app"] }, auto: true };
   }
@@ -514,18 +517,16 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           // handler's text so the table/detail view has data — unless the
           // handler already supplied its own `structuredContent`.
           //
-          // Only attach the widget when the output actually parsed into ROWS. A
-          // non-tabular read — e.g. a "no PoE-out hardware" message, a "not
-          // found" reply, or any single sentence — yields zero rows; rendering a
-          // blank records widget there makes the host show "rendered an
-          // interactive widget" and SUPPRESS the real text answer, so the user
-          // sees an empty table and the model loses the message. In that case we
-          // fall back to plain text (no widget) so the answer stays visible.
+          // The host may preload the advertised view before this result arrives.
+          // Omitting structuredContent does not unmount it. Empty/non-tabular
+          // results still need a payload: the records view displays its raw text
+          // or an explicit empty state. Preserve custom structured contracts.
           if (auto && !out.structuredContent) {
-            const view = buildRecordsView(def.name, def.title, out.text, new Date().toISOString());
-            if (view.rows.length > 0) {
-              out.structuredContent = view as unknown as Record<string, unknown>;
-            }
+            const report = reportViewForTool(def.name);
+            const view = report
+              ? buildReportView(report, def.name, def.title, deviceName, out.text)
+              : buildRecordsView(def.name, def.title, out.text, new Date().toISOString());
+            out.structuredContent = view as unknown as Record<string, unknown>;
           }
           const result: CallToolResult = {
             content: [{ type: "text", text: out.text }],
@@ -534,6 +535,21 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           if (out.structuredContent) {
             result.structuredContent = out.structuredContent;
             hasStructured = true;
+          }
+          const report = auto && reportViewForTool(def.name);
+          if (report && out.structuredContent?.__mikrotikView !== "report") {
+            // Preserve pre-existing structured API contracts (fabric/plans).
+            // Presentation metadata is available to the App, not added to model text.
+            result._meta = {
+              [REPORT_VIEW_META]: buildReportView(
+                report,
+                def.name,
+                def.title,
+                deviceName,
+                out.text,
+                out.structuredContent,
+              ),
+            };
           }
           if (deviceStamp) result.content.push({ type: "text", text: deviceStamp });
           return result;
@@ -603,13 +619,9 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           // for reads), advertise the `ui://` resource so the host can preload and
           // render it (Claude + ChatGPT compatible).
           ...(ui ? { _meta: toolUiMeta(ui) } : {}),
-          // Explicit app-view tools also declare an output schema (matching the
-          // ext-apps examples) so the host treats them as structured-output
-          // widgets. NOT applied to the auto-records view: that one omits
-          // `structuredContent` for non-tabular reads, and the SDK throws if an
-          // output schema is declared but a success result has no structured
-          // content.
-          ...(ui && !auto ? { outputSchema: UI_OUTPUT_SCHEMA } : {}),
+          // Auto-records reads now also supply structured output for every
+          // successful result, including empty rows and plain-text messages.
+          ...(ui ? { outputSchema: UI_OUTPUT_SCHEMA } : {}),
         },
         // The SDK derives the callback's arg type from `inputSchema`; our
         // dynamic registry erases that generic, so we assert the known-correct

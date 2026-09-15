@@ -169,7 +169,7 @@ function renderDetail(): void {
 }
 
 // ── server-tool actions ──────────────────────────────────────────────────────
-function adopt(structured: unknown): void {
+function adopt(structured: unknown): boolean {
   if (
     structured &&
     typeof structured === "object" &&
@@ -177,7 +177,9 @@ function adopt(structured: unknown): void {
   ) {
     view = structured as DevicesView;
     render();
+    return true;
   }
+  return false;
 }
 async function action(name: string, mac: string): Promise<void> {
   if (busy) return;
@@ -219,7 +221,7 @@ function render(): void {
   const head = h(
     "div",
     { class: "toolbar" },
-    h("div", { class: "title" }, "Connected Devices"),
+    h("h1", { class: "title" }, "Connected Devices"),
     h(
       "div",
       { class: "counts muted" },
@@ -287,13 +289,6 @@ function render(): void {
 }
 
 // ── bridge ───────────────────────────────────────────────────────────────────
-app.ontoolresult = (result) => {
-  console.warn("[connected-devices] ontoolresult", result);
-  adopt((result as { structuredContent?: unknown }).structuredContent);
-};
-app.ontoolinput = () => {
-  if (!view) render();
-};
 wireHostContext(app);
 app.onteardown = async () => {
   stopPolling();
@@ -302,7 +297,10 @@ app.onteardown = async () => {
 };
 
 render();
-void connectApp(app, "connected-devices", root).then((ok) => {
-  // Only start auto-refresh once the bridge is live.
-  if (ok) autoTimer = setInterval(() => void refresh(), 15000);
+void connectApp(app, "connected-devices", root, adopt).then((ok) => {
+  // Do not replay a cancelled/failed initial request or overwrite its feedback.
+  if (ok)
+    autoTimer = setInterval(() => {
+      if (view) void refresh();
+    }, 15000);
 });
