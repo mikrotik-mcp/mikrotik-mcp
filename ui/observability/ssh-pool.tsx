@@ -1,89 +1,17 @@
 import type { ReactNode } from "react";
-import { StatCard } from "./atoms";
-import { cn } from "@/lib/utils";
+import { Activity, Cable, ChevronDown, Clock3, Radio, Server } from "lucide-react";
+import { ms, num } from "./format";
 import type { DeviceInfo, SSHPoolPayload } from "./types";
 
-// ── helpers ─────────────────────────────────────────────────────────────────
-
-function ms(v: number): string {
-  return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`;
+function poolState(pool: DeviceInfo["pool"]): { state: string; label: string } {
+  if (!pool) return { state: "unknown", label: "Not reported" };
+  if (pool.dead) return { state: "offline", label: "Reconnecting" };
+  if (!pool.pooled) return { state: "unknown", label: "No connection" };
+  if (pool.inflight > 0) return { state: "busy", label: `${pool.inflight} active channels` };
+  return { state: "online", label: "Ready · idle" };
 }
 
-function poolColor(d: DeviceInfo["pool"]): string {
-  if (!d || !d.pooled) return "var(--muted-foreground)"; // disconnected
-  if (d.dead) return "var(--destructive)"; // dead
-  if (d.inflight > 0) return "var(--chart-1)"; // busy
-  return "var(--success)"; // idle/ready
-}
-
-function poolLabel(d: DeviceInfo["pool"]): string {
-  if (!d || !d.pooled) return "no connection";
-  if (d.dead) return "reconnecting";
-  if (d.inflight > 0) return `${d.inflight} inflight`;
-  return "ready";
-}
-
-// ── per-device pipe card ────────────────────────────────────────────────────
-
-function PoolDeviceCard({ device }: { device: DeviceInfo }): ReactNode {
-  const p = device.pool;
-  const variantCls =
-    !p || !p.pooled
-      ? "border-dashed opacity-60"
-      : p.dead
-        ? "border-destructive/50"
-        : p.inflight > 0
-          ? "border-chart-1/50"
-          : "border-success/35";
-  const busy = !!p && p.pooled && p.inflight > 0;
-  const col = poolColor(p);
-  // Fill width proportional to inflight: 0→8%, each channel adds ~15%, cap 100%.
-  const fillPct = !p || !p.pooled ? 0 : p.inflight > 0 ? Math.min(8 + p.inflight * 15, 100) : 100;
-  return (
-    <div
-      className={cn(
-        "bg-card rounded-lg border px-3 py-2.5 transition-colors hover:border-muted-foreground/40",
-        variantCls,
-      )}
-    >
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <span className="size-[7px] shrink-0 rounded-full" style={{ background: col }} />
-        <span className="text-foreground overflow-hidden text-xs font-semibold text-ellipsis whitespace-nowrap">
-          {device.name}
-        </span>
-        <span
-          className="ml-auto text-[10px] font-semibold tracking-[0.04em] uppercase"
-          style={{ color: col }}
-        >
-          {poolLabel(p)}
-        </span>
-      </div>
-      <div className="bg-muted relative h-1.5 overflow-hidden rounded-[3px]">
-        <div
-          className={cn(
-            "h-full rounded-[3px] opacity-65 transition-[width] duration-[400ms]",
-            busy && "animate-pulse",
-          )}
-          style={{ width: `${fillPct}%`, background: col }}
-        />
-        {p && p.pooled && p.inflight > 0 && (
-          <span className="text-foreground absolute -top-px right-1 text-[8px] leading-[8px] font-bold [text-shadow:0_0_3px_rgba(0,0,0,0.6)]">
-            {p.inflight} ch
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── aggregate stat cards ────────────────────────────────────────────────────
-
-function PoolStat({ k, v, sub }: { k: string; v: string; sub?: string }): ReactNode {
-  return <StatCard k={k} v={v} sub={sub} cls="min-w-[100px]" />;
-}
-
-// ── main panel ──────────────────────────────────────────────────────────────
-
+/** Fleet-wide management connections, not a router reachability or capacity meter. */
 export function SSHPoolPanel({
   devices,
   poolPayload,
@@ -91,55 +19,102 @@ export function SSHPoolPanel({
   devices: DeviceInfo[];
   poolPayload?: SSHPoolPayload | null;
 }): ReactNode {
-  // Only show SSH devices that have pool info
-  const sshDevices = devices.filter((d) => d.pool !== null && d.pool !== undefined);
-  const poolEnabled = poolPayload?.enabled ?? sshDevices.length > 0;
-
-  if (!poolEnabled && sshDevices.length === 0) {
-    return (
-      <details className="my-3" open>
-        <summary className="mb-2 cursor-pointer font-semibold">SSH Connection Pool</summary>
-        <p className="text-muted-foreground my-1 text-[13px]">
-          Connection pooling is disabled. Enable it with{" "}
-          <code className="text-chart-1 text-xs">--ssh-keep-alive true</code> or{" "}
-          <code className="text-chart-1 text-xs">MIKROTIK_SSH__KEEP_ALIVE=true</code> to keep
-          persistent SSH connections across tool calls.
-        </p>
-      </details>
-    );
-  }
-
   const agg = poolPayload?.aggregate;
   const cfg = poolPayload?.config;
-
+  const sshDevices = devices.filter((d) => !d.mac);
   return (
-    <details className="my-3" open>
-      <summary className="mb-2 cursor-pointer font-semibold">SSH Connection Pool</summary>
-
-      {/* aggregate stats row */}
-      {agg && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          <PoolStat k="Connections" v={String(agg.totalConnections)} />
-          <PoolStat k="Inflight" v={String(agg.totalInflight)} sub="channels" />
-          <PoolStat k="Idle" v={String(agg.totalIdle)} />
-          <PoolStat k="Busy" v={String(agg.totalBusy)} />
-          {cfg && (
-            <>
-              <PoolStat k="Keepalive" v={ms(cfg.keepAliveInterval)} />
-              <PoolStat k="Idle timeout" v={ms(cfg.idleTimeout)} />
-            </>
-          )}
-        </div>
-      )}
-
-      {/* per-device pipe grid */}
-      {sshDevices.length > 0 && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
-          {sshDevices.map((d) => (
-            <PoolDeviceCard key={d.name} device={d} />
-          ))}
-        </div>
-      )}
+    <details className="device-pool" open>
+      <summary>
+        <span className="device-pool__icon">
+          <Cable size={19} />
+        </span>
+        <span>
+          <strong>SSH Connection Pool</strong>
+          <small>Persistent management channels · entire fleet</small>
+        </span>
+        <span className="device-pool__state">
+          {poolPayload
+            ? poolPayload.enabled
+              ? "Pooling enabled"
+              : "Pooling disabled"
+            : "Status unavailable"}
+        </span>
+        <ChevronDown size={16} />
+      </summary>
+      <div className="device-pool__body">
+        {poolPayload?.enabled === false ? (
+          <p className="devices-caption">
+            Persistent pooling is disabled. Enable <code>--ssh-keep-alive true</code> or{" "}
+            <code>MIKROTIK_SSH__KEEP_ALIVE=true</code> in the server configuration to reuse SSH
+            connections.
+          </p>
+        ) : (
+          <>
+            <div className="device-pool__metrics">
+              <div className="device-pool__total">
+                <Server size={18} />
+                <strong>{agg ? num(agg.totalConnections) : "—"}</strong>
+                <span>open connections</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>
+                    <Activity size={13} /> In-flight channels
+                  </dt>
+                  <dd>{agg ? num(agg.totalInflight) : "—"}</dd>
+                </div>
+                <div>
+                  <dt>
+                    <Radio size={13} /> Busy connections
+                  </dt>
+                  <dd>{agg ? num(agg.totalBusy) : "—"}</dd>
+                </div>
+                <div>
+                  <dt>
+                    <Clock3 size={13} /> Idle connections
+                  </dt>
+                  <dd>{agg ? num(agg.totalIdle) : "—"}</dd>
+                </div>
+              </dl>
+            </div>
+            <div className="device-pool__connections">
+              {sshDevices.map((d) => {
+                const info = poolState(d.pool);
+                return (
+                  <div key={d.name} data-state={info.state}>
+                    <span className="device-pool__socket">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    <strong>{d.name}</strong>
+                    <span>{info.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {!poolPayload && (
+              <p className="devices-caption">
+                Pool totals have not loaded. Unreported connections are not assumed to be
+                disconnected.
+              </p>
+            )}
+          </>
+        )}
+        <footer>
+          <span>
+            {cfg ? (
+              <>
+                Keepalive <b>{ms(cfg.keepAliveInterval)}</b> <i /> Idle timeout{" "}
+                <b>{ms(cfg.idleTimeout)}</b>
+              </>
+            ) : (
+              "Connection timing not reported"
+            )}
+          </span>
+          <span>Pool state does not prove router health.</span>
+        </footer>
+      </div>
     </details>
   );
 }

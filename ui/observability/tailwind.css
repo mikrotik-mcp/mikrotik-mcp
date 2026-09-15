@@ -23,6 +23,7 @@
 /* SVG geometry, filters and @keyframes that utilities cannot express. */
 @import "./viz.css";
 @import "./dashboard-shell.css";
+@import "./devices.css";
 
 /* shadcn's dark variant keys off a `.dark` class on <html>, set by main.tsx. */
 @custom-variant dark (&:is(.dark *));

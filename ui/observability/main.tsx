@@ -21,7 +21,6 @@ import {
   ChevronRight,
   HelpCircle,
   Menu,
-  Network,
   Pencil,
   Radar,
   Search,
@@ -75,11 +74,10 @@ import { RoundTripView } from "./round-trip";
 import { PageBoundary } from "./page-boundary";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
 import { ConfigEditor } from "./config-editor";
-import { ConnectivityGraph, DeviceCard } from "./connectivity";
+import { DevicesView } from "./devices-view";
 import { DetailDrawer } from "./detail-drawer";
 import { bytes, clock, FEED_CAP, ms, num, RISK_CLASS, RISK_COLOR, sval, WINDOWS } from "./format";
-import { Button, Dot, Input, Note, Select, Spinner } from "./geist";
-import { DeviceHealthCard } from "./health";
+import { Button, Dot, Input, Select, Spinner } from "./geist";
 import { JsonView } from "./highlight";
 import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
@@ -102,7 +100,6 @@ import { SnapshotsView } from "./snapshots";
 import { TopologyMap } from "./topology";
 import { AdvisoryView, FabricView } from "./posture";
 import { AccessView } from "./access-view";
-import { SSHPoolPanel } from "./ssh-pool";
 import { useWhatsNew, WhatsNewModal } from "./whats-new";
 import type {
   CapabilitiesJson,
@@ -930,32 +927,6 @@ function App(): ReactNode {
       }
       return next;
     });
-  // Devices page: search + status filter so a large fleet stays navigable.
-  const [deviceQuery, setDeviceQuery] = useState("");
-  const [deviceFilter, setDeviceFilter] = useState<"all" | "online" | "offline">("all");
-  const deviceCounts = useMemo(() => {
-    const list = devices?.devices ?? [];
-    return {
-      online: list.filter((d) => d.status.reachable === true).length,
-      offline: list.filter((d) => d.status.reachable === false).length,
-      total: list.length,
-    };
-  }, [devices]);
-  const shownDevices = useMemo(() => {
-    const list = devices?.devices ?? [];
-    const q = deviceQuery.trim().toLowerCase();
-    return list.filter((d) => {
-      if (deviceFilter === "online" && d.status.reachable !== true) return false;
-      if (deviceFilter === "offline" && d.status.reachable !== false) return false;
-      if (
-        q &&
-        !d.name.toLowerCase().includes(q) &&
-        !(d.address ?? d.host ?? "").toLowerCase().includes(q)
-      )
-        return false;
-      return true;
-    });
-  }, [devices, deviceQuery, deviceFilter]);
 
   // Live stream → prepend to feed (unless paused) and pulse the device's link.
   useLiveStream(
@@ -1587,118 +1558,18 @@ function App(): ReactNode {
               )}
 
               {/* ── Devices ── */}
-              {view === "devices" &&
-                (devices && devices.devices.length > 0 ? (
-                  <section className="grid content-start gap-[18px]">
-                    {/* search + status filter — keeps a large fleet navigable */}
-                    <div className="reveal flex flex-wrap items-center gap-2">
-                      <Input
-                        className="min-w-[180px] flex-1"
-                        type="search"
-                        placeholder="Search devices by name or address…"
-                        value={deviceQuery}
-                        onChange={(e) => setDeviceQuery(e.target.value)}
-                      />
-                      <div className="bg-muted flex gap-0.5 rounded-md p-0.5">
-                        {(["all", "online", "offline"] as const).map((f) => (
-                          <button
-                            key={f}
-                            type="button"
-                            className={cn(
-                              "rounded-sm px-2.5 py-1 text-xs transition-colors",
-                              deviceFilter === f
-                                ? "bg-background text-foreground shadow-xs"
-                                : "text-muted-foreground hover:text-foreground",
-                            )}
-                            onClick={() => setDeviceFilter(f)}
-                          >
-                            {f === "all"
-                              ? `All ${deviceCounts.total}`
-                              : f === "online"
-                                ? `Online ${deviceCounts.online}`
-                                : `Offline ${deviceCounts.offline}`}
-                          </button>
-                        ))}
-                      </div>
-                      <span className="text-muted-foreground text-[11px]">
-                        {shownDevices.length}/{deviceCounts.total} shown
-                      </span>
-                    </div>
-
-                    {/* connectivity radar — collapsible so it doesn't dominate a big fleet */}
-                    <details
-                      className="bg-card reveal rounded-lg border p-4"
-                      open={deviceCounts.total <= 8}
-                    >
-                      <summary className="cursor-pointer text-sm font-medium">
-                        Connectivity radar
-                        <span className="text-muted-foreground text-[11px]">
-                          {" "}
-                          · {deviceCounts.online} online · {deviceCounts.offline} offline ·{" "}
-                          {deviceCounts.total} total
-                        </span>
-                      </summary>
-                      <ConnectivityGraph payload={devices} pulses={pulses} />
-                    </details>
-
-                    {/* SSH connection pool panel */}
-                    <SSHPoolPanel devices={shownDevices} poolPayload={sshPool} />
-
-                    {/* responsive device grid (filtered) */}
-                    {shownDevices.length === 0 ? (
-                      <EmptyState
-                        className="reveal"
-                        icon={<Search className="size-6" />}
-                        title="No devices match"
-                        sub="Try a different search or status filter."
-                      />
-                    ) : (
-                      <div className="reveal grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4">
-                        {shownDevices.map((d) => (
-                          <DeviceCard
-                            key={d.name}
-                            d={d}
-                            allNames={devices.devices.map((x) => x.name)}
-                            capabilities={capabilities[d.name] ?? null}
-                            onToggle={toggleDevice}
-                            onTest={testDevice}
-                            onReconnect={reconnectDevice}
-                            onProbeCapabilities={probeCapabilities}
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    {/* system health (filtered) */}
-                    {shownDevices.length > 0 && (
-                      <Panel
-                        title="Device system health"
-                        className="reveal"
-                        extra={
-                          <span className="text-muted-foreground text-[11px]">
-                            CPU · memory · disk · latency · live probe
-                          </span>
-                        }
-                      >
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] gap-3">
-                          {shownDevices.map((d) => (
-                            <DeviceHealthCard key={d.name} d={d} />
-                          ))}
-                        </div>
-                      </Panel>
-                    )}
-                  </section>
-                ) : (
-                  <EmptyState
-                    icon={<Network className="size-6" />}
-                    title="No devices configured"
-                    body={
-                      <Note type="secondary" label="Tip">
-                        Add a device to your config to see connectivity and system health here.
-                      </Note>
-                    }
-                  />
-                ))}
+              {view === "devices" && (
+                <DevicesView
+                  payload={devices}
+                  pulses={pulses}
+                  pool={sshPool}
+                  capabilities={capabilities}
+                  onToggle={toggleDevice}
+                  onTest={testDevice}
+                  onReconnect={reconnectDevice}
+                  onProbeCapabilities={probeCapabilities}
+                />
+              )}
 
               {/* ── Clients ── */}
               {view === "clients" && <ClientsView />}
