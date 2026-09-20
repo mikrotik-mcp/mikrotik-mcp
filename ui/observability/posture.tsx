@@ -11,6 +11,7 @@ import { AlertTriangle, Cable, Network, RefreshCw, ShieldCheck, ShieldOff } from
 import { api } from "./api";
 import { Panel } from "./atoms";
 import { Button, Select } from "./geist";
+import { Checkbox } from "./components/ui/checkbox";
 
 // ── Shared bits ──────────────────────────────────────────────────────────────
 
@@ -320,16 +321,20 @@ export function AdvisoryView(): ReactNode {
     <Panel
       title="Known vulnerabilities"
       extra={
-        <div className="flex items-center gap-3 text-xs">
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={fleet} onChange={(e) => setFleet(e.target.checked)} />
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <label className="flex cursor-pointer items-center gap-2">
+            <Checkbox
+              aria-label="whole fleet"
+              checked={fleet}
+              onCheckedChange={(checked) => setFleet(checked === true)}
+            />
             whole fleet
           </label>
-          <label className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
+          <label className="flex cursor-pointer items-center gap-2">
+            <Checkbox
+              aria-label="show mitigated"
               checked={showMitigated}
-              onChange={(e) => setShowMitigated(e.target.checked)}
+              onCheckedChange={(checked) => setShowMitigated(checked === true)}
             />
             show mitigated
           </label>
