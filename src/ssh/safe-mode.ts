@@ -18,10 +18,12 @@ import { resolveJump, sshOptionsOf } from "../core/transport";
 
 /** Matches RouterOS prompts in both normal and safe mode:
  *   [admin@MikroTik] >
- *   [admin@MikroTik] <SAFE> >
+ *   [admin@MikroTik] <SAFE>
+ * Older terminals may also append `>` after `<SAFE>`.
  */
 // eslint-disable-next-line regexp/no-super-linear-backtracking
-const PROMPT_RE = /\[.+?@.+?\] (?:<SAFE> )?> ?$/m;
+const PROMPT_RE =
+  /\[[^\r\n\]]+@[^\r\n\]]+\][ \t]+(?:\/[^\r\n<>]*[ \t]*)?(?:<SAFE>(?:[ \t]*>)?|>)[ \t]*$/;
 
 /** Strip ANSI/VT escape sequences RouterOS emits on interactive shells. */
 const ANSI_RE =
@@ -182,12 +184,13 @@ export class SafeModeManager {
         return `Error: Timed out waiting for MikroTik shell prompt. Got: ${JSON.stringify(initial.slice(0, 300))}`;
       }
 
-      this.channel.write(CTRL_X);
       // Wait specifically for the activation signal, not just any prompt: right
       // after Ctrl+X RouterOS can echo a redraw of the still-normal prompt
       // before the `<SAFE>` marker appears, which would otherwise be misread as
       // "did not activate". Fall back to the timeout buffer either way.
-      const response = (await this.readUntilPrompt(10_000, (c) => isSafeModeActivated(c))).text;
+      const activation = this.readUntilPrompt(10_000, (c) => isSafeModeActivated(c));
+      this.channel.write(CTRL_X);
+      const response = (await activation).text;
       // Activation is confirmed EITHER by the prompt switching to the `<SAFE>`
       // marker (the usual case) OR by RouterOS printing a textual confirmation
       // — some versions/terminal types emit "Taking Safe Mode session...
@@ -226,13 +229,14 @@ export class SafeModeManager {
       if (!this.active || !this.channel) {
         throw new Error("Safe mode session is not active.");
       }
+      const response = this.readUntilPrompt();
       this.channel.write(`${command}\n`);
-      const { text, timedOut } = await this.readUntilPrompt();
+      const { text, timedOut } = await response;
       if (timedOut) {
         throw new Error(
-          `Safe Mode shell went silent for ${IDLE_TIMEOUT_MS / 1000}s (command: ${command}). The ` +
-            "interactive session appears wedged — some RouterOS builds/terminals don't support Safe " +
-            "Mode over SSH. Apply the change with the direct write tools instead (verify each with a read).",
+          `Safe Mode command did not return a recognized prompt before the timeout (command: ${command}). ` +
+            "Execution may have occurred; do not retry the write blindly. Inspect the session " +
+            "and roll back if its state cannot be verified.",
         );
       }
       return this.extractOutput(text, command);
@@ -425,15 +429,16 @@ export class SafeModeManager {
   private async probeMode(): Promise<"safe" | "released" | "unknown"> {
     if (!this.channel) return "unknown";
     const token = "__MCP_SAFEMODE_PROBE__";
-    this.channel.write(`:put "${token}"\n`);
     // Settle only once the sentinel's OUTPUT is on screen AND a prompt follows
     // it — i.e. the command fully round-tripped at the current prompt.
-    const out = (
-      await this.readUntilPrompt(8_000, (cleaned) => {
-        const i = cleaned.lastIndexOf(token);
-        return i >= 0 && PROMPT_RE.test(cleaned.slice(i));
-      })
-    ).text;
+    const response = this.readUntilPrompt(8_000, (cleaned) => {
+      // Require a standalone OUTPUT line, not the token in the command echo.
+      const lines = cleaned.replace(/\r/g, "\n").split("\n");
+      const i = lines.findIndex((line) => line.trim() === token);
+      return i >= 0 && PROMPT_RE.test(lines.slice(i + 1).join("\n"));
+    });
+    this.channel.write(`:put "${token}"\n`);
+    const out = (await response).text;
     return classifyPrompt(out);
   }
 
@@ -447,6 +452,11 @@ export class SafeModeManager {
       if (!pastEcho) {
         if (stripped.includes(command.trim())) pastEcho = true;
         continue;
+      }
+      // RouterOS may echo once before CR and again on its redrawn prompt.
+      if (stripped.endsWith(command.trim())) {
+        const prefix = stripped.slice(0, -command.trim().length).trimEnd();
+        if (PROMPT_RE.test(prefix)) continue;
       }
       if (PROMPT_RE.test(stripped)) break;
       result.push(line);
