@@ -77,7 +77,7 @@ export function SnapshotsView(): ReactNode {
   }));
 
   return (
-    <section className="grid content-start gap-[18px]">
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-[18px] [&>*]:min-w-0">
       <Panel
         title="Config snapshots"
         className="reveal"
