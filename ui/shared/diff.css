@@ -1,0 +1,60 @@
+/* GitHub Primer diff-blob palette; independent of dashboard accent colours. */
+:root {
+  --diff-add-bg: #e6ffec;
+  --diff-del-bg: #ffebe9;
+  --diff-fg: #1f2328;
+  --diff-hunk-bg: #ddf4ff;
+  --diff-hunk-fg: #0969da;
+  --diff-canvas: #ffffff;
+  --diff-border: #d1d9e0;
+}
+:root.dark,
+:root[data-theme="dark"] {
+  --diff-add-bg: rgba(46, 160, 67, 0.15);
+  --diff-del-bg: rgba(248, 81, 73, 0.15);
+  --diff-fg: #e6edf3;
+  --diff-hunk-bg: #182638;
+  --diff-hunk-fg: #79c0ff;
+  --diff-canvas: #0d1117;
+  --diff-border: #30363d;
+}
+.github-diff {
+  margin: 0;
+  max-height: 500px;
+  overflow: auto;
+  border: 1px solid var(--diff-border);
+  border-radius: 8px;
+  background: var(--diff-canvas);
+  color: var(--diff-fg);
+  font:
+    12px/1.65 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  text-align: left;
+  direction: ltr;
+  white-space: pre;
+  tab-size: 4;
+}
+.github-diff-line {
+  padding: 0 12px;
+  min-height: 1.65em;
+  min-width: max-content;
+}
+.github-diff .diff-add {
+  background: var(--diff-add-bg);
+}
+.github-diff .diff-del {
+  background: var(--diff-del-bg);
+}
+.github-diff .diff-hunk {
+  background: var(--diff-hunk-bg);
+  color: var(--diff-hunk-fg);
+}
+.github-diff .diff-file {
+  font-weight: 600;
+}
+.github-diff:focus-visible {
+  outline: 2px solid var(--diff-hunk-fg);
+  outline-offset: 2px;
+}

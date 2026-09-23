@@ -1,3 +1,4 @@
+import { UnifiedDiff } from "./diff-view";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { History, RefreshCw, X } from "lucide-react";
@@ -153,24 +154,7 @@ export function SnapshotsView(): ReactNode {
             </span>
           }
         >
-          <pre className="m-0 max-h-80 overflow-auto rounded bg-background p-3 font-mono text-[11px] leading-normal text-muted-foreground">
-            {(diff.unified || "(identical)").split("\n").map((l, i) => (
-              <div
-                key={i}
-                className={
-                  l.startsWith("+")
-                    ? "text-success"
-                    : l.startsWith("-")
-                      ? "text-destructive"
-                      : l.startsWith("@@")
-                        ? "text-brand"
-                        : ""
-                }
-              >
-                {l || " "}
-              </div>
-            ))}
-          </pre>
+          <UnifiedDiff unified={diff.unified || ""} maxHeight={320} />
         </Panel>
       )}
 

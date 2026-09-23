@@ -1,3 +1,5 @@
+import { diffElement, isUnifiedDiff } from "../shared/diff";
+import "../shared/diff.css";
 /**
  * MikroTik Records Viewer — the generic MCP App view shared by every read tool
  * (`list_*` / `get_*` / `show_*` / `print_*`).
@@ -266,7 +268,9 @@ function results(v: RecordsView): HTMLElement {
   const rows = visibleRows(v);
   if (v.rows.length === 0) {
     return v.raw
-      ? h("pre", { class: "raw" }, v.raw)
+      ? isUnifiedDiff(v.raw)
+        ? diffElement(v.raw)
+        : h("pre", { class: "raw" }, v.raw)
       : h("div", { class: "empty" }, "No records returned.");
   }
   if (v.kind === "record" && v.rows.length === 1) return detailGrid(v.rows[0]);

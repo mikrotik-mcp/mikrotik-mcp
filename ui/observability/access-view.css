@@ -776,11 +776,18 @@
   font: 500 11px var(--font-mono);
 }
 .access-review-diff del {
-  color: var(--muted-foreground);
+  background: var(--diff-del-bg);
+  color: var(--diff-fg);
   text-decoration: none;
+}
+.access-review-diff span {
+  background: var(--diff-add-bg);
+  color: var(--diff-fg);
 }
 .access-review-diff span,
 .access-review-diff del {
+  padding: 4px 8px;
+  border-radius: 4px;
   overflow-wrap: anywhere;
 }
 .access-review-diff svg {

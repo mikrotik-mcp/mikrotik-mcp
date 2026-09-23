@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { UnifiedDiff } from "./diff-view";
 
 // ── JSON syntax highlighter ──────────────────────────────────────────────────
 // Tokenises pretty-printed JSON into coloured spans (keys / strings / numbers /
@@ -68,22 +68,14 @@ export function highlightDeviceOutput(text: string): ReactNode[] {
     const tok = m[0];
     // Semantic-token colours per RouterOS group (see ROS_TOKEN order above).
     let cls = "text-chart-1"; // number
-    if (m[1] !== undefined)
-      cls = "text-muted-foreground italic"; // comment
-    else if (m[2] !== undefined)
-      cls = "text-success"; // quoted string
-    else if (m[3] !== undefined)
-      cls = "text-chart-5"; // MAC
-    else if (m[4] !== undefined)
-      cls = "text-chart-2"; // IPv4 / CIDR
-    else if (m[5] !== undefined)
-      cls = "text-foreground"; // key
-    else if (m[6] !== undefined)
-      cls = "text-success font-medium"; // good status
-    else if (m[7] !== undefined)
-      cls = "text-destructive font-medium"; // bad status
-    else if (m[8] !== undefined)
-      cls = "text-warning"; // boolean
+    if (m[1] !== undefined) cls = "text-muted-foreground italic"; // comment
+    else if (m[2] !== undefined) cls = "text-success"; // quoted string
+    else if (m[3] !== undefined) cls = "text-chart-5"; // MAC
+    else if (m[4] !== undefined) cls = "text-chart-2"; // IPv4 / CIDR
+    else if (m[5] !== undefined) cls = "text-foreground"; // key
+    else if (m[6] !== undefined) cls = "text-success font-medium"; // good status
+    else if (m[7] !== undefined) cls = "text-destructive font-medium"; // bad status
+    else if (m[8] !== undefined) cls = "text-warning"; // boolean
     else if (m[9] !== undefined) cls = "text-muted-foreground"; // dim keyword
     parts.push(
       <span className={cls} key={i++}>
@@ -139,52 +131,6 @@ export function JsonView({ value, maxHeight }: { value: unknown; maxHeight?: num
   );
 }
 
-// ── Unified JSON diff ─────────────────────────────────────────────────────────
-
-/** The role of a unified-diff line, from its leading marker. */
-type DiffKind = "add" | "del" | "ctx" | "hunk" | "file";
-
-function diffKind(line: string): DiffKind {
-  // `---`/`+++` file headers are checked before `-`/`+` so they don't read as
-  // removed/added lines.
-  if (line.startsWith("+++") || line.startsWith("---")) return "file";
-  if (line.startsWith("@@")) return "hunk";
-  if (line.startsWith("+")) return "add";
-  if (line.startsWith("-")) return "del";
-  return "ctx";
-}
-
-/** Per-line row background (the diff signal). */
-const DIFF_ROW: Record<DiffKind, string> = {
-  add: "bg-success/10",
-  del: "bg-destructive/10",
-  hunk: "bg-muted/50",
-  file: "",
-  ctx: "",
-};
-
-/** Gutter marker colour. */
-const DIFF_GUTTER: Record<DiffKind, string> = {
-  add: "text-success",
-  del: "text-destructive",
-  hunk: "text-brand",
-  file: "text-muted-foreground",
-  ctx: "text-muted-foreground/50",
-};
-
-const DIFF_MARK: Record<DiffKind, string> = { add: "+", del: "−", ctx: "", hunk: "", file: "" };
-
-/**
- * Render a unified diff of JSON with BOTH colour dimensions: a per-line diff
- * signal (green for additions, red for removals, a muted band for hunk headers,
- * carried in the row background + a coloured gutter marker) AND the JSON syntax
- * colours from {@link highlightJson} on the line content — so keys, strings and
- * numbers still light up exactly as they do in the effective-config view.
- *
- * The diff signal lives in the gutter/background rather than the text colour, so
- * it never fights the JSON token colours: an added string is green-on-faint-green
- * with a green `+`, not a wash that hides the syntax.
- */
 export function JsonDiffView({
   unified,
   maxHeight,
@@ -192,34 +138,5 @@ export function JsonDiffView({
   unified: string;
   maxHeight?: number;
 }): ReactNode {
-  const lines = unified.replace(/\n+$/, "").split("\n");
-  return (
-    <pre
-      className="text-muted-foreground m-0 overflow-auto rounded border border-border bg-background py-2 font-mono text-[11px] leading-[1.6] break-words whitespace-pre-wrap"
-      style={maxHeight ? { maxHeight } : undefined}
-    >
-      {lines.map((line, i) => {
-        const kind = diffKind(line);
-        // Strip the one-char marker from add/del/context so the content is clean
-        // JSON; hunk/file headers are shown whole and not syntax-highlighted.
-        const structural = kind === "hunk" || kind === "file";
-        const body = kind === "add" || kind === "del" || kind === "ctx" ? line.slice(1) : line;
-        return (
-          <div key={i} className={cn("flex px-2", DIFF_ROW[kind])}>
-            <span className={cn("w-3 shrink-0 select-none text-center", DIFF_GUTTER[kind])}>
-              {DIFF_MARK[kind]}
-            </span>
-            <span
-              className={cn(
-                "min-w-0 flex-1 break-words whitespace-pre-wrap",
-                structural && "text-muted-foreground/80",
-              )}
-            >
-              {structural ? line : highlightJson(body)}
-            </span>
-          </div>
-        );
-      })}
-    </pre>
-  );
+  return <UnifiedDiff unified={unified} maxHeight={maxHeight} renderLine={highlightJson} />;
 }

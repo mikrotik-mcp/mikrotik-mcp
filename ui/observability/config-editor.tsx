@@ -1,3 +1,4 @@
+import { UnifiedDiff } from "./diff-view";
 /**
  * Config editor shell. Owns the single working `cfg` object and the shared
  * safe-apply pipeline (validate → preview → save → countdown → keep/rollback,
@@ -297,24 +298,7 @@ export function ConfigEditor({
               aria-label="Close preview"
             />
           </div>
-          <pre className="bg-background text-muted-foreground m-0 max-h-[320px] overflow-auto px-3 py-2.5 font-mono text-[11px] leading-[1.5]">
-            {(preview.unified || "(identical)").split("\n").map((l, i) => (
-              <div
-                key={i}
-                className={
-                  l.startsWith("+")
-                    ? "text-success"
-                    : l.startsWith("-")
-                      ? "text-destructive"
-                      : l.startsWith("@@")
-                        ? "text-brand"
-                        : ""
-                }
-              >
-                {l || " "}
-              </div>
-            ))}
-          </pre>
+          <UnifiedDiff unified={preview.unified || ""} maxHeight={320} />
         </div>
       )}
     </div>

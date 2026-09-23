@@ -1,3 +1,4 @@
+import { UnifiedDiff } from "./diff-view";
 /**
  * Drift Guard dashboard view — fleet-wide golden-config drift detection,
  * per-device diff viewer with change attribution, and baseline management.
@@ -141,31 +142,7 @@ function SetBaselineForm({ device, onDone }: { device: string; onDone: () => voi
 
 // ── Diff viewer ─────────────────────────────────────────────────────────────
 
-function DiffViewer({ unified }: { unified: string }): ReactNode {
-  if (!unified) return <span className="text-muted-foreground text-[11px]">No differences.</span>;
-  const lines = unified.split("\n");
-  return (
-    <pre className="m-0 max-h-[500px] overflow-auto rounded bg-background p-3 font-mono text-[11px] leading-normal">
-      {lines.map((line, i) => {
-        let cls = "text-muted-foreground";
-        if (line.startsWith("+")) {
-          cls = "text-success bg-success/10";
-        } else if (line.startsWith("-")) {
-          cls = "text-destructive bg-destructive/10";
-        } else if (line.startsWith("@@")) {
-          cls = "text-brand";
-        } else if (line.startsWith("/")) {
-          cls = "text-warning";
-        }
-        return (
-          <div key={i} className={cn("px-1", cls)}>
-            {line || " "}
-          </div>
-        );
-      })}
-    </pre>
-  );
-}
+const DiffViewer = UnifiedDiff;
 
 // ── Section breakdown bars ──────────────────────────────────────────────────
 

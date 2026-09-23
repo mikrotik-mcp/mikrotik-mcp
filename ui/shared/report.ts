@@ -5,6 +5,8 @@ import type { ReportView, ReportViewKind } from "../../src/core/report-views";
 import { button, connectApp, copyText, download, h, networkIcon, wireHostContext } from "./kit";
 import "./base.css";
 import "./report.css";
+import { diffElement, isUnifiedDiff } from "./diff";
+import "./diff.css";
 
 type Row = Record<string, unknown>;
 const object = (value: unknown): Row =>
@@ -102,11 +104,13 @@ function fieldGrid(row: Row, excluded: string[] = []): HTMLElement {
           h(
             "dd",
             {},
-            ["status", "state", "verdict", "clientOutcome"].includes(key)
-              ? statusBadge(value)
-              : /(?:At|^ts)$/.test(key)
-                ? time(value)
-                : text(value),
+            typeof value === "string" && (key === "unified" || isUnifiedDiff(value))
+              ? diffElement(value)
+              : ["status", "state", "verdict", "clientOutcome"].includes(key)
+                ? statusBadge(value)
+                : /(?:At|^ts)$/.test(key)
+                  ? time(value)
+                  : text(value),
           ),
         ),
       ),
@@ -466,6 +470,10 @@ function fabric(data: Row, query: string): HTMLElement {
 }
 
 function plainReport(raw: string, query: string): HTMLElement {
+  if (isUnifiedDiff(raw))
+    return !query || raw.toLowerCase().includes(query)
+      ? diffElement(raw)
+      : empty("No sections match your search.");
   const sections = raw
     .split(/\n\s*\n/)
     .filter((part) => !query || part.toLowerCase().includes(query));
@@ -575,7 +583,9 @@ export function startReportView(kind: ReportViewKind): void {
           "div",
           { class: "report-inset" },
           jsonEvidence(current.data),
-          h("pre", { class: "report-text" }, current.raw),
+          isUnifiedDiff(current.raw)
+            ? diffElement(current.raw)
+            : h("pre", { class: "report-text" }, current.raw),
         ),
       ),
       h(
