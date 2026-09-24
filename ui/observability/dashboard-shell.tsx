@@ -28,6 +28,8 @@ import {
 import type { ViewId } from "./navigation";
 import type { LiveMode } from "./types";
 import { num } from "./format";
+import { NewFeatureBadge } from "./new-feature-badge";
+import { newFeatureRelease } from "./feature-releases";
 
 export function StreamStatus({ mode }: { mode: LiveMode }): ReactNode {
   return (
@@ -120,24 +122,32 @@ export function DashboardSidebar({
   };
   const pageRow = (item: (typeof VIEWS)[number], instance: string, inPinned = false): ReactNode => {
     const pinned = pins.includes(item.id);
+    const release = newFeatureRelease(item.id, version);
     return (
       <div className="shell-nav-row" key={item.id}>
         <AnimatedSidebarMenuButton
           href={`#${item.id}`}
+          accessibleLabel={release ? `${item.label} · New in v${release}` : undefined}
           isActive={view === item.id}
           activeLayoutId={inPinned ? "pinned" : "categories"}
           className="shell-nav-link"
           onSelect={() => choose(item.id)}
-          icon={renderIcon(item.id)}
-          badge={
+          icon={
             <>
+              {renderIcon(item.id)}
+              {collapsed && <NewFeatureBadge view={item.id} version={version} placement="icon" />}
+            </>
+          }
+          badge={
+            <span className="shell-nav-badges">
+              <NewFeatureBadge view={item.id} version={version} />
               {item.id === "alerts" && firingCount > 0 && (
                 <span className="shell-nav-count shell-nav-count-alert">{firingCount}</span>
               )}
               {item.id === "feed" && feedCount > 0 && (
                 <span className="shell-nav-count">{feedCount > 999 ? "999+" : feedCount}</span>
               )}
-            </>
+            </span>
           }
         >
           {item.label}

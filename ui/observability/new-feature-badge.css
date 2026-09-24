@@ -1,0 +1,44 @@
+.feature-new-badge {
+  color: #0f766e;
+  background: #ccfbf1;
+  border-color: #5eead4;
+  vertical-align: middle;
+}
+.dark .feature-new-badge {
+  color: #99f6e4;
+  background: #134e4a;
+  border-color: #0f766e;
+}
+.feature-new-menu {
+  height: 18px;
+  padding: 0 5px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+.feature-new-page {
+  font-size: 10px;
+  height: 25px;
+  letter-spacing: 0;
+}
+.feature-new-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  top: -3px;
+  right: -4px;
+  border-radius: 50%;
+  background: #14b8a6;
+  box-shadow: 0 0 0 2px var(--shell-sidebar, var(--background));
+}
+.shell-page-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.shell-nav-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

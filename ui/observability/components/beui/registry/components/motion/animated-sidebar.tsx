@@ -919,6 +919,8 @@ export interface AnimatedSidebarMenuButtonProps {
   children: ReactNode;
   icon?: ReactNode;
   badge?: ReactNode;
+  /** Include contextual status in icon-only tooltips and accessible names. */
+  accessibleLabel?: string;
   href?: string;
   isActive?: boolean;
   ariaExpanded?: boolean;
@@ -936,6 +938,7 @@ export function AnimatedSidebarMenuButton({
   children,
   icon,
   badge,
+  accessibleLabel,
   href,
   isActive = false,
   ariaExpanded,
@@ -1046,8 +1049,8 @@ export function AnimatedSidebarMenuButton({
       aria-current={isActive ? "page" : undefined}
       aria-expanded={ariaExpanded}
       aria-disabled={disabled || undefined}
-      aria-label={panel.collapsed ? textLabel : undefined}
-      title={panel.collapsed ? textLabel : undefined}
+      aria-label={accessibleLabel ?? (panel.collapsed ? textLabel : undefined)}
+      title={panel.collapsed ? (accessibleLabel ?? textLabel) : undefined}
       tabIndex={disabled ? -1 : undefined}
       onClick={select}
       whileTap={context.reduce || disabled ? undefined : { scale: 0.98 }}
@@ -1062,8 +1065,8 @@ export function AnimatedSidebarMenuButton({
       disabled={disabled}
       aria-current={isActive ? "page" : undefined}
       aria-expanded={ariaExpanded}
-      aria-label={panel.collapsed ? textLabel : undefined}
-      title={panel.collapsed ? textLabel : undefined}
+      aria-label={accessibleLabel ?? (panel.collapsed ? textLabel : undefined)}
+      title={panel.collapsed ? (accessibleLabel ?? textLabel) : undefined}
       onClick={select}
       whileTap={context.reduce || disabled ? undefined : { scale: 0.98 }}
       transition={SPRING_PRESS}

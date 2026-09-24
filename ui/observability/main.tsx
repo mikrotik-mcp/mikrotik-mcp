@@ -69,6 +69,7 @@ import { ChangePlanView } from "./change-plan";
 import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
 import { HomeInternetView } from "./home-internet";
+import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
 import { RoundTripView } from "./round-trip";
@@ -1421,7 +1422,10 @@ function App(): ReactNode {
                 <span className="shell-eyebrow">
                   {viewGroup(view).label} / {cur.label}
                 </span>
-                <h1>{cur.label}</h1>
+                <div className="shell-page-heading">
+                  <h1>{cur.label}</h1>
+                  <NewFeatureBadge view={view} version={meta?.version} placement="page" />
+                </div>
                 <p className="text-muted-foreground">{cur.sub}</p>
               </div>
             </div>

@@ -25,6 +25,7 @@ import { OperationsIsland } from "../../ui/observability/operations-island";
 import { DashboardRefresh } from "../../ui/observability/dashboard-refresh";
 import { FeedActions } from "../../ui/observability/feed-actions";
 import { DashboardSidebar } from "../../ui/observability/dashboard-shell";
+import { NewFeatureBadge } from "../../ui/observability/new-feature-badge";
 import {
   AnimatedSidebarProvider,
   AnimatedSidebarTrigger,
@@ -483,4 +484,57 @@ test("animated sidebar retains navigation, pins and modified-link behavior when 
   expect(
     host.querySelector('[aria-label="Pin Devices"], [aria-label="Unpin Devices"]'),
   ).not.toBeNull();
+});
+
+test("release badges survive remounts and disappear on upgrade in menu and page placements", async () => {
+  for (const placement of ["menu", "page"] as const) {
+    await render(h(NewFeatureBadge, { view: "home-internet", version: "5.12.0", placement }));
+    expect(host.querySelector('[data-feature-release="5.12.0"]')?.textContent).toBe(
+      placement === "menu" ? "NEW" : "New in v5.12.0",
+    );
+    expect(host.querySelector('[aria-label="New in v5.12.0"]')).not.toBeNull();
+    await render(null);
+    await render(h(NewFeatureBadge, { view: "home-internet", version: "5.12.0", placement }));
+    expect(host.querySelector("[data-feature-release]")).not.toBeNull();
+    await render(h(NewFeatureBadge, { view: "home-internet", version: "5.13.0", placement }));
+    expect(host.querySelector("[data-feature-release]")).toBeNull();
+  }
+});
+
+test("navigation promotes new pages in categories, pins and accessible collapsed icons", async () => {
+  const sidebar = (version: string) =>
+    h(AnimatedSidebarProvider, {
+      children: [
+        h(AnimatedSidebarTrigger, { key: "toggle", "aria-label": "Toggle navigation" }),
+        h(DashboardSidebar, {
+          key: "sidebar",
+          view: "home-internet",
+          version,
+          onNavigate: vi.fn(),
+          renderIcon: () => h("span", null, "•"),
+          onMobileOpenChange: vi.fn(),
+          liveMode: "off",
+          feedCount: 0,
+          firingCount: 0,
+          releaseAvailable: false,
+          controls: null,
+        }),
+      ],
+    });
+  await render(sidebar("5.12.0"));
+  const links = () => [...host.querySelectorAll<HTMLAnchorElement>('a[href="#home-internet"]')];
+  expect(links()).toHaveLength(1);
+  expect(links()[0]!.querySelector(".feature-new-menu")?.textContent).toBe("NEW");
+  await click(host.querySelector<HTMLButtonElement>('[aria-label="Pin Home Internet"]')!);
+  expect(links()).toHaveLength(2);
+  for (const link of links()) expect(link.querySelector(".feature-new-menu")).not.toBeNull();
+  await click(host.querySelector<HTMLButtonElement>('[aria-label="Toggle navigation"]')!);
+  for (const link of links()) {
+    expect(link.querySelector(".feature-new-dot")).not.toBeNull();
+    expect(link.getAttribute("aria-label")).toBe("Home Internet · New in v5.12.0");
+    expect(link.title).toBe("Home Internet · New in v5.12.0");
+  }
+  await render(sidebar("5.13.0"));
+  expect(host.querySelector("[data-feature-release]")).toBeNull();
+  expect(links()[0]!.getAttribute("aria-label")).toBe("Home Internet");
 });
