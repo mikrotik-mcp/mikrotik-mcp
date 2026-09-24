@@ -1,4 +1,5 @@
 export type ViewId =
+  | "home-internet"
   | "overview"
   | "devices"
   | "clients"
@@ -31,6 +32,11 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  {
+    id: "home-internet",
+    label: "Home Internet",
+    sub: "Understand slowdowns, manage your household & compare paths",
+  },
   { id: "overview", label: "Overview", sub: "Calls, latency & risk at a glance" },
   { id: "devices", label: "Devices", sub: "Connectivity radar & system health" },
   { id: "clients", label: "Clients", sub: "Connected LAN devices — usage, block/allow, pin IP" },
@@ -105,7 +111,11 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
 ];
 
 export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
-  { id: "observe", label: "Observe", views: ["overview", "devices", "clients", "feed"] },
+  {
+    id: "observe",
+    label: "Observe",
+    views: ["overview", "home-internet", "devices", "clients", "feed"],
+  },
   {
     id: "investigate",
     label: "Investigate",

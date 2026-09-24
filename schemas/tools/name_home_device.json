@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "name_home_device",
+  "type": "object",
+  "properties": {
+    "mac": {
+      "type": "string",
+      "pattern": "^(?:[\\da-f]{2}:){5}[\\da-f]{2}$"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "person": {
+      "default": "",
+      "type": "string",
+      "maxLength": 80
+    }
+  },
+  "required": ["mac", "name", "person"],
+  "additionalProperties": false
+}

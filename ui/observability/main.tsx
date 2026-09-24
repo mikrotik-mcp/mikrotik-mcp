@@ -68,6 +68,7 @@ import { AaaView } from "./aaa";
 import { ChangePlanView } from "./change-plan";
 import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
+import { HomeInternetView } from "./home-internet";
 import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
 import { RoundTripView } from "./round-trip";
@@ -171,6 +172,14 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  "home-internet": {
+    what: "Simple connection checks, local household names and approved temporary IPv4 policies with router-side expiry.",
+    tips: [
+      "Discover devices establishes a baseline; later scans flag new MACs.",
+      "Ping results do not measure download speed or client application delivery.",
+      "Changes require a reserved DHCP IP, safe prerequisites, an explicit preview and confirmation.",
+    ],
+  },
   overview: {
     what: "A live pulse of all MCP tool activity: total calls, error rate, p50/p95 latency, the busiest tools, and a risk breakdown — over a time window you choose.",
     tips: [
@@ -583,6 +592,12 @@ function ReloadServerButton(): ReactNode {
 /** Inline stroke icons for the sidebar — no icon-font dependency. */
 function NavIcon({ name }: { name: ViewId }): ReactNode {
   const paths: Record<ViewId, ReactNode> = {
+    "home-internet": (
+      <>
+        <path d="m3 11 9-8 9 8v10H3Z" />
+        <path d="M9 21v-8h6v8" />
+      </>
+    ),
     overview: (
       <>
         <rect x="3" y="3" width="8" height="8" rx="1.6" />
@@ -1573,6 +1588,7 @@ function App(): ReactNode {
 
               {/* ── Clients ── */}
               {view === "clients" && <ClientsView />}
+              {view === "home-internet" && <HomeInternetView />}
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}
               {view === "round-trip" && <RoundTripView />}

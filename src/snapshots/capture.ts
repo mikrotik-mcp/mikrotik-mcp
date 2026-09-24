@@ -10,6 +10,7 @@
 import { executeMikrotikCommand } from "../core/connector";
 import type { ToolContext } from "../core/context";
 import { resolveDeviceName } from "../core/runtime";
+import { looksLikeError } from "../core/routeros";
 import { DEFAULT_SNAPSHOT_DB } from "../config";
 import { contentSha, countLines, normalizeExport, parseExportMeta } from "./format";
 import { openSnapshotStore } from "./store";
@@ -26,9 +27,20 @@ function snapshots(): Promise<SnapshotStore> {
  * Capture a pre-change configuration snapshot and return its id. Reads the
  * device only (`/export terse`); all mutation is local persistence.
  */
-export async function captureSnapshot(ctx: ToolContext, label: string): Promise<string> {
+export async function captureSnapshot(
+  ctx: ToolContext,
+  label: string,
+  requireExport = false,
+): Promise<string> {
   const device = resolveDeviceName(ctx.device);
   const body = await executeMikrotikCommand("/export terse", ctx);
+  if (
+    requireExport &&
+    (looksLikeError(body) || !/^\/[a-z]/m.test(body) || /#\s*error exporting/i.test(body))
+  )
+    throw new Error(
+      "A complete pre-change configuration export could not be captured; no policy was applied.",
+    );
   const meta = parseExportMeta(body);
   const sha = contentSha(normalizeExport(body));
   const ts = Date.now();

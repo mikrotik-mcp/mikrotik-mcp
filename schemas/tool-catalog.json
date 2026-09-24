@@ -2,8 +2,238 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.12.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 903,
+  "toolCount": 911,
   "tools": [
+    {
+      "name": "diagnose_home_internet",
+      "title": "Why Is My Internet Slow?",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Start here when a household client reports slow internet. Read router CPU/memory, client Wi-Fi signal, DNS, exact-IP queues and five bounded router ICMP probes. Return plain-language observed facts, suspected causes and unknowns with next steps. Never changes MTU/config, enables accounting or claims client application success. No throughput test is run.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string",
+            "format": "ipv4",
+            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+          },
+          "target": {
+            "default": "example.com",
+            "type": "string",
+            "maxLength": 253,
+            "pattern": "^[a-z\\d](?:[a-z\\d.-]*[a-z\\d])?$"
+          }
+        },
+        "required": ["client", "target"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "compare_home_paths",
+      "title": "Compare Internet Paths",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Compare up to three existing enabled FIB routing tables with five ICMP probes each to one explicit IPv4 target. For calls/gaming suggest the lowest-loss/latency candidate; download throughput is unmeasured, so no fastest-download recommendation. Router output mangle may affect probes. Selection is separate: preview_home_policy, then explicit user approval and apply_home_policy. Never switches routes automatically.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "format": "ipv4",
+            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+          },
+          "tables": {
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "goal": {
+            "default": "calls",
+            "type": "string",
+            "enum": ["calls", "gaming", "download"]
+          }
+        },
+        "required": ["target", "tables", "goal"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_home_internet",
+      "title": "Read Household Internet Workspace",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read locally saved household device names, people, newly discovered devices and temporary policy history for this router. Historical policy status is not current router proof. No router queries; refresh_home_devices explicitly collects current DHCP records and available routing tables.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "refresh_home_devices",
+      "title": "Discover Household Devices",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Read DHCP clients and routing tables, saving a local first/last-seen household inventory. First scan establishes a baseline; later new MACs appear as unacknowledged notices. No router writes or background scans. WRITE reflects local persistence. Randomized MACs may look like new devices; absence does not prove offline.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "name_home_device",
+      "title": "Name a Household Device",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Save a friendly device name and person locally and acknowledge its new-device notice. Does not modify router DHCP, reserve an IP or change access.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "mac": {
+            "type": "string",
+            "pattern": "^(?:[\\da-f]{2}:){5}[\\da-f]{2}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "person": {
+            "default": "",
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": ["mac", "name", "person"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "preview_home_policy",
+      "title": "Preview a Temporary Household Policy",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Prepare a device-bound five-minute consent preview for a reserved IPv4 DHCP client: pause routed access, raise an existing child queue to meeting priority, or select an existing route table. Duration 5–120 minutes; optional start delay up to 24h. Local preview only, no router changes. Fails closed on FastTrack, ambiguous leases, conflicting route marks or missing QoS. Pause refuses IPv6 forwarding. Review exact commands, limitations and expiry with the user before applying.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "mac": {
+            "type": "string",
+            "pattern": "^(?:[\\da-f]{2}:){5}[\\da-f]{2}$"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["pause", "priority", "route"]
+          },
+          "minutes": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 120
+          },
+          "startInMinutes": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": ["mac", "action", "minutes", "startInMinutes"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "apply_home_policy",
+      "title": "Apply an Approved Household Policy",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Only after explicit user approval of preview_home_policy: consume its one-use ID, recheck unchanged router state, save a local snapshot, apply in a NEW Safe Mode session, install router-side expiry and commit. No direct-write fallback. Scheduled policies expire even if MCP stops; priority restoration requires scheduler permission. Existing sessions may disconnect. Uncertain results must be inspected/undone, never blindly retried.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "confirm": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "confirm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "undo_home_policy",
+      "title": "Undo a Household Policy",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "With user confirmation remove only this policy's tagged rules/timers and restore its previous queue priority when the queue still matches. Works from durable history after an MCP restart. Does not restore an entire config or touch unrelated rules. Use to reconcile expired or uncertain policies too.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "confirm": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "confirm"],
+        "additionalProperties": false
+      }
+    },
     {
       "name": "trace_round_trip",
       "title": "Model a Multi-Router Round Trip",

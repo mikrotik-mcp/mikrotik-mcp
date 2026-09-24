@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "diagnose_home_internet",
+  "type": "object",
+  "properties": {
+    "client": {
+      "type": "string",
+      "format": "ipv4",
+      "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+    },
+    "target": {
+      "default": "example.com",
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^[a-z\\d](?:[a-z\\d.-]*[a-z\\d])?$"
+    }
+  },
+  "required": ["client", "target"],
+  "additionalProperties": false
+}

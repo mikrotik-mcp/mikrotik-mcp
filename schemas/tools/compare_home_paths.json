@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "compare_home_paths",
+  "type": "object",
+  "properties": {
+    "target": {
+      "type": "string",
+      "format": "ipv4",
+      "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+    },
+    "tables": {
+      "minItems": 1,
+      "maxItems": 3,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
+    "goal": {
+      "default": "calls",
+      "type": "string",
+      "enum": ["calls", "gaming", "download"]
+    }
+  },
+  "required": ["target", "tables", "goal"],
+  "additionalProperties": false
+}

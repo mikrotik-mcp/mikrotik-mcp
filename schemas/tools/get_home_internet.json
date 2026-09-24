@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_home_internet",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

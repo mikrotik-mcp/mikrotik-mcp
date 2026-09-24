@@ -9,6 +9,7 @@ import type { ToolModule } from "../core/registry";
 import { addressListTools } from "./address-list";
 import { connectedDeviceTools } from "./connected-devices";
 import { investigationTools } from "./investigations";
+import { homeInternetTools } from "./home-internet";
 import { serviceContractTools } from "./service-contracts";
 import { roundTripTools } from "./round-trip";
 import { appViewTools } from "./app-views";
@@ -163,6 +164,14 @@ export interface ModuleInfo {
 }
 
 export const moduleCatalog: ModuleInfo[] = [
+  {
+    label: "Home Internet",
+    slug: "home-internet",
+    group: "System & Ops",
+    description:
+      "Plain-language internet diagnosis, household inventory and approved temporary client policies with bounded path comparisons.",
+    tools: homeInternetTools,
+  },
   {
     label: "Multi-Router Round Trip",
     slug: "round-trip",

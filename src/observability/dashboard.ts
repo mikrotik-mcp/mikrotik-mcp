@@ -56,6 +56,7 @@ import {
 } from "../backups/vault";
 import { createContext } from "../core/context";
 import { investigationRoutes } from "./investigation-routes";
+import { homeRoutes } from "./home-routes";
 import { serviceContractRoutes } from "./service-contract-routes";
 import { roundTripRoutes } from "./round-trip-routes";
 import {
@@ -1575,6 +1576,8 @@ export async function runDashboard(
 
     const investigationResp = await investigationRoutes(req, url);
     if (investigationResp) return investigationResp;
+    const homeResp = await homeRoutes(req, url);
+    if (homeResp) return homeResp;
 
     const serviceContractResp = await serviceContractRoutes(req, url);
     if (serviceContractResp) return serviceContractResp;
