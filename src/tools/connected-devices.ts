@@ -23,7 +23,7 @@ import type { ToolModule } from "../core/registry";
 import type { ToolContext } from "../core/context";
 import { isEmpty, looksLikeError, quoteValue, Cmd } from "../core/routeros";
 import { isYes } from "../utils/yes";
-import { parseRecords, parseLeadingNumber } from "../core/routeros-parse";
+import { parseRecords, parseLeadingNumber, parseSize } from "../core/routeros-parse";
 import { uiViewUri } from "../core/ui-meta";
 
 /** Comment tag on the firewall drop rules a block installs (keyed by MAC). */
@@ -101,33 +101,21 @@ const resolvedSource = new Map<string, TrafficSource>();
 const firstLine = (s: string): string => s.trim().split("\n")[0]!.trim();
 
 /**
- * Enable `/ip accounting` (v6). Returns an error note (e.g. "bad command name
- * accounting" on v7, where it was removed), or null on success.
+ * Check existing accounting configuration without enabling it from a read request.
  */
-async function enableAccounting(ctx: ToolContext): Promise<string | null> {
-  // `threshold` caps how many host pairs are tracked between snapshots; the
-  // default (256) truncates on a busy LAN, so raise it.
-  const out = await executeMikrotikCommand("/ip accounting set enabled=yes threshold=2000", ctx);
-  return looksLikeError(out) ? firstLine(out) : null;
+async function checkAccounting(ctx: ToolContext): Promise<string | null> {
+  const out = await executeMikrotikCommand("/ip accounting print", ctx);
+  if (looksLikeError(out)) return firstLine(out);
+  return /\benabled\s*[:=]\s*yes\b/.test(out) ? null : "Accounting is not enabled";
 }
 
 /**
- * Ensure Kid Control is monitoring (v7). Kid Control tracks per-device traffic
- * for ALL devices as soon as at least one control entry exists, so if none does
- * we add a monitor-only one: a 24/7-allowed schedule (`0s-1d` every day) with no
- * device assigned, which never blocks or limits anything — it only turns the
- * counters on. Existing Kid Control setups are left untouched.
+ * Check whether Kid Control can be read. Never create parental-control profiles
+ * as a side effect of opening the dashboard; an empty table is diagnosed below.
  */
-async function enableKidControl(ctx: ToolContext): Promise<string | null> {
-  const count = await executeMikrotikCommand("/ip kid-control print count-only", ctx);
-  if (looksLikeError(count)) return firstLine(count);
-  if ((parseLeadingNumber(count.trim()) ?? 0) > 0) return null; // already monitoring
-
-  // No `comment=` — `/ip kid-control add` rejects it on some RouterOS builds
-  // ("bad parameter comment"). The `mcp-monitor` name is enough to identify it.
-  const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map((d) => `${d}=0s-1d`).join(" ");
-  const add = await executeMikrotikCommand(`/ip kid-control add name=mcp-monitor ${days}`, ctx);
-  return looksLikeError(add) ? firstLine(add) : null;
+async function checkKidControl(ctx: ToolContext): Promise<string | null> {
+  const count = await executeMikrotikCommand("/ip kid-control device print count-only", ctx);
+  return looksLikeError(count) ? firstLine(count) : null;
 }
 
 /**
@@ -140,12 +128,12 @@ async function resolveSource(ctx: ToolContext): Promise<{ source: TrafficSource;
   const cached = resolvedSource.get(key);
   if (cached) return { source: cached };
 
-  const accErr = await enableAccounting(ctx);
+  const accErr = await checkAccounting(ctx);
   if (!accErr) {
     resolvedSource.set(key, "accounting");
     return { source: "accounting" };
   }
-  const kidErr = await enableKidControl(ctx);
+  const kidErr = await checkKidControl(ctx);
   if (!kidErr) {
     resolvedSource.set(key, "kid-control");
     return { source: "kid-control" };
@@ -349,30 +337,45 @@ async function sampleAccounting(
  *
  * Kid Control already exposes instantaneous `rate-down`/`rate-up` (bits/sec) and
  * cumulative `bytes-down`/`bytes-up` per device, so no delta math is needed:
- * down = the device's download (rx), up = its upload (tx). Keyed by `ip-address`
- * (rows without one — e.g. a device seen only by MAC — are skipped). Pure.
+ * down = the device's download (rx), up = its upload (tx). Each address is an
+ * alias for the same DEVICE-wide counter, not a separate additive IP counter.
  */
 export function parseKidDevices(rows: Record<string, string>[]): Record<string, HostTraffic> {
   const hosts: Record<string, HostTraffic> = {};
   for (const row of rows) {
-    const ip = (row["ip-address"] ?? "").trim();
-    if (!ip) continue;
-    hosts[ip] = {
+    const addresses = (row["ip-address"] ?? "")
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean);
+    const traffic = {
       rxRate: parseMagnitude(row["rate-down"]),
       txRate: parseMagnitude(row["rate-up"]),
-      rxBytes: parseMagnitude(row["bytes-down"]),
-      txBytes: parseMagnitude(row["bytes-up"]),
+      rxBytes: parseSize(row["bytes-down"]) ?? parseMagnitude(row["bytes-down"]),
+      txBytes: parseSize(row["bytes-up"]) ?? parseMagnitude(row["bytes-up"]),
     };
+    for (const ip of addresses) hosts[ip] = traffic;
   }
   return hosts;
 }
 
+/** Join wrapped address lists before the generic whitespace-delimited KV parser. */
+export function parseKidControlOutput(output: string): Record<string, HostTraffic> {
+  const unwrapped = output.replace(
+    /(ip-address=)([\da-fA-F:.]+(?:,\s*[\da-fA-F:.]+)*)/g,
+    (_match, key: string, value: string) => `${key}${value.replace(/\s+/g, "")}`,
+  );
+  return parseKidDevices(parseRecords(unwrapped).rows);
+}
+
 /** v7: read Kid Control's per-device counters. */
 async function sampleKidControl(ctx: ToolContext): Promise<Record<string, HostTraffic>> {
-  const out = await executeMikrotikCommand("/ip kid-control device print detail", ctx);
+  const out = await executeMikrotikCommand(
+    "/ip kid-control device print detail without-paging",
+    ctx,
+  );
   if (looksLikeError(out)) throw new Error(firstLine(out));
   if (isEmpty(out)) return {};
-  return parseKidDevices(parseRecords(out).rows);
+  return parseKidControlOutput(out);
 }
 
 /**
@@ -390,8 +393,17 @@ export async function sampleAllTraffic(ctx: ToolContext): Promise<BulkTrafficPay
   try {
     const hosts =
       source === "accounting" ? await sampleAccounting(ctx, ts) : await sampleKidControl(ctx);
-    return { ts, source, hosts, limits };
+    return {
+      ts,
+      source,
+      hosts,
+      limits,
+      note: Object.keys(hosts).length
+        ? undefined
+        : "No per-device counters were returned. Monitoring may be inactive or no clients have been observed. Router configuration was not changed.",
+    };
   } catch (e) {
+    resolvedSource.delete(ctx.device ?? "");
     // A read failure after the source resolved: report it but keep limits.
     return {
       ts,

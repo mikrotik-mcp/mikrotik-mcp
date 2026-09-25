@@ -10,6 +10,7 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   aggregateHostTraffic,
   parseKidDevices,
+  parseKidControlOutput,
   parseMagnitude,
 } from "../src/tools/connected-devices";
 import { parseRecords } from "../src/core/routeros-parse";
@@ -77,6 +78,37 @@ describe("parseMagnitude", () => {
 });
 
 describe("parseKidDevices (RouterOS v7 Kid Control)", () => {
+  test("maps every address of a dual-stack device to its device-wide counters", () => {
+    const hosts = parseKidDevices([
+      {
+        "ip-address": "fe80::1234,10.10.10.215, fde9::1234",
+        "rate-down": "8.7Mbps",
+        "rate-up": "374.3kbps",
+        "bytes-down": "33.9GiB",
+        "bytes-up": "2286.9MiB",
+      },
+    ]);
+    expect(hosts["10.10.10.215"]).toEqual({
+      rxRate: 8_700_000,
+      txRate: 374_300,
+      rxBytes: 33.9 * 1024 ** 3,
+      txBytes: 2286.9 * 1024 ** 2,
+    });
+    expect(hosts["fe80::1234"]).toBe(hosts["10.10.10.215"]);
+    expect(hosts["fde9::1234"]).toBe(hosts["10.10.10.215"]);
+  });
+
+  test("preserves addresses wrapped across RouterOS terminal lines", () => {
+    const hosts = parseKidControlOutput(`Flags: D - DYNAMIC
+ 0 D name="phone" mac-address=AA:BB:CC:DD:EE:10
+     ip-address=fde9::1234,2001:db8::1234,
+        10.10.10.247,fe80::1234 activity="example.org"
+     rate-down=0bps rate-up=0bps bytes-down=2533.4MiB bytes-up=278.0MiB`);
+    expect(hosts["10.10.10.247"]?.rxBytes).toBe(2533.4 * 1024 ** 2);
+    expect(hosts["10.10.10.247"]?.rxRate).toBe(0);
+    expect(Object.keys(hosts)).toHaveLength(4);
+  });
+
   test("maps rate-down/up → rx/tx and bytes, keyed by ip", () => {
     const hosts = parseKidDevices([
       {

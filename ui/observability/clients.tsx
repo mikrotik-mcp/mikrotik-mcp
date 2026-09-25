@@ -30,6 +30,8 @@ import { Badge, Button, Input, Note, Select } from "./geist";
 import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 import { UsageHistoryChart } from "./usage-charts";
+import { applyTrafficSample, EMPTY_TRAFFIC, MINI_SAMPLES } from "./clients-traffic";
+import type { BulkTraffic, IpTraffic } from "./clients-traffic";
 
 interface Device {
   mac: string;
@@ -65,26 +67,7 @@ interface OpResult {
   view?: DevicesView;
 }
 
-/** Per-IP computed traffic state (delta rates + sparkline history). */
-interface IpTraffic {
-  rxRate: number; // bits/sec, this interval
-  txRate: number;
-  rxBytes: number; // cumulative for this dashboard session (sum of deltas)
-  txBytes: number;
-  downloadLimit: string;
-  uploadLimit: string;
-  history: { rx: number; tx: number }[];
-}
-
-/** What `useBulkTraffic` returns: the per-IP map plus the source diagnostic. */
-interface BulkTraffic {
-  map: Map<string, IpTraffic>;
-  source: "accounting" | "kid-control" | "none";
-  note?: string;
-}
-
 const MAX_SAMPLES = 40;
-const MINI_SAMPLES = 30;
 const BULK_POLL_MS = 1000;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -289,10 +272,12 @@ function DeviceDetail({
   device,
   deviceName,
   traffic,
+  limits,
 }: {
   device: Device;
   deviceName: string;
   traffic: IpTraffic | undefined;
+  limits: { download: string; upload: string } | undefined;
 }): ReactNode {
   const hasTraffic = traffic !== undefined;
   return (
@@ -305,8 +290,8 @@ function DeviceDetail({
       </div>
       {!hasTraffic ? (
         <Note type="secondary" label="No traffic yet">
-          No traffic seen for <code>{device.ip}</code> yet. Rates appear here as soon as the device
-          sends or receives.
+          No counter was returned for <code>{device.ip}</code>. This is unavailable data, not zero
+          usage. Check the traffic source notice above.
         </Note>
       ) : (
         <>
@@ -316,7 +301,7 @@ function DeviceDetail({
           </div>
           <TrafficChart history={traffic.history} />
           <div className="mt-2 text-muted-foreground text-xs tabular-nums">
-            total ↓ {bytes(traffic.rxBytes)} · ↑ {bytes(traffic.txBytes)}
+            Router counter totals ↓ {bytes(traffic.rxBytes)} · ↑ {bytes(traffic.txBytes)}
           </div>
         </>
       )}
@@ -325,8 +310,8 @@ function DeviceDetail({
           ip={device.ip}
           deviceName={deviceName}
           current={{
-            download: traffic?.downloadLimit ?? "",
-            upload: traffic?.uploadLimit ?? "",
+            download: limits?.download ?? "",
+            upload: limits?.upload ?? "",
           }}
           onSaved={() => {}}
         />
@@ -349,44 +334,6 @@ function DeviceDetail({
 }
 
 // ── Bulk traffic hook ───────────────────────────────────────────────────────
-
-const EMPTY_TRAFFIC: BulkTraffic = { map: new Map(), source: "accounting" };
-
-/**
- * Fold one server sample into the traffic map. The server normalises both
- * RouterOS sources — `/ip accounting` (v6) and Kid Control (v7) — into live rates
- * (bits/sec) plus cumulative bytes per IP, so this just carries the sparkline
- * history forward: a zero is pushed for an idle host so its line decays smoothly
- * instead of vanishing, and idle hosts with no rate limit are pruned once their
- * whole window is quiet, keeping the map from growing without bound.
- */
-function applyTrafficSample(old: BulkTraffic, sample: BulkTrafficSample): BulkTraffic {
-  const ids = new Set<string>([
-    ...old.map.keys(),
-    ...Object.keys(sample.hosts),
-    ...Object.keys(sample.limits),
-  ]);
-  const next = new Map<string, IpTraffic>();
-  for (const ip of ids) {
-    const h = sample.hosts[ip];
-    const rxRate = h?.rxRate ?? 0;
-    const txRate = h?.txRate ?? 0;
-    const ex = old.map.get(ip);
-    const history = [...(ex?.history ?? []), { rx: rxRate, tx: txRate }].slice(-MINI_SAMPLES);
-    const lim = sample.limits[ip];
-    if (!lim && !history.some((p) => p.rx > 0 || p.tx > 0)) continue;
-    next.set(ip, {
-      rxRate,
-      txRate,
-      rxBytes: h?.rxBytes ?? ex?.rxBytes ?? 0,
-      txBytes: h?.txBytes ?? ex?.txBytes ?? 0,
-      downloadLimit: lim?.download ?? "",
-      uploadLimit: lim?.upload ?? "",
-      history,
-    });
-  }
-  return { map: next, source: sample.source, note: sample.note };
-}
 
 /**
  * Live per-client traffic, received over — in order of preference — a WebSocket,
@@ -426,8 +373,14 @@ function useBulkTraffic(deviceName: string): BulkTraffic {
               `/api/clients/traffic-bulk?device=${encodeURIComponent(deviceName)}`,
             ),
           );
-        } catch {
-          /* transient poll error */
+        } catch (error) {
+          onSample({
+            ts: Date.now(),
+            source: "none",
+            hosts: {},
+            limits: {},
+            note: error instanceof Error ? error.message : "Traffic request failed",
+          });
         }
       };
       void poll();
@@ -514,7 +467,12 @@ export function ClientsView(): ReactNode {
   );
 
   // Bulk traffic: polls every 1s; server picks /ip accounting (v6) or Kid Control (v7).
-  const { map: trafficMap, source: trafficSource, note: trafficNote } = useBulkTraffic(deviceName);
+  const {
+    map: trafficMap,
+    source: trafficSource,
+    note: trafficNote,
+    limits: trafficLimits,
+  } = useBulkTraffic(deviceName);
 
   // Discover the configured routers so the user can pick which one to inspect.
   useEffect(() => {
@@ -663,11 +621,17 @@ export function ClientsView(): ReactNode {
           </Note>
         )}
 
-        {trafficSource === "none" && trafficNote && (
+        {trafficNote && (
           <Note type="warning" label="Traffic unavailable" className="mb-2.5">
             {trafficNote} The Traffic column needs per-host counters — <code>/ip accounting</code>{" "}
             on RouterOS v6, or Kid Control on v7.
           </Note>
+        )}
+        {trafficSource === "kid-control" && !trafficNote && (
+          <p className="mb-2.5 text-xs text-muted-foreground">
+            Live device counters · ↓ download / ↑ upload · includes IPv4 + IPv6 for each device.
+            Router counters may reset; these are not billing totals.
+          </p>
         )}
 
         {!view ? (
@@ -738,7 +702,9 @@ export function ClientsView(): ReactNode {
                           <MiniSparkline history={t.history} />
                         </span>
                       ) : (
-                        <span className="text-muted-foreground text-[11px]">{d.ip ? "—" : ""}</span>
+                        <span className="text-muted-foreground text-[11px]">
+                          {d.ip ? "No counter" : ""}
+                        </span>
                       )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -844,6 +810,7 @@ export function ClientsView(): ReactNode {
             device={selectedDevice}
             deviceName={deviceName}
             traffic={selectedDevice.ip ? trafficMap.get(selectedDevice.ip) : undefined}
+            limits={trafficLimits[selectedDevice.ip]}
           />
         )}
       </Panel>
