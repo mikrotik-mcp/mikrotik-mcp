@@ -65,22 +65,40 @@ export function UsageHistoryChart({
 }): ReactNode {
   const [data, setData] = useState<UsagePayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const abort = new AbortController();
+    setData(null);
     setLoading(true);
-    void api<UsagePayload>(endpoint)
-      .then((d) => {
-        if (alive) setData(d);
-      })
-      .catch(() => {
-        if (alive) setData(null);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
+    const refresh = (): void => {
+      void api<UsagePayload>(endpoint, abort.signal)
+        .then((d) => {
+          if (alive) {
+            setData(d);
+            setError(false);
+          }
+        })
+        .catch(() => {
+          if (alive) {
+            setData(null);
+            setError(true);
+          }
+        })
+        .finally(() => {
+          if (alive) {
+            setLoading(false);
+            timer = setTimeout(refresh, 30_000);
+          }
+        });
+    };
+    refresh();
     return () => {
       alive = false;
+      abort.abort();
+      clearTimeout(timer);
     };
   }, [endpoint]);
 
@@ -99,12 +117,19 @@ export function UsageHistoryChart({
 
   if (loading)
     return <div className="px-1 py-4 text-[12.5px] text-muted-foreground">loading usage…</div>;
-  const hasData = (data?.totalRx ?? 0) + (data?.totalTx ?? 0) > 0;
+  if (error)
+    return (
+      <div role="status" className="px-1 py-4 text-[12.5px] text-destructive">
+        Could not load usage history. Retrying automatically.
+      </div>
+    );
+  const hasData = (data?.series.length ?? 0) > 0;
   if (!hasData) {
     return (
       <div className="px-1 py-4 text-[12.5px] text-muted-foreground">
-        No usage recorded yet. The dashboard samples on a configurable interval (1 minute by default
-        — see the RADIUS &amp; UM Settings tab); history fills in over time (kept ~3 months).
+        No measured history yet. Client history needs two samples from an existing per-device
+        counter (normally one minute apart). This chart refreshes automatically. Past usage before
+        recording began cannot be reconstructed; retention is about three months.
       </div>
     );
   }
@@ -112,7 +137,8 @@ export function UsageHistoryChart({
   const W = 640;
   const H = 150;
   const pad = 8;
-  const max = Math.max(1, ...filled.flatMap((d) => [d.rx, d.tx]));
+  const peak = Math.max(0, ...filled.flatMap((d) => [d.rx, d.tx]));
+  const max = Math.max(1, peak);
   const x = (i: number): number => pad + (i * (W - 2 * pad)) / Math.max(1, filled.length - 1);
   const y = (v: number): number => H - pad - (v / max) * (H - 2 * pad);
   const path = (pick: (d: DailyUsage) => number): string =>
@@ -129,7 +155,7 @@ export function UsageHistoryChart({
         <span className="font-semibold text-chart-3">↓ {bytes(data?.totalRx ?? 0)} down</span>
         <span className="font-semibold text-chart-4">↑ {bytes(data?.totalTx ?? 0)} up</span>
         <span className="text-[11px] text-muted-foreground">
-          · peak/day {bytes(max)} · last {days} days
+          · peak/day {bytes(peak)} · last {days} days · {data?.series.length ?? 0} recorded days
         </span>
       </div>
       <svg
@@ -138,6 +164,7 @@ export function UsageHistoryChart({
         preserveAspectRatio="none"
         xmlns={SVG_NS}
         role="img"
+        aria-label="Recorded daily download and upload usage"
       >
         <polygon className="fill-chart-3/20" points={area((d) => d.rx)} />
         <polygon className="fill-chart-4/15" points={area((d) => d.tx)} />

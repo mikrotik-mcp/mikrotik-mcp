@@ -7,7 +7,7 @@
  * Two long-lived datasets back the dashboard's usage views:
  *
  *   • `usage_samples` — periodic snapshots of each connected client's cumulative
- *     `/queue simple` counters. Kept ~3 months; per-day download/upload is the
+ *     Kid Control or exact-host queue counters. Kept ~3 months; per-day download/upload is the
  *     reset-aware delta between consecutive snapshots ({@link dailyUsageFromSamples}).
  *   • `vpn_sessions` — User Manager accounting sessions, ingested and de-duped by
  *     accounting id and kept FOREVER. Per-user per-day usage is the sum of session
@@ -25,6 +25,14 @@ export interface ClientSample {
   ts: number;
   rx: number;
   tx: number;
+  /** Missing on legacy queue samples; a source change starts a new baseline. */
+  source?: string;
+}
+export interface ClientCounter {
+  ip: string;
+  rx: number;
+  tx: number;
+  source?: string;
 }
 /** Per-day download (rx) / upload (tx) bytes. */
 export interface DailyUsage {
@@ -65,6 +73,7 @@ export function dailyUsageFromSamples(samples: ClientSample[]): DailyUsage[] {
   for (let i = 1; i < samples.length; i++) {
     const prev = samples[i - 1];
     const cur = samples[i];
+    if ((prev.source ?? "queue") !== (cur.source ?? "queue")) continue;
     const dRx = cur.rx >= prev.rx ? cur.rx - prev.rx : cur.rx;
     const dTx = cur.tx >= prev.tx ? cur.tx - prev.tx : cur.tx;
     const day = dayOf(cur.ts);
@@ -80,11 +89,7 @@ export function dailyUsageFromSamples(samples: ClientSample[]): DailyUsage[] {
 
 /** Public storage interface (a SQLite implementation today; swappable in tests). */
 export interface UsageStore {
-  recordClientSamples(
-    device: string,
-    ts: number,
-    samples: { ip: string; rx: number; tx: number }[],
-  ): void;
+  recordClientSamples(device: string, ts: number, samples: ClientCounter[]): void;
   /** Insert/refresh sessions (dedup by acct id); returns the count written. */
   upsertSessions(device: string, sessions: VpnSession[]): number;
   clientDailyUsage(device: string, ip: string, sinceTs: number): DailyUsage[];
@@ -104,7 +109,8 @@ const SCHEMA_STATEMENTS = [
      subject TEXT NOT NULL,
      ts INTEGER NOT NULL,
      rx INTEGER NOT NULL,
-     tx INTEGER NOT NULL
+     tx INTEGER NOT NULL,
+     source TEXT NOT NULL DEFAULT 'queue'
    )`,
   "CREATE INDEX IF NOT EXISTS idx_usage_sub ON usage_samples(device, subject, ts)",
   "CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage_samples(ts)",
@@ -134,20 +140,27 @@ class SqliteUsageStore implements UsageStore {
     db.run("PRAGMA journal_mode = WAL");
     db.run("PRAGMA synchronous = NORMAL");
     for (const stmt of SCHEMA_STATEMENTS) db.run(stmt);
+    const columns = db.query("PRAGMA table_info(usage_samples)").all() as { name: string }[];
+    if (!columns.some((column) => column.name === "source")) {
+      db.run("ALTER TABLE usage_samples ADD COLUMN source TEXT NOT NULL DEFAULT 'queue'");
+    }
   }
 
-  recordClientSamples(
-    device: string,
-    ts: number,
-    samples: { ip: string; rx: number; tx: number }[],
-  ): void {
+  recordClientSamples(device: string, ts: number, samples: ClientCounter[]): void {
     if (samples.length === 0) return;
     const insert = this.db.query(
-      "INSERT INTO usage_samples (device, subject, ts, rx, tx) VALUES ($d,$s,$ts,$rx,$tx)",
+      "INSERT INTO usage_samples (device, subject, ts, rx, tx, source) VALUES ($d,$s,$ts,$rx,$tx,$source)",
     );
-    const tx = this.db.transaction((rows: { ip: string; rx: number; tx: number }[]) => {
+    const tx = this.db.transaction((rows: ClientCounter[]) => {
       for (const r of rows) {
-        insert.run({ $d: device, $s: r.ip, $ts: ts, $rx: r.rx, $tx: r.tx });
+        insert.run({
+          $d: device,
+          $s: r.ip,
+          $ts: ts,
+          $rx: r.rx,
+          $tx: r.tx,
+          $source: r.source ?? "queue",
+        });
       }
     });
     tx(samples);
@@ -184,7 +197,7 @@ class SqliteUsageStore implements UsageStore {
   clientDailyUsage(device: string, ip: string, sinceTs: number): DailyUsage[] {
     const rows = this.db
       .query(
-        "SELECT ts, rx, tx FROM usage_samples WHERE device=$d AND subject=$s AND ts>=$since ORDER BY ts ASC",
+        "SELECT ts, rx, tx, source FROM usage_samples WHERE device=$d AND subject=$s AND ts>=$since ORDER BY ts ASC",
       )
       .all({ $d: device, $s: ip, $since: sinceTs }) as ClientSample[];
     return dailyUsageFromSamples(rows);

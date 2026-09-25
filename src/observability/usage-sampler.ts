@@ -3,8 +3,8 @@
  *
  * On an interval (default 1 min) it walks every SSH-reachable configured device
  * and, per device:
- *   • snapshots each `/queue simple` cumulative counter (per-client download/
- *     upload) into `usage_samples`, and
+ *   • snapshots existing Kid Control counters, with exact-host simple queues
+ *     as a fallback, into `usage_samples`, and
  *   • ingests `/user-manager session` accounting records (de-duped by accounting
  *     id) into `vpn_sessions` — so the 3-month usage graphs and the forever
  *     connection heatmap keep accumulating even when nobody's watching.
@@ -17,6 +17,7 @@
  * registry/test graph, so it may freely pull in the device I/O layer.
  */
 import { executeMikrotikCommand } from "../core/connector";
+import { isIPv4 } from "node:net";
 import { createContext } from "../core/context";
 import { commandUnsupported, isEmpty, looksLikeError } from "../core/routeros";
 import {
@@ -27,7 +28,8 @@ import {
 } from "../core/routeros-parse";
 import { getConfig } from "../core/runtime";
 import { logger } from "../logger";
-import type { UsageStore, VpnSession } from "./usage-store";
+import { parseKidControlOutput } from "../tools/connected-devices";
+import type { ClientCounter, UsageStore, VpnSession } from "./usage-store";
 
 const SERVER_TAG = "mikrotik-mcp";
 /** Keep ~3 months of client snapshots; sessions are kept forever by the store. */
@@ -54,25 +56,43 @@ function bytesOf(v: string | undefined): number {
   return parseSize(v) ?? parseLeadingNumber(v) ?? 0;
 }
 
-/** Strip a `/32`-style mask so the queue target matches the client IP. */
+/** Only a single host queue can be attributed to one client. */
 function ipOf(target: string): string {
-  return (target ?? "").split("/")[0]?.trim() ?? "";
+  const [ip, mask, extra] = target.trim().split("/");
+  return isIPv4(ip ?? "") && (!mask || mask === "32") && !extra ? ip : "";
 }
 
-/** Snapshot every simple queue's cumulative counters for one device. */
+/** Read existing counters; never enable monitoring or create queues while sampling. */
 async function sampleClients(store: UsageStore, device: string, ts: number): Promise<void> {
   const ctx = createContext(undefined, device);
+  const samples = new Map<string, ClientCounter>();
+  const kid = await executeMikrotikCommand(
+    "/ip kid-control device print detail without-paging",
+    ctx,
+  );
+  if (!looksLikeError(kid) && !commandUnsupported(kid)) {
+    for (const [ip, counter] of Object.entries(parseKidControlOutput(kid))) {
+      // The Clients table uses IPv4. Do not persist IPv6 aliases as extra clients.
+      if (isIPv4(ip))
+        samples.set(ip, {
+          ip,
+          rx: counter.rxBytes,
+          tx: counter.txBytes,
+          source: "kid-control",
+        });
+    }
+  }
   const out = await executeMikrotikCommand("/queue simple print stats detail", ctx);
-  if (isEmpty(out) || looksLikeError(out) || commandUnsupported(out)) return;
-  const samples: { ip: string; rx: number; tx: number }[] = [];
-  for (const row of parseRecords(out).rows) {
+  const queues =
+    isEmpty(out) || looksLikeError(out) || commandUnsupported(out) ? [] : parseRecords(out).rows;
+  for (const row of queues) {
     const ip = ipOf(row.target ?? "");
-    if (!ip) continue;
+    if (!ip || samples.has(ip) || !row.bytes) continue;
     // `bytes` is RouterOS's `upload/download` (tx/rx).
     const [tx, rx] = (row.bytes ?? "0/0").split("/");
-    samples.push({ ip, rx: bytesOf(rx), tx: bytesOf(tx) });
+    samples.set(ip, { ip, rx: bytesOf(rx), tx: bytesOf(tx), source: "queue" });
   }
-  store.recordClientSamples(device, ts, samples);
+  store.recordClientSamples(device, ts, [...samples.values()]);
 }
 
 /**

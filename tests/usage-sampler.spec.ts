@@ -10,7 +10,7 @@ import {
 import type { UsageStore } from "../src/observability/usage-store";
 import { logger } from "../src/logger";
 
-const read = vi.hoisted(() => vi.fn(async () => ""));
+const read = vi.hoisted(() => vi.fn(async (_command: string) => ""));
 vi.mock("../src/core/connector", () => ({ executeMikrotikCommand: read }));
 const original = getConfig();
 const busyError = Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY", errno: 5 });
@@ -82,4 +82,54 @@ test("immediate and periodic timer passes survive retention failures", async () 
   stopUsageSampler();
   await vi.advanceTimersByTimeAsync(MIN_USAGE_INTERVAL_MS);
   expect(db.pruneSamples).toHaveBeenCalledTimes(2);
+});
+
+test("records Kid Control counters even without queues, once per IPv4 client", async () => {
+  read.mockImplementation(async (command?: string) =>
+    command?.includes("kid-control")
+      ? `0 D name="PS5"
+    ip-address=fe80::1,
+      10.10.10.191 rate-down=0bps rate-up=0bps bytes-down=1MiB bytes-up=64KiB`
+      : "",
+  );
+  const db = store();
+  await sampleUsageOnce(db);
+  expect(db.recordClientSamples).toHaveBeenCalledWith("edge", expect.any(Number), [
+    { ip: "10.10.10.191", rx: 1048576, tx: 65536, source: "kid-control" },
+  ]);
+  expect(read.mock.calls.every(([command]) => command.includes("print"))).toBe(true);
+});
+
+test("prefers Kid Control and only falls back to exact-host queues without double counting", async () => {
+  read.mockImplementation(async (command?: string) => {
+    if (command?.includes("kid-control")) return `0 ip-address=10.0.0.1 bytes-down=100 bytes-up=20`;
+    if (command?.includes("queue simple"))
+      return `0 target=10.0.0.1/32 bytes=999/999
+1 target=10.0.0.2/32 bytes=10/50
+2 target=10.0.0.0/24 bytes=500/800
+3 target=10.0.0.3/32,10.0.0.4/32 bytes=600/900
+4 target=bridge bytes=700/1000`;
+    return "";
+  });
+  const db = store();
+  await sampleUsageOnce(db);
+  expect(db.recordClientSamples).toHaveBeenCalledWith("edge", expect.any(Number), [
+    { ip: "10.0.0.1", rx: 100, tx: 20, source: "kid-control" },
+    { ip: "10.0.0.2", rx: 50, tx: 10, source: "queue" },
+  ]);
+});
+
+test("unsupported Kid Control retains legacy queue sampling", async () => {
+  read.mockImplementation(async (command?: string) =>
+    command?.includes("kid-control")
+      ? "bad command name kid-control"
+      : command?.includes("queue simple")
+        ? "0 target=10.0.0.2/32 bytes=10/50"
+        : "",
+  );
+  const db = store();
+  await sampleUsageOnce(db);
+  expect(db.recordClientSamples).toHaveBeenCalledWith("edge", expect.any(Number), [
+    { ip: "10.0.0.2", rx: 50, tx: 10, source: "queue" },
+  ]);
 });

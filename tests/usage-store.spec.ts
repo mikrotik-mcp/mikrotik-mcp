@@ -18,6 +18,17 @@ describe("dayOf", () => {
 });
 
 describe("dailyUsageFromSamples", () => {
+  test("a source switch creates a baseline instead of a fake usage spike", () => {
+    expect(
+      dailyUsageFromSamples([
+        { ts: D1, rx: 100, tx: 10 },
+        { ts: D1 + 1000, rx: 9_000_000, tx: 2000, source: "kid-control" },
+        { ts: D1 + 2000, rx: 9_000_100, tx: 2020, source: "kid-control" },
+        { ts: D1 + 3000, rx: 999, tx: 500, source: "queue" },
+      ]),
+    ).toEqual([{ day: "2026-01-01", rx: 100, tx: 20 }]);
+  });
+
   test("attributes the delta between snapshots to the later sample's day", () => {
     const out = dailyUsageFromSamples([
       { ts: D1, rx: 100, tx: 10 },

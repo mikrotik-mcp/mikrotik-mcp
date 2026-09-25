@@ -51,3 +51,33 @@ test("retention drains expired snapshots in bounded batches and preserves VPN se
     store.close();
   }
 });
+
+test("legacy database migrates without losing history and persists source boundaries across reopen", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "mikrotik-usage-migration-"));
+  const path = join(directory, "usage.db");
+  const legacy = new Database(path);
+  legacy.run(
+    "CREATE TABLE usage_samples (device TEXT, subject TEXT, ts INTEGER, rx INTEGER, tx INTEGER)",
+  );
+  legacy.run(
+    "INSERT INTO usage_samples VALUES ('edge', '10.0.0.1', 1, 100, 10), ('edge', '10.0.0.1', 2, 150, 20)",
+  );
+  legacy.close();
+  let store = await openUsageStore(path);
+  try {
+    store.recordClientSamples("edge", 3, [
+      { ip: "10.0.0.1", rx: 1_000_000, tx: 50_000, source: "kid-control" },
+    ]);
+    store.recordClientSamples("edge", 4, [
+      { ip: "10.0.0.1", rx: 1_000_200, tx: 50_040, source: "kid-control" },
+    ]);
+    store.close();
+    store = await openUsageStore(path);
+    expect(store.clientDailyUsage("edge", "10.0.0.1", 0)).toEqual([
+      { day: "1970-01-01", rx: 250, tx: 50 },
+    ]);
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true });
+  }
+});
