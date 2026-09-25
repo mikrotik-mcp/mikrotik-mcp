@@ -3,7 +3,7 @@
  * by redrawing the prompt with `<SAFE>` or by printing a textual confirmation,
  * and both must count as activated.
  */
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { EventEmitter } from "node:events";
 import {
   SafeModeManager,
@@ -69,6 +69,7 @@ describe("classifyPrompt — commit-side mode detection", () => {
   test("settles on the LAST prompt after a Ctrl+X then Enter nudge", () => {
     // Ctrl+X redraws <SAFE>, Enter then renders the real post-commit prompt.
     expect(classifyPrompt("[admin@MikroTik] <SAFE> > \r\n[admin@MikroTik] > ")).toBe("released");
+    expect(classifyPrompt("[admin@MikroTik] <SAFE> \r[admin@MikroTik] > ")).toBe("released");
   });
 });
 
@@ -111,11 +112,86 @@ describe("Safe Mode interactive round trips", () => {
       }
       const prompt = `[admin@CHR] ${safe ? "<SAFE>" : ">"} `;
       emit(`${prompt}${input}\r\n`);
-      emit(`__MCP_SAFEMODE_PROBE__\r\n${prompt}`);
+      emit(`${JSON.parse(input.trim().slice(5))}\r\n${prompt}`);
     });
     expect((await manager.commit()).ok).toBe(true);
     expect(toggles).toBe(1);
     expect(manager.isActive).toBe(false);
+  });
+
+  test("preserves neighbor rows after a horizontally scrolled command echo", async () => {
+    const command = '/ipv6 neighbor print where mac-address~"4E:76:31:54:43:62"';
+    const { manager } = session((_input, emit) => {
+      // RouterOS 7.24.2, dumb terminal: '<' replaces the clipped beginning.
+      emit('/ipv6 neighbor print where mac-address~"\r');
+      emit("[admin@Home] <SAFE> /ipv6 neighbor print where mac-address~>\r");
+      emit('<ipv6 neighbor print where mac-address~"4                      \r');
+      emit(`<${command.slice(1)}\r<${command.slice(1)}\r\n`);
+      emit("Flags: D - DYNAMIC\r\n0 D fd79::2 4E:76:31:54:43:62 bridge\r\n");
+      emit("[admin@Home] <SAFE> ");
+    });
+    try {
+      expect(await manager.execute(command)).toBe(
+        "Flags: D - DYNAMIC\n0 D fd79::2 4E:76:31:54:43:62 bridge",
+      );
+    } finally {
+      await manager.rollback();
+    }
+  });
+
+  test("preserves a device error after a scrolled echo", async () => {
+    const command = '/ip firewall filter add comment="a long command"';
+    const { manager } = session((_input, emit) => {
+      emit(`<${command.slice(10)}\r\n`);
+      emit("failure: configuration flagged\r\n[admin@Home] <SAFE> ");
+    });
+    try {
+      expect(await manager.execute(command)).toBe("failure: configuration flagged");
+    } finally {
+      await manager.rollback();
+    }
+  });
+
+  test("commit cannot classify a timeout prompt without sentinel output as success", async () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const { manager } = session((input, emit) => {
+      writes.push(input);
+      emit(`${input}\r\n[admin@Home] > `); // echo only, no sentinel output
+    });
+    try {
+      const result = manager.commit();
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect((await result).ok).toBe(false);
+      expect(manager.isActive).toBe(true);
+      expect(writes).not.toContain("\x18");
+    } finally {
+      await manager.rollback();
+      vi.useRealTimers();
+    }
+  });
+
+  test("commit requires a fresh sentinel after toggling, not a replayed probe", async () => {
+    vi.useFakeTimers();
+    let previous = "";
+    let toggled = false;
+    const { manager } = session((input, emit) => {
+      if (input === "\x18") {
+        toggled = true;
+        return;
+      }
+      if (!toggled) previous = JSON.parse(input.trim().slice(5));
+      emit(`${input}\r\n${previous}\r\n[admin@Home] ${toggled ? ">" : "<SAFE>"} `);
+    });
+    try {
+      const result = manager.commit();
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect((await result).ok).toBe(false);
+      expect(manager.isActive).toBe(true);
+    } finally {
+      await manager.rollback();
+      vi.useRealTimers();
+    }
   });
 
   test("does not mistake an earlier prompt for command completion", async () => {
@@ -125,6 +201,129 @@ describe("Safe Mode interactive round trips", () => {
     });
     expect(await manager.execute("/system identity print")).toContain("name: CHR");
     await manager.rollback();
+  });
+
+  test("drains the split sniffer settings pager before accepting the next command", async () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const { manager, channel } = session((input, emit) => {
+      writes.push(input);
+      if (input === "/tool sniffer print\n") {
+        emit(`${input}\r\nonly-headers: yes\r\nfilter-port: 443\r\n`);
+        emit("\x1B[7m-- [Q quit|D du");
+        emit("mp|down]\x1B[0m\r");
+      } else if (input === " ") {
+        // Synchronous chunks exercise re-entrant channel.write callbacks too.
+        emit("\r\x1B[Kfilter-direction: any\r\nrunning: no\r\n");
+        emit("[admin@CHR] <SAFE> ");
+      } else {
+        emit(`${input}\r\n[admin@CHR] <SAFE> `);
+      }
+    });
+    try {
+      const output = manager.execute("/tool sniffer print").catch(String);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await output).toBe(
+        "only-headers: yes\nfilter-port: 443\n\nfilter-direction: any\nrunning: no",
+      );
+      expect(writes).toEqual(["/tool sniffer print\n", " "]);
+      expect(await manager.execute("/tool sniffer start")).toBe("");
+      expect(writes.at(-1)).toBe("/tool sniffer start\n");
+      expect(channel.listenerCount("data")).toBe(0);
+    } finally {
+      await manager.rollback();
+      vi.useRealTimers();
+    }
+  });
+
+  test("an ambiguous timeout fences queued commands and commit until rollback", async () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const { manager, channel } = session((input, emit) => {
+      writes.push(input);
+      emit(`${input}\r\npartial output, no prompt`);
+    });
+    try {
+      const first = manager.execute("/tool sniffer start").catch(String);
+      const queued = manager.execute("/tool sniffer stop").catch(String);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await first).toMatch(/Execution may have occurred/);
+      expect(await queued).toMatch(/uncertain|unverified/i);
+      expect(writes).toEqual(["/tool sniffer start\n"]);
+      expect(manager.isActive).toBe(true); // must not fall back to one-shot SSH
+      expect(manager.status()).toMatch(/uncertain|unverified/i);
+      const committed = manager.commit();
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect((await committed).ok).toBe(false);
+      expect(writes).toEqual(["/tool sniffer start\n"]);
+      expect(channel.listenerCount("data")).toBe(0);
+    } finally {
+      await manager.rollback();
+      vi.useRealTimers();
+    }
+  });
+
+  test("advances multiple pages without dumping a file or losing rows", async () => {
+    const writes: string[] = [];
+    let page = 0;
+    const { manager } = session((input, emit) => {
+      writes.push(input);
+      if (page === 0) emit(input);
+      emit(`\r\nrule-${++page}\r\n`);
+      if (page < 3) emit("-- [Q quit|D dump|right|up|down]\r");
+      else emit("[admin@CHR] <SAFE> ");
+    });
+    try {
+      const out = await manager.execute("/ip firewall mangle print");
+      expect(out).toContain("rule-1");
+      expect(out).toContain("rule-2");
+      expect(out).toContain("rule-3");
+      expect(out).not.toContain("Q quit");
+      expect(writes).toEqual(["/ip firewall mangle print\n", " ", " "]);
+    } finally {
+      await manager.rollback();
+    }
+  });
+
+  test.each([
+    "-- [Q quit|D dump|C-z pause]",
+    "Do you want to continue? [y/N]",
+    'comment="-- [Q quit|D dump|down]"',
+  ])("never answers a monitor, confirmation, or quoted pager: %s", async (footer) => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const { manager } = session((input, emit) => {
+      writes.push(input);
+      emit(`${input}\r\n${footer}\r`);
+    });
+    try {
+      const out = manager.execute("/test").catch(String);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await out).toMatch(/timeout/);
+      expect(writes).toEqual(["/test\n"]);
+    } finally {
+      await manager.rollback();
+      vi.useRealTimers();
+    }
+  });
+
+  test("pages cannot extend the absolute execution deadline forever", async () => {
+    vi.useFakeTimers();
+    const pending: ReturnType<typeof setTimeout>[] = [];
+    const { manager, channel } = session((input, emit) => {
+      if (input !== " ") emit(input);
+      pending.push(setTimeout(() => emit("\r\nrow\r\n-- [Q quit|D dump|down]\r"), 1_000));
+    });
+    try {
+      const out = manager.execute("/test print").catch(String);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(await out).toMatch(/timeout/);
+      expect(channel.listenerCount("data")).toBe(0);
+    } finally {
+      for (const timer of pending) clearTimeout(timer);
+      await manager.rollback();
+      vi.useRealTimers();
+    }
   });
 });
 

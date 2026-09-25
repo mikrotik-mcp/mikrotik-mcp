@@ -12,7 +12,7 @@
  * through the single persistent shell held here.
  */
 import type { ClientChannel } from "ssh2";
-import { MikroTikSSHClient, decodeOutput } from "./client";
+import { decodeOutput, MikroTikSSHClient } from "./client";
 import { getDevice } from "../core/runtime";
 import { resolveJump, sshOptionsOf } from "../core/transport";
 
@@ -35,6 +35,13 @@ function stripAnsi(text: string): string {
 }
 
 const CTRL_X = "\x18";
+
+/** Finite print pager only — never answer confirmation or live-monitor prompts. */
+const PRINT_PAGER_RE = /(?:^|[\r\n])-- \[Q quit\|D dump\|(?:up\||left\||right\|)*down\][ \t\r]*$/;
+
+const UNCERTAIN_SESSION =
+  "Safe Mode session is uncertain after a command timeout. Further commands and commit are " +
+  "blocked; call rollback_safe_mode, inspect device state, and re-enable Safe Mode before retrying.";
 
 /**
  * How long the interactive shell may stay SILENT before we treat it as wedged.
@@ -69,7 +76,7 @@ export function isSafeModeActivated(response: string): boolean {
 /** The last non-empty, CR-stripped, right-trimmed line of a response buffer. */
 function lastNonEmptyLine(response: string): string {
   const lines = response
-    .replace(/\r/g, "")
+    .replace(/\r/g, "\n")
     .split("\n")
     .map((l) => l.trimEnd())
     .filter(Boolean);
@@ -125,6 +132,10 @@ export class SafeModeManager {
    * instead of a reassuring false success. Cleared on the next enable().
    */
   private droppedUnexpectedly = false;
+  /** Keep the session active (no one-shot fallback), but fence a desynchronised shell. */
+  private uncertain = false;
+  /** Distinguish each mode probe from delayed output of an earlier round trip. */
+  private probeSequence = 0;
   /** Serializes channel access so concurrent tool calls don't interleave I/O. */
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -148,9 +159,11 @@ export class SafeModeManager {
   /** Open a persistent SSH shell and activate MikroTik Safe Mode. */
   enable(): Promise<string> {
     return this.lock(async () => {
-      if (this.active) return "Safe mode is already active.";
+      if (this.active)
+        return this.uncertain ? `Error: ${UNCERTAIN_SESSION}` : "Safe mode is already active.";
       // Fresh session — clear any drop flag left by a previously died session.
       this.droppedUnexpectedly = false;
+      this.uncertain = false;
 
       const dc = getDevice(this.deviceName);
       // Safe Mode rides a persistent SSH shell (Ctrl+X). A MAC-Telnet device has
@@ -229,14 +242,15 @@ export class SafeModeManager {
       if (!this.active || !this.channel) {
         throw new Error("Safe mode session is not active.");
       }
-      const response = this.readUntilPrompt();
+      if (this.uncertain) throw new Error(UNCERTAIN_SESSION);
+      const response = this.readUntilPrompt(IDLE_TIMEOUT_MS, undefined, HARD_CAP_MS, true);
       this.channel.write(`${command}\n`);
       const { text, timedOut } = await response;
       if (timedOut) {
+        this.uncertain = true;
         throw new Error(
           `Safe Mode command did not return a recognized prompt before the timeout (command: ${command}). ` +
-            "Execution may have occurred; do not retry the write blindly. Inspect the session " +
-            "and roll back if its state cannot be verified.",
+            `Execution may have occurred; do not retry the write blindly. ${UNCERTAIN_SESSION}`,
         );
       }
       return this.extractOutput(text, command);
@@ -265,6 +279,7 @@ export class SafeModeManager {
       if (!this.active || !this.channel) {
         return { ok: true, message: "Safe mode is not active. Nothing to commit." };
       }
+      if (this.uncertain) return { ok: false, message: UNCERTAIN_SESSION };
 
       // PROBE FIRST with a sentinel round-trip. A previous commit may have
       // actually succeeded even though detection was flaky (leaving us `active`).
@@ -344,6 +359,7 @@ export class SafeModeManager {
         "were NOT saved. Re-enable Safe Mode and re-apply, or apply changes directly (verify each with a read)."
       );
     }
+    if (this.uncertain && this.active) return UNCERTAIN_SESSION;
     return this.active
       ? "Safe mode is ACTIVE. Changes are pending — they are NOT yet persisted. " +
           "Call commit_safe_mode to persist or rollback_safe_mode to revert."
@@ -386,6 +402,7 @@ export class SafeModeManager {
     idleMs = IDLE_TIMEOUT_MS,
     isDone: (cleaned: string) => boolean = (c) => PROMPT_RE.test(c),
     hardCapMs = HARD_CAP_MS,
+    drainPrintPager = false,
   ): Promise<{ text: string; timedOut: boolean }> {
     const channel = this.channel;
     if (!channel) return Promise.resolve({ text: "", timedOut: false });
@@ -403,7 +420,19 @@ export class SafeModeManager {
         buf += decodeOutput(chunk);
         armIdle(); // progress: the shell is alive, so restart the silence clock
         const cleaned = stripAnsi(buf);
-        if (isDone(cleaned)) finish(cleaned, false);
+        if (isDone(cleaned)) {
+          finish(cleaned, false);
+          return;
+        }
+        const pager = drainPrintPager ? PRINT_PAGER_RE.exec(cleaned) : null;
+        if (pager) {
+          // Remove the consumed footer BEFORE writing: a response may arrive
+          // synchronously, and split chunks must never answer the same pager twice.
+          // Space advances one screen. Never use `d`: RouterOS writes a
+          // console-dump.txt file on router storage for that key.
+          buf = cleaned.slice(0, pager.index);
+          channel!.write(" ");
+        }
       }
       function finish(result: string, timedOut: boolean): void {
         clearTimeout(idleTimer);
@@ -428,7 +457,7 @@ export class SafeModeManager {
    */
   private async probeMode(): Promise<"safe" | "released" | "unknown"> {
     if (!this.channel) return "unknown";
-    const token = "__MCP_SAFEMODE_PROBE__";
+    const token = `__MCP_SAFEMODE_PROBE_${++this.probeSequence}__`;
     // Settle only once the sentinel's OUTPUT is on screen AND a prompt follows
     // it — i.e. the command fully round-tripped at the current prompt.
     const response = this.readUntilPrompt(8_000, (cleaned) => {
@@ -438,8 +467,9 @@ export class SafeModeManager {
       return i >= 0 && PROMPT_RE.test(lines.slice(i + 1).join("\n"));
     });
     this.channel.write(`:put "${token}"\n`);
-    const out = (await response).text;
-    return classifyPrompt(out);
+    const { text, timedOut } = await response;
+    // A prompt alone is not proof: the predicate also requires THIS sentinel.
+    return timedOut ? "unknown" : classifyPrompt(text);
   }
 
   private extractOutput(raw: string, command: string): string {
@@ -447,17 +477,26 @@ export class SafeModeManager {
     const lines = text.split("\n");
     const result: string[] = [];
     let pastEcho = false;
+    const sent = command.trim();
+    const isEcho = (line: string): boolean => {
+      if (line === sent) return true;
+      if (line.endsWith(sent) && PROMPT_RE.test(line.slice(0, -sent.length).trimEnd())) {
+        return true;
+      }
+      // RouterOS's line editor scrolls long commands horizontally even on a
+      // dumb PTY. '<' replaces the clipped prefix; the complete command may
+      // never appear on any single line. Match the remaining suffix, not an
+      // arbitrary substring, and remove repeated CR redraws of that echo too.
+      return line.startsWith("<") && line.length > 1 && sent.endsWith(line.slice(1));
+    };
     for (const line of lines) {
       const stripped = line.trim();
       if (!pastEcho) {
-        if (stripped.includes(command.trim())) pastEcho = true;
+        if (isEcho(stripped)) pastEcho = true;
         continue;
       }
       // RouterOS may echo once before CR and again on its redrawn prompt.
-      if (stripped.endsWith(command.trim())) {
-        const prefix = stripped.slice(0, -command.trim().length).trimEnd();
-        if (PROMPT_RE.test(prefix)) continue;
-      }
+      if (isEcho(stripped)) continue;
       if (PROMPT_RE.test(stripped)) break;
       result.push(line);
     }
@@ -466,6 +505,7 @@ export class SafeModeManager {
 
   private cleanup(): void {
     this.active = false;
+    this.uncertain = false;
     if (this.channel) {
       try {
         this.channel.end();
