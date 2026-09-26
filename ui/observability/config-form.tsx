@@ -7,7 +7,8 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Copy } from "lucide-react";
+import { CREDENTIAL_SOURCE, duplicateDevice, renameDevice } from "../../src/config-device-draft";
 import { api } from "./api";
 import { Badge, Button, Card, Input, Note, Select } from "./geist";
 import { Sheet } from "./sheet";
@@ -368,18 +369,13 @@ function DeviceSheet({
   const commitName = (): boolean => {
     const nn = newName.trim();
     if (nn === name) return true; // unchanged — nothing to rename
-    if (!nn) {
-      setNameErr("Name cannot be empty.");
+    try {
+      onChange(renameDevice(cfg, name, nn));
+      return true;
+    } catch (error) {
+      setNameErr(error instanceof Error ? error.message : "Could not rename device.");
       return false;
     }
-    if (devices[nn]) {
-      setNameErr(`A device named "${nn}" already exists.`);
-      return false;
-    }
-    const nextDevices = { ...devices, [nn]: dev };
-    delete nextDevices[name];
-    onChange({ ...cfg, devices: nextDevices });
-    return true;
   };
 
   // Done applies the typed name (creating the device under its real key for a
@@ -414,13 +410,19 @@ function DeviceSheet({
             placeholder="core-router"
           />
           {!isNew && newName.trim() !== name && (
-            <Button size="sm" ghost onClick={() => commitName()}>
+            <Button size="sm" ghost onClick={done}>
               Rename
             </Button>
           )}
         </div>
         {nameErr && <span className="text-destructive text-[11px]">{nameErr}</span>}
       </div>
+      {typeof dev[CREDENTIAL_SOURCE] === "string" && (
+        <Note type="secondary" label="Copied credentials">
+          Unchanged secrets are inherited securely from {str(dev[CREDENTIAL_SOURCE])} when testing
+          or saving. Review the address and name before saving. Nothing has been applied yet.
+        </Note>
+      )}
       <FieldForm fields={DEVICE_FIELDS} value={dev} onField={setDev} />
     </Sheet>
   );
@@ -432,6 +434,11 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
   const devices = asObj(cfg.devices);
   const names = Object.keys(devices);
   const defaultDevice = str(cfg.defaultDevice);
+  const duplicate = (source: string) => {
+    const result = duplicateDevice(cfg, source);
+    onChange(result.config);
+    setSheet({ name: result.name, isNew: true });
+  };
 
   const addDevice = (): void => {
     const base = "device";
@@ -485,7 +492,10 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
         </Button>
       </div>
 
-      <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Copy includes all settings and stored credentials. Save to apply changes.
+      </p>
+      <div className="mt-3 grid min-w-0 grid-cols-1 gap-3">
         {names.map((n) => {
           const d = asObj(devices[n]);
           const off = d.disabled === true;
@@ -520,7 +530,16 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
                   {str(d.description)}
                 </div>
               ) : null}
-              <div className="mt-auto flex gap-1.5 pt-1">
+              <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                <Button
+                  size="sm"
+                  ghost
+                  aria-label={`Copy ${n}`}
+                  onClick={() => duplicate(n)}
+                  icon={<Copy className="size-3.5" />}
+                >
+                  Copy
+                </Button>
                 <Button size="sm" ghost onClick={() => setSheet({ name: n, isNew: false })}>
                   Edit
                 </Button>
@@ -702,7 +721,7 @@ function ModulesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
 
 export function ConfigForm({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }): ReactNode {
   return (
-    <div className="mt-1 grid gap-3.5">
+    <div className="mt-1 grid min-w-0 grid-cols-1 gap-3.5">
       {CONFIG_SECTIONS.map((s) =>
         s.kind === "deviceMap" ? (
           <DevicesCard key={s.id} cfg={cfg} onChange={onChange} />

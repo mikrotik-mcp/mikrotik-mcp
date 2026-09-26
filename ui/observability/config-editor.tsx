@@ -9,7 +9,7 @@ import { UnifiedDiff } from "./diff-view";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Braces, LayoutGrid, X } from "lucide-react";
-import { postJson } from "./api";
+import { api, postJson } from "./api";
 import { ConfigForm } from "./config-form";
 import { JsonEditor, ROLLBACK_OPTS } from "./config-studio";
 import type { ConfigIssue, DiffSummary, SaveResp } from "./config-studio";
@@ -44,12 +44,28 @@ export function ConfigEditor({
 
   // Debounced schema validation of the working config (Zod is authoritative).
   useEffect(() => {
+    let active = true;
     const t = setTimeout(() => {
-      void postJson<{ ok: boolean; errors: ConfigIssue[] }>("/api/config/validate", cfg)
-        .then((r) => setErrors(r.errors ?? []))
-        .catch(() => {});
+      void postJson<{ ok: boolean; errors?: ConfigIssue[]; error?: string }>(
+        "/api/config/validate",
+        cfg,
+      )
+        .then((r) => {
+          if (active)
+            setErrors(
+              r.ok
+                ? []
+                : (r.errors ?? [{ path: "(root)", message: r.error ?? "Validation unavailable" }]),
+            );
+        })
+        .catch(() => {
+          if (active) setErrors([{ path: "(root)", message: "Validation unavailable" }]);
+        });
     }, 350);
-    return () => clearTimeout(t);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
   }, [cfg]);
 
   // Rollback countdown while a save awaits confirmation.
@@ -64,6 +80,9 @@ export function ConfigEditor({
     if (pending && countdown === 0 && (pending.rollbackMs ?? 0) > 0) {
       setMsg("Auto-reverted — changes were not confirmed in time.");
       setPending(null);
+      void api<Cfg>("/api/config")
+        .then(setCfg)
+        .catch(() => {});
       onReloadRef.current();
     }
   }, [pending, countdown]);
@@ -106,7 +125,10 @@ export function ConfigEditor({
   const doSave = async (): Promise<void> => {
     setMsg("Saving…");
     try {
-      const r = await postJson<SaveResp>("/api/config", { config: cfg, rollbackMs });
+      const r = await postJson<SaveResp & { config?: Cfg }>("/api/config", {
+        config: cfg,
+        rollbackMs,
+      });
       setMsg(null);
       setPreview(null);
       if (!r.ok) {
@@ -115,6 +137,7 @@ export function ConfigEditor({
         return;
       }
       setPending(r);
+      if (r.config) setCfg(r.config);
       setCountdown(Math.round((r.rollbackMs ?? 0) / 1000));
       toast.success("Config applied");
     } catch (e) {
@@ -140,6 +163,7 @@ export function ConfigEditor({
     try {
       await postJson("/api/config/rollback", { pendingId: pending.pendingId });
       setPending(null);
+      setCfg(await api<Cfg>("/api/config"));
       setMsg("Reverted to the previous config.");
       onReload();
       toast.success("Change rolled back");

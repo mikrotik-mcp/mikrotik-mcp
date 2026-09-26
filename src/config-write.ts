@@ -16,6 +16,7 @@
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { REDACTED } from "./observability/event";
+import { CREDENTIAL_SOURCE } from "./config-device-draft";
 
 /** Relative path used as the `$schema` pointer in written config files. */
 const SCHEMA_REF = "./schemas/config.schema.json";
@@ -54,6 +55,41 @@ export function mergeSecrets(incoming: Json, current: Json): Json {
     return out;
   }
   return incoming;
+}
+
+/** Restore copied/renamed device secrets without sending plaintext credentials to the browser. */
+export function mergeDeviceDraft(
+  incoming: unknown,
+  name: string,
+  devices: Record<string, unknown>,
+): unknown {
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return incoming;
+  const { [CREDENTIAL_SOURCE]: source, ...draft } = incoming as Record<string, unknown>;
+  if (source !== undefined && (typeof source !== "string" || !Object.hasOwn(devices, source)))
+    throw new Error(
+      "Credential source is unavailable. Reopen the editor or enter new credentials.",
+    );
+  const key = typeof source === "string" ? source : name;
+  return mergeSecrets(draft, Object.hasOwn(devices, key) ? devices[key] : undefined);
+}
+
+/** Same resolver for validation, preview and saving, preserving incoming device order. */
+export function mergeConfigDraft(incoming: unknown, current: unknown): unknown {
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return incoming;
+  const draft = incoming as Record<string, unknown>;
+  if (!draft.devices || typeof draft.devices !== "object" || Array.isArray(draft.devices))
+    return mergeSecrets(incoming, current);
+  const { devices: _devices, ...rest } = draft;
+  const currentDevices = (current as { devices?: Record<string, unknown> } | null)?.devices ?? {};
+  return {
+    ...(mergeSecrets(rest, current) as Record<string, unknown>),
+    devices: Object.fromEntries(
+      Object.entries(draft.devices).map(([name, device]) => [
+        name,
+        mergeDeviceDraft(device, name, currentDevices),
+      ]),
+    ),
+  };
 }
 
 /**

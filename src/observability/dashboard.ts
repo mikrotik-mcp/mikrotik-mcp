@@ -40,7 +40,7 @@ import {
 } from "../config";
 import { moduleCatalog } from "../tools";
 import { applyModuleToggle, moduleSurface } from "./modules";
-import { atomicWrite, mergeSecrets, serializeConfig } from "../config-write";
+import { atomicWrite, mergeConfigDraft, mergeDeviceDraft, serializeConfig } from "../config-write";
 import { buildChangePlan, renderPlan, splitCommands } from "../core/change-plan";
 import { diffLines } from "../core/diff";
 import { getS3Client, isS3Configured, presignExpiresIn, s3Target } from "../core/s3";
@@ -548,15 +548,14 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
   }
 
   if (p === "/api/config/validate" && req.method === "POST") {
-    const merged = mergeSecrets(await readJson(req), getConfig());
+    const merged = mergeConfigDraft(await readJson(req), getConfig());
     return json(validateConfig(merged));
   }
 
   if (p === "/api/config/test-device" && req.method === "POST") {
     const body = (await readJson(req)) as { name?: string; config?: unknown };
     const name = typeof body?.name === "string" ? body.name : "(unsaved)";
-    const currentDc = (getConfig().devices as Record<string, unknown>)[name];
-    const merged = mergeSecrets(body?.config, currentDc);
+    const merged = mergeDeviceDraft(body?.config, name, getConfig().devices);
     const parsed = DeviceConfigSchema.safeParse(merged);
     if (!parsed.success) return json({ ok: false, errors: issues(parsed.error) }, 400);
     const status = await probeDevice(`config-test:${name}`, parsed.data);
@@ -565,14 +564,18 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
 
   if (p === "/api/config/preview" && req.method === "POST") {
     const before = JSON.stringify(redact(getConfig()), null, 2);
-    const after = JSON.stringify((await readJson(req)) ?? {}, null, 2);
+    const after = JSON.stringify(
+      redact(mergeConfigDraft(await readJson(req), getConfig())),
+      null,
+      2,
+    );
     const d = diffLines(before, after, { fromLabel: "current", toLabel: "edited" });
     return json({ summary: d.summary, unified: d.unified });
   }
 
   if (p === "/api/config" && req.method === "POST") {
     const body = (await readJson(req)) as { config?: unknown; rollbackMs?: unknown };
-    const merged = mergeSecrets(body?.config, getConfig());
+    const merged = mergeConfigDraft(body?.config, getConfig());
     const v = validateConfig(merged);
     if (!v.ok || !v.value) return json({ ok: false, errors: v.errors }, 400);
 
@@ -588,7 +591,14 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
       prevDevs.length !== nextDevs.length || prevDevs.some((d) => !nextDevs.includes(d));
 
     const res = admin.applyConfig(v.value, clampRollback(body?.rollbackMs));
-    return json({ ok: true, ...res, devicesChanged, summary: diff.summary, unified: diff.unified });
+    return json({
+      ok: true,
+      ...res,
+      config: redact(v.value),
+      devicesChanged,
+      summary: diff.summary,
+      unified: diff.unified,
+    });
   }
 
   if (p === "/api/config/keep" && req.method === "POST") {
