@@ -7,8 +7,22 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronDown, ChevronRight, Plus, Copy } from "lucide-react";
-import { CREDENTIAL_SOURCE, duplicateDevice, renameDevice } from "../../src/config-device-draft";
+import {
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Copy,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
+import { Reorder, useDragControls, useReducedMotion } from "motion/react";
+import {
+  CREDENTIAL_SOURCE,
+  duplicateDevice,
+  renameDevice,
+  reorderDevices,
+} from "../../src/config-device-draft";
 import { api } from "./api";
 import { Badge, Button, Card, Input, Note, Select } from "./geist";
 import { Sheet } from "./sheet";
@@ -428,16 +442,97 @@ function DeviceSheet({
   );
 }
 
+function SortableDevice({
+  name,
+  index,
+  total,
+  onMove,
+  children,
+}: {
+  name: string;
+  index: number;
+  total: number;
+  onMove: (offset: number) => void;
+  children: ReactNode;
+}) {
+  const controls = useDragControls();
+  const reduced = useReducedMotion();
+  return (
+    <Reorder.Item
+      as="div"
+      value={name}
+      dragListener={false}
+      dragControls={controls}
+      transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 35 }}
+      whileDrag={{ zIndex: 10, scale: reduced ? 1 : 1.01 }}
+      className="relative flex min-w-0 gap-3 rounded-xl border border-border bg-card p-3 sm:p-4"
+    >
+      <div className="flex shrink-0 flex-col items-center gap-1 border-r border-border pr-2">
+        <span className="text-[10px] font-mono text-muted-foreground">
+          {String(index + 1).padStart(2, "0")}
+        </span>
+        <button
+          type="button"
+          aria-label={`Drag to reorder ${name}`}
+          title="Drag, or use ↑ / ↓ keys"
+          onPointerDown={(event) => controls.start(event)}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+              event.preventDefault();
+              onMove(event.key === "ArrowUp" ? -1 : 1);
+            }
+          }}
+          className="touch-none cursor-grab rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing"
+        >
+          <GripVertical className="size-4" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Move ${name} up`}
+          disabled={index === 0}
+          onClick={() => onMove(-1)}
+          className="rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-25 focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <ArrowUp className="size-3" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Move ${name} down`}
+          disabled={index === total - 1}
+          onClick={() => onMove(1)}
+          className="rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-25 focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <ArrowDown className="size-3" />
+        </button>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">{children}</div>
+    </Reorder.Item>
+  );
+}
+
 function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }): ReactNode {
   const [sheet, setSheet] = useState<{ name: string; isNew: boolean } | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   const devices = asObj(cfg.devices);
   const names = Object.keys(devices);
   const defaultDevice = str(cfg.defaultDevice);
+  const reorder = (order: string[]) => {
+    onChange(reorderDevices(cfg, order));
+    setAnnouncement(`Device order: ${order.join(", ")}. Save to apply.`);
+  };
+  const move = (name: string, offset: number) => {
+    const index = names.indexOf(name);
+    if (index + offset < 0 || index + offset >= names.length) return;
+    const order = [...names];
+    [order[index], order[index + offset]] = [order[index + offset], order[index]];
+    reorder(order);
+  };
   const duplicate = (source: string) => {
     const result = duplicateDevice(cfg, source);
     onChange(result.config);
     setSheet({ name: result.name, isNew: true });
+    setAnnouncement(`Copied ${source} to ${result.name}. Review and save to apply.`);
   };
 
   const addDevice = (): void => {
@@ -493,35 +588,46 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
       </div>
 
       <p className="mt-3 text-[11px] text-muted-foreground">
-        Copy includes all settings and stored credentials. Save to apply changes.
+        Drag the handle to reorder, or use the arrow buttons. Copy includes all settings and stored
+        credentials. Save to apply changes.
       </p>
-      <div className="mt-3 grid min-w-0 grid-cols-1 gap-3">
-        {names.map((n) => {
+      <span role="status" className="sr-only">
+        {announcement}
+      </span>
+      <Reorder.Group
+        as="div"
+        axis="y"
+        values={names}
+        onReorder={reorder}
+        className="mt-3 grid min-w-0 grid-cols-1 gap-3"
+      >
+        {names.map((n, index) => {
           const d = asObj(devices[n]);
           const off = d.disabled === true;
           const addr = d.mac ? str(d.mac) : `${str(d.host) || "?"}:${str(d.port) || "22"}`;
           return (
-            <div
+            <SortableDevice
               key={n}
-              className={cn(
-                "border-border bg-card hover:border-brand/40 flex flex-col gap-1.5 rounded-lg border px-[15px] py-3.5 transition-colors",
-                off && "opacity-50 grayscale-[0.4]",
-              )}
+              name={n}
+              index={index}
+              total={names.length}
+              onMove={(offset) => move(n, offset)}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={cn(
                     "inline-block size-2 shrink-0 rounded-full",
                     off ? "bg-muted-foreground/60" : "bg-success",
                   )}
                 />
-                <span className="font-mono text-[13px] font-medium">{n}</span>
+                <span className="break-all font-mono text-[13px] font-medium">{n}</span>
                 {defaultDevice === n && <Badge type="accent">default</Badge>}
+                {off && <Badge>disabled</Badge>}
                 <span className="flex-1" />
                 <Switch
                   checked={!off}
                   onCheckedChange={(c) => toggleDisabled(n, !c)}
-                  title={off ? "Enable device" : "Disable device"}
+                  aria-label={`${off ? "Enable" : "Disable"} ${n}`}
                 />
               </div>
               <div className="text-muted-foreground font-mono text-[11px] break-words">{addr}</div>
@@ -553,7 +659,7 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
                   </Button>
                 )}
               </div>
-            </div>
+            </SortableDevice>
           );
         })}
         {names.length === 0 && (
@@ -561,7 +667,7 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
             No devices yet. Click <b>Add device</b> to configure your first router.
           </Note>
         )}
-      </div>
+      </Reorder.Group>
 
       {sheet && (
         <DeviceSheet

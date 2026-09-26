@@ -44,3 +44,14 @@ export function renameDevice(cfg: Draft, name: string, nextName: string): Draft 
     ),
   };
 }
+
+export function reorderDevices(cfg: Draft, order: string[]): Draft {
+  const devices = devicesOf(cfg);
+  if (
+    order.length !== Object.keys(devices).length ||
+    new Set(order).size !== order.length ||
+    order.some((name) => !Object.hasOwn(devices, name))
+  )
+    return cfg;
+  return { ...cfg, devices: Object.fromEntries(order.map((name) => [name, devices[name]])) };
+}

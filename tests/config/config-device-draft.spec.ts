@@ -1,7 +1,13 @@
 import { expect, test } from "vite-plus/test";
-import { CREDENTIAL_SOURCE, duplicateDevice, renameDevice } from "../../src/config-device-draft";
-import { mergeConfigDraft, mergeDeviceDraft } from "../../src/config-write";
+import {
+  CREDENTIAL_SOURCE,
+  duplicateDevice,
+  renameDevice,
+  reorderDevices,
+} from "../../src/config-device-draft";
+import { mergeConfigDraft, mergeDeviceDraft, serializeConfig } from "../../src/config-write";
 import { REDACTED, redact } from "../../src/observability/event";
+import { MikrotikConfigSchema } from "../../src/config";
 
 const current = {
   defaultDevice: "home",
@@ -58,6 +64,16 @@ test("rename preserves position, default and secrets even when the source is rem
   ).toEqual(current.devices.home);
   expect(() => renameDevice(draft, "home", "edge")).toThrow();
   expect(() => duplicateDevice(draft, "missing")).toThrow();
+});
+
+test("device order survives secret resolution, schema validation and serialization without changing the default", () => {
+  const draft = reorderDevices(redact(current) as Record<string, unknown>, ["edge", "home"]);
+  const config = MikrotikConfigSchema.parse(mergeConfigDraft(draft, current));
+  const saved = JSON.parse(serializeConfig(config));
+  expect(Object.keys(saved.devices)).toEqual(["edge", "home"]);
+  expect(saved.defaultDevice).toBe("home");
+  expect(reorderDevices(draft, ["edge", "edge"])).toBe(draft);
+  expect(reorderDevices(draft, ["ghost", "home"])).toBe(draft);
 });
 
 test("missing or invalid credential origins fail closed; markers never become credentials", () => {
