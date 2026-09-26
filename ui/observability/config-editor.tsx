@@ -22,6 +22,8 @@ type Cfg = Record<string, unknown>;
 const asObj = (v: unknown): Cfg =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Cfg) : {};
 
+export type DeviceTest = { ok: boolean; pending: boolean; label: string; fingerprint: string };
+
 export function ConfigEditor({
   initial,
   onClose,
@@ -35,7 +37,9 @@ export function ConfigEditor({
   const [mode, setMode] = useState<"form" | "json">("form");
   const [jsonErr, setJsonErr] = useState<string | null>(null);
   const [errors, setErrors] = useState<ConfigIssue[]>([]);
-  const [tests, setTests] = useState<Record<string, { ok: boolean; label: string }>>({});
+  const [tests, setTests] = useState<Record<string, DeviceTest>>({});
+  const testing = useRef(new Map<string, Promise<boolean>>());
+  const [testingAll, setTestingAll] = useState(false);
   const [preview, setPreview] = useState<{ summary?: DiffSummary; unified?: string } | null>(null);
   const [pending, setPending] = useState<SaveResp | null>(null);
   const [countdown, setCountdown] = useState(0);
@@ -89,32 +93,47 @@ export function ConfigEditor({
 
   const valid = !jsonErr && errors.length === 0;
 
+  const testDevice = (name: string): Promise<boolean> => {
+    const existing = testing.current.get(name);
+    if (existing) return existing;
+    const dc = asObj(cfg.devices)[name];
+    const fingerprint = JSON.stringify(dc);
+    setTests((old) => ({
+      ...old,
+      [name]: { ok: false, pending: true, label: "Connecting…", fingerprint },
+    }));
+    type TestResp = { ok?: boolean; status?: DeviceStatus; errors?: ConfigIssue[]; error?: string };
+    const request = postJson<TestResp>("/api/config/test-device", { name, config: dc })
+      .catch((): TestResp => ({ error: "Connection test request failed. Try again." }))
+      .then((r) => {
+        const ok = r.ok === true && r.status?.reachable === true;
+        const label = ok
+          ? `${Math.round(r.status?.latencyMs ?? 0)}ms · ${r.status?.identity ?? "Connected"}`
+          : (r.status?.error ?? r.errors?.[0]?.message ?? r.error ?? "Unreachable");
+        setTests((old) => ({ ...old, [name]: { ok, pending: false, label, fingerprint } }));
+        return ok;
+      })
+      .finally(() => testing.current.delete(name));
+    testing.current.set(name, request);
+    return request;
+  };
+
   const testDevices = async (): Promise<void> => {
+    if (testingAll) return;
     const devices = asObj(cfg.devices);
     if (Object.keys(devices).length === 0) {
       setMsg("No devices configured to test — add one first.");
       toast.error("No devices to test");
       return;
     }
-    setTests({});
-    setMsg("Testing devices…");
-    const out: Record<string, { ok: boolean; label: string }> = {};
-    type TestResp = { ok: boolean; status?: DeviceStatus; errors?: ConfigIssue[] };
-    for (const [name, dc] of Object.entries(devices)) {
-      const r = await postJson<TestResp>("/api/config/test-device", { name, config: dc }).catch(
-        (): TestResp => ({ ok: false }),
-      );
-      out[name] =
-        r.ok && r.status?.reachable === true
-          ? {
-              ok: true,
-              label: `${Math.round(r.status.latencyMs ?? 0)}ms · ${r.status.identity ?? "ok"}`,
-            }
-          : { ok: false, label: r.status?.error ?? r.errors?.[0]?.message ?? "unreachable" };
-      setTests({ ...out });
+    setTestingAll(true);
+    const out: boolean[] = [];
+    try {
+      for (const name of Object.keys(devices)) out.push(await testDevice(name));
+    } finally {
+      setTestingAll(false);
     }
-    setMsg(null);
-    if (Object.values(out).every((r) => r.ok)) toast.success("Devices reachable");
+    if (out.every(Boolean)) toast.success("Devices reachable");
     else toast.error("Some devices unreachable");
   };
 
@@ -213,8 +232,8 @@ export function ConfigEditor({
               : "valid ✓"}
         </span>
         <span className="flex-1" />
-        <Button size="sm" onClick={() => void testDevices()}>
-          Test devices
+        <Button size="sm" disabled={testingAll} onClick={() => void testDevices()}>
+          {testingAll ? "Testing devices…" : "Test devices"}
         </Button>
         <Button size="sm" onClick={() => void doPreview()} disabled={!valid}>
           Preview diff
@@ -268,24 +287,33 @@ export function ConfigEditor({
         </div>
       )}
 
-      {Object.keys(tests).length > 0 && (
+      {mode === "json" && Object.keys(tests).length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {Object.entries(tests).map(([name, r]) => (
-            <span
-              key={name}
-              className={cn(
-                "rounded-full border px-2.5 py-1 font-mono text-[11px]",
-                r.ok ? "border-success/40 text-success" : "border-destructive/40 text-destructive",
-              )}
-            >
-              {r.ok ? "●" : "○"} {name}: {r.label}
-            </span>
-          ))}
+          {Object.entries(tests)
+            .filter(([name, r]) => r.fingerprint === JSON.stringify(asObj(cfg.devices)[name]))
+            .map(([name, r]) => (
+              <span
+                key={name}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 font-mono text-[11px]",
+                  r.ok
+                    ? "border-success/40 text-success"
+                    : "border-destructive/40 text-destructive",
+                )}
+              >
+                {r.ok ? "●" : "○"} {name}: {r.label}
+              </span>
+            ))}
         </div>
       )}
 
       {mode === "form" ? (
-        <ConfigForm cfg={cfg} onChange={setCfg} />
+        <ConfigForm
+          cfg={cfg}
+          onChange={setCfg}
+          tests={tests}
+          onTest={(name) => void testDevice(name)}
+        />
       ) : (
         <JsonEditor value={cfg} onChange={(o) => setCfg(asObj(o))} onJsonError={setJsonErr} />
       )}

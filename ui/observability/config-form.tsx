@@ -15,6 +15,8 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
+  PlugZap,
+  LoaderCircle,
 } from "lucide-react";
 import { Reorder, useDragControls, useReducedMotion } from "motion/react";
 import {
@@ -23,6 +25,7 @@ import {
   renameDevice,
   reorderDevices,
 } from "../../src/config-device-draft";
+import type { DeviceTest } from "./config-editor";
 import { api } from "./api";
 import { Badge, Button, Card, Input, Note, Select } from "./geist";
 import { Sheet } from "./sheet";
@@ -442,6 +445,8 @@ function DeviceSheet({
   );
 }
 
+type DeviceControls = { tests: Record<string, DeviceTest>; onTest: (name: string) => void };
+
 function SortableDevice({
   name,
   index,
@@ -510,7 +515,12 @@ function SortableDevice({
   );
 }
 
-function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }): ReactNode {
+function DevicesCard({
+  cfg,
+  onChange,
+  tests,
+  onTest,
+}: { cfg: Cfg; onChange: (c: Cfg) => void } & DeviceControls): ReactNode {
   const [sheet, setSheet] = useState<{ name: string; isNew: boolean } | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -603,6 +613,7 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
       >
         {names.map((n, index) => {
           const d = asObj(devices[n]);
+          const test = tests[n]?.fingerprint === JSON.stringify(d) ? tests[n] : undefined;
           const off = d.disabled === true;
           const addr = d.mac ? str(d.mac) : `${str(d.host) || "?"}:${str(d.port) || "22"}`;
           return (
@@ -640,6 +651,22 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
                 <Button
                   size="sm"
                   ghost
+                  disabled={!!tests[n]?.pending}
+                  aria-label={`Test connection to ${n}`}
+                  onClick={() => onTest(n)}
+                  icon={
+                    tests[n]?.pending ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <PlugZap className="size-3.5" />
+                    )
+                  }
+                >
+                  {tests[n]?.pending ? "Testing…" : "Test connection"}
+                </Button>
+                <Button
+                  size="sm"
+                  ghost
                   aria-label={`Copy ${n}`}
                   onClick={() => duplicate(n)}
                   icon={<Copy className="size-3.5" />}
@@ -659,6 +686,29 @@ function DevicesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
                   </Button>
                 )}
               </div>
+              {test && (
+                <div
+                  role="status"
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-xs break-words",
+                    test.pending
+                      ? "border-border text-muted-foreground"
+                      : test.ok
+                        ? "border-success/30 bg-success/5 text-success"
+                        : "border-destructive/30 bg-destructive/5 text-destructive",
+                  )}
+                >
+                  <strong>
+                    {test.pending ? "Testing" : test.ok ? "Connected" : "Connection failed"}
+                  </strong>{" "}
+                  · {test.label}
+                  {test.ok && (
+                    <span className="mt-1 block text-[10px] opacity-80">
+                      Connection + read check, not ICMP ping. Tested with this draft.
+                    </span>
+                  )}
+                </div>
+              )}
             </SortableDevice>
           );
         })}
@@ -825,12 +875,17 @@ function ModulesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
 
 // ── the form ─────────────────────────────────────────────────────────────────
 
-export function ConfigForm({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }): ReactNode {
+export function ConfigForm({
+  cfg,
+  onChange,
+  tests,
+  onTest,
+}: { cfg: Cfg; onChange: (c: Cfg) => void } & DeviceControls): ReactNode {
   return (
     <div className="mt-1 grid min-w-0 grid-cols-1 gap-3.5">
       {CONFIG_SECTIONS.map((s) =>
         s.kind === "deviceMap" ? (
-          <DevicesCard key={s.id} cfg={cfg} onChange={onChange} />
+          <DevicesCard key={s.id} cfg={cfg} onChange={onChange} tests={tests} onTest={onTest} />
         ) : s.kind === "modules" ? (
           <ModulesCard key={s.id} cfg={cfg} onChange={onChange} />
         ) : (

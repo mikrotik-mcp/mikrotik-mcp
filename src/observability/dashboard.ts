@@ -556,6 +556,13 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
     const body = (await readJson(req)) as { name?: string; config?: unknown };
     const name = typeof body?.name === "string" ? body.name : "(unsaved)";
     const merged = mergeDeviceDraft(body?.config, name, getConfig().devices);
+    const target = merged as { host?: unknown; mac?: unknown } | null;
+    if (
+      ![target?.host, target?.mac].some(
+        (value) => typeof value === "string" && value.trim().length > 0,
+      )
+    )
+      return json({ ok: false, error: "Enter a Host / IP or MAC address before testing." }, 400);
     const parsed = DeviceConfigSchema.safeParse(merged);
     if (!parsed.success) return json({ ok: false, errors: issues(parsed.error) }, 400);
     const status = await probeDevice(`config-test:${name}`, parsed.data);
