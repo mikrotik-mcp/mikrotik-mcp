@@ -9,6 +9,7 @@ export const FEATURE_RELEASES: Record<ViewId, string | null> = {
   "home-internet": "5.12.0",
   overview: null,
   devices: null,
+  interfaces: "5.16.0",
   clients: null,
   investigations: null,
   "service-contracts": null,

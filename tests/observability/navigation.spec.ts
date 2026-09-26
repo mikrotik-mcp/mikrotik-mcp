@@ -5,7 +5,8 @@ test("grouped navigation preserves every page exactly once", () => {
   const ids = NAV_GROUPS.flatMap((group) => group.views);
   expect(new Set(ids).size).toBe(ids.length);
   expect([...ids].sort()).toEqual(VIEWS.map((view) => view.id).sort());
-  expect(VIEWS).toHaveLength(32);
+  expect(VIEWS).toHaveLength(33);
+  expect(viewGroup("interfaces").id).toBe("observe");
   expect(viewGroup("home-internet").id).toBe("observe");
   for (const view of VIEWS) expect(viewGroup(view.id).views).toContain(view.id);
 });

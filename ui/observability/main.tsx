@@ -68,6 +68,7 @@ import { AaaView } from "./aaa";
 import { ChangePlanView } from "./change-plan";
 import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
+import { InterfacesView } from "./interfaces";
 import { HomeInternetView } from "./home-internet";
 import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
@@ -173,6 +174,15 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  interfaces: {
+    what: "All interfaces on a selected router, with live receive/transmit charts, packet rates and cumulative counters.",
+    tips: [
+      "Choose a router, then select any interface card to inspect it.",
+      "RX enters an interface and TX leaves it; this is not always the client's download/upload direction.",
+      "Rates need two samples. Missing readings and counter resets are not zero traffic.",
+      "Monitoring is read-only, shared across viewers and paused when this page is hidden.",
+    ],
+  },
   "home-internet": {
     what: "Simple connection checks, local household names and approved temporary IPv4 policies with router-side expiry.",
     tips: [
@@ -593,6 +603,12 @@ function ReloadServerButton(): ReactNode {
 /** Inline stroke icons for the sidebar — no icon-font dependency. */
 function NavIcon({ name }: { name: ViewId }): ReactNode {
   const paths: Record<ViewId, ReactNode> = {
+    interfaces: (
+      <>
+        <rect x="3" y="5" width="18" height="12" rx="2" />
+        <path d="M7 9v4M12 9v4M17 9v4M7 17v3M17 17v3" />
+      </>
+    ),
     "home-internet": (
       <>
         <path d="m3 11 9-8 9 8v10H3Z" />
@@ -1592,6 +1608,7 @@ function App(): ReactNode {
 
               {/* ── Clients ── */}
               {view === "clients" && <ClientsView />}
+              {view === "interfaces" && <InterfacesView />}
               {view === "home-internet" && <HomeInternetView />}
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}

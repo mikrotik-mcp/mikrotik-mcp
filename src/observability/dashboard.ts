@@ -134,6 +134,7 @@ import { getDeviceGeo, startGeoLookups, stopGeoLookups } from "./geo";
 import { flagSvg } from "./flags";
 import { configureRecorder, getEventStore, subscribe, subscriberCount } from "./recorder";
 import { subscribeTraffic } from "./traffic-hub";
+import { interfaceStatsResponse } from "./interface-stats";
 import type { EventFilter, EventStore } from "./store";
 import { openSqliteStore } from "./store";
 import type { CapsmanStore } from "./capsman-store";
@@ -1535,6 +1536,11 @@ export async function runDashboard(
     ca: typeof configAdmin,
     tl: string,
   ): Promise<Response> {
+    if (url.pathname === "/api/interfaces/stream" && req.method === "GET") {
+      const device = url.searchParams.get("device");
+      if (!device) return json({ error: "device required" }, 400);
+      return interfaceStatsResponse(req, device);
+    }
     // Live stream — Bun-native WebSocket (preferred). One endpoint serves two
     // channels: `?traffic=<device>` is the Clients-page traffic feed, otherwise
     // it's the tool-event feed. `open()` branches on `ws.data.traffic`.

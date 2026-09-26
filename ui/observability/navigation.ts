@@ -2,6 +2,7 @@ export type ViewId =
   | "home-internet"
   | "overview"
   | "devices"
+  | "interfaces"
   | "clients"
   | "investigations"
   | "service-contracts"
@@ -39,6 +40,7 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   },
   { id: "overview", label: "Overview", sub: "Calls, latency & risk at a glance" },
   { id: "devices", label: "Devices", sub: "Connectivity radar & system health" },
+  { id: "interfaces", label: "Interfaces", sub: "Every port and tunnel — live traffic & counters" },
   { id: "clients", label: "Clients", sub: "Connected LAN devices — usage, block/allow, pin IP" },
   {
     id: "investigations",
@@ -114,7 +116,7 @@ export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
   {
     id: "observe",
     label: "Observe",
-    views: ["overview", "home-internet", "devices", "clients", "feed"],
+    views: ["overview", "home-internet", "devices", "interfaces", "clients", "feed"],
   },
   {
     id: "investigate",
