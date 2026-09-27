@@ -389,6 +389,36 @@ For frontend development, `bun run dev:dashboard` connects
 the UI on port 9191 to the existing dashboard backend on port 9091.
 See the [dashboard design system](docs/dashboard-design.md).
 
+### DevFrame developer tools
+
+Run the dashboard backend and the DevTools frontend in **two terminals** from
+the repository root:
+
+```sh
+# Terminal 1 — MCP server and dashboard API
+bun run start:dev --dashboard --dashboard-port 9091 --config /path/to/devices.json
+
+# Terminal 2 — dashboard frontend with DevFrame enabled
+bun run dev:tools
+```
+
+Open **http://127.0.0.1:9191/** and authorize the DevFrame dock with the one-time
+code printed in the development terminal when prompted. If the port is occupied,
+run `bun run dev:tools --port 9194` and open **http://127.0.0.1:9194/** instead.
+The backend stays on port **9091**; `start:dev` alone does not enable DevFrame.
+
+- **Data Inspector:** explore tool schemas, modules, prompts, App View coverage,
+  device requirements, navigation and build diagnostics.
+- **Devframe Inspector:** enable **Settings → Advanced → Show Devframe Inspector**,
+  then filter **Functions** by `mikrotik:` for read-only MCP inspection queries.
+- **A11y Inspector:** audit the current dashboard page for accessibility issues.
+
+After changing tool declarations, run `bun run gen:schemas` to refresh the public
+inspection data. Run `bun run build:ui` to populate build-artifact diagnostics.
+DevFrame is development-only: it is not embedded in production builds, does not
+load device credentials, and does not expose another router-execution endpoint.
+See the [DevTools guide](docs/devtools.md) for search examples and security boundaries.
+
 **Access Scope settings** can be edited directly in the dashboard: configure risk
 ceilings, router allow/block lists and tool-name patterns, preview permission
 decisions without executing tools, then review and apply with a 60-second

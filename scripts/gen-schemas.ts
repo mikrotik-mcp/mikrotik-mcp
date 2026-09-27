@@ -10,6 +10,7 @@
  * Outputs:
  *   schemas/config.schema.json     — runtime configuration (MIKROTIK_* / flags)
  *   schemas/tool-catalog.json      — every tool: name, risk, title, description, input JSON Schema
+ *   schemas/devtools-manifest.json — public modules, prompts, requirements and App View bindings
  *   schemas/tools/<name>.json       — one input JSON Schema per tool
  *   schemas/README.md              — what these files are
  */
@@ -20,6 +21,7 @@ import { MikrotikConfigSchema } from "../src/config";
 import { SCHEMAS_DIR } from "../src/paths";
 import { allToolModules } from "../src/tools";
 import { VERSION } from "../src/version";
+import { buildDevtoolsManifest } from "./devtools-manifest";
 
 function riskOf(a: {
   readOnlyHint?: boolean;
@@ -64,6 +66,7 @@ for (const mod of allToolModules) {
 const catalogContent = `${JSON.stringify({ $schema: "https://json-schema.org/draft/2020-12/schema", version: VERSION, generated: "by scripts/gen-schemas.ts — do not edit by hand", toolCount: count, tools: catalog }, null, 2)}\n`;
 
 const configContent = `${JSON.stringify({ $schema: "https://json-schema.org/draft/2020-12/schema", title: "MikrotikConfig", ...z.toJSONSchema(MikrotikConfigSchema, { target: "draft-2020-12" }) }, null, 2)}\n`;
+const devtoolsContent = `${JSON.stringify(buildDevtoolsManifest(), null, 2)}\n`;
 
 // Only now, with all content generated, touch the filesystem. Write the per-tool
 // files into a fresh temp dir and atomically swap it in: the live schemas/tools/
@@ -87,6 +90,7 @@ try {
 writeFileSync(join(SCHEMAS_DIR, "tool-catalog.json"), catalogContent);
 
 writeFileSync(join(SCHEMAS_DIR, "config.schema.json"), configContent);
+writeFileSync(join(SCHEMAS_DIR, "devtools-manifest.json"), devtoolsContent);
 
 writeFileSync(
   join(SCHEMAS_DIR, "README.md"),

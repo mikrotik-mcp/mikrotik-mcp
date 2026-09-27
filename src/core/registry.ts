@@ -54,7 +54,7 @@ const UI_OUTPUT_SCHEMA = z.object({}).passthrough();
  * read tool with a matching verb gets the shared `records` view. `visibility`
  * includes `app` so the rendered view can call the tool back to refresh.
  */
-function effectiveUi(def: { name: string; annotations: ToolAnnotations; ui?: UiLink }): {
+export function effectiveUi(def: { name: string; annotations: ToolAnnotations; ui?: UiLink }): {
   ui: UiLink | undefined;
   auto: boolean;
 } {

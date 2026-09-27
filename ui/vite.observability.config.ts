@@ -19,11 +19,17 @@ import { DASHBOARD_API_PATH } from "./observability/dev-routing";
  */
 const here = dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(async ({ command, mode }) => ({
   // Serve the actual SPA, including its hash routes, instead of a mock fixture.
   root: command === "serve" ? resolve(here, "observability") : here,
   base: "./",
-  plugins: [tailwindcss()],
+  plugins: [
+    tailwindcss(),
+    // Never load DevFrame (or its server dependencies) for normal dev/builds.
+    ...(command === "serve" && mode === "devtools"
+      ? (await import("./devtools")).dashboardDevtools(resolve(here, ".."))
+      : []),
+  ],
   server: {
     host: "127.0.0.1",
     port: 9191,
