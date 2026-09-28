@@ -8,6 +8,7 @@ import type { ViewId } from "./navigation";
 export const FEATURE_RELEASES: Record<ViewId, string | null> = {
   "client-checks": "5.17.0",
   "router-migration": "5.17.0",
+  "support-bundles": "5.17.0",
   prompts: "5.17.0",
   "home-internet": "5.12.0",
   overview: null,

@@ -72,6 +72,7 @@ import { InterfacesView } from "./interfaces";
 import { PromptsView } from "./prompts";
 import { ClientChecksView } from "./client-checks";
 import { RouterMigrationView } from "./router-migration";
+import { SupportBundlesView } from "./support-bundles";
 import { HomeInternetView } from "./home-internet";
 import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
@@ -193,6 +194,15 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Protect a dedicated management port; collisions and unsupported fields block staging.",
       "Rehearsal writes under Safe Mode and rolls back. Stage commits disabled networking objects; neither activates your replacement LAN.",
       "Review manual sections, move production links, then activate and validate with a local console available. Never activate duplicate DHCP/IPs alongside the old router.",
+    ],
+  },
+  "support-bundles": {
+    what: "Build a minimised support report from saved evidence without uploading data.",
+    tips: [
+      "Select up to seven days and optional investigations.",
+      "Raw payloads, config values and logs are excluded before saving. Network identifiers use consistent aliases.",
+      "Review the exact export before downloading script-free HTML or JSON.",
+      "Removing a report does not erase the original evidence or copies you already exported.",
     ],
   },
   prompts: {
@@ -644,6 +654,11 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <rect x="2" y="3" width="8" height="7" rx="1" />
         <rect x="14" y="14" width="8" height="7" rx="1" />
         <path d="M7 14v4h4M14 6h4v4m-2-2 2 2 2-2" />
+      </>
+    ),
+    "support-bundles": (
+      <>
+        <path d="M5 3h10l4 4v14H5ZM15 3v5h4M9 13l2 2 4-4M9 18h6" />
       </>
     ),
     prompts: (
@@ -1661,6 +1676,7 @@ function App(): ReactNode {
               {view === "prompts" && <PromptsView />}
               {view === "client-checks" && <ClientChecksView />}
               {view === "router-migration" && <RouterMigrationView />}
+              {view === "support-bundles" && <SupportBundlesView />}
               {view === "home-internet" && <HomeInternetView />}
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}

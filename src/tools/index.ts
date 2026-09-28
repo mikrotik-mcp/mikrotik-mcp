@@ -7,6 +7,7 @@
 import type { ToolModule } from "../core/registry";
 import { clientCheckTools } from "./client-check";
 import { routerMigrationTools } from "./router-migration";
+import { supportBundleTools } from "./support-bundle";
 
 import { addressListTools } from "./address-list";
 import { connectedDeviceTools } from "./connected-devices";
@@ -181,6 +182,13 @@ export const moduleCatalog: ModuleInfo[] = [
     description:
       "Capability-aware router replacement, port mapping, Safe Mode rehearsal and inactive staging.",
     tools: routerMigrationTools,
+  },
+  {
+    label: "Support Bundles",
+    slug: "support-bundle",
+    group: "Diagnostics",
+    description: "Minimised, pseudonymised local incident evidence with reviewed HTML/JSON export.",
+    tools: supportBundleTools,
   },
   {
     label: "Home Internet",

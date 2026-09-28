@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
-import { runInput, summarizeRun, compareRuns } from "../../src/client-check/model";
+import { checkInput, runInput, summarizeRun, compareRuns } from "../../src/client-check/model";
 import type { CheckRun } from "../../src/client-check/model";
 import { buildMigration, migrationInput } from "../../src/migration/model";
 import type { RouterInventory, MigrationInput } from "../../src/migration/model";
+import { buildBundle, bundleHtml, bundleInput } from "../../src/support/bundle";
+import type { BundleEvidence } from "../../src/support/bundle";
+import { buildEvent } from "../../src/observability/event";
 
 const run: CheckRun = {
   id: "one",
@@ -129,5 +132,123 @@ describe("migration planner", () => {
     };
     expect(buildMigration("test", input, large, target).blockers.join(" ")).toContain("60 objects");
     expect(migrationInput.safeParse({ ...input, target: "old" }).success).toBe(false);
+  });
+});
+
+describe("support minimisation", () => {
+  test("omits secret canaries before persistence, keeps useful relationships and escapes HTML", () => {
+    const data: BundleEvidence = {
+      device: "private-router",
+      events: [
+        {
+          id: "e",
+          ts: 10,
+          tool: "list_interfaces",
+          title: "SECRET",
+          risk: "READ",
+          durationMs: 25,
+          isError: false,
+          input: '{"password":"SECRET"}',
+          output: "SECRET",
+          outputBytes: 6,
+          truncated: false,
+          hasStructured: false,
+        },
+      ],
+      cases: [
+        {
+          id: "case",
+          createdAt: 10,
+          finishedAt: 11,
+          device: "private-router",
+          devices: ["private-router"],
+          client: "192.0.2.10",
+          target: "private.example",
+          service: "PERSON",
+          clientOutcome: "unverified",
+          nextTests: ["SECRET"],
+          evidence: [
+            {
+              id: "e",
+              device: "private-router",
+              source: "arp",
+              startedAt: 10,
+              finishedAt: 11,
+              state: "observed",
+              summary: "SECRET",
+              truncated: false,
+              rows: [
+                {
+                  address: "192.0.2.10",
+                  interface: "secret-lan",
+                  password: "SECRET",
+                  comment: "PERSON",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      snapshots: [
+        {
+          id: "s",
+          device: "private-router",
+          ts: 10,
+          body: "/user\nadd name=PERSON password=SECRET",
+          bytes: 40,
+          lines: 2,
+          sha: "abc",
+        },
+      ],
+      checks: [],
+      missing: [],
+    };
+    const b = buildBundle(
+        {
+          since: 1,
+          until: 20,
+          cases: ["case"],
+          includeChecks: true,
+          includeEvents: true,
+          includeSnapshots: true,
+        },
+        data,
+      ),
+      json = JSON.stringify(b.report);
+    for (const secret of [
+      "SECRET",
+      "PERSON",
+      "private-router",
+      "private.example",
+      "192.0.2.10",
+      "secret-lan",
+    ])
+      expect(json).not.toContain(secret);
+    expect(json.match(/address-1/g)?.length).toBe(2);
+    expect(json).toContain('"tool":"list_interfaces"');
+    expect(b.digest).toMatch(/^[a-f0-9]{64}$/);
+    const html = bundleHtml({ ...b, report: { unsafe: "</pre><script>alert(1)</script>" } });
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+    expect(bundleInput.safeParse({ since: 1, until: 8 * 86400000 }).success).toBe(false);
+  });
+  test("private invitation never enters tool activity", () => {
+    const e = buildEvent(
+      {
+        tool: "create_client_check",
+        title: "test",
+        risk: "WRITE",
+        ts: 1,
+        durationMs: 1,
+        isError: false,
+        args: {},
+        output: '{"token":"SECRET","clientPath":"/client-check#SECRET"}',
+        hasStructured: false,
+      },
+      "id",
+      { captureBody: true, maxBodyBytes: 10000 },
+    );
+    expect(e.output).not.toContain("SECRET");
+    expect(checkInput.safeParse({ label: "x", minutes: 61 }).success).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { ClientChecksView } from "../../ui/observability/client-checks";
 import { RouterMigrationView } from "../../ui/observability/router-migration";
+import { SupportBundlesView } from "../../ui/observability/support-bundles";
 import { api, postJson } from "../../ui/observability/api";
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
 vi.hoisted(() => {
@@ -102,6 +103,27 @@ test("LAN invitation stays pending until a real heartbeat, then reflects connect
   expect(state()).toBe("disconnected");
   await act(async () => vi.advanceTimersByTimeAsync(20000));
   expect(state()).toBe("expired");
+});
+test("support export requires review, escapes markup, and a new report resets acknowledgement", async () => {
+  vi.mocked(postJson).mockResolvedValue({
+    id: "report",
+    device: "new",
+    devices: ["new"],
+    createdAt: 1,
+    status: "ready",
+    digest: "abc",
+    report: { text: "<script>unsafe</script>" },
+  });
+  await act(async () => root.render(h(SupportBundlesView)));
+  await act(async () => button("Prepare private preview").click());
+  expect(button("Download HTML").disabled).toBe(true);
+  expect(host.querySelector("pre")?.textContent).toContain("<script>unsafe</script>");
+  expect(host.querySelector("script")).toBeNull();
+  const review = [...host.querySelectorAll<HTMLElement>('[role="checkbox"]')].at(-1)!;
+  await act(async () => review.click());
+  expect(button("Download HTML").disabled).toBe(false);
+  await act(async () => button("Prepare private preview").click());
+  expect(button("Download HTML").disabled).toBe(true);
 });
 test("saved migration approval gates both write actions", async () => {
   const oldImpl = vi.mocked(api).getMockImplementation()!;

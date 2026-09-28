@@ -30,6 +30,19 @@
       ]
     },
     {
+      "slug": "support-bundle",
+      "label": "Support Bundles",
+      "group": "Diagnostics",
+      "description": "Minimised, pseudonymised local incident evidence with reviewed HTML/JSON export.",
+      "alwaysOn": false,
+      "tools": [
+        "create_support_bundle",
+        "list_support_bundles",
+        "export_support_bundle",
+        "delete_support_bundle"
+      ]
+    },
+    {
       "slug": "home-internet",
       "label": "Home Internet",
       "group": "System & Ops",
@@ -2136,6 +2149,42 @@
       "name": "undo_router_migration",
       "module": "router-migration",
       "group": "Automation",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "create_support_bundle",
+      "module": "support-bundle",
+      "group": "Diagnostics",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "list_support_bundles",
+      "module": "support-bundle",
+      "group": "Diagnostics",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "export_support_bundle",
+      "module": "support-bundle",
+      "group": "Diagnostics",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "delete_support_bundle",
+      "module": "support-bundle",
+      "group": "Diagnostics",
       "noDevice": false,
       "requires": null,
       "ui": null
