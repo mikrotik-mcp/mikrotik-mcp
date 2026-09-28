@@ -1,18 +1,28 @@
 /**
- * CAPsMAN dashboard view (Phase 1 — view-only).
+ * CAPsMAN dashboard: per-device manager controls and Wi-Fi fabric analysis.
  *
  * Reads /api/capsman/overview|clients|audit and renders the Wi-Fi fabric:
  * a per-floor coverage grid (co-channel conflicts highlighted), a resource-aware
  * load board, a weak-signal client table with the recommended neighbor AP, and a
- * roaming/HA audit strip. Steering/apply actions arrive in a later phase.
+ * roaming/HA audit strip. Every write targets the selected router explicitly.
  */
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RefreshCw, Radio as RadioIcon, Scale, Wifi } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Power,
+  RefreshCw,
+  Radio as RadioIcon,
+  Scale,
+  ShieldCheck,
+  Wifi,
+} from "lucide-react";
 import { api, postJson } from "./api";
 import { Panel, StatCard } from "./atoms";
 import { MetricArea } from "./charts";
-import { Badge, Button, Note, Spinner } from "./geist";
+import { Badge, Button, Note, Select, Spinner } from "./geist";
+import type { DevicesPayload } from "./types";
+import type { CapsmanManager } from "../../src/observability/capsman-manager";
 import { num } from "./format";
 import { toast } from "./toast-action";
 import {
@@ -142,17 +152,19 @@ async function runApply(
     } else {
       toast.error(r?.error ?? `${label} failed`, { id });
     }
-  } catch {
-    toast.error(`${label} failed (server unreachable)`, { id });
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : `${label} failed`, { id });
   }
 }
 
 /** "Steer" action for one weak client — confirmed in an AlertDialog. */
 function SteerButton({
+  device,
   mac,
   cap,
   onDone,
 }: {
+  device: string;
   mac: string;
   cap: string;
   onDone: () => void;
@@ -183,7 +195,7 @@ function SteerButton({
             onClick={() =>
               void runApply(
                 "/api/capsman/apply/steer",
-                { mac, mode: "hard" },
+                { device, mac, mode: "hard" },
                 `Steer ${mac}`,
                 onDone,
               )
@@ -211,6 +223,277 @@ function healthColor(h: number): string {
 }
 
 export function CapsmanView(): ReactNode {
+  const [routers, setRouters] = useState<DevicesPayload | null>(null);
+  const [device, setDevice] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    void api<DevicesPayload>("/api/devices", controller.signal)
+      .then((r) => {
+        if (controller.signal.aborted) return;
+        setRouters(r);
+        setDevice(
+          r.devices.some((d) => d.name === r.defaultDevice)
+            ? r.defaultDevice
+            : (r.devices[0]?.name ?? ""),
+        );
+        setError(null);
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted)
+          setError(e instanceof Error ? e.message : "Could not load routers.");
+      });
+    return () => controller.abort();
+  }, [attempt]);
+  return (
+    <section className="grid min-w-0 gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">Wireless control plane</div>
+          <p className="text-xs text-muted-foreground">Manage CAPsMAN on one router at a time.</p>
+        </div>
+        {routers && routers.devices.length > 0 && (
+          <Select
+            aria-label="CAPsMAN router"
+            value={device}
+            disabled={busy}
+            onValueChange={setDevice}
+            options={routers.devices.map((d) => ({
+              value: d.name,
+              label: `${d.name}${d.name === routers.defaultDevice ? " (default)" : ""}`,
+            }))}
+          />
+        )}
+      </div>
+      {error ? (
+        <Note type="error" label="Routers unavailable">
+          {error}{" "}
+          <Button size="sm" onClick={() => setAttempt((a) => a + 1)}>
+            Retry
+          </Button>
+        </Note>
+      ) : !routers ? (
+        <div role="status">
+          <Spinner /> Loading routers…
+        </div>
+      ) : !device ? (
+        <Note>No configured routers.</Note>
+      ) : (
+        <>
+          <ManagerControl
+            key={device}
+            device={device}
+            onBusyChange={setBusy}
+            onApplied={() => setRevision((r) => r + 1)}
+          />
+          <fieldset disabled={busy} className="min-w-0">
+            <legend className="sr-only">CAPsMAN fabric for {device}</legend>
+            <CapsmanFabric key={`${device}:${revision}`} device={device} />
+          </fieldset>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ManagerControl({
+  device,
+  onBusyChange,
+  onApplied,
+}: {
+  device: string;
+  onBusyChange: (busy: boolean) => void;
+  onApplied: () => void;
+}): ReactNode {
+  const [managers, setManagers] = useState<CapsmanManager[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<CapsmanManager | null>(null);
+  const load = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      try {
+        const result = await api<{ device: string; managers: CapsmanManager[] }>(
+          `/api/capsman/manager?device=${encodeURIComponent(device)}`,
+          signal,
+        );
+        if (signal?.aborted) return;
+        if (result.device !== device)
+          throw new Error("The returned settings belong to another router.");
+        setManagers(result.managers);
+        setError(null);
+      } catch (e) {
+        if (!signal?.aborted)
+          setError(e instanceof Error ? e.message : "Could not read manager settings.");
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [device],
+  );
+  useEffect(() => {
+    const controller = new AbortController();
+    // State updates inside load happen only after the asynchronous router read.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  async function apply(): Promise<void> {
+    if (!selected || busy) return;
+    setBusy(true);
+    onBusyChange(true);
+    let failure: string | null = null;
+    try {
+      const result = await postJson<ApplyResult>("/api/capsman/manager", {
+        device,
+        path: selected.path,
+        enabled: !selected.enabled,
+        confirm: true,
+      });
+      if (!result.ok) throw new Error(result.error ?? "CAPsMAN change could not be verified.");
+      toast.success(`${selected.label} ${selected.enabled ? "disabled" : "enabled"} on ${device}`, {
+        description: result.snapshotId ? `Snapshot: ${result.snapshotId}` : result.message,
+      });
+    } catch (e) {
+      failure =
+        e instanceof Error ? e.message : "The outcome is unknown. Refresh before trying again.";
+      toast.error(failure);
+    } finally {
+      setSelected(null);
+      setLoading(true);
+      await load();
+      // Keep failures visible; never optimistically flip the enabled state.
+      if (failure) setError(failure);
+      setBusy(false);
+      onBusyChange(false);
+      onApplied();
+    }
+  }
+  return (
+    <Panel
+      title="CAPsMAN manager"
+      extra={
+        <Button
+          size="sm"
+          ghost
+          icon={<RefreshCw />}
+          disabled={loading || busy}
+          onClick={() => {
+            setLoading(true);
+            void load();
+          }}
+        >
+          Refresh status
+        </Button>
+      }
+    >
+      <div className="grid gap-4">
+        <p className="text-xs text-muted-foreground">
+          Controller service on <span className="font-mono text-foreground">{device}</span>. Local
+          Wi-Fi, CAP client mode and provisioning rules are not changed.
+        </p>
+        {error && (
+          <Note type="error" label="Manager status needs attention">
+            {error}
+          </Note>
+        )}
+        {loading ? (
+          <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner /> Reading manager status…
+          </div>
+        ) : !error && managers.length === 0 ? (
+          <Note label="Not supported">
+            No supported CAPsMAN manager was found on this router. Check the installed RouterOS
+            packages.
+          </Note>
+        ) : (
+          managers.map((manager) => (
+            <div
+              key={manager.path}
+              className={cn(
+                "flex flex-wrap items-center gap-4 rounded-lg border p-4 transition-colors motion-reduce:transition-none",
+                manager.enabled ? "border-success/30 bg-success/5" : "border-border bg-background",
+              )}
+            >
+              <div
+                className={cn(
+                  "grid size-11 shrink-0 place-items-center rounded-lg border",
+                  manager.enabled
+                    ? "border-success/30 text-success"
+                    : "border-border text-muted-foreground",
+                )}
+              >
+                <RadioIcon className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-semibold">{manager.label}</h3>
+                  <Badge type={error ? "warning" : manager.enabled ? "success" : "secondary"}>
+                    {error ? "Refresh required" : manager.enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </div>
+                <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">
+                  {manager.path}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                ghost
+                icon={busy ? <Spinner /> : <Power />}
+                disabled={busy || !!error}
+                onClick={() => setSelected(manager)}
+                aria-label={`${manager.enabled ? "Disable" : "Enable"} ${manager.label}`}
+              >
+                {busy ? "Applying…" : manager.enabled ? "Disable" : "Enable"}
+              </Button>
+            </div>
+          ))
+        )}
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <ShieldCheck className="size-3.5 shrink-0" />
+          Configuration snapshot → Safe Mode → verify status
+        </div>
+      </div>
+      <AlertDialog
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) setSelected(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {selected?.enabled ? "Disable" : "Enable"} {selected?.label} on {device}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {selected?.enabled
+                ? "Managed access points may disconnect and their Wi-Fi clients may lose access. "
+                : "This starts the controller with its existing configuration. Existing provisioning rules may take effect; no rules or profiles are modified. "}
+              Use a wired or independent management connection. A configuration snapshot is saved
+              first; the change requires Safe Mode and a verified status readback.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <Button
+              disabled={busy}
+              onClick={() => void apply()}
+              icon={busy ? <Spinner /> : <Power />}
+            >
+              {busy ? "Applying…" : selected?.enabled ? "Disable manager" : "Enable manager"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Panel>
+  );
+}
+
+function CapsmanFabric({ device }: { device: string }): ReactNode {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [weak, setWeak] = useState<WeakClient[]>([]);
   const [audit, setAudit] = useState<AuditPayload | null>(null);
@@ -218,35 +501,49 @@ export function CapsmanView(): ReactNode {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load(): Promise<void> {
-    setLoading(true);
-    try {
-      const [o, c, a] = await Promise.all([
-        api<Overview>("/api/capsman/overview"),
-        api<{ weak: WeakClient[] }>("/api/capsman/clients"),
-        api<AuditPayload>("/api/capsman/audit"),
-      ]);
-      setOverview(o);
-      setWeak(c.weak);
-      setAudit(a);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load CAPsMAN data");
-    } finally {
-      setLoading(false);
-    }
-    // Trends are optional (the sampler DB may be off/empty) — never fail the view.
-    try {
-      const t = await api<TrendsPayload>("/api/capsman/trends");
-      setTrends(t.series ?? []);
-    } catch {
-      setTrends([]);
-    }
-  }
+  const load = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      try {
+        const [o, c, a] = await Promise.all([
+          api<Overview>(`/api/capsman/overview?device=${encodeURIComponent(device)}`, signal),
+          api<{ weak: WeakClient[] }>(
+            `/api/capsman/clients?device=${encodeURIComponent(device)}`,
+            signal,
+          ),
+          api<AuditPayload>(`/api/capsman/audit?device=${encodeURIComponent(device)}`, signal),
+        ]);
+        if (signal?.aborted) return;
+        setOverview(o);
+        setWeak(c.weak);
+        setAudit(a);
+        setError(null);
+      } catch (e) {
+        if (signal?.aborted) return;
+        setError(e instanceof Error ? e.message : "Could not load CAPsMAN data");
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+      // Trends are optional (the sampler DB may be off/empty) — never fail the view.
+      try {
+        const t = await api<TrendsPayload>(
+          `/api/capsman/trends?device=${encodeURIComponent(device)}`,
+          signal,
+        );
+        if (!signal?.aborted) setTrends(t.series ?? []);
+      } catch {
+        if (!signal?.aborted) setTrends([]);
+      }
+    },
+    [device],
+  );
 
   useEffect(() => {
-    void load();
-  }, []);
+    const controller = new AbortController();
+    // load synchronizes state with asynchronous device responses, not with props.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   // Group radios by floor (unknown floor → "?"), then render a grid per floor.
   const floors = useMemo(() => {
@@ -269,8 +566,11 @@ export function CapsmanView(): ReactNode {
     return (
       <div className="p-4">
         <Note type="error" label="CAPsMAN unavailable">
-          {error}. This device may not run a CAPsMAN manager, or has no managed CAPs.
+          {error}
         </Note>
+        <Button size="sm" onClick={() => void load()}>
+          Retry fabric data
+        </Button>
       </div>
     );
   }
@@ -281,9 +581,10 @@ export function CapsmanView(): ReactNode {
   return (
     <div className="flex flex-col gap-5">
       {notManager && (
-        <Note type="warning" label="No CAPsMAN manager">
-          This device isn&rsquo;t running a CAPsMAN manager (or no CAPs are provisioned). The audit
-          still runs; the coverage grid will be empty.
+        <Note label="Local radio view">
+          The fabric collector did not report an active manager for this wireless stack. Local
+          radios may still appear below; use the manager controls above for the verified service
+          status.
         </Note>
       )}
 
@@ -338,7 +639,7 @@ export function CapsmanView(): ReactNode {
                       onClick={() =>
                         void runApply(
                           "/api/capsman/apply/channel-plan",
-                          {},
+                          { device },
                           "Channel plan",
                           () => void load(),
                         )
@@ -371,7 +672,7 @@ export function CapsmanView(): ReactNode {
                     onClick={() =>
                       void runApply(
                         "/api/capsman/apply/load-balance",
-                        {},
+                        { device },
                         "Load balance",
                         () => void load(),
                       )
@@ -472,7 +773,12 @@ export function CapsmanView(): ReactNode {
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() =>
-                        void runApply("/api/capsman/apply/ft", {}, "Enable FT", () => void load())
+                        void runApply(
+                          "/api/capsman/apply/ft",
+                          { device },
+                          "Enable FT",
+                          () => void load(),
+                        )
                       }
                     >
                       Enable FT
@@ -504,7 +810,12 @@ export function CapsmanView(): ReactNode {
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() =>
-                        void runApply("/api/capsman/apply/ha", {}, "Harden HA", () => void load())
+                        void runApply(
+                          "/api/capsman/apply/ha",
+                          { device },
+                          "Harden HA",
+                          () => void load(),
+                        )
                       }
                     >
                       Harden HA
@@ -590,7 +901,12 @@ export function CapsmanView(): ReactNode {
                     </TableCell>
                     <TableCell>
                       {w.recommendCap && (
-                        <SteerButton mac={w.mac} cap={w.recommendCap} onDone={() => void load()} />
+                        <SteerButton
+                          device={device}
+                          mac={w.mac}
+                          cap={w.recommendCap}
+                          onDone={() => void load()}
+                        />
                       )}
                     </TableCell>
                   </TableRow>

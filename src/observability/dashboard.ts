@@ -121,6 +121,7 @@ import {
 import { captureSnapshot } from "../snapshots/capture";
 import { applyWritesSafely } from "../utils/safe-mode-apply";
 import { fetchCapsmanState } from "../utils/wifi-query";
+import { capsmanManagerChange, readCapsmanManagers, setCapsmanManager } from "./capsman-manager";
 import {
   getDeviceHistory,
   getDeviceNeighbors,
@@ -913,6 +914,29 @@ let capsmanStore: CapsmanStore | null = null;
 async function capsmanRoutes(req: Request, url: URL): Promise<Response | null> {
   const p = url.pathname;
   if (!p.startsWith("/api/capsman")) return null;
+
+  if (p === "/api/capsman/manager") {
+    if (req.method === "GET") {
+      const requested = url.searchParams.get("device");
+      if (!requested) return json({ error: "Select a device first." }, 400);
+      const device = resolveDeviceName(requested);
+      return json({
+        device,
+        managers: await readCapsmanManagers(createContext(undefined, device)),
+      });
+    }
+    if (req.method === "POST") {
+      const parsed = capsmanManagerChange.safeParse(await readJson(req));
+      if (!parsed.success)
+        return json(
+          { error: "A device, supported manager, boolean enabled and confirmation are required." },
+          400,
+        );
+      const ctx = createContext(undefined, resolveDeviceName(parsed.data.device));
+      return json(await setCapsmanManager(ctx, parsed.data));
+    }
+    return json({ error: "Method not allowed" }, 405);
+  }
 
   if (req.method === "GET") {
     const ctx = createContext(undefined, url.searchParams.get("device") ?? undefined);
