@@ -23,20 +23,16 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { api, postJson } from "./api";
-import { Panel } from "./atoms";
 import { Badge, Button, Input, Note, Select } from "./geist";
 import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
-import { Heatmap, UsageHistoryChart } from "./usage-charts";
+import { UmReports } from "./um-reports";
+import type { OpResult } from "../../src/tools/aaa-data";
 
 type Row = Record<string, string>;
 interface AaaList {
   available: boolean;
   rows: Row[];
-}
-interface OpResult {
-  ok: boolean;
-  message: string;
 }
 
 /** A form/column field. `key` is the RouterOS attribute name (server whitelist). */
@@ -79,6 +75,10 @@ const FORM_GRID = "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-3.
 const FORM_ACTIONS = "mt-3.5 flex items-center gap-2.5";
 const FIELD = "flex flex-col gap-1";
 const FIELD_LABEL = "text-[11.5px] text-muted-foreground";
+
+/** Poll only the visible Users tab, without overlapping reads or losing the edit draft. */
+
+/** Fetch only while creating a user; profiles belong to the currently selected router. */
 
 // ── one CRUD entity (table + inline add/edit form) ───────────────────────────
 function EntityManager({ config, device }: { config: EntityConfig; device: string }): ReactNode {
@@ -344,96 +344,6 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   );
 }
 
-// ── read-only sessions table ─────────────────────────────────────────────────
-const SESSION_COLS = [
-  "user",
-  "calling-station-id",
-  "nas-ip-address",
-  "started",
-  "ended",
-  "uptime",
-  "download",
-  "upload",
-  "status",
-];
-function SessionsTable({ device }: { device: string }): ReactNode {
-  const [data, setData] = useState<AaaList | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("");
-  const load = useCallback(async (): Promise<void> => {
-    try {
-      const q = device ? `?device=${encodeURIComponent(device)}` : "";
-      setData(await api<AaaList>(`/api/aaa/list/um-sessions${q}`));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [device]);
-  useEffect(() => {
-    setData(null);
-    void load();
-    const t = setInterval(() => void load(), 10_000);
-    return () => clearInterval(t);
-  }, [load]);
-
-  if (data && !data.available) {
-    return (
-      <Note type="warning" label="User Manager not installed">
-        The <code>user-manager</code> package isn't installed on this device.
-      </Note>
-    );
-  }
-  const rows = (data?.rows ?? []).filter(
-    (r) => !filter.trim() || (r.user ?? "").toLowerCase().includes(filter.trim().toLowerCase()),
-  );
-  return (
-    <div>
-      <div className="mb-3 flex items-center gap-2.5">
-        <Input
-          className="w-[200px]"
-          placeholder="Filter by user…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        <span className="text-muted-foreground text-[11px]">{rows.length} sessions</span>
-        <span className="flex-1" />
-        <Button size="sm" ghost icon={<RefreshCw />} onClick={() => void load()}>
-          Refresh
-        </Button>
-      </div>
-      {error && <Note type="error">{error}</Note>}
-      {!data ? (
-        <div className="text-muted-foreground text-[11px]">loading…</div>
-      ) : rows.length === 0 ? (
-        <div className="px-1 py-5 text-muted-foreground text-[11px]">
-          No accounting sessions recorded.
-        </div>
-      ) : (
-        <Table className="text-[13px]">
-          <TableHeader>
-            <TableRow>
-              {SESSION_COLS.map((c) => (
-                <TableHead key={c}>{c.replace(/-/g, " ")}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r, i) => (
-              <TableRow key={r[".id"] || i}>
-                {SESSION_COLS.map((c) => (
-                  <TableCell key={c} title={r[c] ?? ""}>
-                    {r[c] ?? ""}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-    </div>
-  );
-}
-
 // ── singleton settings forms (RADIUS incoming / UM global) ───────────────────
 function SingletonForm({
   device,
@@ -454,6 +364,7 @@ function SingletonForm({
   extra?: ReactNode;
 }): ReactNode {
   const [row, setRow] = useState<Row | null>(null);
+  const [loadError, setLoadError] = useState("");
   const [available, setAvailable] = useState(true);
   const [form, setForm] = useState<Row>({});
   const [msg, setMsg] = useState<string | null>(null);
@@ -461,11 +372,17 @@ function SingletonForm({
 
   const load = useCallback(async (): Promise<void> => {
     const q = device ? `?device=${encodeURIComponent(device)}` : "";
-    const payload = await api<unknown>(`${getPath}${q}`).catch(() => null);
-    const { available: av, row: r } = unwrap(payload);
-    setAvailable(av);
-    setRow(r);
-    setForm({});
+    try {
+      const payload = await api<unknown>(`${getPath}${q}`);
+      const { available: av, row: r } = unwrap(payload);
+      setAvailable(av);
+      setRow(r);
+      setForm({});
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Settings could not be read.");
+      setRow(null);
+    }
   }, [device, getPath, unwrap]);
   useEffect(() => {
     void load();
@@ -497,6 +414,21 @@ function SingletonForm({
       </Note>
     );
   }
+  if (loadError)
+    return (
+      <Note type="error" label={title}>
+        {loadError}{" "}
+        <Button size="sm" ghost onClick={() => void load()}>
+          Retry
+        </Button>
+      </Note>
+    );
+  if (!row)
+    return (
+      <p className="text-xs text-muted-foreground" role="status">
+        Loading {title}…
+      </p>
+    );
   return (
     <div className={FORM_BOX}>
       <div className={FORM_TITLE}>{title}</div>
@@ -715,18 +647,16 @@ type TabId =
   | "limitations"
   | "nas"
   | "assignments"
-  | "sessions"
-  | "usage"
+  | "reports"
   | "settings";
 const TABS: { id: TabId; label: string }[] = [
+  { id: "reports", label: "Reports & insights" },
   { id: "radius", label: "RADIUS Servers" },
   { id: "users", label: "Users" },
   { id: "profiles", label: "Profiles" },
   { id: "limitations", label: "Limitations" },
   { id: "nas", label: "NAS Clients" },
   { id: "assignments", label: "Assignments" },
-  { id: "sessions", label: "Sessions" },
-  { id: "usage", label: "Usage & Heatmap" },
   { id: "settings", label: "Settings" },
 ];
 
@@ -741,83 +671,6 @@ const UM_SETTINGS_FIELDS: Field[] = [
   { key: "authentication-port", label: "Auth port", type: "number" },
   { key: "accounting-port", label: "Acct port", type: "number" },
 ];
-
-/**
- * Usage & heatmap tab: per-user 3-month download/upload (from persisted User
- * Manager sessions) and a GitHub-style connection heatmap (per-day VPN/RADIUS
- * connection counts), both backed by the local usage database.
- */
-function UsageTab({ device }: { device: string }): ReactNode {
-  const [users, setUsers] = useState<string[] | null>(null);
-  const [user, setUser] = useState<string>("");
-
-  useEffect(() => {
-    const q = device ? `?device=${encodeURIComponent(device)}` : "";
-    void api<{ users: string[] }>(`/api/usage/um-users${q}`)
-      .then((r) => {
-        setUsers(r.users);
-        setUser((cur) => cur || r.users[0] || "");
-      })
-      .catch(() => setUsers([]));
-  }, [device]);
-
-  const dev = device ? `&device=${encodeURIComponent(device)}` : "";
-
-  return (
-    <div>
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-muted-foreground text-[11px]">User</span>
-        <Select
-          value={user}
-          onValueChange={setUser}
-          aria-label="User"
-          options={
-            users && users.length > 0
-              ? users.map((u) => ({ value: u, label: u }))
-              : [{ value: "", label: "— no sessions recorded yet —" }]
-          }
-        />
-      </div>
-
-      {users && users.length === 0 ? (
-        <Note type="secondary" label="No data yet">
-          No User Manager sessions have been recorded yet. The dashboard ingests sessions on a
-          configurable interval (1 minute by default — change it under the Settings tab) and keeps
-          them forever, so usage and the heatmap fill in over time.
-        </Note>
-      ) : (
-        user && (
-          <>
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-semibold text-muted-foreground">
-                Download / upload · last 3 months
-              </div>
-              <UsageHistoryChart
-                endpoint={`/api/usage/um-user?user=${encodeURIComponent(user)}${dev}&days=90`}
-                days={90}
-              />
-            </div>
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-semibold text-muted-foreground">
-                Connection heatmap · {user}
-              </div>
-              <Heatmap
-                endpoint={`/api/usage/heatmap?user=${encodeURIComponent(user)}${dev}&days=371`}
-                label={`${user} — connections`}
-              />
-            </div>
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-semibold text-muted-foreground">
-                All users · connections
-              </div>
-              <Heatmap endpoint={`/api/usage/heatmap?days=371${dev}`} label="All users" />
-            </div>
-          </>
-        )
-      )}
-    </div>
-  );
-}
 
 /**
  * Usage-sampling cadence — how often the dashboard snapshots client traffic and
@@ -920,7 +773,7 @@ function fmtInterval(ms: number): string {
 export function AaaView(): ReactNode {
   const [routers, setRouters] = useState<DevicesPayload | null>(null);
   const [device, setDevice] = useState("");
-  const [tab, setTab] = useState<TabId>("radius");
+  const [tab, setTab] = useState<TabId>("reports");
 
   useEffect(() => {
     void api<DevicesPayload>("/api/devices")
@@ -935,95 +788,88 @@ export function AaaView(): ReactNode {
 
   return (
     <section className="grid content-start gap-[18px]">
-      <Panel
-        title="RADIUS & User Manager"
-        className="reveal"
-        extra={
-          routerOptions.length > 1 ? (
-            <Select
-              value={device}
-              onValueChange={setDevice}
-              aria-label="Router"
-              options={routerOptions.map((d) => ({
-                value: d.name,
-                label: `${d.name}${d.isDefault ? " (default)" : ""}`,
-              }))}
-            />
-          ) : undefined
-        }
-      >
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
-          <TabsList className="mb-3.5 h-auto w-full flex-wrap justify-start border-b border-border">
-            {TABS.map((t) => (
-              <TabsTrigger key={t.id} value={t.id}>
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground">RADIUS & User Manager workspace</span>
+        {routerOptions.length > 0 ? (
+          <Select
+            value={device}
+            onValueChange={setDevice}
+            aria-label="Router"
+            options={routerOptions.map((d) => ({
+              value: d.name,
+              label: `${d.name}${d.isDefault ? " (default)" : ""}`,
+            }))}
+          />
+        ) : null}
+      </div>
+      <Tabs key={device} value={tab} onValueChange={(v) => setTab(v as TabId)}>
+        <TabsList className="mb-3.5 h-auto w-full flex-wrap justify-start border-b border-border">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.id} value={t.id}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-          <TabsContent value="radius">
-            <EntityManager config={RADIUS_CONFIG} device={device} />
-          </TabsContent>
-          <TabsContent value="users">
-            <EntityManager config={UM_USERS_CONFIG} device={device} />
-          </TabsContent>
-          <TabsContent value="profiles">
-            <EntityManager config={UM_PROFILES_CONFIG} device={device} />
-          </TabsContent>
-          <TabsContent value="limitations">
-            <EntityManager config={UM_LIMITATIONS_CONFIG} device={device} />
-          </TabsContent>
-          <TabsContent value="nas">
-            <EntityManager config={UM_ROUTERS_CONFIG} device={device} />
-          </TabsContent>
-          <TabsContent value="assignments">
-            <EntityManager config={UM_ASSIGN_CONFIG} device={device} />
-          </TabsContent>
-          <TabsContent value="sessions">
-            <SessionsTable device={device} />
-          </TabsContent>
-          <TabsContent value="usage">
-            <UsageTab device={device} />
-          </TabsContent>
-          <TabsContent value="settings">
-            <div className="flex flex-col gap-2">
-              <SingletonForm
-                device={device}
-                getPath="/api/aaa/radius-incoming"
-                setPath="/api/aaa/radius-incoming"
-                title="RADIUS Incoming (CoA listener)"
-                fields={RADIUS_INCOMING_FIELDS}
-                unwrap={(p) => ({ available: true, row: (p as Row) ?? {} })}
-                extra={
-                  <Button
-                    size="sm"
-                    ghost
-                    onClick={() =>
-                      void postJson("/api/aaa/radius-reset-counters", { device })
-                        .then(() => toast.success("Counters reset"))
-                        .catch(() => toast.error("Reset counters failed"))
-                    }
-                  >
-                    Reset RADIUS counters
-                  </Button>
-                }
-              />
-              <SingletonForm
-                device={device}
-                getPath="/api/aaa/um-settings"
-                setPath="/api/aaa/um-settings"
-                title="User Manager (built-in RADIUS server)"
-                fields={UM_SETTINGS_FIELDS}
-                unwrap={(p) => {
-                  const o = (p as { available?: boolean; settings?: Row }) ?? {};
-                  return { available: o.available !== false, row: o.settings ?? {} };
-                }}
-              />
-              <SamplerSettings />
-            </div>
-          </TabsContent>
-        </Tabs>
-      </Panel>
+        <TabsContent value="radius">
+          <EntityManager config={RADIUS_CONFIG} device={device} />
+        </TabsContent>
+        <TabsContent value="users">
+          <EntityManager config={UM_USERS_CONFIG} device={device} />
+        </TabsContent>
+        <TabsContent value="profiles">
+          <EntityManager config={UM_PROFILES_CONFIG} device={device} />
+        </TabsContent>
+        <TabsContent value="limitations">
+          <EntityManager config={UM_LIMITATIONS_CONFIG} device={device} />
+        </TabsContent>
+        <TabsContent value="nas">
+          <EntityManager config={UM_ROUTERS_CONFIG} device={device} />
+        </TabsContent>
+        <TabsContent value="assignments">
+          <EntityManager config={UM_ASSIGN_CONFIG} device={device} />
+        </TabsContent>
+        <TabsContent value="reports">
+          <UmReports key={device} device={device} />
+        </TabsContent>
+        <TabsContent value="settings">
+          <div className="flex flex-col gap-2">
+            <SingletonForm
+              device={device}
+              getPath="/api/aaa/radius-incoming"
+              setPath="/api/aaa/radius-incoming"
+              title="RADIUS Incoming (CoA listener)"
+              fields={RADIUS_INCOMING_FIELDS}
+              unwrap={(p) => ({ available: true, row: (p as Row) ?? {} })}
+              extra={
+                <Button
+                  size="sm"
+                  ghost
+                  onClick={() =>
+                    void postJson("/api/aaa/radius-reset-counters", { device })
+                      .then(() => toast.success("Counters reset"))
+                      .catch(() => toast.error("Reset counters failed"))
+                  }
+                >
+                  Reset RADIUS counters
+                </Button>
+              }
+            />
+            <SingletonForm
+              device={device}
+              getPath="/api/aaa/um-settings"
+              setPath="/api/aaa/um-settings"
+              title="User Manager (built-in RADIUS server)"
+              fields={UM_SETTINGS_FIELDS}
+              unwrap={(p) => {
+                const o = (p as { available?: boolean; settings?: Row }) ?? {};
+                return { available: o.available !== false, row: o.settings ?? {} };
+              }}
+            />
+            <SamplerSettings />
+          </div>
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

@@ -87,6 +87,7 @@ import {
   toggleAaaEntity,
   updateAaaEntity,
 } from "../tools/aaa-data";
+import { buildUmReport, getUmSnapshot, parseUmReportQuery } from "./um-reports";
 import { normalizeExport } from "../snapshots/format";
 import type { SnapshotStore } from "../snapshots/store";
 import { openSnapshotStore } from "../snapshots/store";
@@ -1131,6 +1132,15 @@ async function aaaRoutes(req: Request, url: URL): Promise<Response | null> {
     if (p === "/api/aaa/entities") {
       // Static metadata so the UI knows which entities/fields exist.
       return json({ entities: AAA_ENTITIES });
+    }
+    if (p === "/api/aaa/reports") {
+      let filters;
+      try {
+        filters = parseUmReportQuery(url.searchParams);
+      } catch {
+        return json({ error: "Invalid report filters" }, 400);
+      }
+      return json(buildUmReport(await getUmSnapshot(deviceFromQuery()), filters));
     }
     if (p === "/api/aaa/radius-incoming") {
       return json(await getRadiusIncoming(createContext(undefined, deviceFromQuery())));

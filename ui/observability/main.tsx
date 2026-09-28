@@ -281,11 +281,11 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
     ],
   },
   aaa: {
-    what: "Full management of the router's RADIUS client (`/radius`) and the built-in User Manager RADIUS server (`/user-manager`): RADIUS servers + incoming CoA, and User Manager users, service profiles, rate/quota limitations, NAS clients, profile assignments, accounting sessions, and global settings.",
+    what: "Manage the router's RADIUS client and User Manager: users, profiles, limitations, NAS clients, assignments and settings, plus aggregate and per-user accounting statistics.",
     tips: [
-      "Pick the router (top-right), then switch tabs across RADIUS, Users, Profiles, Limitations, NAS, Assignments, Sessions and Settings.",
-      "Every tab is full CRUD: add, edit, enable/disable and remove — secrets are write-only and shown redacted.",
-      "The Usage & Heatmap tab shows each user's 3-month download/upload and a GitHub-style connection heatmap, persisted locally.",
+      "Pick the router (top-right), then open Reports & insights or the management tabs.",
+      "Reports are read-only. Management tabs support the relevant add, edit, enable/disable and remove actions; secrets are write-only and shown redacted.",
+      "Reports & insights shows traffic totals, daily and cumulative charts, connection statistics and a calendar for all users or one user. Individual session lists are not displayed or exported.",
       "If a device lacks the user-manager package, the User Manager tabs explain how to install it; RADIUS-client tabs still work.",
     ],
   },

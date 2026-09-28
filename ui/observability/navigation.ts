@@ -72,7 +72,7 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     label: "Service Health",
     sub: "Approved endpoint checks, contracts and evidence",
   },
-  { id: "aaa", label: "RADIUS & UM", sub: "RADIUS client & User Manager RADIUS server" },
+  { id: "aaa", label: "RADIUS & UM", sub: "User accounting, session insights & RADIUS management" },
   { id: "topology", label: "Topology", sub: "Layer-2 neighbours via MNDP / CDP / LLDP" },
   { id: "round-trip", label: "Round-trip Lab", sub: "Forward and return paths across snapshots" },
   { id: "fabric", label: "L2 Fabric", sub: "Which host sits on which physical bridge port" },

@@ -15,7 +15,7 @@
 import { executeMikrotikCommand } from "../core/connector";
 import type { ToolContext } from "../core/context";
 import { commandUnsupported, isEmpty, looksLikeError, quoteValue, Cmd } from "../core/routeros";
-import { parseRecords } from "../core/routeros-parse";
+import { parseKeyValues, parseRecords } from "../core/routeros-parse";
 
 export const UM_NOT_AVAILABLE =
   "User Manager is not available on this device (the user-manager package is not installed).";
@@ -199,7 +199,9 @@ export async function listAaaEntity(ctx: ToolContext, slug: string): Promise<Aaa
   const entity = entityFor(slug);
   const out = await executeMikrotikCommand(`/${entity.menu} print detail`, ctx);
   if (commandUnsupported(out)) return { available: false, rows: [] };
-  if (isEmpty(out) || looksLikeError(out)) return { available: true, rows: [] };
+  if (looksLikeError(out))
+    throw new Error("Router rejected the AAA read. Check permissions and connectivity.");
+  if (isEmpty(out)) return { available: true, rows: [] };
   const rows = parseRecords(out).rows;
   // Attach the stable `.id` (zipped by print order) unless the parser already
   // captured one, then redact any secret columns.
@@ -296,15 +298,15 @@ export async function toggleAaaEntity(
 
 // ── Singletons: RADIUS incoming (CoA) + User Manager settings ────────────────
 
-/** Parse a single `key=value` settings block into one row. */
+/** Parse RouterOS singleton settings (`key: value`) into one redacted row. */
 function parseSingleton(out: string): AaaRow {
-  const rows = parseRecords(out).rows;
-  return redactRow(rows[0] ?? {});
+  return redactRow(parseKeyValues(out));
 }
 
 export async function getRadiusIncoming(ctx: ToolContext): Promise<AaaRow> {
   const out = await executeMikrotikCommand("/radius incoming print", ctx);
-  return looksLikeError(out) ? {} : parseSingleton(out);
+  if (looksLikeError(out)) throw new Error("Unable to read RADIUS incoming settings.");
+  return parseSingleton(out);
 }
 
 export async function setRadiusIncoming(ctx: ToolContext, fields: AaaRow): Promise<OpResult> {
@@ -329,7 +331,8 @@ export async function getUmSettings(
 ): Promise<{ available: boolean; settings: AaaRow }> {
   const out = await executeMikrotikCommand("/user-manager print", ctx);
   if (commandUnsupported(out)) return { available: false, settings: {} };
-  return { available: true, settings: looksLikeError(out) ? {} : parseSingleton(out) };
+  if (looksLikeError(out)) throw new Error("Unable to read User Manager settings.");
+  return { available: true, settings: parseSingleton(out) };
 }
 
 const UM_SETTINGS_FIELDS = [
