@@ -11,6 +11,7 @@ import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { toast } from "./toast-action";
 
 /** A titled surface grouping related content, with an optional right-aligned slot. */
 export function Panel({
@@ -125,13 +126,17 @@ export function CopyButton({
   const tRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (tRef.current && clearTimeout(tRef.current)), []);
   const onClick = (): void => {
-    void navigator.clipboard?.writeText(text).then(
+    if (!navigator.clipboard) {
+      toast.error("Clipboard unavailable. Select the text and copy it manually.");
+      return;
+    }
+    void navigator.clipboard.writeText(text).then(
       () => {
         setCopied(true);
         if (tRef.current) clearTimeout(tRef.current);
         tRef.current = setTimeout(() => setCopied(false), 1400);
       },
-      () => {},
+      () => toast.error("Couldn't copy. Select the text and copy it manually."),
     );
   };
   return (

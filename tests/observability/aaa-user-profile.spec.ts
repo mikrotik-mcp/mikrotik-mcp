@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { AaaView } from "../../ui/observability/aaa";
 import { api, postJson } from "../../ui/observability/api";
 import { generateUserPassword } from "../../ui/observability/aaa-user-credentials";
+import { toast } from "../../ui/observability/toast-action";
 
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
 vi.mock("../../ui/observability/um-reports", () => ({ UmReports: () => null }));
@@ -189,4 +190,63 @@ test("generates exactly eight cryptographically random characters with all four 
     expect(password).toMatch(/[!@#$%&*+?-]/);
   }
   expect(secure).toHaveBeenCalled();
+});
+
+test("generates in the input, shows the submitted credentials only after success, copies and clears on close", async () => {
+  const copy = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  await open();
+  await fillName();
+  await click(host.querySelector('[aria-label="Generate 8-character password"]')!);
+  const password = host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!.value;
+  expect(password).toHaveLength(8);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  await choose("Initial profile", "Monthly");
+  await click(button("Create"));
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain("User created");
+  expect(dialog.textContent).toContain("Monthly");
+  expect(dialog.textContent).toContain("alice");
+  expect(dialog.querySelector('[aria-label="Created user password"]')?.textContent).toBe(password);
+  await click(dialog.querySelector('[aria-label="Copy password"]')!);
+  expect(copy).toHaveBeenCalledExactlyOnceWith(password);
+  expect(dialog.textContent).toContain("Copied!");
+  await click([...dialog.querySelectorAll("button")].find((b) => b.textContent === "Done")!);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.body.textContent).not.toContain(password);
+  await click(button("Add"));
+  expect(host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!.value).toBe("");
+});
+
+test("keeps failed drafts, but shows credentials with a warning for confirmed creation and uncertain profile", async () => {
+  await open();
+  await fillName();
+  await choose("Initial profile", "Monthly");
+  vi.mocked(postJson).mockResolvedValueOnce({ ok: false, message: "User already exists" });
+  await click(button("Create"));
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!.value).toBe(
+    "New!234x",
+  );
+  vi.mocked(postJson).mockResolvedValueOnce({
+    ok: false,
+    created: true,
+    message: "Check Assignments; do not recreate the user.",
+  });
+  await click(button("Create"));
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain("New!234x");
+  expect(dialog.textContent).toContain("Monthly · unconfirmed");
+  expect(dialog.textContent).toContain("do not recreate");
+  expect(host.querySelector('[autocomplete="new-password"]')).toBeNull();
+  expect(postJson).toHaveBeenCalledTimes(2);
+});
+
+test("reports clipboard denial instead of claiming the password was copied", async () => {
+  vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("Permission denied"));
+  await open();
+  await fillName();
+  await click(button("Create"));
+  await click(document.querySelector('[aria-label="Copy password"]')!);
+  expect(toast.error).toHaveBeenCalledWith("Couldn't copy. Select the text and copy it manually.");
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Copied!");
 });

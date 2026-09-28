@@ -29,7 +29,8 @@ import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 import { UmReports } from "./um-reports";
 import { bytes, clock } from "./format";
-import { generateUserPassword } from "./aaa-user-credentials";
+import { generateUserPassword, UserCreatedDialog } from "./aaa-user-credentials";
+import type { CreatedUserReceipt } from "./aaa-user-credentials";
 import type { OpResult } from "../../src/tools/aaa-data";
 import type { UmUserCounters } from "../../src/observability/um-reports";
 
@@ -262,6 +263,8 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   // The form: null (closed), "new", or an existing row's id (editing).
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<Row>({});
+  const [createdUser, setCreatedUser] = useState<CreatedUserReceipt | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -302,6 +305,38 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                     ? "Entry enabled"
                     : "Entry disabled"
                   : "Done";
+        if (path === "add" && config.slug === "um-users" && (r.ok || r.created)) {
+          const fields = payload.fields as Row;
+          setCreatedUser({
+            device,
+            name: fields.name,
+            password: fields.password ?? "",
+            warning: r.ok ? undefined : r.message,
+            details: [
+              [
+                "Initial profile",
+                fields.profile
+                  ? `${fields.profile}${r.ok ? "" : " · unconfirmed"}`
+                  : "None assigned",
+              ],
+              ["Group", fields.group || "Router default"],
+              ["Shared users", fields["shared-users"] || "Router default"],
+              ["Status", fields.disabled === "yes" ? "Disabled" : "Enabled"],
+              ...(["caller-id", "attributes", "comment"] as const)
+                .filter((key) => fields[key])
+                .map((key): [string, string] => [
+                  key === "caller-id"
+                    ? "Caller ID"
+                    : key === "attributes"
+                      ? "RADIUS attributes"
+                      : "Comment",
+                  fields[key],
+                ]),
+            ],
+          });
+          setEditing(null);
+          setForm({});
+        }
         if (!r.ok) {
           if (r.created) {
             setEditing(null);
@@ -399,7 +434,14 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
         >
           Refresh
         </Button>
-        <Button size="sm" type="accent" icon={<Plus />} disabled={busy} onClick={openAdd}>
+        <Button
+          ref={addButton}
+          size="sm"
+          type="accent"
+          icon={<Plus />}
+          disabled={busy}
+          onClick={openAdd}
+        >
           Add
         </Button>
       </div>
@@ -685,6 +727,13 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
             })}
           </TableBody>
         </Table>
+      )}
+      {createdUser && (
+        <UserCreatedDialog
+          user={createdUser}
+          onClose={() => setCreatedUser(null)}
+          onCloseAutoFocus={() => addButton.current?.focus()}
+        />
       )}
     </div>
   );
