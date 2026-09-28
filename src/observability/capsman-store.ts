@@ -111,6 +111,9 @@ class SqliteCapsmanStore implements CapsmanStore {
   private readonly db: Database;
   constructor(db: Database) {
     this.db = db;
+    // Like usage sampling, tolerate short writer contention without blocking
+    // the synchronous MCP event loop for seconds; later passes retry long locks.
+    db.run("PRAGMA busy_timeout = 100");
     db.run("PRAGMA journal_mode = WAL");
     db.run("PRAGMA synchronous = NORMAL");
     for (const stmt of SCHEMA_STATEMENTS) db.run(stmt);
@@ -149,7 +152,14 @@ class SqliteCapsmanStore implements CapsmanStore {
   }
 
   pruneSamples(olderThanTs: number): number {
-    const res = this.db.query("DELETE FROM capsman_samples WHERE ts < $t").run({ $t: olderThanTs });
+    // Keep each cleanup's write lock bounded when multiple dashboards share this DB.
+    const res = this.db
+      .query(
+        `DELETE FROM capsman_samples WHERE rowid IN (
+           SELECT rowid FROM capsman_samples WHERE ts < $t ORDER BY ts LIMIT 5000
+         )`,
+      )
+      .run({ $t: olderThanTs });
     return Number(res.changes ?? 0);
   }
 

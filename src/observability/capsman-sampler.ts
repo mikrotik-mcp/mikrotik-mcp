@@ -77,6 +77,7 @@ export async function sampleCapsmanOnce(store: CapsmanStore): Promise<void> {
   if (inFlight) return;
   inFlight = true;
   const ts = Date.now();
+  let phase = "sampling pass";
   try {
     const cfg = getConfig();
     await Promise.all(
@@ -89,7 +90,12 @@ export async function sampleCapsmanOnce(store: CapsmanStore): Promise<void> {
         }
       }),
     );
+    phase = "retention cleanup";
     store.pruneSamples(ts - CAPSMAN_RETENTION_MS);
+  } catch (e) {
+    // Timer callers do not await this pass. Report failures (including retention)
+    // without an unhandled rejection, then release the guard for the next pass.
+    logger.warn(`[${SERVER_TAG}] capsman ${phase} failed; next pass will retry: ${String(e)}`);
   } finally {
     inFlight = false;
   }
