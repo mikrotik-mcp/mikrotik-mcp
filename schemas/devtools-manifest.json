@@ -16,6 +16,20 @@
       ]
     },
     {
+      "slug": "router-migration",
+      "label": "Router Migration",
+      "group": "Automation",
+      "description": "Capability-aware router replacement, port mapping, Safe Mode rehearsal and inactive staging.",
+      "alwaysOn": false,
+      "tools": [
+        "inspect_router_migration",
+        "preview_router_migration",
+        "list_router_migrations",
+        "apply_router_migration",
+        "undo_router_migration"
+      ]
+    },
+    {
       "slug": "home-internet",
       "label": "Home Internet",
       "group": "System & Ops",
@@ -2078,6 +2092,50 @@
       "name": "close_client_check",
       "module": "client-check",
       "group": "Diagnostics",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "inspect_router_migration",
+      "module": "router-migration",
+      "group": "Automation",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "preview_router_migration",
+      "module": "router-migration",
+      "group": "Automation",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "list_router_migrations",
+      "module": "router-migration",
+      "group": "Automation",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "apply_router_migration",
+      "module": "router-migration",
+      "group": "Automation",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "undo_router_migration",
+      "module": "router-migration",
+      "group": "Automation",
       "noDevice": false,
       "requires": null,
       "ui": null

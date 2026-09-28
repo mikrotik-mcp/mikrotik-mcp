@@ -1,5 +1,6 @@
 export type ViewId =
   | "client-checks"
+  | "router-migration"
   | "prompts"
   | "home-internet"
   | "overview"
@@ -39,6 +40,11 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     id: "client-checks",
     label: "Client Check",
     sub: "Measure from the affected phone or laptop — compare Wi-Fi and VPN",
+  },
+  {
+    id: "router-migration",
+    label: "Router Migration",
+    sub: "Map, rehearse and prepare a replacement router safely",
   },
   { id: "prompts", label: "Prompts", sub: "Ready-made workflows, tailored to your next request" },
   {
@@ -150,6 +156,7 @@ export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
     label: "Operate",
     views: [
       "plan",
+      "router-migration",
       "simulator",
       "txn",
       "snapshots",

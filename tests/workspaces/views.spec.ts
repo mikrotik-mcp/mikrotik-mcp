@@ -3,6 +3,7 @@ import { act, createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { ClientChecksView } from "../../ui/observability/client-checks";
+import { RouterMigrationView } from "../../ui/observability/router-migration";
 import { api, postJson } from "../../ui/observability/api";
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
 vi.hoisted(() => {
@@ -101,4 +102,38 @@ test("LAN invitation stays pending until a real heartbeat, then reflects connect
   expect(state()).toBe("disconnected");
   await act(async () => vi.advanceTimersByTimeAsync(20000));
   expect(state()).toBe("expired");
+});
+test("saved migration approval gates both write actions", async () => {
+  const oldImpl = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation(async (path: string, ...args: any[]) => {
+    if (path.startsWith("/api/migrations?"))
+      return [
+        {
+          id: "plan",
+          device: "new",
+          createdAt: 1,
+          expiresAt: Date.now() + 60000,
+          status: "preview",
+          input: { source: "old" },
+          fingerprint: "abc",
+          items: [],
+          manual: [],
+          blockers: [],
+        },
+      ] as any;
+    return oldImpl(path, ...args);
+  });
+  await act(async () => root.render(h(RouterMigrationView)));
+  expect(postJson).not.toHaveBeenCalled();
+  const trigger = host.querySelector<HTMLElement>('[aria-label="Saved migration"]')!;
+  await act(async () => trigger.click());
+  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((o) =>
+    o.textContent?.includes("old → new"),
+  )!;
+  await act(async () => option.click());
+  expect(button("Rehearse & roll back").disabled).toBe(true);
+  expect(button("Back up & stage inactive").disabled).toBe(true);
+  const approval = host.querySelector<HTMLElement>('[role="checkbox"]')!;
+  await act(async () => approval.click());
+  expect(button("Back up & stage inactive").disabled).toBe(false);
 });

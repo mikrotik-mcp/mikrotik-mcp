@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "preview_router_migration",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "managementInterface": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "mapping": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      }
+    },
+    "sections": {
+      "minItems": 1,
+      "maxItems": 15,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "/interface/bridge",
+          "/interface/vlan",
+          "/interface/list",
+          "/interface/list/member",
+          "/interface/bridge/port",
+          "/ip/pool",
+          "/ip/address",
+          "/ip/dhcp-server/network",
+          "/ip/dhcp-server",
+          "/ip/dhcp-server/lease",
+          "/routing/table",
+          "/ip/route",
+          "/ip/firewall/address-list",
+          "/ip/firewall/filter",
+          "/ip/firewall/nat"
+        ]
+      }
+    }
+  },
+  "required": ["source", "target", "managementInterface", "mapping", "sections"],
+  "additionalProperties": false
+}

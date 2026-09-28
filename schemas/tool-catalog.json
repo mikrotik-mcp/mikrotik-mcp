@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.16.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 915,
+  "toolCount": 920,
   "tools": [
     {
       "name": "create_client_check",
@@ -109,6 +109,175 @@
           }
         },
         "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "inspect_router_migration",
+      "title": "Inspect Router Migration Capabilities",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read router hardware, RouterOS version, installed packages and interfaces for a replacement migration. Does not expose the raw export or change configuration. Use a dedicated, unmapped management port on target.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "preview_router_migration",
+      "title": "Preview a Router Replacement",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Read source and target, map physical Ethernet ports and persist a five-minute, device-bound staging plan. Select supported sections; incompatible fields, collisions and unresolved dependencies BLOCK staging. Lists ALL unselected/unsupported sections as manual work. Same RouterOS 7 version required. Never copies credentials, certificates, scripts, Wi-Fi drivers or VPN secrets, and never changes target management. Preview changes local state only.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "managementInterface": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "mapping": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          "sections": {
+            "minItems": 1,
+            "maxItems": 15,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "/interface/bridge",
+                "/interface/vlan",
+                "/interface/list",
+                "/interface/list/member",
+                "/interface/bridge/port",
+                "/ip/pool",
+                "/ip/address",
+                "/ip/dhcp-server/network",
+                "/ip/dhcp-server",
+                "/ip/dhcp-server/lease",
+                "/routing/table",
+                "/ip/route",
+                "/ip/firewall/address-list",
+                "/ip/firewall/filter",
+                "/ip/firewall/nat"
+              ]
+            }
+          }
+        },
+        "required": ["source", "target", "managementInterface", "mapping", "sections"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_router_migrations",
+      "title": "Read Router Migration Plans",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read durable migration previews, backup references, rehearsal/staging outcomes and manual cutover items for the selected TARGET router.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "apply_router_migration",
+      "title": "Rehearse or Stage an Approved Migration",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Only after user reviews the exact preview: back up source and target locally, reject stale state, acquire NEW Safe Mode, apply at most 60 additive objects and read each back. Default rehearse rolls back and verifies the original export; stage commits INACTIVE addresses, ports, DHCP, routes and firewall rules. Never resets a router or activates duplicate networks. Manual physical cutover, secrets and application verification remain required. No direct-write fallback; uncertain results must not be retried.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "mode": {
+            "default": "rehearse",
+            "type": "string",
+            "enum": ["rehearse", "stage"]
+          },
+          "confirm": {
+            "default": false,
+            "type": "boolean"
+          },
+          "acknowledgeManual": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "mode", "confirm", "acknowledgeManual"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "undo_router_migration",
+      "title": "Remove Unchanged Staged Migration Objects",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "After explicit approval remove ONLY this plan's staged objects under Safe Mode, provided none was edited or activated. Verify target export matches pre-migration snapshot before commit. Refuses uncertain migrations; never wipes unrelated target configuration.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "confirm": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "confirm"],
         "additionalProperties": false
       }
     },

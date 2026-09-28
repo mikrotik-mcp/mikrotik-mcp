@@ -71,6 +71,7 @@ import { ClientsView } from "./clients";
 import { InterfacesView } from "./interfaces";
 import { PromptsView } from "./prompts";
 import { ClientChecksView } from "./client-checks";
+import { RouterMigrationView } from "./router-migration";
 import { HomeInternetView } from "./home-internet";
 import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
@@ -183,6 +184,15 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "A local server measures LAN access, not internet speed. Start is explicit and limited to 20 MiB per run.",
       "Run on Wi-Fi and VPN yourself, then select two saved measurements. Partial measurements are not zero.",
       "Tokens grant probe access only; revoke a link from the session history.",
+    ],
+  },
+  "router-migration": {
+    what: "Prepare an additive, inactive replacement configuration with explicit physical port mapping.",
+    tips: [
+      "Choose the replacement as workspace router, then inspect both devices.",
+      "Protect a dedicated management port; collisions and unsupported fields block staging.",
+      "Rehearsal writes under Safe Mode and rolls back. Stage commits disabled networking objects; neither activates your replacement LAN.",
+      "Review manual sections, move production links, then activate and validate with a local console available. Never activate duplicate DHCP/IPs alongside the old router.",
     ],
   },
   prompts: {
@@ -627,6 +637,13 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       <>
         <rect x="6" y="2" width="12" height="20" rx="3" />
         <path d="M9 7h6M9 11h2l2 3 2-5M11 19h2" />
+      </>
+    ),
+    "router-migration": (
+      <>
+        <rect x="2" y="3" width="8" height="7" rx="1" />
+        <rect x="14" y="14" width="8" height="7" rx="1" />
+        <path d="M7 14v4h4M14 6h4v4m-2-2 2 2 2-2" />
       </>
     ),
     prompts: (
@@ -1643,6 +1660,7 @@ function App(): ReactNode {
               {view === "interfaces" && <InterfacesView />}
               {view === "prompts" && <PromptsView />}
               {view === "client-checks" && <ClientChecksView />}
+              {view === "router-migration" && <RouterMigrationView />}
               {view === "home-internet" && <HomeInternetView />}
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}

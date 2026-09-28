@@ -6,6 +6,7 @@
  */
 import type { ToolModule } from "../core/registry";
 import { clientCheckTools } from "./client-check";
+import { routerMigrationTools } from "./router-migration";
 
 import { addressListTools } from "./address-list";
 import { connectedDeviceTools } from "./connected-devices";
@@ -172,6 +173,14 @@ export const moduleCatalog: ModuleInfo[] = [
     description:
       "Bounded browser-side network tests, Wi-Fi/VPN comparison and investigation evidence.",
     tools: clientCheckTools,
+  },
+  {
+    label: "Router Migration",
+    slug: "router-migration",
+    group: "Automation",
+    description:
+      "Capability-aware router replacement, port mapping, Safe Mode rehearsal and inactive staging.",
+    tools: routerMigrationTools,
   },
   {
     label: "Home Internet",
