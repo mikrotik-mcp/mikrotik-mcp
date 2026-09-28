@@ -1,0 +1,166 @@
+.check-connection {
+  --link-ink: var(--color-brand);
+  overflow: hidden;
+}
+.check-connection[data-connection-state="connected"] {
+  --link-ink: var(--color-chart-2);
+}
+.check-connection:is(
+  [data-connection-state="disconnected"],
+  [data-connection-state="unknown"],
+  [data-connection-state="expired"],
+  [data-connection-state="closed"]
+) {
+  --link-ink: var(--color-muted-foreground);
+}
+.check-link-scene {
+  display: grid;
+  grid-template-columns: 72px minmax(40px, 1fr) 72px;
+  align-items: center;
+  margin: 36px 0 42px;
+  padding: 0 12px;
+}
+.check-link-node {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  height: 76px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-background);
+  color: var(--link-ink);
+  transition:
+    color 0.3s,
+    border-color 0.3s;
+}
+.check-link-node span {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: var(--color-muted-foreground);
+}
+.check-link-wire {
+  position: relative;
+  height: 1px;
+  background: var(--color-border);
+}
+.check-link-wire i {
+  position: absolute;
+  top: -1px;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--link-ink);
+  opacity: 0;
+}
+.check-connection:is([data-connection-state="connected"], [data-connection-state="pending"])
+  .check-link-wire
+  i {
+  animation: check-signal 2.6s ease-in-out infinite;
+}
+.check-link-wire i:nth-child(2) {
+  animation-delay: 0.55s !important;
+}
+.check-link-wire i:nth-child(3) {
+  animation-delay: 1.1s !important;
+}
+.check-link-seal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  color: var(--link-ink);
+  transition: color 0.3s;
+}
+.check-connection[data-connection-state="connected"] .check-link-seal {
+  border-color: var(--link-ink);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--link-ink) 9%, transparent);
+}
+.check-link-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--link-ink);
+  flex-shrink: 0;
+}
+.check-link-message {
+  animation: check-arrival 0.3s ease-out;
+}
+.check-qr-frame {
+  position: relative;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px dashed var(--color-brand);
+  transition: border-color 0.3s;
+}
+.check-qr-frame img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: white;
+}
+.check-qr-check {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--color-background);
+  background: var(--color-chart-2);
+  transform: scale(0);
+  opacity: 0;
+  transition:
+    transform 0.35s cubic-bezier(0.2, 1.6, 0.4, 1),
+    opacity 0.2s;
+}
+.check-qr-frame[data-connected="true"] {
+  border-style: solid;
+  border-color: var(--color-chart-2);
+}
+.check-qr-frame[data-connected="true"] .check-qr-check {
+  transform: scale(1);
+  opacity: 1;
+}
+@keyframes check-signal {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    left: calc(100% - 12px);
+    opacity: 0;
+  }
+}
+@keyframes check-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .check-connection *,
+  .check-qr-frame,
+  .check-qr-check {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -70,6 +70,7 @@ import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
 import { InterfacesView } from "./interfaces";
 import { PromptsView } from "./prompts";
+import { ClientChecksView } from "./client-checks";
 import { HomeInternetView } from "./home-internet";
 import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
@@ -175,6 +176,15 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  "client-checks": {
+    what: "Measure HTTP transfer performance from an affected device to this MCP host.",
+    tips: [
+      "Create a short-lived QR invitation using this server's reachable LAN/VPN or HTTPS address.",
+      "A local server measures LAN access, not internet speed. Start is explicit and limited to 20 MiB per run.",
+      "Run on Wi-Fi and VPN yourself, then select two saved measurements. Partial measurements are not zero.",
+      "Tokens grant probe access only; revoke a link from the session history.",
+    ],
+  },
   prompts: {
     what: "Browse the server's workflow templates and prepare a complete request for your AI assistant.",
     tips: [
@@ -613,6 +623,12 @@ function ReloadServerButton(): ReactNode {
 /** Inline stroke icons for the sidebar — no icon-font dependency. */
 function NavIcon({ name }: { name: ViewId }): ReactNode {
   const paths: Record<ViewId, ReactNode> = {
+    "client-checks": (
+      <>
+        <rect x="6" y="2" width="12" height="20" rx="3" />
+        <path d="M9 7h6M9 11h2l2 3 2-5M11 19h2" />
+      </>
+    ),
     prompts: (
       <>
         <path d="M4 4h16v13H8l-4 4V4Z" />
@@ -1626,6 +1642,7 @@ function App(): ReactNode {
               {view === "clients" && <ClientsView />}
               {view === "interfaces" && <InterfacesView />}
               {view === "prompts" && <PromptsView />}
+              {view === "client-checks" && <ClientChecksView />}
               {view === "home-internet" && <HomeInternetView />}
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}

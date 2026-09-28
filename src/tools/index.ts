@@ -5,6 +5,7 @@
  * place: here.
  */
 import type { ToolModule } from "../core/registry";
+import { clientCheckTools } from "./client-check";
 
 import { addressListTools } from "./address-list";
 import { connectedDeviceTools } from "./connected-devices";
@@ -164,6 +165,14 @@ export interface ModuleInfo {
 }
 
 export const moduleCatalog: ModuleInfo[] = [
+  {
+    label: "Client Check",
+    slug: "client-check",
+    group: "Diagnostics",
+    description:
+      "Bounded browser-side network tests, Wi-Fi/VPN comparison and investigation evidence.",
+    tools: clientCheckTools,
+  },
   {
     label: "Home Internet",
     slug: "home-internet",

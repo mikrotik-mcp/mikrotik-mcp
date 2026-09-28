@@ -139,7 +139,13 @@ export function buildEvent(raw: RawCall, id: string, opts: CaptureOptions): Tool
   if (opts.captureBody) {
     const args = opts.redactInput === false ? raw.args : redact(raw.args);
     const rin = truncate(JSON.stringify(args ?? {}), opts.maxBodyBytes);
-    const rout = truncate(raw.output, opts.maxBodyBytes);
+    // Invitation URLs are bearer capabilities even though their field is named clientPath.
+    const rout = truncate(
+      raw.tool === "create_client_check"
+        ? "Client check created. Private invitation omitted from activity history."
+        : raw.output,
+      opts.maxBodyBytes,
+    );
     input = rin.text;
     output = rout.text;
     truncated = rin.truncated || rout.truncated;

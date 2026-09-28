@@ -95,6 +95,7 @@ function main(): void {
 
   // The React observability dashboard is already a single-entry build.
   build("ui/vite.observability.config.ts", "React observability dashboard");
+  build("ui/vite.config.ts", "Scoped Client Check page", { MCP_VIEW: "client-check" });
 
   if (!existsSync(BUILD_DIR)) {
     console.error(`✗ expected build output at ${BUILD_DIR}`);

@@ -2,8 +2,116 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.16.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 911,
+  "toolCount": 915,
   "tools": [
+    {
+      "name": "create_client_check",
+      "title": "Create a Client Network Check",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Create a 5–60 minute, six-run browser test invitation. Open returned clientPath on the affected phone/laptop via a reachable dashboard address; the fragment token grants test access only, never dashboard access. Explicit user start transfers at most 20 MiB per run to THIS MCP host. This is not internet throughput unless the host is on the remote path. Measures browser HTTP latency, loaded latency and transfers, not ICMP, DNS leakage, PMTU or app availability. Optional caseId links historical investigation evidence. No router changes.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "caseId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "minutes": {
+            "default": 15,
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 60
+          }
+        },
+        "required": ["label", "minutes"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_client_checks",
+      "title": "Read Client Network Checks",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read browser-reported measurements saved for this router. Tokens are never returned. Observed peer IP belongs to this HTTP connection, not necessarily the user's public internet exit. Does not run tests or contact routers.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "compare_client_checks",
+      "title": "Compare Two Client Test Runs",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Compare two complete browser test runs in one session, for example Wi-Fi vs WireGuard. Requires the same endpoint. Measurements are client-reported and sequential, not proof of a bottleneck or a fastest route.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "first": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "second": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id", "first", "second"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "close_client_check",
+      "title": "Revoke a Client Check Invitation",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Immediately close the selected test invitation. Rejects further measurements while retaining saved history. No router configuration changes.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
     {
       "name": "diagnose_home_internet",
       "title": "Why Is My Internet Slow?",

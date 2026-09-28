@@ -57,6 +57,9 @@ import {
 import { createContext } from "../core/context";
 import { investigationRoutes } from "./investigation-routes";
 import { homeRoutes } from "./home-routes";
+import { workspaceRoutes } from "./workspace-routes";
+import { clientCheckRoutes } from "../client-check/routes";
+import { clientCheckNetwork } from "../client-check/network";
 import { serviceContractRoutes } from "./service-contract-routes";
 import { roundTripRoutes } from "./round-trip-routes";
 import {
@@ -1623,6 +1626,10 @@ export async function runDashboard(
     if (investigationResp) return investigationResp;
     const homeResp = await homeRoutes(req, url);
     if (homeResp) return homeResp;
+    if (url.pathname === "/api/client-checks/network" && req.method === "GET")
+      return json(clientCheckNetwork(cfg.host, srv.port ?? cfg.port));
+    const workspaceResp = await workspaceRoutes(req, url);
+    if (workspaceResp) return workspaceResp;
 
     const serviceContractResp = await serviceContractRoutes(req, url);
     if (serviceContractResp) return serviceContractResp;
@@ -1959,6 +1966,9 @@ export async function runDashboard(
       const url = new URL(req.url);
 
       if (url.pathname === "/health") return new Response("OK");
+
+      const checkResponse = await clientCheckRoutes(req, url, srv.requestIP(req)?.address);
+      if (checkResponse) return checkResponse;
 
       if (!tokenOk(req, url)) {
         return new Response("Unauthorized", { status: 401 });

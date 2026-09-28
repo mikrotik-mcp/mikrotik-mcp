@@ -1,4 +1,5 @@
 export type ViewId =
+  | "client-checks"
   | "prompts"
   | "home-internet"
   | "overview"
@@ -34,6 +35,11 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  {
+    id: "client-checks",
+    label: "Client Check",
+    sub: "Measure from the affected phone or laptop — compare Wi-Fi and VPN",
+  },
   { id: "prompts", label: "Prompts", sub: "Ready-made workflows, tailored to your next request" },
   {
     id: "home-internet",
@@ -125,6 +131,7 @@ export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
     label: "Investigate",
     views: [
       "investigations",
+      "client-checks",
       "service-contracts",
       "round-trip",
       "topology",

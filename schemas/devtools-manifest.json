@@ -3,6 +3,19 @@
   "version": "5.16.0",
   "modules": [
     {
+      "slug": "client-check",
+      "label": "Client Check",
+      "group": "Diagnostics",
+      "description": "Bounded browser-side network tests, Wi-Fi/VPN comparison and investigation evidence.",
+      "alwaysOn": false,
+      "tools": [
+        "create_client_check",
+        "list_client_checks",
+        "compare_client_checks",
+        "close_client_check"
+      ]
+    },
+    {
       "slug": "home-internet",
       "label": "Home Internet",
       "group": "System & Ops",
@@ -2033,6 +2046,42 @@
     }
   ],
   "tools": [
+    {
+      "name": "create_client_check",
+      "module": "client-check",
+      "group": "Diagnostics",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "list_client_checks",
+      "module": "client-check",
+      "group": "Diagnostics",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "compare_client_checks",
+      "module": "client-check",
+      "group": "Diagnostics",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "close_client_check",
+      "module": "client-check",
+      "group": "Diagnostics",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
     {
       "name": "diagnose_home_internet",
       "module": "home-internet",
