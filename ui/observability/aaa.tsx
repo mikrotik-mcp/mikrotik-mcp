@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Copy, Plus, RefreshCw, Shuffle } from "lucide-react";
+import { Copy, Eye, EyeOff, Plus, RefreshCw, Shuffle } from "lucide-react";
 import { Input as BeuiInput } from "@/components/beui/registry/components/motion/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -263,6 +263,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   // The form: null (closed), "new", or an existing row's id (editing).
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<Row>({});
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [createdUser, setCreatedUser] = useState<CreatedUserReceipt | null>(null);
   const [cloneNotice, setCloneNotice] = useState("");
   const addButton = useRef<HTMLButtonElement>(null);
@@ -366,6 +367,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   );
 
   const openAdd = (): void => {
+    setPasswordVisible(false);
     setEditing("new");
     setForm({});
     setCloneNotice("");
@@ -381,6 +383,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
     return f;
   };
   const openEdit = (r: Row): void => {
+    setPasswordVisible(false);
     setEditing(r[config.idKey]);
     setForm(fieldsFromRow(r));
     setCloneNotice("");
@@ -416,6 +419,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
       notice += " Profile assignments could not be read; select the initial profile yourself.";
     } finally {
       if (!controller.signal.aborted) {
+        setPasswordVisible(false);
         setForm(draft);
         setCloneNotice(notice);
         setEditing("new");
@@ -563,7 +567,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                 <BeuiInput
                   key={fd.key}
                   label={`Password${editing === "new" ? " *" : ""}`}
-                  type="password"
+                  type={passwordVisible ? "text" : "password"}
                   autoComplete="new-password"
                   disabled={busy}
                   placeholder={editing === "new" ? "Enter or generate a password" : "(unchanged)"}
@@ -572,11 +576,26 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                   classNames={{
                     label: FIELD_LABEL,
                     field: "h-9 rounded-xl",
-                    input: "pr-10 text-[13px] leading-5",
+                    input: "pr-20 text-[13px] leading-5",
                     rightIcon: "[&_button]:size-9",
                   }}
                   rightIcon={
                     <>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={passwordVisible ? "Hide password" : "Show password"}
+                        aria-pressed={passwordVisible}
+                        title={passwordVisible ? "Hide password" : "Show password"}
+                        className="rounded-lg transition-colors hover:bg-brand/10 hover:text-brand focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2 disabled:opacity-50"
+                        onClick={() => setPasswordVisible((visible) => !visible)}
+                      >
+                        {passwordVisible ? (
+                          <EyeOff aria-hidden="true" />
+                        ) : (
+                          <Eye aria-hidden="true" />
+                        )}
+                      </button>
                       <button
                         type="button"
                         disabled={busy}

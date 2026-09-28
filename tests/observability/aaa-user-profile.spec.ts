@@ -192,6 +192,39 @@ test("generates exactly eight cryptographically random characters with all four 
   expect(secure).toHaveBeenCalled();
 });
 
+test("toggles password visibility without changing the value and hides it in every new draft", async () => {
+  await open();
+  await fillName();
+  const input = () => host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!;
+  expect(input().type).toBe("password");
+  await click(host.querySelector('[aria-label="Show password"]')!);
+  expect(input().type).toBe("text");
+  expect(input().value).toBe("New!234x");
+  expect(host.querySelector('[aria-label="Hide password"]')?.getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  await click(host.querySelector('[aria-label="Generate 8-character password"]')!);
+  const generated = input().value;
+  expect(generated).toHaveLength(8);
+  await click(host.querySelector('[aria-label="Hide password"]')!);
+  expect(input().type).toBe("password");
+  expect(input().value).toBe(generated);
+  await click(host.querySelector('[aria-label="Show password"]')!);
+  await click(button("Cancel"));
+  await click(button("Add"));
+  expect(input().type).toBe("password");
+  expect(input().value).toBe("");
+  await click(host.querySelector('[aria-label="Show password"]')!);
+  await click(button("Edit"));
+  expect(input().type).toBe("password");
+  expect(input().value).toBe("");
+  await click(host.querySelector('[aria-label="Show password"]')!);
+  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  expect(input().type).toBe("password");
+  expect(input().value).toBe("");
+  expect(postJson).not.toHaveBeenCalled();
+});
+
 test("generates in the input, shows the submitted credentials only after success, copies and clears on close", async () => {
   const copy = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
   await open();
