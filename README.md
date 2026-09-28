@@ -1,20 +1,20 @@
 <div align="center">
   <img src="assets/logo.svg" alt="@usex/mikrotik-mcp" width="440" />
-  <p><strong>Drive one or more MikroTik routers in plain language — 901 risk-annotated tools your AI can call, over SSH.</strong><br/>
+  <p><strong>Drive one or more MikroTik routers in plain language — 924 risk-annotated tools your AI can call, over SSH.</strong><br/>
   Firewall · routing · DHCP/DNS · wireless · QoS · a complete VPN suite · transactional Safe Mode · live attack detection · and an observability dashboard that watches every call.</p>
 
   <p>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-7C3AED.svg"></a>
     <img alt="Runtime: Bun" src="https://img.shields.io/badge/runtime-Bun%20%E2%89%A5%201.3-06B6D4.svg">
     <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-6366F1.svg">
-    <img alt="MCP" src="https://img.shields.io/badge/MCP-901%20tools-1F2937.svg">
+    <img alt="MCP" src="https://img.shields.io/badge/MCP-924%20tools-1F2937.svg">
     <a href="docs/"><img alt="Docs" src="https://img.shields.io/badge/docs-reference-7C3AED.svg"></a>
   </p>
 </div>
 
 ---
 
-`@usex/mikrotik-mcp` turns **MikroTik RouterOS** into **901 [Model Context Protocol](https://modelcontextprotocol.io)
+`@usex/mikrotik-mcp` turns **MikroTik RouterOS** into **924 [Model Context Protocol](https://modelcontextprotocol.io)
 tools** any MCP client (Claude Desktop, Claude Code, Cursor, …) can call to read and
 configure your router by talking to it. It reaches the device over **plain SSH** — no
 agent, no package to install on RouterOS — runs on **[Bun](https://bun.sh)**, and
@@ -46,6 +46,21 @@ Then just ask:
 
 ## Highlights
 
+- **Client Check** — invite the affected phone/laptop with an expiring QR/link,
+  measure browser HTTP latency, loaded latency and bounded transfers, and compare
+  Wi-Fi/VPN runs in the dashboard. Optional investigation links keep evidence together.
+  Tests measure the path **to the MCP host**, not arbitrary internet speed, DNS leakage
+  or PMTU. [Guide and trust boundary](docs/network-workspaces.md#client-check)
+- **Router Migration** — inspect both routers, map Ethernet ports, preview supported
+  configuration and review omitted sections. Fresh-state checks, local snapshots of
+  both routers, Safe Mode rehearsal and verified **inactive staging** protect the
+  target. Physical cutover, credentials and activation remain operator-controlled.
+  [Supported scope](docs/network-workspaces.md#router-migration)
+- **Support Bundles** — prepare a time-bounded report from saved investigations,
+  event metadata, snapshot inventories and client measurements. Raw tool bodies,
+  secrets and personal labels stay out; network identifiers become consistent aliases.
+  Review before downloading self-contained HTML or JSON. Nothing is uploaded.
+  [Privacy and export](docs/network-workspaces.md#support-bundles)
 - **MCP App workspaces** — 13 host-themed views, with dedicated investigation,
   round-trip, service-health, L2 fabric, operations and report workspaces alongside
   the existing device, interface, firewall and record views. Responsive grids,
@@ -71,7 +86,7 @@ Then just ask:
   Uses existing NetFlow/IPFIX exports; never enables capture or changes router settings.
   Missing telemetry remains unknown, not a fabricated blocking hop.
   [Flow-path guide](docs/client-flow-paths.md)
-- 🧰 **901 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
+- 🧰 **924 tools, one per RouterOS scope** — L2 (bridge, VLAN, wireless, PoE),
   L3 (addressing, routing, DHCP, DNS), security (firewall, NAT, address-lists,
   certificates), QoS, and system ops (users, logs, backups, scheduler).
 - 🛡️ **Attack detection** — reads every device's log, correlates brute force,
