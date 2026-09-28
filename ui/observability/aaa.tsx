@@ -9,7 +9,7 @@
  * schema-driven {@link EntityManager}; sessions are read-only; RADIUS-incoming
  * (CoA) and UM global settings are singleton forms.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Plus, RefreshCw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,7 +27,9 @@ import { Badge, Button, Input, Note, Select } from "./geist";
 import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 import { UmReports } from "./um-reports";
+import { bytes, clock } from "./format";
 import type { OpResult } from "../../src/tools/aaa-data";
+import type { UmUserCounters } from "../../src/observability/um-reports";
 
 type Row = Record<string, string>;
 interface AaaList {
@@ -77,6 +79,75 @@ const FIELD = "flex flex-col gap-1";
 const FIELD_LABEL = "text-[11.5px] text-muted-foreground";
 
 /** Poll only the visible Users tab, without overlapping reads or losing the edit draft. */
+function useUserCounters(device: string, enabled: boolean) {
+  const [data, setData] = useState<UmUserCounters | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [paused, setPaused] = useState(document.hidden);
+  const [now, setNow] = useState(Date.now);
+  const refreshRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!enabled || !device) return;
+    const controller = new AbortController();
+    let pending = false;
+    const refresh = async () => {
+      setNow(Date.now());
+      if (pending || document.hidden || controller.signal.aborted) return;
+      pending = true;
+      try {
+        const result = await api<UmUserCounters>(
+          `/api/aaa/user-counters?device=${encodeURIComponent(device)}`,
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        if (!result.available) throw new Error(result.error || "User counters are unavailable.");
+        if (result.device !== device)
+          throw new Error("Counters belong to a different device. Refresh to retry.");
+        setData(result);
+        setError(null);
+        setNow(Date.now());
+      } catch (e) {
+        if (!controller.signal.aborted)
+          setError(e instanceof Error ? e.message : "Unable to read user counters.");
+      } finally {
+        pending = false;
+      }
+    };
+    refreshRef.current = () => {
+      void refresh();
+    };
+    const visibility = () => {
+      setPaused(document.hidden);
+      void refresh();
+    };
+    document.addEventListener("visibilitychange", visibility);
+    const timer = setInterval(() => {
+      void refresh();
+    }, 5000);
+    void refresh();
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", visibility);
+      refreshRef.current = () => {};
+    };
+  }, [device, enabled]);
+  const current = data?.device === device ? data : null;
+  const rows = useMemo(() => new Map(current?.rows.map((r) => [r.name, r])), [current]);
+  return {
+    data: current,
+    error,
+    paused,
+    rows,
+    stale: !!current && (now - current.collectedAt > 15_000 || !!error),
+    refresh: () => refreshRef.current(),
+  };
+}
+
+function connectionTime(seconds: number): string {
+  const whole = Math.floor(seconds);
+  const days = Math.floor(whole / 86400);
+  return `${days ? `${days}d ` : ""}${[Math.floor(whole / 3600) % 24, Math.floor(whole / 60) % 60, whole % 60].map((v) => String(v).padStart(2, "0")).join(":")}`;
+}
 
 /** Fetch only while creating a user; profiles belong to the currently selected router. */
 function InitialProfileField({
@@ -181,6 +252,7 @@ function InitialProfileField({
 // ── one CRUD entity (table + inline add/edit form) ───────────────────────────
 function EntityManager({ config, device }: { config: EntityConfig; device: string }): ReactNode {
   const showCounters = config.slug === "um-users";
+  const counters = useUserCounters(device, showCounters);
   const [data, setData] = useState<AaaList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -320,6 +392,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
           icon={<RefreshCw />}
           onClick={() => {
             void load();
+            counters.refresh();
           }}
         >
           Refresh
@@ -328,6 +401,43 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
           Add
         </Button>
       </div>
+
+      {showCounters && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-card px-3 py-2 text-xs">
+          <span
+            role="status"
+            className={cn(
+              "font-medium",
+              counters.stale || counters.error ? "text-warning" : "text-muted-foreground",
+            )}
+          >
+            {counters.paused
+              ? "Updates paused"
+              : counters.error
+                ? "Counters unavailable"
+                : counters.stale
+                  ? "Updates delayed"
+                  : counters.data
+                    ? "Live · 5s refresh"
+                    : "Reading counters…"}
+          </span>
+          {counters.data && (
+            <span className="text-muted-foreground">
+              Last read {clock(counters.data.collectedAt)}
+              {counters.stale ? " · showing last known values" : ""}
+            </span>
+          )}
+          <span className="basis-full text-muted-foreground">
+            Cumulative User Manager totals, not the current connection only. Values update when the
+            NAS sends RADIUS accounting; refresh does not reset counters.
+          </span>
+          {counters.error && (
+            <span role="alert" className="basis-full text-warning">
+              {counters.error}
+            </span>
+          )}
+        </div>
+      )}
 
       {error && (
         <Note type="error" className="mb-2.5">
@@ -431,6 +541,13 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
               {config.columns.map((c) => (
                 <TableHead key={c.key}>{c.label}</TableHead>
               ))}
+              {showCounters && (
+                <>
+                  <TableHead className="text-right">Total connected time</TableHead>
+                  <TableHead className="text-right text-chart-1">↓ Download</TableHead>
+                  <TableHead className="text-right text-chart-2">↑ Upload</TableHead>
+                </>
+              )}
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -438,6 +555,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
             {rows.map((r) => {
               const id = r[config.idKey];
               const off = isDisabled(r);
+              const counter = counters.rows.get(r.name);
               return (
                 <TableRow key={id || rowLabel(r, config)}>
                   {config.columns.map((c) => (
@@ -450,11 +568,42 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                         <Badge type={off ? "secondary" : "success"}>
                           {off ? "disabled" : "enabled"}
                         </Badge>
+                      ) : showCounters && c.key === "name" ? (
+                        <div className="grid gap-1">
+                          <span className="font-medium">{r.name}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {counter?.active == null
+                              ? "Connection count unknown"
+                              : `${counter.active} active connection${counter.active === 1 ? "" : "s"}`}
+                          </span>
+                        </div>
                       ) : (
                         (r[c.key] ?? "")
                       )}
                     </TableCell>
                   ))}
+                  {showCounters && (
+                    <>
+                      <TableCell
+                        className="text-right font-mono tabular-nums"
+                        title="Cumulative accounted connection time across this user's sessions"
+                      >
+                        {counter?.seconds == null ? "—" : connectionTime(counter.seconds)}
+                      </TableCell>
+                      <TableCell
+                        className="text-right font-mono tabular-nums text-chart-1"
+                        title="Total bytes downloaded by this user"
+                      >
+                        {counter?.download == null ? "—" : bytes(counter.download)}
+                      </TableCell>
+                      <TableCell
+                        className="text-right font-mono tabular-nums text-chart-2"
+                        title="Total bytes uploaded by this user"
+                      >
+                        {counter?.upload == null ? "—" : bytes(counter.upload)}
+                      </TableCell>
+                    </>
+                  )}
                   <TableCell className="text-right">
                     <span className="flex justify-end gap-1.5">
                       {config.toggle && (

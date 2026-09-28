@@ -4,6 +4,7 @@ import { getConfig, setConfig } from "../../src/core/runtime";
 import {
   buildUmReport,
   getUmSnapshot,
+  getUmUserCounters,
   parseUmReportQuery,
   parseUmRows,
   umDurationSeconds,
@@ -91,6 +92,70 @@ function snapshot(): UmSnapshot {
 const query = (q = "") => parseUmReportQuery(new URLSearchParams(q));
 
 describe("User Manager accounting reports", () => {
+  test("live user counters join by stable ID, retain unknowns and avoid session history", async () => {
+    read
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          { ".id": "*1", name: "alice", password: "hidden" },
+          { ".id": "*2", name: "bob" },
+          { ".id": "*3", name: "new-user" },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          {
+            ".id": "*2",
+            "total-download": 0,
+            "total-upload": 0,
+            "total-uptime": "0s",
+            "active-sessions": 0,
+          },
+          {
+            ".id": "*1",
+            "total-download": 4000,
+            "total-upload": 700,
+            "total-uptime": "1970-01-03 01:00:00",
+            "active-sessions": 2,
+          },
+        ]),
+      );
+    const [one, two] = await Promise.all([getUmUserCounters("edge"), getUmUserCounters("edge")]);
+    expect(one).toBe(two);
+    expect(one.rows).toEqual([
+      { id: "*1", name: "alice", download: 4000, upload: 700, seconds: 176400, active: 2 },
+      { id: "*2", name: "bob", download: 0, upload: 0, seconds: 0, active: 0 },
+      { id: "*3", name: "new-user", download: null, upload: null, seconds: null, active: null },
+    ]);
+    expect(JSON.stringify(one)).not.toContain("hidden");
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(read.mock.calls.some(([cmd]) => cmd.includes("session"))).toBe(false);
+    expect(await getUmUserCounters("edge")).toBe(one);
+    expect(read).toHaveBeenCalledTimes(2);
+    await expect(getUmUserCounters("missing")).rejects.toThrow();
+    expect(read).toHaveBeenCalledTimes(2);
+    setConfig(MikrotikConfigSchema.parse(getConfig()));
+    await getUmUserCounters("edge");
+    expect(read).toHaveBeenCalledTimes(4);
+  });
+  test("live counters expire quickly and device failures do not become zeros", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(100_000);
+    await getUmUserCounters("edge");
+    now.mockReturnValue(103_000);
+    const failure = new DeviceConnectionError("edge", "Failed to connect to device 'edge'");
+    read.mockRejectedValueOnce(failure);
+    await expect(getUmUserCounters("edge")).rejects.toBe(failure);
+    read.mockResolvedValueOnce("bad command name user-manager");
+    expect(await getUmUserCounters("edge")).toMatchObject({ available: false, rows: [] });
+    read
+      .mockResolvedValueOnce('[{".id":"*1","name":"alice"}]')
+      .mockResolvedValueOnce('{"truncated":');
+    expect(await getUmUserCounters("edge")).toMatchObject({
+      available: false,
+      rows: [],
+      error: expect.stringContaining("Incomplete"),
+    });
+    expect((await getUmUserCounters("edge")).available).toBe(true);
+  });
   test("singleton settings parse colon-delimited output and rejected management reads stay errors", async () => {
     read.mockResolvedValue("enabled: yes\nuse-profiles: no\nauthentication-port: 1812\n");
     expect((await getUmSettings(createContext(undefined, "edge"))).settings).toEqual({

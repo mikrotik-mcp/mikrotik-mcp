@@ -87,7 +87,7 @@ import {
   toggleAaaEntity,
   updateAaaEntity,
 } from "../tools/aaa-data";
-import { buildUmReport, getUmSnapshot, parseUmReportQuery } from "./um-reports";
+import { buildUmReport, getUmSnapshot, getUmUserCounters, parseUmReportQuery } from "./um-reports";
 import { normalizeExport } from "../snapshots/format";
 import type { SnapshotStore } from "../snapshots/store";
 import { openSnapshotStore } from "../snapshots/store";
@@ -1141,6 +1141,9 @@ async function aaaRoutes(req: Request, url: URL): Promise<Response | null> {
         return json({ error: "Invalid report filters" }, 400);
       }
       return json(buildUmReport(await getUmSnapshot(deviceFromQuery()), filters));
+    }
+    if (p === "/api/aaa/user-counters") {
+      return json(await getUmUserCounters(deviceFromQuery()));
     }
     if (p === "/api/aaa/radius-incoming") {
       return json(await getRadiusIncoming(createContext(undefined, deviceFromQuery())));

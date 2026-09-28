@@ -298,6 +298,80 @@ export async function getUmSnapshot(device?: string): Promise<UmSnapshot> {
   return target.pending;
 }
 
+export interface UmUserCounters {
+  device: string;
+  collectedAt: number;
+  available: boolean;
+  error?: string;
+  rows: {
+    id: string;
+    name: string;
+    active: number | null;
+    seconds: number | null;
+    download: number | null;
+    upload: number | null;
+  }[];
+}
+const userCounterCache = new Map<
+  string,
+  {
+    config: ReturnType<typeof getConfig>;
+    value?: UmUserCounters;
+    pending?: Promise<UmUserCounters>;
+  }
+>();
+
+/** Short, shared read for the Users table; never walks historical sessions. */
+export async function getUmUserCounters(device?: string): Promise<UmUserCounters> {
+  const name = resolveDeviceName(device);
+  assertDeviceAccess([name], "list_user_manager_users", "READ");
+  const config = getConfig();
+  let entry = userCounterCache.get(name);
+  if (!entry || entry.config !== config) {
+    entry = { config };
+    userCounterCache.set(name, entry);
+  }
+  if (entry.pending) return entry.pending;
+  if (entry.value && Date.now() - entry.value.collectedAt < 2500) return entry.value;
+  const target = entry;
+  target.pending = (async (): Promise<UmUserCounters> => {
+    const ctx = createContext(undefined, name);
+    const users = await readSource(ctx, "users");
+    const totals = users.available ? await readSource(ctx, "totals") : users;
+    const available = users.available && totals.available;
+    const byId = new Map(totals.rows.map((r) => [r[".id"], r]));
+    const value: UmUserCounters = {
+      device: name,
+      collectedAt: Date.now(),
+      available,
+      error: available
+        ? undefined
+        : users.error || totals.error || "User Manager counters are unavailable on this device.",
+      rows: available
+        ? users.rows
+            .filter((r) => r.name && r[".id"])
+            .map((r) => {
+              const total = byId.get(r[".id"]);
+              return {
+                id: r[".id"],
+                name: r.name,
+                active: total?.["active-sessions"] != null ? count(total["active-sessions"]) : null,
+                seconds:
+                  total?.["total-uptime"] != null ? umDurationSeconds(total["total-uptime"]) : null,
+                download: total?.["total-download"] != null ? size(total["total-download"]) : null,
+                upload: total?.["total-upload"] != null ? size(total["total-upload"]) : null,
+              };
+            })
+        : [],
+    };
+    if (available) target.value = value;
+    return value;
+  })().finally(() => {
+    target.pending = undefined;
+  });
+  return target.pending;
+}
+
 /** RouterOS JSON serializes long durations as epoch dates, not ISO durations. */
 export function umDurationSeconds(value: string | undefined): number {
   if (!value || value === "0") return 0;
