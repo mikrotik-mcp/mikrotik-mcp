@@ -174,7 +174,7 @@ import { attackRoutes } from "./attack-routes";
 import { subscribeRollout } from "./rollout-hub";
 import { subscribeTxn } from "./txn-hub";
 import { alertRoutes } from "./alert-routes";
-import { clientError, logError } from "./http-error";
+import { clientError, errorResponse, logError } from "./http-error";
 import { closeMemoryStore, memoryRoutes } from "./memory-routes";
 
 const SERVER_TAG = "mikrotik-mcp";
@@ -1739,7 +1739,7 @@ export async function runDashboard(
         return json({ device: b.device, capabilities: serializeCapabilities(caps) });
       } catch (e) {
         logger.error(`Capability probe failed for '${b.device}': ${logError(e)}`);
-        return json({ error: clientError(e) }, 502);
+        return errorResponse(e);
       }
     }
 
@@ -1946,7 +1946,7 @@ export async function runDashboard(
         return await dashboardRoute(req, url, srv, configAdmin, transportLabel);
       } catch (e) {
         logger.error(`Dashboard request failed (${url.pathname}): ${logError(e)}`);
-        return json({ error: clientError(e) }, 502);
+        return errorResponse(e);
       }
     },
     websocket: {

@@ -13,7 +13,7 @@ import { getConfig, resolveDeviceName } from "../core/runtime";
 import { DEFAULT_SNAPSHOT_DB } from "../config";
 import { noteDriftResult } from "../drift/alert";
 import { analyzeDrift, attributeChanges } from "../drift/engine";
-import { clientError } from "./http-error";
+import { errorResponse } from "./http-error";
 import { normalizeExport } from "../snapshots/format";
 import { openSnapshotStore } from "../snapshots/store";
 import type { SnapshotStore } from "../snapshots/store";
@@ -193,7 +193,7 @@ export async function driftRoutes(req: Request, url: URL): Promise<Response | nu
 
       return json(report);
     } catch (e) {
-      return json({ error: clientError(e) }, 502);
+      return errorResponse(e);
     }
   }
 

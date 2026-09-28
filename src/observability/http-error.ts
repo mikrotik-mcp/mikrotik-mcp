@@ -14,6 +14,7 @@
  * MCP host surfaces to the operator.
  */
 import { homedir } from "node:os";
+import { DeviceConnectionError } from "../core/device-connection-error";
 
 const HOME = homedir();
 const MAX_LEN = 300;
@@ -34,6 +35,21 @@ export function sanitizeMessage(raw: string, home: string, fallback: string): st
 /** Sanitised, single-line message for an unknown thrown value. */
 export function clientError(e: unknown, fallback = "unknown error"): string {
   return sanitizeMessage(e instanceof Error ? e.message : String(e), HOME, fallback);
+}
+
+/** Only a proven device connection failure is a device-unavailable response. */
+export function errorResponse(e: unknown): Response {
+  const connection = e instanceof DeviceConnectionError;
+  return Response.json(
+    {
+      error: clientError(e),
+      ...(connection && {
+        code: "DEVICE_CONNECTION_FAILED",
+        device: sanitizeMessage(e.device, HOME, "unknown device"),
+      }),
+    },
+    { status: connection ? 503 : 502 },
+  );
 }
 
 /** The full error text (message + stack when present) for server-side logs. */

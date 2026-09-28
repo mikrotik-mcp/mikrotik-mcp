@@ -8,6 +8,7 @@
  * fresh one-shot SSH channel is opened, used, and closed.
  */
 import type { ToolContext } from "./context";
+import { DeviceConnectionError } from "./device-connection-error";
 import { isPoolEnabled, runPooled } from "./connection-pool";
 import { resolveDeviceName, getDevice } from "./runtime";
 import {
@@ -111,7 +112,7 @@ async function runOnce(
   const client = createDeviceClient(dc);
   try {
     if (!(await client.connect())) {
-      throw new Error(connectErrorMessage(name, dc, client.lastError));
+      throw new DeviceConnectionError(name, connectErrorMessage(name, dc, client.lastError));
     }
     return await client.run(command, opts);
   } finally {
@@ -279,7 +280,7 @@ export async function uploadFileToDevice(
   }
   const ssh = new MikroTikSSHClient({ ...sshOptionsOf(dc), jump: resolveJump(dc) });
   if (!(await ssh.connect())) {
-    throw new Error(connectErrorMessage(name, dc, ssh.lastError));
+    throw new DeviceConnectionError(name, connectErrorMessage(name, dc, ssh.lastError));
   }
   try {
     await ssh.uploadFile(remotePath, data);
@@ -308,7 +309,7 @@ export async function downloadFileFromDevice(
   }
   const ssh = new MikroTikSSHClient({ ...sshOptionsOf(dc), jump: resolveJump(dc) });
   if (!(await ssh.connect())) {
-    throw new Error(connectErrorMessage(name, dc, ssh.lastError));
+    throw new DeviceConnectionError(name, connectErrorMessage(name, dc, ssh.lastError));
   }
   try {
     return await ssh.downloadFile(remotePath);

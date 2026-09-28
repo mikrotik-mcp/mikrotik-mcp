@@ -18,6 +18,7 @@
 import { MikroTikSSHClient } from "../ssh/client";
 import { logger } from "../logger";
 import { getConfig, getDevice } from "./runtime";
+import { DeviceConnectionError } from "./device-connection-error";
 import { connectErrorMessage, resolveJump, sshOptionsOf } from "./transport";
 
 // ── Pool entry ──────────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ async function doConnect(name: string): Promise<PoolEntry> {
   });
 
   if (!(await client.connect())) {
-    throw new Error(connectErrorMessage(name, dc, client.lastError));
+    throw new DeviceConnectionError(name, connectErrorMessage(name, dc, client.lastError));
   }
 
   const entry: PoolEntry = {

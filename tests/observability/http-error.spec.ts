@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
-import { clientError, logError, sanitizeMessage } from "../../src/observability/http-error";
+import {
+  clientError,
+  errorResponse,
+  logError,
+  sanitizeMessage,
+} from "../../src/observability/http-error";
+import { DeviceConnectionError } from "../../src/core/device-connection-error";
 
 // A stand-in home directory, so these assertions don't depend on the machine
 // running them (and the test file needs no node:os import).
@@ -31,6 +37,26 @@ describe("sanitizeMessage", () => {
 });
 
 describe("clientError / logError", () => {
+  test.each(["connect ECONNREFUSED", "All configured authentication methods failed"])(
+    "connection failures preserve the device and actual cause: %s",
+    async (reason) => {
+      const message = `Failed to connect to MikroTik device 'edge' — ${reason}`;
+      const res = errorResponse(new DeviceConnectionError("edge", `${message}\n    at hidden`));
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({
+        error: message,
+        code: "DEVICE_CONNECTION_FAILED",
+        device: "edge",
+      });
+    },
+  );
+
+  test("unrelated upstream or server errors never claim the device is offline", async () => {
+    const res = errorResponse(new Error("S3 ECONNREFUSED\n    at hidden"));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "S3 ECONNREFUSED" });
+  });
+
   test("clientError sanitises a thrown Error and stringifies anything else", () => {
     expect(clientError(new Error("boom\n    at x (/a/b.ts:1:1)"))).toBe("boom");
     expect(clientError(undefined)).toBe("undefined");
