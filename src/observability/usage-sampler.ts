@@ -28,7 +28,7 @@ import {
 } from "../core/routeros-parse";
 import { getConfig } from "../core/runtime";
 import { logger } from "../logger";
-import { parseKidControlOutput } from "../tools/connected-devices";
+import { KID_CONTROL_COUNTERS_COMMAND, parseKidControlOutput } from "../tools/connected-devices";
 import type { ClientCounter, UsageStore, VpnSession } from "./usage-store";
 
 const SERVER_TAG = "mikrotik-mcp";
@@ -66,10 +66,7 @@ function ipOf(target: string): string {
 async function sampleClients(store: UsageStore, device: string, ts: number): Promise<void> {
   const ctx = createContext(undefined, device);
   const samples = new Map<string, ClientCounter>();
-  const kid = await executeMikrotikCommand(
-    "/ip kid-control device print detail without-paging",
-    ctx,
-  );
+  const kid = await executeMikrotikCommand(KID_CONTROL_COUNTERS_COMMAND, ctx);
   if (!looksLikeError(kid) && !commandUnsupported(kid)) {
     for (const [ip, counter] of Object.entries(parseKidControlOutput(kid))) {
       // The Clients table uses IPv4. Do not persist IPv6 aliases as extra clients.

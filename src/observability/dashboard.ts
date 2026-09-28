@@ -66,7 +66,6 @@ import {
   fetchDevices,
   makeDeviceStatic,
   removeDeviceLease,
-  sampleAllTraffic,
   sampleDeviceTraffic,
   setDeviceIp,
   setDeviceLabel,
@@ -133,7 +132,7 @@ import {
 import { getDeviceGeo, startGeoLookups, stopGeoLookups } from "./geo";
 import { flagSvg } from "./flags";
 import { configureRecorder, getEventStore, subscribe, subscriberCount } from "./recorder";
-import { subscribeTraffic } from "./traffic-hub";
+import { readTrafficSample, subscribeTraffic } from "./traffic-hub";
 import { interfaceStatsResponse } from "./interface-stats";
 import type { EventFilter, EventStore } from "./store";
 import { openSqliteStore } from "./store";
@@ -1038,8 +1037,7 @@ async function clientsRoutes(req: Request, url: URL): Promise<Response | null> {
   }
 
   if (p === "/api/clients/traffic-bulk" && req.method === "GET") {
-    const ctx = createContext(undefined, deviceFromQuery());
-    return json(await sampleAllTraffic(ctx));
+    return json(await readTrafficSample(deviceFromQuery() ?? ""));
   }
 
   // Mutations: each takes { mac, device?, ... } and returns { ok, message, view? }.

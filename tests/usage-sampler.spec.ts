@@ -9,6 +9,7 @@ import {
 } from "../src/observability/usage-sampler";
 import type { UsageStore } from "../src/observability/usage-store";
 import { logger } from "../src/logger";
+import { KID_CONTROL_COUNTERS_COMMAND } from "../src/tools/connected-devices";
 
 const read = vi.hoisted(() => vi.fn(async (_command: string) => ""));
 vi.mock("../src/core/connector", () => ({ executeMikrotikCommand: read }));
@@ -98,6 +99,19 @@ test("records Kid Control counters even without queues, once per IPv4 client", a
     { ip: "10.10.10.191", rx: 1048576, tx: 65536, source: "kid-control" },
   ]);
   expect(read.mock.calls.every(([command]) => command.includes("print"))).toBe(true);
+});
+
+test("persists unrounded byte counters from the shared stats reader", async () => {
+  read.mockImplementation(async (command: string) =>
+    command === KID_CONTROL_COUNTERS_COMMAND
+      ? "0 ip-address=10.0.0.10;fe80::1 rate-down=120000 rate-up=800 bytes-down=47814187295 bytes-up=3026699413"
+      : "",
+  );
+  const db = store();
+  await sampleUsageOnce(db);
+  expect(db.recordClientSamples).toHaveBeenCalledWith("edge", expect.any(Number), [
+    { ip: "10.0.0.10", rx: 47814187295, tx: 3026699413, source: "kid-control" },
+  ]);
 });
 
 test("prefers Kid Control and only falls back to exact-host queues without double counting", async () => {

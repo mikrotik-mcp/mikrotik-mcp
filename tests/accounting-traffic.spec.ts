@@ -78,6 +78,27 @@ describe("parseMagnitude", () => {
 });
 
 describe("parseKidDevices (RouterOS v7 Kid Control)", () => {
+  test("retains exact raw counters and semicolon-separated address arrays", () => {
+    const hosts =
+      parseKidControlOutput(`0 ip-address=fe80::1;10.0.0.2 rate-down=2433048 rate-up=233800 bytes-down=47814187295 bytes-up=3026699413
+0 ip-address=10.0.0.3 rate-down=0 rate-up=0 bytes-down=0 bytes-up=0`);
+    expect(hosts["10.0.0.2"]).toEqual({
+      rxRate: 2433048,
+      txRate: 233800,
+      rxBytes: 47814187295,
+      txBytes: 3026699413,
+    });
+    expect(hosts["10.0.0.3"]?.rxRate).toBe(0);
+  });
+  test("missing rates remain unknown and unreadable counters are never fabricated as zero", () => {
+    const hosts = parseKidDevices([
+      { "ip-address": "10.0.0.2", "bytes-down": "100", "bytes-up": "20" },
+      { "ip-address": "10.0.0.3", "rate-down": "0bps", "rate-up": "0bps" },
+      { "ip-address": "10.0.0.4", "bytes-down": "unavailable", "bytes-up": "20" },
+    ]);
+    expect(hosts["10.0.0.2"]).toEqual({ rxRate: null, txRate: null, rxBytes: 100, txBytes: 20 });
+    expect(Object.keys(hosts)).toEqual(["10.0.0.2"]);
+  });
   test("maps every address of a dual-stack device to its device-wide counters", () => {
     const hosts = parseKidDevices([
       {

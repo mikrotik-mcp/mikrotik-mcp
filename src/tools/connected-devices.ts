@@ -17,6 +17,7 @@
  * share one implementation (no behaviour drift).
  */
 import { z } from "zod";
+import { isIP } from "node:net";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -67,8 +68,8 @@ export type TrafficSource = "accounting" | "kid-control" | "none";
 
 /** Live rates (bits/sec) + cumulative bytes for one host, normalised across sources. */
 export interface HostTraffic {
-  rxRate: number;
-  txRate: number;
+  rxRate: number | null;
+  txRate: number | null;
   rxBytes: number;
   txBytes: number;
 }
@@ -163,7 +164,8 @@ export async function fetchDevices(ctx: ToolContext): Promise<Device[]> {
   const arpByMac = new Map<string, Record<string, string>>();
   for (const r of arp) {
     const m = (r["mac-address"] ?? "").toUpperCase();
-    if (m) arpByMac.set(m, r);
+    // A gateway/proxy may have several IPs. Prefer a reachable entry over a stale alias.
+    if (m && (!arpByMac.has(m) || r.status === "reachable")) arpByMac.set(m, r);
   }
 
   const byMac = new Map<string, Device>();
@@ -179,7 +181,7 @@ export async function fetchDevices(ctx: ToolContext): Promise<Device[]> {
       iface: a?.interface ?? l.server ?? "",
       server: l.server ?? "",
       status: l.status ?? (a ? "arp-only" : ""),
-      static: !yes(l.dynamic),
+      static: !(yes(l.dynamic) || (l.flags ?? "").includes("D")),
       blocked: yes(l["block-access"]),
       lastSeen: l["last-seen"] ?? "",
       comment: l.comment ?? "",
@@ -193,8 +195,9 @@ export async function fetchDevices(ctx: ToolContext): Promise<Device[]> {
       host: "",
       iface: a.interface ?? "",
       server: "",
-      status: yes(a.complete) ? "arp-only" : "incomplete",
-      static: !yes(a.dynamic),
+      status:
+        a.status || (yes(a.complete) || (a.flags ?? "").includes("C") ? "arp-only" : "incomplete"),
+      static: !(yes(a.dynamic) || (a.flags ?? "").includes("D")),
       blocked: false,
       lastSeen: "",
       comment: a.comment ?? "",
@@ -342,21 +345,44 @@ async function sampleAccounting(
  */
 export function parseKidDevices(rows: Record<string, string>[]): Record<string, HostTraffic> {
   const hosts: Record<string, HostTraffic> = {};
+  const number = (value: string | undefined, bytes = false): number | null => {
+    if (bytes) {
+      const parsed = parseSize(value);
+      if (parsed != null && Number.isFinite(parsed) && parsed >= 0) return parsed;
+    }
+    if (!/^\d+(?:\.\d+)?\s*(?:[kMGT](?:bps)?|bps)?$/i.test(value ?? "")) return null;
+    const parsed = parseMagnitude(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
   for (const row of rows) {
     const addresses = (row["ip-address"] ?? "")
-      .split(",")
+      .split(/[,;]/)
       .map((ip) => ip.trim())
-      .filter(Boolean);
+      .filter((ip) => isIP(ip));
+    const rxBytes = number(row["bytes-down"], true);
+    const txBytes = number(row["bytes-up"], true);
+    if (rxBytes == null || txBytes == null) continue;
     const traffic = {
-      rxRate: parseMagnitude(row["rate-down"]),
-      txRate: parseMagnitude(row["rate-up"]),
-      rxBytes: parseSize(row["bytes-down"]) ?? parseMagnitude(row["bytes-down"]),
-      txBytes: parseSize(row["bytes-up"]) ?? parseMagnitude(row["bytes-up"]),
+      rxRate: number(row["rate-down"]),
+      txRate: number(row["rate-up"]),
+      rxBytes,
+      txBytes,
     };
     for (const ip of addresses) hosts[ip] = traffic;
   }
   return hosts;
 }
+
+/**
+ * Read raw integers, not rounded `44.5GiB` display values. Static read-only script:
+ * stats is one snapshot; resolve addresses by its internal ID, never a print ordinal.
+ * No names/activity are emitted. :tostr keeps a dual-stack address array on one line.
+ */
+export const KID_CONTROL_COUNTERS_COMMAND =
+  ":foreach sample in=[/ip kid-control device print stats as-value] do={ " +
+  ':put ("0 ip-address=" . [:tostr [/ip kid-control device get ($sample->".id") ip-address]] . ' +
+  '" rate-down=" . ($sample->"rate-down") . " rate-up=" . ($sample->"rate-up") . ' +
+  '" bytes-down=" . ($sample->"bytes-down") . " bytes-up=" . ($sample->"bytes-up")) }';
 
 /** Join wrapped address lists before the generic whitespace-delimited KV parser. */
 export function parseKidControlOutput(output: string): Record<string, HostTraffic> {
@@ -369,10 +395,7 @@ export function parseKidControlOutput(output: string): Record<string, HostTraffi
 
 /** v7: read Kid Control's per-device counters. */
 async function sampleKidControl(ctx: ToolContext): Promise<Record<string, HostTraffic>> {
-  const out = await executeMikrotikCommand(
-    "/ip kid-control device print detail without-paging",
-    ctx,
-  );
+  const out = await executeMikrotikCommand(KID_CONTROL_COUNTERS_COMMAND, ctx);
   if (looksLikeError(out)) throw new Error(firstLine(out));
   if (isEmpty(out)) return {};
   return parseKidControlOutput(out);

@@ -30,8 +30,9 @@ import { Badge, Button, Input, Note, Select } from "./geist";
 import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 import { UsageHistoryChart } from "./usage-charts";
-import { applyTrafficSample, EMPTY_TRAFFIC, MINI_SAMPLES } from "./clients-traffic";
-import type { BulkTraffic, IpTraffic } from "./clients-traffic";
+import { applyTrafficSample, EMPTY_TRAFFIC, trafficX } from "./clients-traffic";
+import type { BulkTraffic, IpTraffic, TrafficPoint } from "./clients-traffic";
+import type { BulkTrafficPayload } from "../../src/tools/connected-devices";
 
 interface Device {
   mac: string;
@@ -51,42 +52,34 @@ interface DevicesView {
   counts: { total: number; blocked: number; static: number };
   generatedAt: string;
 }
-interface BulkTrafficSample {
-  ts: number;
-  /** How the server obtained traffic; `none` → `note` explains why it's empty. */
-  source: "accounting" | "kid-control" | "none";
-  note?: string;
-  /** Per-IP live rates (bits/sec) + cumulative bytes, normalised across sources. */
-  hosts: Record<string, { rxRate: number; txRate: number; rxBytes: number; txBytes: number }>;
-  /** Per-IP rate limits from `/queue simple`, for the limits editor. */
-  limits: Record<string, { download: string; upload: string }>;
-}
+type BulkTrafficSample = BulkTrafficPayload;
 interface OpResult {
   ok: boolean;
   message: string;
   view?: DevicesView;
 }
 
-const MAX_SAMPLES = 40;
 const BULK_POLL_MS = 1000;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-const mbps = (bits: number): string => `${(bits / 1e6).toFixed(2)} Mbps`;
-const compact = (bits: number): string => {
-  if (bits >= 1e6) return `${(bits / 1e6).toFixed(1)}M`;
-  if (bits >= 1e3) return `${(bits / 1e3).toFixed(0)}k`;
-  return bits > 0 ? `${Math.round(bits)}` : "0";
+const mbps = (bits: number | null): string =>
+  bits == null ? "Unavailable" : `${(bits / 1e6).toFixed(2)} Mbps`;
+const compact = (bits: number | null): string => {
+  if (bits == null) return "—";
+  if (bits >= 1e6) return `${(bits / 1e6).toFixed(1)} Mbps`;
+  if (bits >= 1e3) return `${(bits / 1e3).toFixed(1)} kbps`;
+  return `${Math.round(bits)} bps`;
 };
 
 // ── Charts ──────────────────────────────────────────────────────────────────
 
 /** A live Download (green ↓) / Upload (amber ↑) area chart, hand-rolled in SVG. */
-function TrafficChart({ history }: { history: { rx: number; tx: number }[] }): ReactNode {
+export function TrafficChart({ history }: { history: TrafficPoint[] }): ReactNode {
   const W = 520;
   const H = 150;
   const pad = 8;
   const max = Math.max(1, ...history.flatMap((p) => [p.rx, p.tx]));
-  const x = (i: number): number => pad + (i * (W - 2 * pad)) / Math.max(1, MAX_SAMPLES - 1);
+  const x = (i: number): number => trafficX(history, i, W, pad);
   const y = (v: number): number => H - pad - (v / max) * (H - 2 * pad);
 
   const path = (pick: (p: { rx: number; tx: number }) => number): string =>
@@ -104,6 +97,7 @@ function TrafficChart({ history }: { history: { rx: number; tx: number }[] }): R
       viewBox={`0 0 ${W} ${H}`}
       xmlns={SVG_NS}
       role="img"
+      aria-label="Client download and upload rate over observed time"
     >
       {history.length >= 2 && (
         <>
@@ -118,14 +112,14 @@ function TrafficChart({ history }: { history: { rx: number; tx: number }[] }): R
 }
 
 /** Tiny inline sparkline (rx + tx stacked areas) for a client row. */
-function MiniSparkline({ history }: { history: { rx: number; tx: number }[] }): ReactNode {
+function MiniSparkline({ history }: { history: TrafficPoint[] }): ReactNode {
   const W = 80;
   const H = 18;
   const pad = 1;
   const cls = "block h-[18px] w-20 shrink-0 rounded-[3px] bg-muted/40";
   if (history.length < 2) return <svg className={cls} viewBox={`0 0 ${W} ${H}`} />;
   const max = Math.max(1, ...history.flatMap((p) => [p.rx, p.tx]));
-  const x = (i: number): number => pad + (i * (W - 2 * pad)) / Math.max(1, MINI_SAMPLES - 1);
+  const x = (i: number): number => trafficX(history, i, W, pad);
   const y = (v: number): number => H - pad - (v / max) * (H - 2 * pad);
   const pts = (pick: (p: { rx: number; tx: number }) => number): string =>
     history.map((p, i) => `${x(i).toFixed(1)},${y(pick(p)).toFixed(1)}`).join(" ");
@@ -299,7 +293,17 @@ function DeviceDetail({
             <span className="font-semibold text-success">↓ {mbps(traffic.rxRate)}</span>
             <span className="font-semibold text-warning">↑ {mbps(traffic.txRate)}</span>
           </div>
-          <TrafficChart history={traffic.history} />
+          {traffic.history.length >= 2 ? (
+            <>
+              <TrafficChart history={traffic.history} />
+              <div className="mt-1 flex max-w-[520px] justify-between text-[11px] text-muted-foreground">
+                <span>{new Date(traffic.history[0]!.ts).toLocaleTimeString()}</span>
+                <span>{new Date(traffic.history.at(-1)!.ts).toLocaleTimeString()}</span>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">Waiting for two valid rate samples…</p>
+          )}
           <div className="mt-2 text-muted-foreground text-xs tabular-nums">
             Router counter totals ↓ {bytes(traffic.rxBytes)} · ↑ {bytes(traffic.txBytes)}
           </div>
@@ -356,12 +360,20 @@ function useBulkTraffic(deviceName: string): BulkTraffic {
     let closed = false;
     let ws: WebSocket | null = null;
     let es: EventSource | null = null;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
     const q = `traffic=${encodeURIComponent(deviceName)}`;
 
     const onSample = (sample: BulkTrafficSample): void => {
       if (!closed) setTraffic((old) => applyTrafficSample(old, sample));
     };
+    const unavailable = (note: string): void =>
+      onSample({
+        ts: Date.now(),
+        source: "none",
+        hosts: {},
+        limits: {},
+        note,
+      });
 
     // 3rd fallback: 1-second HTTP polling.
     const startPolling = (): void => {
@@ -382,9 +394,9 @@ function useBulkTraffic(deviceName: string): BulkTraffic {
             note: error instanceof Error ? error.message : "Traffic request failed",
           });
         }
+        if (!closed) pollTimer = setTimeout(() => void poll(), BULK_POLL_MS);
       };
       void poll();
-      pollTimer = setInterval(() => void poll(), BULK_POLL_MS);
     };
 
     // 2nd: Server-Sent Events.
@@ -403,6 +415,7 @@ function useBulkTraffic(deviceName: string): BulkTraffic {
         }
       });
       es.onerror = () => {
+        unavailable("Traffic stream interrupted. Reconnecting; rates are unavailable.");
         // Never established → give up on SSE and fall to polling. If it had
         // opened, leave EventSource to auto-reconnect on its own.
         if (!opened && es) {
@@ -433,6 +446,7 @@ function useBulkTraffic(deviceName: string): BulkTraffic {
       };
       ws.onclose = () => {
         if (closed) return;
+        unavailable("Traffic stream interrupted. Reconnecting; rates are unavailable.");
         if (opened) setTimeout(connectWs, 2000); // was working — reconnect
         else connectSse(); // never opened — fall to SSE
       };
@@ -443,7 +457,7 @@ function useBulkTraffic(deviceName: string): BulkTraffic {
       closed = true;
       ws?.close();
       es?.close();
-      if (pollTimer) clearInterval(pollTimer);
+      if (pollTimer) clearTimeout(pollTimer);
     };
   }, [deviceName]);
 
@@ -630,7 +644,8 @@ export function ClientsView(): ReactNode {
         {trafficSource === "kid-control" && !trafficNote && (
           <p className="mb-2.5 text-xs text-muted-foreground">
             Live device counters · ↓ download / ↑ upload · includes IPv4 + IPv6 for each device.
-            Router counters may reset; these are not billing totals.
+            These are not router, WAN or tunnel totals. Router counters may reset; these are not
+            billing totals.
           </p>
         )}
 

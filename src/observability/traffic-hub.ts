@@ -13,6 +13,7 @@
  * last leaves, so an idle dashboard touches no router.
  */
 import { createContext } from "../core/context";
+import { resolveDeviceName } from "../core/runtime";
 import { sampleAllTraffic } from "../tools/connected-devices";
 import type { BulkTrafficPayload } from "../tools/connected-devices";
 
@@ -20,7 +21,8 @@ type Listener = (sample: BulkTrafficPayload) => void;
 
 interface Hub {
   listeners: Set<Listener>;
-  timer: ReturnType<typeof setInterval>;
+  timer?: ReturnType<typeof setTimeout>;
+  reading: boolean;
   /** The most recent sample, replayed to a newcomer so it isn't blank for ~1s. */
   last?: BulkTrafficPayload;
 }
@@ -34,47 +36,65 @@ const hubs = new Map<string, Hub>();
  * Subscribe to a device's live traffic samples. Returns an unsubscribe function;
  * when the last subscriber for a device unsubscribes, its poller is stopped.
  */
-export function subscribeTraffic(device: string, fn: Listener): () => void {
+export function subscribeTraffic(target: string, fn: Listener): () => void {
+  const device = resolveDeviceName(target || undefined);
   let hub = hubs.get(device);
   if (!hub) {
-    const broadcast = (sample: BulkTrafficPayload): void => {
-      const h = hubs.get(device);
-      if (!h) return;
-      h.last = sample;
-      for (const l of h.listeners) l(sample);
-    };
+    hub = { listeners: new Set(), reading: false };
+    const active = hub;
+    hubs.set(device, active);
     const poll = async (): Promise<void> => {
+      active.reading = true;
+      let sample: BulkTrafficPayload;
       try {
-        broadcast(await sampleAllTraffic(createContext(undefined, device || undefined)));
+        sample = await sampleAllTraffic(createContext(undefined, device));
       } catch (e) {
         // A connection failure throws; surface it as an empty sample so the
         // client shows the notice rather than freezing on stale numbers.
-        broadcast({
+        sample = {
           ts: Date.now(),
           source: "none",
           note: e instanceof Error ? e.message : String(e),
           hosts: {},
           limits: {},
-        });
+        };
       }
+      active.reading = false;
+      if (hubs.get(device) !== active) return;
+      if (!active.listeners.size) {
+        hubs.delete(device);
+        return;
+      }
+      active.last = sample;
+      for (const listener of active.listeners) listener(sample);
+      if (active.listeners.size) active.timer = setTimeout(() => void poll(), POLL_MS);
     };
-    hub = { listeners: new Set(), timer: setInterval(() => void poll(), POLL_MS) };
-    hubs.set(device, hub);
     void poll(); // seed immediately rather than waiting a full interval
   }
 
   hub.listeners.add(fn);
   if (hub.last) fn(hub.last);
 
+  const active = hub;
   return () => {
-    const h = hubs.get(device);
-    if (!h) return;
-    h.listeners.delete(fn);
-    if (h.listeners.size === 0) {
-      clearInterval(h.timer);
-      hubs.delete(device);
+    active.listeners.delete(fn);
+    if (!active.listeners.size) {
+      clearTimeout(active.timer);
+      // A reconnect must share the unfinished read instead of racing a new snapshot.
+      if (!active.reading && hubs.get(device) === active) hubs.delete(device);
     }
   };
+}
+
+/** HTTP fallback shares the same read as WS/SSE, including destructive v6 snapshots. */
+export function readTrafficSample(device: string): Promise<BulkTrafficPayload> {
+  return new Promise((resolve) => {
+    const unsubscribe = subscribeTraffic(device, (sample) => {
+      resolve(sample);
+      // Cached samples can be delivered synchronously before subscribe returns.
+      queueMicrotask(() => unsubscribe());
+    });
+  });
 }
 
 /** Total live traffic subscribers across all devices (for diagnostics). */
