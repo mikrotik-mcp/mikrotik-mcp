@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Plus, RefreshCw, Shuffle } from "lucide-react";
+import { Copy, Plus, RefreshCw, Shuffle } from "lucide-react";
 import { Input as BeuiInput } from "@/components/beui/registry/components/motion/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -264,7 +264,10 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<Row>({});
   const [createdUser, setCreatedUser] = useState<CreatedUserReceipt | null>(null);
+  const [cloneNotice, setCloneNotice] = useState("");
   const addButton = useRef<HTMLButtonElement>(null);
+  const cloneRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => cloneRequest.current?.abort(), [device]);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -336,6 +339,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
           });
           setEditing(null);
           setForm({});
+          setCloneNotice("");
         }
         if (!r.ok) {
           if (r.created) {
@@ -364,6 +368,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   const openAdd = (): void => {
     setEditing("new");
     setForm({});
+    setCloneNotice("");
   };
   const fieldsFromRow = (r: Row): Row => {
     // Prefill non-secret fields; secrets are redacted, so leave blank = unchanged.
@@ -378,7 +383,47 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   const openEdit = (r: Row): void => {
     setEditing(r[config.idKey]);
     setForm(fieldsFromRow(r));
+    setCloneNotice("");
   };
+  const duplicateUser = async (r: Row): Promise<void> => {
+    const controller = new AbortController();
+    cloneRequest.current?.abort();
+    cloneRequest.current = controller;
+    setBusy(true);
+    const draft = fieldsFromRow(r);
+    const names = new Set((data?.rows ?? []).map((row) => row.name));
+    let suffix = 1;
+    draft.name = `${r.name}-copy`;
+    while (names.has(draft.name)) draft.name = `${r.name}-copy-${++suffix}`;
+    let notice = `Settings copied from ${r.name}. Choose a new name and password. Password, OTP and usage history are not copied.`;
+    try {
+      const assignments = await api<AaaList>(
+        `/api/aaa/list/um-user-profiles?device=${encodeURIComponent(device)}`,
+        controller.signal,
+      );
+      if (!assignments.available) throw new Error("Profiles unavailable");
+      const profiles = [
+        ...new Set(
+          assignments.rows
+            .filter((row) => row.user === r.name && row.profile)
+            .map((row) => row.profile),
+        ),
+      ];
+      if (profiles.length === 1) draft.profile = profiles[0];
+      else if (profiles.length > 1)
+        notice += " This user has multiple profiles; select one initial profile below.";
+    } catch {
+      notice += " Profile assignments could not be read; select the initial profile yourself.";
+    } finally {
+      if (!controller.signal.aborted) {
+        setForm(draft);
+        setCloneNotice(notice);
+        setEditing("new");
+        setBusy(false);
+      }
+    }
+  };
+
   const save = async (): Promise<void> => {
     if (showCounters && editing === "new" && (!form.name?.trim() || !form.password)) {
       setError("Enter a name and password for the new user.");
@@ -498,6 +543,11 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                 : `New ${config.slug}`
               : `Edit ${editing}`}
           </div>
+          {cloneNotice && (
+            <Note label="Duplicate user" className="mb-3">
+              {cloneNotice}
+            </Note>
+          )}
           {editing === "new" && config.slug === "um-users" && (
             <InitialProfileField
               key={device}
@@ -606,6 +656,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
               onClick={() => {
                 setEditing(null);
                 setForm({});
+                setCloneNotice("");
               }}
             >
               Cancel
@@ -696,6 +747,19 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                   )}
                   <TableCell className="text-right">
                     <span className="flex justify-end gap-1.5">
+                      {showCounters && (
+                        <Button
+                          size="sm"
+                          ghost
+                          icon={<Copy />}
+                          disabled={busy}
+                          aria-label={`Duplicate ${r.name}`}
+                          title="Copy settings into a new user"
+                          onClick={() => void duplicateUser(r)}
+                        >
+                          Duplicate
+                        </Button>
+                      )}
                       {config.toggle && (
                         <Button
                           size="sm"

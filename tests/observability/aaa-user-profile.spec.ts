@@ -241,6 +241,47 @@ test("keeps failed drafts, but shows credentials with a warning for confirmed cr
   expect(postJson).toHaveBeenCalledTimes(2);
 });
 
+test("duplicates only editable non-secret settings and the single assigned profile into a new draft", async () => {
+  await open();
+  await click(button("Cancel"));
+  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  expect(postJson).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Settings copied from existing");
+  expect(host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!.value).toBe("");
+  await fill("Password", "Fresh!2x");
+  await click(button("Create"));
+  expect(postJson).toHaveBeenCalledExactlyOnceWith("/api/aaa/add", {
+    device: "home",
+    slug: "um-users",
+    fields: {
+      name: "existing-copy-2",
+      group: "default",
+      "shared-users": "2",
+      comment: "A template",
+      disabled: "no",
+      profile: "Monthly",
+      password: "Fresh!2x",
+    },
+  });
+});
+
+test("does not silently pick one of multiple profiles or create a passwordless duplicate", async () => {
+  assignments.push({ user: "existing", profile: "Other" });
+  await open();
+  await click(button("Cancel"));
+  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  expect(host.textContent).toContain("multiple profiles");
+  await click(button("Create"));
+  expect(postJson).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Enter a name and password");
+  await fill("Password", "Fresh!2x");
+  await click(button("Create"));
+  expect(vi.mocked(postJson).mock.calls[0][1]).toMatchObject({
+    fields: { name: "existing-copy-2" },
+  });
+  expect(vi.mocked(postJson).mock.calls[0][1]).not.toHaveProperty("fields.profile");
+});
+
 test("reports clipboard denial instead of claiming the password was copied", async () => {
   vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("Permission denied"));
   await open();
@@ -249,4 +290,44 @@ test("reports clipboard denial instead of claiming the password was copied", asy
   await click(document.querySelector('[aria-label="Copy password"]')!);
   expect(toast.error).toHaveBeenCalledWith("Couldn't copy. Select the text and copy it manually.");
   expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Copied!");
+});
+
+test("ignores an old router's pending duplicate when the selected router changes", async () => {
+  await open();
+  await click(button("Cancel"));
+  const original = vi.mocked(api).getMockImplementation()!;
+  let resolve!: (value: unknown) => void;
+  let signal: AbortSignal | undefined;
+  vi.mocked(api).mockImplementation((path, abort) => {
+    if (path.startsWith("/api/aaa/list/um-user-profiles")) {
+      signal = abort;
+      return new Promise((done) => {
+        resolve = done;
+      });
+    }
+    return original(path, abort);
+  });
+  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  await choose("Router", "remote");
+  expect(signal?.aborted).toBe(true);
+  await act(async () => resolve({ available: true, rows: assignments }));
+  await click(button("Users"));
+  expect(host.textContent).not.toContain("Settings copied");
+  expect(host.querySelector('[autocomplete="new-password"]')).toBeNull();
+  expect(postJson).not.toHaveBeenCalled();
+});
+
+test("keeps duplicate settings editable when profile lookup fails", async () => {
+  await open();
+  await click(button("Cancel"));
+  const original = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation((path, signal) =>
+    path.startsWith("/api/aaa/list/um-user-profiles")
+      ? Promise.reject(new Error("Device disconnected"))
+      : original(path, signal),
+  );
+  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  expect(host.textContent).toContain("Profile assignments could not be read");
+  expect(button("Create").disabled).toBe(false);
+  expect(host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!.value).toBe("");
 });
