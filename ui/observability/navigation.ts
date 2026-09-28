@@ -1,4 +1,5 @@
 export type ViewId =
+  | "prompts"
   | "home-internet"
   | "overview"
   | "devices"
@@ -33,6 +34,7 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  { id: "prompts", label: "Prompts", sub: "Ready-made workflows, tailored to your next request" },
   {
     id: "home-internet",
     label: "Home Internet",
@@ -154,7 +156,7 @@ export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
   {
     id: "workspace",
     label: "Workspace",
-    views: ["modules", "config", "memory", "alerts", "releases"],
+    views: ["prompts", "modules", "config", "memory", "alerts", "releases"],
   },
 ];
 

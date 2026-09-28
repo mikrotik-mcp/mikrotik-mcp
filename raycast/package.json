@@ -50,6 +50,13 @@
   "access": "public",
   "commands": [
     {
+      "name": "prompts",
+      "title": "Prompt Library",
+      "description": "Compose a guided MikroTik request, hand it to your MCP assistant or ask Raycast AI for a plan",
+      "icon": "extension-icon.png",
+      "mode": "view"
+    },
+    {
       "name": "menubar",
       "title": "Fleet Menu Bar",
       "description": "Live MikroTik fleet cockpit in the menu bar \u2014 health, activity, alerts",

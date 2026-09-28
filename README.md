@@ -496,6 +496,15 @@ MCP **prompts** are one-click guided workflows — authored as Markdown in
 
 See **[docs/prompts.md](docs/prompts.md)**.
 
+Browse the live library under **Workspace → Prompts** in the dashboard, or run
+**Prompt Library** in Raycast (also available in the Fleet Menu Bar). Search and
+filter workflows, fill their required inputs, add your own request and target
+router, then preview and copy the completed brief into an MCP-connected assistant.
+Nothing runs on a router while composing. The dashboard links open ChatGPT/Claude
+without including your request in the URL; paste and send it yourself. Raycast also
+offers **Ask Raycast AI for a Plan** when AI access is available: this sends the
+request to Raycast AI for advice, not MCP tool execution.
+
 ## Transports
 
 | Transport           | When                              | Run                                                              |

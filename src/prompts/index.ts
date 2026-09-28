@@ -27,6 +27,7 @@ import type { DeviceDirectoryEntry } from "../core/runtime";
 import { logger } from "../logger";
 import { PROMPTS_DIR } from "../paths";
 import { transactionPromptGuidance } from "../txn/guidance";
+import { substitutePrompt } from "./compose";
 
 export interface PromptArg {
   name: string;
@@ -85,16 +86,6 @@ function parseFrontmatter(raw: string): ParsedPrompt | null {
     arguments: args,
     body: transactionPromptGuidance(meta.name, body.trim()),
   };
-}
-
-function substitute(body: string, vars: Record<string, unknown>): string {
-  return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, key) => {
-    const v = vars[key];
-    if (v === undefined || v === null || v === "") return whole;
-    return typeof v === "object"
-      ? JSON.stringify(v)
-      : String(v as string | number | boolean | bigint | symbol);
-  });
 }
 
 /** Options for multi-device prompt injection. */
@@ -220,7 +211,7 @@ export function registerPrompts(server: McpServer, opts: PromptRegisterOptions =
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: substitute(parsed.body, args),
+              text: substitutePrompt(parsed.body, args),
             },
           },
         ],

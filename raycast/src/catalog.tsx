@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import { Action, ActionPanel, Color, Icon, List } from "@raycast/api";
 import { useApi } from "./lib/hooks";
+import { PromptForm } from "./prompts";
 
 type Risk = "READ" | "WRITE" | "WRITE_IDEMPOTENT" | "DESTRUCTIVE" | "DANGEROUS";
 
@@ -172,6 +173,11 @@ export default function Command() {
               }
               actions={
                 <ActionPanel>
+                  <Action.Push
+                    title="Compose Request"
+                    icon={Icon.Pencil}
+                    target={<PromptForm prompt={p} />}
+                  />
                   <Action.CopyToClipboard
                     title="Copy Invocation"
                     content={`/${p.name}`}

@@ -28,6 +28,7 @@ Open any command's preferences (⌘,) and set:
 | Command            | What it does                                                                                             |
 | ------------------ | -------------------------------------------------------------------------------------------------------- |
 | **Overview**       | Tool-call volume, latency, error rate and per-risk / per-tool breakdowns                                 |
+| **Prompt Library** | Search workflows, fill inputs, preview/copy/paste a request; optionally ask Raycast AI for a plan          |
 | **Devices**        | Router connectivity, CPU/MEM/DISK gauges, health sparklines, SSH pool, enable/disable                    |
 | **Clients**        | LAN devices on a router — live traffic, block/allow, pin IP, set IP, label, rate limits, usage           |
 | **RADIUS & UM**    | RADIUS client + User Manager — users, profiles, limitations, NAS, assignments, sessions, settings, usage |
@@ -44,6 +45,13 @@ Open any command's preferences (⌘,) and set:
 | **Live Feed**      | Every MCP tool call in real time (WebSocket, SSE fallback)                                               |
 
 ## Notes
+
+- **Prompt Library** reads the server's `/api/catalog` and is also in the Fleet Menu
+  Bar's Quick access menu and the Catalog's prompt actions. Compose → Preview →
+  Copy/Paste sends no router commands. Copy & Open ChatGPT/Claude prepares a manual
+  handoff; the selected assistant needs a MikroTik MCP connection to execute tools.
+  **Ask Raycast AI for a Plan** appears only with AI access, explicitly sends the
+  composed request to Raycast AI, and produces advice only (no MCP tools).
 
 - **Real-time** views (Live Feed, client traffic, packet capture) stream over the dashboard's
   WebSocket (`/api/stream`) with an SSE fallback, using the Node runtime's global `WebSocket`.

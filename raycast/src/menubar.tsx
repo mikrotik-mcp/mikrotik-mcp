@@ -436,6 +436,11 @@ export default function Command() {
           shortcut={Keyboard.Shortcut.Common.Open}
         />
         <MenuBarExtra.Submenu title="Quick access" icon={Icon.AppWindow}>
+          <FleetLink
+            title="Prompt Library"
+            command="prompts"
+            icon={Icon.Message}
+          />
           <FleetLink title="Devices" command="devices" icon={Icon.HardDrive} />
           <FleetLink
             title="Connected clients"

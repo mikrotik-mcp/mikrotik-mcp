@@ -69,6 +69,7 @@ import { ChangePlanView } from "./change-plan";
 import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
 import { InterfacesView } from "./interfaces";
+import { PromptsView } from "./prompts";
 import { HomeInternetView } from "./home-internet";
 import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
@@ -174,6 +175,15 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  prompts: {
+    what: "Browse the server's workflow templates and prepare a complete request for your AI assistant.",
+    tips: [
+      "Required inputs must be filled before copying.",
+      "Preview and copy your request, then paste it into a client connected to MikroTik MCP.",
+      "Nothing is sent to an AI or executed on a router by opening this page.",
+      "Drafts stay in this page and are cleared when you switch workflows or leave.",
+    ],
+  },
   interfaces: {
     what: "All interfaces on a selected router, with live receive/transmit charts, packet rates and cumulative counters.",
     tips: [
@@ -603,6 +613,12 @@ function ReloadServerButton(): ReactNode {
 /** Inline stroke icons for the sidebar — no icon-font dependency. */
 function NavIcon({ name }: { name: ViewId }): ReactNode {
   const paths: Record<ViewId, ReactNode> = {
+    prompts: (
+      <>
+        <path d="M4 4h16v13H8l-4 4V4Z" />
+        <path d="M8 8h8M8 12h5" />
+      </>
+    ),
     interfaces: (
       <>
         <rect x="3" y="5" width="18" height="12" rx="2" />
@@ -1609,6 +1625,7 @@ function App(): ReactNode {
               {/* ── Clients ── */}
               {view === "clients" && <ClientsView />}
               {view === "interfaces" && <InterfacesView />}
+              {view === "prompts" && <PromptsView />}
               {view === "home-internet" && <HomeInternetView />}
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}
