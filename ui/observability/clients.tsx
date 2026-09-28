@@ -93,8 +93,9 @@ export function TrafficChart({ history }: { history: TrafficPoint[] }): ReactNod
 
   return (
     <svg
-      className="block h-[150px] w-full max-w-[520px] rounded-md border border-border bg-background"
+      className="block h-[150px] w-full rounded-md border border-border bg-background"
       viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
       xmlns={SVG_NS}
       role="img"
       aria-label="Client download and upload rate over observed time"
@@ -103,8 +104,16 @@ export function TrafficChart({ history }: { history: TrafficPoint[] }): ReactNod
         <>
           <polygon className="fill-success/20 stroke-none" points={area((p) => p.rx)} />
           <polygon className="fill-warning/15 stroke-none" points={area((p) => p.tx)} />
-          <polyline className="fill-none stroke-success stroke-2" points={path((p) => p.rx)} />
-          <polyline className="fill-none stroke-warning stroke-2" points={path((p) => p.tx)} />
+          <polyline
+            className="fill-none stroke-success stroke-2"
+            points={path((p) => p.rx)}
+            vectorEffect="non-scaling-stroke"
+          />
+          <polyline
+            className="fill-none stroke-warning stroke-2"
+            points={path((p) => p.tx)}
+            vectorEffect="non-scaling-stroke"
+          />
         </>
       )}
     </svg>
@@ -296,7 +305,7 @@ function DeviceDetail({
           {traffic.history.length >= 2 ? (
             <>
               <TrafficChart history={traffic.history} />
-              <div className="mt-1 flex max-w-[520px] justify-between text-[11px] text-muted-foreground">
+              <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
                 <span>{new Date(traffic.history[0]!.ts).toLocaleTimeString()}</span>
                 <span>{new Date(traffic.history.at(-1)!.ts).toLocaleTimeString()}</span>
               </div>
@@ -594,12 +603,12 @@ export function ClientsView(): ReactNode {
   const counts = view?.counts;
 
   return (
-    <section className="grid content-start gap-[18px]">
+    <section className="grid grid-cols-1 content-start gap-[18px]">
       <Panel
         title="Connected clients"
         className="reveal"
         extra={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {routerOptions.length > 1 && (
               <Select
                 value={deviceName}
