@@ -11,7 +11,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Shuffle } from "lucide-react";
+import { Input as BeuiInput } from "@/components/beui/registry/components/motion/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -28,6 +29,7 @@ import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 import { UmReports } from "./um-reports";
 import { bytes, clock } from "./format";
+import { generateUserPassword } from "./aaa-user-credentials";
 import type { OpResult } from "../../src/tools/aaa-data";
 import type { UmUserCounters } from "../../src/observability/um-reports";
 
@@ -464,46 +466,92 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
             />
           )}
           <div className={FORM_GRID}>
-            {config.fields.map((fd) => (
-              <label key={fd.key} className={FIELD}>
-                <span className={FIELD_LABEL}>
-                  {fd.label}
-                  {fd.required && editing === "new" ? " *" : ""}
-                </span>
-                {fd.type === "bool" ? (
-                  <Select
-                    disabled={busy}
-                    value={form[fd.key] ?? ""}
-                    onValueChange={(v) => setForm({ ...form, [fd.key]: v })}
-                    options={[
-                      { value: "", label: "—" },
-                      { value: "no", label: "no" },
-                      { value: "yes", label: "yes" },
-                    ]}
-                  />
-                ) : fd.type === "select" ? (
-                  <Select
-                    disabled={busy}
-                    value={form[fd.key] ?? ""}
-                    onValueChange={(v) => setForm({ ...form, [fd.key]: v })}
-                    options={[
-                      { value: "", label: "—" },
-                      ...(fd.options ?? []).map((o) => ({ value: o, label: o })),
-                    ]}
-                  />
-                ) : (
-                  <Input
-                    disabled={busy}
-                    type={
-                      fd.type === "password" ? "password" : fd.type === "number" ? "number" : "text"
-                    }
-                    placeholder={fd.placeholder ?? (fd.type === "password" ? "(unchanged)" : "")}
-                    value={form[fd.key] ?? ""}
-                    onChange={(e) => setForm({ ...form, [fd.key]: e.target.value })}
-                  />
-                )}
-              </label>
-            ))}
+            {config.fields.map((fd) =>
+              showCounters && fd.key === "password" ? (
+                <BeuiInput
+                  key={fd.key}
+                  label={`Password${editing === "new" ? " *" : ""}`}
+                  type="password"
+                  autoComplete="new-password"
+                  disabled={busy}
+                  placeholder={editing === "new" ? "Enter or generate a password" : "(unchanged)"}
+                  value={form.password ?? ""}
+                  onChange={(password) => setForm((current) => ({ ...current, password }))}
+                  classNames={{
+                    label: FIELD_LABEL,
+                    field: "h-9 rounded-xl",
+                    input: "pr-10 text-[13px] leading-5",
+                    rightIcon: "[&_button]:size-9",
+                  }}
+                  rightIcon={
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label="Generate 8-character password"
+                        title="Generate 8 characters: uppercase, lowercase, number and symbol"
+                        className="rounded-lg text-brand transition-colors hover:bg-brand/10 focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2 disabled:opacity-50"
+                        onClick={() => {
+                          try {
+                            const password = generateUserPassword();
+                            setForm((current) => ({ ...current, password }));
+                          } catch {
+                            setError(
+                              "Secure password generation is unavailable. Enter a password manually.",
+                            );
+                          }
+                        }}
+                      >
+                        <Shuffle aria-hidden="true" />
+                      </button>
+                    </>
+                  }
+                />
+              ) : (
+                <label key={fd.key} className={FIELD}>
+                  <span className={FIELD_LABEL}>
+                    {fd.label}
+                    {fd.required && editing === "new" ? " *" : ""}
+                  </span>
+                  {fd.type === "bool" ? (
+                    <Select
+                      disabled={busy}
+                      value={form[fd.key] ?? ""}
+                      onValueChange={(v) => setForm({ ...form, [fd.key]: v })}
+                      options={[
+                        { value: "", label: "—" },
+                        { value: "no", label: "no" },
+                        { value: "yes", label: "yes" },
+                      ]}
+                    />
+                  ) : fd.type === "select" ? (
+                    <Select
+                      disabled={busy}
+                      value={form[fd.key] ?? ""}
+                      onValueChange={(v) => setForm({ ...form, [fd.key]: v })}
+                      options={[
+                        { value: "", label: "—" },
+                        ...(fd.options ?? []).map((o) => ({ value: o, label: o })),
+                      ]}
+                    />
+                  ) : (
+                    <Input
+                      disabled={busy}
+                      type={
+                        fd.type === "password"
+                          ? "password"
+                          : fd.type === "number"
+                            ? "number"
+                            : "text"
+                      }
+                      placeholder={fd.placeholder ?? (fd.type === "password" ? "(unchanged)" : "")}
+                      value={form[fd.key] ?? ""}
+                      onChange={(e) => setForm({ ...form, [fd.key]: e.target.value })}
+                    />
+                  )}
+                </label>
+              ),
+            )}
           </div>
           <div className={FORM_ACTIONS}>
             <Button size="sm" type="accent" loading={busy} onClick={() => void save()}>

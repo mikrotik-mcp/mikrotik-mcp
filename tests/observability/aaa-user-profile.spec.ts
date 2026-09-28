@@ -5,6 +5,7 @@ import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { AaaView } from "../../ui/observability/aaa";
 import { api, postJson } from "../../ui/observability/api";
+import { generateUserPassword } from "../../ui/observability/aaa-user-credentials";
 
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
 vi.mock("../../ui/observability/um-reports", () => ({ UmReports: () => null }));
@@ -172,4 +173,20 @@ test("partial success closes creation and preserves the actionable warning after
   expect(host.querySelector('[aria-label="Initial profile"]')).toBeNull();
   expect(host.textContent).toContain("User created; check Assignments, do not recreate.");
   expect(postJson).toHaveBeenCalledTimes(1);
+});
+
+test("generates exactly eight cryptographically random characters with all four classes", () => {
+  const secure = vi.spyOn(crypto, "getRandomValues");
+  vi.spyOn(Math, "random").mockImplementation(() => {
+    throw new Error("Not a password RNG");
+  });
+  for (let i = 0; i < 200; i++) {
+    const password = generateUserPassword();
+    expect(password).toHaveLength(8);
+    expect(password).toMatch(/[A-Z]/);
+    expect(password).toMatch(/[a-z]/);
+    expect(password).toMatch(/[0-9]/);
+    expect(password).toMatch(/[!@#$%&*+?-]/);
+  }
+  expect(secure).toHaveBeenCalled();
 });
