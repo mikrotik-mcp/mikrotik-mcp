@@ -27,6 +27,8 @@ export type AaaRow = Record<string, string>;
 export interface OpResult {
   ok: boolean;
   message: string;
+  /** User exists, but its requested initial profile could not be confirmed. Do not retry creation. */
+  created?: boolean;
 }
 
 /** A read returning rows plus whether the backing package/menu is available. */
@@ -224,7 +226,7 @@ function applyFields(cmd: Cmd, pairs: [string, string][]): Cmd {
   return cmd;
 }
 
-/** Create a row from whitelisted fields. */
+/** Create a row from whitelisted fields, optionally assigning a new UM user's initial profile. */
 export async function addAaaEntity(
   ctx: ToolContext,
   slug: string,
@@ -232,12 +234,58 @@ export async function addAaaEntity(
 ): Promise<OpResult> {
   const entity = entityFor(slug);
   if (entity.readonly) return { ok: false, message: `${slug} is read-only.` };
+  // A profile is an assignment, not an attribute accepted by /user-manager user add.
+  const profile = slug === "um-users" ? fields.profile : undefined;
+  const assignProfile = profile !== undefined && profile !== "";
+  if (assignProfile) {
+    if (
+      typeof profile !== "string" ||
+      !profile.trim() ||
+      typeof fields.name !== "string" ||
+      !fields.name.trim()
+    )
+      return { ok: false, message: "A user name and a valid profile name are required." };
+    const count = await executeMikrotikCommand(
+      new Cmd("/user-manager profile print count-only where").set("name", profile).build(),
+      ctx,
+    );
+    if (commandUnsupported(count)) return { ok: false, message: UM_NOT_AVAILABLE };
+    if (count.trim() !== "1")
+      return {
+        ok: false,
+        message:
+          "The selected profile could not be found or verified on this device. Refresh profiles before creating the user.",
+      };
+  }
   const pairs = pickFields(entity, fields);
   if (pairs.length === 0) return { ok: false, message: "No fields supplied." };
   const cmd = applyFields(new Cmd(`/${entity.menu} add`), pairs).build();
   const out = await executeMikrotikCommand(cmd, ctx);
   if (commandUnsupported(out)) return { ok: false, message: UM_NOT_AVAILABLE };
   if (looksLikeError(out)) return { ok: false, message: out.trim() };
+  if (assignProfile) {
+    const partial: OpResult = {
+      ok: false,
+      created: true,
+      message: `User '${fields.name}' was created, but profile '${profile}' could not be confirmed. Check the Assignments tab before assigning it again; do not recreate the user.`,
+    };
+    try {
+      const assigned = await addAaaEntity(ctx, "um-user-profiles", { user: fields.name, profile });
+      if (!assigned.ok) return partial;
+      const count = await executeMikrotikCommand(
+        new Cmd("/user-manager user-profile print count-only where")
+          .set("user", fields.name)
+          .set("profile", profile)
+          .build(),
+        ctx,
+      );
+      if (!/^\d+$/.test(count.trim()) || Number(count.trim()) < 1) return partial;
+      return { ok: true, message: "User created and profile assigned." };
+    } catch {
+      // A timeout can happen after the router applied the assignment. Never replay either write.
+      return partial;
+    }
+  }
   return { ok: true, message: "Created." };
 }
 

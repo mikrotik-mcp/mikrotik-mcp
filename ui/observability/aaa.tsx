@@ -79,9 +79,108 @@ const FIELD_LABEL = "text-[11.5px] text-muted-foreground";
 /** Poll only the visible Users tab, without overlapping reads or losing the edit draft. */
 
 /** Fetch only while creating a user; profiles belong to the currently selected router. */
+function InitialProfileField({
+  device,
+  value,
+  onChange,
+  disabled,
+}: {
+  device: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}): ReactNode {
+  const [profiles, setProfiles] = useState<Row[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    const q = device ? `?device=${encodeURIComponent(device)}` : "";
+    void api<AaaList>(`/api/aaa/list/um-profiles${q}`, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result.available)
+          throw new Error("User Manager profiles are unavailable on this device.");
+        setProfiles(result.rows.filter((row) => row.name));
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted)
+          setError(e instanceof Error ? e.message : "Unable to load profiles.");
+      });
+    return () => controller.abort();
+  }, [device, attempt]);
+  const selected = profiles?.find((row) => row.name === value);
+  return (
+    <div className="mb-3.5 grid gap-3 rounded-lg border border-brand/25 bg-brand/5 p-3.5 sm:grid-cols-2">
+      <div>
+        <div className="text-sm font-medium">
+          Initial profile <span className="font-normal text-muted-foreground">· optional</span>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Assign a service profile as part of creating this user.
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Profile rules apply when User Manager’s “Use profiles” setting is enabled.
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-col gap-2">
+        <Select
+          aria-label="Initial profile"
+          className="w-full"
+          value={value}
+          onValueChange={onChange}
+          disabled={disabled || profiles === null || !!error}
+          options={[
+            {
+              value: "",
+              label: !profiles && !error ? "Loading profiles…" : "No profile — assign later",
+            },
+            ...(profiles ?? []).map((row) => ({ value: row.name, label: row.name })),
+          ]}
+        />
+        {error ? (
+          <div className="text-xs text-destructive" role="alert">
+            {error}
+            <Button
+              size="sm"
+              ghost
+              disabled={disabled}
+              onClick={() => {
+                setProfiles(null);
+                setError(null);
+                setAttempt((n) => n + 1);
+              }}
+              className="mt-2"
+            >
+              Retry profiles
+            </Button>
+          </div>
+        ) : profiles?.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No profiles yet. Create one in the Profiles tab, or continue without one.
+          </p>
+        ) : selected ? (
+          <p className="text-xs text-muted-foreground">
+            {selected.validity && <>Validity: {selected.validity} · </>}
+            {selected["starts-when"] === "first-auth"
+              ? "Starts on first authentication"
+              : selected["starts-when"] === "assigned"
+                ? "Starts immediately when assigned"
+                : "Uses the profile’s activation settings"}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Existing users and profiles are not changed.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── one CRUD entity (table + inline add/edit form) ───────────────────────────
 function EntityManager({ config, device }: { config: EntityConfig; device: string }): ReactNode {
+  const showCounters = config.slug === "um-users";
   const [data, setData] = useState<AaaList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -102,6 +201,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
 
   useEffect(() => {
     setData(null);
+    setError(null);
     setEditing(null);
     void load();
   }, [load]);
@@ -129,12 +229,17 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                     : "Entry disabled"
                   : "Done";
         if (!r.ok) {
+          if (r.created) {
+            setEditing(null);
+            setForm({});
+            await load();
+          }
           setError(r.message);
           toast.error(r.message || `${label} failed`);
           return false;
         }
         await load();
-        toast.success(label);
+        toast.success(path === "add" && config.slug === "um-users" ? r.message : label);
         return true;
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -151,8 +256,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
     setEditing("new");
     setForm({});
   };
-  const openEdit = (r: Row): void => {
-    setEditing(r[config.idKey]);
+  const fieldsFromRow = (r: Row): Row => {
     // Prefill non-secret fields; secrets are redacted, so leave blank = unchanged.
     const f: Row = {};
     for (const fd of config.fields) {
@@ -160,15 +264,25 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
       if (fd.key === "disabled") f.disabled = isDisabled(r) ? "yes" : "no";
       else if (r[fd.key] != null) f[fd.key] = r[fd.key];
     }
-    setForm(f);
+    return f;
   };
-
+  const openEdit = (r: Row): void => {
+    setEditing(r[config.idKey]);
+    setForm(fieldsFromRow(r));
+  };
   const save = async (): Promise<void> => {
+    if (showCounters && editing === "new" && (!form.name?.trim() || !form.password)) {
+      setError("Enter a name and password for the new user.");
+      return;
+    }
     const ok =
       editing === "new"
         ? await post("add", { fields: form })
         : await post("update", { id: editing, fields: form });
-    if (ok) setEditing(null);
+    if (ok) {
+      setEditing(null);
+      setForm({});
+    }
   };
 
   const rows = useMemo(() => {
@@ -190,8 +304,8 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   }
 
   return (
-    <div>
-      <div className="mb-3 flex items-center gap-2.5">
+    <div className="min-w-0">
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <Input
           className="w-[200px]"
           placeholder="Filter…"
@@ -200,10 +314,17 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
         />
         <span className="text-muted-foreground text-[11px]">{rows.length} rows</span>
         <span className="flex-1" />
-        <Button size="sm" ghost icon={<RefreshCw />} onClick={() => void load()}>
+        <Button
+          size="sm"
+          ghost
+          icon={<RefreshCw />}
+          onClick={() => {
+            void load();
+          }}
+        >
           Refresh
         </Button>
-        <Button size="sm" type="accent" icon={<Plus />} onClick={openAdd}>
+        <Button size="sm" type="accent" icon={<Plus />} disabled={busy} onClick={openAdd}>
           Add
         </Button>
       </div>
@@ -217,8 +338,21 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
       {editing && (
         <div className={FORM_BOX}>
           <div className={FORM_TITLE}>
-            {editing === "new" ? `New ${config.slug}` : `Edit ${editing}`}
+            {editing === "new"
+              ? showCounters
+                ? "New User Manager user"
+                : `New ${config.slug}`
+              : `Edit ${editing}`}
           </div>
+          {editing === "new" && config.slug === "um-users" && (
+            <InitialProfileField
+              key={device}
+              device={device}
+              value={form.profile ?? ""}
+              onChange={(profile) => setForm((current) => ({ ...current, profile }))}
+              disabled={busy}
+            />
+          )}
           <div className={FORM_GRID}>
             {config.fields.map((fd) => (
               <label key={fd.key} className={FIELD}>
@@ -228,6 +362,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                 </span>
                 {fd.type === "bool" ? (
                   <Select
+                    disabled={busy}
                     value={form[fd.key] ?? ""}
                     onValueChange={(v) => setForm({ ...form, [fd.key]: v })}
                     options={[
@@ -238,6 +373,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                   />
                 ) : fd.type === "select" ? (
                   <Select
+                    disabled={busy}
                     value={form[fd.key] ?? ""}
                     onValueChange={(v) => setForm({ ...form, [fd.key]: v })}
                     options={[
@@ -247,6 +383,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                   />
                 ) : (
                   <Input
+                    disabled={busy}
                     type={
                       fd.type === "password" ? "password" : fd.type === "number" ? "number" : "text"
                     }
@@ -262,7 +399,15 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
             <Button size="sm" type="accent" loading={busy} onClick={() => void save()}>
               {editing === "new" ? "Create" : "Save"}
             </Button>
-            <Button size="sm" ghost onClick={() => setEditing(null)}>
+            <Button
+              size="sm"
+              ghost
+              disabled={busy}
+              onClick={() => {
+                setEditing(null);
+                setForm({});
+              }}
+            >
               Cancel
             </Button>
           </div>
@@ -270,7 +415,11 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
       )}
 
       {!data ? (
-        <div className="text-muted-foreground text-[11px]">loading…</div>
+        !error && (
+          <div className="text-muted-foreground text-[11px]" role="status">
+            Loading…
+          </div>
+        )
       ) : rows.length === 0 ? (
         <div className="px-1 py-5 text-muted-foreground text-[11px]">
           {config.empty ?? "Nothing here yet."}
