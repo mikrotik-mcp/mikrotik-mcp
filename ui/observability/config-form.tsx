@@ -17,10 +17,15 @@ import {
   ArrowDown,
   PlugZap,
   LoaderCircle,
+  Router,
+  ShieldCheck,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Reorder, useDragControls, useReducedMotion } from "motion/react";
 import {
   CREDENTIAL_SOURCE,
+  addDevice as createDeviceDraft,
   duplicateDevice,
   renameDevice,
   reorderDevices,
@@ -515,13 +520,18 @@ function SortableDevice({
   );
 }
 
-function DevicesCard({
+export function DevicesForm({
   cfg,
   onChange,
   tests,
   onTest,
-}: { cfg: Cfg; onChange: (c: Cfg) => void } & DeviceControls): ReactNode {
-  const [sheet, setSheet] = useState<{ name: string; isNew: boolean } | null>(null);
+  initialSelection,
+}: {
+  cfg: Cfg;
+  onChange: (c: Cfg) => void;
+  initialSelection?: { name: string; isNew: boolean };
+} & DeviceControls): ReactNode {
+  const [sheet, setSheet] = useState(initialSelection ?? null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const devices = asObj(cfg.devices);
@@ -546,18 +556,9 @@ function DevicesCard({
   };
 
   const addDevice = (): void => {
-    const base = "device";
-    let i = 1;
-    let n = base;
-    while (devices[n]) n = `${base}-${++i}`;
-    onChange({
-      ...cfg,
-      devices: {
-        ...devices,
-        [n]: { host: "192.168.88.1", port: 22, username: "admin", password: "", timeoutMs: 10000 },
-      },
-    });
-    setSheet({ name: n, isNew: true });
+    const result = createDeviceDraft(cfg);
+    onChange(result.config);
+    setSheet({ name: result.name, isNew: true });
   };
   const toggleDisabled = (n: string, disabled: boolean): void => {
     onChange({ ...cfg, devices: { ...devices, [n]: { ...asObj(devices[n]), disabled } } });
@@ -572,34 +573,37 @@ function DevicesCard({
   };
 
   return (
-    <Card className="px-4 py-3.5">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-lg leading-none" aria-hidden="true">
-          🖧
-        </span>
-        <div className="min-w-0">
-          <div className="text-foreground flex items-center gap-2 text-sm font-bold">Devices</div>
-          <div className="text-muted-foreground mt-0.5 max-w-[520px] truncate font-mono text-xs">
-            {names.length} device{names.length === 1 ? "" : "s"} · default: {defaultDevice || "—"}
-          </div>
+    <section className="router-manager" aria-label="Router configuration draft">
+      <div className="router-manager__heading">
+        <div>
+          <span className="devices-eyebrow">
+            <Router size={14} /> ROUTER INVENTORY
+          </span>
+          <h3>Your routers, in order.</h3>
+          <p>
+            {names.length} configured ·{" "}
+            {names.filter((n) => asObj(devices[n]).disabled !== true).length} enabled in MCP
+          </p>
         </div>
-        <span className="flex-1" />
-        <label className="inline-flex items-center gap-1.5">
-          <span className="text-muted-foreground text-[11px]">Default</span>
-          <Select
-            value={defaultDevice}
-            onValueChange={(v) => onChange({ ...cfg, defaultDevice: v })}
-            options={names.map((n) => ({ value: n, label: n }))}
-          />
-        </label>
-        <Button size="sm" onClick={addDevice} icon={<Plus className="size-4" />}>
-          Add device
-        </Button>
+        <div className="router-manager__controls">
+          <label className="inline-flex items-center gap-1.5">
+            <span className="text-muted-foreground text-[11px]">Default router</span>
+            <Select
+              aria-label="Default router"
+              value={defaultDevice}
+              onValueChange={(v) => onChange({ ...cfg, defaultDevice: v })}
+              options={names.map((n) => ({ value: n, label: n }))}
+            />
+          </label>
+          <Button size="sm" onClick={addDevice} icon={<Plus className="size-4" />}>
+            Add device
+          </Button>
+        </div>
       </div>
 
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Drag the handle to reorder, or use the arrow buttons. Copy includes all settings and stored
-        credentials. Save to apply changes.
+      <p className="router-manager__hint">
+        <ShieldCheck size={15} /> Draft only. Review and save to apply; router configuration is not
+        changed.
       </p>
       <span role="status" className="sr-only">
         {announcement}
@@ -609,7 +613,7 @@ function DevicesCard({
         axis="y"
         values={names}
         onReorder={reorder}
-        className="mt-3 grid min-w-0 grid-cols-1 gap-3"
+        className="router-manager__list"
       >
         {names.map((n, index) => {
           const d = asObj(devices[n]);
@@ -624,16 +628,15 @@ function DevicesCard({
               total={names.length}
               onMove={(offset) => move(n, offset)}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={cn(
-                    "inline-block size-2 shrink-0 rounded-full",
-                    off ? "bg-muted-foreground/60" : "bg-success",
-                  )}
-                />
-                <span className="break-all font-mono text-[13px] font-medium">{n}</span>
+              <div className="router-entry__identity">
+                <span className="router-entry__icon" aria-hidden="true">
+                  <Router size={21} strokeWidth={1.5} />
+                </span>
+                <strong className="break-all font-mono text-sm font-medium">{n}</strong>
                 {defaultDevice === n && <Badge type="accent">default</Badge>}
-                {off && <Badge>disabled</Badge>}
+                <Badge type={off ? "secondary" : "default"}>
+                  {off ? "Disabled in MCP" : "Enabled in MCP"}
+                </Badge>
                 <span className="flex-1" />
                 <Switch
                   checked={!off}
@@ -641,13 +644,37 @@ function DevicesCard({
                   aria-label={`${off ? "Enable" : "Disable"} ${n}`}
                 />
               </div>
-              <div className="text-muted-foreground font-mono text-[11px] break-words">{addr}</div>
+              <div className="router-entry__facts">
+                <div>
+                  <span>Management address</span>
+                  <code>{addr}</code>
+                </div>
+                <div>
+                  <span>Transport</span>
+                  <strong>
+                    {d.mac ? "MAC-Telnet" : d.transport === "rest" ? "REST / SSH fallback" : "SSH"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Login</span>
+                  <strong>{str(d.username) || "admin"}</strong>
+                </div>
+              </div>
               {d.description ? (
                 <div className="text-muted-foreground font-mono text-[11px] break-words">
                   {str(d.description)}
                 </div>
               ) : null}
-              <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+              <div className="router-entry__actions">
+                <Button
+                  size="sm"
+                  ghost
+                  aria-label={`Edit ${n}`}
+                  icon={<Pencil className="size-3.5" />}
+                  onClick={() => setSheet({ name: n, isNew: false })}
+                >
+                  Edit settings
+                </Button>
                 <Button
                   size="sm"
                   ghost
@@ -673,15 +700,30 @@ function DevicesCard({
                 >
                   Copy
                 </Button>
-                <Button size="sm" ghost onClick={() => setSheet({ name: n, isNew: false })}>
-                  Edit
-                </Button>
                 {confirmDel === n ? (
-                  <Button size="sm" type="error" onClick={() => removeDevice(n)}>
-                    Confirm?
-                  </Button>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <Button size="sm" type="error" onClick={() => removeDevice(n)}>
+                      Remove {n}?
+                    </Button>
+                    <Button size="sm" ghost onClick={() => setConfirmDel(null)}>
+                      Cancel
+                    </Button>
+                  </span>
                 ) : (
-                  <Button size="sm" ghost type="error" onClick={() => setConfirmDel(n)}>
+                  <Button
+                    size="sm"
+                    ghost
+                    type="error"
+                    disabled={names.length === 1}
+                    title={
+                      names.length === 1
+                        ? "Keep at least one configured router"
+                        : "Remove from MCP; the router itself is not changed"
+                    }
+                    aria-label={`Remove ${n}`}
+                    icon={<Trash2 className="size-3.5" />}
+                    onClick={() => setConfirmDel(n)}
+                  >
                     Remove
                   </Button>
                 )}
@@ -718,6 +760,10 @@ function DevicesCard({
           </Note>
         )}
       </Reorder.Group>
+      <p className="devices-caption">
+        Drag a handle or use its arrow keys to reorder. Copy includes settings and stored
+        credentials, never live router data.
+      </p>
 
       {sheet && (
         <DeviceSheet
@@ -728,7 +774,7 @@ function DevicesCard({
           onClose={() => setSheet(null)}
         />
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -875,18 +921,11 @@ function ModulesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
 
 // ── the form ─────────────────────────────────────────────────────────────────
 
-export function ConfigForm({
-  cfg,
-  onChange,
-  tests,
-  onTest,
-}: { cfg: Cfg; onChange: (c: Cfg) => void } & DeviceControls): ReactNode {
+export function ConfigForm({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }): ReactNode {
   return (
     <div className="mt-1 grid min-w-0 grid-cols-1 gap-3.5">
-      {CONFIG_SECTIONS.map((s) =>
-        s.kind === "deviceMap" ? (
-          <DevicesCard key={s.id} cfg={cfg} onChange={onChange} tests={tests} onTest={onTest} />
-        ) : s.kind === "modules" ? (
+      {CONFIG_SECTIONS.filter((s) => s.kind !== "deviceMap").map((s) =>
+        s.kind === "modules" ? (
           <ModulesCard key={s.id} cfg={cfg} onChange={onChange} />
         ) : (
           <ObjectCard key={s.id} cfg={cfg} onChange={onChange} section={s} />

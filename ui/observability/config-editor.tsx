@@ -10,7 +10,9 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Braces, LayoutGrid, X } from "lucide-react";
 import { api, postJson } from "./api";
-import { ConfigForm } from "./config-form";
+import { ConfigForm, DevicesForm } from "./config-form";
+import { selectConfigScope, scopeConfigDraft } from "../../src/config-device-draft";
+import type { ConfigScope } from "../../src/config-device-draft";
 import { JsonEditor, ROLLBACK_OPTS } from "./config-studio";
 import type { ConfigIssue, DiffSummary, SaveResp } from "./config-studio";
 import { Button, Select } from "./geist";
@@ -28,10 +30,16 @@ export function ConfigEditor({
   initial,
   onClose,
   onReload,
+  scope = "server",
+  initialSelection,
+  original = initial,
 }: {
   initial: unknown;
   onClose: () => void;
   onReload: () => void;
+  scope?: ConfigScope;
+  initialSelection?: { name: string; isNew: boolean };
+  original?: unknown;
 }): ReactNode {
   const [cfg, setCfg] = useState<Cfg>(() => asObj(initial));
   const [mode, setMode] = useState<"form" | "json">("form");
@@ -45,13 +53,26 @@ export function ConfigEditor({
   const [countdown, setCountdown] = useState(0);
   const [rollbackMs, setRollbackMs] = useState(60_000);
   const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [baseline, setBaseline] = useState(() => asObj(original));
+  const [discard, setDiscard] = useState(false);
+  const [selection, setSelection] = useState(initialSelection);
+  const dirty =
+    JSON.stringify(selectConfigScope(cfg, scope)) !==
+    JSON.stringify(selectConfigScope(baseline, scope));
+  const endpoint = (path: string) => `${path}?scope=${scope}`;
+  const change = (next: Cfg) => {
+    setCfg(next);
+    setPreview(null);
+    setDiscard(false);
+  };
 
   // Debounced schema validation of the working config (Zod is authoritative).
   useEffect(() => {
     let active = true;
     const t = setTimeout(() => {
       void postJson<{ ok: boolean; errors?: ConfigIssue[]; error?: string }>(
-        "/api/config/validate",
+        `/api/config/validate?scope=${scope}`,
         cfg,
       )
         .then((r) => {
@@ -70,7 +91,7 @@ export function ConfigEditor({
       active = false;
       clearTimeout(t);
     };
-  }, [cfg]);
+  }, [cfg, scope]);
 
   // Rollback countdown while a save awaits confirmation.
   useEffect(() => {
@@ -85,7 +106,10 @@ export function ConfigEditor({
       setMsg("Auto-reverted — changes were not confirmed in time.");
       setPending(null);
       void api<Cfg>("/api/config")
-        .then(setCfg)
+        .then((value) => {
+          setCfg(value);
+          setBaseline(value);
+        })
         .catch(() => {});
       onReloadRef.current();
     }
@@ -138,13 +162,22 @@ export function ConfigEditor({
   };
 
   const doPreview = async (): Promise<void> => {
-    setPreview(await postJson("/api/config/preview", cfg));
+    setBusy(true);
+    try {
+      setPreview(await postJson(endpoint("/api/config/preview"), cfg));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Preview failed");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const doSave = async (): Promise<void> => {
+    if (busy || pending) return;
+    setBusy(true);
     setMsg("Saving…");
     try {
-      const r = await postJson<SaveResp & { config?: Cfg }>("/api/config", {
+      const r = await postJson<SaveResp & { config?: Cfg }>(endpoint("/api/config"), {
         config: cfg,
         rollbackMs,
       });
@@ -156,46 +189,80 @@ export function ConfigEditor({
         return;
       }
       setPending(r);
-      if (r.config) setCfg(r.config);
+      if (r.config) {
+        setCfg(r.config);
+        setBaseline(r.config);
+      }
       setCountdown(Math.round((r.rollbackMs ?? 0) / 1000));
       toast.success("Config applied");
+      onReload();
     } catch (e) {
       setMsg(null);
       toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(false);
     }
   };
 
   const doKeep = async (): Promise<void> => {
-    if (!pending?.pendingId) return;
+    if (!pending?.pendingId || busy) return;
+    setBusy(true);
     try {
-      await postJson("/api/config/keep", { pendingId: pending.pendingId });
+      const result = await postJson<{ kept: boolean }>("/api/config/keep", {
+        pendingId: pending.pendingId,
+      });
+      if (!result.kept)
+        throw new Error("This change is no longer pending. Refresh before trying again.");
       setPending(null);
       setMsg("Changes kept.");
       onReload();
       toast.success("Change kept");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Keep failed");
+    } finally {
+      setBusy(false);
     }
   };
   const doRollback = async (): Promise<void> => {
-    if (!pending?.pendingId) return;
+    if (!pending?.pendingId || busy) return;
+    setBusy(true);
     try {
-      await postJson("/api/config/rollback", { pendingId: pending.pendingId });
+      const result = await postJson<{ rolledBack: boolean }>("/api/config/rollback", {
+        pendingId: pending.pendingId,
+      });
+      if (!result.rolledBack)
+        throw new Error("This change is no longer pending. Refresh before trying again.");
       setPending(null);
-      setCfg(await api<Cfg>("/api/config"));
+      const restored = await api<Cfg>("/api/config");
+      setCfg(restored);
+      setBaseline(restored);
+      setMode("form");
+      setSelection(undefined);
       setMsg("Reverted to the previous config.");
       onReload();
       toast.success("Change rolled back");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rollback failed");
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className={cn("flex flex-col gap-3.5", scope === "devices" && "device-config-editor")}>
+      {scope === "server" && (
+        <p className="text-xs text-muted-foreground">
+          Router connections are managed on the{" "}
+          <a className="text-primary underline underline-offset-4" href="#devices">
+            Devices page
+          </a>
+          . This editor only changes server settings.
+        </p>
+      )}
+      <div className="config-editor__toolbar flex flex-wrap items-center gap-2">
         <div className="border-border bg-muted inline-flex gap-0.5 rounded-md border p-0.5">
           <button
+            disabled={busy || !!pending}
             className={cn(
               "flex cursor-pointer items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-[11px] py-1 text-xs font-semibold",
               mode === "form" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
@@ -208,11 +275,15 @@ export function ConfigEditor({
             <LayoutGrid className="size-3.5" /> Form
           </button>
           <button
+            disabled={busy || !!pending}
             className={cn(
               "flex cursor-pointer items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-[11px] py-1 text-xs font-semibold",
               mode === "json" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
             )}
-            onClick={() => setMode("json")}
+            onClick={() => {
+              setSelection(undefined);
+              setMode("json");
+            }}
           >
             <Braces className="size-3.5" /> JSON
           </button>
@@ -232,14 +303,27 @@ export function ConfigEditor({
               : "valid ✓"}
         </span>
         <span className="flex-1" />
-        <Button size="sm" disabled={testingAll} onClick={() => void testDevices()}>
-          {testingAll ? "Testing devices…" : "Test devices"}
-        </Button>
-        <Button size="sm" onClick={() => void doPreview()} disabled={!valid}>
+        {scope === "devices" && (
+          <Button
+            size="sm"
+            ghost
+            disabled={testingAll || busy || !!pending}
+            onClick={() => void testDevices()}
+          >
+            {testingAll ? "Testing devices…" : "Test devices"}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          ghost
+          onClick={() => void doPreview()}
+          disabled={!valid || busy || !!pending}
+        >
           Preview diff
         </Button>
         <Select
           size="sm"
+          disabled={busy || !!pending}
           value={String(rollbackMs)}
           onValueChange={(v) => setRollbackMs(Number(v))}
           options={ROLLBACK_OPTS.map(([label, v]) => ({ value: String(v), label }))}
@@ -249,14 +333,32 @@ export function ConfigEditor({
           size="sm"
           type="accent"
           onClick={() => void doSave()}
-          disabled={!valid || !!pending}
+          disabled={!valid || !!pending || busy || testingAll}
         >
-          Save
+          {busy ? "Working…" : scope === "devices" ? "Save devices" : "Save"}
         </Button>
-        <Button size="sm" onClick={onClose}>
+        <Button
+          size="sm"
+          ghost
+          disabled={busy || !!pending}
+          onClick={() => (dirty || jsonErr ? setDiscard(true) : onClose())}
+        >
           Close
         </Button>
       </div>
+      {discard && (
+        <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs" role="alert">
+          <p className="mb-2">Discard this unsaved draft? No saved settings will be changed.</p>
+          <div className="flex gap-2">
+            <Button size="sm" type="error" onClick={onClose}>
+              Discard draft
+            </Button>
+            <Button size="sm" ghost onClick={() => setDiscard(false)}>
+              Continue editing
+            </Button>
+          </div>
+        </div>
+      )}
 
       {msg && <div className="text-muted-foreground font-mono text-xs">{msg}</div>}
 
@@ -278,10 +380,10 @@ export function ConfigEditor({
             </span>
           )}
           <span className="flex-1" />
-          <Button size="sm" type="accent" onClick={() => void doKeep()}>
+          <Button size="sm" type="accent" disabled={busy} onClick={() => void doKeep()}>
             Keep changes
           </Button>
-          <Button size="sm" onClick={() => void doRollback()}>
+          <Button size="sm" disabled={busy} onClick={() => void doRollback()}>
             Revert now
           </Button>
         </div>
@@ -307,16 +409,30 @@ export function ConfigEditor({
         </div>
       )}
 
-      {mode === "form" ? (
-        <ConfigForm
-          cfg={cfg}
-          onChange={setCfg}
-          tests={tests}
-          onTest={(name) => void testDevice(name)}
-        />
-      ) : (
-        <JsonEditor value={cfg} onChange={(o) => setCfg(asObj(o))} onJsonError={setJsonErr} />
-      )}
+      <fieldset
+        disabled={busy || !!pending}
+        className="min-w-0 border-0 p-0 m-0 disabled:opacity-70"
+      >
+        {mode === "form" ? (
+          scope === "devices" ? (
+            <DevicesForm
+              cfg={cfg}
+              onChange={change}
+              tests={tests}
+              onTest={(name) => void testDevice(name)}
+              initialSelection={selection}
+            />
+          ) : (
+            <ConfigForm cfg={cfg} onChange={change} />
+          )
+        ) : (
+          <JsonEditor
+            value={selectConfigScope(cfg, scope)}
+            onChange={(o) => change(asObj(scopeConfigDraft(o, cfg, scope)))}
+            onJsonError={setJsonErr}
+          />
+        )}
+      </fieldset>
 
       {(jsonErr || errors.length > 0) && (
         <div className="flex flex-col gap-[3px]">

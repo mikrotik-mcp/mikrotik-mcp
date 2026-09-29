@@ -81,6 +81,7 @@ import { RoundTripView } from "./round-trip";
 import { PageBoundary } from "./page-boundary";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
 import { ConfigEditor } from "./config-editor";
+import { selectConfigScope } from "../../src/config-device-draft";
 import { DevicesView } from "./devices-view";
 import { DetailDrawer } from "./detail-drawer";
 import { bytes, clock, FEED_CAP, ms, num, RISK_CLASS, RISK_COLOR, sval, WINDOWS } from "./format";
@@ -242,6 +243,8 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
   devices: {
     what: "Every configured router with its live reachability (SSH or MAC-Telnet), latency, identity, and system health — CPU, memory and disk — refreshed continuously.",
     tips: [
+      "Add device or Manage routers to edit connections, copy routers, set the default, enable/disable, test, or drag to reorder. These changes are drafts until saved.",
+      "Preview the diff before saving. Keep the applied changes within the auto-revert window, or revert them safely.",
       "Each device gets a stable colour so you can track it across the connectivity radar.",
       "Health (CPU/Mem/Disk) is probed periodically; MAC-Telnet devices are probed on a slower cadence.",
       "Latency tiers are colour-coded green → amber → red; a grey node is currently unreachable.",
@@ -293,7 +296,7 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
     what: "A Layer-2 map of neighbours each router discovers via MNDP / CDP / LLDP — the physical adjacency of your network, drawn live.",
     tips: [
       "Solid nodes are configured devices; faint nodes are discovered-but-unmanaged neighbours.",
-      "Use “Add to config →” on an unmanaged neighbour to pre-fill it in the Config editor.",
+      "Use “Add to Devices →” on an unmanaged neighbour to pre-fill a new router in Devices. Review and save the draft to apply.",
       "Drag to pan; the layout settles automatically as new neighbours arrive.",
     ],
   },
@@ -1659,6 +1662,17 @@ function App(): ReactNode {
               {/* ── Devices ── */}
               {view === "devices" && (
                 <DevicesView
+                  key={seed ? `seed-${seed.name}` : "devices"}
+                  seed={seed}
+                  onSeedConsumed={() => setSeed(null)}
+                  onReload={() => {
+                    void api<Record<string, unknown>>("/api/config")
+                      .then(setConfig)
+                      .catch(() => {});
+                    void api<DevicesPayload>("/api/devices")
+                      .then(setDevices)
+                      .catch(() => {});
+                  }}
                   payload={devices}
                   pulses={pulses}
                   pool={sshPool}
@@ -1695,8 +1709,7 @@ function App(): ReactNode {
                       topo={topology}
                       onOnboard={(name, body) => {
                         setSeed({ name, body });
-                        setEditingConfig(true);
-                        setView("config");
+                        setView("devices");
                       }}
                     />
                   </section>
@@ -1792,35 +1805,23 @@ function App(): ReactNode {
                           <Button
                             size="sm"
                             ghost
-                            onClick={() => setEditingConfig((v) => !v)}
+                            disabled={editingConfig}
+                            onClick={() => setEditingConfig(true)}
                             title="Edit the config JSON with autocomplete, validation and safe-apply"
                             icon={editingConfig ? undefined : <Pencil />}
                           >
-                            {editingConfig ? "View" : "Edit config"}
+                            Edit config
                           </Button>
                         </span>
                       }
                     >
                       {editingConfig ? (
                         <ConfigEditor
-                          key={seed ? `seed-${seed.name}` : "config"}
-                          initial={
-                            seed
-                              ? {
-                                  ...config,
-                                  devices: {
-                                    ...(config.devices as Record<string, unknown>),
-                                    [seed.name]: seed.body,
-                                  },
-                                }
-                              : config
-                          }
+                          initial={config}
                           onClose={() => {
                             setEditingConfig(false);
-                            setSeed(null);
                           }}
                           onReload={() => {
-                            setSeed(null);
                             void api<Record<string, unknown>>("/api/config")
                               .then(setConfig)
                               .catch(() => {});
@@ -1844,10 +1845,20 @@ function App(): ReactNode {
                           </div>
                           <details>
                             <summary className="cursor-pointer text-sm">
-                              Full effective configuration (secrets redacted)
+                              Server configuration (secrets redacted)
                             </summary>
-                            <JsonView value={config} maxHeight={340} />
+                            <JsonView value={selectConfigScope(config, "server")} maxHeight={340} />
                           </details>
+                          <p className="mt-3 text-xs text-muted-foreground">
+                            Router connections, credentials and ordering are managed on the{" "}
+                            <a
+                              className="text-primary underline underline-offset-4"
+                              href="#devices"
+                            >
+                              Devices page
+                            </a>
+                            .
+                          </p>
                         </>
                       )}
                     </Panel>

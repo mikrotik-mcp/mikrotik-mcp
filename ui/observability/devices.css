@@ -1,4 +1,120 @@
 /* Devices has its own visual language. No selectors reach into the radar. */
+.fleet-brief__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+.devices-management {
+  min-width: 0;
+  padding: clamp(16px, 2.5vw, 28px);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--primary);
+  border-radius: 16px;
+  background: var(--card);
+  animation: device-arrive 0.25s ease-out both;
+}
+.devices-management-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--destructive);
+  border-radius: 12px;
+  color: var(--destructive);
+  font-size: 13px;
+}
+.device-config-editor .config-editor__toolbar {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.router-manager__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 12px 0 16px;
+}
+.router-manager__heading h3 {
+  margin: 8px 0;
+  font-size: clamp(21px, 2vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.router-manager__heading p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.router-manager__controls,
+.router-entry__actions,
+.router-entry__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.router-manager__controls > label {
+  flex-wrap: wrap;
+}
+.router-manager__hint {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  margin-bottom: 20px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.router-manager__hint svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--primary);
+}
+.router-manager__list {
+  display: grid;
+  gap: 12px;
+}
+.router-manager__list > div {
+  background: var(--background);
+}
+.router-entry__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--primary);
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.router-entry__facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 8px 0;
+}
+.router-entry__facts > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.router-entry__facts span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.router-entry__facts strong {
+  font-weight: 500;
+}
+.router-entry__actions {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 4px;
+}
 .devices-workspace {
   display: grid;
   gap: 28px;
@@ -836,6 +952,15 @@
   }
 }
 @media (max-width: 640px) {
+  .router-entry__facts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .router-entry__facts > div:first-child {
+    grid-column: 1 / -1;
+  }
+  .router-entry__actions button {
+    flex: 1 1 auto;
+  }
   .fleet-brief {
     grid-template-columns: 1fr;
     gap: 24px;
@@ -891,7 +1016,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .device-dossier {
+  .device-dossier,
+  .devices-management {
     animation: none;
   }
   .fleet-availability > span,

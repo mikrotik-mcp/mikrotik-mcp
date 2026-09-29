@@ -41,6 +41,7 @@ import {
 import { moduleCatalog } from "../tools";
 import { applyModuleToggle, moduleSurface } from "./modules";
 import { atomicWrite, mergeConfigDraft, mergeDeviceDraft, serializeConfig } from "../config-write";
+import { scopeConfigDraft } from "../config-device-draft";
 import { buildChangePlan, renderPlan, splitCommands } from "../core/change-plan";
 import { diffLines } from "../core/diff";
 import { getS3Client, isS3Configured, presignExpiresIn, s3Target } from "../core/s3";
@@ -546,13 +547,29 @@ function issues(error: z.ZodError): { path: string; message: string }[] {
  */
 async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise<Response | null> {
   const p = url.pathname;
+  const scope = url.searchParams.get("scope");
+  if (
+    req.method === "POST" &&
+    ["/api/config", "/api/config/validate", "/api/config/preview"].includes(p) &&
+    scope !== null &&
+    scope !== "devices" &&
+    scope !== "server"
+  )
+    return json({ ok: false, error: "Unknown configuration scope" }, 400);
+  const mergeDraft = (raw: unknown) => {
+    const current = getConfig();
+    return mergeConfigDraft(
+      scope === "devices" || scope === "server" ? scopeConfigDraft(raw, current, scope) : raw,
+      current,
+    );
+  };
 
   if (p === "/api/config-schema" && req.method === "GET") {
     return json(configSchemaJson());
   }
 
   if (p === "/api/config/validate" && req.method === "POST") {
-    const merged = mergeConfigDraft(await readJson(req), getConfig());
+    const merged = mergeDraft(await readJson(req));
     return json(validateConfig(merged));
   }
 
@@ -575,18 +592,14 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
 
   if (p === "/api/config/preview" && req.method === "POST") {
     const before = JSON.stringify(redact(getConfig()), null, 2);
-    const after = JSON.stringify(
-      redact(mergeConfigDraft(await readJson(req), getConfig())),
-      null,
-      2,
-    );
+    const after = JSON.stringify(redact(mergeDraft(await readJson(req))), null, 2);
     const d = diffLines(before, after, { fromLabel: "current", toLabel: "edited" });
     return json({ summary: d.summary, unified: d.unified });
   }
 
   if (p === "/api/config" && req.method === "POST") {
     const body = (await readJson(req)) as { config?: unknown; rollbackMs?: unknown };
-    const merged = mergeConfigDraft(body?.config, getConfig());
+    const merged = mergeDraft(body?.config);
     const v = validateConfig(merged);
     if (!v.ok || !v.value) return json({ ok: false, errors: v.errors }, 400);
 

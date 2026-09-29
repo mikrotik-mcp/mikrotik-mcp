@@ -9,6 +9,7 @@ import {
   Globe2,
   Loader2,
   Network,
+  Pencil,
   RotateCw,
   Router,
   ShieldCheck,
@@ -28,6 +29,7 @@ export interface DeviceActions {
   onTest?: (name: string) => Promise<void>;
   onReconnect?: (name: string) => Promise<void>;
   onProbeCapabilities?: (name: string) => Promise<void>;
+  onManage?: (name: string) => void;
 }
 
 /** One device dossier: observations first, explicit network actions last. */
@@ -39,6 +41,7 @@ export function DeviceCard({
   onTest,
   onReconnect,
   onProbeCapabilities,
+  onManage,
 }: DeviceActions & {
   d: DeviceInfo;
   allNames: string[];
@@ -320,6 +323,16 @@ export function DeviceCard({
           {d.status.version ? `RouterOS ${d.status.version}` : "RouterOS not observed"}
         </span>
         <div>
+          {onManage && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onManage(d.name)}
+              aria-label={`Edit settings for ${d.name}`}
+            >
+              <Pencil /> Edit
+            </Button>
+          )}
           {onTest && (
             <Button
               size="sm"

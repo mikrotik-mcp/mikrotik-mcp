@@ -562,7 +562,7 @@ function Inspector({
                   onOnboard(node.suggestedConfig!.name, stubBody(node.suggestedConfig!))
                 }
               >
-                Add to config →
+                Add to Devices →
               </Button>
             )}
           </div>

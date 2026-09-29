@@ -4,6 +4,51 @@ type Draft = Record<string, unknown>;
 const devicesOf = (cfg: Draft): Record<string, Draft> =>
   (cfg.devices ?? {}) as Record<string, Draft>;
 
+export type ConfigScope = "devices" | "server";
+
+/** The two editors own disjoint sections of the same configuration. */
+export function selectConfigScope(cfg: Draft, scope: ConfigScope): Draft {
+  return Object.fromEntries(
+    Object.entries(cfg).filter(([key]) =>
+      scope === "devices"
+        ? key === "devices" || key === "defaultDevice"
+        : key !== "devices" && key !== "defaultDevice",
+    ),
+  );
+}
+
+/** Merge against live state on the server, not a stale browser snapshot. */
+export function scopeConfigDraft(raw: unknown, current: Draft, scope: ConfigScope): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  return {
+    ...selectConfigScope(current, scope === "devices" ? "server" : "devices"),
+    ...selectConfigScope(raw as Draft, scope),
+  };
+}
+
+export function addDevice(cfg: Draft): { config: Draft; name: string } {
+  const devices = devicesOf(cfg);
+  let name = "device";
+  for (let i = 2; Object.hasOwn(devices, name); i++) name = `device-${i}`;
+  return {
+    name,
+    config: {
+      ...cfg,
+      defaultDevice: cfg.defaultDevice || name,
+      devices: {
+        ...devices,
+        [name]: {
+          host: "192.168.88.1",
+          port: 22,
+          username: "admin",
+          password: "",
+          timeoutMs: 10000,
+        },
+      },
+    },
+  };
+}
+
 function copyDevice(device: Draft, name: string): Draft {
   const copy = structuredClone(device);
   if (JSON.stringify(copy).includes('"«redacted»"'))

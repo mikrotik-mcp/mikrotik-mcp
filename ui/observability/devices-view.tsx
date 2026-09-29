@@ -1,12 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Activity, ArrowDown, CircleHelp, Network, Search, Server, WifiOff } from "lucide-react";
+import {
+  Activity,
+  ArrowDown,
+  CircleHelp,
+  Network,
+  Search,
+  Server,
+  WifiOff,
+  Plus,
+  Settings2,
+  LoaderCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConnectivityGraph } from "./connectivity";
 import { DeviceCard } from "./device-card";
 import type { DeviceActions } from "./device-card";
 import { SSHPoolPanel } from "./ssh-pool";
+import { ConfigEditor } from "./config-editor";
+import { api } from "./api";
+import { addDevice } from "../../src/config-device-draft";
 import type { CapabilitiesJson, DevicesPayload, SSHPoolPayload } from "./types";
 
 type DeviceFilter = "all" | "online" | "offline" | "pending" | "disabled";
@@ -17,15 +31,115 @@ export function DevicesView({
   pulses,
   pool,
   capabilities,
+  seed,
+  onSeedConsumed,
+  onReload,
   ...actions
 }: DeviceActions & {
   payload: DevicesPayload | null;
   pulses: Record<string, number>;
   pool: SSHPoolPayload | null;
   capabilities: Record<string, CapabilitiesJson | null>;
+  seed?: { name: string; body: Record<string, unknown> } | null;
+  onSeedConsumed?: () => void;
+  onReload?: () => void;
 }): ReactNode {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<DeviceFilter>("all");
+  type Request = { name?: string; add?: boolean; seed?: NonNullable<typeof seed> };
+  const [request, setRequest] = useState<Request | null>(() => (seed ? { seed } : null));
+  const [error, setError] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{
+    initial: Record<string, unknown>;
+    original: Record<string, unknown>;
+    selection?: { name: string; isNew: boolean };
+  } | null>(null);
+  const loading = !!request && !editor && !error;
+  const openManager = (next: Request) => {
+    setError(null);
+    setRequest(next);
+  };
+  useEffect(() => {
+    if (!request) return;
+    const controller = new AbortController();
+    void api<Record<string, unknown>>("/api/config", controller.signal)
+      .then((original) => {
+        if (controller.signal.aborted) return;
+        let initial = original;
+        let selection: { name: string; isNew: boolean } | undefined;
+        const devices = (original.devices ?? {}) as Record<string, unknown>;
+        if (request.seed) {
+          // Discovery must never overwrite an existing router with the same name.
+          let name = request.seed.name;
+          for (let n = 2; Object.hasOwn(devices, name); n++) name = `${request.seed.name}-${n}`;
+          initial = {
+            ...original,
+            devices: { ...devices, [name]: request.seed.body },
+            defaultDevice: original.defaultDevice || name,
+          };
+          selection = { name, isNew: true };
+        } else if (request.add) {
+          const added = addDevice(original);
+          initial = added.config;
+          selection = { name: added.name, isNew: true };
+        } else if (request.name) {
+          if (!Object.hasOwn(devices, request.name))
+            throw new Error("This router is no longer configured. Refresh the device directory.");
+          selection = { name: request.name, isNew: false };
+        }
+        setEditor({ initial, original, selection });
+      })
+      .catch((e: unknown) => {
+        if (!controller.signal.aborted)
+          setError(e instanceof Error ? e.message : "Could not load router settings.");
+      });
+    return () => controller.abort();
+  }, [request]);
+  const management = (
+    <>
+      {error && (
+        <div className="devices-management-error" role="alert">
+          <span>{error}</span>
+          <Button variant="outline" size="sm" onClick={() => openManager({ ...request })}>
+            Retry settings
+          </Button>
+        </div>
+      )}
+      {editor && (
+        <section className="devices-management" aria-label="Manage routers">
+          <ConfigEditor
+            scope="devices"
+            initial={editor.initial}
+            original={editor.original}
+            initialSelection={editor.selection}
+            onClose={() => {
+              setEditor(null);
+              setRequest(null);
+              onSeedConsumed?.();
+            }}
+            onReload={() => onReload?.()}
+          />
+        </section>
+      )}
+    </>
+  );
+  const controls = (
+    <div className="fleet-brief__actions">
+      <Button size="sm" disabled={loading || !!editor} onClick={() => openManager({ add: true })}>
+        <Plus size={15} />
+        Add device
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={loading || !!editor}
+        onClick={() => openManager({})}
+      >
+        {loading ? <LoaderCircle size={15} className="animate-spin" /> : <Settings2 size={15} />}{" "}
+        {loading ? "Loading settings…" : "Manage routers"}
+      </Button>
+    </div>
+  );
   const list = payload?.devices ?? [];
   const counts = {
     all: list.length,
@@ -62,21 +176,28 @@ export function DevicesView({
 
   if (!payload)
     return (
-      <section className="devices-empty" role="status">
-        <Server aria-hidden="true" />
-        <h2>Waiting for device data</h2>
-        <p>The fleet has not loaded yet. Use Refresh data above to retry.</p>
+      <section className="devices-workspace">
+        <section className="devices-empty" role="status">
+          <Server aria-hidden="true" />
+          <h2>Waiting for device data</h2>
+          <p>The fleet has not loaded yet. Use Refresh data above to retry.</p>
+          {controls}
+        </section>
+        {management}
       </section>
     );
   if (!list.length)
     return (
-      <section className="devices-empty">
-        <Network aria-hidden="true" />
-        <h2>Your fleet starts here</h2>
-        <p>Add a router in Config to see its connection, system resources and tool activity.</p>
-        <Button variant="outline" size="sm" asChild>
-          <a href="#config">Open configuration</a>
-        </Button>
+      <section className="devices-workspace">
+        <section className="devices-empty">
+          <Network aria-hidden="true" />
+          <h2>Your fleet starts here</h2>
+          <p>
+            Add your first router here to see its connection, system resources and tool activity.
+          </p>
+          {controls}
+        </section>
+        {management}
       </section>
     );
 
@@ -97,6 +218,7 @@ export function DevicesView({
             <br />
             Test a device when you need a fresh reading.
           </p>
+          {controls}
           <a
             className="fleet-brief__link"
             href="#device-inventory"
@@ -152,6 +274,7 @@ export function DevicesView({
           </p>
         </div>
       </header>
+      {management}
 
       {/* Preserve the existing radar, its dimensions and its fleet-wide input. */}
       <details className="bg-card reveal rounded-lg border p-4" open={counts.all <= 8}>
@@ -227,6 +350,7 @@ export function DevicesView({
                 allNames={list.map((x) => x.name)}
                 capabilities={capabilities[d.name] ?? null}
                 {...actions}
+                onManage={editor || loading ? undefined : (name) => openManager({ name })}
               />
             ))}
           </div>

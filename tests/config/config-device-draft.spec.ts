@@ -1,6 +1,9 @@
 import { expect, test } from "vite-plus/test";
 import {
   CREDENTIAL_SOURCE,
+  addDevice,
+  selectConfigScope,
+  scopeConfigDraft,
   duplicateDevice,
   renameDevice,
   reorderDevices,
@@ -27,6 +30,44 @@ const current = {
     edge: { host: "192.0.2.2", username: "admin", password: "edge-secret" },
   },
 };
+
+test("scoped saves preserve the other editor's latest state, including secrets", () => {
+  const stale = redact(current) as Record<string, unknown>;
+  const live = {
+    ...current,
+    readOnly: true,
+    dashboard: { token: "new-secret" },
+    devices: { ...current.devices, new: current.devices.edge },
+  };
+  const draft = reorderDevices(stale, ["edge", "home"]);
+  const merged = mergeConfigDraft(scopeConfigDraft(draft, live, "devices"), live) as typeof live;
+  expect(merged.readOnly).toBe(true);
+  expect(merged.dashboard.token).toBe("new-secret");
+  expect(Object.keys(merged.devices)).toEqual(["edge", "home"]);
+  expect(merged.devices.home.password).toBe("secret");
+  const server = mergeConfigDraft(
+    scopeConfigDraft({ ...stale, readOnly: false }, live, "server"),
+    live,
+  ) as typeof live;
+  expect(server.devices).toEqual(live.devices);
+  expect(server.readOnly).toBe(false);
+  expect(selectConfigScope(stale, "devices")).toEqual({
+    devices: stale.devices,
+    defaultDevice: "home",
+  });
+  expect(selectConfigScope(stale, "server")).not.toHaveProperty("devices");
+  for (const invalid of [null, false, "", []])
+    expect(scopeConfigDraft(invalid, live, "devices")).toBe(invalid);
+});
+
+test("adding routers chooses unique names and only initializes a missing default", () => {
+  const first = addDevice({ devices: {} });
+  expect(first.config.defaultDevice).toBe("device");
+  const next = addDevice(first.config);
+  expect(next.name).toBe("device-2");
+  expect(next.config.defaultDevice).toBe("device");
+  expect(Object.keys(first.config.devices as object)).toEqual(["device"]);
+});
 
 test("copy includes every setting, stays independent, and securely restores credentials through repeated copies", () => {
   const draft = redact(current) as Record<string, unknown>;

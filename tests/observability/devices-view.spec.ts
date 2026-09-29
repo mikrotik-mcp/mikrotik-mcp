@@ -5,6 +5,7 @@ import type { Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, test, vi } from "vite-plus/test";
 import { DevicesView } from "../../ui/observability/devices-view";
 import { DeviceHealthCard } from "../../ui/observability/health";
+import { ConfigEditor } from "../../ui/observability/config-editor";
 import type { DeviceInfo, DevicesPayload, SSHPoolPayload } from "../../ui/observability/types";
 
 vi.hoisted(() => {
@@ -108,6 +109,153 @@ const search = async (value: string) => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
+
+const draftConfig = {
+  defaultDevice: "edge",
+  devices: {
+    edge: { host: "192.0.2.1", username: "admin", password: "«redacted»" },
+    branch: { host: "192.0.2.2", username: "operator", password: "«redacted»" },
+  },
+  mcp: { transport: "stdio" },
+};
+const mockConfigApi = () => {
+  const calls: { path: string; body: any }[] = [];
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+    calls.push({ path, body });
+    const result = path.includes("test-device")
+      ? { ok: true, status: { reachable: true, latencyMs: 12, identity: "lab" } }
+      : path.includes("validate")
+        ? { ok: true }
+        : path.includes("preview")
+          ? { summary: { changed: true, added: 1, removed: 0 }, unified: "+test" }
+          : path.includes("keep")
+            ? { kept: true }
+            : path.includes("rollback")
+              ? { rolledBack: true, config: draftConfig }
+              : init?.method === "POST"
+                ? { ok: true, config: body.config, pendingId: "pending-lab", rollbackMs: 60000 }
+                : path.includes("schema")
+                  ? {}
+                  : draftConfig;
+    return new Response(JSON.stringify(result), {
+      headers: { "content-type": "application/json" },
+    });
+  });
+  return calls;
+};
+
+test("Devices owns the draft, per-router tests, ordering and safe apply; Config has no router controls or JSON", async () => {
+  const calls = mockConfigApi();
+  await render();
+  await click(button("Manage routers"));
+  expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeTruthy();
+  await click(button("Test connection to branch"));
+  expect(calls.find((c) => c.path.includes("test-device"))?.body.name).toBe("branch");
+  expect(host.textContent).toContain("12ms · lab");
+  await click(button("Move branch up"));
+  await click(button("Preview diff"));
+  expect(
+    Object.keys(calls.find((c) => c.path === "/api/config/preview?scope=devices")!.body.devices),
+  ).toEqual(["branch", "edge"]);
+  await click(button("Close"));
+  expect(host.textContent).toContain("Discard this unsaved draft?");
+  await click(button("Continue editing"));
+  await click(button("Save devices"));
+  expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(true);
+  expect(button("Close").disabled).toBe(true);
+  await click(button("Keep changes"));
+  expect(host.textContent).toContain("Changes kept.");
+  await click(button("Close"));
+  expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeNull();
+
+  await act(async () =>
+    root.render(h(ConfigEditor, { initial: draftConfig, onClose: vi.fn(), onReload: vi.fn() })),
+  );
+  expect(host.textContent).toContain("Devices page");
+  expect(host.textContent).not.toContain("Add device");
+  expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeNull();
+  await click(button("JSON"));
+  expect(host.querySelector("textarea")?.value).not.toContain('"devices"');
+  expect(host.querySelector("textarea")?.value).not.toContain('"defaultDevice"');
+});
+
+test("copy, edit and remove stay in the Devices draft until saved", async () => {
+  const calls = mockConfigApi();
+  await render();
+  await click(button("Manage routers"));
+  await click(button("Copy branch"));
+  expect(document.body.textContent).toContain("Copied credentials");
+  const done = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    (b) => b.textContent === "Done",
+  )!;
+  await click(done);
+  expect(button("Edit branch-copy")).toBeTruthy();
+  await click(button("Remove branch-copy"));
+  await click(button("Remove branch-copy?"));
+  expect(button("Edit branch-copy")).toBeUndefined();
+  expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
+});
+
+test("an unavailable settings API displays a retry, not an empty configuration", async () => {
+  vi.mocked(fetch).mockResolvedValue(
+    new Response(JSON.stringify({ error: "Settings unavailable" }), { status: 503 }),
+  );
+  await render();
+  await click(button("Manage routers"));
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("Settings unavailable");
+  expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeNull();
+  mockConfigApi();
+  await click(button("Retry settings"));
+  expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeTruthy();
+});
+
+test("new and discovered routers open here without overwriting an existing router or saving", async () => {
+  const calls = mockConfigApi();
+  await render({ ...payload, devices: [] });
+  await click(button("Add device"));
+  expect(document.querySelector<HTMLInputElement>("#dev_name")?.value).toBe("device");
+  const done = () =>
+    [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent === "Done",
+    )!;
+  await click(done());
+  await click(button("Close"));
+  await click(button("Discard draft"));
+  await act(async () =>
+    root.render(
+      h(DevicesView, {
+        key: "discovery",
+        payload: null,
+        pool,
+        capabilities: {},
+        pulses: {},
+        seed: { name: "edge", body: { host: "192.0.2.99", username: "admin" } },
+      }),
+    ),
+  );
+  expect(document.querySelector<HTMLInputElement>("#dev_name")?.value).toBe("edge-2");
+  await click(done());
+  await click(button("Preview diff"));
+  const draft = calls.find((c) => c.path === "/api/config/preview?scope=devices")!.body;
+  expect(draft.devices.edge.host).toBe("192.0.2.1");
+  expect(draft.devices["edge-2"].host).toBe("192.0.2.99");
+  expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
+});
+
+test("reverting an applied draft restores the previous router order", async () => {
+  mockConfigApi();
+  await render();
+  await click(button("Manage routers"));
+  await click(button("Move branch up"));
+  await click(button("Save devices"));
+  expect(button("Close").disabled).toBe(true);
+  await click(button("Revert now"));
+  expect(host.textContent).toContain("Reverted to the previous config.");
+  expect(button("Move edge up").disabled).toBe(true);
+  expect(button("Close").disabled).toBe(false);
+});
 
 test("renders the actual BeUI controls without contacting or mutating devices", async () => {
   await render();

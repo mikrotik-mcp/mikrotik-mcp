@@ -59,7 +59,7 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     sub: "Understand slowdowns, manage your household & compare paths",
   },
   { id: "overview", label: "Overview", sub: "Calls, latency & risk at a glance" },
-  { id: "devices", label: "Devices", sub: "Connectivity radar & system health" },
+  { id: "devices", label: "Devices", sub: "Router management, connectivity & system health" },
   { id: "interfaces", label: "Interfaces", sub: "Every port and tunnel — live traffic & counters" },
   { id: "clients", label: "Clients", sub: "Connected LAN devices — usage, block/allow, pin IP" },
   {
