@@ -272,7 +272,7 @@ describe("User Manager accounting reports", () => {
               : "[]",
     );
     const [one, two] = await Promise.all([getUmSnapshot("edge"), getUmSnapshot("edge")]);
-    expect(one).toBe(two);
+    expect(one.sources).toBe(two.sources);
     const commands = read.mock.calls.map(([cmd]) => cmd);
     expect(commands.filter((cmd) => cmd.includes("session print"))).toHaveLength(1);
     expect(commands.some((cmd) => cmd.includes("monitor [find] once as-value"))).toBe(true);
@@ -290,6 +290,93 @@ describe("User Manager accounting reports", () => {
     expect(read).toHaveBeenCalledTimes(1);
     const recovered = await getUmSnapshot("edge");
     expect(recovered.sources.users.available).toBe(true);
+  });
+  test("serves expired reports immediately during one background read and a forced refresh joins it", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(100_000);
+    const first = await getUmSnapshot("edge");
+    const calls = read.mock.calls.length;
+    now.mockReturnValue(160_001);
+    let release!: (value: string) => void;
+    read.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const cached = await getUmSnapshot("edge");
+    expect(cached.collectedAt).toBe(first.collectedAt);
+    expect(cached.cache).toMatchObject({ stale: true, refreshing: true, retryAfterMs: 3000 });
+    const forced = getUmSnapshot("edge", true);
+    expect((await getUmSnapshot("edge")).sources).toBe(first.sources);
+    expect(read).toHaveBeenCalledTimes(calls + 1);
+    release("[]");
+    const next = await forced;
+    expect(next.collectedAt).toBe(160_001);
+    expect(next.cache).toMatchObject({ stale: false, refreshing: false });
+    const warmCalls = read.mock.calls.length;
+    await getUmSnapshot("edge");
+    expect(read).toHaveBeenCalledTimes(warmCalls);
+    await getUmSnapshot("edge", true);
+    expect(read.mock.calls.length).toBeGreaterThan(warmCalls);
+  });
+  test("failed refresh preserves the snapshot, redacts errors and backs off automatic retries", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(100_000);
+    const first = await getUmSnapshot("edge");
+    now.mockReturnValue(160_001);
+    read.mockRejectedValueOnce(new DeviceConnectionError("edge", "private-transport-detail"));
+    await expect(getUmSnapshot("edge", true)).rejects.toThrow();
+    const calls = read.mock.calls.length;
+    const cached = await getUmSnapshot("edge");
+    expect(cached.sources).toBe(first.sources);
+    expect(cached.collectedAt).toBe(100_000);
+    expect(cached.cache).toMatchObject({ stale: true, refreshing: false, retryAfterMs: 30_000 });
+    expect(cached.cache?.error).toContain("Device connection unavailable");
+    expect(JSON.stringify(cached)).not.toContain("private-transport-detail");
+    expect(read).toHaveBeenCalledTimes(calls);
+    now.mockReturnValue(190_002);
+    await getUmSnapshot("edge", true);
+    expect((await getUmSnapshot("edge")).cache?.error).toBeUndefined();
+  });
+  test("incomplete refresh cannot replace previously successful accounting with zero rows", async () => {
+    const first = await getUmSnapshot("edge");
+    read.mockResolvedValueOnce('{"truncated":');
+    await expect(getUmSnapshot("edge", true)).rejects.toThrow("source");
+    const kept = await getUmSnapshot("edge");
+    expect(kept.sources).toBe(first.sources);
+    expect(kept.cache?.stale).toBe(true);
+  });
+  test("isolates routers, invalidates on configuration changes and rejects a mixed collection", async () => {
+    setConfig(
+      MikrotikConfigSchema.parse({
+        defaultDevice: "edge",
+        devices: {
+          edge: { host: "192.0.2.1" },
+          remote: { host: "192.0.2.2" },
+        },
+      }),
+    );
+    const first = await getUmSnapshot("edge");
+    const remote = await getUmSnapshot("remote");
+    expect(remote.device).toBe("remote");
+    expect(remote.sources).not.toBe(first.sources);
+    read.mockImplementationOnce(async () => {
+      setConfig(MikrotikConfigSchema.parse(getConfig()));
+      return "[]";
+    });
+    await expect(getUmSnapshot("edge", true)).rejects.toThrow("Configuration changed");
+    expect((await getUmSnapshot("edge")).sources).not.toBe(first.sources);
+    setConfig(
+      MikrotikConfigSchema.parse({
+        defaultDevice: "edge",
+        devices: {
+          edge: { host: "192.0.2.1", disabled: true },
+          remote: { host: "192.0.2.2" },
+        },
+      }),
+    );
+    const calls = read.mock.calls.length;
+    await expect(getUmSnapshot("edge")).rejects.toThrow("disabled");
+    expect(read).toHaveBeenCalledTimes(calls);
   });
   test("reads accounting in bounded ID batches and rejects a missing row instead of partial totals", async () => {
     const ids = Array.from({ length: 2001 }, (_, i) => `*${(i + 1).toString(16)}`);

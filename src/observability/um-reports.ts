@@ -4,12 +4,13 @@ import { executeMikrotikCommand } from "../core/connector";
 import { DeviceConnectionError } from "../core/device-connection-error";
 import { Cmd, commandUnsupported, looksLikeError } from "../core/routeros";
 import { parseKeyValues, parseRouterosDate, parseSize } from "../core/routeros-parse";
-import { getConfig, resolveDeviceName } from "../core/runtime";
+import { getConfig, onConfigChanged, resolveDeviceName } from "../core/runtime";
 import { assertDeviceAccess } from "../core/scoped-access";
 
 type Row = Record<string, string>;
 const DAY = 86_400_000;
 const CACHE_MS = 60_000;
+const RETRY_MS = 30_000;
 const count = (v?: string): number => Math.max(0, Number(v) || 0);
 const size = (v?: string): number => Math.max(0, parseSize(v) ?? 0);
 
@@ -87,6 +88,7 @@ export interface UmSource {
   available: boolean;
   rows: Row[];
   error?: string;
+  collectionMs?: number;
 }
 export interface UmSnapshot {
   device: string;
@@ -94,6 +96,7 @@ export interface UmSnapshot {
   collectionMs: number;
   clock: { zone: string; offsetMs: number | null };
   sources: Record<Source, UmSource>;
+  cache?: { stale: boolean; refreshing: boolean; error?: string; retryAfterMs: number };
 }
 
 /** Reject partial/invalid JSON instead of presenting a timeout as empty accounting. */
@@ -227,11 +230,19 @@ async function readSource(ctx: ToolContext, source: Source): Promise<UmSource> {
 
 async function collect(device: string): Promise<UmSnapshot> {
   const start = Date.now();
+  const config = getConfig();
   const ctx = createContext(undefined, device);
   const sources = Object.fromEntries(
     Object.keys(UM_REPORT_FIELDS).map((key) => [key, { available: false, rows: [] }]),
   ) as unknown as UmSnapshot["sources"];
-  sources.users = await readSource(ctx, "users");
+  const read = async (source: Source) => {
+    // A reload can retarget a device key; never combine two routers' records.
+    if (getConfig() !== config) throw new Error("Configuration changed during report collection.");
+    const started = Date.now();
+    const result = await readSource(ctx, source);
+    return { ...result, collectionMs: Date.now() - started };
+  };
+  sources.users = await read("users");
   let clock: UmSnapshot["clock"] = {
     zone: "Router local time (offset unavailable)",
     offsetMs: null,
@@ -243,7 +254,7 @@ async function collect(device: string): Promise<UmSnapshot> {
         sources[key] =
           key === "totals" && !sources.users.rows.length
             ? { available: true, rows: [] }
-            : await readSource(ctx, key);
+            : await read(key);
     }
     try {
       const fields = parseKeyValues(await executeMikrotikCommand("/system clock print", ctx));
@@ -258,15 +269,22 @@ async function collect(device: string): Promise<UmSnapshot> {
       /* Calendar grouping can still use the router's wall-clock dates. */
     }
   }
+  if (getConfig() !== config) throw new Error("Configuration changed during report collection.");
   return { device, collectedAt: Date.now(), collectionMs: Date.now() - start, clock, sources };
 }
 
 const cache = new Map<
   string,
-  { config: ReturnType<typeof getConfig>; value?: UmSnapshot; pending?: Promise<UmSnapshot> }
+  {
+    value?: UmSnapshot;
+    pending?: Promise<UmSnapshot>;
+    error?: string;
+    retryAt: number;
+  }
 >();
-/** Shared, per-router single flight; even Refresh cannot overlap or hammer a large table. */
-export async function getUmSnapshot(device?: string): Promise<UmSnapshot> {
+onConfigChanged(() => cache.clear());
+/** Serve the last snapshot while one shared read refreshes it; only cold/forced reads wait. */
+export async function getUmSnapshot(device?: string, refresh = false): Promise<UmSnapshot> {
   const name = resolveDeviceName(device); // Validate before looking in the cache.
   for (const tool of [
     "list_user_manager_users",
@@ -278,24 +296,59 @@ export async function getUmSnapshot(device?: string): Promise<UmSnapshot> {
     "get_user_manager_settings",
   ])
     assertDeviceAccess([name], tool, "READ");
-  const config = getConfig();
   let entry = cache.get(name);
-  if (!entry || entry.config !== config) {
-    entry = { config };
+  if (!entry) {
+    entry = { retryAt: 0 };
     cache.set(name, entry);
   }
-  if (entry.pending) return entry.pending;
-  if (entry.value && Date.now() - entry.value.collectedAt < CACHE_MS) return entry.value;
   const target = entry;
-  target.pending = collect(name)
-    .then((value) => {
-      target.value = value;
-      return value;
-    })
-    .finally(() => {
-      target.pending = undefined;
-    });
-  return target.pending;
+  const expired =
+    !target.value || !!target.error || Date.now() - target.value.collectedAt >= CACHE_MS;
+  if (!target.pending && (refresh || (expired && Date.now() >= target.retryAt))) {
+    target.pending = collect(name)
+      .then((value) => {
+        // A failed refresh must not replace known accounting with partial totals.
+        if (
+          target.value &&
+          Object.entries(target.value.sources).some(
+            ([key, source]) => source.available && !value.sources[key as Source].available,
+          )
+        )
+          throw new Error("An accounting source could not be refreshed.");
+        target.value = value;
+        target.error = undefined;
+        target.retryAt = 0;
+        return value;
+      })
+      .catch((error: unknown) => {
+        target.error =
+          error instanceof DeviceConnectionError
+            ? "Device connection unavailable. Showing the last collected report."
+            : "Report refresh failed. Showing the last collected report; some sources could not be read.";
+        target.retryAt = target.value ? Date.now() + RETRY_MS : 0;
+        throw error;
+      })
+      .finally(() => {
+        target.pending = undefined;
+      });
+    // Background revalidation has no awaiting HTTP caller. Observe rejection
+    // here; cold/forced callers still receive the original failure below.
+    void target.pending.catch(() => {});
+  }
+  if (!target.value || refresh) await target.pending;
+  const value = target.value!;
+  const age = Math.max(0, Date.now() - value.collectedAt);
+  return {
+    ...value,
+    cache: {
+      stale: age >= CACHE_MS || !!target.error,
+      refreshing: !!target.pending,
+      error: target.error,
+      retryAfterMs: target.pending
+        ? 3000
+        : Math.max(1000, target.error ? target.retryAt - Date.now() : CACHE_MS - age),
+    },
+  };
 }
 
 export interface UmUserCounters {
@@ -590,14 +643,25 @@ export function buildUmReport(snapshot: UmSnapshot, query: UmReportQuery) {
   const sourceStates = Object.fromEntries(
     Object.entries(sources).map(([key, value]) => [
       key,
-      { available: value.available, count: value.rows.length, error: value.error },
+      {
+        available: value.available,
+        count: value.rows.length,
+        error: value.error,
+        collectionMs: value.collectionMs,
+      },
     ]),
   );
   return {
     device: snapshot.device,
     collectedAt: snapshot.collectedAt,
     collectionMs: snapshot.collectionMs,
-    refreshAfterMs: CACHE_MS,
+    refreshAfterMs: snapshot.cache?.retryAfterMs ?? CACHE_MS,
+    cache: snapshot.cache ?? {
+      stale: false,
+      refreshing: false,
+      error: undefined,
+      retryAfterMs: CACHE_MS,
+    },
     available: sources.users.available,
     sources: sourceStates,
     clock: snapshot.clock,

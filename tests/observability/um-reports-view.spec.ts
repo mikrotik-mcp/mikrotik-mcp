@@ -21,6 +21,7 @@ vi.hoisted(() => Reflect.deleteProperty(Element.prototype, "animate"));
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(async () => {
+  vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   const sources = Object.fromEntries(
@@ -58,6 +59,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 test("retains accounting statistics and charts without a session list or its controls", () => {
   for (const label of [
@@ -100,4 +102,48 @@ test("keeps individual-user statistical filtering", async () => {
   const query = new URL(vi.mocked(api).mock.calls.at(-1)![0], "http://fixture").searchParams;
   expect(query.get("user")).toBe("alice");
   expect(host.textContent).not.toContain("Session explorer");
+});
+
+test("polls background refresh promptly, labels stale data and keeps charts visible", async () => {
+  const report = await vi.mocked(api).mock.results[0].value;
+  vi.mocked(api).mockResolvedValue({
+    ...report,
+    cache: { stale: true, refreshing: true },
+    refreshAfterMs: 3000,
+  });
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
+  expect(host.textContent).toContain("Refreshing in the background");
+  expect(host.textContent).toContain("Counters are not live");
+  expect(host.querySelectorAll('[data-slot="chart"]')).toHaveLength(2);
+  expect(host.querySelector(".um-loading")).toBeNull();
+  const calls = vi.mocked(api).mock.calls.length;
+  vi.mocked(api).mockResolvedValue(report);
+  await act(async () => vi.advanceTimersByTimeAsync(3000));
+  expect(api).toHaveBeenCalledTimes(calls + 1);
+  expect(host.textContent).not.toContain("Counters are not live");
+});
+
+test("manual Refresh bypasses TTL once, while later filtering uses the shared cache", async () => {
+  const button = [...host.querySelectorAll("button")].find((b) => b.textContent === "Refresh")!;
+  await act(async () => button.click());
+  expect(vi.mocked(api).mock.calls.at(-1)![0]).toContain("refresh=true");
+  await act(async () => host.querySelector<HTMLButtonElement>(".um-user-button")!.click());
+  expect(vi.mocked(api).mock.calls.at(-1)![0]).not.toContain("refresh=true");
+});
+
+test("does not display another router's cached data during a slow or failed switch", async () => {
+  let fail!: (error: Error) => void;
+  vi.mocked(api).mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  await act(async () => root.render(h(UmReports, { device: "remote" })));
+  expect(host.querySelectorAll('[data-slot="chart"]')).toHaveLength(0);
+  expect(host.textContent).not.toContain("alice");
+  expect(host.textContent).toContain("Building the first cached snapshot");
+  await act(async () => fail(new Error("Device connection unavailable")));
+  expect(host.textContent).toContain("Device connection unavailable");
+  expect(host.textContent).not.toContain("alice");
 });

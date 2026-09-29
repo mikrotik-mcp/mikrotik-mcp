@@ -1153,7 +1153,13 @@ async function aaaRoutes(req: Request, url: URL): Promise<Response | null> {
       } catch {
         return json({ error: "Invalid report filters" }, 400);
       }
-      return json(buildUmReport(await getUmSnapshot(deviceFromQuery()), filters));
+      return Response.json(
+        buildUmReport(
+          await getUmSnapshot(deviceFromQuery(), url.searchParams.get("refresh") === "true"),
+          filters,
+        ),
+        { headers: { "cache-control": "no-store" } },
+      );
     }
     if (p === "/api/aaa/user-counters") {
       return json(await getUmUserCounters(deviceFromQuery()));

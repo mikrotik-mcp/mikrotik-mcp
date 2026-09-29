@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -83,7 +83,10 @@ export function UmReports({ device }: { device: string }) {
   const [user, setUser] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [mode, setMode] = useState("daily");
-  const [report, setReport] = useState<UmReport | null>(null);
+  const [data, setReport] = useState<UmReport | null>(null);
+  // Never display the previous router's accounting while switching devices.
+  const report = data?.device === device ? data : null;
+  const lastRefresh = useRef(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const invalidDates = !!from && !!to && from > to;
@@ -100,12 +103,18 @@ export function UmReports({ device }: { device: string }) {
     });
     setLoading(true);
     setError("");
-    const load = async () => {
+    const load = async (force = false) => {
+      let delay = 60_000;
       try {
-        const data = await api<UmReport>(`/api/aaa/reports?${query}`, abort.signal);
+        const data = await api<UmReport>(
+          `/api/aaa/reports?${query}${force ? "&refresh=true" : ""}`,
+          abort.signal,
+        );
         if (!abort.signal.aborted) {
+          if (data.device !== device) throw new Error("Report belongs to a different device.");
           setReport(data);
           setError("");
+          delay = Math.max(1000, data.refreshAfterMs);
         }
       } catch (e) {
         if (!abort.signal.aborted)
@@ -113,11 +122,12 @@ export function UmReports({ device }: { device: string }) {
       } finally {
         if (!abort.signal.aborted) {
           setLoading(false);
-          timer = setTimeout(load, 60_000);
+          timer = setTimeout(() => void load(), delay);
         }
       }
     };
-    void load();
+    void load(refresh !== lastRefresh.current);
+    lastRefresh.current = refresh;
     return () => {
       abort.abort();
       clearTimeout(timer);
@@ -154,13 +164,13 @@ export function UmReports({ device }: { device: string }) {
           <div>
             <strong>Read-only reporting</strong>
             <span>
-              {error
+              {error || report?.cache?.error
                 ? "Router data unavailable"
                 : report
-                  ? `Snapshot · ${new Date(report.collectedAt).toLocaleTimeString()}`
+                  ? `${report.cache?.refreshing ? "Refreshing cached report" : report.cache?.stale ? "Stale snapshot" : "Cached snapshot"} · ${new Date(report.collectedAt).toLocaleTimeString()}`
                   : "Reading router accounting"}
             </span>
-            <small>Refreshes every minute · no router changes</small>
+            <small>60-second cache · background refresh · read-only</small>
           </div>
         </div>
       </div>
@@ -261,10 +271,18 @@ export function UmReports({ device }: { device: string }) {
         </Button>
       </div>
       {invalidDates && <Note type="error">The start date must be on or before the end date.</Note>}
-      {loading && report && (
+      {(loading || report?.cache?.refreshing) && report && (
         <p className="um-caption" role="status">
-          Updating report… The previous snapshot remains visible until the new filters have loaded.
+          {loading
+            ? "Updating report… The previous snapshot remains visible until the new filters have loaded."
+            : "Refreshing in the background… Showing the cached snapshot until collection completes."}
         </p>
+      )}
+      {report?.cache?.stale && !error && (
+        <Note type="warning" label="Cached report">
+          {report.cache.error || "This snapshot is older than 60 seconds and is being refreshed."}{" "}
+          Last collected: {new Date(report.collectedAt).toLocaleString()}. Counters are not live.
+        </Note>
       )}
       {error && (
         <Note type="error" label="Report unavailable">
@@ -283,7 +301,8 @@ export function UmReports({ device }: { device: string }) {
           </div>
           <h3>Putting your accounting in perspective</h3>
           <p>
-            Reading exact counters and retained sessions. Large histories may take up to a minute.
+            Building the first cached snapshot from the router. Large histories can take more than a
+            minute; subsequent visits use the cache while it refreshes in the background.
           </p>
         </div>
       )}
@@ -727,7 +746,8 @@ export function UmReports({ device }: { device: string }) {
               {report.coverage.undated > 0 &&
                 `${num(report.coverage.undated)} records have no valid start date and are excluded from period totals.`}{" "}
               This is a sequential snapshot, not an atomic capture. Collected in{" "}
-              {(report.collectionMs / 1000).toFixed(1)}s; refresh is coalesced for 60 seconds.
+              {(report.collectionMs / 1000).toFixed(1)}s; cached for 60 seconds, then refreshed in
+              the background. Manual Refresh waits for a new collection.
             </p>
             <div className="um-source-grid">
               {Object.entries(report.sources).map(([key, s]) => (
@@ -735,7 +755,7 @@ export function UmReports({ device }: { device: string }) {
                   <strong>{sourceNames[key]}</strong>
                   <span>
                     {s.available
-                      ? `${num(s.count)} records · read successfully`
+                      ? `${num(s.count)} records · read successfully${s.collectionMs == null ? "" : ` · ${(s.collectionMs / 1000).toFixed(1)}s`}`
                       : s.error || "Unsupported or not read"}
                   </span>
                 </div>
