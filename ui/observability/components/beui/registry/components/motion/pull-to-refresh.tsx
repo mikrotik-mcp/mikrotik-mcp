@@ -10,7 +10,7 @@ import {
   useTransform,
 } from "motion/react";
 import type { MotionValue } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
 import {
   EASE_IN_OUT,
@@ -232,9 +232,11 @@ export function PullToRefresh({
   const indicatorScale = useTransform(y, [0, pullThreshold], [0.86, 1]);
   const isRefreshing = refreshing || internalRefreshing;
 
-  disabledRef.current = disabled;
-  externalRefreshingRef.current = refreshing;
-  refreshingRef.current = isRefreshing;
+  useLayoutEffect(() => {
+    disabledRef.current = disabled;
+    externalRefreshingRef.current = refreshing;
+    refreshingRef.current = isRefreshing;
+  }, [disabled, refreshing, isRefreshing]);
 
   const setStatus = useCallback((next: PullToRefreshStatus) => {
     if (statusRef.current === next) return;

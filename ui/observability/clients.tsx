@@ -177,12 +177,10 @@ function LimitsEditor({
   const [msg, setMsg] = useState<string | null>(null);
 
   // Adopt the live (fetched) limits until the user starts editing.
-  useEffect(() => {
-    if (!dirty) {
-      setDl(current.download);
-      setUl(current.upload);
-    }
-  }, [current.download, current.upload, dirty]);
+  if (!dirty && (dl !== current.download || ul !== current.upload)) {
+    setDl(current.download);
+    setUl(current.upload);
+  }
 
   const apply = useCallback(
     async (download: string, upload: string): Promise<void> => {
@@ -359,10 +357,11 @@ function DeviceDetail({
  */
 function useBulkTraffic(deviceName: string): BulkTraffic {
   const [traffic, setTraffic] = useState<BulkTraffic>(EMPTY_TRAFFIC);
-
-  useEffect(() => {
+  const [trafficDevice, setTrafficDevice] = useState(deviceName);
+  if (trafficDevice !== deviceName) {
+    setTrafficDevice(deviceName);
     setTraffic(EMPTY_TRAFFIC);
-  }, [deviceName]);
+  }
 
   useEffect(() => {
     if (!deviceName) return;
@@ -507,20 +506,26 @@ export function ClientsView(): ReactNode {
       .catch(() => setRouters({ server: "", defaultDevice: "", devices: [] }));
   }, []);
 
-  const load = useCallback(async (): Promise<void> => {
-    try {
-      const q = deviceName ? `?device=${encodeURIComponent(deviceName)}` : "";
-      setView(await api<DevicesView>(`/api/clients${q}`));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const load = useCallback((): Promise<void> => {
+    const q = deviceName ? `?device=${encodeURIComponent(deviceName)}` : "";
+    return api<DevicesView>(`/api/clients${q}`)
+      .then((next) => {
+        setView(next);
+        setError(null);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, [deviceName]);
 
   // Load on device change, then refresh the list lightly (status can change).
-  useEffect(() => {
+  const [viewDevice, setViewDevice] = useState(deviceName);
+  if (viewDevice !== deviceName) {
+    setViewDevice(deviceName);
     setView(null);
     setSelected(null);
+  }
+  useEffect(() => {
     void load();
     const t = setInterval(() => void load(), 15_000);
     return () => clearInterval(t);

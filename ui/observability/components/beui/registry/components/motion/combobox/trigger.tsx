@@ -17,16 +17,17 @@ export interface ComboboxTriggerProps {
 
 export function ComboboxTrigger({ children, className }: ComboboxTriggerProps) {
   const context = useComboboxContext("ComboboxTrigger");
+  const { triggerRef, inputRef } = context;
 
   return (
     <div
-      ref={context.triggerRef}
+      ref={triggerRef}
       id={context.triggerId}
       data-state={context.open ? "open" : "closed"}
       onPointerDown={(event) => {
-        if (context.disabled || event.target === context.inputRef.current) return;
+        if (context.disabled || event.target === inputRef.current) return;
         event.preventDefault();
-        context.inputRef.current?.focus({ preventScroll: true });
+        inputRef.current?.focus({ preventScroll: true });
         context.setOpen(true);
       }}
       className={cn(

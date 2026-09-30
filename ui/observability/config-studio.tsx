@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { api } from "./api";
 import { highlightJson } from "./highlight";
@@ -127,8 +127,10 @@ export function JsonEditor({
   // Parse-on-valid → emit the object; report syntax errors.
   const onChangeRef = useRef(onChange);
   const onErrRef = useRef(onJsonError);
-  onChangeRef.current = onChange;
-  onErrRef.current = onJsonError;
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange;
+    onErrRef.current = onJsonError;
+  }, [onChange, onJsonError]);
   useEffect(() => {
     const t = setTimeout(() => {
       try {

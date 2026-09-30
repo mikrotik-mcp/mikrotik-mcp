@@ -144,7 +144,10 @@ function ChartTooltipContent({
     }
 
     const [item] = payload;
-    const key = `${labelKey ?? item?.dataKey ?? item?.name ?? "value"}`;
+    const dataKey = item?.dataKey;
+    const key = String(
+      labelKey ?? (typeof dataKey === "function" ? undefined : dataKey) ?? item?.name ?? "value",
+    );
     const itemConfig = getPayloadConfigFromPayload(config, item, key);
     const value =
       !labelKey && typeof label === "string" ? (config[label]?.label ?? label) : itemConfig?.label;
@@ -180,7 +183,12 @@ function ChartTooltipContent({
         {payload
           .filter((item) => item.type !== "none")
           .map((item, index) => {
-            const key = `${nameKey ?? item.name ?? item.dataKey ?? "value"}`;
+            const key = String(
+              nameKey ??
+                item.name ??
+                (typeof item.dataKey === "function" ? undefined : item.dataKey) ??
+                "value",
+            );
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
             const indicatorColor = color ?? item.payload?.fill ?? item.color;
 
@@ -279,7 +287,9 @@ function ChartLegendContent({
       {payload
         .filter((item) => item.type !== "none")
         .map((item, index) => {
-          const key = `${nameKey ?? item.dataKey ?? "value"}`;
+          const key = String(
+            nameKey ?? (typeof item.dataKey === "function" ? undefined : item.dataKey) ?? "value",
+          );
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
           return (

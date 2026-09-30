@@ -93,6 +93,14 @@ export function UmReports({ device }: { device: string }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const invalidDates = !!from && !!to && from > to;
+  const requestKey = JSON.stringify([device, period, user, from, to, refresh]);
+  const [loadedKey, setLoadedKey] = useState(requestKey);
+  if (loadedKey !== requestKey) {
+    setLoadedKey(requestKey);
+    setLoading(true);
+    setError("");
+    setCollection(null);
+  }
   useEffect(() => {
     if (!device || invalidDates) return;
     const abort = new AbortController();
@@ -104,9 +112,6 @@ export function UmReports({ device }: { device: string }) {
       from,
       to,
     });
-    setLoading(true);
-    setError("");
-    setCollection(null);
     const load = async (force = false) => {
       let delay = 30_000;
       const request = new AbortController();

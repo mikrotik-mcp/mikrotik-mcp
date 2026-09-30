@@ -286,22 +286,23 @@ export function FlowsView(): ReactNode {
   const [health, setHealth] = useState<FlowHealth | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const [topRes, convRes, lineRes, healthRes] = await Promise.all([
-        api<FlowTopPayload>(`/api/flows/top?window=${window}&dimension=${dimension}`),
-        api<{ conversations: FlowConversation[] }>(`/api/flows/conversations?window=${window}`),
-        api<FlowTimelinePayload>(`/api/flows/timeline?window=${window}&dimension=${dimension}`),
-        api<FlowHealth>("/api/flows/health"),
-      ]);
-      setTop(topRes);
-      setTalks(convRes.conversations);
-      setLine(lineRes);
-      setHealth(healthRes);
-      setError(topRes.error ?? null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const load = useCallback(() => {
+    return Promise.all([
+      api<FlowTopPayload>(`/api/flows/top?window=${window}&dimension=${dimension}`),
+      api<{ conversations: FlowConversation[] }>(`/api/flows/conversations?window=${window}`),
+      api<FlowTimelinePayload>(`/api/flows/timeline?window=${window}&dimension=${dimension}`),
+      api<FlowHealth>("/api/flows/health"),
+    ])
+      .then(([topRes, convRes, lineRes, healthRes]) => {
+        setTop(topRes);
+        setTalks(convRes.conversations);
+        setLine(lineRes);
+        setHealth(healthRes);
+        setError(topRes.error ?? null);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, [window, dimension]);
 
   useEffect(() => {

@@ -120,26 +120,34 @@ export function AccessView(): ReactNode {
     setPreview(null);
     setNow(Date.now());
   }, []);
-  const load = useCallback(async () => {
+  const load = useCallback(() => {
     loadController.current?.abort();
     const controller = new AbortController();
     loadController.current = controller;
+    return request<AccessSettings>("", undefined, controller.signal)
+      .then((next) => {
+        if (!Array.isArray(next.tools) || !next.configured)
+          throw new Error(
+            "This server does not support access settings yet. Restart it with the updated build.",
+          );
+        if (alive.current && !controller.signal.aborted) {
+          accept(next);
+          setError("");
+        }
+      })
+      .catch((e) => {
+        if (alive.current && !controller.signal.aborted)
+          setError(e instanceof Error ? e.message : "Access settings unavailable.");
+      })
+      .finally(() => {
+        if (alive.current && !controller.signal.aborted) setLoading(false);
+      });
+  }, [accept]);
+  const reload = () => {
     setLoading(true);
     setError("");
-    try {
-      const next = await request<AccessSettings>("", undefined, controller.signal);
-      if (!Array.isArray(next.tools) || !next.configured)
-        throw new Error(
-          "This server does not support access settings yet. Restart it with the updated build.",
-        );
-      if (alive.current && !controller.signal.aborted) accept(next);
-    } catch (e) {
-      if (alive.current && !controller.signal.aborted)
-        setError(e instanceof Error ? e.message : "Access settings unavailable.");
-    } finally {
-      if (alive.current && !controller.signal.aborted) setLoading(false);
-    }
-  }, [accept]);
+    void load();
+  };
   useEffect(() => {
     alive.current = true;
     void load();
@@ -183,9 +191,22 @@ export function AccessView(): ReactNode {
     }
   }, [pending, now, load]);
 
-  useEffect(() => {
+  const previewKey = JSON.stringify([
+    data?.revision,
+    access,
+    invalid,
+    pending,
+    loading,
+    probeDevice,
+    probeTool,
+  ]);
+  const [lastPreviewKey, setLastPreviewKey] = useState(previewKey);
+  if (lastPreviewKey !== previewKey) {
+    setLastPreviewKey(previewKey);
     setPreview(null);
     setPreviewError("");
+  }
+  useEffect(() => {
     if (!data || !access || invalid || pending || loading) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -348,7 +369,7 @@ export function AccessView(): ReactNode {
             ghost
             icon={<RefreshCw />}
             loading={loading}
-            onClick={() => void load()}
+            onClick={reload}
             disabled={saving || (dirty && !error)}
             aria-label="Refresh access settings"
           />
@@ -370,7 +391,7 @@ export function AccessView(): ReactNode {
             ghost
             onClick={() => {
               setReview(false);
-              void load();
+              reload();
             }}
           >
             Reload saved policy

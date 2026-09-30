@@ -77,10 +77,14 @@ export function MemoryEditor({
   const [error, setError] = useState("");
   const [scope, setScope] = useState<MemoryScope | null>(null);
   const [scopeError, setScopeError] = useState("");
-  useEffect(() => {
-    const abort = new AbortController();
+  const [scopeEntity, setScopeEntity] = useState(entity);
+  if (scopeEntity !== entity) {
+    setScopeEntity(entity);
     setScope(null);
     setScopeError("");
+  }
+  useEffect(() => {
+    const abort = new AbortController();
     if (!entity.trim()) return () => abort.abort();
     const timer = setTimeout(() => {
       void api<MemoryScope>(

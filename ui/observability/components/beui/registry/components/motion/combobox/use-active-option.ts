@@ -87,39 +87,45 @@ export function useActiveOption({ open, ...options }: Options & { open: boolean 
     latest.current = { open, query, value, enabledItems };
   });
 
-  const setActiveValue = useCallback((next: string | null) => {
-    setCursor(next === null ? null : { value: next, query: latest.current.query });
-  }, []);
+  const setActiveValue = useCallback(
+    (next: string | null) => {
+      setCursor(next === null ? null : { value: next, query: latest.current.query });
+    },
+    [setCursor],
+  );
 
   // Steps from the option the cursor really resolves to, inside the update, so
   // that two keys landing in one batch move two rows rather than one.
-  const moveActive = useCallback((direction: 1 | -1 | "first" | "last") => {
-    const options = latest.current;
-    // While closed the list is still filtering by the query it was open
-    // with, so a step taken now would be measured against rows the next
-    // render replaces. Opening is the caller's job; stepping waits for it.
-    if (!options.open) return;
-    const rows = options.enabledItems;
-    const last = rows.length - 1;
-    if (last < 0) {
-      setCursor(null);
-      return;
-    }
-    setCursor((current) => {
-      // `resolveActive` always lands on a member of `enabledItems` once the
-      // list is non-empty, which the early return above guarantees, so there
-      // is always a row to step from.
-      const from = resolveActive(current, options);
-      const at = rows.findIndex((item) => item.value === from);
-      const index =
-        direction === "first"
-          ? 0
-          : direction === "last"
-            ? last
-            : (at + direction + rows.length) % rows.length;
-      return { value: rows[index].value, query: options.query };
-    });
-  }, []);
+  const moveActive = useCallback(
+    (direction: 1 | -1 | "first" | "last") => {
+      const options = latest.current;
+      // While closed the list is still filtering by the query it was open
+      // with, so a step taken now would be measured against rows the next
+      // render replaces. Opening is the caller's job; stepping waits for it.
+      if (!options.open) return;
+      const rows = options.enabledItems;
+      const last = rows.length - 1;
+      if (last < 0) {
+        setCursor(null);
+        return;
+      }
+      setCursor((current) => {
+        // `resolveActive` always lands on a member of `enabledItems` once the
+        // list is non-empty, which the early return above guarantees, so there
+        // is always a row to step from.
+        const from = resolveActive(current, options);
+        const at = rows.findIndex((item) => item.value === from);
+        const index =
+          direction === "first"
+            ? 0
+            : direction === "last"
+              ? last
+              : (at + direction + rows.length) % rows.length;
+        return { value: rows[index].value, query: options.query };
+      });
+    },
+    [setCursor],
+  );
 
   return { activeValue, setActiveValue, moveActive };
 }

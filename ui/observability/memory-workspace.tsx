@@ -182,10 +182,15 @@ function FactDetail({
       {pendingNext ? "Retry next memory" : onNextReview ? "Verify & next" : "I verified this"}
     </Button>
   );
-  useEffect(() => {
-    const abort = new AbortController();
+  const historyKey = `${fact.id}:${fact.revision}`;
+  const [loadedHistory, setLoadedHistory] = useState(historyKey);
+  if (loadedHistory !== historyKey) {
+    setLoadedHistory(historyKey);
     setHistory(null);
     setError("");
+  }
+  useEffect(() => {
+    const abort = new AbortController();
     void api<MemoryRevision[]>(`/api/memory/facts/${fact.id}/history`, abort.signal)
       .then((rows) => {
         if (!abort.signal.aborted) {
@@ -612,6 +617,23 @@ export function MemoryView() {
   const [deleting, setDeleting] = useState(false);
   const search = useDelayedText(query);
   const subjectSearch = useDelayedText(entitySearch);
+  const requestKey = JSON.stringify([
+    search,
+    state,
+    kind,
+    scopeFilter,
+    offset,
+    entity,
+    subjectSearch,
+    entityOffset,
+    version,
+  ]);
+  const [loadedKey, setLoadedKey] = useState(requestKey);
+  if (loadedKey !== requestKey) {
+    setLoadedKey(requestKey);
+    setLoading(true);
+    setError("");
+  }
   const refresh = () => setVersion((v) => v + 1);
   const selectEntity = (name: string) => {
     setEntity(name);
@@ -626,8 +648,6 @@ export function MemoryView() {
   }, []);
   useEffect(() => {
     const abort = new AbortController();
-    setLoading(true);
-    setError("");
     const load = async () => {
       try {
         const cfg = await api<MemoryConfig>("/api/memory/config", abort.signal);

@@ -225,13 +225,14 @@ export function SimulatorView(): ReactNode {
     }
   };
 
-  const loadReachability = useCallback(async () => {
-    try {
-      const res = await api<{ rules: SimReachabilityRule[] }>("/api/sim/reachability");
-      setRules(res.rules ?? []);
-    } catch {
-      // The page is useful without it; the packet tracer does not depend on it.
-    }
+  const loadReachability = useCallback(() => {
+    return api<{ rules: SimReachabilityRule[] }>("/api/sim/reachability")
+      .then((res) => {
+        setRules(res.rules ?? []);
+      })
+      .catch(() => {
+        // The page is useful without it; the packet tracer does not depend on it.
+      });
   }, []);
 
   useEffect(() => {

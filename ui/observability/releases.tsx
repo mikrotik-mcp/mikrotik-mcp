@@ -107,19 +107,20 @@ export function ReleasesView(): ReactNode {
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await api<ReleasesPayload>("/api/releases");
-      setData(r);
-      setError(null);
-      const latest = r.releases.find((x) => x.version === r.latestVersion);
-      if (latest) setExpanded(new Set([latest.version]));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load releases");
-    } finally {
-      setLoading(false);
-    }
+  const load = useCallback(() => {
+    return api<ReleasesPayload>("/api/releases")
+      .then((r) => {
+        setData(r);
+        setError(null);
+        const latest = r.releases.find((x) => x.version === r.latestVersion);
+        if (latest) setExpanded(new Set([latest.version]));
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : "Could not load releases");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -189,7 +190,13 @@ export function ReleasesView(): ReactNode {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={() => void load()} title="Re-check for updates">
+            <Button
+              onClick={() => {
+                setLoading(true);
+                void load();
+              }}
+              title="Re-check for updates"
+            >
               <RefreshCw className="size-3.5" /> Re-check
             </Button>
             {data.updateAvailable && latest && (

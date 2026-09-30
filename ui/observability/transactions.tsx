@@ -182,16 +182,15 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode
   const [events, setEvents] = useState<TxnEvent[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api<{ transaction: TxnRecord; events: TxnEvent[] }>(
-        `/api/txn/${encodeURIComponent(id)}`,
-      );
-      setTxn(res.transaction);
-      setEvents(res.events);
-    } catch (e) {
-      toast.error(`Failed to load transaction: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  const load = useCallback(() => {
+    return api<{ transaction: TxnRecord; events: TxnEvent[] }>(`/api/txn/${encodeURIComponent(id)}`)
+      .then((res) => {
+        setTxn(res.transaction);
+        setEvents(res.events);
+      })
+      .catch((e) => {
+        toast.error(`Failed to load transaction: ${e instanceof Error ? e.message : String(e)}`);
+      });
   }, [id]);
 
   useEffect(() => {
@@ -332,14 +331,15 @@ export function TransactionsView(): ReactNode {
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api<{ transactions: TxnRecord[]; error?: string }>("/api/txn");
-      setRows(res.transactions);
-      setError(res.error ?? null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const load = useCallback(() => {
+    return api<{ transactions: TxnRecord[]; error?: string }>("/api/txn")
+      .then((res) => {
+        setRows(res.transactions);
+        setError(res.error ?? null);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, []);
 
   useEffect(() => {

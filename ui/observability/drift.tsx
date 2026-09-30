@@ -367,18 +367,19 @@ export function DriftView(): ReactNode {
   const [showSetBaseline, setShowSetBaseline] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    try {
-      const [status, bl] = await Promise.all([
-        api<{ devices: DriftDeviceStatus[] }>("/api/drift/status"),
-        api<{ baselines: DriftBaseline[] }>("/api/drift/baselines"),
-      ]);
-      setDevices(status.devices);
-      setBaselines(bl.baselines);
-      setError("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const load = useCallback(() => {
+    return Promise.all([
+      api<{ devices: DriftDeviceStatus[] }>("/api/drift/status"),
+      api<{ baselines: DriftBaseline[] }>("/api/drift/baselines"),
+    ])
+      .then(([status, bl]) => {
+        setDevices(status.devices);
+        setBaselines(bl.baselines);
+        setError("");
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, []);
 
   useEffect(() => {

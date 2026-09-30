@@ -17,6 +17,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, postJson } from "./api";
+import { useNow } from "./use-now";
 import { Panel, StatCard } from "./atoms";
 import { Badge, Button, Dot } from "./geist";
 import type { GeistType } from "./geist";
@@ -107,7 +108,8 @@ function PostureTimeline({ points }: { points: SchedulePoint[] }): ReactNode {
 
   // Cumulative stacking, worst severity first so it sits on the baseline.
   let below = points.map(() => 0);
-  const layers = SEVERITIES.map((severity) => {
+  const layers = [];
+  for (const severity of SEVERITIES) {
     const top = points.map((p, i) => below[i] + (p.bySeverity[severity] ?? 0));
     // Top edge left→right, then this layer's floor right→left, closed.
     const area = [
@@ -116,8 +118,9 @@ function PostureTimeline({ points }: { points: SchedulePoint[] }): ReactNode {
       "Z",
     ].join(" ");
     below = top;
-    return { severity, area };
-  }).reverse();
+    layers.push({ severity, area });
+  }
+  layers.reverse();
 
   return (
     <div className="space-y-2">
@@ -156,7 +159,7 @@ function HeatCalendar({
   points: SchedulePoint[];
   days?: number;
 }): ReactNode {
-  const now = Date.now();
+  const now = useNow(60_000);
   const byDay = new Map<string, { total: number; failed: boolean }>();
   for (const p of points) {
     const key = dayKey(p.at);
@@ -260,26 +263,27 @@ export function SchedulesView(): ReactNode {
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (job?: string | null): Promise<void> => {
-    try {
-      const q = job ? `?job=${encodeURIComponent(job)}` : "";
-      const [list, timeline, regs] = await Promise.all([
-        api<{
-          jobs: ScheduleJobRow[];
-          schedulable: { tool: string; summary: string }[];
-          error?: string;
-        }>("/api/schedules"),
-        api<{ points: SchedulePoint[] }>(`/api/schedules/timeline${q}`),
-        api<{ regressions: ScheduleRegression[] }>(`/api/schedules/regressions${q}`),
-      ]);
-      setJobs(list.jobs ?? []);
-      setSchedulable(list.schedulable ?? []);
-      setPoints(timeline.points ?? []);
-      setRegressions(regs.regressions ?? []);
-      setError(list.error ?? null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const load = useCallback((job?: string | null): Promise<void> => {
+    const q = job ? `?job=${encodeURIComponent(job)}` : "";
+    return Promise.all([
+      api<{
+        jobs: ScheduleJobRow[];
+        schedulable: { tool: string; summary: string }[];
+        error?: string;
+      }>("/api/schedules"),
+      api<{ points: SchedulePoint[] }>(`/api/schedules/timeline${q}`),
+      api<{ regressions: ScheduleRegression[] }>(`/api/schedules/regressions${q}`),
+    ])
+      .then(([list, timeline, regs]) => {
+        setJobs(list.jobs ?? []);
+        setSchedulable(list.schedulable ?? []);
+        setPoints(timeline.points ?? []);
+        setRegressions(regs.regressions ?? []);
+        setError(list.error ?? null);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, []);
 
   useEffect(() => {
@@ -315,7 +319,7 @@ export function SchedulesView(): ReactNode {
     }
   };
 
-  const now = Date.now();
+  const now = useNow();
   const totals = useMemo(() => {
     const findings = jobs.reduce((n, j) => n + j.posture.total, 0);
     const critical = jobs.reduce((n, j) => n + (j.posture.bySeverity.critical ?? 0), 0);

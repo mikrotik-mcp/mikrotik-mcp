@@ -3,7 +3,7 @@
 import type { Transition } from "motion/react";
 import { motion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePopoverPortalPosition } from "@/components/beui/registry/components/motion/popover-position";
 import { cn } from "@/components/beui/registry/lib/utils";
@@ -39,34 +39,32 @@ export function ComboboxContent({
   className,
 }: ComboboxContentProps) {
   const context = useComboboxContext("ComboboxContent");
+  const { triggerRef, contentRef } = context;
   const measureRef = useRef<HTMLDivElement>(null);
-  const [portalReady, setPortalReady] = useState(false);
+  const portalReady = typeof document !== "undefined";
   const [actualSide, setActualSide] = useState<Side>(side);
   const [morphReady, setMorphReady] = useState(false);
-  const layout = usePopoverPortalPosition(context.triggerRef, measureRef, portalReady);
+  const layout = usePopoverPortalPosition(triggerRef, measureRef, portalReady);
 
-  useEffect(() => setPortalReady(true), []);
   useLayoutEffect(() => {
     if (!portalReady) return;
     const readyFrame = requestAnimationFrame(() => setMorphReady(true));
     return () => cancelAnimationFrame(readyFrame);
   }, [portalReady]);
 
-  useLayoutEffect(() => {
+  if (context.open && layout) {
     // Preserve the resolved side during exit, so top panels close upward.
-    if (!context.open || !layout) return;
-    if (!avoidCollisions) {
-      setActualSide(side);
-      return;
-    }
     const below = window.innerHeight - (layout.trigger.top + layout.trigger.height);
     const above = layout.trigger.top;
-    if (side === "bottom" && below < layout.content.height + sideOffset && above > below)
-      setActualSide("top");
-    else if (side === "top" && above < layout.content.height + sideOffset && below > above)
-      setActualSide("bottom");
-    else setActualSide(side);
-  }, [avoidCollisions, context.open, layout, side, sideOffset]);
+    const resolved = !avoidCollisions
+      ? side
+      : side === "bottom" && below < layout.content.height + sideOffset && above > below
+        ? "top"
+        : side === "top" && above < layout.content.height + sideOffset && below > above
+          ? "bottom"
+          : side;
+    if (actualSide !== resolved) setActualSide(resolved);
+  }
 
   if (!portalReady) return null;
 
@@ -93,7 +91,7 @@ export function ComboboxContent({
 
   return createPortal(
     <motion.div
-      ref={context.contentRef}
+      ref={contentRef}
       data-combobox-content=""
       data-side={actualSide}
       aria-hidden={!context.open}

@@ -49,8 +49,12 @@ const asObj = (v: unknown): Cfg =>
 const arr = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : []);
 const uniq = (a: string[]): string[] => [...new Set(a)];
 /** Safe stringify of an untyped config value (never "[object Object]"). */
-const str = (v: unknown): string =>
-  v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+const str = (v: unknown): string => {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean" || typeof v === "bigint") return String(v);
+  return JSON.stringify(v) ?? "";
+};
 
 /** Read a possibly-dotted key (`channels.slack.url`) off an object. */
 const getIn = (o: Cfg, key: string): unknown =>

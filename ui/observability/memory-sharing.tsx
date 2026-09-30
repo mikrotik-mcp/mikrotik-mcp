@@ -70,10 +70,28 @@ function ScopeForm({
   const [offset, setOffset] = useState(0);
   const [choices, setChoices] = useState<{ items: Entity[]; total: number } | null>(null);
   const [memberError, setMemberError] = useState("");
-  useEffect(() => {
-    const abort = new AbortController();
+  const recordKey = JSON.stringify([entity, reload]);
+  const [loadedRecord, setLoadedRecord] = useState(recordKey);
+  if (loadedRecord !== recordKey) {
+    setLoadedRecord(recordKey);
     setRecord(null);
     setError("");
+  }
+  const countKey = JSON.stringify([entity, reload, refreshVersion]);
+  const [loadedCount, setLoadedCount] = useState(countKey);
+  if (loadedCount !== countKey) {
+    setLoadedCount(countKey);
+    setCount(null);
+  }
+  const choicesKey = JSON.stringify([scope, query, offset, refreshVersion]);
+  const [loadedChoices, setLoadedChoices] = useState(choicesKey);
+  if (loadedChoices !== choicesKey) {
+    setLoadedChoices(choicesKey);
+    setChoices(null);
+    setMemberError("");
+  }
+  useEffect(() => {
+    const abort = new AbortController();
     void api<MemoryScope>(
       `/api/memory/scope?entityName=${encodeURIComponent(entity)}`,
       abort.signal,
@@ -92,7 +110,6 @@ function ScopeForm({
   }, [entity, reload]);
   useEffect(() => {
     const abort = new AbortController();
-    setCount(null);
     void api<MemoryPage>(
       `/api/memory/facts?entityName=${encodeURIComponent(entity)}&state=all&limit=1`,
       abort.signal,
@@ -108,8 +125,6 @@ function ScopeForm({
   useEffect(() => {
     if (scope !== "group") return;
     const abort = new AbortController();
-    setChoices(null);
-    setMemberError("");
     const timer = setTimeout(() => {
       void api<{ items: Entity[]; total: number }>(
         `/api/memory/entities?q=${encodeURIComponent(query)}&limit=50&offset=${offset}`,

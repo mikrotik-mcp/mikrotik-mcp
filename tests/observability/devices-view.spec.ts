@@ -142,6 +142,7 @@ test("address status separates active fallback, historical success, failures and
 });
 
 test("address status refresh shows preference separately from live sessions, clears expired preference and exposes transport failures", async () => {
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
   const endpoints = {
     primary: "10.0.0.1",
@@ -168,16 +169,25 @@ test("address status refresh shows preference separately from live sessions, cle
     expect(host.querySelector('[data-state="connected"]')).not.toBeNull();
     endpoints.connected = [];
     clock.mockReturnValue(61_000);
-    await act(async () => root.render(h(DeviceAddressStatus, { endpoints })));
+    await act(async () => {
+      root.render(h(DeviceAddressStatus, { endpoints }));
+      vi.advanceTimersByTime(1000);
+    });
     expect(host.querySelector('[data-state="connected"]')).toBeNull();
     expect(host.textContent).toContain("No open session");
     expect(host.textContent).toContain("4m 00s left");
     clock.mockReturnValue(301000);
-    await act(async () => root.render(h(DeviceAddressStatus, { endpoints })));
+    // Expiry must update even without a new endpoints payload or parent render.
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
     expect(host.textContent).not.toContain("Remembered");
     expect(host.textContent).not.toContain("Fast reconnect");
     expect(host.textContent).toContain("Primary");
   } finally {
+    await act(async () => root.render(null));
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
     clock.mockRestore();
   }
 });
@@ -197,7 +207,7 @@ const draftConfig = {
   },
   mcp: { transport: "stdio" },
 };
-const mockConfigApi = () => {
+const mockConfigApi = (rollbackMs = 60000) => {
   const calls: { path: string; body: any }[] = [];
   vi.mocked(fetch).mockImplementation(async (input, init) => {
     const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -214,7 +224,7 @@ const mockConfigApi = () => {
             : path.includes("rollback")
               ? { rolledBack: true, config: draftConfig }
               : init?.method === "POST"
-                ? { ok: true, config: body.config, pendingId: "pending-lab", rollbackMs: 60000 }
+                ? { ok: true, config: body.config, pendingId: "pending-lab", rollbackMs }
                 : path.includes("schema")
                   ? {}
                   : draftConfig;
@@ -224,6 +234,33 @@ const mockConfigApi = () => {
   });
   return calls;
 };
+
+test("an expired config confirmation reloads the restored draft using the latest callback", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const calls = mockConfigApi(1000);
+  const onReload = vi.fn();
+  const latestReload = vi.fn();
+  const props = { initial: draftConfig, scope: "devices" as const, onClose: vi.fn() };
+  try {
+    await act(async () => root.render(h(ConfigEditor, { ...props, onReload })));
+    await click(button("Move branch up"));
+    await click(button("Save devices"));
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(button("Keep changes")).toBeTruthy();
+    await act(async () => root.render(h(ConfigEditor, { ...props, onReload: latestReload })));
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(host.textContent).toContain("Auto-reverted — changes were not confirmed in time.");
+    expect(button("Keep changes")).toBeUndefined();
+    expect(latestReload).toHaveBeenCalledTimes(1);
+    expect(onReload).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c.path === "/api/config?scope=devices")).toHaveLength(1);
+    expect(calls.some((c) => c.path === "/api/config" && !c.body)).toBe(true);
+    expect(button("Close").disabled).toBe(false);
+  } finally {
+    await act(async () => root.render(null));
+    vi.useRealTimers();
+  }
+});
 
 test("Devices owns the draft, per-router tests, ordering and safe apply; Config has no router controls or JSON", async () => {
   const calls = mockConfigApi();

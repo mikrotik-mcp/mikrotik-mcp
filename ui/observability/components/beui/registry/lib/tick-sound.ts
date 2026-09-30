@@ -139,7 +139,7 @@ export function createTickPlayer(): TickPlayer {
       activeSource = null;
       consumers = Math.max(0, consumers - 1);
       if (consumers === 0 && ctx) {
-        ctx.close();
+        void ctx.close().catch(() => {}); // Closing an already-closed audio context is harmless.
         ctx = null;
         masterGain = null;
         clickBuffer = null;

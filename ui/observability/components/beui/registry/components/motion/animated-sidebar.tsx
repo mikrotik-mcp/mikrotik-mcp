@@ -292,7 +292,7 @@ function MobileSidebar({
 }) {
   const context = useAnimatedSidebar();
   const panelRef = useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = typeof document !== "undefined";
   // The sheet is mounted for as long as the viewport is mobile, so it hides
   // itself while closed rather than sitting there transparent and interactive.
   // Opening shows it in the same commit that starts the slide — a delayed show
@@ -312,17 +312,17 @@ function MobileSidebar({
     (first ?? panel).focus({ preventScroll: true });
   }, []);
 
-  useEffect(() => setMounted(true), []);
+  if (context.openMobile && hidden) setHidden(false);
 
   useEffect(() => {
     openMobileRef.current = context.openMobile;
-    if (context.openMobile) setHidden(false);
   }, [context.openMobile]);
 
   useEffect(() => {
     if (!context.openMobile) return;
 
     const body = document.body;
+    const trigger = context.triggerRef.current;
     const scrollY = window.scrollY;
     const previousBodyStyles = {
       left: body.style.left,
@@ -348,7 +348,7 @@ function MobileSidebar({
       body.style.right = previousBodyStyles.right;
       body.style.overflow = previousBodyStyles.overflow;
       window.scrollTo(0, scrollY);
-      context.triggerRef.current?.focus({ preventScroll: true });
+      trigger?.focus({ preventScroll: true });
     };
   }, [context.openMobile, context.triggerRef, focusPanel]);
 
@@ -544,13 +544,14 @@ export interface AnimatedSidebarTriggerProps extends ButtonHTMLAttributes<HTMLBu
 export const AnimatedSidebarTrigger = forwardRef<HTMLButtonElement, AnimatedSidebarTriggerProps>(
   ({ className, onClick, type = "button", ...props }, forwardedRef) => {
     const context = useAnimatedSidebar();
+    const { triggerRef } = context;
     const expanded = context.isMobile ? context.openMobile : context.open;
 
     return (
       <button
         {...props}
         ref={(node) => {
-          context.triggerRef.current = node;
+          triggerRef.current = node;
           if (typeof forwardedRef === "function") forwardedRef(node);
           else if (forwardedRef) forwardedRef.current = node;
         }}

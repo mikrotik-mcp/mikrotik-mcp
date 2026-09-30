@@ -143,16 +143,17 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode
   const [events, setEvents] = useState<RolloutEvent[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api<{ rollout: RolloutRecord; events: RolloutEvent[] }>(
-        `/api/rollout/${encodeURIComponent(id)}`,
-      );
-      setRollout(res.rollout);
-      setEvents(res.events);
-    } catch (e) {
-      toast.error(`Failed to load rollout: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  const load = useCallback(() => {
+    return api<{ rollout: RolloutRecord; events: RolloutEvent[] }>(
+      `/api/rollout/${encodeURIComponent(id)}`,
+    )
+      .then((res) => {
+        setRollout(res.rollout);
+        setEvents(res.events);
+      })
+      .catch((e) => {
+        toast.error(`Failed to load rollout: ${e instanceof Error ? e.message : String(e)}`);
+      });
   }, [id]);
 
   useEffect(() => {
@@ -286,14 +287,15 @@ export function RolloutView(): ReactNode {
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api<{ rollouts: RolloutRecord[]; error?: string }>("/api/rollout");
-      setRows(res.rollouts);
-      setError(res.error ?? null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const load = useCallback(() => {
+    return api<{ rollouts: RolloutRecord[]; error?: string }>("/api/rollout")
+      .then((res) => {
+        setRows(res.rollouts);
+        setError(res.error ?? null);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, []);
 
   useEffect(() => {

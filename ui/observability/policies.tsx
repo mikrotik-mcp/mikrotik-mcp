@@ -216,17 +216,18 @@ export function PoliciesView(): ReactNode {
   const [running, setRunning] = useState(false);
   const [showRules, setShowRules] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const [cat, res] = await Promise.all([
-        api<PolicyCatalog>("/api/policies"),
-        api<{ results: PolicyResultRow[] }>("/api/policies/results?limit=200"),
-      ]);
-      setCatalog(cat);
-      setResults(res.results);
-    } catch (e) {
-      toast.error(`Failed to load policies: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  const load = useCallback(() => {
+    return Promise.all([
+      api<PolicyCatalog>("/api/policies"),
+      api<{ results: PolicyResultRow[] }>("/api/policies/results?limit=200"),
+    ])
+      .then(([cat, res]) => {
+        setCatalog(cat);
+        setResults(res.results);
+      })
+      .catch((e) => {
+        toast.error(`Failed to load policies: ${e instanceof Error ? e.message : String(e)}`);
+      });
   }, []);
 
   useEffect(() => {

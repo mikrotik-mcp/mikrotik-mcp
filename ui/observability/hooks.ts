@@ -39,8 +39,10 @@ export function useLiveStream(
 ): void {
   const onEventRef = useRef(onEvent);
   const onModeRef = useRef(onMode);
-  onEventRef.current = onEvent;
-  onModeRef.current = onMode;
+  useLayoutEffect(() => {
+    onEventRef.current = onEvent;
+    onModeRef.current = onMode;
+  }, [onEvent, onMode]);
 
   useEffect(() => {
     let closed = false;

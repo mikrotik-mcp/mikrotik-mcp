@@ -25,6 +25,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, postJson } from "./api";
+import { useNow } from "./use-now";
 import { Panel, StatCard } from "./atoms";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -138,6 +139,7 @@ function AttackTimeline({
   incidents: AttackIncident[];
   days: number;
 }): ReactNode {
+  const now = useNow(60_000);
   const data = useMemo(() => {
     const DAY = 86_400_000;
     // LOCAL midnight, not `floor(ms / DAY)`: that floors to UTC, and every bar
@@ -147,7 +149,7 @@ function AttackTimeline({
       d.setHours(0, 0, 0, 0);
       return d.getTime();
     };
-    const today = startOfDay(Date.now());
+    const today = startOfDay(now);
     const buckets = new Map<
       number,
       { t: number; confirmed: number; high: number; other: number }
@@ -167,7 +169,7 @@ function AttackTimeline({
       else bucket.other++;
     }
     return [...buckets.values()];
-  }, [incidents, days]);
+  }, [incidents, days, now]);
 
   if (incidents.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">No incidents to chart.</p>;
@@ -354,27 +356,28 @@ export function AttacksView(): ReactNode {
   const [scheduling, setScheduling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (): Promise<void> => {
-    try {
-      const [main, src, devs, sched] = await Promise.all([
-        api<AttacksPayload>("/api/attacks?hours=168"),
-        api<{ sources: AttackSource[] }>("/api/attacks/sources"),
-        api<{ devices: { name: string; reachable: boolean | null }[] }>("/api/attacks/devices"),
-        api<{
-          jobs: { id: string }[];
-          schedulable: { tool: string; summary: string }[];
-        }>("/api/schedules"),
-      ]);
-      setPayload(main);
-      setSources(src.sources ?? []);
-      setDeviceList(devs.devices ?? []);
-      setSchedulable(sched.schedulable ?? []);
-      setJobCount(sched.jobs?.length ?? 0);
-      setAuditTool((current) => current || (sched.schedulable?.[0]?.tool ?? ""));
-      setError(main.error ?? null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const load = useCallback((): Promise<void> => {
+    return Promise.all([
+      api<AttacksPayload>("/api/attacks?hours=168"),
+      api<{ sources: AttackSource[] }>("/api/attacks/sources"),
+      api<{ devices: { name: string; reachable: boolean | null }[] }>("/api/attacks/devices"),
+      api<{
+        jobs: { id: string }[];
+        schedulable: { tool: string; summary: string }[];
+      }>("/api/schedules"),
+    ])
+      .then(([main, src, devs, sched]) => {
+        setPayload(main);
+        setSources(src.sources ?? []);
+        setDeviceList(devs.devices ?? []);
+        setSchedulable(sched.schedulable ?? []);
+        setJobCount(sched.jobs?.length ?? 0);
+        setAuditTool((current) => current || (sched.schedulable?.[0]?.tool ?? ""));
+        setError(main.error ?? null);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, []);
 
   useEffect(() => {
@@ -489,8 +492,8 @@ export function AttacksView(): ReactNode {
     }
   };
 
-  const now = Date.now();
-  const incidents = payload?.incidents ?? [];
+  const now = useNow();
+  const incidents = useMemo(() => payload?.incidents ?? [], [payload]);
   // A device that has never been probed counts as reachable here, matching the
   // server: never probed is not the same as known-offline.
   const onlineCount = deviceList.filter((d) => d.reachable !== false).length;

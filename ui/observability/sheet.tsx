@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Sheet as UiSheet,
@@ -47,7 +47,9 @@ export function Sheet({
   // Read the latest onClose from a ref so a deferred close never fires a stale
   // parent callback.
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useLayoutEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   // Open on the frame after mount so the closed→open transition actually runs.
   useEffect(() => {

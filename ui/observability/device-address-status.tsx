@@ -1,11 +1,12 @@
 import { Clock3, Radio, Star } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useNow } from "./use-now";
 import type { DeviceEndpoints } from "../../src/core/device-endpoints";
 import "./device-addresses.css";
 
 /** Connection evidence and short-lived preference are deliberately separate. */
 export function DeviceAddressStatus({ endpoints }: { endpoints: DeviceEndpoints }) {
-  const now = Date.now();
+  const now = useNow();
   const remembered = (endpoints.remembered ?? []).filter((c) => c.expiresAt > now);
   const live = endpoints.connected;
   return (

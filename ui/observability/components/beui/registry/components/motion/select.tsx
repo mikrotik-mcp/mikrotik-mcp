@@ -233,9 +233,10 @@ export function SelectTrigger({
   ...props
 }: SelectTriggerProps) {
   const ctx = useSelectContext("SelectTrigger");
+  const { triggerRef, setTriggerId } = ctx;
   useLayoutEffect(() => {
-    if (id) ctx.setTriggerId(id);
-  }, [id, ctx.setTriggerId]);
+    if (id) setTriggerId(id);
+  }, [id, setTriggerId]);
   const isTop = ctx.placement === "top";
   // edge facing the panel flattens then rounds; the far edge stays rounded.
   // All four corners are specified so none gets stranded when placement flips.
@@ -249,7 +250,7 @@ export function SelectTrigger({
     <motion.button
       {...props}
       ref={(node) => {
-        ctx.triggerRef.current = node;
+        triggerRef.current = node;
         if (typeof ref === "function") ref(node);
         else if (ref) ref.current = node;
       }}
@@ -332,6 +333,7 @@ export interface SelectContentProps {
 
 export function SelectContent({ className, children }: SelectContentProps) {
   const ctx = useSelectContext("SelectContent");
+  const { triggerRef, contentRef } = ctx;
   const innerRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
   const open = ctx.open;
@@ -343,10 +345,10 @@ export function SelectContent({ className, children }: SelectContentProps) {
   // Keep options inside a modal's focus scope when the trigger belongs to one.
   useLayoutEffect(() => {
     setPortalTarget(
-      ctx.triggerRef.current?.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]') ??
+      triggerRef.current?.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]') ??
         document.body,
     );
-  }, [ctx.triggerRef]);
+  }, [triggerRef]);
 
   useLayoutEffect(() => {
     const node = innerRef.current;
@@ -361,7 +363,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
   // On open, flip upward when there isn't room below and there's more above.
   useLayoutEffect(() => {
     if (!open) return;
-    const trigger = ctx.triggerRef.current;
+    const trigger = triggerRef.current;
     const node = innerRef.current;
     if (!trigger || !node) return;
     const measure = () => {
@@ -410,7 +412,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
-  }, [open, ctx.triggerRef, setPlacement, portalTarget]);
+  }, [open, triggerRef, setPlacement, portalTarget]);
 
   // Specify EVERY corner + both margins each render. The near edge (facing the
   // trigger) animates flat->round and the gap opens on that side; the far edge
@@ -434,7 +436,7 @@ export function SelectContent({ className, children }: SelectContentProps) {
   const inModal = portalTarget !== document.body;
   return createPortal(
     <motion.div
-      ref={ctx.contentRef}
+      ref={contentRef}
       id={ctx.listId}
       role="listbox"
       aria-labelledby={ctx.triggerId}
@@ -556,13 +558,14 @@ export function SelectItem({
   textValue,
 }: SelectItemProps) {
   const ctx = useSelectContext("SelectItem");
+  const { register, unregister } = ctx;
   const selected = ctx.value === value;
   const label = textValue ?? children;
 
   useLayoutEffect(() => {
-    ctx.register(value, label);
-    return () => ctx.unregister(value);
-  }, [ctx.register, ctx.unregister, value, label]);
+    register(value, label);
+    return () => unregister(value);
+  }, [register, unregister, value, label]);
 
   return (
     <motion.div role="presentation" variants={ctx.reduce ? undefined : ITEM_VARIANTS}>

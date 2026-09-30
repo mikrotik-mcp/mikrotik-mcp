@@ -66,13 +66,18 @@ export function UsageHistoryChart({
   const [data, setData] = useState<UsagePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [loadedEndpoint, setLoadedEndpoint] = useState(endpoint);
+  if (loadedEndpoint !== endpoint) {
+    setLoadedEndpoint(endpoint);
+    setData(null);
+    setLoading(true);
+    setError(false);
+  }
 
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
     const abort = new AbortController();
-    setData(null);
-    setLoading(true);
     const refresh = (): void => {
       void api<UsagePayload>(endpoint, abort.signal)
         .then((d) => {

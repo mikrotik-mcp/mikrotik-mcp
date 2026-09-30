@@ -270,20 +270,27 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   const cloneRequest = useRef<AbortController | null>(null);
   useEffect(() => () => cloneRequest.current?.abort(), [device]);
 
-  const load = useCallback(async (): Promise<void> => {
-    try {
-      const q = device ? `?device=${encodeURIComponent(device)}` : "";
-      setData(await api<AaaList>(`/api/aaa/list/${config.slug}${q}`));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  const load = useCallback((): Promise<void> => {
+    const q = device ? `?device=${encodeURIComponent(device)}` : "";
+    return api<AaaList>(`/api/aaa/list/${config.slug}${q}`)
+      .then((next) => {
+        setData(next);
+        setError(null);
+      })
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, [config.slug, device]);
 
-  useEffect(() => {
+  const requestKey = `${config.slug}\0${device}`;
+  const [loadedKey, setLoadedKey] = useState(requestKey);
+  if (loadedKey !== requestKey) {
+    setLoadedKey(requestKey);
     setData(null);
     setError(null);
     setEditing(null);
+  }
+  useEffect(() => {
     void load();
   }, [load]);
 
@@ -848,19 +855,21 @@ function SingletonForm({
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async (): Promise<void> => {
+  const load = useCallback((): Promise<void> => {
     const q = device ? `?device=${encodeURIComponent(device)}` : "";
-    try {
-      const payload = await api<unknown>(`${getPath}${q}`);
-      const { available: av, row: r } = unwrap(payload);
-      setAvailable(av);
-      setRow(r);
-      setForm({});
-      setLoadError("");
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Settings could not be read.");
-      setRow(null);
-    }
+
+    return api<unknown>(`${getPath}${q}`)
+      .then((payload) => {
+        const { available: av, row: r } = unwrap(payload);
+        setAvailable(av);
+        setRow(r);
+        setForm({});
+        setLoadError("");
+      })
+      .catch((error) => {
+        setLoadError(error instanceof Error ? error.message : "Settings could not be read.");
+        setRow(null);
+      });
   }, [device, getPath, unwrap]);
   useEffect(() => {
     void load();
@@ -1161,13 +1170,14 @@ function SamplerSettings(): ReactNode {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const load = useCallback(async (): Promise<void> => {
-    try {
-      const r = await api<{ intervalMs: number }>("/api/usage/sampler");
-      setCurrent(r.intervalMs);
-    } catch {
-      setCurrent(null);
-    }
+  const load = useCallback((): Promise<void> => {
+    return api<{ intervalMs: number }>("/api/usage/sampler")
+      .then((r) => {
+        setCurrent(r.intervalMs);
+      })
+      .catch(() => {
+        setCurrent(null);
+      });
   }, []);
   useEffect(() => {
     void load();

@@ -4,7 +4,7 @@
 import { Moon, Sun } from "lucide-react";
 import { useTheme as useDashboardTheme } from "@/theme";
 import { useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import { ActionSwapIcon } from "@/components/beui/registry/components/motion/action-swap";
 import { EASE_OUT_CSS } from "@/components/beui/registry/lib/ease";
@@ -131,8 +131,7 @@ export function useThemeToggle({
 }: { variant?: ThemeVariant; start?: RectStart } = {}) {
   const [resolvedTheme, setTheme] = useDashboardTheme();
   const reduce = useReducedMotion() ?? false;
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = typeof document !== "undefined";
   useEffect(() => {
     if (document.getElementById(VT_STYLE_ID)) return;
     const el = document.createElement("style");
@@ -169,9 +168,11 @@ export function useThemeToggle({
       }
     ).startViewTransition(() => setTheme(next));
 
-    vt.finished.finally(() => {
+    const cleanup = () => {
       delete root.dataset.beuiVt;
-    });
+    };
+    // A superseded/unsupported transition can reject; the theme is already applied.
+    void vt.finished.then(cleanup, cleanup);
   };
 
   return { isDark, mounted, toggle };

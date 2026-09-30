@@ -111,17 +111,30 @@ export function FabricView(): ReactNode {
   const [device, setDevice] = useState<string | undefined>(undefined);
   const [data, setData] = useState<FabricMap | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [query, setQuery] = useState("");
 
   const load = useCallback(() => {
-    setBusy(true);
-    setError(null);
     void api<FabricMap>(`/api/fabric${device ? `?device=${encodeURIComponent(device)}` : ""}`)
-      .then((d) => (d.error ? setError(d.error) : setData(d)))
+      .then((d) => {
+        setError(d.error ?? null);
+        if (!d.error) setData(d);
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   }, [device]);
+  const [loadedDevice, setLoadedDevice] = useState(device);
+  if (loadedDevice !== device) {
+    setLoadedDevice(device);
+    setBusy(true);
+    setError(null);
+    setData(null);
+  }
+  const reload = () => {
+    setBusy(true);
+    setError(null);
+    load();
+  };
   useEffect(() => load(), [load]);
 
   const q = query.trim().toLowerCase();
@@ -154,7 +167,7 @@ export function FabricView(): ReactNode {
             onChange={(e) => setQuery(e.target.value)}
           />
           <DevicePicker value={device} onChange={setDevice} />
-          <Button size="sm" ghost loading={busy} icon={<RefreshCw />} onClick={load}>
+          <Button size="sm" ghost loading={busy} icon={<RefreshCw />} onClick={reload}>
             Refresh
           </Button>
         </div>
@@ -299,18 +312,31 @@ const EXPOSURE_TEXT: Record<string, string> = {
 export function AdvisoryView(): ReactNode {
   const [data, setData] = useState<AdvisoryReport | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [fleet, setFleet] = useState(false);
   const [showMitigated, setShowMitigated] = useState(false);
 
   const load = useCallback(() => {
-    setBusy(true);
-    setError(null);
     void api<AdvisoryReport>(`/api/advisories${fleet ? "?all=1" : ""}`)
-      .then((d) => (d.error ? setError(d.error) : setData(d)))
+      .then((d) => {
+        setError(d.error ?? null);
+        if (!d.error) setData(d);
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   }, [fleet]);
+  const [loadedFleet, setLoadedFleet] = useState(fleet);
+  if (loadedFleet !== fleet) {
+    setLoadedFleet(fleet);
+    setBusy(true);
+    setError(null);
+    setData(null);
+  }
+  const reload = () => {
+    setBusy(true);
+    setError(null);
+    load();
+  };
   useEffect(() => load(), [load]);
 
   const findings = (data?.findings ?? []).filter(
@@ -338,7 +364,7 @@ export function AdvisoryView(): ReactNode {
             />
             show mitigated
           </label>
-          <Button size="sm" ghost loading={busy} icon={<RefreshCw />} onClick={load}>
+          <Button size="sm" ghost loading={busy} icon={<RefreshCw />} onClick={reload}>
             Refresh
           </Button>
         </div>

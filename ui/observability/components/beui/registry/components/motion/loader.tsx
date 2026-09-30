@@ -278,10 +278,7 @@ const SCRAMBLE_GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<>/*#@";
 function Scramble({ size, speed, reduce }: PartProps) {
   const [text, setText] = useState(SCRAMBLE_TARGET);
   useEffect(() => {
-    if (reduce) {
-      setText(SCRAMBLE_TARGET);
-      return;
-    }
+    if (reduce) return;
     let tick = 0;
     const total = SCRAMBLE_TARGET.length + 4;
     const id = setInterval(
@@ -307,7 +304,7 @@ function Scramble({ size, speed, reduce }: PartProps) {
       className="font-mono font-medium tracking-[0.2em] tabular-nums"
       style={{ fontSize: size * 0.42 }}
     >
-      {text}
+      {reduce ? SCRAMBLE_TARGET : text}
     </span>
   );
 }

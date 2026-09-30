@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { api, postJson } from "./api";
+import type { Trigger } from "../../src/alerts/model";
 import { Badge, Note, Select, Spinner } from "./geist";
 // The shadcn Button, not geist's — only this one has the `xs` size and the
 // outline/ghost variants this page's dense action rows need.
@@ -24,7 +25,7 @@ interface AlertRuleRow {
   /** Which device this row is about; `*` for fleet-wide rules. */
   subject: string;
   description?: string;
-  when: Record<string, unknown>;
+  when: Trigger;
   severity: Severity;
   channels: string[];
   for?: string;
@@ -76,7 +77,7 @@ const STATUS_HINT: Record<RuleStatus, string> = {
 };
 
 /** Render a trigger as the one line a person can actually scan. */
-function describeTrigger(when: Record<string, unknown>): string {
+function describeTrigger(when: Trigger): string {
   if ("metric" in when) {
     const bound = when.above !== undefined ? `> ${String(when.above)}` : `< ${String(when.below)}`;
     return `${String(when.metric)} ${bound} over ${String(when.window)}${
@@ -110,22 +111,23 @@ export function AlertsView(): ReactNode {
   const [msg, setMsg] = useState<string | null>(null);
   const [hours, setHours] = useState("24");
 
-  const load = useCallback(async () => {
-    try {
-      setData(await api<AlertsPayload>("/api/alerts"));
-    } catch {
-      setMsg("could not load alerts");
-    }
-  }, []);
+  const load = useCallback(
+    () =>
+      api<AlertsPayload>("/api/alerts")
+        .then(setData)
+        .catch(() => setMsg("could not load alerts")),
+    [],
+  );
 
-  const loadHistory = useCallback(async () => {
-    try {
-      const res = await api<{ history: HistoryRow[] }>(`/api/alerts/history?hours=${hours}`);
-      setHistory(res.history);
-    } catch {
-      /* history is supplementary — never blank the page over it */
-    }
-  }, [hours]);
+  const loadHistory = useCallback(
+    () =>
+      api<{ history: HistoryRow[] }>(`/api/alerts/history?hours=${hours}`)
+        .then((res) => setHistory(res.history))
+        .catch(() => {
+          /* history is supplementary — never blank the page over it */
+        }),
+    [hours],
+  );
 
   useEffect(() => {
     void load();

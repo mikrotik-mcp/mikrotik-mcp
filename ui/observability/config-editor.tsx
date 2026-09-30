@@ -6,7 +6,7 @@ import { UnifiedDiff } from "./diff-view";
  * interactive card form (`ConfigForm`) or the raw `JsonEditor` — both mutate the
  * same `cfg`, so switching modes is lossless and the JSON always reflects the form.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Braces, LayoutGrid, X } from "lucide-react";
 import { api, postJson } from "./api";
@@ -94,25 +94,29 @@ export function ConfigEditor({
   }, [cfg, scope]);
 
   // Rollback countdown while a save awaits confirmation.
-  useEffect(() => {
-    if (!pending || countdown <= 0) return;
-    const t = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(t);
-  }, [pending, countdown]);
   const onReloadRef = useRef(onReload);
-  onReloadRef.current = onReload;
+  useLayoutEffect(() => {
+    onReloadRef.current = onReload;
+  }, [onReload]);
   useEffect(() => {
-    if (pending && countdown === 0 && (pending.rollbackMs ?? 0) > 0) {
-      setMsg("Auto-reverted — changes were not confirmed in time.");
-      setPending(null);
-      void api<Cfg>("/api/config")
-        .then((value) => {
-          setCfg(value);
-          setBaseline(value);
-        })
-        .catch(() => {});
-      onReloadRef.current();
-    }
+    if (!pending || (pending.rollbackMs ?? 0) <= 0) return;
+    const t = setTimeout(
+      () => {
+        setCountdown(Math.max(0, countdown - 1));
+        if (countdown > 1) return;
+        setMsg("Auto-reverted — changes were not confirmed in time.");
+        setPending(null);
+        void api<Cfg>("/api/config")
+          .then((value) => {
+            setCfg(value);
+            setBaseline(value);
+          })
+          .catch(() => {});
+        onReloadRef.current();
+      },
+      countdown > 0 ? 1000 : 0,
+    );
+    return () => clearTimeout(t);
   }, [pending, countdown]);
 
   const valid = !jsonErr && errors.length === 0;
