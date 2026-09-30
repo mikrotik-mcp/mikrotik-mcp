@@ -11,7 +11,10 @@ export function substitutePrompt(body: string, vars: Record<string, unknown>): s
   return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, key: string) => {
     const value = Object.hasOwn(vars, key) ? vars[key] : undefined;
     if (value === undefined || value === null || value === "") return whole;
-    return typeof value === "object" ? JSON.stringify(value) : String(value);
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint")
+      return String(value);
+    return JSON.stringify(value) ?? whole;
   });
 }
 

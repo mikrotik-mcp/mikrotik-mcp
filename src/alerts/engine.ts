@@ -91,7 +91,7 @@ export class AlertEngine {
     this.rules = rules;
     // Drop state for rules that no longer exist, so a re-added rule starts clean.
     const ids = new Set(rules.map((r) => r.id));
-    for (const key of [...this.states.keys()]) {
+    for (const key of this.states.keys()) {
       if (!ids.has(splitKey(key).ruleId)) this.states.delete(key);
     }
   }

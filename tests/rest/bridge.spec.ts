@@ -206,6 +206,14 @@ describe("toConsoleText", () => {
     );
   });
 
+  test("structured settings retain their JSON instead of implicit object strings", () => {
+    expect(toConsoleText({ enabled: false, retries: 0, settings: { mtu: 1420 } })).toBe(
+      '  enabled: false\n  retries: 0\n  settings: {"mtu":1420}',
+    );
+    expect(toConsoleText(false)).toBe("false");
+    expect(toConsoleText(0)).toBe("0");
+  });
+
   test("null and undefined render as empty, never as the string 'null'", () => {
     expect(toConsoleText(null)).toBe("");
     expect(toConsoleText(undefined)).toBe("");

@@ -328,8 +328,10 @@ export function toConsoleText(json: unknown, req?: Pick<RestRequest, "countOnly"
   if (typeof json === "object") {
     const entries = Object.entries(json as Record<string, unknown>);
     if (entries.length === 0) return "";
-    return entries.map(([k, v]) => `  ${k}: ${typeof v === "string" ? v : String(v)}`).join("\n");
+    return entries
+      .map(([k, v]) => `  ${k}: ${typeof v === "string" ? v : (JSON.stringify(v) ?? "")}`)
+      .join("\n");
   }
 
-  return String(json);
+  return typeof json === "string" ? json : (JSON.stringify(json) ?? "");
 }

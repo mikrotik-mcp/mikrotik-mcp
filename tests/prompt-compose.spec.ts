@@ -43,4 +43,7 @@ test("required inputs fail closed and substitution preserves literal user text",
     substitutePrompt("{{constructor}} {{x}} {{y}} {{z}}", { x: 0, y: false, z: { value: 1 } }),
   ).toBe('{{constructor}} 0 false {"value":1}');
   expect(substitutePrompt("{{x}}", { x: "" })).toBe("{{x}}");
+  expect(substitutePrompt("{{x}}", { x: 42n })).toBe("42");
+  expect(substitutePrompt("{{x}}", { x: ["edge", "home"] })).toBe('["edge","home"]');
+  expect(substitutePrompt("{{x}}", { x: () => "ignored" })).toBe("{{x}}");
 });

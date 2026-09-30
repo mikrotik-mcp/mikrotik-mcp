@@ -97,7 +97,9 @@ export async function lastSeen(t: AbsenceTriggerT): Promise<number | undefined> 
       } catch (e) {
         // No snapshot database is "no information", NOT "never snapshotted" —
         // returning undefined here would fire the rule.
-        logger.debug(`[alerts] snapshot lookup failed: ${e instanceof Error ? e.message : e}`);
+        logger.debug(
+          `[alerts] snapshot lookup failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
         return Date.now();
       }
       return newest;

@@ -132,7 +132,9 @@ async function tryProbe(command: string, ctx: ToolContext): Promise<string | nul
     if (commandUnsupported(out) || looksLikeError(out)) return null;
     return out;
   } catch (e) {
-    logger.debug(`[capability] probe '${command}' failed: ${e instanceof Error ? e.message : e}`);
+    logger.debug(
+      `[capability] probe '${command}' failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return null;
   }
 }

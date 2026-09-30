@@ -1958,7 +1958,9 @@ export async function runDashboard(
     // strict x.y.z (validated to prevent injecting anything into the package arg).
     if (url.pathname === "/api/upgrade" && req.method === "POST") {
       const body = (await readJson(req)) as { version?: unknown; restart?: unknown };
-      const version = String(body?.version ?? "latest");
+      if (body?.version != null && typeof body.version !== "string")
+        return json({ ok: false, error: 'Version must be "latest" or an x.y.z string.' }, 400);
+      const version = body?.version ?? "latest";
       if (version !== "latest" && !/^\d+\.\d+\.\d+$/.test(version)) {
         return json(
           { ok: false, error: `Invalid version "${version}" (use "latest" or x.y.z).` },
