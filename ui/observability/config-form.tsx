@@ -34,6 +34,7 @@ import { api } from "./api";
 import { Badge, Button, Card, Input, Note, Select } from "./geist";
 import { Sheet } from "./sheet";
 import { DeviceEditor } from "./device-editor";
+import { RouterAddressList } from "./router-address-list";
 import { CONFIG_SECTIONS, DEVICE_FIELDS } from "./config-spec";
 import type { CfgField, CfgSection } from "./config-spec";
 import { Label } from "@/components/ui/label";
@@ -558,7 +559,11 @@ export function DevicesForm({
           const d = asObj(devices[n]);
           const test = tests[n]?.fingerprint === JSON.stringify(d) ? tests[n] : undefined;
           const off = d.disabled === true;
-          const addr = d.mac ? str(d.mac) : `${str(d.host) || "?"}:${str(d.port) || "22"}`;
+          const hosts = uniq(
+            [d.host, ...arr(d.fallbackHosts)]
+              .filter((host): host is string => typeof host === "string" && !!host.trim())
+              .map((host) => host.trim()),
+          );
           return (
             <SortableDevice
               key={n}
@@ -576,6 +581,13 @@ export function DevicesForm({
                 <Badge type={off ? "secondary" : "default"}>
                   {off ? "Disabled in MCP" : "Enabled in MCP"}
                 </Badge>
+                {!d.mac && (
+                  <Badge type="accent">
+                    <span aria-label={`${n}: ${hosts.length} configured management addresses`}>
+                      {hosts.length} address{hosts.length === 1 ? "" : "es"}
+                    </span>
+                  </Badge>
+                )}
                 <span className="flex-1" />
                 <Switch
                   checked={!off}
@@ -584,17 +596,26 @@ export function DevicesForm({
                 />
               </div>
               <div className="router-entry__facts">
-                <div>
-                  <span>Management address</span>
-                  <code>{addr}</code>
+                <div className="content-start">
+                  <span>{d.mac ? "Management address" : "Management addresses"}</span>
+                  {d.mac ? (
+                    <code>{str(d.mac)}</code>
+                  ) : (
+                    <RouterAddressList
+                      name={n}
+                      hosts={hosts}
+                      primary={str(d.host).trim()}
+                      port={str(d.port) || "22"}
+                    />
+                  )}
                 </div>
-                <div>
+                <div className="content-start">
                   <span>Transport</span>
                   <strong>
                     {d.mac ? "MAC-Telnet" : d.transport === "rest" ? "REST / SSH fallback" : "SSH"}
                   </strong>
                 </div>
-                <div>
+                <div className="content-start">
                   <span>Login</span>
                   <strong>{str(d.username) || "admin"}</strong>
                 </div>

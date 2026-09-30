@@ -273,6 +273,88 @@ test("copy, edit and remove stay in the Devices draft until saved", async () => 
   expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
 });
 
+test("router inventory lists and counts draft addresses with a stable primary, not live connections", async () => {
+  const calls = mockConfigApi();
+  const initial = {
+    ...draftConfig,
+    devices: {
+      ...draftConfig.devices,
+      edge: { ...draftConfig.devices.edge, port: 2222, fallbackHosts: ["10.0.0.1", "2001:db8::1"] },
+      layer2: { mac: "02:00:00:00:00:01", host: "127.0.0.1" },
+      unfinished: { host: "", fallbackHosts: [" "] },
+      duplicate: { host: "192.0.2.5", fallbackHosts: ["192.0.2.5", "  ", null] },
+    },
+  };
+  await act(async () =>
+    root.render(
+      h(ConfigEditor, { initial, scope: "devices", onClose: vi.fn(), onReload: vi.fn() }),
+    ),
+  );
+  const count = (name: string) =>
+    host.querySelector(`[aria-label^="${name}: "][aria-label$="configured management addresses"]`);
+  expect(count("edge")?.textContent).toBe("3 addresses");
+  expect(count("branch")?.textContent).toBe("1 address");
+  expect(count("layer2")).toBeNull();
+  expect(count("unfinished")?.textContent).toBe("0 addresses");
+  expect(count("duplicate")?.textContent).toBe("1 address");
+  const list = (name: string) => host.querySelector(`[aria-label="${name} management addresses"]`);
+  const addresses = (name: string) =>
+    [...(list(name)?.querySelectorAll("li code") ?? [])].map((el) => el.textContent);
+  expect(addresses("edge")).toEqual(["192.0.2.1:2222", "10.0.0.1:2222", "[2001:db8::1]:2222"]);
+  expect(list("edge")?.querySelector('[data-primary="true"]')?.textContent).toBe(
+    "192.0.2.1:2222Primary",
+  );
+  expect(list("edge")?.querySelectorAll('[data-primary="false"]')).toHaveLength(2);
+  expect(list("edge")?.closest('[data-slot="scroll-area-viewport"]')).not.toBeNull();
+  expect(addresses("branch")).toEqual(["192.0.2.2:22"]);
+  expect(addresses("duplicate")).toEqual(["192.0.2.5:22"]);
+  expect(list("layer2")).toBeNull();
+  expect(host.textContent).toContain("02:00:00:00:00:01");
+  expect(host.textContent).toContain("No addresses configured");
+
+  await click(button("Edit edge"));
+  const dialogButton = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (b) => b.textContent?.trim() === label,
+    )!;
+  await click(dialogButton("Add address"));
+  const input = document.querySelector<HTMLInputElement>("#f_fallback_3")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "203.0.113.5",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click(dialogButton("Continue"));
+  await click(dialogButton("Continue"));
+  await click(dialogButton("Update draft"));
+  expect(count("edge")?.textContent).toBe("4 addresses");
+  expect(addresses("edge")).toEqual([
+    "192.0.2.1:2222",
+    "10.0.0.1:2222",
+    "[2001:db8::1]:2222",
+    "203.0.113.5:2222",
+  ]);
+  await click(button("Edit edge"));
+  const makePrimary = document.querySelector<HTMLButtonElement>(
+    '[aria-label="Make 2001:db8::1 primary"]',
+  );
+  expect(makePrimary).not.toBeNull();
+  await click(makePrimary!);
+  await click(dialogButton("Continue"));
+  await click(dialogButton("Continue"));
+  await click(dialogButton("Update draft"));
+  expect(count("edge")?.textContent).toBe("4 addresses");
+  expect(list("edge")?.querySelector('[data-primary="true"]')?.textContent).toBe(
+    "[2001:db8::1]:2222Primary",
+  );
+  expect(initial.devices.edge.fallbackHosts).toHaveLength(2);
+  expect(
+    calls.some((c) => c.path.includes("test-device") || c.path === "/api/config?scope=devices"),
+  ).toBe(false);
+});
+
 test("an unavailable settings API displays a retry, not an empty configuration", async () => {
   vi.mocked(fetch).mockResolvedValue(
     new Response(JSON.stringify({ error: "Settings unavailable" }), { status: 503 }),
