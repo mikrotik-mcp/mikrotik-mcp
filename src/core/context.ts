@@ -6,7 +6,7 @@
  * transport reserves for JSON-RPC) and, when the MCP client has opted into
  * logging notifications, forwarded over the protocol too.
  */
-import { logger } from "../logger";
+import { formatLogMessage, logger } from "../logger";
 
 export interface ToolContext {
   /** Informational progress message. */
@@ -54,11 +54,11 @@ export function createContext(sendLog?: SendLog, device?: string): ToolContext {
     device,
     info(message: string) {
       logger.info(message);
-      sendLog?.("info", message);
+      sendLog?.("info", formatLogMessage(message));
     },
     error(message: string) {
       logger.error(message);
-      sendLog?.("error", message);
+      sendLog?.("error", formatLogMessage(message));
     },
   };
 }

@@ -29,10 +29,22 @@ const COLORS: Record<LogLevel, string> = {
 const RESET = "\x1B[0m";
 const useColor = stderr.isTTY ?? false;
 
+/** Bound diagnostics only; never use this for device commands or tool results. */
+export function formatLogMessage(message: string): string {
+  const compact = message.replace(
+    /\bfrom=\*[\da-f]+(?:,\*[\da-f]+)+/gi,
+    (list) => `from=<${list.split(",").length} IDs omitted>`,
+  );
+  const maxLength = 1024;
+  return compact.length <= maxLength
+    ? compact
+    : `${compact.slice(0, maxLength)}… [${compact.length - maxLength} chars omitted]`;
+}
+
 function emit(level: LogLevel, message: string): void {
   if (LEVELS[level] < THRESHOLD) return;
   const tag = useColor ? `${COLORS[level]}${level.toUpperCase()}${RESET}` : level.toUpperCase();
-  stderr.write(`[mikrotik-mcp] ${tag} ${message}\n`);
+  stderr.write(`[mikrotik-mcp] ${tag} ${formatLogMessage(message)}\n`);
 }
 
 export const logger = {
