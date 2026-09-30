@@ -28,6 +28,7 @@ import { Input } from "@/components/beui/registry/components/motion/input";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import { TagsInput } from "@/components/ui/tags-input";
 import "./device-editor.css";
 
 type Draft = Record<string, unknown>;
@@ -393,29 +394,13 @@ export function DeviceEditor({
       label={label}
       placeholder={placeholder}
       type={type}
-      value={
-        key === "name"
-          ? newName
-          : key === "tags" && Array.isArray(dev.tags)
-            ? dev.tags.join(", ")
-            : text(dev[key])
-      }
+      value={key === "name" ? newName : text(dev[key])}
       error={errors[key]}
       autoComplete="off"
       onChange={(value) =>
         key === "name"
           ? (setNewName(value), setErrors({}))
-          : setField(
-              key,
-              key === "tags"
-                ? value
-                    .split(",")
-                    .map((tag) => tag.trim())
-                    .filter(Boolean)
-                : type === "number" && value
-                  ? Number(value)
-                  : value,
-            )
+          : setField(key, type === "number" && value ? Number(value) : value)
       }
       classNames={{ field: "rounded-xl", input: "text-sm" }}
     />
@@ -584,7 +569,14 @@ export function DeviceEditor({
                         </>
                       )}
                     </div>
-                    {field("tags", "Tags", "home, production")}
+                    <TagsInput
+                      value={Array.isArray(dev.tags) ? dev.tags : []}
+                      suggestions={Object.values(devices).flatMap((device) =>
+                        Array.isArray(device.tags) ? device.tags : [],
+                      )}
+                      onValueChange={(tags) => setField("tags", tags)}
+                      disabled={busy}
+                    />
                     <details className="device-editor__advanced">
                       <summary>
                         Connection options{" "}

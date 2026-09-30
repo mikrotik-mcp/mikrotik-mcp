@@ -113,6 +113,85 @@ const input = async (id: string, value: string) => {
   });
 };
 
+test("tags suggest the whole fleet, create and remove chips, and only change the accepted device draft", async () => {
+  const config = {
+    ...cfg,
+    devices: {
+      edge: { ...redacted, tags: ["home"] },
+      branch: {
+        host: "192.0.2.2",
+        disabled: true,
+        tags: ["europe", "home", "production", "europe"],
+      },
+    },
+  };
+  await render(config);
+  const tags = document.querySelector<HTMLInputElement>('[aria-label="Tags"]')!;
+  const options = () => [
+    ...document.querySelectorAll('[aria-label="Available tags"] [role="option"]'),
+  ];
+  await act(async () => tags.focus());
+  expect(options().map((el) => el.textContent?.trim())).toEqual(["europe", "production"]);
+  expect(
+    document
+      .querySelector('[aria-label="Available tags"]')
+      ?.closest('[data-slot="scroll-area-viewport"]'),
+  ).toBeTruthy();
+  await input(tags.id, "EURO");
+  await click("europe");
+  expect(button("Remove tag europe")).toBeTruthy();
+  await act(async () => tags.click());
+  await input(tags.id, "  gaming  ");
+  await click("Create “gaming”");
+  expect(button("Remove tag gaming")).toBeTruthy();
+  await act(async () => tags.click());
+  await input(tags.id, "gaming");
+  expect(options()).toHaveLength(0);
+  expect(document.body.textContent).toContain("This tag is already selected.");
+  await input(tags.id, "   ");
+  expect(options().some((el) => el.textContent?.includes("Create"))).toBe(false);
+  await click("Remove tag home");
+  expect(config.devices.edge.tags).toEqual(["home"]);
+  expect(applied).not.toHaveBeenCalled();
+  expect(saved).not.toHaveBeenCalled();
+  await click("Continue");
+  await click("Continue");
+  await click("Update draft");
+  expect(accepted().devices.edge.tags).toEqual(["europe", "gaming"]);
+  expect(accepted().devices.branch).toEqual(config.devices.branch);
+});
+
+test("tag keyboard entry handles Enter, comma, Backspace and IME without advancing the form", async () => {
+  await render();
+  const tags = document.querySelector<HTMLInputElement>('[aria-label="Tags"]')!;
+  const key = async (key: string, isComposing = false) =>
+    act(async () => {
+      tags.dispatchEvent(
+        new KeyboardEvent("keydown", { key, isComposing, bubbles: true, cancelable: true }),
+      );
+    });
+  await act(async () => tags.focus());
+  await input(tags.id, "خانه");
+  await key("Enter", true);
+  expect(button("Remove tag خانه")).toBeUndefined();
+  await key("Enter");
+  expect(button("Remove tag خانه")).toBeTruthy();
+  await act(async () => tags.click());
+  await input(tags.id, "office");
+  await key(",");
+  expect(button("Remove tag office")).toBeTruthy();
+  await key("Backspace");
+  expect(button("Remove tag office")).toBeUndefined();
+  await key("Escape");
+  expect(tags.getAttribute("aria-expanded")).toBe("false");
+  expect(document.querySelector('[data-slot="tags-input"]')).toBeTruthy();
+  expect(cancelled).not.toHaveBeenCalled();
+  expect(saved).not.toHaveBeenCalled();
+  await click("Cancel");
+  await click("Discard form");
+  expect(applied).not.toHaveBeenCalled();
+});
+
 test("jump picker auto-fills a linked router without copying credentials and tests the same draft", async () => {
   await render({
     ...cfg,
