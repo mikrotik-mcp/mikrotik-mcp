@@ -1,200 +1,231 @@
-/**
- * Dashboard sub-router for the Knowledge Graph Memory view.
- *
- * Lazily opens a {@link MemoryStore} on first request (same pattern as the
- * snapshot store), and re-opens it when the dashboard changes the DB path at
- * runtime. Returns `null` for non-memory paths so the caller can chain the
- * next sub-router.
- */
+/** Knowledge memory API. Shared validation and store logic also serve the MCP tools. */
+import { z } from "zod";
 import { getConfig, setConfig } from "../core/runtime";
 import { getConfigSource } from "../config";
 import { atomicWrite, serializeConfig } from "../config-write";
-import { closeMemoryStore, getMemoryStore, reopenMemoryStore } from "../memory/accessor";
-
+import { closeMemoryStore, getMemoryStore, installMemoryStore } from "../memory/accessor";
+import { openMemoryStore } from "../memory/store";
+import { BrowseSchema, RecallSchema, RememberSchema, ReviseSchema } from "../memory/knowledge";
 export { closeMemoryStore };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
-
+const name = z.string().trim().min(1).max(200);
+const content = z.string().trim().min(1).max(8000);
+const relation = z.object({ from: name, to: name, relationType: name }).strict();
+const list = <T extends z.ZodType>(schema: T) => z.array(schema).min(1).max(100);
+const count = (value: string | null, fallback: number, max: number) =>
+  z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(max)
+    .parse(value ?? fallback);
+let configuring = false;
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+  return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
-
-async function bodyJson<T>(req: Request): Promise<T> {
-  return (await req.json()) as T;
+async function body(req: Request): Promise<unknown> {
+  const raw = await req.text();
+  if (raw.length > 256_000) throw new Error("Memory request is too large");
+  return JSON.parse(raw);
 }
-
-// ── Route handler ────────────────────────────────────────────────────────────
 
 export async function memoryRoutes(req: Request, url: URL): Promise<Response | null> {
   const p = url.pathname;
-  if (!p.startsWith("/api/memory")) return null;
-
-  const cfg = getConfig();
-  if (!cfg.memory.enabled) {
-    return json({ error: "Knowledge-graph memory is disabled" }, 503);
-  }
-
-  // ── Config endpoints (no store required) ─────────────────────────────────
-
-  if (p === "/api/memory/config" && req.method === "GET") {
-    let stats = null;
-    try {
-      const store = await getMemoryStore();
-      stats = store.stats();
-    } catch {
-      // store may not be openable yet
+  if (!p.startsWith("/api/memory/")) return null;
+  try {
+    const cfg = getConfig();
+    if (p === "/api/memory/config" && req.method === "GET") {
+      // Keep settings reachable even when a configured database cannot be opened.
+      let stats = null;
+      if (cfg.memory.enabled) {
+        try {
+          stats = (await getMemoryStore()).stats();
+        } catch {
+          /* Summary reports storage errors. */
+        }
+      }
+      return json({
+        ...cfg.memory,
+        stats,
+      });
     }
-    return json({
-      enabled: cfg.memory.enabled,
-      dbPath: cfg.memory.dbPath,
-      stats,
-    });
-  }
-
-  if (p === "/api/memory/config" && req.method === "POST") {
-    const body = await bodyJson<{ dbPath?: string; enabled?: boolean }>(req);
-    const updates: Record<string, unknown> = {};
-
-    if (
-      body.dbPath !== undefined &&
-      typeof body.dbPath === "string" &&
-      body.dbPath !== cfg.memory.dbPath
-    ) {
-      updates.dbPath = body.dbPath;
-
-      // Reopen the shared store at the new path; verifies the DB is usable.
+    if (p === "/api/memory/config" && req.method === "POST") {
+      if (configuring)
+        return json({ error: "Memory configuration is being saved. Retry shortly." }, 409);
+      const update = z
+        .object({
+          dbPath: z.string().trim().min(1).max(4096).optional(),
+          enabled: z.boolean().optional(),
+        })
+        .strict()
+        .parse(await body(req));
+      configuring = true;
       try {
-        await reopenMemoryStore(body.dbPath);
-      } catch (e) {
-        return json(
-          {
-            error: `Failed to open memory DB at ${body.dbPath}: ${e instanceof Error ? e.message : String(e)}`,
-          },
-          400,
-        );
+        const next = { ...cfg, memory: { ...cfg.memory, ...update } };
+        if (next.memory.enabled === cfg.memory.enabled && next.memory.dbPath === cfg.memory.dbPath)
+          return json({ ok: true, ...cfg.memory });
+        const prepared = next.memory.enabled ? await openMemoryStore(next.memory.dbPath) : null;
+        try {
+          atomicWrite(getConfigSource().path, serializeConfig(next));
+        } catch {
+          prepared?.close();
+          return json(
+            {
+              error:
+                "Could not persist memory configuration; the previous configuration is still active.",
+            },
+            500,
+          );
+        }
+        setConfig(next);
+        if (prepared) installMemoryStore(prepared);
+        else closeMemoryStore();
+        return json({ ok: true, ...next.memory, stats: prepared?.stats() ?? null });
+      } finally {
+        configuring = false;
       }
     }
-
-    if (body.enabled !== undefined && typeof body.enabled === "boolean") {
-      updates.enabled = body.enabled;
+    if (!cfg.memory.enabled)
+      return json({ error: "Knowledge memory is disabled. Enable it in Memory settings." }, 503);
+    const store = await getMemoryStore();
+    if (p === "/api/memory/summary" && req.method === "GET")
+      return json({ stats: store.stats(), health: store.health() });
+    if (p === "/api/memory/facts" && req.method === "GET") {
+      const values = Object.fromEntries(url.searchParams);
+      delete values.token;
+      return json(
+        store.facts(
+          BrowseSchema.parse({
+            ...values,
+            limit: count(url.searchParams.get("limit"), 30, 100),
+            offset: count(url.searchParams.get("offset"), 0, 1000000),
+          }),
+        ),
+      );
     }
-
-    if (Object.keys(updates).length > 0) {
-      const newMemory = { ...cfg.memory, ...updates };
-      const newCfg = { ...cfg, memory: newMemory };
-      setConfig(newCfg);
-
-      // Persist to config file
-      const src = getConfigSource();
-      try {
-        atomicWrite(src.path, serializeConfig(newCfg));
-      } catch {
-        // best-effort persistence
-      }
+    if (p === "/api/memory/facts" && req.method === "POST")
+      return json(store.remember(RememberSchema.parse(await body(req))));
+    if (p === "/api/memory/facts/revise" && req.method === "POST")
+      return json(store.revise(ReviseSchema.parse(await body(req))));
+    if (p === "/api/memory/recall" && req.method === "POST")
+      return json(store.recall(RecallSchema.parse(await body(req))));
+    const history = p.match(/^\/api\/memory\/facts\/(\d+)\/history$/);
+    if (history && req.method === "GET")
+      return json(store.history(z.coerce.number().int().positive().parse(history[1])));
+    if (p === "/api/memory/entities" && req.method === "GET")
+      return json(
+        store.listEntities(
+          z
+            .string()
+            .max(500)
+            .parse(url.searchParams.get("q") ?? ""),
+          count(url.searchParams.get("limit"), 100, 100),
+          count(url.searchParams.get("offset"), 0, 1000000),
+        ),
+      );
+    // Compatibility endpoints for existing clients, including Raycast.
+    if (p === "/api/memory/graph" && req.method === "GET") return json(store.readGraph());
+    if (p === "/api/memory/stats" && req.method === "GET") return json(store.stats());
+    if (p === "/api/memory/search" && req.method === "GET")
+      return json(
+        store.searchNodes(
+          z
+            .string()
+            .max(500)
+            .parse(url.searchParams.get("q") ?? ""),
+          count(url.searchParams.get("limit"), 50, 100),
+        ),
+      );
+    if (p === "/api/memory/activity" && req.method === "GET")
+      return json(
+        store.activity(
+          count(url.searchParams.get("limit"), 50, 100),
+          url.searchParams.has("since")
+            ? count(url.searchParams.get("since"), 0, Number.MAX_SAFE_INTEGER)
+            : undefined,
+          url.searchParams.get("changesOnly") === "true",
+        ),
+      );
+    const entity = p.match(/^\/api\/memory\/entity\/(.+)$/);
+    if (entity && req.method === "GET") {
+      const graph = store.openNodes([name.parse(decodeURIComponent(entity[1]))]);
+      return graph.entities.length
+        ? json({ entity: graph.entities[0], relations: graph.relations })
+        : json({ error: "Entity not found" }, 404);
     }
-
-    let stats = null;
-    try {
-      const store = await getMemoryStore();
-      stats = store.stats();
-    } catch {
-      // may fail if disabled
+    if (p === "/api/memory/entities" && req.method === "POST") {
+      const data = z
+        .object({
+          entities: list(
+            z
+              .object({
+                name,
+                entityType: name,
+                observations: z.array(content).max(100).optional(),
+              })
+              .strict(),
+          ),
+        })
+        .strict()
+        .parse(await body(req));
+      const created = store.createEntities(data.entities);
+      return json({ created, count: created.length });
     }
-
-    return json({
-      ok: true,
-      enabled: getConfig().memory.enabled,
-      dbPath: getConfig().memory.dbPath,
-      stats,
-    });
+    if (p === "/api/memory/relations" && (req.method === "POST" || req.method === "DELETE")) {
+      const data = z
+        .object({ relations: list(relation) })
+        .strict()
+        .parse(await body(req));
+      if (req.method === "DELETE") return json({ removed: store.deleteRelations(data.relations) });
+      const created = store.createRelations(data.relations);
+      return json({ created, count: created.length });
+    }
+    if (p === "/api/memory/observations" && req.method === "POST") {
+      const data = z
+        .object({
+          observations: list(z.object({ entityName: name, contents: list(content) }).strict()),
+        })
+        .strict()
+        .parse(await body(req));
+      return json({ results: store.addObservations(data.observations) });
+    }
+    if (p === "/api/memory/entities" && req.method === "DELETE") {
+      const data = z
+        .object({ names: list(name) })
+        .strict()
+        .parse(await body(req));
+      return json({ removed: store.deleteEntities(data.names) });
+    }
+    if (p === "/api/memory/observations" && req.method === "DELETE") {
+      const data = z
+        .object({
+          deletions: list(z.object({ entityName: name, observations: list(content) }).strict()),
+        })
+        .strict()
+        .parse(await body(req));
+      return json({ removed: store.deleteObservations(data.deletions) });
+    }
+    return json({ error: "Unknown memory endpoint or method" }, 404);
+  } catch (error) {
+    if (error instanceof z.ZodError)
+      return json(
+        { error: error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") },
+        400,
+      );
+    if (error instanceof SyntaxError || error instanceof URIError)
+      return json({ error: "Invalid memory request" }, 400);
+    const message = error instanceof Error ? error.message : "Memory operation failed";
+    if (message.includes("UNIQUE constraint"))
+      return json(
+        { error: "This entity already has an identical memory. Edit the existing record." },
+        409,
+      );
+    if (message.includes("changed since")) return json({ error: message }, 409);
+    if (/not found|credential vault|already exists|too large/.test(message))
+      return json({ error: message }, 400);
+    return json(
+      { error: "Memory storage is unavailable. Check its path and permissions, then retry." },
+      503,
+    );
   }
-
-  // ── All remaining endpoints require the store ────────────────────────────
-
-  const store = await getMemoryStore();
-
-  // ── Read endpoints ───────────────────────────────────────────────────────
-
-  if (p === "/api/memory/graph" && req.method === "GET") {
-    return json(store.readGraph());
-  }
-
-  if (p === "/api/memory/stats" && req.method === "GET") {
-    return json(store.stats());
-  }
-
-  if (p === "/api/memory/search" && req.method === "GET") {
-    const q = url.searchParams.get("q") || "";
-    const limit = Number(url.searchParams.get("limit") ?? 50);
-    return json(store.searchNodes(q, limit));
-  }
-
-  if (p === "/api/memory/activity" && req.method === "GET") {
-    const limit = Number(url.searchParams.get("limit") ?? 50);
-    const since = url.searchParams.get("since");
-    return json(store.activity(limit, since ? Number(since) : undefined));
-  }
-
-  // Single entity by name
-  const entityMatch = p.match(/^\/api\/memory\/entity\/(.+)$/);
-  if (entityMatch && req.method === "GET") {
-    const name = decodeURIComponent(entityMatch[1]);
-    const graph = store.openNodes([name]);
-    if (graph.entities.length === 0) return json({ error: "Entity not found" }, 404);
-    return json({ entity: graph.entities[0], relations: graph.relations });
-  }
-
-  // ── Write endpoints ──────────────────────────────────────────────────────
-
-  if (p === "/api/memory/entities" && req.method === "POST") {
-    const body = await bodyJson<{
-      entities: { name: string; entityType: string; observations?: string[] }[];
-    }>(req);
-    const created = store.createEntities(body.entities ?? []);
-    return json({ created, count: created.length });
-  }
-
-  if (p === "/api/memory/relations" && req.method === "POST") {
-    const body = await bodyJson<{
-      relations: { from: string; to: string; relationType: string }[];
-    }>(req);
-    const created = store.createRelations(body.relations ?? []);
-    return json({ created, count: created.length });
-  }
-
-  if (p === "/api/memory/observations" && req.method === "POST") {
-    const body = await bodyJson<{
-      observations: { entityName: string; contents: string[] }[];
-    }>(req);
-    const results = store.addObservations(body.observations ?? []);
-    return json({ results });
-  }
-
-  // ── Delete endpoints ─────────────────────────────────────────────────────
-
-  if (p === "/api/memory/entities" && req.method === "DELETE") {
-    const body = await bodyJson<{ names: string[] }>(req);
-    const removed = store.deleteEntities(body.names ?? []);
-    return json({ removed });
-  }
-
-  if (p === "/api/memory/relations" && req.method === "DELETE") {
-    const body = await bodyJson<{
-      relations: { from: string; to: string; relationType: string }[];
-    }>(req);
-    const removed = store.deleteRelations(body.relations ?? []);
-    return json({ removed });
-  }
-
-  if (p === "/api/memory/observations" && req.method === "DELETE") {
-    const body = await bodyJson<{
-      deletions: { entityName: string; observations: string[] }[];
-    }>(req);
-    const removed = store.deleteObservations(body.deletions ?? []);
-    return json({ removed });
-  }
-
-  return null;
 }

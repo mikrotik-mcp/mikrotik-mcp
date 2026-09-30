@@ -23,12 +23,15 @@ export function isMemoryEnabled(): boolean {
 
 /** Lazy-open the memory store. Rejects when memory is disabled. */
 export function getMemoryStore(): Promise<MemoryStore> {
+  const cfg = getConfig();
+  if (!cfg.memory.enabled)
+    return Promise.reject(new Error("Knowledge-graph memory is disabled in config"));
   if (!storePromise) {
-    const cfg = getConfig();
-    if (!cfg.memory.enabled) {
-      return Promise.reject(new Error("Knowledge-graph memory is disabled in config"));
-    }
-    storePromise = openMemoryStore(cfg.memory.dbPath);
+    const pending = openMemoryStore(cfg.memory.dbPath);
+    storePromise = pending;
+    void pending.catch(() => {
+      if (storePromise === pending) storePromise = null;
+    });
   }
   return storePromise;
 }
@@ -56,8 +59,14 @@ export function closeMemoryStore(): void {
  * Re-point the singleton to a new DB path (for dashboard config changes).
  * Returns the new store promise so the caller can verify the open succeeded.
  */
-export function reopenMemoryStore(dbPath: string): Promise<MemoryStore> {
+export async function reopenMemoryStore(dbPath: string): Promise<MemoryStore> {
+  const next = await openMemoryStore(dbPath);
+  installMemoryStore(next);
+  return next;
+}
+
+/** Publish a validated store only after its configuration has been persisted. */
+export function installMemoryStore(store: MemoryStore): void {
   closeMemoryStore();
-  storePromise = openMemoryStore(dbPath);
-  return storePromise;
+  storePromise = Promise.resolve(store);
 }
