@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "memory_review",
+  "type": "object",
+  "properties": {
+    "query": {
+      "default": "",
+      "type": "string",
+      "maxLength": 500
+    },
+    "entityName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["fact", "constraint", "lesson", "preference", "procedure"]
+    },
+    "state": {
+      "default": "active",
+      "type": "string",
+      "enum": ["active", "review", "pinned", "archived", "all"]
+    },
+    "limit": {
+      "default": 30,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "offset": {
+      "default": 0,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    }
+  },
+  "required": ["query", "state", "limit", "offset"],
+  "additionalProperties": false
+}

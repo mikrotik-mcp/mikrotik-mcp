@@ -2052,6 +2052,11 @@
       "description": "Persistent knowledge-graph memory — entities, relations and observations that survive across sessions. Create, search and manage structured knowledge the AI can reference.",
       "alwaysOn": true,
       "tools": [
+        "memory_remember",
+        "memory_recall",
+        "memory_review",
+        "memory_revise",
+        "memory_history",
         "memory_create_entities",
         "memory_create_relations",
         "memory_add_observations",
@@ -10972,6 +10977,46 @@
         "visibility": ["model"],
         "automatic": true
       }
+    },
+    {
+      "name": "memory_remember",
+      "module": "memory",
+      "group": "Memory",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "memory_recall",
+      "module": "memory",
+      "group": "Memory",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "memory_review",
+      "module": "memory",
+      "group": "Memory",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "memory_revise",
+      "module": "memory",
+      "group": "Memory",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "memory_history",
+      "module": "memory",
+      "group": "Memory",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
     },
     {
       "name": "memory_create_entities",
