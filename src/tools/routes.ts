@@ -7,6 +7,7 @@ import {
   yesno,
   whereClause,
   routeTypeArg,
+  readBackUnavailable,
   quoteValue,
   looksLikeError,
   isEmpty,
@@ -26,6 +27,25 @@ import { notFoundMessage, ruleResolver } from "./_resolve-rule-id";
 const resolveRouteId = ruleResolver("/ip route");
 
 const routeNotFound = (id: string): string => notFoundMessage("Route", id, "list_routes");
+
+/** A sent update is not a verified update when the follow-up read fails. */
+async function readUpdatedRoute(
+  id: string,
+  ctx: Parameters<typeof executeMikrotikCommand>[1],
+): Promise<string> {
+  try {
+    const details = await executeMikrotikCommand(`/ip route print detail where .id=${id}`, ctx);
+    if (readBackUnavailable(details) || !/(?:^|\s)dst-address=/.test(details)) {
+      throw new Error("read-back returned no usable route record");
+    }
+    return details;
+  } catch (error) {
+    throw new Error(
+      `Route ${id} update was sent, but verification failed: ${error instanceof Error ? error.message : String(error)}. ` +
+        `The change may already be applied; do not retry the write blindly. Restore connectivity and call get_route with route_id=${id} to verify.`,
+    );
+  }
+}
 
 /**
  * RouterOS v7 dropped v6's `type=` property on `/ip route`: `blackhole` is a
@@ -108,7 +128,7 @@ async function setRouteDisabled(
     ctx,
   );
   if (looksLikeError(result)) return `Failed to update route: ${result}`;
-  const details = await executeMikrotikCommand(`/ip route print detail where .id=${id}`, ctx);
+  const details = await readUpdatedRoute(id, ctx);
   return `Route updated successfully:\n\n${details}`;
 }
 
@@ -307,7 +327,7 @@ export const routeTools: ToolModule = [
       const result = await executeMikrotikCommand(built, ctx);
       if (looksLikeError(result)) return `Failed to update route: ${result}`;
 
-      const details = await executeMikrotikCommand(`/ip route print detail where .id=${id}`, ctx);
+      const details = await readUpdatedRoute(id, ctx);
       // Name the resolved .id: when the caller passed a row position, this is
       // the only way they can tell WHICH route actually changed.
       return `Route ${id} updated successfully:\n\n${details}`;
