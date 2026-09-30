@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Archive,
@@ -130,18 +130,62 @@ function FactDetail({
   onClose,
   onEdit,
   onRevise,
+  onNextReview,
   busy,
 }: {
   fact: MemoryFact;
   onClose: () => void;
   onEdit: () => void;
-  onRevise: (patch: object) => void;
+  onRevise: (patch: object) => Promise<MemoryFact | undefined>;
+  onNextReview?: (reviewedIds: number[]) => Promise<void>;
   busy: boolean;
 }) {
   const [history, setHistory] = useState<MemoryRevision[] | null>(null);
   const [error, setError] = useState("");
+  const [reviewedIds, setReviewedIds] = useState<number[]>([]);
+  const [pendingNext, setPendingNext] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
+  const [nextError, setNextError] = useState("");
+  const contentRef = useRef<HTMLParagraphElement>(null);
+  const working = busy || advancing;
+  useEffect(() => {
+    contentRef.current?.focus({ preventScroll: true });
+  }, [fact.id]);
+  const verify = async () => {
+    if (working) return;
+    setAdvancing(true);
+    try {
+      let reviewed = reviewedIds;
+      if (!pendingNext) {
+        const saved = await onRevise({ verified: true });
+        if (!saved || !onNextReview) return;
+        reviewed = [...reviewedIds, saved.id];
+        setReviewedIds(reviewed);
+        setPendingNext(true);
+      }
+      await onNextReview?.(reviewed);
+      setPendingNext(false);
+      setNextError("");
+    } catch (e) {
+      setNextError(message(e));
+    } finally {
+      setAdvancing(false);
+    }
+  };
+  const verifyAction = (
+    <Button
+      variant={onNextReview ? "default" : "outline"}
+      disabled={working || fact.status === "archived"}
+      onClick={() => void verify()}
+    >
+      {working ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+      {pendingNext ? "Retry next memory" : onNextReview ? "Verify & next" : "I verified this"}
+    </Button>
+  );
   useEffect(() => {
     const abort = new AbortController();
+    setHistory(null);
+    setError("");
     void api<MemoryRevision[]>(`/api/memory/facts/${fact.id}/history`, abort.signal)
       .then((rows) => {
         if (!abort.signal.aborted) {
@@ -158,10 +202,16 @@ function FactDetail({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !busy) onClose();
+        if (!open && !working) onClose();
       }}
     >
-      <DialogContent className="memory-editor sm:max-w-2xl">
+      <DialogContent
+        className="memory-editor sm:max-w-2xl"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          contentRef.current?.focus({ preventScroll: true });
+        }}
+      >
         <header>
           <div className="memory-eyebrow">
             {fact.entityName} / {fact.kind}
@@ -172,9 +222,14 @@ function FactDetail({
             agent assessment.
           </DialogDescription>
         </header>
-        <ScrollArea className="memory-editor-scroll">
+        <ScrollArea key={fact.id} className="memory-editor-scroll">
           <div className="memory-detail">
-            <p className="memory-detail-content" dir="auto">
+            {onNextReview && (
+              <p className="memory-help" role="status">
+                {reviewedIds.length} verified this round · Next memory opens automatically.
+              </p>
+            )}
+            <p ref={contentRef} tabIndex={-1} className="memory-detail-content" dir="auto">
               {fact.content}
             </p>
             <div className="memory-status-tags">
@@ -212,16 +267,10 @@ function FactDetail({
               </div>
             </dl>
             <div className="memory-inline-actions">
+              {!onNextReview && verifyAction}
               <Button
                 variant="outline"
-                disabled={busy || fact.status === "archived"}
-                onClick={() => onRevise({ verified: true })}
-              >
-                <Check size={14} />I verified this
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy}
+                disabled={working || pendingNext}
                 onClick={() =>
                   onRevise({ status: fact.status === "archived" ? "active" : "archived" })
                 }
@@ -230,6 +279,12 @@ function FactDetail({
                 {fact.status === "archived" ? "Restore memory" : "Archive memory"}
               </Button>
             </div>
+            {nextError && (
+              <p role="alert" className="memory-error">
+                Verification saved. Could not load the next memory: {nextError} Retry does not
+                verify this memory again.
+              </p>
+            )}
             <p className="memory-help">
               Verifying does not extend expiry or test a router. Archiving removes a memory from
               recall without deleting its history.
@@ -271,12 +326,17 @@ function FactDetail({
         </ScrollArea>
         <footer className="memory-dialog-actions">
           <CopyButton text={fact.content} />
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" disabled={working} onClick={onClose}>
             Close
           </Button>
-          <Button disabled={busy} onClick={onEdit}>
+          <Button
+            variant={onNextReview ? "outline" : "default"}
+            disabled={working}
+            onClick={onEdit}
+          >
             Edit memory
           </Button>
+          {onNextReview && verifyAction}
         </footer>
       </DialogContent>
     </Dialog>
@@ -634,11 +694,48 @@ export function MemoryView() {
       });
       setDetail((current) => (current?.id === next.id ? next : current));
       refresh();
+      return next;
     } catch (e) {
       toast.error(message(e));
     } finally {
       setBusy(false);
     }
+  };
+  const nextReview = async (reviewedIds: number[]) => {
+    const reviewed = new Set(reviewedIds);
+    const items = page?.items ?? [];
+    const currentIndex = items.findIndex((fact) => fact.id === detail?.id);
+    // Keep the visible card order, wrapping to earlier cards before leaving this page.
+    const remaining = (
+      currentIndex < 0 ? items : [...items.slice(currentIndex + 1), ...items.slice(0, currentIndex)]
+    ).find(
+      (fact) => !reviewed.has(fact.id) && fact.status === "active" && reviewReasons(fact).length,
+    );
+    if (remaining) {
+      setDetail(remaining);
+      return;
+    }
+    const params = new URLSearchParams({ query: search, state: "review", limit: "100" });
+    if (entity) params.set("entityName", entity);
+    if (kind !== "all") params.set("kind", kind);
+    if (scopeFilter !== "all") params.set("scope", scopeFilter);
+    // Verification shrinks/reorders the review list. Re-read from the start at page boundaries
+    // and skip this round's verified IDs (expired/low-confidence records can remain in review).
+    for (let cursor = 0; ; cursor += 100) {
+      params.set("offset", String(cursor));
+      const candidates = await api<MemoryPage>(`/api/memory/facts?${params}`);
+      const next = candidates.items.find((fact) => !reviewed.has(fact.id));
+      if (next) {
+        setDetail(next);
+        return;
+      }
+      if (!candidates.items.length || cursor + 100 >= candidates.total) break;
+    }
+    setDetail(null);
+    setOffset(0);
+    toast.success(
+      `Review round complete: ${reviewed.size} verified. Expired or low-confidence memories may still need editing.`,
+    );
   };
   return (
     <div className="memory-workspace">
@@ -1093,7 +1190,8 @@ export function MemoryView() {
             setEditor(detail);
             setDetail(null);
           }}
-          onRevise={(patch) => void revise(detail, patch)}
+          onRevise={(patch) => revise(detail, patch)}
+          onNextReview={state === "review" ? nextReview : undefined}
           busy={busy}
         />
       )}

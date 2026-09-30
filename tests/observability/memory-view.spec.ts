@@ -5,6 +5,7 @@ import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { MemoryView } from "../../ui/observability/memory";
 import { api, postJson } from "../../ui/observability/api";
+import { toast } from "../../ui/observability/toast-action";
 vi.mock("../../ui/observability/api", () => ({
   api: vi.fn(),
   postJson: vi.fn(),
@@ -171,4 +172,127 @@ test("shared scope shows its impact and requires explicit confirmation before ap
   });
   expect(host.textContent).toContain("Sharing scope saved");
   expect(host.textContent).toContain("not permissions or tenant isolation");
+});
+
+function reviewRecords(count: number, expired = false) {
+  const records = Array.from({ length: count }, (_, i) => ({
+    ...fact,
+    id: i + 1,
+    content: `Review memory ${i + 1}`,
+    expiresAt: expired ? 1 : null,
+    verifiedAt: null as number | null,
+  }));
+  const original = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation(async (path, signal) => {
+    if (!path.startsWith("/api/memory/facts?")) return original(path, signal);
+    const params = new URL(path, "http://localhost").searchParams;
+    const items = records.filter(
+      (row) =>
+        params.get("state") !== "review" || row.verifiedAt === null || row.expiresAt !== null,
+    );
+    const offset = Number(params.get("offset"));
+    const limit = Number(params.get("limit"));
+    return { items: items.slice(offset, offset + limit), total: items.length, offset, limit };
+  });
+  vi.mocked(postJson).mockImplementation(async (_path, body) => {
+    const { id, expectedRevision } = body as { id: number; expectedRevision: number };
+    const index = records.findIndex((row) => row.id === id);
+    expect(expectedRevision).toBe(records[index].revision);
+    records[index] = { ...records[index], verifiedAt: Date.now(), revision: expectedRevision + 1 };
+    return records[index];
+  });
+}
+
+test("verification advances in the same dialog, wraps, and never repeats expired records in a round", async () => {
+  reviewRecords(3, true);
+  await render();
+  await click(host.querySelector<HTMLElement>('[data-tone="review"]')!);
+  await click(host.querySelectorAll<HTMLElement>(".memory-fact-content")[1]);
+  const dialog = document.querySelector('[role="dialog"]')!;
+  const content = () => dialog.querySelector(".memory-detail-content")!.textContent;
+  expect(content()).toBe("Review memory 2");
+  expect(document.activeElement).toBe(dialog.querySelector(".memory-detail-content"));
+  await click(button("Verify & next"));
+  expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+  expect(content()).toBe("Review memory 3");
+  expect(document.activeElement).toBe(dialog.querySelector(".memory-detail-content"));
+  expect(dialog.textContent).toContain("1 verified this round");
+  expect(postJson).toHaveBeenCalledTimes(1);
+  expect(postJson).toHaveBeenLastCalledWith("/api/memory/facts/revise", {
+    id: 2,
+    expectedRevision: 3,
+    verified: true,
+  });
+  await click(button("Verify & next"));
+  expect(content()).toBe("Review memory 1");
+  await click(button("Verify & next"));
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(postJson).toHaveBeenCalledTimes(3);
+  expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("Review round complete: 3"));
+  expect(host.textContent).toContain("Expired");
+});
+
+test("review crosses shrinking page boundaries without skipping records or losing filters", async () => {
+  reviewRecords(26);
+  vi.useFakeTimers();
+  await render();
+  await click(host.querySelector<HTMLElement>('.memory-subject[data-selected="false"]')!);
+  await fill(host.querySelector<HTMLInputElement>('[aria-label="Search knowledge"]')!, "Review");
+  await act(async () => vi.advanceTimersByTime(260));
+  await click(host.querySelector<HTMLElement>('[data-tone="review"]')!);
+  await click(button("Next"));
+  await click(button("Details"));
+  const content = () => document.querySelector(".memory-detail-content")!.textContent;
+  expect(content()).toBe("Review memory 25");
+  await click(button("Verify & next"));
+  expect(content()).toBe("Review memory 26");
+  await click(button("Verify & next"));
+  expect(content()).toBe("Review memory 1");
+  const read = vi.mocked(api).mock.calls.find(([path]) => path.includes("limit=100"))![0];
+  const params = new URL(read, "http://localhost").searchParams;
+  expect(Object.fromEntries(params)).toMatchObject({
+    query: "Review",
+    state: "review",
+    entityName: "edge",
+    offset: "0",
+  });
+  expect(host.querySelector<HTMLInputElement>('[aria-label="Search knowledge"]')!.value).toBe(
+    "Review",
+  );
+});
+
+test("failed verification stays on the current record; retrying next only retries the read", async () => {
+  reviewRecords(1);
+  await render();
+  await click(host.querySelector<HTMLElement>('[data-tone="review"]')!);
+  await click(button("Details"));
+  vi.mocked(postJson).mockRejectedValueOnce(new Error("Revision conflict"));
+  await click(button("Verify & next"));
+  expect(document.querySelector(".memory-detail-content")!.textContent).toBe("Review memory 1");
+  expect(toast.error).toHaveBeenCalledWith("Revision conflict");
+  expect(vi.mocked(api).mock.calls.some(([path]) => path.includes("limit=100"))).toBe(false);
+  const original = vi.mocked(api).getMockImplementation()!;
+  let failNext = true;
+  vi.mocked(api).mockImplementation(async (path, signal) => {
+    if (path.includes("limit=100") && failNext) throw new Error("Temporarily unavailable");
+    return original(path, signal);
+  });
+  await click(button("Verify & next"));
+  expect(document.querySelector('[role="alert"]')!.textContent).toContain("Verification saved");
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(postJson).toHaveBeenCalledTimes(2);
+  failNext = false;
+  await click(button("Retry next memory"));
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(postJson).toHaveBeenCalledTimes(2);
+});
+
+test("verification outside Needs review does not advance to a different record", async () => {
+  reviewRecords(2);
+  await render();
+  await click(button("Details"));
+  await click(button("I verified this"));
+  expect(document.querySelector(".memory-detail-content")!.textContent).toBe("Review memory 1");
+  expect(postJson).toHaveBeenCalledTimes(1);
+  expect(button("Verify & next")).toBeUndefined();
 });
