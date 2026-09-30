@@ -7,7 +7,7 @@ import { DASHBOARD_API_PATH } from "./observability/dev-routing";
 /**
  * Dedicated build for the React observability dashboard.
  *
- * It is a *single-input* build with `inlineDynamicImports: true`, so the whole
+ * It is a *single-input* build with `codeSplitting: false`, so the whole
  * app (React + components) emits as one JS chunk with no shared runtime chunk —
  * which `scripts/build-ui.ts` can then inline into a single self-contained
  * `dist/ui/observability.html`. (The MCP App views are built separately in
@@ -19,7 +19,7 @@ import { DASHBOARD_API_PATH } from "./observability/dev-routing";
  */
 const here = dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(async ({ command, mode }) => ({
+export default defineConfig(async ({ command, mode, isSsrBuild }) => ({
   // Serve the actual SPA, including its hash routes, instead of a mock fixture.
   root: command === "serve" ? resolve(here, "observability") : here,
   base: "./",
@@ -51,9 +51,24 @@ export default defineConfig(async ({ command, mode }) => ({
     cssCodeSplit: false,
     assetsInlineLimit: 100_000_000,
     modulePreload: { polyfill: false },
-    rollupOptions: {
+    // The offline dashboard deliberately ships as one chunk (~1.94 MB), not
+    // lazy-loaded routes. Keep a finite 2 MB budget so future growth still warns.
+    chunkSizeWarningLimit: 2000,
+    rolldownOptions: {
       input: { observability: resolve(here, "observability/index.html") },
       output: { codeSplitting: false },
+      onLog(level, log, defaultHandler) {
+        // This SPA has no RSC boundary. Dependencies' "use client" metadata
+        // is redundant here; preserve every other diagnostic (and all SSR logs).
+        if (
+          !isSsrBuild &&
+          level === "warn" &&
+          log.code === "MODULE_LEVEL_DIRECTIVE" &&
+          log.message.includes('The semantics of the module level directive "use client" ')
+        )
+          return;
+        defaultHandler(level, log);
+      },
     },
   },
 }));
