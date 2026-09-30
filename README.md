@@ -369,7 +369,32 @@ auto-rollback.
   <img src="assets/screenshots/web/dashboard-config.webp" alt="Config Studio" width="820" />
 </div>
 
-**Memory.** Knowledge graph of entities, relations and observations gathered from calls.
+**Memory.** An evidence-aware knowledge workspace: searchable facts, constraints, lessons,
+preferences and procedures, scoped to entities and their explicit relationships. Inspect
+sources, author-assigned confidence, expiry, verification and revision history; pin important
+knowledge, archive outdated records, and use **Recall lab** to preview the exact bounded context
+an LLM receives. Search and pagination survive background refreshes.
+
+The MCP workflow is `memory_create_entities` → `memory_remember` → `memory_recall`.
+Use a stable `key` (for example `wan.provider`) to replace a fact while keeping its previous
+revisions. `memory_review` finds unverified, expired, low-confidence and 90-day-old records;
+`memory_revise` requires the current revision number to prevent lost edits, and
+`memory_history` shows previous versions. Changing content or source clears verification.
+
+Recall uses local SQLite full-text search (including Unicode), direct/related entity scope,
+pinning and freshness signals—not an external model or embedding API. It excludes archived
+and expired records, explains each selection, and respects an explicit character budget.
+Confidence is supplied by the author, **not** a measured probability. Memory is untrusted
+reference material, never permission to change a router; live state still needs checking.
+
+Existing observations migrate in place as **unverified legacy knowledge**, with a standalone
+`.pre-knowledge-*.bak` database snapshot made before migration. The original graph tools and
+Raycast API remain compatible. Automatic recording creates device entities after successful
+calls and logs metadata only; it does not infer facts from command output. Routine tool-call
+metadata is pruned to the latest 10,000 entries, while knowledge revisions are retained.
+Common pasted credential formats are rejected, but memory is **not a secret vault**—do not
+store passwords, private keys or tokens. Run `bun run test:memory` for real SQLite migration,
+recall, API and dashboard regression tests.
 
 <div align="center">
   <img src="assets/screenshots/web/dashboard-memory.webp" alt="Memory knowledge graph" width="820" />
