@@ -95,6 +95,15 @@ const click = async (el: HTMLElement) => {
   expect(el).toBeTruthy();
   await act(async () => el.click());
 };
+const acceptDeviceForm = async () => {
+  const formButton = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (b) => b.textContent?.trim() === label,
+    )!;
+  await click(formButton("Continue"));
+  await click(formButton("Continue"));
+  await click(formButton("Add to draft"));
+};
 const filter = async (name: string) =>
   click(
     [...host.querySelectorAll<HTMLButtonElement>(".device-filters button")].find((b) =>
@@ -186,11 +195,7 @@ test("copy, edit and remove stay in the Devices draft until saved", async () => 
   await render();
   await click(button("Manage routers"));
   await click(button("Copy branch"));
-  expect(document.body.textContent).toContain("Copied credentials");
-  const done = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-    (b) => b.textContent === "Done",
-  )!;
-  await click(done);
+  await acceptDeviceForm();
   expect(button("Edit branch-copy")).toBeTruthy();
   await click(button("Remove branch-copy"));
   await click(button("Remove branch-copy?"));

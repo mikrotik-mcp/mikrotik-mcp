@@ -24,16 +24,16 @@ import {
 } from "lucide-react";
 import { Reorder, useDragControls, useReducedMotion } from "motion/react";
 import {
-  CREDENTIAL_SOURCE,
   addDevice as createDeviceDraft,
   duplicateDevice,
-  renameDevice,
   reorderDevices,
+  setDraftField as setIn,
 } from "../../src/config-device-draft";
 import type { DeviceTest } from "./config-editor";
 import { api } from "./api";
 import { Badge, Button, Card, Input, Note, Select } from "./geist";
 import { Sheet } from "./sheet";
+import { DeviceEditor } from "./device-editor";
 import { CONFIG_SECTIONS, DEVICE_FIELDS } from "./config-spec";
 import type { CfgField, CfgSection } from "./config-spec";
 import { Label } from "@/components/ui/label";
@@ -54,26 +54,6 @@ const str = (v: unknown): string =>
 /** Read a possibly-dotted key (`channels.slack.url`) off an object. */
 const getIn = (o: Cfg, key: string): unknown =>
   key.split(".").reduce<unknown>((acc, k) => asObj(acc)[k], o);
-
-/**
- * Immutably write a possibly-dotted key. An empty value deletes the leaf, and a
- * parent left with no keys is deleted too — so clearing `channels.slack.url`
- * removes the whole `slack` channel rather than persisting `{}`, which the
- * schema would reject (`url` is required on a channel that exists).
- */
-function setIn(o: Cfg, key: string, val: unknown): Cfg {
-  const [head, ...rest] = key.split(".");
-  const next = { ...o };
-  if (rest.length === 0) {
-    if (val === undefined || val === "") delete next[head];
-    else next[head] = val;
-    return next;
-  }
-  const child = setIn(asObj(next[head]), rest.join("."), val);
-  if (Object.keys(child).length === 0) delete next[head];
-  else next[head] = child;
-  return next;
-}
 
 function sectionObj(cfg: Cfg, s: CfgSection): Cfg {
   return s.path ? asObj(cfg[s.path]) : cfg;
@@ -363,93 +343,6 @@ function ObjectCard({
 
 // ── devices ──────────────────────────────────────────────────────────────────
 
-function DeviceSheet({
-  cfg,
-  onChange,
-  name,
-  isNew,
-  onClose,
-}: {
-  cfg: Cfg;
-  onChange: (c: Cfg) => void;
-  name: string;
-  isNew: boolean;
-  onClose: () => void;
-}): ReactNode {
-  const [newName, setNewName] = useState(name);
-  const [nameErr, setNameErr] = useState<string | null>(null);
-  const devices = asObj(cfg.devices);
-  const dev = asObj(devices[name]);
-
-  const setDev = (key: string, v: unknown): void => {
-    onChange({ ...cfg, devices: { ...devices, [name]: setIn(dev, key, v) } });
-  };
-
-  // Rename the device key from `name` to the typed value. Returns false (and
-  // sets an error) on an empty or already-taken name so the caller keeps the
-  // sheet open instead of silently discarding the edit.
-  const commitName = (): boolean => {
-    const nn = newName.trim();
-    if (nn === name) return true; // unchanged — nothing to rename
-    try {
-      onChange(renameDevice(cfg, name, nn));
-      return true;
-    } catch (error) {
-      setNameErr(error instanceof Error ? error.message : "Could not rename device.");
-      return false;
-    }
-  };
-
-  // Done applies the typed name (creating the device under its real key for a
-  // new entry) before closing.
-  const done = (): void => {
-    if (commitName()) onClose();
-  };
-
-  return (
-    <Sheet
-      title={isNew ? "Add device" : `Device · ${name}`}
-      subtitle={isNew ? "New MikroTik router" : undefined}
-      onClose={done}
-      footer={
-        <Button type="success" size="sm" onClick={done}>
-          Done
-        </Button>
-      }
-    >
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <Label htmlFor="dev_name" className="text-muted-foreground text-xs font-semibold">
-          Name
-        </Label>
-        <div className="flex gap-1.5">
-          <Input
-            id="dev_name"
-            value={newName}
-            onChange={(e) => {
-              setNewName(e.target.value);
-              setNameErr(null);
-            }}
-            placeholder="core-router"
-          />
-          {!isNew && newName.trim() !== name && (
-            <Button size="sm" ghost onClick={done}>
-              Rename
-            </Button>
-          )}
-        </div>
-        {nameErr && <span className="text-destructive text-[11px]">{nameErr}</span>}
-      </div>
-      {typeof dev[CREDENTIAL_SOURCE] === "string" && (
-        <Note type="secondary" label="Copied credentials">
-          Unchanged secrets are inherited securely from {str(dev[CREDENTIAL_SOURCE])} when testing
-          or saving. Review the address and name before saving. Nothing has been applied yet.
-        </Note>
-      )}
-      <FieldForm fields={DEVICE_FIELDS} value={dev} onField={setDev} />
-    </Sheet>
-  );
-}
-
 type DeviceControls = { tests: Record<string, DeviceTest>; onTest: (name: string) => void };
 
 function SortableDevice({
@@ -525,10 +418,14 @@ export function DevicesForm({
   onChange,
   tests,
   onTest,
+  onSave,
+  saveNotice,
   initialSelection,
 }: {
   cfg: Cfg;
   onChange: (c: Cfg) => void;
+  onSave: (c: Cfg) => Promise<boolean>;
+  saveNotice: string;
   initialSelection?: { name: string; isNew: boolean };
 } & DeviceControls): ReactNode {
   const [sheet, setSheet] = useState(initialSelection ?? null);
@@ -571,6 +468,41 @@ export function DevicesForm({
     onChange(next);
     setConfirmDel(null);
   };
+
+  const editor = sheet && (
+    <DeviceEditor
+      cfg={cfg}
+      name={sheet.name}
+      isNew={sheet.isNew}
+      saveNotice={saveNotice}
+      onSave={async (next) => {
+        const saved = await onSave(next);
+        if (saved) setSheet(null);
+        return saved;
+      }}
+      onApply={(next) => {
+        onChange(next);
+        setSheet(null);
+      }}
+      onCancel={() => {
+        if (sheet.isNew) removeDevice(sheet.name);
+        setSheet(null);
+      }}
+      advanced={(value, onField, transport) => (
+        <FieldForm
+          fields={DEVICE_FIELDS.filter(
+            (field) =>
+              field.key === "timeoutMs" ||
+              (transport === "mac"
+                ? ["sourceMac", "macHost", "macPort"].includes(field.key)
+                : transport === "rest" && ["apiPort", "apiInsecureTls"].includes(field.key)),
+          ).map((field) => ({ ...field, advanced: false }))}
+          value={value}
+          onField={onField}
+        />
+      )}
+    />
+  );
 
   return (
     <section className="router-manager" aria-label="Router configuration draft">
@@ -765,15 +697,7 @@ export function DevicesForm({
         credentials, never live router data.
       </p>
 
-      {sheet && (
-        <DeviceSheet
-          cfg={cfg}
-          onChange={onChange}
-          name={sheet.name}
-          isNew={sheet.isNew}
-          onClose={() => setSheet(null)}
-        />
-      )}
+      {editor}
     </section>
   );
 }

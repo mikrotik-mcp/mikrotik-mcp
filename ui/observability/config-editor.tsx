@@ -17,7 +17,7 @@ import { JsonEditor, ROLLBACK_OPTS } from "./config-studio";
 import type { ConfigIssue, DiffSummary, SaveResp } from "./config-studio";
 import { Button, Select } from "./geist";
 import { toast } from "./toast-action";
-import type { DeviceStatus } from "./types";
+import { testDeviceConnection } from "./config-connection";
 import { cn } from "@/lib/utils";
 
 type Cfg = Record<string, unknown>;
@@ -126,14 +126,8 @@ export function ConfigEditor({
       ...old,
       [name]: { ok: false, pending: true, label: "Connecting…", fingerprint },
     }));
-    type TestResp = { ok?: boolean; status?: DeviceStatus; errors?: ConfigIssue[]; error?: string };
-    const request = postJson<TestResp>("/api/config/test-device", { name, config: dc })
-      .catch((): TestResp => ({ error: "Connection test request failed. Try again." }))
-      .then((r) => {
-        const ok = r.ok === true && r.status?.reachable === true;
-        const label = ok
-          ? `${Math.round(r.status?.latencyMs ?? 0)}ms · ${r.status?.identity ?? "Connected"}`
-          : (r.status?.error ?? r.errors?.[0]?.message ?? r.error ?? "Unreachable");
+    const request = testDeviceConnection(name, dc, cfg.devices)
+      .then(({ ok, label }) => {
         setTests((old) => ({ ...old, [name]: { ok, pending: false, label, fingerprint } }));
         return ok;
       })
@@ -172,13 +166,13 @@ export function ConfigEditor({
     }
   };
 
-  const doSave = async (): Promise<void> => {
-    if (busy || pending) return;
+  const doSave = async (next: Cfg = cfg): Promise<boolean> => {
+    if (busy || pending) return false;
     setBusy(true);
     setMsg("Saving…");
     try {
       const r = await postJson<SaveResp & { config?: Cfg }>(endpoint("/api/config"), {
-        config: cfg,
+        config: next,
         rollbackMs,
       });
       setMsg(null);
@@ -186,7 +180,7 @@ export function ConfigEditor({
       if (!r.ok) {
         setErrors(r.errors ?? [{ path: "(root)", message: "save rejected" }]);
         toast.error(r.errors?.[0]?.message ?? "Config save rejected");
-        return;
+        return false;
       }
       setPending(r);
       if (r.config) {
@@ -196,9 +190,11 @@ export function ConfigEditor({
       setCountdown(Math.round((r.rollbackMs ?? 0) / 1000));
       toast.success("Config applied");
       onReload();
+      return true;
     } catch (e) {
       setMsg(null);
       toast.error(e instanceof Error ? e.message : "Save failed");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -247,6 +243,29 @@ export function ConfigEditor({
       setBusy(false);
     }
   };
+
+  const deviceForm = (
+    <DevicesForm
+      cfg={cfg}
+      onChange={(next) => {
+        change(next);
+        setSelection(undefined);
+      }}
+      tests={tests}
+      onTest={(name) => void testDevice(name)}
+      onSave={async (next) => {
+        const saved = await doSave(next);
+        if (saved) setSelection(undefined);
+        return saved;
+      }}
+      saveNotice={
+        rollbackMs > 0
+          ? `Saves all pending device changes. Choose Keep changes within ${rollbackMs / 1000}s after saving, or they auto-revert.`
+          : "Saves all pending device changes without an auto-revert window."
+      }
+      initialSelection={selection}
+    />
+  );
 
   return (
     <div className={cn("flex flex-col gap-3.5", scope === "devices" && "device-config-editor")}>
@@ -415,13 +434,7 @@ export function ConfigEditor({
       >
         {mode === "form" ? (
           scope === "devices" ? (
-            <DevicesForm
-              cfg={cfg}
-              onChange={change}
-              tests={tests}
-              onTest={(name) => void testDevice(name)}
-              initialSelection={selection}
-            />
+            deviceForm
           ) : (
             <ConfigForm cfg={cfg} onChange={change} />
           )
