@@ -21,6 +21,7 @@ import type { SshKeyOption } from "../../src/observability/ssh-key-inventory";
 import { api, postJson } from "./api";
 import { CopyButton } from "./atoms";
 import { testDeviceConnection } from "./config-connection";
+import { DeviceJumpHost, jumpHostIssue } from "./device-jump-host";
 import type { ConnectionResult } from "./config-connection";
 import { Badge, Button, Note } from "./geist";
 import { Input } from "@/components/beui/registry/components/motion/input";
@@ -275,6 +276,8 @@ export function DeviceEditor({
       if (!/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(text(dev.mac)))
         issues.mac = "Enter a MAC address such as 48:A9:8A:C6:42:F7.";
     } else {
+      const jumpIssue = jumpHostIssue(dev, devices, name);
+      if (jumpIssue) issues.form = jumpIssue;
       if (!text(dev.host).trim() || /[\s/]/.test(text(dev.host)))
         issues.host = "Enter an IP address or hostname, without a URL or spaces.";
       if (
@@ -588,6 +591,19 @@ export function DeviceEditor({
                         <span>Timeout, jump host{transport === "rest" ? ", TLS" : ""}</span>
                       </summary>
                       {advanced(dev, setField, transport)}
+                      {transport !== "mac" && (
+                        <DeviceJumpHost
+                          device={dev}
+                          devices={devices}
+                          name={name}
+                          disabled={busy}
+                          onChange={(next) => {
+                            setDev(next);
+                            setErrors({});
+                            setDiscard(false);
+                          }}
+                        />
+                      )}
                     </details>
                     <label className="device-editor__enabled">
                       <span>

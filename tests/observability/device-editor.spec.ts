@@ -5,6 +5,7 @@ import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { DeviceEditor } from "../../ui/observability/device-editor";
 import { mergeConfigDraft } from "../../src/config-write";
+import { jumpHostIssue } from "../../ui/observability/device-jump-host";
 
 vi.hoisted(() => {
   Reflect.deleteProperty(Element.prototype, "animate");
@@ -112,13 +113,110 @@ const input = async (id: string, value: string) => {
   });
 };
 
+test("jump picker auto-fills a linked router without copying credentials and tests the same draft", async () => {
+  await render({
+    ...cfg,
+    devices: {
+      ...cfg.devices,
+      branch: {
+        host: "192.0.2.2",
+        port: 2222,
+        username: "ops",
+        password: "«redacted»",
+        keyFilename: "/keys/bastion",
+      },
+    },
+  } as typeof cfg);
+  await click("branch192.0.2.2:2222 · ops");
+  expect(document.querySelector<HTMLInputElement>("#jump_host")?.value).toBe("192.0.2.2");
+  expect(document.querySelector<HTMLInputElement>("#jump_port")?.value).toBe("2222");
+  expect(document.querySelector<HTMLInputElement>("#jump_username")?.value).toBe("ops");
+  expect(document.querySelector<HTMLInputElement>("#jump_keyFilename")?.value).toBe(
+    "/keys/bastion",
+  );
+  expect(document.querySelector<HTMLInputElement>("#jump_password")?.value).toBe("");
+  expect(document.querySelector<HTMLInputElement>("#jump_host")?.readOnly).toBe(true);
+  await click("Test connection");
+  const body = calls.find((c) => c.path.includes("test-device"))!.body;
+  expect(body.config.jumpVia).toBe("branch");
+  expect(body.config.jumpHost).toBeUndefined();
+  expect(body.config.keyFilename).toBe("/keys/old");
+  expect(body.devices.branch.port).toBe(2222);
+  expect(body.devices.branch.password).toBe("«redacted»");
+  expect(saved).not.toHaveBeenCalled();
+});
+
+test("manual address, configured router and direct modes are exclusive; switching never carries secrets", async () => {
+  await render();
+  const combo = document.querySelector<HTMLInputElement>(
+    '[aria-label="Jump via device or address"]',
+  )!;
+  await act(async () => combo.focus());
+  await input(combo.id, "203.0.113.8");
+  await click("Use “203.0.113.8” as a custom address");
+  expect(document.querySelector<HTMLInputElement>("#jump_host")?.value).toBe("203.0.113.8");
+  expect(document.querySelector<HTMLInputElement>("#jump_host")?.readOnly).toBe(false);
+  await input("jump_password", "manual-secret");
+  await input("jump_host", "203.0.113.9");
+  expect(document.querySelector<HTMLInputElement>("#jump_password")?.value).toBe("");
+  await act(async () => combo.click());
+  await click("branch192.0.2.2:22 · admin");
+  await act(async () => combo.click());
+  await click("Enter a custom address…");
+  expect(document.querySelector<HTMLInputElement>("#jump_keyFilename")?.value).toBe("");
+  await act(async () => combo.click());
+  await click("Direct connection · no jump host");
+  await click("Test connection");
+  const body = calls.find((c) => c.path.includes("test-device"))!.body;
+  expect(body.config.jumpVia).toBeUndefined();
+  expect(body.config.jumpHost).toBeUndefined();
+});
+
+test("jump-host guards reject missing, MAC, disabled and cyclic routers before probing", async () => {
+  const devices = {
+    edge: redacted,
+    loop: { host: "loop", jumpVia: "edge" },
+    mac: { mac: "00:11:22:33:44:55" },
+    off: { host: "off", disabled: true },
+  };
+  for (const name of ["edge", "loop", "mac", "off", "missing"])
+    expect(jumpHostIssue({ jumpVia: name }, devices, "edge")).not.toBe("");
+  await render({
+    ...cfg,
+    devices: { ...cfg.devices, edge: { ...redacted, jumpVia: "edge" } },
+  } as typeof cfg);
+  await click("Connect & Save");
+  expect(document.body.textContent).toContain("jump-host cycle");
+  expect(calls).toHaveLength(0);
+  expect(saved).not.toHaveBeenCalled();
+});
+
+test("keyboard navigation scrolls the shared jump-host viewport, not its non-scrolling list", async () => {
+  await render();
+  const combo = document.querySelector<HTMLInputElement>(
+    '[aria-label="Jump via device or address"]',
+  )!;
+  await act(async () => combo.click());
+  const list = document.querySelector<HTMLElement>('[role="listbox"][aria-label="Jump hosts"]')!;
+  const viewport = list.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+  const option = button("branch192.0.2.2:22 · admin");
+  vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 100 } as DOMRect);
+  vi.spyOn(list, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 500 } as DOMRect);
+  vi.spyOn(option, "getBoundingClientRect").mockReturnValue({ top: 200, bottom: 250 } as DOMRect);
+  await act(async () => {
+    combo.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  });
+  expect(viewport.scrollTop).toBe(150);
+  expect(list.scrollTop).toBe(0);
+});
+
 test("shared scroll areas wrap the form, navigation and key list; step changes reset the form viewport", async () => {
   await render();
   const viewport = document.querySelector<HTMLDivElement>(
     '[data-slot="scroll-area-viewport"][aria-label="Device setup form"]',
   )!;
   expect(viewport).toBeTruthy();
-  expect(document.querySelectorAll('[data-slot="scroll-area"]')).toHaveLength(2);
+  expect(document.querySelectorAll('[data-slot="scroll-area"]')).toHaveLength(4);
   const scroll = vi.spyOn(viewport, "scrollTo");
   await click("Continue");
   expect(scroll).toHaveBeenCalledWith({ top: 0 });
