@@ -10,11 +10,16 @@ export interface EndpointObservation extends EndpointConnection {
   checkedAt: number;
   error?: string;
 }
+export interface RememberedEndpoint extends EndpointConnection {
+  expiresAt: number;
+}
+export const ENDPOINT_SUCCESS_TTL_MS = 5 * 60_000;
 export interface DeviceEndpoints {
   primary: string;
   hosts: string[];
   connected: EndpointConnection[];
   observations: EndpointObservation[];
+  remembered?: RememberedEndpoint[];
 }
 
 // Config-object identity isolates devices, drafts and configuration generations.
@@ -23,12 +28,13 @@ const states = new WeakMap<
   {
     live: Set<EndpointConnection>;
     observations: Map<string, EndpointObservation>;
+    remembered: Map<string, RememberedEndpoint>;
   }
 >();
 function state(dc: DeviceConfig) {
   let value = states.get(dc);
   if (!value) {
-    value = { live: new Set(), observations: new Map() };
+    value = { live: new Set(), observations: new Map(), remembered: new Map() };
     states.set(dc, value);
   }
   return value;
@@ -47,6 +53,7 @@ export function deviceEndpoints(dc: DeviceConfig): DeviceEndpoints | undefined {
     hosts: [dc.host, ...(dc.fallbackHosts ?? [])],
     connected: Array.from(new Map([...current.live].map((c) => [JSON.stringify(c), c])).values()),
     observations: [...current.observations.values()],
+    remembered: [...current.remembered.values()].filter((c) => c.expiresAt > Date.now()),
   };
 }
 
@@ -65,9 +72,17 @@ export function endpointOptions(
 ): EndpointOptions {
   const current = state(dc);
   const key = (host: string) => `${transport}:${endpointAddress(host, port)}`;
+  const service = `${transport}:${port}`;
   return {
     hosts: () => {
       const all = [dc.host, ...(dc.fallbackHosts ?? [])];
+      // Affinity applies only to new connections. Pool and Safe Mode sessions
+      // stay pinned; expiry never closes a connection or replays a command.
+      const remembered = current.remembered.get(service);
+      if (remembered && remembered.expiresAt > Date.now() && all.includes(remembered.host)) {
+        return [remembered.host, ...all.filter((host) => host !== remembered.host)];
+      }
+      // Without a recent success, keep failed addresses behind fresh candidates.
       const available = all.filter((host) => {
         const last = current.observations.get(key(host));
         return !last?.error || Date.now() - last.checkedAt >= 30_000;
@@ -75,6 +90,9 @@ export function endpointOptions(
       return available.length ? [...available, ...all.filter((h) => !available.includes(h))] : all;
     },
     onAttempt: (host, error) => {
+      if (error && current.remembered.get(service)?.host === host) {
+        current.remembered.delete(service);
+      }
       current.observations.set(key(host), {
         host,
         port,
@@ -85,6 +103,10 @@ export function endpointOptions(
     },
     onConnected: (host) => {
       const connection = { host, port, transport };
+      current.remembered.set(service, {
+        ...connection,
+        expiresAt: Date.now() + ENDPOINT_SUCCESS_TTL_MS,
+      });
       current.live.add(connection);
       return () => {
         current.live.delete(connection);

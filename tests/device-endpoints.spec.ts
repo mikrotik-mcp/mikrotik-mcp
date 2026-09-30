@@ -2,7 +2,11 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { DeviceConfigSchema, MikrotikConfigSchema } from "../src/config";
-import { deviceEndpoints, endpointOptions } from "../src/core/device-endpoints";
+import {
+  deviceEndpoints,
+  endpointOptions,
+  ENDPOINT_SUCCESS_TTL_MS,
+} from "../src/core/device-endpoints";
 import { createDeviceClient, createRestClient, sshOptionsOf } from "../src/core/transport";
 import { MikroTikSSHClient } from "../src/ssh/client";
 import { SafeModeManager } from "../src/ssh/safe-mode";
@@ -152,6 +156,62 @@ test("a failed primary has a short cooldown but is preferred again on a later ne
   clock.mockReturnValue(32000);
   expect(options.hosts!()[0]).toBe(dc.host);
   expect(deviceEndpoints(DeviceConfigSchema.parse(dc))?.observations).toEqual([]);
+});
+
+test("authenticated fallback is remembered beyond failure cooldown, renewed on connect, and expires without closing sessions", async () => {
+  const dc = device();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+  mock.failures.set(dc.host, "ETIMEDOUT");
+  const first = createDeviceClient(dc);
+  expect(await first.connect()).toBe(true);
+  first.disconnect();
+  mock.attempts = [];
+  mock.failures.clear(); // Primary has recovered, but must not cost another dial yet.
+  clock.mockReturnValue(61_000);
+  const next = createDeviceClient(dc);
+  expect(await next.connect()).toBe(true);
+  expect(mock.attempts).toEqual(["203.0.113.1"]);
+  expect(deviceEndpoints(dc)?.remembered).toEqual([
+    {
+      host: "203.0.113.1",
+      transport: "ssh",
+      port: 22,
+      expiresAt: 61_000 + ENDPOINT_SUCCESS_TTL_MS,
+    },
+  ]);
+  clock.mockReturnValue(61_000 + ENDPOINT_SUCCESS_TTL_MS);
+  expect(endpointOptions(dc, "ssh", 22).hosts!()[0]).toBe(dc.host);
+  expect(deviceEndpoints(dc)?.remembered).toEqual([]);
+  expect(deviceEndpoints(dc)?.connected[0]?.host).toBe("203.0.113.1");
+  expect(await next.run("/system identity print")).toContain("demo");
+  expect(mock.attempts).toEqual(["203.0.113.1"]); // Expiry does not redial a live session.
+});
+
+test("failed remembered address is invalidated and a new successful address becomes preferred", async () => {
+  const dc = device();
+  const options = endpointOptions(dc, "ssh", 22);
+  options.onConnected!("203.0.113.1")();
+  options.onAttempt!("203.0.113.1", "ECONNREFUSED");
+  expect(deviceEndpoints(dc)?.remembered).toEqual([]);
+  expect(options.hosts!()[0]).toBe(dc.host);
+  options.onConnected!("203.0.113.1")();
+  mock.failures.set("203.0.113.1", "ECONNREFUSED");
+  const next = createDeviceClient(dc);
+  expect(await next.connect()).toBe(true);
+  expect(mock.attempts).toEqual(["203.0.113.1", dc.host]);
+  expect(deviceEndpoints(dc)?.remembered?.[0].host).toBe(dc.host);
+});
+
+test("successful preference is isolated by config identity, transport and port", () => {
+  const dc = device();
+  endpointOptions(dc, "ssh", 22).onConnected!("203.0.113.1")();
+  expect(endpointOptions(dc, "ssh", 22).hosts!()[0]).toBe("203.0.113.1");
+  expect(endpointOptions(dc, "ssh", 2222).hosts!()[0]).toBe(dc.host);
+  expect(endpointOptions(dc, "rest", 22).hosts!()[0]).toBe(dc.host);
+  expect(endpointOptions(DeviceConfigSchema.parse(dc), "ssh", 22).hosts!()[0]).toBe(dc.host);
+  endpointOptions(dc, "rest", 443).onConnected!("2001:db8::1")();
+  expect(endpointOptions(dc, "rest", 443).hosts!()[0]).toBe("2001:db8::1");
+  expect(endpointOptions(dc, "ssh", 22).hosts!()[0]).toBe("203.0.113.1");
 });
 
 test("authentication failure stops attempts and all-network failure reports each attempted IP", async () => {

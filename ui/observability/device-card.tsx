@@ -22,6 +22,7 @@ import { deviceColor } from "./connectivity";
 import { withToken } from "./api";
 import { ms, num } from "./format";
 import { DeviceHealthCard } from "./health";
+import { DeviceAddressStatus } from "./device-address-status";
 import type { CapabilitiesJson, DeviceInfo } from "./types";
 
 export interface DeviceActions {
@@ -158,6 +159,7 @@ export function DeviceCard({
       )}
 
       <DeviceHealthCard d={d} />
+      {d.endpoints && <DeviceAddressStatus endpoints={d.endpoints} />}
 
       <dl className="device-activity">
         <div>

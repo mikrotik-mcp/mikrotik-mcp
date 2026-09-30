@@ -5,6 +5,7 @@ import type { Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, test, vi } from "vite-plus/test";
 import { DevicesView } from "../../ui/observability/devices-view";
 import { DeviceHealthCard } from "../../ui/observability/health";
+import { DeviceAddressStatus } from "../../ui/observability/device-address-status";
 import { ConfigEditor } from "../../ui/observability/config-editor";
 import type { DeviceInfo, DevicesPayload, SSHPoolPayload } from "../../ui/observability/types";
 
@@ -111,6 +112,75 @@ const filter = async (name: string) =>
     )!,
   );
 const names = () => [...host.querySelectorAll(".device-dossier h3")].map((el) => el.textContent);
+
+test("address status separates active fallback, historical success, failures and untested addresses", async () => {
+  await act(async () =>
+    root.render(
+      h(DeviceAddressStatus, {
+        endpoints: {
+          primary: "10.0.0.1",
+          hosts: ["10.0.0.1", "203.0.113.1", "2001:db8::1", "192.0.2.9"],
+          connected: [{ host: "203.0.113.1", port: 22, transport: "ssh" }],
+          observations: [
+            { host: "10.0.0.1", port: 22, transport: "ssh", checkedAt: 1000, error: "timed out" },
+            { host: "2001:db8::1", port: 22, transport: "ssh", checkedAt: 1000 },
+          ],
+        },
+      }),
+    ),
+  );
+  expect(
+    [...host.querySelectorAll(".device-address-status__row")].map((r) =>
+      r.getAttribute("data-state"),
+    ),
+  ).toEqual(["failed", "connected", "verified", "untested"]);
+  expect(host.textContent).toContain("Primary");
+  expect(host.textContent).toContain("Last success");
+  expect(
+    host.querySelector('[aria-label="Address connection results"]')?.getAttribute("data-slot"),
+  ).toBe("scroll-area-viewport");
+});
+
+test("address status refresh shows preference separately from live sessions, clears expired preference and exposes transport failures", async () => {
+  const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+  const endpoints = {
+    primary: "10.0.0.1",
+    hosts: ["10.0.0.1", "203.0.113.1"],
+    connected: [{ host: "203.0.113.1", port: 22, transport: "ssh" as const }],
+    observations: [
+      { host: "203.0.113.1", port: 22, transport: "ssh" as const, checkedAt: 1000 },
+      {
+        host: "203.0.113.1",
+        port: 443,
+        transport: "rest" as const,
+        checkedAt: 1000,
+        error: "ECONNREFUSED",
+      },
+    ],
+    remembered: [{ host: "203.0.113.1", port: 22, transport: "ssh" as const, expiresAt: 301000 }],
+  };
+  try {
+    await act(async () => root.render(h(DeviceAddressStatus, { endpoints })));
+    expect(host.textContent).toContain("Fast reconnect");
+    expect(host.textContent).toContain("Remembered · SSH :22 · 5m 00s left");
+    expect(host.textContent).toContain("REST :443 · Last attempt failed");
+    expect(host.textContent).toContain("ECONNREFUSED");
+    expect(host.querySelector('[data-state="connected"]')).not.toBeNull();
+    endpoints.connected = [];
+    clock.mockReturnValue(61_000);
+    await act(async () => root.render(h(DeviceAddressStatus, { endpoints })));
+    expect(host.querySelector('[data-state="connected"]')).toBeNull();
+    expect(host.textContent).toContain("No open session");
+    expect(host.textContent).toContain("4m 00s left");
+    clock.mockReturnValue(301000);
+    await act(async () => root.render(h(DeviceAddressStatus, { endpoints })));
+    expect(host.textContent).not.toContain("Remembered");
+    expect(host.textContent).not.toContain("Fast reconnect");
+    expect(host.textContent).toContain("Primary");
+  } finally {
+    clock.mockRestore();
+  }
+});
 const search = async (value: string) => {
   const input = host.querySelector<HTMLInputElement>('[aria-label="Search devices"]')!;
   await act(async () => {

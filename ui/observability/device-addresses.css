@@ -6,13 +6,16 @@
 }
 .device-addresses header,
 .device-addresses header > div,
-.device-addresses footer {
+.device-addresses footer,
+.device-address-status header,
+.device-address-status header > span {
   display: flex;
   align-items: center;
   gap: 9px;
 }
 .device-addresses header,
-.device-addresses footer {
+.device-addresses footer,
+.device-address-status header {
   justify-content: space-between;
   flex-wrap: wrap;
 }
@@ -85,6 +88,121 @@
 .device-addresses footer > span {
   font-size: 10px;
   color: var(--muted-foreground);
+}
+.device-address-status {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--primary) 2%, transparent);
+}
+.device-address-status header {
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.device-address-status header small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.device-address-status__scroll {
+  max-height: 225px;
+}
+.device-address-status__memory {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  color: var(--primary);
+}
+.device-address-status__memory > div {
+  flex: 1;
+  min-width: 150px;
+}
+.device-address-status__memory strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+.device-address-status__memory small,
+.device-address-status__note {
+  display: block;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.device-address-status__memory > span {
+  font: 10px var(--font-mono, monospace);
+}
+.device-address-status__note {
+  margin-top: 10px;
+}
+.device-address-status__row {
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px 2px;
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.device-address-status__row > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+}
+.device-address-status__row[data-state="connected"] > i {
+  background: var(--success, #14b8a6);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success, #14b8a6) 12%, transparent);
+}
+.device-address-status__row[data-state="failed"] > i {
+  background: var(--warning, #f59e0b);
+}
+.device-address-status__row code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.device-address-status__row small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.device-address-status__badges {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  font-size: 10px;
+}
+.device-address-status__badges span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+}
+.device-address-status__badges strong {
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.device-address-status__row[data-state="connected"] strong {
+  color: var(--success, #14b8a6);
+}
+.device-address-status__row[data-state="failed"] strong,
+.device-address-status__row .device-address-status__error {
+  color: var(--warning, #f59e0b);
+}
+.device-address-status__row .device-address-status__preferred {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--primary);
+  margin-top: 4px;
+}
+.device-address-status__reason {
+  display: block;
 }
 @media (max-width: 600px) {
   .device-addresses {

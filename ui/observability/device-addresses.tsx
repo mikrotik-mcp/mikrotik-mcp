@@ -26,8 +26,8 @@ export function DeviceAddressesEditor({
         <span className="device-addresses__auto">Automatic failover</span>
       </header>
       <p>
-        Add internal, VPN or public static IPs belonging to this same router. Primary is tried first, then
-        alternatives.
+        Add internal, VPN or public static IPs belonging to this same router. A successful IP is
+        remembered for 5 minutes; otherwise Primary is tried first, then alternatives.
       </p>
       <ScrollArea
         className="device-addresses__scroll"

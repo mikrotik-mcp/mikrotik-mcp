@@ -40,6 +40,11 @@ export const deviceTools: ToolModule = [
                 (o) =>
                   `\n  ${o.transport} ${endpointAddress(o.host, o.port)}: ${o.error ? "failed" : "last success"} at ${new Date(o.checkedAt).toISOString()}`,
               )
+              .join("")}${(endpoints.remembered ?? [])
+              .map(
+                (c) =>
+                  `\n  Remembered for new connections: ${c.transport} ${endpointAddress(c.host, c.port)} until ${new Date(c.expiresAt).toISOString()} (Primary unchanged)`,
+              )
               .join("")}`
           : "";
         return `• ${name}${tag}: ${d.username}@${d.mac || endpointAddress(d.host, d.port)} [auth: ${auth}]${desc}${details}`;
