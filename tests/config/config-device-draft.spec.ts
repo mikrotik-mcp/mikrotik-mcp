@@ -7,10 +7,21 @@ import {
   duplicateDevice,
   renameDevice,
   reorderDevices,
+  setDraftField,
 } from "../../src/config-device-draft";
 import { mergeConfigDraft, mergeDeviceDraft, serializeConfig } from "../../src/config-write";
 import { REDACTED, redact } from "../../src/observability/event";
 import { MikrotikConfigSchema } from "../../src/config";
+
+test("draft field edits preserve siblings and remove empty nested objects without mutating input", () => {
+  const original = { host: "router", jumpHost: { host: "bastion", password: "«redacted»" } };
+  const next = setDraftField(original, "jumpHost.host", "other");
+  expect(next).toEqual({ host: "router", jumpHost: { host: "other", password: "«redacted»" } });
+  expect(original.jumpHost.host).toBe("bastion");
+  expect(
+    setDraftField(setDraftField(next, "jumpHost.host", ""), "jumpHost.password", undefined),
+  ).toEqual({ host: "router" });
+});
 
 const current = {
   defaultDevice: "home",
@@ -115,6 +126,13 @@ test("device order survives secret resolution, schema validation and serializati
   expect(saved.defaultDevice).toBe("home");
   expect(reorderDevices(draft, ["edge", "edge"])).toBe(draft);
   expect(reorderDevices(draft, ["ghost", "home"])).toBe(draft);
+});
+
+test("renaming a bastion keeps dependent jumpVia references intact", () => {
+  const original = { devices: { home: { host: "home" }, edge: { host: "edge", jumpVia: "home" } } };
+  const next = renameDevice(original, "home", "renamed");
+  expect((next.devices as typeof original.devices).edge.jumpVia).toBe("renamed");
+  expect(original.devices.edge.jumpVia).toBe("home");
 });
 
 test("missing or invalid credential origins fail closed; markers never become credentials", () => {

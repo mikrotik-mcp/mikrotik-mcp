@@ -4,6 +4,26 @@ type Draft = Record<string, unknown>;
 const devicesOf = (cfg: Draft): Record<string, Draft> =>
   (cfg.devices ?? {}) as Record<string, Draft>;
 
+/** Write a schema field; clearing the last nested field removes its empty parent too. */
+export function setDraftField(value: Draft, key: string, fieldValue: unknown): Draft {
+  const [head, ...rest] = key.split(".");
+  const next = { ...value };
+  if (!rest.length) {
+    if (fieldValue === undefined || fieldValue === "") delete next[head];
+    else next[head] = fieldValue;
+  } else {
+    const current = next[head];
+    const child = setDraftField(
+      current && typeof current === "object" && !Array.isArray(current) ? (current as Draft) : {},
+      rest.join("."),
+      fieldValue,
+    );
+    if (!Object.keys(child).length) delete next[head];
+    else next[head] = child;
+  }
+  return next;
+}
+
 export type ConfigScope = "devices" | "server";
 
 /** The two editors own disjoint sections of the same configuration. */
@@ -83,9 +103,13 @@ export function renameDevice(cfg: Draft, name: string, nextName: string): Draft 
     ...cfg,
     defaultDevice: cfg.defaultDevice === name ? nextName : cfg.defaultDevice,
     devices: Object.fromEntries(
-      Object.entries(devices).map(([key, value]) =>
-        key === name ? [nextName, copyDevice(value, name)] : [key, value],
-      ),
+      Object.entries(devices).map(([key, value]) => [
+        key === name ? nextName : key,
+        {
+          ...(key === name ? copyDevice(value, name) : value),
+          ...(value.jumpVia === name ? { jumpVia: nextName } : {}),
+        },
+      ]),
     ),
   };
 }

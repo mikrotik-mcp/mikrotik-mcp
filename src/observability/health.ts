@@ -108,7 +108,11 @@ function pushHistory(name: string, sample: MetricSample): void {
 }
 
 /** Probe one device once and cache the result. */
-export async function probeDevice(name: string, dc: DeviceConfig): Promise<DeviceStatus> {
+export async function probeDevice(
+  name: string,
+  dc: DeviceConfig,
+  devices?: Record<string, DeviceConfig>,
+): Promise<DeviceStatus> {
   // MAC-Telnet devices ARE probed (so CPU/memory/disk health is collected for
   // them too), but a MAC-Telnet login is a slow ~30s console negotiation and the
   // device serves one session at a time — so `probeAll` throttles them to a long
@@ -117,10 +121,13 @@ export async function probeDevice(name: string, dc: DeviceConfig): Promise<Devic
   // Pick the transport by config (SSH or MAC-Telnet). The 8s probe clamp keeps
   // the SSH path snappy; a MAC-Telnet client floors its own prime budget higher
   // (RouterOS's ~10s console stall), so the clamp simply doesn't shorten it.
-  const client = createDeviceClient({
-    ...dc,
-    timeoutMs: Math.min(dc.timeoutMs ?? 10_000, 8_000),
-  });
+  const client = createDeviceClient(
+    {
+      ...dc,
+      timeoutMs: Math.min(dc.timeoutMs ?? 10_000, 8_000),
+    },
+    devices,
+  );
   const t0 = Date.now();
   let status: DeviceStatus;
   try {

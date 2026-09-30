@@ -84,6 +84,7 @@ export function sshOptionsOf(dc: DeviceConfig): SSHClientOptions {
 export function resolveJump(
   dc: DeviceConfig,
   seen: Set<string> = new Set(),
+  devices?: Record<string, DeviceConfig>,
 ): SSHClientOptions | undefined {
   if (dc.jumpHost) {
     return {
@@ -104,17 +105,23 @@ export function resolveJump(
     );
   }
   seen.add(dc.jumpVia);
-  const bastion = getDevice(dc.jumpVia);
+  // Draft tests must never fall back to a same-named, stale runtime device.
+  if (devices && !Object.hasOwn(devices, dc.jumpVia))
+    throw new Error(`Jump host '${dc.jumpVia}' is not in this device draft.`);
+  const bastion = devices ? devices[dc.jumpVia]! : getDevice(dc.jumpVia);
   if (isMacTelnetDevice(bastion)) {
     throw new Error(
       `Jump host '${dc.jumpVia}' is a MAC-Telnet device; an SSH bastion must be reachable over SSH.`,
     );
   }
-  return { ...sshOptionsOf(bastion), jump: resolveJump(bastion, seen) };
+  return { ...sshOptionsOf(bastion), jump: resolveJump(bastion, seen, devices) };
 }
 
 /** Build the right transport client for a device config. */
-export function createDeviceClient(dc: DeviceConfig): DeviceClient {
+export function createDeviceClient(
+  dc: DeviceConfig,
+  devices?: Record<string, DeviceConfig>,
+): DeviceClient {
   if (isMacTelnetDevice(dc)) {
     return new MikroTikMacTelnetClient({
       mac: dc.mac,
@@ -127,7 +134,7 @@ export function createDeviceClient(dc: DeviceConfig): DeviceClient {
     });
   }
 
-  return new MikroTikSSHClient({ ...sshOptionsOf(dc), jump: resolveJump(dc) });
+  return new MikroTikSSHClient({ ...sshOptionsOf(dc), jump: resolveJump(dc, new Set(), devices) });
 }
 
 /** How a device is addressed, for logs/errors (e.g. `MAC 48:…` or `1.2.3.4:22`). */

@@ -586,7 +586,7 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
   }
 
   if (p === "/api/config/test-device" && req.method === "POST") {
-    const body = (await readJson(req)) as { name?: string; config?: unknown };
+    const body = (await readJson(req)) as { name?: string; config?: unknown; devices?: unknown };
     const name = typeof body?.name === "string" ? body.name : "(unsaved)";
     const merged = mergeDeviceDraft(body?.config, name, getConfig().devices);
     const target = merged as { host?: unknown; mac?: unknown } | null;
@@ -598,7 +598,16 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
       return json({ ok: false, error: "Enter a Host / IP or MAC address before testing." }, 400);
     const parsed = DeviceConfigSchema.safeParse(merged);
     if (!parsed.success) return json({ ok: false, errors: issues(parsed.error) }, 400);
-    const status = await probeDevice(`config-test:${name}`, parsed.data);
+    let devices;
+    if (body.devices !== undefined) {
+      const draft = mergeConfigDraft({ devices: body.devices }, getConfig()) as {
+        devices: unknown;
+      };
+      const inventory = z.record(z.string(), DeviceConfigSchema).safeParse(draft.devices);
+      if (!inventory.success) return json({ ok: false, errors: issues(inventory.error) }, 400);
+      devices = { ...inventory.data, [name]: parsed.data };
+    }
+    const status = await probeDevice(`config-test:${name}`, parsed.data, devices);
     return json({ ok: true, status });
   }
 
