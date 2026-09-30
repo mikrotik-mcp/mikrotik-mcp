@@ -109,6 +109,10 @@ export class MikroTikSSHClient {
   /** Human-readable reason the last `connect()` failed, if it did. */
   lastError?: string;
 
+  get isConnected(): boolean {
+    return this.client !== null;
+  }
+
   constructor(opts: SSHClientOptions) {
     this.opts = { port: 22, timeoutMs: 10_000, ...opts };
   }
@@ -250,43 +254,83 @@ export class MikroTikSSHClient {
     }
     // Bind the ssh2 channel opener to a local reference to keep this call site
     // free of the OS-shell pattern that static scanners flag.
-    const openChannel = this.client.exec.bind(this.client);
+    const connection = this.client;
+    const openChannel = connection.exec.bind(connection);
     return new Promise((resolve, reject) => {
-      openChannel(command, (err: Error | undefined, stream: ClientChannel) => {
-        if (err) {
-          reject(err);
+      const stdout: Buffer[] = [];
+      const stderrBuf: Buffer[] = [];
+      let stream: ClientChannel | undefined;
+      let settled = false;
+      let openTimer: ReturnType<typeof setTimeout> | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      let hardTimer: ReturnType<typeof setTimeout> | undefined;
+      const clearTimers = (): void => {
+        if (openTimer) clearTimeout(openTimer);
+        if (timer) clearTimeout(timer);
+        if (idleTimer) clearTimeout(idleTimer);
+        if (hardTimer) clearTimeout(hardTimer);
+        connection.off("error", onConnectionError);
+        connection.off("end", onConnectionClose);
+        connection.off("close", onConnectionClose);
+      };
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        clearTimers();
+        const out = decodeOutput(Buffer.concat(stdout));
+        const error = decodeOutput(Buffer.concat(stderrBuf));
+        resolve(error && !out ? error : out);
+      };
+      const fail = (e: Error): void => {
+        if (settled) return;
+        settled = true;
+        clearTimers();
+        try {
+          stream?.signal("INT");
+        } catch {
+          /* RouterOS may not honour signals */
+        }
+        try {
+          stream?.close();
+        } catch {
+          /* channel already closing */
+        }
+        reject(e);
+      };
+      const uncertain =
+        "Command outcome is unknown; do not retry a write blindly. Reconnect and read back the target state first.";
+      function onConnectionError(error: Error): void {
+        fail(new Error(`SSH connection lost: ${error.message}. ${uncertain}`));
+      }
+      function onConnectionClose(): void {
+        fail(new Error(`SSH connection closed before command completion. ${uncertain}`));
+      }
+      connection.on("error", onConnectionError);
+      connection.on("end", onConnectionClose);
+      connection.on("close", onConnectionClose);
+      // exec() includes channel-open and command-request acknowledgement. Its
+      // callback can stall before any stream/watchdog exists.
+      openTimer = setTimeout(() => {
+        fail(
+          new Error(`SSH channel request timed out after ${this.opts.timeoutMs}ms. ${uncertain}`),
+        );
+        // There is no channel to cancel yet. Retire this connection so a late
+        // exec acknowledgement cannot contaminate subsequent pooled calls.
+        if (this.client === connection) this.disconnect();
+      }, this.opts.timeoutMs);
+      const onChannel = (err: Error | undefined, channel: ClientChannel): void => {
+        if (settled) {
+          try {
+            channel?.close();
+          } catch {
+            /* request already cancelled by disconnect */
+          }
           return;
         }
-        const stdout: Buffer[] = [];
-        const stderrBuf: Buffer[] = [];
-        let settled = false;
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        let idleTimer: ReturnType<typeof setTimeout> | undefined;
-        let hardTimer: ReturnType<typeof setTimeout> | undefined;
-        const clearTimers = (): void => {
-          if (timer) clearTimeout(timer);
-          if (idleTimer) clearTimeout(idleTimer);
-          if (hardTimer) clearTimeout(hardTimer);
-        };
-        const finish = (): void => {
-          if (settled) return;
-          settled = true;
-          clearTimers();
-          const out = decodeOutput(Buffer.concat(stdout));
-          const error = decodeOutput(Buffer.concat(stderrBuf));
-          resolve(error && !out ? error : out);
-        };
-        const fail = (e: Error): void => {
-          if (settled) return;
-          settled = true;
-          clearTimers();
-          try {
-            stream.close();
-          } catch {
-            /* channel already closing */
-          }
-          reject(e);
-        };
+        if (openTimer) clearTimeout(openTimer);
+        if (err) return fail(err);
+        stream = channel;
         // Idle watchdog: if the channel goes silent AND never closes, the command
         // is wedged — e.g. RouterOS waiting for more input from a malformed/
         // unbalanced command, which would otherwise pin this connection (and the
@@ -294,18 +338,14 @@ export class MikroTikSSHClient {
         // Re-armed on every chunk, so a slow-but-streaming command (a large
         // `/export`) is never cut off while it is actively producing output.
         const armIdle = (): void => {
+          if (settled) return;
           if (idleTimer) clearTimeout(idleTimer);
           idleTimer = setTimeout(() => {
-            try {
-              stream.signal("INT");
-            } catch {
-              /* RouterOS may not honour signals */
-            }
             fail(
               new Error(
                 `MikroTik command produced no output for ${RUN_IDLE_TIMEOUT_MS / 1000}s and the SSH ` +
                   "channel never closed — it appears wedged (often a malformed or unbalanced command). " +
-                  `Aborted to avoid hanging the connection. Command: ${command.slice(0, 120)}`,
+                  `${uncertain} Command: ${command.slice(0, 120)}`,
               ),
             );
           }, RUN_IDLE_TIMEOUT_MS);
@@ -318,17 +358,17 @@ export class MikroTikSSHClient {
         // streamed, so the tool can't hang forever.
         if (opts.maxMs && opts.maxMs > 0) {
           timer = setTimeout(() => {
+            finish();
             try {
-              stream.signal("INT");
+              channel.signal("INT");
             } catch {
               /* RouterOS may not honour signals */
             }
             try {
-              stream.close();
+              channel.close();
             } catch {
               /* channel already closing */
             }
-            finish();
           }, opts.maxMs);
         } else {
           // No caller-supplied cap: enforce the absolute deadline. Unlike the
@@ -338,32 +378,47 @@ export class MikroTikSSHClient {
           // complete one is worse than an error, because the model would go on
           // to make decisions from a truncated view of the device.
           hardTimer = setTimeout(() => {
-            try {
-              stream.signal("INT");
-            } catch {
-              /* RouterOS may not honour signals */
-            }
             const got = Buffer.concat(stdout).length;
             fail(
               new Error(
                 `MikroTik command exceeded the ${RUN_HARD_TIMEOUT_MS / 1000}s hard timeout and was ` +
                   `aborted (${got} bytes received, output discarded as incomplete). ` +
-                  `Command: ${command.slice(0, 120)}`,
+                  `${uncertain} Command: ${command.slice(0, 120)}`,
               ),
             );
           }, RUN_HARD_TIMEOUT_MS);
         }
-        stream
-          .on("close", finish)
+        channel
+          .on("error", (error: Error) =>
+            fail(new Error(`SSH channel error: ${error.message}. ${uncertain}`)),
+          )
+          .on("close", (code?: number | null, signal?: string) => {
+            if (settled) return;
+            // Exit status is optional in SSH; a normal close without it is valid.
+            if ((typeof code === "number" && code !== 0) || signal) {
+              fail(
+                new Error(
+                  `MikroTik command failed (${signal ? `signal ${signal}` : `exit code ${code}`}): ${decodeOutput(Buffer.concat(stderrBuf)) || decodeOutput(Buffer.concat(stdout))}`,
+                ),
+              );
+            } else finish();
+          })
           .on("data", (d: Buffer) => {
+            if (settled) return;
             stdout.push(d);
             armIdle();
           })
           .stderr.on("data", (d: Buffer) => {
+            if (settled) return;
             stderrBuf.push(d);
             armIdle();
           });
-      });
+      };
+      try {
+        openChannel(command, onChannel);
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
@@ -448,12 +503,13 @@ export class MikroTikSSHClient {
   /** Close the SSH connection (and any jump hosts). Safe to call multiple times. */
   disconnect(): void {
     if (this.client) {
+      const client = this.client;
+      this.client = null;
       try {
-        this.client.end();
+        client.end();
       } catch {
         /* already closed */
       }
-      this.client = null;
     }
     // Tear down bastions in reverse (inner-most first) so the target channel is
     // gone before its carrier hop closes.
