@@ -248,7 +248,9 @@ export function Combobox({
   useEffect(() => {
     if (!activeValue || !open) return;
     const item = items.get(activeValue)?.ref.current;
-    const list = item?.closest<HTMLElement>("[role='listbox']");
+    const list =
+      item?.closest<HTMLElement>("[data-slot='scroll-area-viewport']") ??
+      item?.closest<HTMLElement>("[role='listbox']");
     if (!item || !list) return;
     const itemRect = item.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
