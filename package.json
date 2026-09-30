@@ -76,6 +76,7 @@
     "security:all": "bun run security:audit && bun run security:licenses",
     "prepublish:security": "npm run security:all",
     "test": "vp test run",
+    "test:memory": "bun test tests/memory-store.bun.test.ts && vp test run tests/observability/memory-routes.spec.ts tests/observability/memory-view.spec.ts tests/memory-accessor.spec.ts",
     "test:built": "bun run --bun scripts/check-mcp-build.ts",
     "test:watch": "vp test",
     "test:coverage": "vp test --ui --coverage --watch",

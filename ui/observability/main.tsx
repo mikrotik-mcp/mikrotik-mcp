@@ -445,11 +445,12 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
     ],
   },
   memory: {
-    what: "A persistent knowledge graph the AI builds across sessions — entities (routers, subnets, users), relations between them, and free-text observations.",
+    what: "Local network knowledge with sources, confidence, expiry and revision history. Full-text recall supplies relevant context, not authority to change a router.",
     tips: [
-      "Entities are created by the AI via MCP tools — you can browse and delete them here.",
-      "The graph visualization shows entities as circles and relations as directed edges; click a node to inspect it.",
-      "Change the database path to switch between different knowledge bases.",
+      "Create an entity, then add facts, constraints, lessons, preferences or procedures. Link entities to include related knowledge in recall.",
+      "Use Recall lab to preview exact LLM context and why each memory was selected. Expired and archived memories are excluded.",
+      "Review unverified or stale records before relying on them. Editing content or source resets verification; archiving preserves history.",
+      "Changing the database path switches knowledge bases; it does not move existing data. Never store credentials here.",
     ],
   },
   alerts: {

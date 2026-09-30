@@ -121,7 +121,7 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "backups", label: "Backups", sub: "Local config vault — create, restore, manage" },
   { id: "modules", label: "Modules", sub: "Enable/disable tool modules — curate the surface" },
   { id: "config", label: "Config", sub: "Effective configuration & safe editor" },
-  { id: "memory", label: "Memory", sub: "Knowledge graph — entities, relations & observations" },
+  { id: "memory", label: "Memory", sub: "Evidence, lessons & relevant context across sessions" },
   {
     id: "alerts",
     label: "Alerts",
