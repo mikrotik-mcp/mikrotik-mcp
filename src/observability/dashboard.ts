@@ -42,6 +42,7 @@ import { moduleCatalog } from "../tools";
 import { applyModuleToggle, moduleSurface } from "./modules";
 import { atomicWrite, mergeConfigDraft, mergeDeviceDraft, serializeConfig } from "../config-write";
 import { scopeConfigDraft } from "../config-device-draft";
+import { listSshKeys } from "./ssh-key-inventory";
 import { buildChangePlan, renderPlan, splitCommands } from "../core/change-plan";
 import { diffLines } from "../core/diff";
 import { getS3Client, isS3Configured, presignExpiresIn, s3Target } from "../core/s3";
@@ -566,6 +567,17 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
 
   if (p === "/api/config-schema" && req.method === "GET") {
     return json(configSchemaJson());
+  }
+
+  if (p === "/api/config/ssh-keys" && req.method === "GET") {
+    // This route is behind the dashboard's token gate. Never accept a caller-supplied path.
+    const origin = req.headers.get("origin");
+    if ((origin && origin !== url.origin) || req.headers.get("sec-fetch-site") === "cross-site")
+      return json({ error: "SSH key selection requires a same-origin dashboard request." }, 403);
+    const paths = Object.values(getConfig().devices).flatMap((device) =>
+      [device.keyFilename, device.jumpHost?.keyFilename].filter((p): p is string => !!p),
+    );
+    return Response.json(await listSshKeys(paths), { headers: { "cache-control": "no-store" } });
   }
 
   if (p === "/api/config/validate" && req.method === "POST") {
