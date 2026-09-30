@@ -5,6 +5,7 @@ import {
   LaunchType,
   MenuBarExtra,
   Toast,
+  environment,
   launchCommand,
   open,
   openExtensionPreferences,
@@ -44,13 +45,26 @@ export async function runFeedback(
   title: string,
   action: () => Promise<unknown>,
 ) {
-  const toast = await showToast({ style: Toast.Style.Animated, title });
+  // Menu-bar actions can retain a background launch context. Feedback must
+  // never prevent the action when Raycast cannot display a toast.
+  let toast: Toast | undefined;
+  if (environment.launchType !== LaunchType.Background) {
+    try {
+      toast = await showToast({ style: Toast.Style.Animated, title });
+    } catch (error) {
+      console.error("Could not show action feedback:", error);
+    }
+  }
   try {
     await action();
-    toast.style = Toast.Style.Success;
+    if (toast) toast.style = Toast.Style.Success;
   } catch (error) {
-    toast.style = Toast.Style.Failure;
-    toast.message = error instanceof Error ? error.message : "Action failed";
+    if (toast) {
+      toast.style = Toast.Style.Failure;
+      toast.message = error instanceof Error ? error.message : "Action failed";
+    } else {
+      console.error(`${title} failed:`, error);
+    }
   }
 }
 export const launch = (name: string) =>
