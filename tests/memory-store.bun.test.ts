@@ -93,8 +93,8 @@ test("shared and explicit group policy inherit safely, conflicts are visible and
     const recall = store.recall(
       RecallSchema.parse({ entityName: "home", query: "nothingmatches", includeRelated: false }),
     );
-    expect(recall.items.map((f) => f.id).sort()).toEqual(
-      [common.id, groupFact.id, local.id].sort(),
+    expect(recall.items.map((f) => f.id).sort((a, b) => a - b)).toEqual(
+      [common.id, groupFact.id, local.id].sort((a, b) => a - b),
     );
     expect(recall.applicableScopes.map((s) => s.entityName).sort()).toEqual([
       "fleet-policy",

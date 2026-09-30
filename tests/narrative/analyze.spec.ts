@@ -188,7 +188,7 @@ describe("internet path", () => {
   test("multi-WAN reports both routes with their distances and check-gateway", () => {
     const n = analyzeDevice(MULTI_WAN);
     expect(n.wans).toHaveLength(2);
-    expect(n.wans.map((w) => w.distance).sort()).toEqual([1, 2]);
+    expect(n.wans.map((w) => w.distance).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([1, 2]);
     expect(n.wans.every((w) => w.checkGateway === "ping")).toBe(true);
   });
 
