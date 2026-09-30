@@ -1181,13 +1181,10 @@ async function aaaRoutes(req: Request, url: URL): Promise<Response | null> {
         url.searchParams.get("refresh") === "true",
         false,
       );
-      return Response.json(
-        "status" in snapshot ? snapshot : buildUmReport(snapshot, filters),
-        {
-          status: "status" in snapshot ? (snapshot.status === "collecting" ? 202 : 503) : 200,
-          headers: { "cache-control": "no-store" },
-        },
-      );
+      return Response.json("status" in snapshot ? snapshot : buildUmReport(snapshot, filters), {
+        status: "status" in snapshot ? (snapshot.status === "collecting" ? 202 : 503) : 200,
+        headers: { "cache-control": "no-store" },
+      });
     }
     if (p === "/api/aaa/user-counters") {
       return json(await getUmUserCounters(deviceFromQuery()));
@@ -1321,6 +1318,7 @@ function withTotals(series: { day: string; rx: number; tx: number }[]): unknown 
 // Lazily open the config-snapshot store (shared with the snapshot tools), so the
 // SQLite handle isn't created unless the Snapshots page is actually used.
 let snapStorePromise: Promise<SnapshotStore> | null = null;
+
 function snapStore(): Promise<SnapshotStore> {
   if (!snapStorePromise) snapStorePromise = openSnapshotStore(DEFAULT_SNAPSHOT_DB);
   return snapStorePromise;
@@ -1544,6 +1542,7 @@ async function featureRoutes(req: Request, url: URL): Promise<Response | null> {
 export interface DashboardHandle {
   server: Server<SocketData>;
   store: EventStore;
+
   stop(): void;
 }
 
