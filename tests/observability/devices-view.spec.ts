@@ -216,16 +216,97 @@ test("an unavailable settings API displays a retry, not an empty configuration",
   expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeTruthy();
 });
 
+test.each(["Add device", "Edit settings for edge"])(
+  "%s opens only the modal and cancellation leaves management closed",
+  async (action) => {
+    const calls = mockConfigApi();
+    await render();
+    await click(button(action));
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="Manage routers"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeNull();
+    const cancel = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (b) => b.textContent?.trim() === "Cancel",
+    )!;
+    await click(cancel);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Manage routers"]')).toBeNull();
+    expect(button("Add device").disabled).toBe(false);
+    expect(button("Edit device")).toBeUndefined();
+    await click(button("Manage routers"));
+    await click(button("Preview diff"));
+    expect(Object.keys(calls.find((c) => c.path.includes("preview"))!.body.devices)).toEqual([
+      "edge",
+      "branch",
+    ]);
+    expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
+  },
+);
+
+test("adding inside an open manager preserves its unsaved order when the modal is cancelled", async () => {
+  const calls = mockConfigApi();
+  await render();
+  await click(button("Manage routers"));
+  await click(button("Move branch up"));
+  const manager = host.querySelector('[aria-label="Router configuration draft"]')!;
+  await click(
+    [...manager.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent?.trim() === "Add device",
+    )!,
+  );
+  expect(host.querySelector('[aria-label="Manage routers"]')).toBeTruthy();
+  await click(
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (b) => b.textContent?.trim() === "Cancel",
+    )!,
+  );
+  expect(host.querySelector('[aria-label="Manage routers"]')).toBeTruthy();
+  await click(button("Preview diff"));
+  expect(Object.keys(calls.find((c) => c.path.includes("preview"))!.body.devices)).toEqual([
+    "branch",
+    "edge",
+  ]);
+  expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
+});
+
+test("the add modal tests without saving, then Connect & Save uses safe apply without a second save click", async () => {
+  const calls = mockConfigApi();
+  await render();
+  await click(button("Add device"));
+  const modalButton = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (b) => b.textContent?.trim() === label,
+    )!;
+  const name = document.querySelector<HTMLInputElement>("#dev_name")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      name,
+      "new-lab",
+    );
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click(modalButton("Test connection"));
+  expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
+  await click(modalButton("Connect & Save"));
+  expect(calls.filter((c) => c.path.includes("test-device"))).toHaveLength(2);
+  const saves = calls.filter((c) => c.path === "/api/config?scope=devices");
+  expect(saves).toHaveLength(1);
+  expect(saves[0].body.config.devices["new-lab"].host).toBe("192.168.88.1");
+  expect(saves[0].body.config.devices.device).toBeUndefined();
+  expect(saves[0].body.rollbackMs).toBe(60000);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(host.textContent).toContain("unless you keep it");
+  expect(calls.some((c) => c.path.includes("/keep"))).toBe(false);
+  await click(button("Keep changes"));
+  expect(host.textContent).toContain("Changes kept.");
+});
+
 test("new and discovered routers open here without overwriting an existing router or saving", async () => {
   const calls = mockConfigApi();
   await render({ ...payload, devices: [] });
   await click(button("Add device"));
   expect(document.querySelector<HTMLInputElement>("#dev_name")?.value).toBe("device");
-  const done = () =>
-    [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-      (b) => b.textContent === "Done",
-    )!;
-  await click(done());
+  await acceptDeviceForm();
   await click(button("Close"));
   await click(button("Discard draft"));
   await act(async () =>
@@ -241,7 +322,7 @@ test("new and discovered routers open here without overwriting an existing route
     ),
   );
   expect(document.querySelector<HTMLInputElement>("#dev_name")?.value).toBe("edge-2");
-  await click(done());
+  await acceptDeviceForm();
   await click(button("Preview diff"));
   const draft = calls.find((c) => c.path === "/api/config/preview?scope=devices")!.body;
   expect(draft.devices.edge.host).toBe("192.0.2.1");

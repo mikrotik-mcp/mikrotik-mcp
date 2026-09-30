@@ -264,11 +264,23 @@ export function ConfigEditor({
           : "Saves all pending device changes without an auto-revert window."
       }
       initialSelection={selection}
+      onCancelStandalone={selection ? onClose : undefined}
     />
   );
 
+  // Quick add/edit needs the safe-apply state, not the inventory panel behind it.
+  // Reveal the manager only after accepting a draft or a save needing confirmation.
+  if (scope === "devices" && selection) return deviceForm;
+
   return (
-    <div className={cn("flex flex-col gap-3.5", scope === "devices" && "device-config-editor")}>
+    <div
+      className={cn(
+        "flex flex-col gap-3.5",
+        scope === "devices" && "device-config-editor devices-management",
+      )}
+      role={scope === "devices" ? "region" : undefined}
+      aria-label={scope === "devices" ? "Manage routers" : undefined}
+    >
       {scope === "server" && (
         <p className="text-xs text-muted-foreground">
           Router connections are managed on the{" "}

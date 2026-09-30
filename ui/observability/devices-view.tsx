@@ -106,20 +106,18 @@ export function DevicesView({
         </div>
       )}
       {editor && (
-        <section className="devices-management" aria-label="Manage routers">
-          <ConfigEditor
-            scope="devices"
-            initial={editor.initial}
-            original={editor.original}
-            initialSelection={editor.selection}
-            onClose={() => {
-              setEditor(null);
-              setRequest(null);
-              onSeedConsumed?.();
-            }}
-            onReload={() => onReload?.()}
-          />
-        </section>
+        <ConfigEditor
+          scope="devices"
+          initial={editor.initial}
+          original={editor.original}
+          initialSelection={editor.selection}
+          onClose={() => {
+            setEditor(null);
+            setRequest(null);
+            onSeedConsumed?.();
+          }}
+          onReload={() => onReload?.()}
+        />
       )}
     </>
   );

@@ -421,12 +421,14 @@ export function DevicesForm({
   onSave,
   saveNotice,
   initialSelection,
+  onCancelStandalone,
 }: {
   cfg: Cfg;
   onChange: (c: Cfg) => void;
   onSave: (c: Cfg) => Promise<boolean>;
   saveNotice: string;
   initialSelection?: { name: string; isNew: boolean };
+  onCancelStandalone?: () => void;
 } & DeviceControls): ReactNode {
   const [sheet, setSheet] = useState(initialSelection ?? null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -485,6 +487,10 @@ export function DevicesForm({
         setSheet(null);
       }}
       onCancel={() => {
+        if (onCancelStandalone) {
+          onCancelStandalone();
+          return;
+        }
         if (sheet.isNew) removeDevice(sheet.name);
         setSheet(null);
       }}
@@ -503,6 +509,7 @@ export function DevicesForm({
       )}
     />
   );
+  if (onCancelStandalone) return editor;
 
   return (
     <section className="router-manager" aria-label="Router configuration draft">
