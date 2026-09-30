@@ -13,7 +13,8 @@
  * The `mergeSecrets`/`serializeConfig`/`backupName` helpers are pure and unit
  * tested; `atomicWrite` is the only side-effecting one (temp file + rename).
  */
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { REDACTED } from "./observability/event";
 import { CREDENTIAL_SOURCE } from "./config-device-draft";
@@ -118,7 +119,11 @@ export function backupName(path: string, ts: number): string {
  */
 export function atomicWrite(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp-${process.pid}`;
-  writeFileSync(tmp, text, "utf8");
-  renameSync(tmp, path);
+  const tmp = `${path}.tmp-${randomUUID()}`;
+  try {
+    writeFileSync(tmp, text, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    renameSync(tmp, path);
+  } finally {
+    rmSync(tmp, { force: true });
+  }
 }

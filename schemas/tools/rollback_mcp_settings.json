@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rollback_mcp_settings",
+  "type": "object",
+  "properties": {
+    "pending_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "description": "Revision returned by update_mcp_settings or get_mcp_settings."
+    }
+  },
+  "required": ["pending_id", "revision"],
+  "additionalProperties": false
+}

@@ -185,6 +185,21 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
   // otherwise the memory_* tools are inert and the instruction would be a lie.
   if (getConfig().memory.enabled) instructions += MEMORY_INSTRUCTIONS;
 
+  if (!readOnly && availableTools.has("update_mcp_settings")) {
+    instructions += `\n\nMCP host settings (not RouterOS configuration):
+  Use get_mcp_settings_schema, then get_mcp_settings and preview_mcp_settings.
+  Show changed fields and restart requirements; apply only explicit user-approved
+  changes with update_mcp_settings, the preview revision and confirm=true.
+  Read back with get_mcp_settings; confirm_mcp_settings before the deadline or
+  rollback_mcp_settings. The tool creates a local config backup automatically;
+  no router snapshot or device argument is needed. Never restart while pending:
+  the rollback timer only runs while this process is alive. Configured values do
+  not prove startup-only components are active; restart separately after confirmation.
+  Protected settings (devices, credentials, listeners, paths, access, readOnly,
+  tool restrictions and probe allowlists) require the operator, not a workaround.
+  If another workflow owns a pending change, finish it there before applying.`;
+  }
+
   // If a previous run cached an update check showing a newer version, seed
   // the LLM's instructions so it naturally knows about the update. This is
   // a synchronous file read — fast and non-blocking.

@@ -99,7 +99,7 @@ import { fetchAllReleases, fetchLatestRelease } from "../core/update-check";
 import { logger } from "../logger";
 import { UI_DIST_DIR } from "../paths";
 import type { ConfigAdmin } from "./config-admin";
-import { createConfigAdmin, validateConfig } from "./config-admin";
+import { getConfigAdmin, validateConfig } from "./config-admin";
 import {
   AUTO_RETENTION,
   deleteVersion,
@@ -1602,24 +1602,7 @@ export async function runDashboard(
   // Config Studio: a safe-apply state machine bound to real fs/clock/timers. It
   // backs up the config file, hot-swaps via setConfig, and auto-reverts unless
   // the dashboard confirms within the rollback window.
-  const configAdmin = createConfigAdmin({
-    getConfig,
-    setConfig,
-    source: getConfigSource,
-    readFile: (pth) => {
-      try {
-        return readFileSync(pth, "utf8");
-      } catch {
-        return null;
-      }
-    },
-    writeText: atomicWrite,
-    now: Date.now,
-    schedule: (fn, ms) => setTimeout(fn, ms),
-    cancel: (h) => {
-      if (h) clearTimeout(h as ReturnType<typeof setTimeout>);
-    },
-  });
+  const configAdmin = getConfigAdmin();
 
   const tokenOk = (req: Request, url: URL): boolean => {
     if (!cfg.token) return true;

@@ -121,6 +121,21 @@
       "tools": ["check_server_pulse"]
     },
     {
+      "slug": "mcp-settings",
+      "label": "MCP Settings",
+      "group": "Discovery & Meta",
+      "description": "Read, validate, preview and safely update MCP host settings with local backups, revision checks and timed rollback. Never changes routers, credentials or access ceilings.",
+      "alwaysOn": false,
+      "tools": [
+        "get_mcp_settings",
+        "get_mcp_settings_schema",
+        "preview_mcp_settings",
+        "update_mcp_settings",
+        "confirm_mcp_settings",
+        "rollback_mcp_settings"
+      ]
+    },
+    {
       "slug": "device-capabilities",
       "label": "Device Capabilities",
       "group": "Discovery & Meta",
@@ -2499,6 +2514,62 @@
     {
       "name": "check_server_pulse",
       "module": "server-pulse",
+      "group": "Discovery & Meta",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "get_mcp_settings",
+      "module": "mcp-settings",
+      "group": "Discovery & Meta",
+      "noDevice": true,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "get_mcp_settings_schema",
+      "module": "mcp-settings",
+      "group": "Discovery & Meta",
+      "noDevice": true,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "preview_mcp_settings",
+      "module": "mcp-settings",
+      "group": "Discovery & Meta",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "update_mcp_settings",
+      "module": "mcp-settings",
+      "group": "Discovery & Meta",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "confirm_mcp_settings",
+      "module": "mcp-settings",
+      "group": "Discovery & Meta",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "rollback_mcp_settings",
+      "module": "mcp-settings",
       "group": "Discovery & Meta",
       "noDevice": true,
       "requires": null,

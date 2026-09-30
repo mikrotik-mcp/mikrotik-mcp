@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "preview_mcp_settings",
+  "type": "object",
+  "properties": {
+    "changes": {
+      "type": "object",
+      "properties": {
+        "mcp": {
+          "type": "object",
+          "properties": {
+            "toolPageSize": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "appViews": {
+              "type": "boolean"
+            },
+            "capabilityGating": {
+              "type": "string",
+              "enum": ["off", "annotate", "filter"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "ssh": {
+          "type": "object",
+          "properties": {
+            "keepAlive": {
+              "type": "boolean"
+            },
+            "keepAliveInterval": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "idleTimeout": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false
+        },
+        "dashboard": {
+          "type": "object",
+          "properties": {
+            "maxEvents": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "captureBody": {
+              "type": "boolean"
+            },
+            "redactInput": {
+              "description": "May enable redaction, never disable it.",
+              "type": "boolean",
+              "const": true
+            },
+            "maxBodyBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "feedLimit": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 10000
+            }
+          },
+          "additionalProperties": false
+        },
+        "memory": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "disableUpdateCheck": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Only the fields to change; omitted values are preserved."
+    }
+  },
+  "required": ["changes"],
+  "additionalProperties": false
+}

@@ -131,6 +131,7 @@ import { explainTools } from "./explain";
 import { attackTools } from "./attack";
 import { schedulerTools } from "./scheduler";
 import { serverPulseTools } from "./server-pulse";
+import { mcpSettingsTools } from "./mcp-settings";
 import { capabilityTools } from "./capability";
 import { alertTools } from "./alerts";
 import { threatFeedTools } from "./threat-feed";
@@ -251,6 +252,15 @@ export const moduleCatalog: ModuleInfo[] = [
       "Server self-awareness: running version, update availability, release notes, " +
       "upgrade path, and server vitals. No RouterOS device is contacted.",
     tools: serverPulseTools,
+  },
+  {
+    label: "MCP Settings",
+    slug: "mcp-settings",
+    group: "Discovery & Meta",
+    description:
+      "Read, validate, preview and safely update MCP host settings with local backups, " +
+      "revision checks and timed rollback. Never changes routers, credentials or access ceilings.",
+    tools: mcpSettingsTools,
   },
   {
     label: "Device Capabilities",

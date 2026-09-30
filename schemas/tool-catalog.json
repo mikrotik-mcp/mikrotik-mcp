@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.18.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 931,
+  "toolCount": 937,
   "tools": [
     {
       "name": "create_client_check",
@@ -1336,6 +1336,319 @@
             "type": "boolean"
           }
         },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_mcp_settings",
+      "title": "Read MCP Server Settings",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read the MCP host's editable settings, opaque revision and pending change. Covers tool presentation, SSH pooling, dashboard recording, Memory enablement and startup update checks. Contains no credentials; never contacts a router. These are configured values, not proof a startup-only component has restarted. Read before preview_mcp_settings or update_mcp_settings.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_mcp_settings_schema",
+      "title": "Describe Editable MCP Settings",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Get the exact JSON Schema for the partial changes accepted by preview_mcp_settings and update_mcp_settings. Unknown/protected fields are rejected, omitted fields stay unchanged. Credentials, listeners, file paths, device inventory and permission ceilings are operator-managed. No device or file changes.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "preview_mcp_settings",
+      "title": "Validate and Preview MCP Settings",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Validate a partial MCP settings change against live configuration and return changed paths, a secret-free diff, revision and restart requirements. No file writes or router contact. Show the preview and obtain user approval before applying; never guess setting names.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "object",
+            "properties": {
+              "mcp": {
+                "type": "object",
+                "properties": {
+                  "toolPageSize": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "appViews": {
+                    "type": "boolean"
+                  },
+                  "capabilityGating": {
+                    "type": "string",
+                    "enum": ["off", "annotate", "filter"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "ssh": {
+                "type": "object",
+                "properties": {
+                  "keepAlive": {
+                    "type": "boolean"
+                  },
+                  "keepAliveInterval": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "idleTimeout": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false
+              },
+              "dashboard": {
+                "type": "object",
+                "properties": {
+                  "maxEvents": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "captureBody": {
+                    "type": "boolean"
+                  },
+                  "redactInput": {
+                    "description": "May enable redaction, never disable it.",
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "maxBodyBytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "feedLimit": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10000
+                  }
+                },
+                "additionalProperties": false
+              },
+              "memory": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "disableUpdateCheck": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Only the fields to change; omitted values are preserved."
+          }
+        },
+        "required": ["changes"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_mcp_settings",
+      "title": "Safely Update MCP Settings",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Apply explicitly user-approved MCP host settings, not RouterOS configuration. First get_mcp_settings_schema and preview_mcp_settings; supply that revision and confirm=true. Backs up the config locally, saves atomically and arms a 30–600s in-process rollback (default 60s). Conflicts with another pending dashboard/tool edit are rejected. Verify configured values with get_mcp_settings, then confirm_mcp_settings before the deadline or rollback_mcp_settings. Never restart while pending: the rollback timer does not survive process exit. Restart-required settings are only fully activated after confirmation and a separate operator-controlled restart. Does not widen access scopes or change router addresses/credentials.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "object",
+            "properties": {
+              "mcp": {
+                "type": "object",
+                "properties": {
+                  "toolPageSize": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "appViews": {
+                    "type": "boolean"
+                  },
+                  "capabilityGating": {
+                    "type": "string",
+                    "enum": ["off", "annotate", "filter"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "ssh": {
+                "type": "object",
+                "properties": {
+                  "keepAlive": {
+                    "type": "boolean"
+                  },
+                  "keepAliveInterval": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "idleTimeout": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false
+              },
+              "dashboard": {
+                "type": "object",
+                "properties": {
+                  "maxEvents": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "captureBody": {
+                    "type": "boolean"
+                  },
+                  "redactInput": {
+                    "description": "May enable redaction, never disable it.",
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "maxBodyBytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "feedLimit": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10000
+                  }
+                },
+                "additionalProperties": false
+              },
+              "memory": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "disableUpdateCheck": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "Current revision from get_mcp_settings or preview_mcp_settings."
+          },
+          "confirm": {
+            "type": "boolean",
+            "const": true,
+            "description": "Only set after the user authorizes these exact changes."
+          },
+          "rollback_seconds": {
+            "default": 60,
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 600
+          }
+        },
+        "required": ["changes", "revision", "confirm", "rollback_seconds"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "confirm_mcp_settings",
+      "title": "Keep a Pending MCP Settings Change",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Keep the exact pending change created by update_mcp_settings after reading back its values. Cancels its rollback timer. Requires the current revision and pending_id; cannot confirm dashboard-owned, expired or superseded changes. Does not restart the MCP server or contact routers.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pending_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "Revision returned by update_mcp_settings or get_mcp_settings."
+          }
+        },
+        "required": ["pending_id", "revision"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rollback_mcp_settings",
+      "title": "Revert a Pending MCP Settings Change",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Restore the host-side config backup for a still-pending update_mcp_settings change. Requires its pending_id and current revision. Refuses dashboard-owned transactions or changes that would overwrite newer configuration. Restores configured values only; no router changes, server restart or deletion of knowledge data.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pending_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "Revision returned by update_mcp_settings or get_mcp_settings."
+          }
+        },
+        "required": ["pending_id", "revision"],
         "additionalProperties": false
       }
     },

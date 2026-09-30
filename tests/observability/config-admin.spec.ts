@@ -120,5 +120,12 @@ describe("createConfigAdmin", () => {
     expect(h.config().defaultDevice).toBe("b");
     h.fireTimer(); // nothing scheduled → no-op
     expect(h.config().defaultDevice).toBe("b");
+    expect(admin.pendingId()).toBeNull();
+    // Immediate dashboard preferences do not leave an invisible lock behind.
+    const immediate = admin.applyConfig(A, 0);
+    expect(admin.rollback(immediate.pendingId)).toBe(true);
+    expect(h.config().defaultDevice).toBe("b");
+    admin.applyConfig(A, 30_000);
+    expect(() => admin.applyConfig(B, 0)).toThrow("awaits confirmation");
   });
 });

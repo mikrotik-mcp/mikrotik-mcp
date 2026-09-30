@@ -1,8 +1,11 @@
 /**
- * Unit tests for the Config Studio persistence helpers. Pure — no real FS.
+ * Config Studio persistence helpers; disk checks use an isolated temporary directory.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { backupName, mergeSecrets, serializeConfig } from "../../src/config-write";
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { atomicWrite, backupName, mergeSecrets, serializeConfig } from "../../src/config-write";
 import { REDACTED } from "../../src/observability/event";
 
 describe("mergeSecrets", () => {
@@ -76,4 +79,23 @@ describe("backupName", () => {
       "/etc/mikrotik/config.json.bak-1700000000000",
     );
   });
+});
+
+test("atomic config/backup writes remain private, including replacement of a public file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mcp-config-write-"));
+  try {
+    const path = join(dir, "config.json");
+    atomicWrite(path, "old");
+    chmodSync(path, 0o644);
+    atomicWrite(backupName(path, 1), "old");
+    atomicWrite(path, "new");
+    expect(readFileSync(path, "utf8")).toBe("new");
+    expect(readdirSync(dir).sort()).toEqual(["config.json", "config.json.bak-1"]);
+    if (process.platform !== "win32") {
+      expect(statSync(path).mode & 0o777).toBe(0o600);
+      expect(statSync(backupName(path, 1)).mode & 0o777).toBe(0o600);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

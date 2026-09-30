@@ -1,5 +1,5 @@
 /**
- * Safe-apply state machine for the dashboard's Config Studio.
+ * Shared safe-apply state machine for Config Studio and MCP host settings tools.
  *
  * Saving a config is risky: one bad device entry or a typo in the dashboard's
  * own bind address can lock you out with the server none the wiser. So writes go
@@ -12,9 +12,13 @@
  * All I/O (filesystem, clock, timers, the runtime config) is injected, so the
  * machine is unit-tested with fakes — no real files, no real `setTimeout`.
  */
-import { MikrotikConfigSchema } from "../config";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { getConfigSource, MikrotikConfigSchema } from "../config";
 import type { ConfigSource, MikrotikConfig } from "../config";
-import { backupName, serializeConfig } from "../config-write";
+import { atomicWrite, backupName, serializeConfig } from "../config-write";
+import { getConfig, setConfig } from "../core/runtime";
+import { logger } from "../logger";
 
 /** A single validation problem, addressed by its dotted JSON path. */
 export interface ConfigIssue {
@@ -52,7 +56,7 @@ export interface AdminDeps {
   getConfig: () => MikrotikConfig;
   setConfig: (c: MikrotikConfig) => void;
   source: () => ConfigSource;
-  /** Read a file's text, or null when it doesn't exist / can't be read. */
+  /** Read a file's text, or null when it doesn't exist. Other errors must throw. */
   readFile: (path: string) => string | null;
   /** Persist text to a path (atomically in prod). */
   writeText: (path: string, text: string) => void;
@@ -67,6 +71,8 @@ export interface ApplyResult {
   rollbackMs: number;
   path: string;
   fromFile: boolean;
+  backupPath: string;
+  expiresAt: number | null;
 }
 
 interface Pending {
@@ -75,6 +81,9 @@ interface Pending {
   /** In-memory config to restore on rollback. */
   previous: MikrotikConfig;
   timer: unknown;
+  rollbackMs: number;
+  path: string;
+  revision: string;
 }
 
 export interface ConfigAdmin {
@@ -84,53 +93,153 @@ export interface ConfigAdmin {
   keepConfig: (id: string) => boolean;
   /** Revert a pending apply to its backup now. Also fired automatically on timeout. */
   rollback: (id: string) => boolean;
+  /** A timed change requiring confirmation; immediate saves do not block later edits. */
   pendingId: () => string | null;
+  /** Opaque revision of both runtime settings and the source file. */
+  revision: () => string;
 }
 
 /** Build a config-admin bound to the given dependencies. */
 export function createConfigAdmin(deps: AdminDeps): ConfigAdmin {
+  // ponytail: coordination is process-local; use a file lock if multiple MCP processes must write concurrently.
   let pending: Pending | null = null;
+  let lastTimestamp = 0;
+  const salt = randomUUID();
+  const fingerprint = (
+    config: MikrotikConfig,
+    source: ConfigSource,
+    contents: string | null,
+  ): string =>
+    createHash("sha256")
+      .update(salt)
+      .update(JSON.stringify([config, source, contents]))
+      .digest("hex");
+  const revision = (): string => {
+    const source = deps.source();
+    return fingerprint(deps.getConfig(), source, deps.readFile(source.path));
+  };
+
+  const currentPending = (): Pending | null => {
+    if (pending && pending.revision !== revision()) {
+      deps.cancel(pending.timer);
+      pending = null;
+      logger.warn(
+        "Config changed outside its pending transaction; preserved newer settings. Backup retained.",
+      );
+    }
+    return pending;
+  };
 
   const rollback = (id: string): boolean => {
-    if (!pending || pending.id !== id) return false;
-    const { backupPath, previous, timer } = pending;
+    const active = currentPending();
+    if (!active || active.id !== id) return false;
+    const { backupPath, previous, timer, path } = active;
+    const backup = deps.readFile(backupPath);
+    if (backup == null)
+      throw new Error("Configuration backup is unavailable; rollback was not applied.");
+    deps.writeText(path, backup);
+    deps.setConfig(previous);
     deps.cancel(timer);
     pending = null;
-    const backup = deps.readFile(backupPath);
-    if (backup != null) deps.writeText(deps.source().path, backup);
-    deps.setConfig(previous);
     return true;
   };
 
   const applyConfig = (parsed: MikrotikConfig, rollbackMs: number): ApplyResult => {
-    // A new apply supersedes any still-pending one (its timer is dropped; its
-    // already-written file stands as the new baseline).
-    if (pending) deps.cancel(pending.timer);
+    if ((currentPending()?.rollbackMs ?? 0) > 0)
+      throw new Error(
+        "Another configuration change awaits confirmation. Keep or roll it back first.",
+      );
 
     const src = deps.source();
     const previous = deps.getConfig();
-    const ts = deps.now();
+    const ts = Math.max(deps.now(), lastTimestamp + 1);
+    lastTimestamp = ts;
     const id = `cfg_${ts}`;
 
     // Back up whatever is on disk now (or the serialized in-memory config when
     // no file exists yet), then write the new config and hot-swap it live.
     const backupPath = backupName(src.path, ts);
     const existing = deps.readFile(src.path) ?? serializeConfig(previous);
+    const contents = serializeConfig(parsed);
+    const nextRevision = fingerprint(parsed, src, contents);
     deps.writeText(backupPath, existing);
-    deps.writeText(src.path, serializeConfig(parsed));
+    deps.writeText(src.path, contents);
     deps.setConfig(parsed);
 
-    const timer = rollbackMs > 0 ? deps.schedule(() => void rollback(id), rollbackMs) : null;
-    pending = { id, backupPath, previous, timer };
-    return { pendingId: id, rollbackMs, path: src.path, fromFile: src.fromFile };
+    const timer =
+      rollbackMs > 0
+        ? deps.schedule(() => {
+            try {
+              rollback(id);
+            } catch {
+              logger.error(
+                "Configuration auto-rollback failed; backup retained. Retry rollback or restore it manually.",
+              );
+            }
+          }, rollbackMs)
+        : null;
+    pending = {
+      id,
+      backupPath,
+      previous,
+      timer,
+      rollbackMs,
+      path: src.path,
+      revision: nextRevision,
+    };
+    return {
+      pendingId: id,
+      rollbackMs,
+      path: src.path,
+      fromFile: src.fromFile,
+      backupPath,
+      expiresAt: rollbackMs > 0 ? deps.now() + rollbackMs : null,
+    };
   };
 
   const keepConfig = (id: string): boolean => {
-    if (!pending || pending.id !== id) return false;
-    deps.cancel(pending.timer);
+    const active = currentPending();
+    if (!active || active.id !== id) return false;
+    deps.cancel(active.timer);
     pending = null;
     return true;
   };
 
-  return { applyConfig, keepConfig, rollback, pendingId: () => pending?.id ?? null };
+  return {
+    applyConfig,
+    keepConfig,
+    rollback,
+    pendingId: () => {
+      const active = currentPending();
+      return active && active.rollbackMs > 0 ? active.id : null;
+    },
+    revision,
+  };
+}
+
+let sharedAdmin: ConfigAdmin | undefined;
+
+/** One host-side transaction coordinator, shared by dashboard and MCP tools (also without a dashboard). */
+export function getConfigAdmin(): ConfigAdmin {
+  return (sharedAdmin ??= createConfigAdmin({
+    getConfig,
+    setConfig,
+    source: getConfigSource,
+    readFile: (path) => {
+      try {
+        return readFileSync(path, "utf8");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw new Error(
+          "Cannot read the MCP configuration file; check host-side file permissions.",
+        );
+      }
+    },
+    writeText: atomicWrite,
+    now: Date.now,
+    schedule: (fn, ms) => setTimeout(fn, ms),
+    cancel: (timer) => {
+      if (timer) clearTimeout(timer as ReturnType<typeof setTimeout>);
+    },
+  }));
 }

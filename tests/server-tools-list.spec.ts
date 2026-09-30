@@ -18,6 +18,47 @@ afterEach(() => {
 });
 
 describe("tools/list over the real MCP transport (offline)", () => {
+  test.each([false, true])(
+    "MCP settings discovery respects readOnly=%s and needs no device",
+    async (readOnly) => {
+      setConfig(
+        MikrotikConfigSchema.parse({
+          devices: { offline: { host: "127.0.0.1", port: 1 } },
+          defaultDevice: "offline",
+          readOnly,
+          disableUpdateCheck: true,
+          memory: { enabled: false },
+          tools: { modules: ["mcp-settings"] },
+          mcp: { toolPageSize: 0 },
+        }),
+      );
+      const { server } = createServer();
+      const client = new Client({ name: "settings-discovery", version: "1" });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      try {
+        await server.connect(serverTransport);
+        await client.connect(clientTransport);
+        const { tools } = await client.listTools();
+        const settings = tools.filter(
+          (tool) => tool.name.endsWith("_mcp_settings") || tool.name === "get_mcp_settings_schema",
+        );
+        expect(settings).toHaveLength(readOnly ? 3 : 6);
+        for (const tool of settings)
+          expect(tool.inputSchema.properties).not.toHaveProperty("device");
+        expect(
+          client.getInstructions()?.includes("MCP host settings (not RouterOS configuration)"),
+        ).toBe(!readOnly);
+        const schema = await client.callTool({ name: "get_mcp_settings_schema", arguments: {} });
+        expect(schema.isError).toBeFalsy();
+        expect(JSON.stringify(schema.content)).toContain("keepAlive");
+        expect(executeMikrotikCommand).not.toHaveBeenCalled();
+      } finally {
+        await client.close();
+        await server.close();
+      }
+    },
+  );
+
   for (const capabilityGating of ["off", "annotate", "filter"] as const) {
     for (const appViews of [false, true]) {
       test.each([0, 37, 50, 100])(
