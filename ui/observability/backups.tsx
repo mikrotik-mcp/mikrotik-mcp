@@ -166,9 +166,9 @@ export function BackupsView(): ReactNode {
       warning?: string;
       error?: string;
     };
-    const r = await postJson<DirResp>("/api/backups/dir", { dir }).catch(
-      (): DirResp => ({ error: "request failed" }),
-    );
+    const r = await postJson<DirResp>("/api/backups/dir", { dir }).catch((): DirResp => ({
+      error: "request failed",
+    }));
     setBusy(false);
     setDirEdit(null);
     if (r.ok) {

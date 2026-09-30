@@ -445,11 +445,11 @@ recall, API and dashboard regression tests.
 **Shared memory.** The **Memory → Shared memory** tab assigns an explicit scope to a knowledge
 entity, with a preview of who inherits its existing and future memories:
 
-| Scope | Intended knowledge | Included when recalling a device |
-| --- | --- | --- |
-| Device (default) | Its IPs, routes, MTUs, firmware and measured outcomes | Only for that exact entity |
-| Group | Policies for an explicit set of device entities | Only for listed members; no nested groups |
-| Shared | Fleet-wide safeguards, preferences and reusable lessons | Automatically for every selected device |
+| Scope            | Intended knowledge                                      | Included when recalling a device          |
+| ---------------- | ------------------------------------------------------- | ----------------------------------------- |
+| Device (default) | Its IPs, routes, MTUs, firmware and measured outcomes   | Only for that exact entity                |
+| Group            | Policies for an explicit set of device entities         | Only for listed members; no nested groups |
+| Shared           | Fleet-wide safeguards, preferences and reusable lessons | Automatically for every selected device   |
 
 Create a **dedicated policy entity**, not a copy of a router's observations. For example, after
 creating `fleet-policy` with `memory_create_entities`, read `memory_get_scope` and pass its
