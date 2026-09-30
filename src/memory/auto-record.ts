@@ -23,13 +23,13 @@ export interface ToolMemoryRecord {
  * returns immediately when memory is disabled, and swallows all errors.
  */
 export function recordToolToMemory(record: ToolMemoryRecord): void {
-  if (!isMemoryEnabled()) return;
+  if (!isMemoryEnabled() || record.tool.startsWith("memory_")) return;
   void (async () => {
     try {
       const store = await getMemoryStore();
 
       // Auto-create a device entity on first contact (INSERT OR IGNORE).
-      if (record.device) {
+      if (record.device && !record.isError) {
         store.createEntities([{ name: record.device, entityType: "device" }]);
       }
 
