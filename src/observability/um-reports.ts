@@ -6,11 +6,13 @@ import { Cmd, commandUnsupported, looksLikeError } from "../core/routeros";
 import { parseKeyValues, parseRouterosDate, parseSize } from "../core/routeros-parse";
 import { getConfig, onConfigChanged, resolveDeviceName } from "../core/runtime";
 import { assertDeviceAccess } from "../core/scoped-access";
+import { loadUmReportCache, saveUmReportCache, umReportCachePath } from "./um-report-cache";
 
 type Row = Record<string, string>;
 const DAY = 86_400_000;
 const CACHE_MS = 60_000;
 const RETRY_MS = 30_000;
+const COLLECTION_MS = 180_000;
 const count = (v?: string): number => Math.max(0, Number(v) || 0);
 const size = (v?: string): number => Math.max(0, parseSize(v) ?? 0);
 
@@ -96,7 +98,21 @@ export interface UmSnapshot {
   collectionMs: number;
   clock: { zone: string; offsetMs: number | null };
   sources: Record<Source, UmSource>;
-  cache?: { stale: boolean; refreshing: boolean; error?: string; retryAfterMs: number };
+  cache?: {
+    stale: boolean;
+    refreshing: boolean;
+    error?: string;
+    retryAfterMs: number;
+    persisted?: boolean;
+  };
+}
+
+export interface UmCollectionState {
+  device: string;
+  status: "collecting" | "error";
+  progress: { source: string; completed: number; total: number | null };
+  error?: string;
+  refreshAfterMs: number;
 }
 
 /** Reject partial/invalid JSON instead of presenting a timeout as empty accounting. */
@@ -143,16 +159,24 @@ const menus: Record<Exclude<Source, "totals" | "settings">, string> = {
   groups: "user group",
 };
 
-async function readSource(ctx: ToolContext, source: Source): Promise<UmSource> {
+async function readSource(
+  ctx: ToolContext,
+  source: Source,
+  deadline = Date.now() + COLLECTION_MS,
+  progress?: (completed: number, total: number) => void,
+): Promise<UmSource> {
   let receivedBytes = 0;
+  const run = (command: string) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error("Accounting read deadline exceeded.");
+    return executeMikrotikCommand(command, ctx, { maxMs: Math.min(60_000, remaining) });
+  };
   try {
     if (source === "sessions") {
       // Capture IDs once so new sessions cannot shift page boundaries. Large
       // single-channel replies can end at an SSH window boundary under load.
-      const rawIds = await executeMikrotikCommand(
+      const rawIds = await run(
         ":put [:serialize to=json value=[/user-manager session find] options=json.no-string-conversion]",
-        ctx,
-        { maxMs: 60_000 },
       );
       receivedBytes += rawIds.length;
       if (commandUnsupported(rawIds)) return { available: false, rows: [] };
@@ -165,7 +189,7 @@ async function readSource(ctx: ToolContext, source: Source): Promise<UmSource> {
       )
         throw new Error("Invalid session identity list.");
       const rows: Row[] = [];
-      const deadline = Date.now() + 90_000;
+      progress?.(0, ids.length);
       for (let offset = 0; offset < ids.length; offset += 2000) {
         if (Date.now() >= deadline) throw new Error("Accounting read deadline exceeded.");
         const batch = ids.slice(offset, offset + 2000);
@@ -173,10 +197,8 @@ async function readSource(ctx: ToolContext, source: Source): Promise<UmSource> {
           .raw("as-value")
           .set("from", batch.join(","))
           .build();
-        const raw = await executeMikrotikCommand(
+        const raw = await run(
           `:put [:serialize to=json value=[${command}] options=json.no-string-conversion]`,
-          ctx,
-          { maxMs: 60_000 },
         );
         receivedBytes += raw.length;
         if (receivedBytes > 32 * 1024 * 1024) throw new Error("Accounting exceeds the read limit.");
@@ -189,6 +211,7 @@ async function readSource(ctx: ToolContext, source: Source): Promise<UmSource> {
         )
           throw new Error("Accounting changed during collection or a page was incomplete.");
         rows.push(...page);
+        progress?.(rows.length, ids.length);
       }
       return { available: true, rows };
     }
@@ -204,7 +227,7 @@ async function readSource(ctx: ToolContext, source: Source): Promise<UmSource> {
       source === "totals" || source === "settings"
         ? `:put [:serialize to=json value=[${query}] options=json.no-string-conversion]`
         : `:local result [:toarray ""]; :foreach row in=[${query}] do={ :local item [:toarray ""]; :foreach key in={${UM_REPORT_FIELDS[source].map((key) => `"${key}"`).join(";")}} do={ :if ([:typeof ($row->$key)] != "nil") do={ :set ($item->$key) ($row->$key) } }; :set result ($result, {$item}) }; :put [:serialize to=json value=$result options=json.no-string-conversion]`;
-    const raw = await executeMikrotikCommand(command, ctx, { maxMs: 60_000 });
+    const raw = await run(command);
     receivedBytes = raw.length;
     if (commandUnsupported(raw)) return { available: false, rows: [] };
     if (looksLikeError(raw))
@@ -228,8 +251,12 @@ async function readSource(ctx: ToolContext, source: Source): Promise<UmSource> {
   }
 }
 
-async function collect(device: string): Promise<UmSnapshot> {
+async function collect(
+  device: string,
+  progress: (state: UmCollectionState["progress"]) => void,
+): Promise<UmSnapshot> {
   const start = Date.now();
+  const deadline = start + COLLECTION_MS;
   const config = getConfig();
   const ctx = createContext(undefined, device);
   const sources = Object.fromEntries(
@@ -239,7 +266,11 @@ async function collect(device: string): Promise<UmSnapshot> {
     // A reload can retarget a device key; never combine two routers' records.
     if (getConfig() !== config) throw new Error("Configuration changed during report collection.");
     const started = Date.now();
-    const result = await readSource(ctx, source);
+    if (started >= deadline) throw new Error("Accounting read deadline exceeded.");
+    progress({ source, completed: 0, total: null });
+    const result = await readSource(ctx, source, deadline, (completed, total) =>
+      progress({ source, completed, total }),
+    );
     return { ...result, collectionMs: Date.now() - started };
   };
   sources.users = await read("users");
@@ -257,7 +288,13 @@ async function collect(device: string): Promise<UmSnapshot> {
             : await read(key);
     }
     try {
-      const fields = parseKeyValues(await executeMikrotikCommand("/system clock print", ctx));
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error("Accounting read deadline exceeded.");
+      const fields = parseKeyValues(
+        await executeMikrotikCommand("/system clock print", ctx, {
+          maxMs: Math.min(10_000, remaining),
+        }),
+      );
       const offset = /^([+-]?)(\d{2}):(\d{2})$/.exec(fields["gmt-offset"] ?? "");
       if (offset)
         clock = {
@@ -280,11 +317,28 @@ const cache = new Map<
     pending?: Promise<UmSnapshot>;
     error?: string;
     retryAt: number;
+    restored?: Promise<void>;
+    persisted?: boolean;
+    progress: UmCollectionState["progress"];
   }
 >();
 onConfigChanged(() => cache.clear());
-/** Serve the last snapshot while one shared read refreshes it; only cold/forced reads wait. */
-export async function getUmSnapshot(device?: string, refresh = false): Promise<UmSnapshot> {
+// Avoid continuously re-reading a large history that takes longer than the base TTL.
+const freshnessMs = (value?: UmSnapshot) =>
+  Math.max(CACHE_MS, Math.min(900_000, (value?.collectionMs ?? 0) * 5));
+
+export function getUmSnapshot(device?: string, refresh?: boolean): Promise<UmSnapshot>;
+export function getUmSnapshot(
+  device: string | undefined,
+  refresh: boolean,
+  wait: false,
+): Promise<UmSnapshot | UmCollectionState>;
+/** HTTP callers poll progress; explicit internal readers can await the shared collection. */
+export async function getUmSnapshot(
+  device?: string,
+  refresh = false,
+  wait = true,
+): Promise<UmSnapshot | UmCollectionState> {
   const name = resolveDeviceName(device); // Validate before looking in the cache.
   for (const tool of [
     "list_user_manager_users",
@@ -297,35 +351,50 @@ export async function getUmSnapshot(device?: string, refresh = false): Promise<U
   ])
     assertDeviceAccess([name], tool, "READ");
   let entry = cache.get(name);
+  const config = getConfig();
+  const path = umReportCachePath(name);
   if (!entry) {
-    entry = { retryAt: 0 };
+    entry = { retryAt: 0, progress: { source: "users", completed: 0, total: null } };
     cache.set(name, entry);
+    const target = entry;
+    target.restored = loadUmReportCache(path, name, UM_REPORT_FIELDS).then((value) => {
+      target.value = value;
+      target.persisted = !!value;
+    });
   }
   const target = entry;
+  await target.restored;
+  if (getConfig() !== config) throw new Error("Configuration changed during report collection.");
   const expired =
-    !target.value || !!target.error || Date.now() - target.value.collectedAt >= CACHE_MS;
+    !target.value ||
+    !!target.error ||
+    Date.now() - target.value.collectedAt >= freshnessMs(target.value);
   if (!target.pending && (refresh || (expired && Date.now() >= target.retryAt))) {
-    target.pending = collect(name)
-      .then((value) => {
+    target.pending = collect(name, (state) => {
+      target.progress = state;
+    })
+      .then(async (value) => {
         // A failed refresh must not replace known accounting with partial totals.
         if (
-          target.value &&
-          Object.entries(target.value.sources).some(
-            ([key, source]) => source.available && !value.sources[key as Source].available,
-          )
+          Object.values(value.sources).some((source) => source.error) ||
+          (target.value &&
+            Object.entries(target.value.sources).some(
+              ([key, source]) => source.available && !value.sources[key as Source].available,
+            ))
         )
           throw new Error("An accounting source could not be refreshed.");
         target.value = value;
         target.error = undefined;
         target.retryAt = 0;
+        target.persisted = await saveUmReportCache(path, value);
         return value;
       })
       .catch((error: unknown) => {
         target.error =
           error instanceof DeviceConnectionError
-            ? "Device connection unavailable. Showing the last collected report."
-            : "Report refresh failed. Showing the last collected report; some sources could not be read.";
-        target.retryAt = target.value ? Date.now() + RETRY_MS : 0;
+            ? "Device connection unavailable. Retry when the router is reachable."
+            : "Report collection failed or exceeded its time limit. No partial accounting was counted.";
+        target.retryAt = Date.now() + RETRY_MS;
         throw error;
       })
       .finally(() => {
@@ -335,18 +404,30 @@ export async function getUmSnapshot(device?: string, refresh = false): Promise<U
     // here; cold/forced callers still receive the original failure below.
     void target.pending.catch(() => {});
   }
-  if (!target.value || refresh) await target.pending;
+  if (wait && (!target.value || refresh)) {
+    if (!target.pending) throw new Error(target.error || "Report not available.");
+    await target.pending;
+  }
+  if (!target.value)
+    return {
+      device: name,
+      status: target.pending ? "collecting" : "error",
+      progress: target.progress,
+      error: target.pending ? undefined : target.error,
+      refreshAfterMs: target.pending ? 3000 : Math.max(1000, target.retryAt - Date.now()),
+    };
   const value = target.value!;
   const age = Math.max(0, Date.now() - value.collectedAt);
   return {
     ...value,
     cache: {
-      stale: age >= CACHE_MS || !!target.error,
+      stale: age >= freshnessMs(value) || !!target.error,
       refreshing: !!target.pending,
       error: target.error,
+      persisted: target.persisted,
       retryAfterMs: target.pending
         ? 3000
-        : Math.max(1000, target.error ? target.retryAt - Date.now() : CACHE_MS - age),
+        : Math.max(1000, target.error ? target.retryAt - Date.now() : freshnessMs(value) - age),
     },
   };
 }

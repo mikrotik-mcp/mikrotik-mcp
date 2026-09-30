@@ -1174,12 +1174,17 @@ async function aaaRoutes(req: Request, url: URL): Promise<Response | null> {
       } catch {
         return json({ error: "Invalid report filters" }, 400);
       }
+      const snapshot = await getUmSnapshot(
+        deviceFromQuery(),
+        url.searchParams.get("refresh") === "true",
+        false,
+      );
       return Response.json(
-        buildUmReport(
-          await getUmSnapshot(deviceFromQuery(), url.searchParams.get("refresh") === "true"),
-          filters,
-        ),
-        { headers: { "cache-control": "no-store" } },
+        "status" in snapshot ? snapshot : buildUmReport(snapshot, filters),
+        {
+          status: "status" in snapshot ? (snapshot.status === "collecting" ? 202 : 503) : 200,
+          headers: { "cache-control": "no-store" },
+        },
       );
     }
     if (p === "/api/aaa/user-counters") {

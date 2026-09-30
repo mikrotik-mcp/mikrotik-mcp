@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { MikrotikConfigSchema } from "../../src/config";
 import { getConfig, setConfig } from "../../src/core/runtime";
 import {
@@ -14,6 +17,11 @@ import type { UmSnapshot } from "../../src/observability/um-reports";
 import { getRadiusIncoming, getUmSettings, listAaaEntity } from "../../src/tools/aaa-data";
 import { createContext } from "../../src/core/context";
 import { DeviceConnectionError } from "../../src/core/device-connection-error";
+import {
+  loadUmReportCache,
+  saveUmReportCache,
+  umReportCachePath,
+} from "../../src/observability/um-report-cache";
 
 const read = vi.hoisted(() => vi.fn(async (_command: string) => "[]"));
 vi.mock("../../src/core/connector", () => ({ executeMikrotikCommand: read }));
@@ -288,7 +296,10 @@ describe("User Manager accounting reports", () => {
     read.mockRejectedValueOnce(failure);
     await expect(getUmSnapshot("edge")).rejects.toBe(failure);
     expect(read).toHaveBeenCalledTimes(1);
-    const recovered = await getUmSnapshot("edge");
+    const state = await getUmSnapshot("edge", false, false);
+    expect(state).toMatchObject({ status: "error", refreshAfterMs: 30_000 });
+    expect(read).toHaveBeenCalledTimes(1);
+    const recovered = await getUmSnapshot("edge", true);
     expect(recovered.sources.users.available).toBe(true);
   });
   test("serves expired reports immediately during one background read and a forced refresh joins it", async () => {
@@ -400,12 +411,147 @@ describe("User Manager accounting reports", () => {
       if (command.includes("/user-manager session print")) return '[{".id":"*A"}]';
       return "[]";
     });
-    expect((await getUmSnapshot("edge")).sources.sessions.available).toBe(false);
+    await expect(getUmSnapshot("edge")).rejects.toThrow("source");
   });
   test("reports unsupported package and incomplete reads without manufacturing empty success", async () => {
     read.mockResolvedValue("bad command name user-manager");
     const r = await getUmSnapshot("edge");
     expect(r.sources.users.available).toBe(false);
     expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  test("cold HTTP reads return progress immediately and share collection across filters/refresh", async () => {
+    let release!: (value: string) => void;
+    read.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const cold = await getUmSnapshot("edge", false, false);
+    expect(cold).toMatchObject({ device: "edge", status: "collecting", refreshAfterMs: 3000 });
+    expect(cold).not.toHaveProperty("sources"); // Not a fabricated zero-usage report.
+    expect(await getUmSnapshot("edge", true, false)).toMatchObject({ status: "collecting" });
+    expect(read).toHaveBeenCalledTimes(1);
+    const finished = getUmSnapshot("edge");
+    release("[]");
+    await finished;
+    const calls = read.mock.calls.length;
+    expect(await getUmSnapshot("edge", false, false)).toHaveProperty("sources");
+    expect(read).toHaveBeenCalledTimes(calls);
+  });
+
+  test("forced HTTP refresh returns the saved report without waiting for the router", async () => {
+    const first = await getUmSnapshot("edge");
+    let release!: (value: string) => void;
+    read.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const refreshing = await getUmSnapshot("edge", true, false);
+    expect(refreshing).toMatchObject({
+      collectedAt: first.collectedAt,
+      cache: { refreshing: true },
+    });
+    const finished = getUmSnapshot("edge", true);
+    release("[]");
+    await finished;
+  });
+
+  test("cold errors remain visible with backoff and a manual retry can recover", async () => {
+    read.mockRejectedValueOnce(new DeviceConnectionError("edge", "SECRET endpoint detail"));
+    await getUmSnapshot("edge", false, false);
+    await vi.waitFor(async () => {
+      const failed = await getUmSnapshot("edge", false, false);
+      expect(failed).toMatchObject({ status: "error" });
+      expect(JSON.stringify(failed)).not.toContain("SECRET");
+    });
+    expect(read).toHaveBeenCalledTimes(1);
+    await getUmSnapshot("edge", true);
+    expect(await getUmSnapshot("edge", false, false)).toHaveProperty("sources");
+  });
+
+  test("one deadline spans all accounting pages; only verified batches advance progress", async () => {
+    let time = 100_000;
+    vi.spyOn(Date, "now").mockImplementation(() => time);
+    const ids = Array.from({ length: 6001 }, (_, i) => `*${(i + 1).toString(16)}`);
+    read.mockImplementation(async (command) => {
+      if (command.includes("user print")) return '[{".id":"*1","name":"alice"}]';
+      if (command.includes("session find")) return JSON.stringify(ids);
+      if (command.includes("session print")) {
+        time += 60_000;
+        const batch = command.match(/from=([*\da-f,]+)/i)![1].split(",");
+        return JSON.stringify(batch.map((id) => ({ ".id": id })));
+      }
+      return "[]";
+    });
+    await expect(getUmSnapshot("edge")).rejects.toThrow();
+    expect(read.mock.calls.filter(([cmd]) => cmd.includes("session print"))).toHaveLength(3);
+    expect(await getUmSnapshot("edge", false, false)).toMatchObject({
+      status: "error",
+      progress: { source: "sessions", completed: 6000, total: 6001 },
+    });
+  });
+
+  test("slow histories get a recovery interval instead of continuously saturating SSH", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(100_000);
+    read.mockImplementationOnce(async () => {
+      now.mockReturnValue(200_000);
+      return "[]";
+    });
+    const value = await getUmSnapshot("edge");
+    expect(value.collectionMs).toBe(100_000);
+    expect(value.cache?.retryAfterMs).toBe(500_000);
+    const calls = read.mock.calls.length;
+    now.mockReturnValue(260_001);
+    expect((await getUmSnapshot("edge")).cache?.refreshing).toBe(false);
+    expect(read).toHaveBeenCalledTimes(calls);
+  });
+
+  test("persists private projected reports across reloads, rejects corrupt and retargeted caches", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "um-reports-"));
+    try {
+      const config = MikrotikConfigSchema.parse({
+        ...getConfig(),
+        dashboard: { enabled: true, dbPath: join(directory, "events.db") },
+      });
+      setConfig(config);
+      read.mockImplementation(async (command) =>
+        command.includes("user print")
+          ? '[{".id":"*1","name":"alice","password":"DO-NOT-PERSIST"}]'
+          : "[]",
+      );
+      const first = await getUmSnapshot("edge");
+      expect(first.cache?.persisted).toBe(true);
+      const path = umReportCachePath("edge")!;
+      expect((await stat(path)).mode & 0o777).toBe(0o600);
+      const disk = await readFile(path, "utf8");
+      expect(disk).not.toContain("DO-NOT-PERSIST");
+      read.mockClear();
+      setConfig(MikrotikConfigSchema.parse(config));
+      expect((await getUmSnapshot("edge")).sources).toEqual(first.sources);
+      expect(read).not.toHaveBeenCalled();
+      setConfig(
+        MikrotikConfigSchema.parse({ ...config, devices: { edge: { host: "192.0.2.2" } } }),
+      );
+      expect(umReportCachePath("edge")).not.toBe(path);
+      await getUmSnapshot("edge");
+      expect(read).toHaveBeenCalled();
+      await writeFile(path, '{"version":1,"snapshot":');
+      expect(await loadUmReportCache(path, "edge", UM_REPORT_FIELDS)).toBeUndefined();
+      await writeFile(path, disk);
+      expect(await loadUmReportCache(path, "other-router", UM_REPORT_FIELDS)).toBeUndefined();
+      const raw = JSON.parse(disk);
+      raw.snapshot.collectedAt = Date.now() - 86_400_001;
+      await writeFile(path, JSON.stringify(raw));
+      expect(await loadUmReportCache(path, "edge", UM_REPORT_FIELDS)).toBeUndefined();
+      expect(await loadUmReportCache(directory, "edge", UM_REPORT_FIELDS)).toBeUndefined();
+      expect(await saveUmReportCache(directory, first)).toBe(false);
+      expect(await saveUmReportCache(undefined, first)).toBe(false);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

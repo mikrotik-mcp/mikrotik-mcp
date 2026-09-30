@@ -309,6 +309,17 @@ and last-seen.
 
 **RADIUS & User Manager.** Servers, sessions, profiles, limitations and vouchers.
 
+Reports & insights collects accounting in the background and shows verified-session
+progress on the first visit. Complete snapshots are saved privately alongside the
+dashboard database in `<dashboard.dbPath>.um-reports/` and restored after restart
+(up to 24 hours old, clearly marked when stale). Device/credential/jump-host changes
+invalidate the saved snapshot. Automatic refresh waits at least 60 seconds, or five
+times the previous collection duration (capped at 15 minutes), to avoid repeatedly
+loading large histories. **Refresh** starts a shared background read without hiding
+the current report. Failed reads never replace a complete report with partial totals.
+An ephemeral `:memory:` dashboard or an unwritable storage directory uses RAM only;
+the report page warns when a snapshot could not be persisted.
+
 <div align="center">
   <img src="assets/screenshots/web/dashboard-radius-um.webp" alt="RADIUS & User Manager" width="820" />
 </div>

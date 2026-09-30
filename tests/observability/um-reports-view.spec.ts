@@ -147,3 +147,53 @@ test("does not display another router's cached data during a slow or failed swit
   expect(host.textContent).toContain("Device connection unavailable");
   expect(host.textContent).not.toContain("alice");
 });
+
+test("polls cold collection progress without showing false zero totals and recovers", async () => {
+  const report = await vi.mocked(api).mock.results[0].value;
+  vi.mocked(api).mockResolvedValue({
+    device: "remote",
+    status: "collecting",
+    refreshAfterMs: 3000,
+    progress: { source: "sessions", completed: 2000, total: 23_243 },
+  });
+  await act(async () => root.render(h(UmReports, { device: "remote" })));
+  expect(host.textContent).toContain("2,000 / 23,243 sessions verified");
+  expect(host.querySelector("progress")?.value).toBe(2000);
+  expect(host.textContent).not.toContain("Download accounted");
+  vi.mocked(api).mockResolvedValue({
+    device: "remote",
+    status: "error",
+    error: "Device connection unavailable",
+    refreshAfterMs: 30_000,
+    progress: { source: "sessions", completed: 2000, total: 23_243 },
+  });
+  await act(async () => vi.advanceTimersByTimeAsync(3000));
+  expect(host.textContent).toContain("Device connection unavailable");
+  expect(host.querySelector(".um-loading")).toBeNull();
+  vi.mocked(api).mockResolvedValue({ ...report, device: "remote" });
+  await act(async () => vi.advanceTimersByTimeAsync(30_000));
+  expect(host.textContent).toContain("Download accounted");
+  expect(host.textContent).not.toContain("Device connection unavailable");
+});
+
+test("a stalled HTTP request times out instead of leaving an endless spinner", async () => {
+  vi.mocked(api).mockImplementationOnce(
+    (_path, signal) =>
+      new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      }),
+  );
+  await act(async () => root.render(h(UmReports, { device: "remote" })));
+  await act(async () => vi.advanceTimersByTimeAsync(15_000));
+  expect(host.textContent).toContain("did not respond within 15 seconds");
+  expect(host.querySelector(".um-loading")).toBeNull();
+});
+
+test("distinguishes RAM-only cache from a successfully saved snapshot", async () => {
+  const report = await vi.mocked(api).mock.results[0].value;
+  vi.mocked(api).mockResolvedValue({ ...report, cache: { ...report.cache, persisted: false } });
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
+  expect(host.textContent).toContain("Memory-only cache");
+  expect(host.textContent).toContain("This report could not be saved to disk");
+  expect(host.querySelectorAll('[data-slot="chart"]')).toHaveLength(2);
+});

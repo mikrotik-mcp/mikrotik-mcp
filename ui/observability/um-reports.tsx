@@ -19,7 +19,8 @@ import { api } from "./api";
 import { Button, Input, Note, Select } from "./geist";
 import { bytes, num } from "./format";
 import { saveDownload } from "./workspace-ui";
-import type { UmReport } from "../../src/observability/um-reports";
+import type { UmCollectionState, UmReport } from "../../src/observability/um-reports";
+import { UmReportLoading } from "./um-report-loading";
 import "./um-reports.css";
 
 const chartConfig = {
@@ -84,6 +85,8 @@ export function UmReports({ device }: { device: string }) {
   const [refresh, setRefresh] = useState(0);
   const [mode, setMode] = useState("daily");
   const [data, setReport] = useState<UmReport | null>(null);
+  const [collection, setCollection] = useState<UmCollectionState | null>(null);
+  const collecting = collection?.device === device && collection.status === "collecting";
   // Never display the previous router's accounting while switching devices.
   const report = data?.device === device ? data : null;
   const lastRefresh = useRef(0);
@@ -103,23 +106,39 @@ export function UmReports({ device }: { device: string }) {
     });
     setLoading(true);
     setError("");
+    setCollection(null);
     const load = async (force = false) => {
-      let delay = 60_000;
+      let delay = 30_000;
+      const request = new AbortController();
+      const timeout = setTimeout(() => request.abort(), 15_000);
       try {
-        const data = await api<UmReport>(
+        const data = await api<UmReport | UmCollectionState>(
           `/api/aaa/reports?${query}${force ? "&refresh=true" : ""}`,
-          abort.signal,
+          AbortSignal.any([abort.signal, request.signal]),
         );
         if (!abort.signal.aborted) {
           if (data.device !== device) throw new Error("Report belongs to a different device.");
-          setReport(data);
-          setError("");
+          if ("status" in data) {
+            setCollection(data);
+            setError(data.status === "error" ? data.error || "Report collection failed." : "");
+          } else {
+            setReport(data);
+            setCollection(null);
+            setError("");
+          }
           delay = Math.max(1000, data.refreshAfterMs);
         }
       } catch (e) {
         if (!abort.signal.aborted)
-          setError(e instanceof Error ? e.message : "Report could not be loaded.");
+          setError(
+            request.signal.aborted
+              ? "The dashboard did not respond within 15 seconds. Retrying shortly."
+              : e instanceof Error
+                ? e.message
+                : "Report could not be loaded.",
+          );
       } finally {
+        clearTimeout(timeout);
         if (!abort.signal.aborted) {
           setLoading(false);
           timer = setTimeout(() => void load(), delay);
@@ -170,7 +189,10 @@ export function UmReports({ device }: { device: string }) {
                   ? `${report.cache?.refreshing ? "Refreshing cached report" : report.cache?.stale ? "Stale snapshot" : "Cached snapshot"} · ${new Date(report.collectedAt).toLocaleTimeString()}`
                   : "Reading router accounting"}
             </span>
-            <small>60-second cache · background refresh · read-only</small>
+            <small>
+              {report?.cache?.persisted ? "Saved snapshots" : "Cached snapshots"} · adaptive
+              background refresh · read-only
+            </small>
           </div>
         </div>
       </div>
@@ -239,7 +261,7 @@ export function UmReports({ device }: { device: string }) {
           ghost
           icon={<RefreshCw />}
           loading={loading && !!device}
-          disabled={invalidDates || !device}
+          disabled={invalidDates || !device || collecting}
           onClick={() => setRefresh((n) => n + 1)}
         >
           Refresh
@@ -271,7 +293,7 @@ export function UmReports({ device }: { device: string }) {
         </Button>
       </div>
       {invalidDates && <Note type="error">The start date must be on or before the end date.</Note>}
-      {(loading || report?.cache?.refreshing) && report && (
+      {(loading || collecting || report?.cache?.refreshing) && report && (
         <p className="um-caption" role="status">
           {loading
             ? "Updating report… The previous snapshot remains visible until the new filters have loaded."
@@ -280,8 +302,14 @@ export function UmReports({ device }: { device: string }) {
       )}
       {report?.cache?.stale && !error && (
         <Note type="warning" label="Cached report">
-          {report.cache.error || "This snapshot is older than 60 seconds and is being refreshed."}{" "}
-          Last collected: {new Date(report.collectedAt).toLocaleString()}. Counters are not live.
+          {report.cache.error || "This snapshot is due for a background refresh."} Last collected:{" "}
+          {new Date(report.collectedAt).toLocaleString()}. Counters are not live.
+        </Note>
+      )}
+      {report?.cache?.persisted === false && (
+        <Note type="warning" label="Memory-only cache">
+          This report could not be saved to disk. Check the dashboard storage path and permissions;
+          an in-memory dashboard does not retain reports after restart.
         </Note>
       )}
       {error && (
@@ -290,21 +318,10 @@ export function UmReports({ device }: { device: string }) {
         </Note>
       )}
       {!device && <Note>Select a configured router to inspect User Manager.</Note>}
-      {loading && !report && device && (
-        <div className="um-loading" role="status">
-          <div className="um-loading-bars" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-          </div>
-          <h3>Putting your accounting in perspective</h3>
-          <p>
-            Building the first cached snapshot from the router. Large histories can take more than a
-            minute; subsequent visits use the cache while it refreshes in the background.
-          </p>
-        </div>
+      {(loading || collecting) && !error && !report && device && (
+        <UmReportLoading
+          progress={collection?.device === device ? collection.progress : undefined}
+        />
       )}
       {report && !report.available && (
         <Note type="warning" label="User Manager is unavailable">
