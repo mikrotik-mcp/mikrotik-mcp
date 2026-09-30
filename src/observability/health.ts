@@ -35,6 +35,8 @@ export interface DeviceStatus {
   version?: string;
   /** Failure reason, when unreachable. */
   error?: string;
+  /** Address that authenticated during this probe (not a persistent connection). */
+  connectedHost?: string;
   // ── live system info (from `/system resource print`, when reachable) ──
   /** Board / model name. */
   boardName?: string;
@@ -127,6 +129,7 @@ export async function probeDevice(
       timeoutMs: Math.min(dc.timeoutMs ?? 10_000, 8_000),
     },
     devices,
+    dc,
   );
   const t0 = Date.now();
   let status: DeviceStatus;
@@ -170,6 +173,7 @@ export async function probeDevice(
 
       status = {
         reachable: true,
+        connectedHost: client.connectedHost,
         checkedAt,
         latencyMs,
         identity,

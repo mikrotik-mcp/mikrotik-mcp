@@ -231,6 +231,30 @@ Behind a bastion with no exposed port? Jump through another router (`jumpVia`) �
 commands, Safe Mode and SFTP all ride the hop. Full guide:
 **[docs/multi-device.md](docs/multi-device.md)**.
 
+#### Multiple management addresses & automatic failover
+
+In **Devices → Add device / Edit settings → Connection**, add internal, VPN or public static IPs
+and choose **Primary**. The existing `host` is Primary; `fallbackHosts` holds up to seven
+alternate IPv4/IPv6 addresses in priority order. All addresses must reach the **same router**,
+using its shared SSH/REST ports, credentials and jump-host configuration.
+
+```json
+{
+  "host": "10.10.10.1",
+  "fallbackHosts": ["203.0.113.10", "2001:db8::10"],
+  "port": 22,
+  "username": "admin",
+  "keyFilename": "/keys/home"
+}
+```
+
+- SSH, SSH jump devices, SFTP, initial Safe Mode setup, REST probes and dashboard tests use this
+  selection. Authentication/key errors stop that connection attempt; MAC-Telnet has no IP failover.
+- Failover happens **before command dispatch**. A lost command response is not automatically replayed
+  on another IP or over SSH. An active Safe Mode transaction never migrates between connections.
+- Existing single-address configurations remain valid. No router interface, routing or firewall
+  settings are changed by adding management addresses to MCP.
+
 ### 🩺 Diagnose and harden
 
 > _"Why can't VLAN 50 reach the internet?"_

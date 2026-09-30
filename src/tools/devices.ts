@@ -10,6 +10,7 @@
 import type { ToolModule } from "../core/registry";
 import { READ, defineTool } from "../core/registry";
 import { listDevices, getConfig } from "../core/runtime";
+import { deviceEndpoints, endpointAddress } from "../core/device-endpoints";
 
 export const deviceTools: ToolModule = [
   defineTool({
@@ -20,7 +21,7 @@ export const deviceTools: ToolModule = [
       "List all MikroTik devices registered in this server's configuration (server-side metadata — no RouterOS command is run, no SSH connection is opened). " +
       "Use this to discover the exact device name strings required by the `device` argument on every other tool, especially when working across multiple routers (e.g. building a tunnel between two devices). " +
       "Returns each device's name, username, host, port, auth method (key / password / none), optional description, and which entry is the default. " +
-      "This name → host:port mapping is FIXED for the life of the server process — it does NOT change mid-session, so a given device name always reaches the same physical router. " +
+      "Includes Primary, ordered alternate management IPs, open connections and last connection observations. Alternate IPs must all belong to the same physical router. Automatic failover happens only while connecting; dispatched commands are never replayed. Last success is historical, not proof of a currently open session. " +
       "Call this to verify the exact target before any write/destructive change when several routers are configured. " +
       "Credentials and private-key material are never included in the output.",
     handler(_a, ctx) {
@@ -32,7 +33,16 @@ export const deviceTools: ToolModule = [
         const tag = name === def ? " (default)" : "";
         const auth = d.keyFilename || d.privateKey ? "key" : d.password ? "password" : "none";
         const desc = d.description ? ` — ${d.description}` : "";
-        return `• ${name}${tag}: ${d.username}@${d.host}:${d.port} [auth: ${auth}]${desc}`;
+        const endpoints = deviceEndpoints(d);
+        const details = endpoints
+          ? `\n  Primary: ${endpointAddress(d.host, d.port)}; alternatives: ${d.fallbackHosts?.join(", ") || "none"}\n  Open connections: ${endpoints.connected.map((c) => `${c.transport} ${endpointAddress(c.host, c.port)}`).join(", ") || "none"}${endpoints.observations
+              .map(
+                (o) =>
+                  `\n  ${o.transport} ${endpointAddress(o.host, o.port)}: ${o.error ? "failed" : "last success"} at ${new Date(o.checkedAt).toISOString()}`,
+              )
+              .join("")}`
+          : "";
+        return `• ${name}${tag}: ${d.username}@${d.mac || endpointAddress(d.host, d.port)} [auth: ${auth}]${desc}${details}`;
       });
       return `CONFIGURED MIKROTIK DEVICES (${names.length}):\n\n${lines.join("\n")}`;
     },

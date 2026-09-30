@@ -161,6 +161,39 @@ test("tags suggest the whole fleet, create and remove chips, and only change the
   expect(accepted().devices.branch).toEqual(config.devices.branch);
 });
 
+test("multiple addresses choose Primary atomically and are included in both test and saved draft", async () => {
+  await render();
+  await click("Add address");
+  await input("f_fallback_1", "203.0.113.8");
+  await click("Make 203.0.113.8 primary");
+  expect(document.querySelector<HTMLInputElement>("#f_host")?.value).toBe("203.0.113.8");
+  expect(document.querySelector<HTMLInputElement>("#f_fallback_1")?.value).toBe("192.0.2.1");
+  await click("Test connection");
+  const body = calls.find((c) => c.path.includes("test-device"))!.body;
+  expect(body.config).toMatchObject({ host: "203.0.113.8", fallbackHosts: ["192.0.2.1"] });
+  await click("Update draft");
+  expect(accepted().devices.edge).toMatchObject({
+    host: "203.0.113.8",
+    fallbackHosts: ["192.0.2.1"],
+  });
+  expect(cfg.devices.edge.host).toBe("192.0.2.1");
+});
+
+test("empty and duplicate addresses prevent connection tests; removing Primary promotes the next address", async () => {
+  await render();
+  await click("Add address");
+  await click("Test connection");
+  expect(document.body.textContent).toContain("Enter every management address");
+  await input("f_fallback_1", "192.0.2.1");
+  await click("Test connection");
+  expect(document.body.textContent).toContain("Each management address must be unique");
+  expect(calls.some((c) => c.path.includes("test-device"))).toBe(false);
+  await input("f_fallback_1", "10.0.0.2");
+  await click("Remove address 1");
+  expect(document.querySelector<HTMLInputElement>("#f_host")?.value).toBe("10.0.0.2");
+  expect(button("Remove address 1").disabled).toBe(true);
+});
+
 test("tag keyboard entry handles Enter, comma, Backspace and IME without advancing the form", async () => {
   await render();
   const tags = document.querySelector<HTMLInputElement>('[aria-label="Tags"]')!;
@@ -295,7 +328,7 @@ test("shared scroll areas wrap the form, navigation and key list; step changes r
     '[data-slot="scroll-area-viewport"][aria-label="Device setup form"]',
   )!;
   expect(viewport).toBeTruthy();
-  expect(document.querySelectorAll('[data-slot="scroll-area"]')).toHaveLength(4);
+  expect(document.querySelectorAll('[data-slot="scroll-area"]')).toHaveLength(5);
   const scroll = vi.spyOn(viewport, "scrollTo");
   await click("Continue");
   expect(scroll).toHaveBeenCalledWith({ top: 0 });

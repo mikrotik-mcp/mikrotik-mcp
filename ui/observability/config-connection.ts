@@ -20,7 +20,7 @@ export async function testDeviceConnection(
     return {
       ok,
       label: ok
-        ? `${Math.round(result.status?.latencyMs ?? 0)}ms · ${result.status?.identity ?? "Connected"}`
+        ? `${Math.round(result.status?.latencyMs ?? 0)}ms · ${result.status?.identity ?? "Connected"}${result.status?.connectedHost ? ` · via ${result.status.connectedHost}` : ""}`
         : (result.status?.error ?? result.errors?.[0]?.message ?? result.error ?? "Unreachable"),
     };
   } catch {

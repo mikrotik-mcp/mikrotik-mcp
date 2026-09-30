@@ -69,7 +69,7 @@ async function tryRest(
     }
     return out;
   } catch (e) {
-    if (!shouldFallbackToSsh(e)) {
+    if (!shouldFallbackToSsh(e, true)) {
       // The device answered with a rejection. Surface it rather than masking it
       // behind a second attempt over a different transport.
       if (ctx) ctx.transport = "rest";
@@ -219,7 +219,7 @@ async function tryRestJson(
     ctx.restFallback = undefined;
     return toRecords(rows);
   } catch (e) {
-    if (!shouldFallbackToSsh(e)) {
+    if (!shouldFallbackToSsh(e, true)) {
       ctx.transport = "rest";
       throw e instanceof RestHttpError
         ? new Error(`REST ${e.status} on '${name}': ${e.detail}`)

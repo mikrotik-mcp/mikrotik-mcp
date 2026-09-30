@@ -29,6 +29,7 @@ import { dirname, join } from "node:path";
 import type { Server, ServerWebSocket } from "bun";
 import { serve } from "bun";
 import { z } from "zod";
+import { deviceEndpoints } from "../core/device-endpoints";
 import type { DashboardConfig, MikrotikConfig } from "../config";
 import {
   DEFAULT_SNAPSHOT_DB,
@@ -353,6 +354,7 @@ function devicesPayload(store: EventStore): unknown {
     return {
       name,
       host: dc.host,
+      endpoints: deviceEndpoints(dc),
       port: dc.port,
       // A `mac` device is reached over Layer-2 MAC-Telnet, not SSH — surface that
       // so the dashboard shows the MAC instead of the unused default host:port.

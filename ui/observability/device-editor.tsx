@@ -22,6 +22,7 @@ import { api, postJson } from "./api";
 import { CopyButton } from "./atoms";
 import { testDeviceConnection } from "./config-connection";
 import { DeviceJumpHost, jumpHostIssue } from "./device-jump-host";
+import { DeviceAddressesEditor } from "./device-addresses";
 import type { ConnectionResult } from "./config-connection";
 import { Badge, Button, Note } from "./geist";
 import { Input } from "@/components/beui/registry/components/motion/input";
@@ -249,6 +250,7 @@ export function DeviceEditor({
       const next: Draft = { ...current, api: value === "rest" };
       if (value !== "mac")
         for (const key of ["mac", "sourceMac", "macHost", "macPort"]) delete next[key];
+      else delete next.fallbackHosts;
       return next;
     });
   };
@@ -281,6 +283,14 @@ export function DeviceEditor({
       if (jumpIssue) issues.form = jumpIssue;
       if (!text(dev.host).trim() || /[\s/]/.test(text(dev.host)))
         issues.host = "Enter an IP address or hostname, without a URL or spaces.";
+      const hosts = [
+        text(dev.host),
+        ...(Array.isArray(dev.fallbackHosts) ? dev.fallbackHosts : []),
+      ];
+      if (hosts.some((h) => typeof h !== "string" || !h.trim()))
+        issues.host = "Enter every management address or remove the empty row.";
+      else if (new Set(hosts.map((h) => h.toLowerCase())).size !== hosts.length)
+        issues.host = "Each management address must be unique.";
       if (
         !Number.isInteger(Number(dev.port ?? 22)) ||
         Number(dev.port ?? 22) < 1 ||
@@ -559,16 +569,28 @@ export function DeviceEditor({
                         </button>
                       ))}
                     </div>
-                    <div className="device-editor__grid">
-                      {transport === "mac" ? (
-                        field("mac", "MAC address", "48:A9:8A:C6:42:F7")
-                      ) : (
-                        <>
-                          {field("host", "Host / IP", "192.168.88.1")}
+                    {transport === "mac" ? (
+                      field("mac", "MAC address", "48:A9:8A:C6:42:F7")
+                    ) : (
+                      <>
+                        <DeviceAddressesEditor
+                          host={text(dev.host)}
+                          fallbackHosts={Array.isArray(dev.fallbackHosts) ? dev.fallbackHosts : []}
+                          onChange={(host, fallbackHosts) => {
+                            setDev(({ fallbackHosts: _old, ...current }) => ({
+                              ...current,
+                              host,
+                              ...(fallbackHosts.length ? { fallbackHosts } : {}),
+                            }));
+                            setErrors({});
+                            setDiscard(false);
+                          }}
+                        />
+                        <div className="device-editor__grid">
                           {field("port", "SSH port", "22", "number")}
-                        </>
-                      )}
-                    </div>
+                        </div>
+                      </>
+                    )}
                     <TagsInput
                       value={Array.isArray(dev.tags) ? dev.tags : []}
                       suggestions={Object.values(devices).flatMap((device) =>
@@ -768,6 +790,17 @@ export function DeviceEditor({
                       </Badge>
                     </div>
                     <dl className="device-editor__facts">
+                      {transport !== "mac" && (
+                        <div className="col-span-full">
+                          <dt>Address priority</dt>
+                          <dd>
+                            {[
+                              text(dev.host),
+                              ...(Array.isArray(dev.fallbackHosts) ? dev.fallbackHosts : []),
+                            ].join(" → ")}
+                          </dd>
+                        </div>
+                      )}
                       <div>
                         <dt>Connection</dt>
                         <dd>

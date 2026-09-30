@@ -15,6 +15,7 @@ import { MikroTikRestClient } from "../rest/client";
 import { MikroTikSSHClient } from "../ssh/client";
 import type { SSHClientOptions } from "../ssh/client";
 import { getDevice } from "./runtime";
+import { endpointOptions } from "./device-endpoints";
 
 /** The minimal client surface shared by the SSH and MAC-Telnet transports. */
 export interface DeviceClient {
@@ -31,6 +32,7 @@ export interface DeviceClient {
   disconnect(): void;
   /** Human-readable reason the last `connect()` failed, if it did. */
   lastError?: string;
+  connectedHost?: string;
 }
 
 /** True when this device config selects the MAC-Telnet transport. */
@@ -51,6 +53,7 @@ export function isRestDevice(dc: DeviceConfig): boolean {
 /** A REST client for a device, for the one-shot REST attempt in `runOnce`. */
 export function createRestClient(dc: DeviceConfig): MikroTikRestClient {
   return new MikroTikRestClient({
+    ...endpointOptions(dc, "rest", dc.apiPort ?? 443),
     host: dc.host,
     username: dc.username,
     password: dc.password,
@@ -61,8 +64,9 @@ export function createRestClient(dc: DeviceConfig): MikroTikRestClient {
 }
 
 /** The SSH connection options for a device (no jump), used as one chain hop. */
-export function sshOptionsOf(dc: DeviceConfig): SSHClientOptions {
+export function sshOptionsOf(dc: DeviceConfig, stateConfig = dc): SSHClientOptions {
   return {
+    ...endpointOptions(stateConfig, "ssh", dc.port),
     host: dc.host,
     username: dc.username,
     password: dc.password,
@@ -121,6 +125,7 @@ export function resolveJump(
 export function createDeviceClient(
   dc: DeviceConfig,
   devices?: Record<string, DeviceConfig>,
+  stateConfig = dc,
 ): DeviceClient {
   if (isMacTelnetDevice(dc)) {
     return new MikroTikMacTelnetClient({
@@ -134,7 +139,10 @@ export function createDeviceClient(
     });
   }
 
-  return new MikroTikSSHClient({ ...sshOptionsOf(dc), jump: resolveJump(dc, new Set(), devices) });
+  return new MikroTikSSHClient({
+    ...sshOptionsOf(dc, stateConfig),
+    jump: resolveJump(dc, new Set(), devices),
+  });
 }
 
 /** How a device is addressed, for logs/errors (e.g. `MAC 48:…` or `1.2.3.4:22`). */

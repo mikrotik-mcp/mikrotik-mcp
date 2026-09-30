@@ -1,0 +1,103 @@
+.device-addresses {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--primary) 3%, var(--background));
+}
+.device-addresses header,
+.device-addresses header > div,
+.device-addresses footer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.device-addresses header,
+.device-addresses footer {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.device-addresses header strong {
+  font-size: 14px;
+}
+.device-addresses__auto {
+  color: var(--primary);
+  font-size: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: 20px;
+  padding: 3px 8px;
+}
+.device-addresses > p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+  margin: 10px 0 16px;
+}
+.device-addresses__scroll {
+  max-height: 264px;
+}
+.device-addresses__viewport {
+  max-height: inherit;
+}
+.device-addresses__list {
+  display: grid;
+  gap: 8px;
+  padding: 2px;
+}
+.device-addresses__row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 9px;
+}
+.device-addresses__order {
+  font: 10px var(--font-mono, monospace);
+  color: var(--muted-foreground);
+}
+.device-addresses__primary,
+.device-addresses__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.device-addresses__primary[aria-pressed="true"] {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.device-addresses button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.device-addresses button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.device-addresses__remove:hover:not(:disabled) {
+  color: var(--destructive);
+}
+.device-addresses footer {
+  margin-top: 14px;
+}
+.device-addresses footer > span {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 600px) {
+  .device-addresses {
+    padding: 12px;
+  }
+  .device-addresses__row {
+    grid-template-columns: minmax(0, 1fr) auto 25px;
+    gap: 4px;
+  }
+  .device-addresses__order {
+    display: none;
+  }
+  .device-addresses__primary span {
+    display: none;
+  }
+}

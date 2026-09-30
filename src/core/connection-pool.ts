@@ -16,6 +16,7 @@
  * to avoid duplicate connections.
  */
 import { MikroTikSSHClient } from "../ssh/client";
+import type { DeviceConfig } from "../config";
 import { logger } from "../logger";
 import { getConfig, getDevice } from "./runtime";
 import { DeviceConnectionError } from "./device-connection-error";
@@ -25,6 +26,8 @@ import { connectErrorMessage, resolveJump, sshOptionsOf } from "./transport";
 
 interface PoolEntry {
   client: MikroTikSSHClient;
+  config: DeviceConfig;
+  jumpSignature: string;
   /** Number of exec channels currently running on this connection. */
   inflight: number;
   /** Fires after `idleTimeout` ms of inactivity to close the connection. */
@@ -81,7 +84,7 @@ function armIdle(name: string, entry: PoolEntry): void {
   }, idleTimeout);
 }
 
-/** Whether an error message indicates a lost SSH connection (retriable). */
+/** Whether an error message indicates a lost SSH connection. Never replay commands. */
 function isConnectionError(msg: string): boolean {
   return /not connected|ECONNRESET|EPIPE|socket.*(close|end|destroy)|channel.*(close|open)|timed out.*handshake/i.test(
     msg,
@@ -92,9 +95,11 @@ function isConnectionError(msg: string): boolean {
 async function doConnect(name: string): Promise<PoolEntry> {
   const dc = getDevice(name);
   const cfg = poolConfig();
+  const jump = resolveJump(dc);
+  const jumpSignature = JSON.stringify(jump);
   const client = new MikroTikSSHClient({
     ...sshOptionsOf(dc),
-    jump: resolveJump(dc),
+    jump,
     keepAliveInterval: cfg.keepAliveInterval,
     keepAliveCountMax: cfg.keepAliveCountMax,
   });
@@ -102,9 +107,21 @@ async function doConnect(name: string): Promise<PoolEntry> {
   if (!(await client.connect())) {
     throw new DeviceConnectionError(name, connectErrorMessage(name, dc, client.lastError));
   }
+  try {
+    if (dc !== getDevice(name) || jumpSignature !== JSON.stringify(resolveJump(dc))) {
+      throw new Error(
+        "Device configuration changed while connecting; retry with the current configuration.",
+      );
+    }
+  } catch (error) {
+    client.disconnect();
+    throw error;
+  }
 
   const entry: PoolEntry = {
     client,
+    config: dc,
+    jumpSignature,
     inflight: 0,
     idleTimer: undefined,
     dead: false,
@@ -119,7 +136,15 @@ async function doConnect(name: string): Promise<PoolEntry> {
 async function acquire(name: string): Promise<PoolEntry> {
   // Return existing live entry.
   const existing = entries.get(name);
-  if (existing && !existing.dead) return existing;
+  const dc = getDevice(name);
+  if (
+    existing &&
+    !existing.dead &&
+    existing.client.isConnected !== false &&
+    existing.config === dc &&
+    existing.jumpSignature === JSON.stringify(resolveJump(dc))
+  )
+    return existing;
 
   // Remove dead entry.
   if (existing) removeEntry(name);
@@ -164,7 +189,8 @@ async function runOnEntry(
 
 /**
  * Run a command on a pooled SSH connection. Opens a fresh exec channel on the
- * persistent connection; if the connection is dead, reconnects once and retries.
+ * persistent connection. Dead sessions reconnect before dispatch; a failed
+ * dispatched command is NEVER replayed (its result may be ambiguous).
  *
  * @param command    Fully-formed RouterOS CLI command.
  * @param deviceName Resolved device name (config key).
@@ -181,10 +207,11 @@ export async function runPooled(
     const msg = e instanceof Error ? e.message : String(e);
     if (!isConnectionError(msg)) throw e;
 
-    // Connection lost — remove stale entry and retry once with a fresh one.
-    logger.info(`SSH pool: connection to '${deviceName}' lost (${msg}), reconnecting`);
+    // The next tool call can reconnect/fail over. This call may already have
+    // executed on the router: an automatic retry could duplicate a mutation.
+    logger.info(`SSH pool: connection to '${deviceName}' lost; command was not replayed`);
     removeEntry(deviceName);
-    return runOnEntry(deviceName, command, opts);
+    throw e;
   }
 }
 
@@ -211,7 +238,7 @@ export function poolStatus(): Array<{
   return Array.from(entries, ([name, e]) => ({
     device: name,
     inflight: e.inflight,
-    idle: e.inflight === 0 && !e.dead,
-    dead: e.dead,
+    idle: e.inflight === 0 && !e.dead && e.client.isConnected !== false,
+    dead: e.dead || e.client.isConnected === false,
   }));
 }

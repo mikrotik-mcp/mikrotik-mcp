@@ -19,6 +19,8 @@ import type { Readable } from "node:stream";
 import { Client } from "ssh2";
 import type { ConnectConfig, ClientChannel } from "ssh2";
 import { logger } from "../logger";
+import type { EndpointOptions } from "../core/device-endpoints";
+import { endpointAddress } from "../core/device-endpoints";
 
 /**
  * How long a one-shot `run()` may go with NO output and NO channel close before
@@ -46,7 +48,7 @@ const RUN_IDLE_TIMEOUT_MS = 60_000;
  */
 const RUN_HARD_TIMEOUT_MS = 120_000;
 
-export interface SSHClientOptions {
+export interface SSHClientOptions extends EndpointOptions {
   host: string;
   username: string;
   password?: string;
@@ -101,6 +103,7 @@ export class MikroTikSSHClient {
    * in reverse on `disconnect()`.
    */
   private bastions: Client[] = [];
+  private releases: Array<() => void> = [];
   private readonly opts: Required<
     Pick<SSHClientOptions, "host" | "username" | "port" | "timeoutMs">
   > &
@@ -108,6 +111,7 @@ export class MikroTikSSHClient {
 
   /** Human-readable reason the last `connect()` failed, if it did. */
   lastError?: string;
+  connectedHost?: string;
 
   get isConnected(): boolean {
     return this.client !== null;
@@ -123,30 +127,28 @@ export class MikroTikSSHClient {
    * (with the reason on `lastError`).
    */
   async connect(): Promise<boolean> {
+    if (this.client) return true;
     this.lastError = undefined;
     try {
       // Flatten the jump chain to the order it must be dialled: outermost
       // bastion first, then inner bastions, then the target itself.
       const hops: SSHClientOptions[] = [];
       for (let j = this.opts.jump; j; j = j.jump) hops.unshift(j);
-      const sequence = [...hops, this.opts as SSHClientOptions];
-
-      // Dial each bastion in turn; each connection (after the first) rides a
-      // forwarded channel from the previous hop, and itself forwards onward to
-      // the NEXT address in the sequence.
-      let sock: Readable | undefined;
-      for (let i = 0; i < hops.length; i++) {
-        const hop = hops[i] as SSHClientOptions;
-        const client = await this.openClient(hop, sock);
+      let via: Client | undefined;
+      for (const hop of hops) {
+        const { client } = await this.connectEndpoint(hop, via);
         this.bastions.push(client);
-        const next = sequence[i + 1] as SSHClientOptions;
-        const hopTimeout = hop.timeoutMs ?? this.opts.timeoutMs ?? 10_000;
-        sock = await this.forwardOut(client, next.host, next.port ?? 22, hopTimeout);
+        via = client;
       }
 
       // Finally open the real session to the target (over the last hop's channel
       // when jumping, or directly when there were no hops).
-      this.client = await this.openClient(this.opts, sock);
+      const { client, host } = await this.connectEndpoint(this.opts, via);
+      this.client = client;
+      this.connectedHost = host;
+      client.once("close", () => {
+        if (this.client === client) this.disconnect();
+      });
       return true;
     } catch (e) {
       this.lastError = e instanceof Error ? e.message : String(e);
@@ -154,6 +156,37 @@ export class MikroTikSSHClient {
       this.disconnect();
       return false;
     }
+  }
+
+  /** Retry addresses only during connection setup, never after dispatching a command. */
+  private async connectEndpoint(
+    o: SSHClientOptions,
+    via?: Client,
+  ): Promise<{ client: Client; host: string }> {
+    const errors: string[] = [];
+    for (const host of o.hosts?.() ?? [o.host]) {
+      let sock: Readable | undefined;
+      try {
+        if (via) sock = await this.forwardOut(via, host, o.port ?? 22, o.timeoutMs ?? 10_000);
+        const client = await this.openClient({ ...o, host }, sock);
+        o.onAttempt?.(host);
+        const release = o.onConnected?.(host);
+        if (release) {
+          this.releases.push(release);
+          client.once("close", release);
+        }
+        return { client, host };
+      } catch (error) {
+        sock?.destroy();
+        const message = error instanceof Error ? error.message : String(error);
+        o.onAttempt?.(host, message);
+        errors.push(`${endpointAddress(host, o.port ?? 22)}: ${message}`);
+        // Credentials and local key errors are not reachability problems.
+        if (/authentication|auth methods|private\s*key|key file|passphrase|host key/i.test(message))
+          break;
+      }
+    }
+    throw new Error(errors.join("; "));
   }
 
   /**
@@ -164,6 +197,7 @@ export class MikroTikSSHClient {
   private openClient(o: SSHClientOptions, sock?: Readable): Promise<Client> {
     return new Promise((resolve, reject) => {
       const client = new Client();
+      let ready = false;
       const cfg: ConnectConfig = {
         host: o.host,
         port: o.port ?? 22,
@@ -194,9 +228,23 @@ export class MikroTikSSHClient {
       if (o.password) cfg.password = o.password;
 
       client
-        .on("ready", () => resolve(client))
-        .on("error", (err) => reject(err))
-        .connect(cfg);
+        .on("ready", () => {
+          ready = true;
+          resolve(client);
+        })
+        .on("error", (err) => {
+          if (!ready) reject(err);
+          client.destroy();
+        })
+        .on("close", () => {
+          if (!ready) reject(new Error("SSH connection closed during handshake"));
+        });
+      try {
+        client.connect(cfg);
+      } catch (error) {
+        reject(error);
+        client.destroy();
+      }
     });
   }
 
@@ -231,7 +279,10 @@ export class MikroTikSSHClient {
         );
       }, timeoutMs);
       via.forwardOut("127.0.0.1", 0, host, port, (err, stream) => {
-        if (settled) return;
+        if (settled) {
+          stream?.destroy();
+          return;
+        }
         settled = true;
         clearTimeout(timer);
         if (err) {
@@ -502,6 +553,8 @@ export class MikroTikSSHClient {
 
   /** Close the SSH connection (and any jump hosts). Safe to call multiple times. */
   disconnect(): void {
+    for (const release of this.releases) release();
+    this.releases = [];
     if (this.client) {
       const client = this.client;
       this.client = null;
@@ -511,6 +564,7 @@ export class MikroTikSSHClient {
         /* already closed */
       }
     }
+    this.connectedHost = undefined;
     // Tear down bastions in reverse (inner-most first) so the target channel is
     // gone before its carrier hop closes.
     for (const b of this.bastions.reverse()) {

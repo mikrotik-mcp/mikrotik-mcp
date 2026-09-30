@@ -11,7 +11,7 @@
  *
  * HTTP is stateless, so there is no session to hold: `connect()` is a
  * reachability + auth probe against `/rest/system/resource`, and `disconnect()`
- * is a no-op. That also means no per-command handshake — the latency win over
+ * clears the local endpoint status. That also means no per-command handshake — the latency win over
  * SSH.
  *
  * **This transport cannot do everything.** `/export`, Safe Mode and the
@@ -21,6 +21,8 @@
  */
 import { logger } from "../logger";
 import { toConsoleText, toRequest } from "./bridge";
+import type { EndpointOptions } from "../core/device-endpoints";
+import { endpointAddress } from "../core/device-endpoints";
 
 /** Thrown when the command has no faithful REST mapping → caller must use SSH. */
 export class RestUnmappableError extends Error {
@@ -53,20 +55,21 @@ export class RestHttpError extends Error {
  *
  * - **Fall back** when REST could not express or reach the command —
  *   unmappable, 404 (menu absent on this RouterOS version), or any
- *   transport-level failure (DNS, TCP, TLS). SSH may well succeed.
+ *   transport-level failure before dispatch. Once dispatched, a lost response
+ *   must not cause the command to be replayed over SSH.
  * - **Do not fall back** on 4xx/5xx that is the device *answering* — 400 bad
  *   parameter, 401 auth, 403, 5xx. Re-running a malformed command over SSH
  *   produces a second, differently worded failure, and the operator then debugs
  *   the wrong transport.
  */
-export function shouldFallbackToSsh(e: unknown): boolean {
+export function shouldFallbackToSsh(e: unknown, dispatched = false): boolean {
   if (e instanceof RestUnmappableError) return true;
   if (e instanceof RestHttpError) return e.status === 404;
   // Anything else reaching here is a thrown transport/runtime failure.
-  return true;
+  return !dispatched;
 }
 
-export interface RestClientOptions {
+export interface RestClientOptions extends EndpointOptions {
   host: string;
   username: string;
   password?: string;
@@ -85,13 +88,20 @@ const DEFAULT_PORT = 443;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export class MikroTikRestClient {
-  private readonly opts: Required<Omit<RestClientOptions, "password">> & { password?: string };
+  private readonly opts: Required<Omit<RestClientOptions, "password" | keyof EndpointOptions>> & {
+    password?: string;
+  } & EndpointOptions;
   private readonly auth: string;
   private connected = false;
   lastError?: string;
+  connectedHost?: string;
+  private release?: () => void;
 
   constructor(opts: RestClientOptions) {
     this.opts = {
+      hosts: opts.hosts,
+      onAttempt: opts.onAttempt,
+      onConnected: opts.onConnected,
       host: opts.host,
       username: opts.username,
       password: opts.password,
@@ -103,7 +113,7 @@ export class MikroTikRestClient {
   }
 
   private url(path: string, query: Record<string, string> = {}): string {
-    const u = new URL(`https://${this.opts.host}:${this.opts.port}/rest/${path}`);
+    const u = new URL(`https://${endpointAddress(this.opts.host, this.opts.port)}/rest/${path}`);
     for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
     return u.toString();
   }
@@ -139,21 +149,36 @@ export class MikroTikRestClient {
    * rather than throwing, matching the SSH client's contract.
    */
   async connect(): Promise<boolean> {
-    try {
-      const res = await this.request("GET", "system/resource", {});
-      if (!res.ok) {
-        this.lastError =
-          res.status === 401
-            ? "REST authentication failed (check username/password)"
-            : `REST probe failed with HTTP ${res.status}`;
-        return false;
+    this.disconnect();
+    this.lastError = undefined;
+    const errors: string[] = [];
+    for (const host of this.opts.hosts?.() ?? [this.opts.host]) {
+      this.opts.host = host;
+      try {
+        const res = await this.request("GET", "system/resource", {});
+        await res.body?.cancel();
+        if (!res.ok) {
+          this.lastError =
+            res.status === 401
+              ? "REST authentication failed (check username/password)"
+              : `REST probe failed with HTTP ${res.status}`;
+          this.opts.onAttempt?.(host, this.lastError);
+          return false;
+        }
+        this.connected = true;
+        this.connectedHost = host;
+        this.opts.onAttempt?.(host);
+        this.release = this.opts.onConnected?.(host);
+        return true;
+      } catch (e) {
+        this.lastError = describeConnectFailure(e, this.opts.insecureTls);
+        this.opts.onAttempt?.(host, this.lastError);
+        errors.push(`${endpointAddress(host, this.opts.port)}: ${this.lastError}`);
+        if (/certificate|TLS|SSL/i.test(this.lastError)) break;
       }
-      this.connected = true;
-      return true;
-    } catch (e) {
-      this.lastError = describeConnectFailure(e, this.opts.insecureTls);
-      return false;
     }
+    this.lastError = errors.join("; ");
+    return false;
   }
 
   /**
@@ -210,6 +235,9 @@ export class MikroTikRestClient {
   /** No-op: HTTP holds no session. Present for {@link DeviceClient} parity. */
   disconnect(): void {
     this.connected = false;
+    this.connectedHost = undefined;
+    this.release?.();
+    this.release = undefined;
   }
 }
 

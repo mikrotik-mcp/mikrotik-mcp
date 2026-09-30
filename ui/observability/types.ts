@@ -61,6 +61,7 @@ export interface Meta {
   transport: string;
 }
 export interface DeviceStatus {
+  connectedHost?: string;
   reachable: boolean | null;
   checkedAt: number | null;
   latencyMs: number | null;
@@ -134,6 +135,7 @@ export interface CapabilitiesPayload {
 }
 
 export interface DeviceInfo {
+  endpoints?: import("../../src/core/device-endpoints").DeviceEndpoints;
   name: string;
   host: string;
   port: number;

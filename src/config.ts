@@ -130,88 +130,124 @@ export const JumpHostSchema = z.object({
 });
 export type JumpHostConfig = z.infer<typeof JumpHostSchema>;
 
-export const DeviceConfigSchema = z.object({
-  host: z.string().default("127.0.0.1"),
-  username: z.string().default("admin"),
-  password: z.string().default(""),
-  port: z.coerce.number().int().positive().default(22),
-  keyFilename: z.string().optional(),
-  /** Optional inline private key (PEM). Takes precedence over keyFilename. */
-  privateKey: z.string().optional(),
-  /** Passphrase for an encrypted private key (keyFilename or privateKey). */
-  keyPassphrase: z.string().optional(),
-  /** SSH connect timeout in milliseconds. */
-  timeoutMs: z.coerce.number().int().positive().default(10_000),
-  /**
-   * SSH jump host: reach this device THROUGH another configured device used as a
-   * bastion (SSH ProxyJump). Set to the NAME of another device in this config —
-   * the MCP opens an SSH session to that router and tunnels onward to this
-   * device's `host:port`, so this device needs no port exposed to the network.
-   * The bastion must be an SSH device (not MAC-Telnet) and may itself set
-   * `jumpVia` for a multi-hop chain. SSH-only; ignored for a MAC-Telnet device.
-   * Requires SSH TCP forwarding on the bastion (`/ip ssh set
-   * forwarding-enabled=local`). Use `jumpHost` instead for a non-device bastion.
-   */
-  jumpVia: z.string().optional(),
-  /**
-   * Inline SSH jump host (bastion) for when it isn't a configured device — same
-   * SSH connection fields as a device. Prefer `jumpVia` to reuse an existing
-   * device entry. Ignored when `jumpVia` is also set.
-   */
-  jumpHost: JumpHostSchema.optional(),
-  /**
-   * Target MAC address (e.g. `48:A9:8A:C6:42:F7`). When set, this device is
-   * reached over **MAC-Telnet** (Layer-2, UDP 20561) instead of SSH — no IP is
-   * needed, so it works for a freshly-unboxed or misconfigured router. The
-   * `host`/`port`/key fields above are ignored for a MAC device; auth uses
-   * `username`/`password` (MTWEI, falling back to MD5 on legacy gear).
-   */
-  mac: z.string().optional(),
-  /**
-   * Optional explicit in-packet source MAC for MAC-Telnet. Usually omitted —
-   * the resolver uses the real MAC of the egress interface, which is what
-   * RouterOS's mac-server requires to answer.
-   */
-  sourceMac: z.string().optional(),
-  /**
-   * Optional UDP delivery host for MAC-Telnet (e.g. a subnet broadcast like
-   * `10.0.0.255`). Omit to auto-discover the route by spraying every
-   * interface's directed broadcast.
-   */
-  macHost: z.string().optional(),
-  /** Optional UDP port the device's mac-server listens on (default 20561). */
-  macPort: z.coerce.number().int().positive().optional(),
-  /**
-   * Use the RouterOS **REST API** (`/rest`, RouterOS 7.9+) where the command
-   * maps cleanly, falling back to SSH for everything it cannot express —
-   * `/export`, Safe Mode, the interactive `/tool` commands, `[find]` selectors.
-   *
-   * REST returns structured JSON and real HTTP status codes instead of scraped
-   * console text, and skips the per-command SSH channel setup. Opt-in per
-   * device: it changes the shape of some tool output (list results render in
-   * the `print detail` form), and it requires the `www-ssl` service enabled.
-   */
-  api: z.boolean().optional(),
-  /** HTTPS port for the REST API (`/ip service www-ssl`). Default 443. */
-  apiPort: z.coerce.number().int().positive().optional(),
-  /**
-   * Accept a self-signed TLS certificate for the REST API. RouterOS ships one
-   * by default, so most deployments need this — but it disables certificate
-   * verification, so it stays a deliberate opt-in rather than the default.
-   */
-  apiInsecureTls: z.boolean().optional(),
-  /** Free-text label shown to the AI (e.g. "HQ edge router"). */
-  description: z.string().optional(),
-  /**
-   * Free-form labels for selecting groups of devices — e.g. `["branch", "eu"]`.
-   * Used by staged fleet rollouts (`targets: { tags: ["branch"] }`) so a change
-   * can name a class of routers rather than enumerating them, which is both
-   * shorter and less likely to silently miss a device someone added later.
-   */
-  tags: z.array(z.string()).default([]),
-  /** When true, this device is excluded from the MCP tool surface — the AI cannot target it. */
-  disabled: z.boolean().optional(),
-});
+export const DeviceConfigSchema = z
+  .object({
+    host: z.string().default("127.0.0.1"),
+    /** Alternate static management IPs, tried after host (Primary), in order.
+     * Every address must belong to this same router and uses the same credentials/ports.
+     */
+    fallbackHosts: z
+      .array(z.union([z.ipv4(), z.ipv6()]))
+      .max(7)
+      .optional(),
+    username: z.string().default("admin"),
+    password: z.string().default(""),
+    port: z.coerce.number().int().positive().default(22),
+    keyFilename: z.string().optional(),
+    /** Optional inline private key (PEM). Takes precedence over keyFilename. */
+    privateKey: z.string().optional(),
+    /** Passphrase for an encrypted private key (keyFilename or privateKey). */
+    keyPassphrase: z.string().optional(),
+    /** SSH connect timeout in milliseconds. */
+    timeoutMs: z.coerce.number().int().positive().default(10_000),
+    /**
+     * SSH jump host: reach this device THROUGH another configured device used as a
+     * bastion (SSH ProxyJump). Set to the NAME of another device in this config —
+     * the MCP opens an SSH session to that router and tunnels onward to this
+     * device's `host:port`, so this device needs no port exposed to the network.
+     * The bastion must be an SSH device (not MAC-Telnet) and may itself set
+     * `jumpVia` for a multi-hop chain. SSH-only; ignored for a MAC-Telnet device.
+     * Requires SSH TCP forwarding on the bastion (`/ip ssh set
+     * forwarding-enabled=local`). Use `jumpHost` instead for a non-device bastion.
+     */
+    jumpVia: z.string().optional(),
+    /**
+     * Inline SSH jump host (bastion) for when it isn't a configured device — same
+     * SSH connection fields as a device. Prefer `jumpVia` to reuse an existing
+     * device entry. Ignored when `jumpVia` is also set.
+     */
+    jumpHost: JumpHostSchema.optional(),
+    /**
+     * Target MAC address (e.g. `48:A9:8A:C6:42:F7`). When set, this device is
+     * reached over **MAC-Telnet** (Layer-2, UDP 20561) instead of SSH — no IP is
+     * needed, so it works for a freshly-unboxed or misconfigured router. The
+     * `host`/`port`/key fields above are ignored for a MAC device; auth uses
+     * `username`/`password` (MTWEI, falling back to MD5 on legacy gear).
+     */
+    mac: z.string().optional(),
+    /**
+     * Optional explicit in-packet source MAC for MAC-Telnet. Usually omitted —
+     * the resolver uses the real MAC of the egress interface, which is what
+     * RouterOS's mac-server requires to answer.
+     */
+    sourceMac: z.string().optional(),
+    /**
+     * Optional UDP delivery host for MAC-Telnet (e.g. a subnet broadcast like
+     * `10.0.0.255`). Omit to auto-discover the route by spraying every
+     * interface's directed broadcast.
+     */
+    macHost: z.string().optional(),
+    /** Optional UDP port the device's mac-server listens on (default 20561). */
+    macPort: z.coerce.number().int().positive().optional(),
+    /**
+     * Use the RouterOS **REST API** (`/rest`, RouterOS 7.9+) where the command
+     * maps cleanly, falling back to SSH for everything it cannot express —
+     * `/export`, Safe Mode, the interactive `/tool` commands, `[find]` selectors.
+     *
+     * REST returns structured JSON and real HTTP status codes instead of scraped
+     * console text, and skips the per-command SSH channel setup. Opt-in per
+     * device: it changes the shape of some tool output (list results render in
+     * the `print detail` form), and it requires the `www-ssl` service enabled.
+     */
+    api: z.boolean().optional(),
+    /** HTTPS port for the REST API (`/ip service www-ssl`). Default 443. */
+    apiPort: z.coerce.number().int().positive().optional(),
+    /**
+     * Accept a self-signed TLS certificate for the REST API. RouterOS ships one
+     * by default, so most deployments need this — but it disables certificate
+     * verification, so it stays a deliberate opt-in rather than the default.
+     */
+    apiInsecureTls: z.boolean().optional(),
+    /** Free-text label shown to the AI (e.g. "HQ edge router"). */
+    description: z.string().optional(),
+    /**
+     * Free-form labels for selecting groups of devices — e.g. `["branch", "eu"]`.
+     * Used by staged fleet rollouts (`targets: { tags: ["branch"] }`) so a change
+     * can name a class of routers rather than enumerating them, which is both
+     * shorter and less likely to silently miss a device someone added later.
+     */
+    tags: z.array(z.string()).default([]),
+    /** When true, this device is excluded from the MCP tool surface — the AI cannot target it. */
+    disabled: z.boolean().optional(),
+  })
+  .superRefine((device, ctx) => {
+    if (!device.fallbackHosts?.length) return;
+    if (device.mac)
+      ctx.addIssue({
+        code: "custom",
+        path: ["fallbackHosts"],
+        message: "IP failover is not available for MAC-Telnet.",
+      });
+    const canonical = (host: string) =>
+      host.includes(":") ? new URL(`http://[${host}]/`).hostname : host.toLowerCase();
+    const seen = new Set([
+      device.host.includes(":") && !z.ipv6().safeParse(device.host).success
+        ? device.host
+        : canonical(device.host),
+    ]);
+    device.fallbackHosts.forEach((host, i) => {
+      // Refinements may run even when an individual field failed validation.
+      if (!z.union([z.ipv4(), z.ipv6()]).safeParse(host).success) return;
+      const key = canonical(host);
+      if (seen.has(key))
+        ctx.addIssue({
+          code: "custom",
+          path: ["fallbackHosts", i],
+          message: "Each management address must be unique, including Primary.",
+        });
+      seen.add(key);
+    });
+  });
 export type DeviceConfig = z.infer<typeof DeviceConfigSchema>;
 
 /**
