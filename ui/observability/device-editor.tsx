@@ -186,6 +186,8 @@ export function DeviceEditor({
   name,
   isNew,
   onApply,
+  onSave,
+  saveNotice,
   onCancel,
   advanced,
 }: {
@@ -307,10 +309,11 @@ export function DeviceEditor({
   const close = () => {
     if (!inFlight.current) dirty ? setDiscard(true) : onCancel();
   };
-  const apply = async () => {
+  const apply = async (connectAndSave = false) => {
     if (inFlight.current || !validate(2)) return;
     inFlight.current = true;
     setSaving(true);
+    if (connectAndSave) setTest(null);
     try {
       const next = renameDevice(
         { ...cfg, devices: { ...devices, [name]: dev } },
@@ -332,11 +335,32 @@ export function DeviceEditor({
         });
         return;
       }
-      onApply(next);
+      if (!connectAndSave) {
+        onApply(next);
+        return;
+      }
+      setStep(2);
+      content.current?.scrollTo({ top: 0 });
+      setTesting(true);
+      const connection = await testDeviceConnection(
+        newName.trim(),
+        (next.devices as Record<string, Draft>)[newName.trim()],
+        next.devices,
+      );
+      if (!mounted.current) return;
+      setTesting(false);
+      setTest({ ...connection, snapshot });
+      if (!connection.ok) return;
+      if (!(await onSave(next)) && mounted.current)
+        setErrors({
+          form: "Connection succeeded, but saving was not confirmed. Check the saved devices before trying again; your form is still here.",
+        });
     } catch {
       if (mounted.current)
         setErrors({
-          form: "Could not validate the draft. Nothing has been saved. Try again.",
+          form: connectAndSave
+            ? "Connect & Save could not be completed. Check the saved devices before trying again."
+            : "Could not validate the draft. Nothing has been saved. Try again.",
         });
     } finally {
       inFlight.current = false;
@@ -797,7 +821,11 @@ export function DeviceEditor({
                       </div>
                     </div>
                     <Note type="secondary" label="Nothing saved yet">
-                      <p>Test access before accepting this router into your draft.</p>
+                      <p>
+                        <b>Test connection</b> only checks access. <b>Connect &amp; Save</b> tests
+                        again and saves only after a successful connection. You can also keep this
+                        router in your draft without saving.
+                      </p>
                     </Note>
                   </>
                 )}
@@ -856,17 +884,28 @@ export function DeviceEditor({
                   {isNew ? "Add to draft" : "Update draft"}
                 </Button>
               )}
-              {step === 2 && (
+              <div className="device-editor__connect-actions">
+                <p className="device-editor__save-notice">{saveNotice}</p>
                 <Button
                   ghost
                   disabled={busy}
-                  loading={testing}
+                  loading={testing && !saving}
+                  aria-label="Test connection"
                   onClick={() => void probe()}
                   icon={<PlugZap size={16} />}
                 >
                   Test connection
                 </Button>
-              )}
+                <Button
+                  disabled={busy}
+                  loading={saving}
+                  aria-label="Connect & Save"
+                  onClick={() => void apply(true)}
+                  icon={<Check size={16} />}
+                >
+                  Connect &amp; Save
+                </Button>
+              </div>
             </>
           )}
         </footer>

@@ -130,6 +130,93 @@ test("shared scroll areas wrap the form, navigation and key list; step changes r
   expect(scroll).toHaveBeenCalledTimes(2);
 });
 
+test("Test connection is available immediately and never applies or saves the draft", async () => {
+  await render();
+  await click("Test connection");
+  expect(document.body.textContent).toContain("Connection verified");
+  expect(calls.filter((c) => c.path.includes("test-device"))).toHaveLength(1);
+  expect(saved).not.toHaveBeenCalled();
+  expect(applied).not.toHaveBeenCalled();
+});
+
+test("Connect & Save validates and freshly tests the current draft before saving, including a rename", async () => {
+  await render();
+  await input("dev_name", "edge-renamed");
+  await input("f_host", "192.0.2.9");
+  await click("Test connection");
+  await click("Connect & Save");
+  expect(saved).toHaveBeenCalledOnce();
+  expect(calls.filter((c) => c.path.includes("test-device"))).toHaveLength(2);
+  expect(calls.at(-2)?.path).toBe("/api/config/validate?scope=devices");
+  expect(calls.at(-1)?.body).toEqual({
+    name: "edge-renamed",
+    config: { ...redacted, host: "192.0.2.9", $credentialsFrom: "edge" },
+    devices: saved.mock.calls[0][0].devices,
+  });
+  expect((saved.mock.calls[0][0].devices as any)["edge-renamed"]).toEqual({
+    ...redacted,
+    host: "192.0.2.9",
+    $credentialsFrom: "edge",
+  });
+  expect(applied).not.toHaveBeenCalled();
+});
+
+test.each([
+  { ok: true, status: { reachable: false, error: "SSH authentication failed" } },
+  { ok: true },
+  { ok: false, error: "Permission denied" },
+])("Connect & Save never saves an unsuccessful or unproven connection: %j", async (failure) => {
+  await render();
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(Response.json({ ok: true }))
+    .mockResolvedValueOnce(Response.json(failure));
+  await click("Connect & Save");
+  expect(saved).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain("Connection could not be verified");
+  expect(button("Connect & Save").disabled).toBe(false);
+});
+
+test("failed validation stops Connect & Save before probing, and a failed save retains the form", async () => {
+  await render();
+  vi.mocked(fetch).mockResolvedValueOnce(
+    Response.json({ ok: false, error: "Invalid device settings" }),
+  );
+  await click("Connect & Save");
+  expect(calls.some((c) => c.path.includes("test-device"))).toBe(false);
+  expect(saved).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain("Invalid device settings");
+  saved.mockResolvedValue(false);
+  await click("Connect & Save");
+  expect(saved).toHaveBeenCalledOnce();
+  expect(document.body.textContent).toContain("saving was not confirmed");
+  expect(cancelled).not.toHaveBeenCalled();
+});
+
+test("a pending connect-and-save locks editing and coalesces repeated actions", async () => {
+  await render();
+  let finish!: (value: Response) => void;
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(Response.json({ ok: true }))
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+  const action = button("Connect & Save");
+  await act(async () => {
+    action.click();
+    action.click();
+  });
+  expect(button("Test connection").disabled).toBe(true);
+  expect(button("Connect & Save").disabled).toBe(true);
+  expect(button("Close device editor").disabled).toBe(true);
+  expect(document.querySelector("fieldset")?.disabled).toBe(true);
+  expect(saved).not.toHaveBeenCalled();
+  await act(async () => finish(Response.json({ ok: true, status: { reachable: true } })));
+  expect(saved).toHaveBeenCalledOnce();
+});
+
 test("rename stays local until accepted and preserves redacted credentials through safe draft resolution", async () => {
   await render();
   await input("dev_name", "edge-new");
