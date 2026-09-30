@@ -10,6 +10,7 @@ import {
   RecallSchema,
   RememberSchema,
   STALE_AFTER_MS,
+  ScopeSchema,
 } from "../src/memory/knowledge";
 
 test("keyed memories preserve history, reject stale edits and roll back conflicting changes", async () => {
@@ -58,6 +59,176 @@ test("keyed memories preserve history, reject stale edits and roll back conflict
     ]);
   } finally {
     store.close();
+  }
+});
+
+test("shared and explicit group policy inherit safely, conflicts are visible and budgets never hide missing constraints", async () => {
+  const store = await openMemoryStore(":memory:");
+  try {
+    store.createEntities(
+      ["home", "exit", "other", "fleet-policy", "vpn-policy"].map((name) => ({
+        name,
+        entityType: "network",
+      })),
+    );
+    const share = (entityName: string, scope: "shared" | "group", members: string[] = []) =>
+      store.setScope(
+        ScopeSchema.parse({
+          entityName,
+          scope,
+          members,
+          expectedRevision: 0,
+          confirmSharing: true,
+        }),
+      );
+    share("fleet-policy", "shared");
+    const group = share("vpn-policy", "group", ["home", "exit"]);
+    const add = (entityName: string, key: string, content: string, kind = "constraint") =>
+      store.remember(RememberSchema.parse({ entityName, key, content, kind }));
+    const common = add("fleet-policy", "backup", "Back up before configuration changes");
+    const groupFact = add("vpn-policy", "path.mtu", "Measured path MTU 1400");
+    const local = add("home", "path.mtu", "Measured path MTU 1380");
+    add("other", "path.mtu", "Unrelated MTU 1200");
+    store.createRelations([{ from: "home", to: "other", relationType: "near" }]);
+    const recall = store.recall(
+      RecallSchema.parse({ entityName: "home", query: "nothingmatches", includeRelated: false }),
+    );
+    expect(recall.items.map((f) => f.id).sort()).toEqual(
+      [common.id, groupFact.id, local.id].sort(),
+    );
+    expect(recall.applicableScopes.map((s) => s.entityName).sort()).toEqual([
+      "fleet-policy",
+      "home",
+      "vpn-policy",
+    ]);
+    expect(recall.conflicts).toEqual([
+      {
+        key: "path.mtu",
+        memories: [
+          { id: groupFact.id, entityName: "vpn-policy", scope: "group" },
+          { id: local.id, entityName: "home", scope: "device" },
+        ],
+      },
+    ]);
+    expect(recall.items.every((f) => f.applicability === "applicable")).toBe(true);
+    expect(recall.constraintsOmitted).toBe(0);
+    const related = store.recall(RecallSchema.parse({ entityName: "home", query: "MTU" }));
+    expect(related.items.find((f) => f.entityName === "other")?.applicability).toBe("related");
+    const other = store.recall(RecallSchema.parse({ entityName: "other", includeRelated: false }));
+    expect(other.items.some((f) => f.entityName === "vpn-policy")).toBe(false);
+    expect(other.items.some((f) => f.scope === "shared")).toBe(true);
+    expect(other.conflicts).toEqual([]);
+    const tiny = store.recall(RecallSchema.parse({ entityName: "home", maxChars: 500, limit: 1 }));
+    expect(tiny.context.length).toBeLessThanOrEqual(500);
+    expect(tiny.context).toContain("Conflicting");
+    expect(tiny.constraintsOmitted).toBeGreaterThan(0);
+    expect(tiny.warnings.join(" ")).toContain("Do not change");
+    const symbols = store.recall(RecallSchema.parse({ entityName: "home", query: "!!!" }));
+    expect(symbols.items).toHaveLength(3);
+    store.setScope(
+      ScopeSchema.parse({
+        entityName: group.entityName,
+        scope: "group",
+        expectedRevision: group.revision,
+        members: ["exit"],
+        confirmSharing: true,
+      }),
+    );
+    expect(
+      store
+        .recall(RecallSchema.parse({ entityName: "home", includeRelated: false }))
+        .items.some((f) => f.scope === "group"),
+    ).toBe(false);
+    store.revise({ id: common.id, expectedRevision: common.revision, status: "archived" });
+    expect(
+      store
+        .recall(RecallSchema.parse({ entityName: "exit" }))
+        .items.some((f) => f.scope === "shared"),
+    ).toBe(false);
+  } finally {
+    store.close();
+  }
+});
+
+test("scope mutations require explicit sharing, exact members and optimistic revisions; legacy facts stay local", async () => {
+  const store = await openMemoryStore(":memory:");
+  try {
+    store.createEntities(
+      ["home", "exit", "policy"].map((name) => ({ name, entityType: "router" })),
+    );
+    expect(store.scope("home")).toEqual({
+      entityName: "home",
+      scope: "device",
+      members: [],
+      revision: 0,
+    });
+    const set = (data: object) =>
+      store.setScope(
+        ScopeSchema.parse({
+          entityName: "policy",
+          scope: "group",
+          members: ["home"],
+          expectedRevision: 0,
+          confirmSharing: true,
+          ...data,
+        }),
+      );
+    expect(() => set({ confirmSharing: false })).toThrow("confirm sharing");
+    expect(() => set({ members: ["missing"] })).toThrow("not found");
+    expect(() => set({ members: ["policy"] })).toThrow("nested groups");
+    expect(store.scope("policy").revision).toBe(0);
+    const saved = set({});
+    expect(() => set({ members: ["exit"] })).toThrow("changed since");
+    expect(() => set({ entityName: "home", scope: "shared", members: [] })).toThrow(
+      "remove this entity",
+    );
+    expect(store.scope("policy")).toEqual(saved);
+    const removed = set({ scope: "device", members: [], expectedRevision: 1 });
+    expect(removed.revision).toBe(2);
+    expect(store.scope("policy").members).toEqual([]);
+    expect(() => set({ expectedRevision: 0 })).toThrow("changed since");
+    const reshared = set({ expectedRevision: 2 });
+    expect(reshared.revision).toBe(3);
+    store.deleteEntities(["home"]);
+    expect(store.scope("policy").members).toEqual([]);
+    expect(store.activity(10).some((a) => a.action === "set_scope")).toBe(true);
+  } finally {
+    store.close();
+  }
+});
+
+test("upgrading an evidence-aware database creates a portable backup and preserves local scope", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "mikrotik-shared-migration-"));
+  const path = join(directory, "memory.db");
+  try {
+    const before = await openMemoryStore(path);
+    before.createEntities([{ name: "home", entityType: "router" }]);
+    before.remember(RememberSchema.parse({ entityName: "home", content: "Local MTU 1380" }));
+    before.close();
+    const previous = new Database(path);
+    previous.run("DROP TABLE memory_group_members");
+    previous.run("DROP TABLE memory_scopes");
+    previous.close();
+    const after = await openMemoryStore(path);
+    expect(after.scope("home").scope).toBe("device");
+    expect(after.facts(BrowseSchema.parse({ scope: "device" })).total).toBe(1);
+    expect(after.facts(BrowseSchema.parse({ scope: "shared" })).total).toBe(0);
+    after.close();
+    const backupName = readdirSync(directory).find((name) => name.includes(".pre-shared-memory-"))!;
+    expect(backupName).toBeDefined();
+    const backup = new Database(join(directory, backupName), { readonly: true });
+    expect(backup.query("SELECT content FROM observations").get()).toEqual({
+      content: "Local MTU 1380",
+    });
+    expect(
+      backup.query("SELECT 1 FROM sqlite_master WHERE name = 'memory_scopes'").get(),
+    ).toBeNull();
+    backup.close();
+    const reopened = await openMemoryStore(path);
+    reopened.close();
+    expect(readdirSync(directory).filter((name) => name.endsWith(".bak"))).toHaveLength(1);
+  } finally {
+    rmSync(directory, { recursive: true });
   }
 });
 

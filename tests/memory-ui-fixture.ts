@@ -4,7 +4,7 @@ import { MikrotikConfigSchema } from "../src/config";
 import { setConfig } from "../src/core/runtime";
 import { installMemoryStore } from "../src/memory/accessor";
 import { openMemoryStore } from "../src/memory/store";
-import { RememberSchema } from "../src/memory/knowledge";
+import { RememberSchema, ScopeSchema } from "../src/memory/knowledge";
 import { memoryRoutes } from "../src/observability/memory-routes";
 
 setConfig(
@@ -20,12 +20,42 @@ store.createEntities([
   { name: "demo-home", entityType: "router" },
   { name: "demo-exit", entityType: "router" },
   { name: "change-policy", entityType: "policy" },
+  { name: "vpn-policy", entityType: "policy" },
 ]);
+store.setScope(
+  ScopeSchema.parse({
+    entityName: "change-policy",
+    scope: "shared",
+    expectedRevision: 0,
+    confirmSharing: true,
+  }),
+);
+store.setScope(
+  ScopeSchema.parse({
+    entityName: "vpn-policy",
+    scope: "group",
+    members: ["demo-home", "demo-exit"],
+    expectedRevision: 0,
+    confirmSharing: true,
+  }),
+);
 store.createRelations([
   { from: "demo-home", to: "demo-exit", relationType: "routes_via" },
   { from: "demo-home", to: "change-policy", relationType: "governed_by" },
 ]);
 const samples = [
+  {
+    entityName: "vpn-policy",
+    kind: "constraint",
+    key: "path.mtu",
+    content: "Use measured path MTU 1400 for the VPN group.",
+  },
+  {
+    entityName: "demo-home",
+    kind: "fact",
+    key: "path.mtu",
+    content: "Last measured path MTU was 1380. Recheck before changing.",
+  },
   {
     entityName: "demo-home",
     kind: "constraint",

@@ -8,6 +8,7 @@
 
 /** A named node in the knowledge graph. */
 export interface Entity {
+  memoryScope?: "device" | "group" | "shared";
   name: string;
   entityType: string;
   observations: string[];

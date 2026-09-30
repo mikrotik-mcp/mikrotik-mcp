@@ -17,9 +17,11 @@ vi.hoisted(() => Reflect.deleteProperty(Element.prototype, "animate"));
 let root: Root;
 let host: HTMLDivElement;
 let enabled: boolean;
+let factCount: number;
 const fact = {
   id: 1,
   entityName: "edge",
+  scope: "device",
   content: "Keep management reachable",
   key: "management",
   kind: "constraint",
@@ -37,6 +39,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   enabled = true;
+  factCount = 1;
   vi.mocked(api).mockImplementation(async (path) => {
     if (path === "/api/memory/config")
       return { enabled, dbPath: "/tmp/demo-memory.db", stats: null };
@@ -45,9 +48,11 @@ beforeEach(() => {
     if (path.startsWith("/api/memory/entities"))
       return { items: [{ name: "edge", entityType: "router" }], total: 1 };
     if (path.startsWith("/api/memory/entity/")) return { relations: [] };
+    if (path.startsWith("/api/memory/scope"))
+      return { entityName: "edge", scope: "device", members: [], revision: 0 };
     if (path.includes("history") || path.includes("activity")) return [];
     if (path.startsWith("/api/memory/facts"))
-      return { items: [fact], total: 1, offset: 0, limit: 24 };
+      return { items: [fact], total: factCount, offset: 0, limit: 24 };
     throw new Error(`Unexpected request ${path}`);
   });
   vi.mocked(postJson).mockResolvedValue({ ...fact, revision: 4 });
@@ -119,6 +124,10 @@ test("failed memory creation keeps the form and explains the error", async () =>
   await click(button("Add memory"));
   vi.mocked(postJson).mockResolvedValue({ error: "Entity not found; create it first" });
   const dialog = document.querySelector('[role="dialog"]')!;
+  await fill(dialog.querySelector<HTMLInputElement>("input")!, "edge");
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 180));
+  });
   await act(async () =>
     dialog
       .querySelector("form")!
@@ -126,4 +135,40 @@ test("failed memory creation keeps the form and explains the error", async () =>
   );
   expect(document.querySelector('[role="alert"]')!.textContent).toContain("Entity not found");
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+});
+test("shared scope shows its impact and requires explicit confirmation before applying", async () => {
+  await render();
+  await click(host.querySelector<HTMLElement>('.memory-subject[data-selected="false"]')!);
+  await click(button("Shared memory"));
+  expect(host.textContent).toContain("One lesson. The right routers.");
+  const options = [...host.querySelectorAll<HTMLButtonElement>(".memory-scope-options button")];
+  expect(options).toHaveLength(3);
+  await click(options[2]);
+  expect(host.textContent).toContain("Included in every device’s recall");
+  expect(button("Save sharing scope").disabled).toBe(true);
+  expect(postJson).not.toHaveBeenCalled();
+  factCount = 2;
+  await click(button("Refresh"));
+  expect(host.textContent).toContain("2 existing memories");
+  expect(options[2].getAttribute("aria-pressed")).toBe("true");
+  expect(button("Save sharing scope").disabled).toBe(true);
+  await click(
+    host.querySelector<HTMLElement>('[aria-label="Confirm sharing all entity memories"]')!,
+  );
+  vi.mocked(postJson).mockResolvedValue({
+    entityName: "edge",
+    scope: "shared",
+    revision: 1,
+    members: [],
+  });
+  await click(button("Save sharing scope"));
+  expect(postJson).toHaveBeenCalledWith("/api/memory/scope", {
+    entityName: "edge",
+    scope: "shared",
+    members: [],
+    expectedRevision: 0,
+    confirmSharing: true,
+  });
+  expect(host.textContent).toContain("Sharing scope saved");
+  expect(host.textContent).toContain("not permissions or tenant isolation");
 });

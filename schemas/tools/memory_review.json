@@ -13,6 +13,10 @@
       "minLength": 1,
       "maxLength": 200
     },
+    "scope": {
+      "type": "string",
+      "enum": ["device", "group", "shared"]
+    },
     "kind": {
       "type": "string",
       "enum": ["fact", "constraint", "lesson", "preference", "procedure"]

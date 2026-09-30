@@ -4,6 +4,24 @@ import { z } from "zod";
 export const memoryKinds = ["fact", "constraint", "lesson", "preference", "procedure"] as const;
 const name = z.string().trim().min(1).max(200);
 const text = z.string().trim().min(1).max(8000);
+export const memoryScopes = ["device", "group", "shared"] as const;
+export type MemoryScopeKind = (typeof memoryScopes)[number];
+export const ScopeSchema = z
+  .object({
+    entityName: name,
+    scope: z.enum(memoryScopes),
+    members: z.array(name).max(100).default([]),
+    expectedRevision: z.number().int().min(0),
+    confirmSharing: z.boolean().default(false),
+  })
+  .strict();
+export type ScopeInput = z.infer<typeof ScopeSchema>;
+export interface MemoryScope {
+  entityName: string;
+  scope: MemoryScopeKind;
+  members: string[];
+  revision: number;
+}
 export const RememberSchema = z
   .object({
     entityName: name,
@@ -43,6 +61,7 @@ export const BrowseSchema = z
   .object({
     query: z.string().trim().max(500).default(""),
     entityName: name.optional(),
+    scope: z.enum(memoryScopes).optional(),
     kind: z.enum(memoryKinds).optional(),
     state: z.enum(["active", "review", "pinned", "archived", "all"]).default("active"),
     limit: z.number().int().min(1).max(100).default(30),
@@ -54,6 +73,7 @@ export type ReviseInput = z.infer<typeof ReviseSchema>;
 export type RecallInput = z.infer<typeof RecallSchema>;
 export type BrowseInput = z.infer<typeof BrowseSchema>;
 export interface MemoryFact extends RememberInput {
+  scope: MemoryScopeKind;
   id: number;
   key: string | null;
   status: "active" | "archived";
@@ -84,10 +104,19 @@ export interface MemoryHealth {
   review: number;
 }
 export interface MemoryRecall {
-  items: (MemoryFact & { reasons: string[] })[];
+  items: (MemoryFact & {
+    reasons: string[];
+    applicability: "applicable" | "related" | "library";
+  })[];
   context: string;
   truncated: boolean;
   warnings: string[];
+  applicableScopes: MemoryScope[];
+  conflicts: {
+    key: string;
+    memories: { id: number; entityName: string; scope: MemoryScopeKind }[];
+  }[];
+  constraintsOmitted: number;
 }
 export const STALE_AFTER_MS = 90 * 24 * 60 * 60 * 1000;
 export function reviewReasons(fact: MemoryFact, now = Date.now()): string[] {

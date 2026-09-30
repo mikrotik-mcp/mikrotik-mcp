@@ -22,6 +22,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Trash2,
+  Globe2,
 } from "lucide-react";
 import type {
   BrowseInput,
@@ -37,6 +38,7 @@ import type { MemoryActivityEntry, MemoryConfig, MemoryStats } from "./types";
 import { api, deleteJson } from "./api";
 import { CopyButton } from "./atoms";
 import { EntityEditor, MemoryEditor, MemorySelect, saveMemory } from "./memory-editors";
+import { MemorySharing, MemoryScopeBadge } from "./memory-sharing";
 import { toast } from "./toast-action";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -85,6 +87,7 @@ function FactCard({
           <span>{fact.kind}</span>
         </Badge>
         <span className="memory-entity-name">{fact.entityName}</span>
+        <MemoryScopeBadge scope={fact.scope} />
         <Button
           variant="ghost"
           size="icon-sm"
@@ -175,6 +178,7 @@ function FactDetail({
               {fact.content}
             </p>
             <div className="memory-status-tags">
+              <MemoryScopeBadge scope={fact.scope} />
               {reviewReasons(fact).map((reason) => (
                 <Badge asChild variant="outline" key={reason}>
                   <span>{reason}</span>
@@ -331,7 +335,11 @@ function RecallLab({ entity }: { entity: string }) {
         <div className="memory-scope">
           <Network size={15} />
           <span>{entity || "All knowledge"}</span>
-          <small>Select an entity in the library to narrow the scope.</small>
+          <small>
+            {entity
+              ? "Includes Shared + explicit Groups + this Device."
+              : "Select a device in the library to preview inherited policy."}
+          </small>
         </div>
         <label className="memory-pin-field">
           <Switch
@@ -343,7 +351,8 @@ function RecallLab({ entity }: { entity: string }) {
             aria-label="Include related entities"
           />
           <span>
-            Include related entities<small>One hop, only explicit graph relations.</small>
+            Include related entities
+            <small>Reference only. Shared/group policy is always included.</small>
           </span>
         </label>
         <MemorySelect
@@ -382,12 +391,37 @@ function RecallLab({ entity }: { entity: string }) {
               </p>
             ))}
             <ScrollArea className="memory-context-scroll">
+              <div className="memory-status-tags" aria-label="Applicable memory scopes">
+                {result.applicableScopes?.map((scope) => (
+                  <span key={scope.entityName}>
+                    <MemoryScopeBadge scope={scope.scope} /> {scope.entityName}
+                  </span>
+                ))}
+              </div>
+              {!!result.conflicts?.length && (
+                <section className="memory-conflicts" aria-label="Conflicting memories">
+                  <h4>Resolve before applying · {result.conflicts.length} conflicting keys</h4>
+                  {result.conflicts.map((conflict) => (
+                    <p key={conflict.key}>
+                      <code>{conflict.key}</code> —{" "}
+                      {conflict.memories
+                        .map((m) => `#${m.id} ${m.entityName} (${m.scope})`)
+                        .join(" ↔ ")}
+                    </p>
+                  ))}
+                  <p>
+                    No scope wins automatically. Open these records in the library and verify the
+                    source.
+                  </p>
+                </section>
+              )}
               <div className="memory-context-results">
                 {result.items.map((fact) => (
                   <article key={fact.id}>
                     <header>
                       <code>#{fact.id}</code>
                       <strong>{fact.entityName}</strong>
+                      <MemoryScopeBadge scope={fact.scope} />
                       <Badge asChild variant="outline">
                         <span>{fact.kind}</span>
                       </Badge>
@@ -501,6 +535,7 @@ export function MemoryView() {
   const [relations, setRelations] = useState<Relation[]>([]);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
+  const [scopeFilter, setScopeFilter] = useState("all");
   const [state, setState] = useState<BrowseInput["state"]>("active");
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<MemoryPage | null>(null);
@@ -513,6 +548,7 @@ export function MemoryView() {
   const [editor, setEditor] = useState<MemoryFact | "new" | null>(null);
   const [detail, setDetail] = useState<MemoryFact | null>(null);
   const [entityEditor, setEntityEditor] = useState<"new" | "relation" | null>(null);
+  const [creatingPolicy, setCreatingPolicy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const search = useDelayedText(query);
   const subjectSearch = useDelayedText(entitySearch);
@@ -550,6 +586,7 @@ export function MemoryView() {
         });
         if (entity) params.set("entityName", entity);
         if (kind !== "all") params.set("kind", kind);
+        if (scopeFilter !== "all") params.set("scope", scopeFilter);
         const [nextSummary, nextPage, nextEntities, nextActivity, selected] = await Promise.all([
           api<{ stats: MemoryStats; health: MemoryHealth }>("/api/memory/summary", abort.signal),
           api<MemoryPage>(`/api/memory/facts?${params}`, abort.signal),
@@ -585,7 +622,7 @@ export function MemoryView() {
     };
     void load();
     return () => abort.abort();
-  }, [search, state, kind, offset, entity, subjectSearch, entityOffset, version]);
+  }, [search, state, kind, scopeFilter, offset, entity, subjectSearch, entityOffset, version]);
   const revise = async (fact: MemoryFact, patch: object) => {
     if (busy) return;
     setBusy(true);
@@ -714,6 +751,10 @@ export function MemoryView() {
               <History size={15} />
               Activity
             </TabsTrigger>
+            <TabsTrigger value="sharing" disabled={!config?.enabled}>
+              <Globe2 size={15} />
+              Shared memory
+            </TabsTrigger>
             <TabsTrigger value="settings">
               <SlidersHorizontal size={15} />
               Settings
@@ -768,6 +809,7 @@ export function MemoryView() {
                       <span>
                         {item.name}
                         <small>{item.entityType}</small>
+                        <MemoryScopeBadge scope={item.memoryScope} />
                       </span>
                       <ChevronRight size={12} />
                     </button>
@@ -817,6 +859,10 @@ export function MemoryView() {
                 </div>
                 {entity && (
                   <div className="memory-inline-actions">
+                    <Button size="sm" variant="outline" onClick={() => setTab("sharing")}>
+                      <Globe2 size={14} />
+                      Sharing scope
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => setEntityEditor("relation")}>
                       <Link2 size={14} />
                       Link
@@ -859,6 +905,20 @@ export function MemoryView() {
                 </div>
               )}
               <div className="memory-filters">
+                <MemorySelect
+                  label="Scope"
+                  value={scopeFilter}
+                  onChange={(value) => {
+                    setScopeFilter(value);
+                    setOffset(0);
+                  }}
+                  options={[
+                    { value: "all", label: "All scopes" },
+                    { value: "device", label: "Device" },
+                    { value: "group", label: "Group" },
+                    { value: "shared", label: "Shared" },
+                  ]}
+                />
                 <label className="memory-field">
                   <span>Search knowledge</span>
                   <Input
@@ -960,6 +1020,20 @@ export function MemoryView() {
         <TabsContent value="recall">
           <RecallLab key={entity} entity={entity} />
         </TabsContent>
+        <TabsContent value="sharing">
+          <MemorySharing
+            key={entity}
+            entity={entity}
+            refreshVersion={version}
+            entities={entities.items}
+            onSelect={selectEntity}
+            onCreate={() => {
+              setCreatingPolicy(true);
+              setEntityEditor("new");
+            }}
+            onSaved={refresh}
+          />
+        </TabsContent>
         <TabsContent value="activity">
           <section className="memory-activity">
             <header className="memory-section-header">
@@ -1026,8 +1100,18 @@ export function MemoryView() {
       {entityEditor && (
         <EntityEditor
           from={entityEditor === "relation" ? entity : undefined}
-          onClose={() => setEntityEditor(null)}
-          onSaved={refresh}
+          initialType={creatingPolicy ? "policy" : undefined}
+          onClose={() => {
+            setEntityEditor(null);
+            setCreatingPolicy(false);
+          }}
+          onSaved={(name) => {
+            if (creatingPolicy && name) {
+              selectEntity(name);
+              setTab("sharing");
+            }
+            refresh();
+          }}
         />
       )}
       <Dialog

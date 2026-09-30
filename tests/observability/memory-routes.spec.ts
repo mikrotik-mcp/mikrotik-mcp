@@ -18,6 +18,8 @@ const store = {
   remember: vi.fn(() => ({ id: 1 })),
   revise: vi.fn(() => ({ id: 1 })),
   stats: vi.fn(() => ({})),
+  scope: vi.fn(() => ({ entityName: "policy", scope: "device", revision: 0, members: [] })),
+  setScope: vi.fn(() => ({ entityName: "policy", scope: "shared", revision: 1, members: [] })),
   close: vi.fn(),
 };
 beforeEach(() => {
@@ -32,6 +34,48 @@ beforeEach(() => {
   vi.mocked(getMemoryStore).mockResolvedValue(store as never);
   vi.mocked(openMemoryStore).mockResolvedValue(store as never);
   vi.mocked(atomicWrite).mockImplementation(() => {});
+});
+test("scope routes validate and preserve explicit sharing intent and conflicts", async () => {
+  expect((await request("scope?entityName=policy")).status).toBe(200);
+  expect(store.scope).toHaveBeenCalledWith("policy");
+  expect((await request("scope", { entityName: "policy", scope: "shared" })).status).toBe(400);
+  expect(store.setScope).not.toHaveBeenCalled();
+  expect(
+    (
+      await request("scope", {
+        entityName: "policy",
+        scope: "shared",
+        expectedRevision: 0,
+        confirmSharing: true,
+      })
+    ).status,
+  ).toBe(200);
+  expect(store.setScope).toHaveBeenCalledWith({
+    entityName: "policy",
+    scope: "shared",
+    expectedRevision: 0,
+    confirmSharing: true,
+    members: [],
+  });
+  store.setScope.mockImplementationOnce(() => {
+    throw new Error("Scope changed since you opened it");
+  });
+  expect(
+    (await request("scope", { entityName: "policy", scope: "device", expectedRevision: 0 })).status,
+  ).toBe(409);
+  store.setScope.mockImplementationOnce(() => {
+    throw new Error("Invalid scope: only groups can have members");
+  });
+  expect(
+    (
+      await request("scope", {
+        entityName: "policy",
+        scope: "shared",
+        members: ["home"],
+        expectedRevision: 1,
+      })
+    ).status,
+  ).toBe(400);
 });
 async function request(path: string, data?: unknown, raw?: string) {
   const url = new URL(`http://localhost/api/memory/${path}`);

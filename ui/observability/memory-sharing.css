@@ -1,0 +1,314 @@
+.memory-sharing {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.memory-workspace .memory-filters {
+  grid-template-columns: 130px minmax(160px, 1fr) 130px 150px;
+}
+.memory-workspace .memory-filters > label:first-child {
+  grid-column: auto;
+}
+.memory-subject .memory-scope-badge {
+  margin-top: 7px;
+}
+.memory-sharing-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+.memory-sharing-intro h2 {
+  font-size: clamp(24px, 2.5vw, 34px);
+  letter-spacing: -0.035em;
+  font-weight: 600;
+}
+.memory-sharing p,
+.memory-sharing small {
+  color: var(--muted-foreground);
+  line-height: 1.7;
+  font-size: 12px;
+}
+.memory-sharing-intro p {
+  margin-top: 10px;
+  max-width: 580px;
+  font-size: 14px;
+}
+.memory-inheritance-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+}
+.memory-inheritance-strip > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.memory-inheritance-strip svg {
+  width: 17px;
+  color: var(--primary);
+}
+.memory-inheritance-strip > b {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.memory-inheritance-strip > small {
+  margin-left: auto;
+}
+.memory-sharing-lookup {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  max-width: 620px;
+}
+.memory-sharing-lookup > label {
+  flex: 1;
+  min-width: 0;
+}
+.memory-sharing-form {
+  display: grid;
+  gap: 24px;
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.memory-sharing-fields {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.memory-sharing-fields:disabled {
+  opacity: 0.6;
+}
+.memory-scope-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.memory-scope-options > button {
+  text-align: left;
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  cursor: pointer;
+  min-width: 0;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.memory-scope-options > button > svg {
+  margin-bottom: 10px;
+  color: var(--primary);
+}
+.memory-scope-options > button > strong {
+  font-size: 18px;
+}
+.memory-scope-options > button > span {
+  font-size: 12px;
+  font-weight: 600;
+}
+.memory-scope-options > button[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.memory-scope-options > button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.memory-scope-options > button:disabled {
+  cursor: not-allowed;
+}
+.memory-scope-badge {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 10px;
+}
+.memory-scope-badge[data-scope="shared"] {
+  color: var(--success);
+}
+.memory-scope-badge[data-scope="group"] {
+  color: var(--primary);
+}
+.memory-member-picker {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.memory-member-picker h4 {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-weight: 600;
+}
+.memory-member-picker h4 span {
+  font: 11px var(--font-mt);
+  color: var(--muted-foreground);
+}
+.memory-member-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.memory-member-chips > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: 12px var(--font-mt);
+  overflow-wrap: anywhere;
+}
+.memory-members-scroll {
+  height: 230px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.memory-member-list {
+  display: grid;
+  padding: 8px;
+  gap: 4px;
+}
+.memory-member-list > label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.memory-member-list > label:hover {
+  background: var(--accent);
+}
+.memory-member-list > label > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  font: 12px var(--font-mt);
+  overflow-wrap: anywhere;
+}
+.memory-member-list small {
+  display: block;
+  font: 10px var(--font-mt);
+  margin-top: 4px;
+}
+.memory-sharing-impact {
+  display: flex;
+  align-items: start;
+  gap: 14px;
+  padding: 20px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  border-left: 2px solid var(--primary);
+}
+.memory-sharing-impact > svg {
+  flex: none;
+  color: var(--primary);
+}
+.memory-sharing-impact strong {
+  font-size: 13px;
+}
+.memory-sharing-impact p {
+  margin-top: 7px;
+}
+.memory-sharing-confirm {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  cursor: pointer;
+}
+.memory-sharing-boundary {
+  display: flex;
+  gap: 10px;
+  align-items: start;
+}
+.memory-sharing-boundary svg {
+  flex: none;
+  margin-top: 3px;
+}
+.memory-sharing-empty {
+  padding: 28px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+.memory-sharing .memory-verified-label {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.memory-conflicts {
+  display: grid;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--warning) 50%, var(--border));
+  padding: 16px;
+  border-radius: 10px;
+}
+.memory-conflicts h4 {
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 600;
+}
+.memory-conflicts p {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .memory-workspace .memory-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .memory-sharing-intro {
+    align-items: start;
+    flex-direction: column;
+  }
+  .memory-scope-options {
+    grid-template-columns: 1fr;
+  }
+  .memory-scope-options > button {
+    grid-template-columns: 24px 1fr auto;
+    padding: 16px;
+  }
+  .memory-scope-options > button > svg {
+    margin: 0;
+  }
+  .memory-scope-options > button > small {
+    grid-column: 2 / -1;
+  }
+  .memory-sharing-form {
+    padding: 16px;
+  }
+  .memory-sharing-lookup {
+    flex-wrap: wrap;
+  }
+  .memory-inheritance-strip {
+    gap: 10px;
+    padding: 16px;
+  }
+  .memory-inheritance-strip > small {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+@media (min-width: 761px) and (max-width: 1200px) {
+  .memory-workspace .memory-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .memory-scope-options > button {
+    transition: none;
+  }
+}

@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { BookmarkPlus, Link2, Save } from "lucide-react";
 import { memoryKinds } from "../../src/memory/knowledge";
-import type { MemoryFact } from "../../src/memory/knowledge";
-import { postJson } from "./api";
+import type { MemoryFact, MemoryScope } from "../../src/memory/knowledge";
+import { api, postJson } from "./api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,8 +75,36 @@ export function MemoryEditor({
   const [pinned, setPinned] = useState(fact?.pinned ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [scope, setScope] = useState<MemoryScope | null>(null);
+  const [scopeError, setScopeError] = useState("");
+  useEffect(() => {
+    const abort = new AbortController();
+    setScope(null);
+    setScopeError("");
+    if (!entity.trim()) return () => abort.abort();
+    const timer = setTimeout(() => {
+      void api<MemoryScope>(
+        `/api/memory/scope?entityName=${encodeURIComponent(entity.trim())}`,
+        abort.signal,
+      )
+        .then((next) => {
+          if (!abort.signal.aborted) setScope(next);
+        })
+        .catch(() => {
+          if (!abort.signal.aborted)
+            setScopeError(
+              "Cannot confirm this entity’s sharing scope. Check its name or reopen the form to retry.",
+            );
+        });
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [entity]);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!scope || scope.entityName !== entity.trim()) return;
     setBusy(true);
     setError("");
     const expiresAt =
@@ -129,6 +157,14 @@ export function MemoryEditor({
         <form onSubmit={submit}>
           <ScrollArea className="memory-editor-scroll">
             <fieldset disabled={busy} className="memory-form-grid">
+              <p className="memory-wide memory-warning" role="status">
+                {scopeError ||
+                  (scope
+                    ? `Scope: ${scope.scope.toUpperCase()} · ${scope.scope === "shared" ? "Every device will be able to recall this memory." : scope.scope === "group" ? `Inherited by ${scope.members.length} explicit members.` : "Applies only to this entity; never shared automatically."}`
+                    : entity.trim()
+                      ? "Checking memory scope…"
+                      : "Choose an existing entity to see who inherits this memory.")}
+              </p>
               <label className="memory-field">
                 <span>Entity</span>
                 <Input
@@ -220,11 +256,11 @@ export function MemoryEditor({
             </p>
           )}
           <footer className="memory-dialog-actions">
-            <span>Local only · {fact ? "History preserved" : "Not yet verified"}</span>
+            <span>Local database · {fact ? "History preserved" : "Not yet verified"}</span>
             <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || !scope || scope.entityName !== entity.trim()}>
               <Save size={15} />
               {busy ? "Saving…" : "Save memory"}
             </Button>
@@ -237,15 +273,17 @@ export function MemoryEditor({
 
 export function EntityEditor({
   from,
+  initialType,
   onClose,
   onSaved,
 }: {
   from?: string;
+  initialType?: string;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (name?: string) => void;
 }) {
   const [name, setName] = useState("");
-  const [type, setType] = useState(from ? "depends_on" : "device");
+  const [type, setType] = useState(from ? "depends_on" : (initialType ?? "device"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async (e: FormEvent) => {
@@ -265,7 +303,7 @@ export function EntityEditor({
             ? "Relation exists, or the target entity does not exist."
             : "This entity already exists.",
         );
-      onSaved();
+      onSaved(from ? undefined : name.trim());
       onClose();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not save");

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "memory_get_scope",
+  "type": "object",
+  "properties": {
+    "entityName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  },
+  "required": ["entityName"],
+  "additionalProperties": false
+}

@@ -5,7 +5,13 @@ import { getConfigSource } from "../config";
 import { atomicWrite, serializeConfig } from "../config-write";
 import { closeMemoryStore, getMemoryStore, installMemoryStore } from "../memory/accessor";
 import { openMemoryStore } from "../memory/store";
-import { BrowseSchema, RecallSchema, RememberSchema, ReviseSchema } from "../memory/knowledge";
+import {
+  BrowseSchema,
+  RecallSchema,
+  RememberSchema,
+  ReviseSchema,
+  ScopeSchema,
+} from "../memory/knowledge";
 export { closeMemoryStore };
 
 const name = z.string().trim().min(1).max(200);
@@ -88,6 +94,10 @@ export async function memoryRoutes(req: Request, url: URL): Promise<Response | n
     if (!cfg.memory.enabled)
       return json({ error: "Knowledge memory is disabled. Enable it in Memory settings." }, 503);
     const store = await getMemoryStore();
+    if (p === "/api/memory/scope" && req.method === "GET")
+      return json(store.scope(name.parse(url.searchParams.get("entityName"))));
+    if (p === "/api/memory/scope" && req.method === "POST")
+      return json(store.setScope(ScopeSchema.parse(await body(req))));
     if (p === "/api/memory/summary" && req.method === "GET")
       return json({ stats: store.stats(), health: store.health() });
     if (p === "/api/memory/facts" && req.method === "GET") {
@@ -221,7 +231,7 @@ export async function memoryRoutes(req: Request, url: URL): Promise<Response | n
         409,
       );
     if (message.includes("changed since")) return json({ error: message }, 409);
-    if (/not found|credential vault|already exists|too large/.test(message))
+    if (/not found|credential vault|already exists|too large|Invalid scope/.test(message))
       return json({ error: message }, 400);
     return json(
       { error: "Memory storage is unavailable. Check its path and permissions, then retry." },
