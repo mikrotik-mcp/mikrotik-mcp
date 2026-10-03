@@ -7,53 +7,114 @@ outbound access to the device.
 A ready-to-use **`docker-compose.yml`** ships in the repo root:
 
 ```bash
-cp .env.example .env          # fill in your device credentials
-docker compose up --build     # → http://localhost:8000/mcp
+test -e devices.json || cp docker/devices.example.json devices.json
+# Edit devices.json: devices, credentials/key paths, dashboard.enabled, etc.
+docker compose pull mikrotik-mcp
+docker compose up -d mikrotik-mcp  # → http://localhost:8000/mcp
 ```
 
-It runs the HTTP transport by default and includes an optional `chatgpt` profile
+It requires an existing writable `devices.json`, runs HTTP by default and includes an optional `chatgpt` profile
 (a Cloudflare tunnel) — see [Deploying to ChatGPT Apps](#deploying-to-chatgpt-apps).
 The sections below explain the pieces it wires up.
 
-## Minimal image
+## Published image
 
-```dockerfile
-# Dockerfile
-FROM oven/bun:1.3-alpine
-
-WORKDIR /app
-
-# Install production dependencies first for better layer caching.
-COPY package.json bun.lock ./
-RUN bun install --production --frozen-lockfile
-
-# Copy the rest of the source (prompts/ and schemas/ are needed at runtime).
-COPY . .
-
-# Run the CLI directly with Bun — no separate build step required.
-ENTRYPOINT ["bun", "dist/cli.js"]
-```
-
-If you prefer running from a published bundle instead of source, run
-`bun run build` in the image and keep `dist/`, `prompts/`, and `schemas/`.
-For running straight from TypeScript source, change the entrypoint to
-`["bun", "src/cli.ts"]`.
-
-Build and run:
+Docker Hub: **[alimaster/mikrotik-mcp](https://hub.docker.com/r/alimaster/mikrotik-mcp)**.
+The `5.19.0` and `latest` tags provide `linux/amd64` and `linux/arm64`; Docker
+selects the matching architecture automatically. Compose uses `5.19.0` by default,
+with no implicit local build. Prefer a release tag for deliberate upgrades;
+`latest` moves when a new image is published.
 
 ```bash
-docker build -t mikrotik-mcp .
+docker pull alimaster/mikrotik-mcp:5.19.0
+# Optional: opt into the moving tag. Use the same override for pull and up.
+MIKROTIK_IMAGE_TAG=latest docker compose pull mikrotik-mcp
+MIKROTIK_IMAGE_TAG=latest docker compose up -d mikrotik-mcp
+```
+
+Pulling an image does not restart an existing container. `up -d` recreates the
+service when its image/config changes while retaining the configured JSON and
+state mounts. Confirm pending configuration edits before recreation; never use
+`down -v` for an upgrade. Keep one writer per `devices.json`.
+
+For local development, build a separate tag and select it explicitly:
+
+```bash
+docker build --pull -t alimaster/mikrotik-mcp:local .
+MIKROTIK_IMAGE_TAG=local docker compose up -d --pull never mikrotik-mcp
+```
+
+Maintainers can publish both platforms after testing (Docker Hub login required):
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  --tag alimaster/mikrotik-mcp:5.19.0 --tag alimaster/mikrotik-mcp:latest --push .
+docker buildx imagetools inspect alimaster/mikrotik-mcp:5.19.0
+```
+
+Publishing is separate from a Git commit/release. Verify the remote manifest and
+run a smoke test of the pulled digest on matching hardware before deploying.
+
+## Minimal production image
+
+The repository Dockerfile pins **Bun 1.4.2 Alpine**, the latest stable release
+checked on October 3, 2026. All stages use the same Bun version; there is no Node
+runtime, Git, compiler toolchain, or package installation in the final image.
+To deliberately test a newer version, use `--build-arg BUN_VERSION=x.y.z`.
+The builder runs on `BUILDPLATFORM` and produces architecture-independent
+JavaScript and HTML; the final Bun image uses the requested target platform.
+This avoids QEMU/JSC failures during cross-platform builds. No `.node` binaries
+are copied from the builder. To publish both supported architectures, use
+`docker buildx build --platform linux/amd64,linux/arm64` with your desired output.
+Run the resulting image on matching hardware: Bun 1.4.2's x64 JavaScriptCore was
+observed aborting with `MemoryExhaustion` under QEMU on an ARM Docker Desktop host.
+Successful cross-building is not a native amd64 runtime validation; do not
+disable production JIT or skip verification to hide an emulation failure.
+
+The multi-stage build installs the frozen lockfile with the repository's Bun
+settings, then uses Bun's bundler to minify the CLI and bundle ordinary runtime
+dependencies. SDK and Zod remain together; the Docker-only bundler also handles
+centrs' raw TypeScript directly. Published npm/MCPB builds remain unchanged.
+`ssh2`, `figlet` and their required dependencies remain file-backed. Only the
+banner's Small font ships; optional native SSH accelerators are omitted, using
+the same pure-JavaScript fallback as an install with lifecycle scripts disabled.
+
+The final image includes the dashboard and all MCP App views, prompts, schemas,
+built-in policies, offline flags and third-party notices. It excludes the source
+tree, library-only bundles, declarations, source maps, tests and build tools.
+`.dockerignore` is an allow-list so local `.env` files, router configs, keys,
+databases and host dependencies do not enter the build context.
+
+The server runs as **UID/GID 1000 (`bun`)**. Persist its default databases,
+knowledge memory and backups at `/home/bun/.mikrotik-mcp`; Compose mounts a named
+volume there. Existing bind mounts and private keys must be accessible to that
+UID. Do not make a private key world-readable to solve a permissions mismatch.
+Runtime auto-install and automatic `.env` loading are disabled; pass configuration
+with environment variables, a mounted config, or Docker secrets instead.
+
+Pull and run:
+
+```bash
+docker pull alimaster/mikrotik-mcp:5.19.0
 
 docker run --rm -it \
   -e MIKROTIK_HOST=192.168.88.1 \
   -e MIKROTIK_USERNAME=automation \
-  mikrotik-mcp auth-check
+  alimaster/mikrotik-mcp:5.19.0 auth-check
 ```
 
 ## Passing configuration
 
-Every [config setting](./configuration.md) is an environment variable, so wire
-the container up with `-e` flags or an env file.
+The image reads `MIKROTIK_CONFIG_FILE=/home/bun/.mikrotik-mcp/devices.json` by
+default. The image seeds that file with HTTP port 8000 and dashboard port 9090
+(dashboard disabled). A new named volume inherits the seed; an existing volume
+or host directory must already contain `devices.json`. Environment-only device
+credentials still work with the empty starter `devices` map. Once devices are
+saved in JSON, configure them there instead of mixing sources.
+
+Explicit [environment settings](./configuration.md) and CLI flags override JSON.
+Unlike earlier images, Docker no longer bakes transport/bind/port **environment**
+defaults that would override edits saved to the file. Use `-e` deliberately:
 
 ```bash
 docker run --rm \
@@ -65,7 +126,7 @@ docker run --rm \
   -e MIKROTIK_MCP__ALLOWED_HOSTS=mcp.example.com \
   -v /path/to/key:/run/secrets/mikrotik_key:ro \
   -p 8000:8000 \
-  mikrotik-mcp serve
+  alimaster/mikrotik-mcp:5.19.0 serve
 ```
 
 For the HTTP transports, publish the port (`-p 8000:8000`) and remember that
@@ -73,12 +134,98 @@ binding to `0.0.0.0` without an allow-list disables DNS-rebinding protection —
 set `MIKROTIK_MCP__ALLOWED_HOSTS` to your domain. See
 [Transports](./transports.md#dns-rebinding-protection).
 
-The `/health` endpoint makes a clean container health check:
+The image's healthcheck runs a bounded Bun `fetch` against `/health`, following
+explicit `MIKROTIK_MCP__PORT`, then `mcp.port` in the JSON (fallback 8000). It checks server liveness, **not router
+reachability**. No extra HTTP client is installed. If you override the HTTP port
+using a CLI flag, also set this environment variable to the same port. Config-file
+port edits require restarting the listener and adjusting published ports.
+For stdio-only containers, use `--no-healthcheck`.
 
-```dockerfile
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget -qO- http://127.0.0.1:8000/health || exit 1
+The dashboard stays opt-in and defaults to **9090** when enabled:
+
+```bash
+docker run --rm \
+  -p 127.0.0.1:8000:8000 -p 127.0.0.1:9090:9090 \
+  -e MIKROTIK_HOST=192.168.88.1 \
+  -e MIKROTIK_USERNAME=automation \
+  -e MIKROTIK_KEY_FILENAME=/run/secrets/mikrotik_key \
+  -e MIKROTIK_DASHBOARD__ENABLED=true \
+  -v /path/to/key:/run/secrets/mikrotik_key:ro \
+  -v mikrotik-state:/home/bun/.mikrotik-mcp \
+  alimaster/mikrotik-mcp:5.19.0
 ```
+
+`EXPOSE` documents ports; it does not publish them. Compose publishes MCP and
+dashboard ports on host loopback; enable the dashboard in JSON. Keep management endpoints
+private or put an authenticated HTTPS proxy in front of them. MAC-Telnet still
+requires real Layer-2 reachability; Docker Desktop's VM/NAT does not provide that
+to the physical LAN merely because its dependencies are bundled.
+
+To inspect the result, use `docker image inspect alimaster/mikrotik-mcp:5.19.0 --format '{{.Size}}'`
+and `docker history alimaster/mikrotik-mcp:5.19.0`. Report the platform and whether a size is
+compressed registry storage or unpacked layer size when comparing images.
+
+## Persistent devices.json
+
+`devices.json` is the **whole server configuration**, including device inventory,
+MCP transport, dashboard, SSH pool, memory settings, access rules, modules,
+scheduled audits, flow collection, alerts, policies, attack detection, S3 and
+service-probe settings. Config/Devices saves serialize the full validated config;
+MCP settings tools use the same file and safe-apply coordinator. No separate
+container-only settings file is created. Confirm a pending save with **Keep
+changes** / `confirm_mcp_settings` before a planned restart. Changes to listeners
+and transport require restarting the server; Docker port publishing must match.
+
+### Single-file mount
+
+Use the complete JSON example and `docker run` command in the
+[README](../README.md#docker-one-writable-devicesjson-for-all-mcp-settings).
+Mount the host file read-write at `/home/bun/.mikrotik-mcp/devices.json` and keep
+`mikrotik-state` mounted at its parent. The file must already exist; `--mount`
+fails for a missing source, and Compose uses `create_host_path: false` to avoid
+silently creating a directory where JSON was expected. See
+[Docker bind-mount documentation](https://docs.docker.com/engine/storage/bind-mounts/).
+
+Compose accepts `MIKROTIK_CONFIG_PATH=/absolute/path/devices.json`; otherwise it
+uses `./devices.json`. `MCP_PORT` and `DASHBOARD_PORT` only control port mappings,
+so keep them equal to the corresponding JSON ports (defaults 8000 and 9090).
+Leave application env overrides out of `.env` when the file is authoritative.
+An existing JSON must explicitly bind listeners to `0.0.0.0` inside the container
+for published ports to work; host mappings can remain loopback-only.
+
+Writes preserve the mounted inode: normal files still use a private temporary
+file and atomic rename; **only `EBUSY` on rename** triggers the single-file mount
+fallback. It flushes a private `.bak-mounted-*` copy first, writes and flushes
+the new contents, and attempts to restore the original bytes on an I/O failure.
+It never bypasses `EROFS`/permission errors. This is not atomic across process or
+power failure; retain the backup for manual recovery. Backups/history live in
+the persistent parent state volume. Run only one writer for a given JSON; do not
+share a live local service's file with a second container. Host editors that
+replace files via rename require recreating the container to remount the new inode.
+
+### Directory mount (recommended for atomic updates)
+
+Place `devices.json` in a dedicated writable state directory, then mount that
+directory instead of the named volume and individual JSON mount:
+
+```bash
+docker run -d --name mikrotik-mcp --restart unless-stopped \
+  -p 127.0.0.1:8000:8000 -p 127.0.0.1:9090:9090 \
+  --mount type=bind,src=/absolute/path/mikrotik-state,dst=/home/bun/.mikrotik-mcp \
+  --mount type=bind,src=/absolute/path/mikrotik_ed25519,dst=/run/secrets/mikrotik_key,readonly \
+  alimaster/mikrotik-mcp:5.19.0
+```
+
+Both the directory (for temp files/backups) and JSON must be writable by UID/GID 1000. On Linux give that UID access through ownership or a suitable ACL; keep the
+directory private and JSON/key permissions restrictive (JSON `0600`). Do not
+solve a mismatch with `chmod 777` or world-readable secrets. A read-only JSON can
+be loaded but cannot persist edits; inspect save errors / `persisted:false`.
+
+Settings remain in JSON, while Memory entries, SQLite events/usage reports,
+backup files and config history remain in the parent state directory. Mount any
+custom data paths too. Recreating the container preserves these mounts; removing
+the named volume with `docker compose down -v` deletes its data. Never bake real
+devices/credentials into the image or commit them to Git.
 
 ## Security: don't put passwords in env
 
@@ -92,7 +239,7 @@ it's running in a container (`/.dockerenv` or `container=docker`) with a plainte
 # docker-compose.yml (excerpt)
 services:
   mikrotik-mcp:
-    image: mikrotik-mcp
+    image: alimaster/mikrotik-mcp:5.19.0
     command: ["serve"]
     environment:
       MIKROTIK_HOST: 192.168.88.1
@@ -138,7 +285,7 @@ docker run --rm \
   -e MIKROTIK_READ_ONLY=true \
   -v /path/to/key:/run/secrets/mikrotik_key:ro \
   -p 8000:8000 \
-  mikrotik-mcp serve
+  alimaster/mikrotik-mcp:5.19.0 serve
 ```
 
 CORS defaults to the ChatGPT and Claude origins; set
@@ -170,7 +317,7 @@ Run both together with Compose:
 # docker-compose.yml (excerpt)
 services:
   mikrotik-mcp:
-    image: mikrotik-mcp
+    image: alimaster/mikrotik-mcp:5.19.0
     command: ["serve"]
     environment:
       MIKROTIK_HOST: 192.168.88.1

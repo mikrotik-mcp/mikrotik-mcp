@@ -2,35 +2,36 @@ name: mikrotik-mcp
 
 services:
   mikrotik-mcp:
-    build: .
-    image: mikrotik-mcp
+    # Published multi-platform image; opt into another release explicitly.
+    image: alimaster/mikrotik-mcp:${MIKROTIK_IMAGE_TAG:-5.19.0}
     container_name: mikrotik-mcp
     restart: unless-stopped
     command: ["serve"]
-    # Device credentials, S3, read-only, etc. all come from .env (every config
-    # setting is an environment variable). Optional so `up` works without it.
+    # Optional explicit overrides. Leave MCP settings out of .env when JSON
+    # should be authoritative across restarts.
     env_file:
       - path: .env
         required: false
     environment:
-      # Compose runs the server mode, so default to the HTTP transport.
-      MIKROTIK_MCP__TRANSPORT: ${MIKROTIK_MCP__TRANSPORT:-streamable-http}
-      MIKROTIK_MCP__HOST: 0.0.0.0
-      MIKROTIK_MCP__PORT: ${MIKROTIK_MCP__PORT:-8000}
+      MIKROTIK_CONFIG_FILE: /home/bun/.mikrotik-mcp/devices.json
       MIKROTIK_LOG_LEVEL: ${MIKROTIK_LOG_LEVEL:-info}
     ports:
-      - "${MIKROTIK_MCP__PORT:-8000}:8000"
+      - "127.0.0.1:${MCP_PORT:-8000}:${MCP_PORT:-8000}"
+      - "127.0.0.1:${DASHBOARD_PORT:-9090}:${DASHBOARD_PORT:-9090}"
+    volumes:
+      - mikrotik-state:/home/bun/.mikrotik-mcp
+      - type: bind
+        source: ${MIKROTIK_CONFIG_PATH:-./devices.json}
+        target: /home/bun/.mikrotik-mcp/devices.json
+        read_only: false
+        bind:
+          create_host_path: false
     # Prefer key-based auth over a plaintext password. Drop your private key in
-    # ./secrets/, uncomment below, and set MIKROTIK_KEY_FILENAME in .env to
+    # ./secrets/, uncomment below, and set the device's keyFilename in JSON to
     # /run/secrets/mikrotik_key:
-    # volumes:
+    # Add under volumes above (key must be readable by container UID 1000):
     #   - ./secrets/mikrotik_ed25519:/run/secrets/mikrotik_key:ro
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/health"]
-      interval: 30s
-      timeout: 3s
-      start_period: 5s
-      retries: 3
+    # Inherit the image's Bun-based healthcheck; it respects the MCP port.
 
   # Optional: expose the server publicly over HTTPS for a ChatGPT Apps connector.
   # Create a Cloudflare named tunnel, put its token in CF_TUNNEL_TOKEN (.env),
@@ -46,3 +47,6 @@ services:
       TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
     depends_on:
       - mikrotik-mcp
+
+volumes:
+  mikrotik-state:

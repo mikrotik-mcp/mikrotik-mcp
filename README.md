@@ -223,6 +223,94 @@ mikrotik-mcp serve --config ./devices.json
 mikrotik-mcp devices        # site-a (default) · site-b
 ```
 
+#### Docker: one writable `devices.json` for all MCP settings
+
+Use the published **[alimaster/mikrotik-mcp](https://hub.docker.com/r/alimaster/mikrotik-mcp)**
+image (`5.19.0`, or the moving `latest` tag). Docker selects `linux/amd64` or
+`linux/arm64` automatically; no local build is needed. Compose defaults to
+`5.19.0`; set `MIKROTIK_IMAGE_TAG` explicitly to select a different release.
+
+The Bun container reads **`/home/bun/.mikrotik-mcp/devices.json`** automatically.
+Despite its name, this is the **complete MCP configuration**, not just the router
+list: `mcp`, `dashboard`, `ssh`, `memory`, `tools`, `access`, `alerts`, `flows`,
+`policy`, `schedules`, `attacks`, `serviceProbes`, `s3` and top-level settings live
+in this same JSON. Config/Devices saves and MCP settings tools write back to it;
+confirm **Keep changes** (or `confirm_mcp_settings`) before restarting a pending
+safe-apply transaction. Listener/transport changes require a server restart.
+
+Create a real JSON file on the host (no comments or trailing commas). For example:
+
+```json
+{
+  "defaultDevice": "home",
+  "devices": {
+    "home": {
+      "host": "192.168.88.1",
+      "username": "automation",
+      "keyFilename": "/run/secrets/mikrotik_key"
+    }
+  },
+  "mcp": { "transport": "streamable-http", "host": "0.0.0.0", "port": 8000 },
+  "dashboard": { "enabled": true, "host": "0.0.0.0", "port": 9090 },
+  "ssh": { "keepAlive": true },
+  "memory": { "enabled": true },
+  "disableUpdateCheck": true
+}
+```
+
+```bash
+docker pull alimaster/mikrotik-mcp:5.19.0
+docker run -d --name mikrotik-mcp --restart unless-stopped \
+  -p 127.0.0.1:8000:8000 -p 127.0.0.1:9090:9090 \
+  --mount type=volume,src=mikrotik-state,dst=/home/bun/.mikrotik-mcp \
+  --mount type=bind,src=/absolute/path/devices.json,dst=/home/bun/.mikrotik-mcp/devices.json \
+  --mount type=bind,src=/absolute/path/mikrotik_ed25519,dst=/run/secrets/mikrotik_key,readonly \
+  alimaster/mikrotik-mcp:5.19.0
+```
+
+Dashboard: **http://localhost:9090** · MCP: **http://localhost:8000/mcp**.
+The JSON mount must be **read-write**, must already exist, and must be readable
+and writable by container **UID/GID 1000**. Keep it private (`0600`); it can contain
+credentials. The SSH key only needs read access. On Linux, arrange matching
+ownership/ACLs; do not make secrets world-readable. Mount a dedicated copy rather
+than sharing the live service's file with a second writer.
+
+The included Compose file binds `./devices.json` (or the absolute path in
+`MIKROTIK_CONFIG_PATH`) and also persists application data:
+
+```bash
+# Only creates a starter file when none exists; edit it before starting.
+test -e devices.json || cp docker/devices.example.json devices.json
+# Configure devices + dashboard.enabled in devices.json; mount your key in Compose.
+docker compose pull mikrotik-mcp
+docker compose up -d mikrotik-mcp
+# Or use an existing file:
+MIKROTIK_CONFIG_PATH=/absolute/path/devices.json docker compose up -d mikrotik-mcp
+```
+
+- The starter JSON has no credentials and leaves the dashboard disabled. Docker
+  defaults are stored in JSON, so saved ports/settings are not silently replaced
+  by baked-in environment defaults on restart. Explicit CLI/env overrides still
+  win; remove conflicting `.env` values if JSON should be authoritative.
+- If changing listener ports in JSON, update Docker's port mappings too. For
+  Compose set `MCP_PORT` / `DASHBOARD_PORT` to the **same** new ports; these only
+  control publishing, not application settings. Its healthcheck reads the JSON.
+- The named state volume retains databases, Memory contents, reports, config
+  backups and history. These are **data**, not settings, and are not embedded in
+  JSON. Custom database/backup paths must also be mounted. Do not use
+  `docker compose down -v` if you want to retain this data.
+- For the strongest crash safety, mount a **dedicated parent directory** containing
+  `devices.json` at `/home/bun/.mikrotik-mcp` instead of a single file; this preserves
+  atomic replacement and all state on the host. Single-file mounts use a private,
+  flushed `.bak-mounted-*` backup and an inode-preserving write when Linux rejects
+  rename with `EBUSY`. That fallback is not power-loss atomic; keep one writer and
+  retain backups. A read-only mount cannot persist edits. After replacing the host
+  file by rename in an editor, recreate a single-file-mounted container to remount
+  the new file.
+
+See **[Docker deployment and persistence](docs/docker.md#persistent-devicesjson)**
+for directory mounts, permissions and explicit configuration overrides.
+
 Every tool gains an optional `device` argument, and **Safe Mode is per-device**:
 
 > _"On site-a create a WireGuard interface, on site-b add it as a peer, then ping across."_
@@ -728,14 +816,14 @@ HTTP transports expose `POST /mcp` and `GET /health` with DNS-rebinding protecti
 The **MCP Settings** module (`mcp-settings`) manages host-side settings without
 contacting a router, even when the dashboard is disabled:
 
-| Tool                      | Purpose                                                                |
-| ------------------------- | ---------------------------------------------------------------------- |
-| `get_mcp_settings`        | Read editable settings, revision, config path and pending change       |
-| `get_mcp_settings_schema` | Discover allowed fields and validation limits                          |
-| `preview_mcp_settings`    | Validate a partial patch and inspect its diff and restart requirements |
-| `update_mcp_settings`     | Back up and atomically save an approved patch, with timed rollback     |
-| `confirm_mcp_settings`    | Keep the pending tool-created change after readback                    |
-| `rollback_mcp_settings`   | Restore its local backup before confirmation                           |
+| Tool                      | Purpose                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `get_mcp_settings`        | Read editable settings, revision, config path and pending change              |
+| `get_mcp_settings_schema` | Discover allowed fields and validation limits                                 |
+| `preview_mcp_settings`    | Validate a partial patch and inspect its diff and restart requirements        |
+| `update_mcp_settings`     | Back up and persist an approved patch to the source JSON, with timed rollback |
+| `confirm_mcp_settings`    | Keep the pending tool-created change after readback                           |
+| `rollback_mcp_settings`   | Restore its local backup before confirmation                                  |
 
 Editable fields cover MCP tool pagination, App views and capability gating;
 SSH pooling; dashboard retention/body capture/redaction; Memory enablement; and

@@ -1,29 +1,37 @@
-# Keep the build context small and correct. In particular, never copy the host
-# node_modules/dist into the image — the Dockerfile installs deps and builds
-# fresh inside Alpine (host native modules like ssh2 wouldn't load there).
-node_modules
-dist
-
-# VCS / CI / editor / agent tooling
-.git
-.github
-.vite-hooks
-.ai
-.agents
-.claude
-.cursor
-
-# Secrets and local env (config is injected at runtime, never baked in)
-.env
-.env.*
-!.env.example
-secrets
-
-# Not needed to build or run (NB: keep prompts/*.md — read at runtime).
-tests
-coverage
-*.log
-docs
-assets
-.prettierignore
-.npmignore
+# Deny by default: do not upload local router configs, credentials, databases,
+# screenshots, Git history, agent state or host node_modules to the builder.
+**
+!Dockerfile
+!docker/
+!docker/devices.example.json
+!.dockerignore
+!package.json
+!bun.lock
+!bunfig.toml
+!bunup.config.ts
+!tsconfig.json
+!LICENSE
+!src/
+!src/**
+!ui/
+!ui/**
+!scripts/
+!scripts/**
+!prompts/
+!prompts/**
+!schemas/
+!schemas/**
+!policies/
+!policies/**
+!assets/
+!assets/flags/
+!assets/flags/**
+# Exclude generated/local files even inside the allow-listed source folders.
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/*.log
+**/*.db
+**/*.db-*
+**/.DS_Store

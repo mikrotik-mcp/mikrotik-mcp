@@ -1,59 +1,43 @@
 # syntax=docker/dockerfile:1
-# Bun-native MikroTik MCP server.
-#
-# Build:  docker build -t mikrotik-mcp .
-# Run (stdio is awkward in Docker — use the HTTP transport):
-#   docker run --rm -p 8000:8000 \
-#     -e MIKROTIK_HOST=192.168.88.1 \
-#     -e MIKROTIK_USERNAME=admin \
-#     -e MIKROTIK_PASSWORD=•••• \
-#     -e MIKROTIK_MCP__TRANSPORT=streamable-http \
-#     mikrotik-mcp
-#
-# SECURITY: env vars are visible via `docker inspect`. In shared/production
-# environments pass credentials via Docker secrets or a mounted key file
-# (MIKROTIK_KEY_FILENAME) instead of a plaintext password.
-#
-# Public exposure (e.g. a ChatGPT Apps connector)? Add MIKROTIK_READ_ONLY=true so
-# only inspection tools are reachable until auth is in place, and put HTTPS in
-# front (e.g. Cloudflare Tunnel). See docs/docker.md#deploying-to-chatgpt-apps.
-
-FROM oven/bun:1.3-alpine AS build
+# Pin the latest stable Bun (checked 2026-10-03); override deliberately at build time.
+ARG BUN_VERSION=1.4.2
+# Build architecture-independent JS natively (avoid running JSC under QEMU).
+FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION}-alpine AS build-base
 WORKDIR /app
-# git is a safety net for toolchain steps that probe for it. `--ignore-scripts`
-# skips the dev-only root `prepare` (vp config / git-hook setup), which has no
-# place in an image build and needs a git checkout that isn't present here.
-RUN apk add --no-cache git
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --ignore-scripts
+
+FROM build-base AS dependencies
+# Keep Bun's catalog/peer settings and lockfile together. No Node, Git or hooks.
+COPY package.json bun.lock bunfig.toml ./
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile --ignore-scripts
+
+FROM dependencies AS build
+# .dockerignore is an allow-list: local configs, keys and databases never enter.
 COPY . .
-RUN bun run build
+# The Docker-only Bun bundler handles centrs' raw TS exports directly. The npm
+# library still uses bunup with centrs external; its packaging is unchanged.
+# SDK and Zod stay in the same bundle. Only file-backed runtime packages remain.
+RUN bun build src/cli.ts src/index.ts --target=bun --packages=bundle \
+      --minify --keep-names --external=ssh2 --external=figlet \
+      --outdir=dist --metafile=docker-build-meta.json \
+    && bun run test:built \
+    && bun run build:ui \
+    && bun scripts/package-docker.ts /out
 
-# Production-only dependencies for the runtime image. The CLI bundle keeps its
-# runtime deps external (e.g. ssh2, @modelcontextprotocol/sdk + ext-apps), so we
-# ship a pruned node_modules rather than relying on Bun's runtime auto-install
-# (which needs network access and can't resolve every deep subpath).
-FROM oven/bun:1.3-alpine AS deps
-WORKDIR /app
-COPY package.json bun.lock ./
-RUN bun install --production --frozen-lockfile --ignore-scripts
-
-FROM oven/bun:1.3-alpine AS runtime
+FROM oven/bun:${BUN_VERSION}-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
-    MIKROTIK_MCP__TRANSPORT=streamable-http \
-    MIKROTIK_MCP__HOST=0.0.0.0 \
-    MIKROTIK_MCP__PORT=8000
-# Ship the bundled CLI, its production deps, and the data dirs it reads at runtime.
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prompts ./prompts
-COPY --from=build /app/schemas ./schemas
-COPY --from=build /app/package.json ./package.json
-
-EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD wget -qO- http://127.0.0.1:8000/health || exit 1
-
-ENTRYPOINT ["bun", "dist/cli.js"]
+    MIKROTIK_CONFIG_FILE=/home/bun/.mikrotik-mcp/devices.json
+# App files are root-owned/read-only to bun; state alone is writable/persistable.
+RUN mkdir -p /home/bun/.mikrotik-mcp && chown bun:bun /home/bun/.mikrotik-mcp
+# Defaults live in JSON, not ENV: saved settings must survive a restart unchanged.
+# Mount a writable file here, or mount its parent directory for atomic saves.
+COPY --chown=bun:bun --chmod=0600 docker/devices.example.json /home/bun/.mikrotik-mcp/devices.json
+COPY --from=build /out/ ./
+USER bun
+EXPOSE 8000 9090
+# Uses Bun instead of adding curl/wget; follows the configured MCP port.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD ["bun", "--bun", "--no-install", "--no-env-file", "dist/docker-healthcheck.js"]
+ENTRYPOINT ["bun", "--bun", "--no-install", "--no-env-file", "dist/cli.js"]
 CMD ["serve"]
