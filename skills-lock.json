@@ -66,6 +66,12 @@
       "sourceType": "github",
       "computedHash": "8add10a7fce31ef99856d36bffeb90f1f1130f5afd88b111417c257f1e5d39bd"
     },
+    "homelab-vlan-segmentation": {
+      "source": "affaan-m/ECC",
+      "sourceType": "github",
+      "skillPath": "skills/homelab-vlan-segmentation/SKILL.md",
+      "computedHash": "16d70e9c4fdf3b5a010db8b808f98f6196c4f6467459334e843f2df691110676"
+    },
     "migrate-oai-app": {
       "source": "modelcontextprotocol/ext-apps",
       "sourceType": "github",
@@ -92,9 +98,10 @@
       "computedHash": "4397dd17304e6b62b3492defb31a71a87b55b3a8e697932baa1e76c5a0a0bfaa"
     },
     "routeros-container": {
-      "source": "tikoci/routeros-skills",
+      "source": "aiskillstore/marketplace",
       "sourceType": "github",
-      "computedHash": "071514aac982a709611123e8b30ef09f46c09f9c035502174076af203e87fe0e"
+      "skillPath": "skills/tikoci/routeros-container/SKILL.md",
+      "computedHash": "88216b11b77c23c0467ae300df8e7ac8d1c5aa10df078469c9b87296df6c5ffd"
     },
     "routeros-firewall": {
       "source": "tikoci/routeros-skills",
@@ -117,9 +124,10 @@
       "computedHash": "35028a732203e6b54be882d74fa96a47d06b1e9ea238b9f8bf7d128a589c7010"
     },
     "routeros-mndp": {
-      "source": "tikoci/routeros-skills",
+      "source": "aiskillstore/marketplace",
       "sourceType": "github",
-      "computedHash": "d5745f387e5647891184d7f1b36329f57694bc042dc68e1c995fa8855768429e"
+      "skillPath": "skills/tikoci/routeros-mndp/SKILL.md",
+      "computedHash": "fb16b193132d088b6d317e3a5bcf6fc111875f137f392333857daf936ba97d65"
     },
     "routeros-netinstall": {
       "source": "tikoci/routeros-skills",
