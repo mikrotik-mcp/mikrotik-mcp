@@ -10,6 +10,8 @@ import { registerTools } from "./core/registry";
 import { registerUiResources } from "./core/ui-resources";
 import { VLAN_INSTRUCTIONS } from "./core/vlan-guidance";
 import { registerVlanKnowledgeResource } from "./core/vlan-resource";
+import { CONTAINER_INSTRUCTIONS } from "./core/container-guidance";
+import { registerContainerKnowledgeResource } from "./core/container-resource";
 import { loadFileCacheSync, updateSummaryLine } from "./core/update-check";
 import { listDevices, deviceDirectory, deviceLabels, getConfig } from "./core/runtime";
 import { registerPrompts } from "./prompts";
@@ -175,6 +177,11 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
       : INSTRUCTIONS;
 
   instructions += `\n\n${VLAN_INSTRUCTIONS}`;
+  instructions += `\n\n${CONTAINER_INSTRUCTIONS}`;
+  if (availableTools.has("get_routeros_container_guide")) {
+    instructions +=
+      "\nContainer tool-only clients: discover get_routeros_container_guide with find_tools; this reference does not contact a router.";
+  }
   if (availableTools.has("get_vlan_segmentation_guide")) {
     instructions +=
       "\nTool-only clients: discover get_vlan_segmentation_guide with find_tools; topic=all returns the full guide without router I/O.";
@@ -285,6 +292,7 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
   // that support the Apps extension (Claude, ChatGPT). Plain clients ignore them.
   const uiViewCount = registerUiResources(server);
   registerVlanKnowledgeResource(server);
+  registerContainerKnowledgeResource(server);
   // Optionally paginate `tools/list` so a very large catalog (several hundred
   // tools) ships in client-friendly pages WITHOUT disabling any tool.
   installToolPagination(server, getConfig().mcp.toolPageSize);

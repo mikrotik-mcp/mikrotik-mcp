@@ -27,6 +27,7 @@ import type { DeviceDirectoryEntry } from "../core/runtime";
 import { logger } from "../logger";
 import { PROMPTS_DIR } from "../paths";
 import { vlanPromptGuidance } from "../core/vlan-guidance";
+import { containerPromptGuidance } from "../core/container-guidance";
 import { transactionPromptGuidance } from "../txn/guidance";
 import { substitutePrompt } from "./compose";
 
@@ -85,7 +86,10 @@ function parseFrontmatter(raw: string): ParsedPrompt | null {
     title: meta.title ?? meta.name,
     description: meta.description ?? "",
     arguments: args,
-    body: vlanPromptGuidance(meta.name, transactionPromptGuidance(meta.name, body.trim())),
+    body: containerPromptGuidance(
+      meta.name,
+      vlanPromptGuidance(meta.name, transactionPromptGuidance(meta.name, body.trim())),
+    ),
   };
 }
 

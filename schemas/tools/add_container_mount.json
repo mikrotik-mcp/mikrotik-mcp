@@ -3,19 +3,25 @@
   "title": "add_container_mount",
   "type": "object",
   "properties": {
-    "name": {
+    "list": {
+      "description": "Current CLI mount-list name",
       "type": "string",
-      "description": "Mount name, e.g. 'appdata'"
+      "minLength": 1
+    },
+    "name": {
+      "description": "Legacy CLI mount name; do not use for current list syntax",
+      "type": "string",
+      "minLength": 1
     },
     "src": {
       "type": "string",
-      "description": "Host source path, e.g. 'disk1/appdata'"
+      "minLength": 1
     },
     "dst": {
       "type": "string",
-      "description": "Container destination path, e.g. '/data'"
+      "minLength": 1
     }
   },
-  "required": ["name", "src", "dst"],
+  "required": ["src", "dst"],
   "additionalProperties": false
 }

@@ -28,6 +28,7 @@ import type { ParsedRecords } from "./routeros-parse";
 import { RestHttpError, shouldFallbackToSsh } from "../rest/client";
 import type { DeviceConfig } from "../config";
 import { logger } from "../logger";
+import { containerCommandForLog } from "../utils/container-redaction";
 
 /**
  * Try the command over REST, returning null when the caller should fall back to
@@ -145,12 +146,12 @@ export async function executeMikrotikCommand(
   // command errors (syntax/failure) come back as normal output and are handled
   // by each tool via looksLikeError().
   if (safe.isActive) {
-    ctx.info(`[${deviceName}] Executing (safe mode): ${command}`);
+    ctx.info(`[${deviceName}] Executing (safe mode): ${containerCommandForLog(command)}`);
     // Safe Mode holds a persistent interactive SSH session — never REST.
     ctx.transport = "ssh";
     return safe.execute(command);
   }
-  ctx.info(`[${deviceName}] Executing MikroTik command: ${command}`);
+  ctx.info(`[${deviceName}] Executing MikroTik command: ${containerCommandForLog(command)}`);
   return runOnce(command, ctx.device, opts, ctx);
 }
 

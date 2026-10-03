@@ -4,20 +4,18 @@
   "type": "object",
   "properties": {
     "name_filter": {
-      "description": "Partial container name match",
+      "description": "RouterOS name regex, escaped as a command value",
       "type": "string"
     },
     "tag_filter": {
-      "description": "Partial image tag match",
       "type": "string"
     },
     "status_filter": {
-      "description": "e.g. 'running', 'stopped'",
+      "description": "Legacy status regex; newer releases may expose flags instead",
       "type": "string"
     },
     "detail": {
       "default": false,
-      "description": "Show the full per-container property block",
       "type": "boolean"
     }
   },

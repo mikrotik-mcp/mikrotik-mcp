@@ -3,9 +3,14 @@
   "title": "list_container_mounts",
   "type": "object",
   "properties": {
+    "list_filter": {
+      "type": "string",
+      "minLength": 1
+    },
     "name_filter": {
-      "description": "Partial mount name match",
-      "type": "string"
+      "description": "Legacy exact name filter",
+      "type": "string",
+      "minLength": 1
     }
   },
   "additionalProperties": false

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.19.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 938,
+  "toolCount": 939,
   "tools": [
     {
       "name": "create_client_check",
@@ -31263,6 +31263,38 @@
       }
     },
     {
+      "name": "get_routeros_container_guide",
+      "title": "Get RouterOS Container Guide",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read shared version-aware container knowledge: prerequisites, image compatibility, VETH isolation, lifecycle, secrets and troubleshooting. No device access. Use before auditing, deploying or changing containers.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "topic": {
+            "default": "all",
+            "type": "string",
+            "enum": [
+              "all",
+              "prerequisites",
+              "images",
+              "networking",
+              "lifecycle",
+              "security",
+              "troubleshooting"
+            ]
+          }
+        },
+        "required": ["topic"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "list_containers",
       "title": "List Containers",
       "risk": "read",
@@ -31271,26 +31303,24 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "List every OCI container on the device (`/container print`) with its status, image tag, name, VETH interface and root-dir — the starting point for any container work and the way to POLL the lifecycle, which is asynchronous: status moves extracting → stopped (ready to start) → running. Use this to find the `name`/`tag` the other tools take, to confirm an add has finished extracting before start_container, and to confirm a stop has completed before remove_container. Filter by partial `name_filter`, `tag_filter`, or `status_filter` (e.g. 'running', 'stopped'); set `detail=true` for the full property block. For one container use get_container. A container's stdout/stderr is in the system log (`/log print where topics~\"container\"`) when it was created with logging=yes.",
+      "description": "Discover container .ids, exact names/tags and lifecycle status/flags. Pull/start/stop are asynchronous; running is not application health. Sensitive env/command/config fields are masked. Use get_routeros_container_guide before changes.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "name_filter": {
-            "description": "Partial container name match",
+            "description": "RouterOS name regex, escaped as a command value",
             "type": "string"
           },
           "tag_filter": {
-            "description": "Partial image tag match",
             "type": "string"
           },
           "status_filter": {
-            "description": "e.g. 'running', 'stopped'",
+            "description": "Legacy status regex; newer releases may expose flags instead",
             "type": "string"
           },
           "detail": {
             "default": false,
-            "description": "Show the full per-container property block",
             "type": "boolean"
           }
         },
@@ -31307,18 +31337,25 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Full detail for one container (`/container print detail`) — status, image tag, interface, root-dir, env/mounts, cmd/entrypoint, hostname/dns, logging and start-on-boot. Identify by `name` (preferred) or `tag`. Use list_containers to discover identifiers.",
+      "description": "Read one exact, unique container by stable id, name or exact tag; rejects ambiguity. Sensitive env, command and image-config fields are masked. Missing state is unknown, not stopped.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "id": {
+            "description": "Stable .id from fresh discovery; never a row number",
+            "type": "string",
+            "pattern": "^\\*[\\da-fA-F]+$"
+          },
           "name": {
-            "description": "Container name (set via add_container)",
-            "type": "string"
+            "description": "Exact unique container name",
+            "type": "string",
+            "minLength": 1
           },
           "tag": {
-            "description": "Image tag to match (e.g. 'pihole') if no name",
-            "type": "string"
+            "description": "Exact unique image tag, not a regex; prefer id when images are shared",
+            "type": "string",
+            "minLength": 1
           }
         },
         "additionalProperties": false
@@ -31332,97 +31369,109 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Create an OCI container (`/container add`). PREREQUISITES, in order: (1) the `container` package installed + device-mode `container=yes`; (2) an external disk for storage (containers should never run on internal flash); (3) for `remote_image`, a registry URL + on-disk `tmpdir` set via set_container_config; (4) a VETH for networking — create it first with `/interface veth add name=veth1 address=172.17.0.2/24 gateway=172.17.0.1`, then bridge it and add a srcnat masquerade rule for internet (and a dst-nat to publish a port). Then create the container: supply EITHER `remote_image` (registry pull, e.g. 'library/alpine:latest') OR `file` (a local image tar on the device — must be a SINGLE-LAYER, UNCOMPRESSED Docker-v1 tar). Set `interface` to the VETH and `root_dir` to a path on the external disk (e.g. 'disk1/myapp'). Attach config via inline `env` ('K=v,K2=v2') / `mount` ('src=disk1/data,dst=/data'), or reference named lists with `envlists`/`mountlists` (add_container_env / add_container_mount). Override `cmd`/`entrypoint`/`workdir`; set `hostname`/`dns`; enable `logging`/`start_on_boot`; cap `memory_high`/`cpu_list`. ALWAYS set `name` so the lifecycle tools can find it. The image pull/extract is ASYNCHRONOUS: this returns immediately, then poll list_containers until status becomes 'stopped' (extraction done) before calling start_container.",
+      "description": "Create one container after approved prerequisite, image/storage and network review. Requires exactly one image source, a unique name, VETH and dedicated root_dir. No package installation, device-mode, NAT or firewall changes are implicit. Use supported image-save archives; no blanket single-layer restriction. Explicit legacy envlist/mounts aliases are available; inspect target syntax before writing. Returns a pending extraction request, not a healthy deployment; poll before starting.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "name": {
-            "description": "Container name (recommended for management)",
-            "type": "string"
-          },
-          "remote_image": {
-            "description": "Registry image, e.g. 'library/alpine:latest'",
-            "type": "string"
-          },
-          "file": {
-            "description": "Local Docker-v1 tar on the device (alternative to remote_image)",
-            "type": "string"
-          },
           "interface": {
-            "description": "VETH interface name",
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "description": "Previously configured VETH"
           },
           "root_dir": {
-            "description": "Filesystem root, e.g. 'disk1/myapp'",
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "description": "Dedicated root path on verified storage"
           },
           "env": {
-            "description": "Inline env vars: 'K=v,K2=v2' (7.21+)",
+            "description": "Sensitive inline environment; verify support on the target",
             "type": "string"
           },
           "envlists": {
-            "description": "Named env list name(s) (add_container_env)",
+            "description": "Current CLI named environment lists",
+            "type": "string"
+          },
+          "envlist": {
+            "description": "Legacy singular envlist; exclusive with envlists",
             "type": "string"
           },
           "mount": {
-            "description": "Inline mount: 'src=disk1/data,dst=/data' (7.21+)",
+            "description": "Inline mount expression supported by the target; not Docker syntax",
             "type": "string"
           },
           "mountlists": {
-            "description": "Named mount name(s) (add_container_mount)",
+            "description": "Current CLI named mount lists",
+            "type": "string"
+          },
+          "mounts": {
+            "description": "Legacy mounts reference; exclusive with mountlists",
             "type": "string"
           },
           "cmd": {
-            "description": "Override container CMD",
+            "description": "Command override; may contain secrets",
             "type": "string"
           },
           "entrypoint": {
-            "description": "Override container ENTRYPOINT",
+            "description": "Entrypoint override; may contain secrets",
             "type": "string"
           },
           "workdir": {
-            "description": "Override working directory",
             "type": "string"
           },
           "hostname": {
             "type": "string"
           },
           "dns": {
-            "description": "DNS server for the container",
             "type": "string"
           },
           "user": {
             "type": "string"
           },
           "stop_signal": {
-            "description": "Signal used to stop the container",
             "type": "string"
           },
           "devices": {
-            "description": "Pass-through physical devices (7.20+)",
+            "description": "Device passthrough; extra privilege requires explicit review",
             "type": "string"
           },
           "cpu_list": {
-            "description": "CPU core affinity",
             "type": "string"
           },
           "memory_high": {
-            "description": "RAM limit, e.g. '256M'",
+            "description": "Soft memory pressure threshold, not a hard cap",
+            "type": "string"
+          },
+          "memory_max": {
+            "description": "Hard memory limit only where supported; can terminate processes",
             "type": "string"
           },
           "logging": {
-            "description": "Send stdout/stderr to the RouterOS log",
             "type": "boolean"
           },
           "start_on_boot": {
-            "description": "Auto-start on device boot",
             "type": "boolean"
           },
           "comment": {
             "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Unique name for read-back and ambiguous-write recovery"
+          },
+          "remote_image": {
+            "description": "Reviewed architecture-compatible image with pinned version/digest",
+            "type": "string",
+            "minLength": 1
+          },
+          "file": {
+            "description": "Uploaded Docker/Podman saved image archive supported by the target",
+            "type": "string",
+            "minLength": 1
           }
         },
+        "required": ["interface", "root_dir", "name"],
         "additionalProperties": false
       }
     },
@@ -31435,41 +31484,66 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Modify an existing container's properties in place (`/container set [find …]`) without recreating it — change `start_on_boot`, `logging`, `cmd`/`entrypoint`/`workdir`, `hostname`/`dns`, `interface`, `root_dir`, inline `env`/`mount` or `envlists`/`mountlists`, resource caps, or `comment`. Identify by `name` or `tag`. Best practice: stop the container first (stop_container) before changing runtime properties like interface, env, mounts or cmd — they take effect on the next start_container, not live. To create a new container use add_container; to change the image, remove and re-add.",
+      "description": "Update exactly one container. Runtime settings require positive fully-stopped evidence; logging, comment and start_on_boot can change without stopping. Named env/mount lists can affect other consumers. Inspect target syntax; no automatic compatibility retries.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "id": {
+            "description": "Stable .id from fresh discovery; never a row number",
+            "type": "string",
+            "pattern": "^\\*[\\da-fA-F]+$"
+          },
           "name": {
-            "description": "Container name (set via add_container)",
-            "type": "string"
+            "description": "Exact unique container name",
+            "type": "string",
+            "minLength": 1
           },
           "tag": {
-            "description": "Image tag to match (e.g. 'pihole') if no name",
-            "type": "string"
+            "description": "Exact unique image tag, not a regex; prefer id when images are shared",
+            "type": "string",
+            "minLength": 1
           },
           "interface": {
-            "type": "string"
+            "description": "VETH interface(s); verify target syntax and image interface names",
+            "type": "string",
+            "minLength": 1
           },
           "root_dir": {
-            "type": "string"
+            "description": "Dedicated root path on appropriate storage, not internal flash",
+            "type": "string",
+            "minLength": 1
           },
           "env": {
+            "description": "Sensitive inline environment; verify support on the target",
             "type": "string"
           },
           "envlists": {
+            "description": "Current CLI named environment lists",
+            "type": "string"
+          },
+          "envlist": {
+            "description": "Legacy singular envlist; exclusive with envlists",
             "type": "string"
           },
           "mount": {
+            "description": "Inline mount expression supported by the target; not Docker syntax",
             "type": "string"
           },
           "mountlists": {
+            "description": "Current CLI named mount lists",
+            "type": "string"
+          },
+          "mounts": {
+            "description": "Legacy mounts reference; exclusive with mountlists",
             "type": "string"
           },
           "cmd": {
+            "description": "Command override; may contain secrets",
             "type": "string"
           },
           "entrypoint": {
+            "description": "Entrypoint override; may contain secrets",
             "type": "string"
           },
           "workdir": {
@@ -31481,10 +31555,25 @@
           "dns": {
             "type": "string"
           },
+          "user": {
+            "type": "string"
+          },
+          "stop_signal": {
+            "type": "string"
+          },
+          "devices": {
+            "description": "Device passthrough; extra privilege requires explicit review",
+            "type": "string"
+          },
           "cpu_list": {
             "type": "string"
           },
           "memory_high": {
+            "description": "Soft memory pressure threshold, not a hard cap",
+            "type": "string"
+          },
+          "memory_max": {
+            "description": "Hard memory limit only where supported; can terminate processes",
             "type": "string"
           },
           "logging": {
@@ -31508,18 +31597,25 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Start a stopped container (`/container start [find …]`). Identify by `name` or `tag`. The container must have finished extracting (status 'stopped') first — check with list_containers. View its output in the log when logging=yes. To stop it use stop_container.",
+      "description": "start exactly one container by stable id, exact unique name or tag. Start requires positive stopped evidence. Asynchronous: inspect state with bounded polling; accepted does not mean healthy/completed.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "id": {
+            "description": "Stable .id from fresh discovery; never a row number",
+            "type": "string",
+            "pattern": "^\\*[\\da-fA-F]+$"
+          },
           "name": {
-            "description": "Container name (set via add_container)",
-            "type": "string"
+            "description": "Exact unique container name",
+            "type": "string",
+            "minLength": 1
           },
           "tag": {
-            "description": "Image tag to match (e.g. 'pihole') if no name",
-            "type": "string"
+            "description": "Exact unique image tag, not a regex; prefer id when images are shared",
+            "type": "string",
+            "minLength": 1
           }
         },
         "additionalProperties": false
@@ -31533,18 +31629,25 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Stop a running container (`/container stop [find …]`). Identify by `name` or `tag`. Stopping is asynchronous — poll list_containers until status is 'stopped' before removing it. To start it again use start_container.",
+      "description": "stop exactly one container by stable id, exact unique name or tag. Start requires positive stopped evidence. Asynchronous: inspect state with bounded polling; accepted does not mean healthy/completed.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "id": {
+            "description": "Stable .id from fresh discovery; never a row number",
+            "type": "string",
+            "pattern": "^\\*[\\da-fA-F]+$"
+          },
           "name": {
-            "description": "Container name (set via add_container)",
-            "type": "string"
+            "description": "Exact unique container name",
+            "type": "string",
+            "minLength": 1
           },
           "tag": {
-            "description": "Image tag to match (e.g. 'pihole') if no name",
-            "type": "string"
+            "description": "Exact unique image tag, not a regex; prefer id when images are shared",
+            "type": "string",
+            "minLength": 1
           }
         },
         "additionalProperties": false
@@ -31559,18 +31662,25 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Permanently delete a container (`/container remove [find …]`). The container must be FULLY STOPPED first — RouterOS rejects removal while it is running or still stopping. If removal fails for that reason, stop it (stop_container), wait until list_containers shows status 'stopped', then retry. Identify by `name` or `tag`. This does not delete its root-dir data on disk.",
+      "description": "Remove exactly one container after a positive stopped check. Back up application data first; do not assume root-dir survives removal. Does not separately delete volumes/layers. Verify absence; never blindly retry an ambiguous write.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "id": {
+            "description": "Stable .id from fresh discovery; never a row number",
+            "type": "string",
+            "pattern": "^\\*[\\da-fA-F]+$"
+          },
           "name": {
-            "description": "Container name (set via add_container)",
-            "type": "string"
+            "description": "Exact unique container name",
+            "type": "string",
+            "minLength": 1
           },
           "tag": {
-            "description": "Image tag to match (e.g. 'pihole') if no name",
-            "type": "string"
+            "description": "Exact unique image tag, not a regex; prefer id when images are shared",
+            "type": "string",
+            "minLength": 1
           }
         },
         "additionalProperties": false
@@ -31585,7 +31695,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Read the global container configuration (`/container config print`) — the image registry URL, the tmpdir used for pulls/extraction, the layer directory, and the RAM-high limit. Use to verify the registry/tmpdir are set before pulling images. To change them use set_container_config.",
+      "description": "Read registry, extraction storage and memory settings. Registry credentials are masked. Settings are router-wide and may affect every container.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -31602,33 +31712,31 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Configure the global container settings (`/container config set`) — the router-wide singleton that MUST be set before pulling any `remote_image` with add_container. Set `registry_url` (Docker Hub is 'https://registry-1.docker.io') and `tmpdir` to a path on an EXTERNAL disk (e.g. 'disk1/pull') — pulls and extraction need real space and IOPS, never internal flash. Optionally set `layer_dir`, a `ram_high` cap, and `username`/`password` for a private registry (credentials are redacted from output). The router also needs working DNS + internet to reach the registry. To read the current values use get_container_config.",
+      "description": "Update router-wide registry/extraction/storage/memory settings and read back. Use verified storage and HTTPS registry; may affect other workloads. memory_high is a soft threshold. ram_high is a compatibility input alias for the same RouterOS memory-high property.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "registry_url": {
-            "description": "Image registry URL",
             "type": "string"
           },
           "tmpdir": {
-            "description": "Pull/extract temp dir, e.g. 'disk1/pull'",
             "type": "string"
           },
           "layer_dir": {
-            "description": "Directory for extracted image layers",
+            "type": "string"
+          },
+          "memory_high": {
             "type": "string"
           },
           "ram_high": {
-            "description": "RAM-high limit, e.g. '256M'",
+            "description": "Deprecated alias of memory_high; never sent as ram-high",
             "type": "string"
           },
           "username": {
-            "description": "Registry username (private registries)",
             "type": "string"
           },
           "password": {
-            "description": "Registry password (private registries)",
             "type": "string"
           }
         },
@@ -31637,20 +31745,20 @@
     },
     {
       "name": "list_container_envs",
-      "title": "List Container Env Variables",
+      "title": "List Container Env Metadata",
       "risk": "read",
       "annotations": {
         "readOnlyHint": true,
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "List named environment-variable entries (`/container envs print`) — each has a `list` (the group name referenced by a container's envlists), a `key` and a `value`. Optionally filter by partial `list_filter`. To add one use add_container_env; to delete use remove_container_env.",
+      "description": "List environment .ids, list names and keys WITHOUT retrieving values. Treat every value as potentially secret. Shared lists may have multiple container consumers.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "list_filter": {
-            "description": "Partial env-list (group) name match",
+            "description": "Exact list name",
             "type": "string"
           }
         },
@@ -31665,22 +31773,21 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Add an environment variable to a named list (`/container envs add list= key= value=`). Group related variables under the same `list` name, then point a container at the group with `envlists=<list>` (add_container or update_container) — a container that is already running must be restarted to pick up env changes. Named lists are reusable across containers; for a one-off, self-contained setup the inline `env` on add_container is simpler. The grouping `list=` property requires RouterOS 7.20+. Values may be secrets and are redacted from output.",
+      "description": "Add a sensitive value to a named env list. Current CLI groups by list; check target syntax. Review all consumers before changing a shared list. Existing running containers may need an approved stop/start; no implicit restart.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "list": {
             "type": "string",
-            "description": "Env-list (group) name, e.g. 'MYAPP'"
+            "minLength": 1
           },
           "key": {
             "type": "string",
-            "description": "Variable name, e.g. 'TZ'"
+            "minLength": 1
           },
           "value": {
-            "type": "string",
-            "description": "Variable value"
+            "type": "string"
           }
         },
         "required": ["list", "key", "value"],
@@ -31696,21 +31803,25 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Delete an environment variable from a list (`/container envs remove [find list= key=]`). Supply the `list` (group) name and the `key`. Verifies it exists first. To browse entries use list_container_envs.",
+      "description": "Remove one env entry by stable id OR exact list+key. Reject duplicates/unreadable selection. Review containers consuming this list first; no implicit restart.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "id": {
+            "description": "Stable .id from fresh discovery; never a row number",
+            "type": "string",
+            "pattern": "^\\*[\\da-fA-F]+$"
+          },
           "list": {
             "type": "string",
-            "description": "Env-list (group) name"
+            "minLength": 1
           },
           "key": {
             "type": "string",
-            "description": "Variable name to remove"
+            "minLength": 1
           }
         },
-        "required": ["list", "key"],
         "additionalProperties": false
       }
     },
@@ -31723,14 +31834,19 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "List named volume mounts (`/container mounts print`) — each has a `name` (referenced by a container's mountlists), a host source `src` (e.g. 'disk1/appdata') and a container destination `dst` (e.g. '/data'). Optionally filter by partial `name_filter`. To add one use add_container_mount; to delete use remove_container_mount.",
+      "description": "Read mount metadata. Current CLI groups by list; legacy CLI may use name. No application files are read. A list can contain several mounts.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "list_filter": {
+            "type": "string",
+            "minLength": 1
+          },
           "name_filter": {
-            "description": "Partial mount name match",
-            "type": "string"
+            "description": "Legacy exact name filter",
+            "type": "string",
+            "minLength": 1
           }
         },
         "additionalProperties": false
@@ -31744,25 +31860,31 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Create a named volume mount (`/container mounts add name= src= dst=`) — persists container data on the host so it survives restarts/recreation. Maps a host source `src` (put it on an EXTERNAL disk, e.g. 'disk1/appdata', never internal flash) to a path `dst` inside the container (e.g. '/data'). Point a container at it with `mountlists=<name>` (add_container or update_container); a running container must be restarted to apply mount changes. For a one-off, the inline `mount` on add_container is simpler. Named mounts and `mountlists` require RouterOS 7.21+.",
+      "description": "Add a persistent mount using current list= OR legacy name=, never both. Verify target syntax first. Use appropriate storage; a missing source may be populated from the image. Review consumers; this neither formats storage nor restarts containers.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "name": {
+          "list": {
+            "description": "Current CLI mount-list name",
             "type": "string",
-            "description": "Mount name, e.g. 'appdata'"
+            "minLength": 1
+          },
+          "name": {
+            "description": "Legacy CLI mount name; do not use for current list syntax",
+            "type": "string",
+            "minLength": 1
           },
           "src": {
             "type": "string",
-            "description": "Host source path, e.g. 'disk1/appdata'"
+            "minLength": 1
           },
           "dst": {
             "type": "string",
-            "description": "Container destination path, e.g. '/data'"
+            "minLength": 1
           }
         },
-        "required": ["name", "src", "dst"],
+        "required": ["src", "dst"],
         "additionalProperties": false
       }
     },
@@ -31775,17 +31897,33 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Delete a named volume mount (`/container mounts remove [find name=...]`). Verifies it exists first. Does not delete the host data at `src`. To browse mounts use list_container_mounts.",
+      "description": "Remove one mount definition by stable id or unique list/name, optionally narrowed by src/dst. Rejects multi-entry lists. Review shared consumers first; no host files are deleted by this tool.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "id": {
+            "description": "Stable .id from fresh discovery; never a row number",
+            "type": "string",
+            "pattern": "^\\*[\\da-fA-F]+$"
+          },
+          "list": {
+            "type": "string",
+            "minLength": 1
+          },
           "name": {
             "type": "string",
-            "description": "Mount name to remove"
+            "minLength": 1
+          },
+          "src": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dst": {
+            "type": "string",
+            "minLength": 1
           }
         },
-        "required": ["name"],
         "additionalProperties": false
       }
     },

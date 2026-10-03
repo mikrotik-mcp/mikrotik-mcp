@@ -224,7 +224,9 @@ function buildPrint(path: string, rest: string[]): RestRequest | null {
     const [k, v] = pair;
     // A filter operator other than `=` survived tokenization inside the key.
     if (/[~<>!]/.test(k)) return null;
-    query[k] = v;
+    // CLI uses proplist=; REST uses .proplist=. Without translation this becomes
+    // an ordinary equality filter and can return no rows (or all properties).
+    query[k === "proplist" ? ".proplist" : k] = v;
   }
 
   return { method: "GET", path, query, countOnly };

@@ -1297,7 +1297,7 @@ export const moduleCatalog: ModuleInfo[] = [
     slug: "container",
     group: "System & Ops",
     description:
-      "OCI container subsystem (`/container`): lifecycle (add/start/stop/remove/set), global config " +
+      "Shared container safety knowledge and exact-target OCI lifecycle (`/container`), global config " +
       "(registry/tmpdir/RAM), named env lists, and volume mounts.",
     tools: containerTools,
   },

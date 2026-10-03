@@ -5,15 +5,14 @@
   "properties": {
     "list": {
       "type": "string",
-      "description": "Env-list (group) name, e.g. 'MYAPP'"
+      "minLength": 1
     },
     "key": {
       "type": "string",
-      "description": "Variable name, e.g. 'TZ'"
+      "minLength": 1
     },
     "value": {
-      "type": "string",
-      "description": "Variable value"
+      "type": "string"
     }
   },
   "required": ["list", "key", "value"],

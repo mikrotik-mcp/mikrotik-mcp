@@ -4,27 +4,25 @@
   "type": "object",
   "properties": {
     "registry_url": {
-      "description": "Image registry URL",
       "type": "string"
     },
     "tmpdir": {
-      "description": "Pull/extract temp dir, e.g. 'disk1/pull'",
       "type": "string"
     },
     "layer_dir": {
-      "description": "Directory for extracted image layers",
+      "type": "string"
+    },
+    "memory_high": {
       "type": "string"
     },
     "ram_high": {
-      "description": "RAM-high limit, e.g. '256M'",
+      "description": "Deprecated alias of memory_high; never sent as ram-high",
       "type": "string"
     },
     "username": {
-      "description": "Registry username (private registries)",
       "type": "string"
     },
     "password": {
-      "description": "Registry password (private registries)",
       "type": "string"
     }
   },

@@ -3,91 +3,103 @@
   "title": "add_container",
   "type": "object",
   "properties": {
-    "name": {
-      "description": "Container name (recommended for management)",
-      "type": "string"
-    },
-    "remote_image": {
-      "description": "Registry image, e.g. 'library/alpine:latest'",
-      "type": "string"
-    },
-    "file": {
-      "description": "Local Docker-v1 tar on the device (alternative to remote_image)",
-      "type": "string"
-    },
     "interface": {
-      "description": "VETH interface name",
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "Previously configured VETH"
     },
     "root_dir": {
-      "description": "Filesystem root, e.g. 'disk1/myapp'",
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "Dedicated root path on verified storage"
     },
     "env": {
-      "description": "Inline env vars: 'K=v,K2=v2' (7.21+)",
+      "description": "Sensitive inline environment; verify support on the target",
       "type": "string"
     },
     "envlists": {
-      "description": "Named env list name(s) (add_container_env)",
+      "description": "Current CLI named environment lists",
+      "type": "string"
+    },
+    "envlist": {
+      "description": "Legacy singular envlist; exclusive with envlists",
       "type": "string"
     },
     "mount": {
-      "description": "Inline mount: 'src=disk1/data,dst=/data' (7.21+)",
+      "description": "Inline mount expression supported by the target; not Docker syntax",
       "type": "string"
     },
     "mountlists": {
-      "description": "Named mount name(s) (add_container_mount)",
+      "description": "Current CLI named mount lists",
+      "type": "string"
+    },
+    "mounts": {
+      "description": "Legacy mounts reference; exclusive with mountlists",
       "type": "string"
     },
     "cmd": {
-      "description": "Override container CMD",
+      "description": "Command override; may contain secrets",
       "type": "string"
     },
     "entrypoint": {
-      "description": "Override container ENTRYPOINT",
+      "description": "Entrypoint override; may contain secrets",
       "type": "string"
     },
     "workdir": {
-      "description": "Override working directory",
       "type": "string"
     },
     "hostname": {
       "type": "string"
     },
     "dns": {
-      "description": "DNS server for the container",
       "type": "string"
     },
     "user": {
       "type": "string"
     },
     "stop_signal": {
-      "description": "Signal used to stop the container",
       "type": "string"
     },
     "devices": {
-      "description": "Pass-through physical devices (7.20+)",
+      "description": "Device passthrough; extra privilege requires explicit review",
       "type": "string"
     },
     "cpu_list": {
-      "description": "CPU core affinity",
       "type": "string"
     },
     "memory_high": {
-      "description": "RAM limit, e.g. '256M'",
+      "description": "Soft memory pressure threshold, not a hard cap",
+      "type": "string"
+    },
+    "memory_max": {
+      "description": "Hard memory limit only where supported; can terminate processes",
       "type": "string"
     },
     "logging": {
-      "description": "Send stdout/stderr to the RouterOS log",
       "type": "boolean"
     },
     "start_on_boot": {
-      "description": "Auto-start on device boot",
       "type": "boolean"
     },
     "comment": {
       "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique name for read-back and ambiguous-write recovery"
+    },
+    "remote_image": {
+      "description": "Reviewed architecture-compatible image with pinned version/digest",
+      "type": "string",
+      "minLength": 1
+    },
+    "file": {
+      "description": "Uploaded Docker/Podman saved image archive supported by the target",
+      "type": "string",
+      "minLength": 1
     }
   },
+  "required": ["interface", "root_dir", "name"],
   "additionalProperties": false
 }

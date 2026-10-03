@@ -3,11 +3,27 @@
   "title": "remove_container_mount",
   "type": "object",
   "properties": {
+    "id": {
+      "description": "Stable .id from fresh discovery; never a row number",
+      "type": "string",
+      "pattern": "^\\*[\\da-fA-F]+$"
+    },
+    "list": {
+      "type": "string",
+      "minLength": 1
+    },
     "name": {
       "type": "string",
-      "description": "Mount name to remove"
+      "minLength": 1
+    },
+    "src": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dst": {
+      "type": "string",
+      "minLength": 1
     }
   },
-  "required": ["name"],
   "additionalProperties": false
 }

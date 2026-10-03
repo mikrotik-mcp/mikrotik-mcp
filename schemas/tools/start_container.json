@@ -3,13 +3,20 @@
   "title": "start_container",
   "type": "object",
   "properties": {
+    "id": {
+      "description": "Stable .id from fresh discovery; never a row number",
+      "type": "string",
+      "pattern": "^\\*[\\da-fA-F]+$"
+    },
     "name": {
-      "description": "Container name (set via add_container)",
-      "type": "string"
+      "description": "Exact unique container name",
+      "type": "string",
+      "minLength": 1
     },
     "tag": {
-      "description": "Image tag to match (e.g. 'pihole') if no name",
-      "type": "string"
+      "description": "Exact unique image tag, not a regex; prefer id when images are shared",
+      "type": "string",
+      "minLength": 1
     }
   },
   "additionalProperties": false

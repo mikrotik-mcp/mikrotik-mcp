@@ -1,347 +1,164 @@
 ---
 name: routeros-container
-description: "RouterOS /container subsystem for running OCI containers on MikroTik devices. Use when: enabling containers on RouterOS, setting up VETH/bridge networking for containers, managing container lifecycle via CLI or REST API, building OCI images for RouterOS, configuring container environment variables, troubleshooting container issues, or when the user mentions RouterOS container, /container, VETH, device-mode container, or MikroTik Docker."
+description: "RouterOS /container subsystem for running OCI containers on MikroTik devices. Use for container readiness, VETH/bridge isolation, safe lifecycle, image compatibility, environment/mount configuration and container troubleshooting."
 ---
 
-# RouterOS Container Subsystem
+# RouterOS container operations
 
-## Overview
+## Start with evidence, not setup commands
 
-RouterOS 7.x includes a container subsystem (`/container`) that runs OCI-compatible container images directly on MikroTik hardware. It is NOT Docker — it's MikroTik's own implementation with significant differences.
+Resolve the exact configured router. Read identity, version, architecture/CPU
+variant, installed/enabled packages, device-mode, storage and resource headroom.
+A timeout or unsupported field does not prove the package is absent.
+Container requires compatible ARM/ARM64/x86 hardware and the container package;
+MIPS/SMIPS are not supported. Some ARM boards need arm32v5 rather than arm/v7.
+Verify the specific image manifest and board.
 
-**Requirements:**
-- RouterOS 7.x with `container` extra package installed
-- Device-mode must be enabled (requires physical access for initial setup)
-- Sufficient storage (external USB disk recommended, 100+ MB/s, 10K+ random IOPS)
-- ARM, ARM64, or x86 architecture (MIPS not supported for containers)
+This is not Docker or full Compose. The live target command schema wins over
+version guesses and stale examples. Read-only audits must not install packages,
+change device-mode/networking, restart containers or remove files.
 
-## Device-Mode — Physical Access Required
+In this MCP project, consult `get_routeros_container_guide` or
+`mikrotik://knowledge/routeros-container`. The shared implementation is
+`src/core/container-guidance.ts`, reused by resources and prompts so Dashboard,
+Raycast and MCP clients receive the same baseline.
 
-Container support is gated behind device-mode, which requires physical confirmation (reset button press or power cycle) to enable:
+## Device-mode and package installation
 
-```routeros
-# Enable container mode
-/system/device-mode/update mode=advanced container=yes
-
-# After executing: physically confirm within activation-timeout
-# - Press reset button, OR
-# - Power cycle the device
-```
-
-Device-mode is a general RouterOS security feature — not container-specific. It gates many features (scheduler, fetch, sniffer, etc.) across four modes (`home`, `basic`, `advanced`, `rose`) with device-dependent factory defaults.
-
-For the full feature matrix, modes, update properties, and physical confirmation details: see the [Device-mode reference](../routeros-fundamentals/references/device-mode.md) in the `routeros-fundamentals` skill.
-
-**Mode script bypass (7.22+):** During netinstall, a mode script (`-sm`) can set device-mode on first boot, automatically triggering a reboot. See the `routeros-netinstall` skill.
-
-## Installing the Container Package
+For the full feature matrix and physical-confirmation flow, read
+[Device-mode reference](../routeros-fundamentals/references/device-mode.md).
+Do not use its lab/Netinstall alternatives to bypass operator confirmation on an
+existing router. Keep security changes minimal:
 
 ```routeros
-# Check if container package is already installed
-/system/package/print where name=container
+# Only after separate operator approval and arranging physical confirmation:
+/system/device-mode/update container=yes
 ```
 
-**Method 1: Upload .npk file + apply-changes** (offline)
-```sh
-# Upload via SCP (or Winbox drag-and-drop, or WebFig file upload)
-scp container-7.22-arm64.npk admin@router:/
-```
+Do not add mode=advanced merely to enable containers; it may change other feature
+permissions. Confirm the observed result after the physical step. Never reset or
+Netinstall a production router as an implicit prerequisite.
+
+Match an official NPK to the exact RouterOS version and architecture.
+Manual NPK upload followed by reboot is documented by MikroTik; do not claim a
+normal reboot universally discards uploaded packages. Since 7.18, online extra
+packages can be selected/enabled and applied with apply-changes. This can reboot.
+Check pending package actions, obtain a maintenance approval and recovery path,
+then read back packages/logs after return. Do not use a general RouterOS upgrade
+as a shortcut to install one extra package.
+
+## Image and storage
+
+Use a reviewed publisher and pinned version/digest for the correct architecture.
+Use exactly one source: registry image OR a previously uploaded saved image.
+Docker/Podman image-save archives are documented import methods. Do not impose a
+universal single-layer/uncompressed Docker-v1 requirement or handcraft manifests
+based on one lab failure. Diagnose the actual format, variant and extraction error.
+A root-filesystem export is not automatically a valid saved image.
+
+Verify registry DNS, clock, TLS/auth and free extraction space. Keep certificate
+validation; do not hide TLS errors by disabling security. Prefer appropriate
+external/dedicated storage for root, temporary extraction and persistent data.
+Never format storage automatically. RouterOS exports and Safe Mode do not back up
+application files or volumes; snapshot/copy those independently before destructive
+work. Do not promise root-dir survives remove on every release.
+
+## Networking is a policy boundary
+
+Create a dedicated container bridge/VLAN and non-overlapping subnet. Example
+addresses below are illustrative, not values to apply without inventory:
+
 ```routeros
-# Apply changes (triggers reboot AND activates — /system/reboot does NOT work!)
-/system/package/apply-changes
-```
-
-⚠️ **Critical: `/system/package/apply-changes` was added in RouterOS 7.18.** On 7.18+, always use it — a plain `/system/reboot` discards uploaded packages. On versions <7.18, `/system/reboot` IS the correct (and only) method. (Lab-verified: 7.22.1 uses apply-changes, 7.10 requires reboot. Version check via rosetta command tree.)
-
-**Method 2: Online package update** (requires internet)
-```routeros
-/system/package/update check-for-updates
-/system/package/update install
-```
-This downloads and installs all available updates including extra packages. To enable a specific package already uploaded but not active, use `/system/package/enable container` then `/system/package/apply-changes`.
-
-## Networking Setup
-
-### VETH (Virtual Ethernet)
-
-Containers connect to RouterOS networking via VETH interfaces:
-
-```routeros
-# Create VETH pair
-/interface/veth/add name=veth-myapp address=172.17.0.2/24 gateway=172.17.0.1
-
-# The VETH name IS the container's interface name (RouterOS 7.21+)
-```
-
-### Bridge Setup
-
-```routeros
-# Create a bridge for containers
 /interface/bridge/add name=containers
-
-# Add VETH to the bridge
-/interface/bridge/port/add bridge=containers interface=veth-myapp
-
-# Assign IP to bridge (acts as gateway for containers)
 /ip/address/add address=172.17.0.1/24 interface=containers
+/interface/veth/add name=veth-myapp address=172.17.0.2/24 gateway=172.17.0.1
+/interface/bridge/port/add bridge=containers interface=veth-myapp
 ```
 
-### NAT / Firewall
+The router gateway belongs on the bridge; the VETH address is the container side.
+Check the interface name inside the image instead of assuming eth0.
+Do not add containers to the trusted LAN list to make connectivity work.
+Agree explicit IPv4 AND IPv6 INPUT/FORWARD flows, DNS/NTP, administration,
+return routes and denial tests. Separate VETHs on one bridge do not provide
+isolation. Review broad accepts, FastTrack and policy routes.
+
+If source NAT is needed, match the intended source subnet AND actual positive WAN
+egress. out-interface=veth is not the container's internet egress.
+Publishing a service requires approved source, ingress, destination and port scope
+plus forwarding policy. Never create a WAN-wide unauthenticated proxy/admin UI.
+L2 attachment exposes the app to that broadcast domain; use only when explicitly
+required, with a reviewed management/recovery plan.
+
+## Environment and mount syntax
+
+Inspect the target schema before writing. Current command reference uses:
 
 ```routeros
-# Masquerade container traffic for internet access
-/ip/firewall/nat/add chain=srcnat action=masquerade src-address=172.17.0.0/24
-
-# Port forwarding from host to container
-/ip/firewall/nat/add chain=dstnat action=dst-nat \
-  dst-port=8080 protocol=tcp to-addresses=172.17.0.2 to-ports=80
-
-# Allow container bridge in interface list (if firewall restricts)
-/interface/list/member/add list=LAN interface=containers
+/container/envs/add list=MYAPP key=TZ value=UTC
+/container/mounts/add list=appdata src=disk1/appdata dst=/data
+# Image identity/path/interface must be verified first:
+/container/add file=disk1/myimage.tar name=myapp interface=veth-myapp envlists=MYAPP mountlists=appdata root-dir=disk1/myapp
 ```
 
-### Layer 2 Networking (Bridge Mode)
+Older releases/examples may use envlist (singular), mounts, and mount name=.
+Do not claim older releases lack grouping or mounts altogether. Inline env/mount
+expressions and modern resource/healthcheck fields are version-dependent; inspect
+their actual grammar, not a guessed Docker-style expression. Do not try alternative
+writes until one succeeds. Named lists may be shared: inspect all consumers before
+changing/removing one. The global memory property is memory-high, a soft pressure
+threshold, not a hard reservation/cap.
 
-For containers that need to be on the same L2 network as physical interfaces (e.g., netinstall):
+Every env value can be secret, regardless of its key name. Do not echo env/value,
+registry credentials, cmd/entrypoint secrets or config-json into output/history.
+Prefer env KEY metadata; inspect bounded logs only after redaction. Values do not
+belong in Device, Group or Shared Memory.
 
-```routeros
-# Add both physical port and VETH to the same bridge
-/interface/bridge/port/add bridge=mybridge interface=ether5
-/interface/bridge/port/add bridge=mybridge interface=veth-netinstall
-```
+## Exact-target lifecycle
 
-This gives the container direct L2 access to devices on ether5.
+Use a fresh stable .id or one exact unique name/tag. Never mutate a partial regex
+or a broad find. Reject ambiguous, failed or empty selection.
+An add starts an asynchronous pull/extraction, not the application.
+Wait for positive fully-stopped evidence before start/removal or runtime updates.
+A missing running flag is not proof of stopped. Depending on version, CLI/REST
+may expose a status property or lifecycle flags; normalize known true/false values
+and treat missing/unknown state as unknown.
 
-## Environment Variables and Mounts
+Poll with a deadline, report pending honestly, and never replay an ambiguous write
+after a timeout. Read back the same target after mutation. Do not recursively
+delete application files, root directories, layers or shared volumes.
+Running is not service health: verify the application from a permitted real client,
+denied access, both IP families and resource pressure. Set start-on-boot only after
+verification/approval. A reboot test needs separate scheduling.
 
-There are two ways to attach env vars and mounts to a container (from 7.21+):
+Safe Mode protects eligible router configuration only, not filesystem writes,
+image extraction, application data or physical/reboot operations.
 
-### Inline (preferred for 7.21+)
+## /app versus manual containers
 
-Set `env=` and `mount=` directly on `/container/add` — keeps the container self-contained:
+/app offers version-dependent application management and custom YAML capabilities.
+It is not full Docker Compose and not an authorization shortcut. If the request
+requires it, read the related [routeros-app-yaml skill](../routeros-app-yaml/SKILL.md)
+before proposing app-specific changes; inspect the actual target schema and
+template's images, privileges, mounts and exposed ports.
 
-```routeros
-# Inline env vars and mount (7.21+)
-/container/add remote-image=pihole/pihole:latest interface=veth1 \
-  env="TZ=Europe/Riga,WEBPASSWORD=secret" \
-  mount="src=disk1/pihole,dst=/etc/pihole" \
-  root-dir=disk1/images/pihole logging=yes
-```
+## Report and retain evidence
 
-This is also how `/app` YAML works under the hood — inline is the modern pattern and easier for automation (no separate linked objects to manage).
+Separate MCP connectivity, RouterOS prerequisites, image/storage, process state,
+network policy and application health. Unknown does not mean safe or empty.
+Report proposed changes, risks, backup/recovery and tests; avoid performance claims
+without measurements. Recalled memory is context, not authorization.
 
-### Named Lists (works across all versions)
+## Sources and maintenance
 
-Create env vars and mounts as separate objects, then reference by name:
+Cross-check against the target release; general examples can lag the CLI reference.
 
-```routeros
-# Create named env list (7.20+ — the 'list=' property groups envs together)
-/container/envs/add list=MYAPP key=TZ value="Europe/Riga"
-/container/envs/add list=MYAPP key=WEBPASSWORD value="secret"
+- [Container guide](https://manual.mikrotik.com/docs/containers/)
+- [Container CLI](https://manual.mikrotik.com/docs/cli-reference/container/)
+- [Global config](https://manual.mikrotik.com/docs/cli-reference/container/config/)
+- [Environment lists](https://manual.mikrotik.com/docs/cli-reference/container/envs/)
+- [Mount lists](https://manual.mikrotik.com/docs/cli-reference/container/mounts/)
+- [Packages and reboot workflows](https://help.mikrotik.com/docs/spaces/ROS/pages/40992872/Packages)
 
-# Create named mount
-/container/mounts/add name=appdata src=disk1/appdata dst=/data
-
-# Reference from container (7.20+ uses 'envlists=', pre-7.20 used 'envlist=')
-/container/add file=myimage.tar interface=veth1 \
-  envlists=MYAPP mountlists=appdata root-dir=disk1/myapp
-```
-
-**Best practice:** Always place container volumes on external disk (`disk1/`), never on internal flash storage.
-
-### Property Name History
-
-The naming of env/mount reference properties changed at version boundaries:
-
-| Version | Env list grouping (`/container/envs/add`) | Container env reference (`/container/add`) | Container mount reference |
-|---|---|---|---|
-| Pre-7.20 | `key=`, `value=` only (no grouping property) | *(no env reference property)* | *(not available)* |
-| 7.20 | `list=` added | `envlists=` (plural) added | *(not available)* |
-| 7.21+ | `list=` | `envlists=` + inline `env=` | `mountlists=` + inline `mount=` |
-
-> **Version note:** Property names for 7.20+ are confirmed against `/console/inspect` command tree data. Pre-7.20, `/container/envs/add` had only `key` and `value` with no grouping mechanism; `/container/add` had no env reference property. Inline `env=` and `mount=` were added at 7.21.
-
-## Container Image Formats
-
-RouterOS accepts container images in these formats:
-
-### Option A: Pull from Registry
-```routeros
-/container/config/set registry-url=https://registry-1.docker.io tmpdir=disk1/pull
-/container/add remote-image=library/alpine:latest interface=veth-myapp
-```
-
-### Option B: Import Local Tar File
-Upload a Docker v1 tar to the router, then:
-```routeros
-/container/add file=myimage.tar interface=veth-myapp
-```
-
-### OCI Image Requirements for Local Import
-
-RouterOS's container loader has specific requirements for local tar files:
-
-1. **Single layer only** — multi-layer images are not supported
-2. **No gzip compression** — layers must be uncompressed tar
-3. **Docker v1 manifest format** — `manifest.json` + `config.json` + `layer.tar`
-
-```
-myimage.tar
-├── manifest.json    # [{"Config":"config.json","RepoTags":["name:tag"],"Layers":["layer.tar"]}]
-├── config.json      # {"architecture":"arm64","os":"linux","config":{...},"rootfs":{...}}
-└── layer.tar        # Uncompressed tar of the full filesystem
-```
-
-These constraints are the key difference from standard OCI images — most base images from public registries already meet requirement 1 and 2 via registry pull; local tar builds must satisfy all three.
-
-## Container Lifecycle
-
-### CLI
-
-```routeros
-# Create container (7.21+ inline syntax)
-/container/add file=myimage.tar interface=veth-myapp \
-  env="MY_VAR=hello" mount="src=disk1/appdata,dst=/data" \
-  root-dir=disk1/myapp logging=yes
-
-# Start
-/container/start [find tag~"myapp"]
-
-# Stop
-/container/stop [find tag~"myapp"]
-
-# View status
-/container/print
-
-# View logs (if logging=yes)
-/log/print where topics~"container"
-
-# Remove (must be fully stopped first)
-/container/remove [find tag~"myapp"]
-```
-
-### REST API
-
-```typescript
-const base = "http://192.168.1.1/rest";
-const auth = { headers: { Authorization: `Basic ${btoa("admin:")}` } };
-
-// List containers
-const containers = await fetch(`${base}/container`, auth).then(r => r.json());
-
-// Start container by ID
-await fetch(`${base}/container/start`, {
-  method: "POST", ...auth,
-  headers: { ...auth.headers, "Content-Type": "application/json" },
-  body: JSON.stringify({ ".id": "*1" }),
-});
-
-// Check status — .running field is "true"/"false" (strings!)
-const status = await fetch(`${base}/container/*1`, auth).then(r => r.json());
-if (status.running === "true") { /* container is running */ }
-
-// Stop container
-await fetch(`${base}/container/stop`, {
-  method: "POST", ...auth,
-  body: JSON.stringify({ ".id": "*1" }),
-});
-
-// Delete — must be fully stopped. Poll .running and retry.
-async function deleteContainer(id) {
-  for (let i = 0; i < 5; i++) {
-    const c = await fetch(`${base}/container/${id}`, auth).then(r => r.json());
-    if (c.running === "false") {
-      await fetch(`${base}/container/${id}`, { method: "DELETE", ...auth });
-      return;
-    }
-    await new Promise(r => setTimeout(r, 3000));
-  }
-  throw new Error("Container did not stop in time");
-}
-```
-
-### REST API Gotchas for Containers
-
-- **`.running` field** is the status indicator — values are strings `"true"` / `"false"`, not booleans
-- **No `.stopped` field exists** — only check `.running`
-- **Delete while stopping = HTTP 400** — must poll `.running` until `"false"` before DELETE
-- **`file=` for local tar**, `remote-image=` for registry pull
-- **Container `envlists=`** (plural, 7.20+) references the env list name — note the plural. Pre-7.20 used `envlist=` (singular). See env/mount version history above.
-
-## Container Properties (from 7.22)
-
-Selected properties from `/container/add`. This is **not exhaustive** — use `rosetta` MCP tools (`routeros_command_tree` at `/container/add`) for the full list on a specific version.
-
-| Property | Description |
-|---|---|
-| `interface` | VETH interface |
-| `env` | Inline environment variables (7.21+). Comma-separated `KEY=value` pairs |
-| `envlists` | Named env list reference (7.20+). See env/mount section above |
-| `mount` | Inline volume mount (7.21+). `src=host/path,dst=/container/path` |
-| `mountlists` | Named mount list reference (7.21+). See env/mount section above |
-| `root-dir` | Storage location for container filesystem |
-| `file` | Container tar file (local import) |
-| `remote-image` | Container image name (registry pull) |
-| `cmd` | Override container CMD |
-| `entrypoint` | Override container ENTRYPOINT |
-| `hostname` | Container hostname |
-| `dns` | DNS server for container |
-| `logging` | Enable container stdout/stderr to RouterOS log (`yes`/`no`) |
-| `start-on-boot` | Auto-start container on device boot (`yes`/`no`) |
-| `workdir` | Override working directory |
-| `name` | Container name (for `[find where name=...]`) |
-| `devices` | Pass through physical devices (7.20+) |
-| `cpu-list` | CPU core affinity |
-| `memory-high` | RAM usage limit in bytes |
-
-## Architecture Mapping
-
-When pulling from registries or building images, map RouterOS architecture to Docker platform:
-
-| RouterOS `architecture-name` | Docker Platform |
-|---|---|
-| `arm` | `linux/arm/v7` |
-| `arm64` | `linux/arm64` |
-| `x86` | `linux/amd64` |
-
-Query the router's architecture:
-```typescript
-const resource = await fetch(`${base}/system/resource`, auth).then(r => r.json());
-const arch = resource["architecture-name"]; // "arm64", "arm", "x86"
-```
-
-## /app System (7.21+/7.22+)
-
-RouterOS 7.21 introduced the `/app` path (built-in app listing). Full YAML app creation (`/app/add`) was added in 7.22. See the `routeros-app-yaml` skill for the full YAML specification.
-
-```routeros
-# List available apps
-/app/print
-
-# Add app from URL
-/app/add yaml-url=https://example.com/myapp.tikapp.yaml
-```
-
-### /app vs Manual Container Setup
-
-| Concern | Manual (this page) | /app YAML |
-|---|---|---|
-| Networking | Full control — any bridge/VETH/L2 topology | Docker-style: `internal` subnet with port forwarding (NAT) |
-| L2 bridge access | Yes — add VETH + physical port to same bridge | Not directly — but can assign a bridge post-creation via `/app/set network=<bridge>` |
-| Multi-container | Manual per-container setup | Declarative YAML, multiple services |
-| Use case | Raw L2 access (netinstall, DHCP relay, etc.) | Standard app deployment with port forwarding |
-
-Netinstall specifically requires L2 bridge access for BOOTP/TFTP, which is why the manual VETH+bridge approach is used rather than /app. For typical containers that only need port-forwarded TCP/UDP services, `/app` is simpler.
-
-## Additional Resources
-
-**Related skills:**
-- For netinstall and device-mode automation: see the `routeros-netinstall` skill
-- For the /app YAML format: see the `routeros-app-yaml` skill
-- For general RouterOS fundamentals (CLI, REST, scripting): see the `routeros-fundamentals` skill
-
-**MCP tools:**
-- For RouterOS documentation and property lookups: use the `rosetta` MCP server tools (`routeros_search`, `routeros_get_page`, `routeros_search_properties`)
-
-**External docs:**
-- MikroTik official docs: https://help.mikrotik.com/docs/spaces/ROS/pages/84901929/Container
+Project corrections reviewed on 2026-10-03: removed unsupported universal image/
+package claims, replaced broad lifecycle selectors and implicit LAN/WAN trust,
+and aligned current mount/global-memory fields with official CLI documentation.

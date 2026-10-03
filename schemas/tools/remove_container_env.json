@@ -3,15 +3,19 @@
   "title": "remove_container_env",
   "type": "object",
   "properties": {
+    "id": {
+      "description": "Stable .id from fresh discovery; never a row number",
+      "type": "string",
+      "pattern": "^\\*[\\da-fA-F]+$"
+    },
     "list": {
       "type": "string",
-      "description": "Env-list (group) name"
+      "minLength": 1
     },
     "key": {
       "type": "string",
-      "description": "Variable name to remove"
+      "minLength": 1
     }
   },
-  "required": ["list", "key"],
   "additionalProperties": false
 }

@@ -1,558 +1,505 @@
 /**
- * Container management — `/container` (RouterOS 7 OCI container subsystem).
- *
- * Covers every part of the container surface:
- *   • `/container`         — the containers: add, list, get, start, stop, set, remove.
- *   • `/container config`  — global settings: registry, tmpdir, RAM, layer dir.
- *   • `/container envs`    — named environment-variable lists.
- *   • `/container mounts`  — named volume mounts.
- *
- * Containers are matched by their `name` (when set) or by `tag~` (the image tag),
- * so every lifecycle tool accepts either. Requires the `container` package and
- * device-mode `container=yes`; every tool guards with `commandUnsupported` so a
- * device without container support degrades to a friendly message.
+ * Container tools: exact, bounded target resolution; no implicit package/network
+ * changes. Current CLI fields and explicit legacy aliases, never write-and-retry.
  */
 import { z } from "zod";
-import { executeMikrotikCommand } from "../core/connector";
+import { Cmd, quoteValue } from "../core/routeros";
 import {
-  WRITE_IDEMPOTENT,
-  WRITE,
   READ,
+  WRITE,
+  WRITE_IDEMPOTENT,
   DESTRUCTIVE,
   defineTool,
   withRequires,
 } from "../core/registry";
 import type { ToolModule } from "../core/registry";
+import { CONTAINER_GUIDE_TOPICS, getRouterosContainerGuide } from "../core/container-guidance";
+import { redactContainerText } from "../utils/container-redaction";
 import {
-  whereClause,
-  looksLikeError,
-  isEmpty,
-  commandUnsupported,
-  quoteValue,
-  Cmd,
-} from "../core/routeros";
-import { redactSecrets } from "../utils";
+  containerRead,
+  containerReadBack,
+  containerWrite,
+  requireStopped,
+  resolveContainerItem,
+} from "./_container-safety";
+import type { ToolContext } from "../core/context";
 
-const NOT_AVAILABLE =
-  "Container support is not available on this device. Install the `container` package and enable " +
-  "device-mode (`/system/device-mode/update container=yes`, then physically confirm).";
-
-/** A `name="X"` / `tag~"X"` match fragment for `where` and `[find …]`, or null. */
-function containerMatch(name?: string, tag?: string): string | null {
-  if (name) return `name=${quoteValue(name)}`;
-  if (tag) return `tag~${quoteValue(tag)}`;
-  return null;
+const textValue = z.string().trim().min(1);
+const IDENTITY = {
+  id: z
+    .string()
+    .regex(/^\*[\da-fA-F]+$/)
+    .optional()
+    .describe("Stable .id from fresh discovery; never a row number"),
+  name: textValue.optional().describe("Exact unique container name"),
+  tag: textValue
+    .optional()
+    .describe("Exact unique image tag, not a regex; prefer id when images are shared"),
+};
+type Identity = { id?: string; name?: string; tag?: string };
+async function target(a: Identity, ctx: ToolContext): Promise<string> {
+  if ([a.id, a.name, a.tag].filter((v) => v !== undefined).length !== 1)
+    throw new Error("Provide exactly one of id, name or tag.");
+  return resolveContainerItem(
+    "/container",
+    a.id ? { ".id": a.id } : a.name ? { name: a.name } : { tag: a.tag },
+    ctx,
+  );
 }
 
-/** The id field shared by every lifecycle tool. */
-const IDENTITY = {
-  name: z.string().optional().describe("Container name (set via add_container)"),
-  tag: z.string().optional().describe("Image tag to match (e.g. 'pihole') if no name"),
+const SETTINGS = {
+  interface: textValue
+    .optional()
+    .describe("VETH interface(s); verify target syntax and image interface names"),
+  root_dir: textValue
+    .optional()
+    .describe("Dedicated root path on appropriate storage, not internal flash"),
+  env: z.string().optional().describe("Sensitive inline environment; verify support on the target"),
+  envlists: z.string().optional().describe("Current CLI named environment lists"),
+  envlist: z.string().optional().describe("Legacy singular envlist; exclusive with envlists"),
+  mount: z
+    .string()
+    .optional()
+    .describe("Inline mount expression supported by the target; not Docker syntax"),
+  mountlists: z.string().optional().describe("Current CLI named mount lists"),
+  mounts: z.string().optional().describe("Legacy mounts reference; exclusive with mountlists"),
+  cmd: z.string().optional().describe("Command override; may contain secrets"),
+  entrypoint: z.string().optional().describe("Entrypoint override; may contain secrets"),
+  workdir: z.string().optional(),
+  hostname: z.string().optional(),
+  dns: z.string().optional(),
+  user: z.string().optional(),
+  stop_signal: z.string().optional(),
+  devices: z
+    .string()
+    .optional()
+    .describe("Device passthrough; extra privilege requires explicit review"),
+  cpu_list: z.string().optional(),
+  memory_high: z.string().optional().describe("Soft memory pressure threshold, not a hard cap"),
+  memory_max: z
+    .string()
+    .optional()
+    .describe("Hard memory limit only where supported; can terminate processes"),
+  logging: z.boolean().optional(),
+  start_on_boot: z.boolean().optional(),
+  comment: z.string().optional(),
 };
+const fields = {
+  interface: "interface",
+  root_dir: "root-dir",
+  env: "env",
+  envlists: "envlists",
+  envlist: "envlist",
+  mount: "mount",
+  mountlists: "mountlists",
+  mounts: "mounts",
+  cmd: "cmd",
+  entrypoint: "entrypoint",
+  workdir: "workdir",
+  hostname: "hostname",
+  dns: "dns",
+  user: "user",
+  stop_signal: "stop-signal",
+  devices: "devices",
+  cpu_list: "cpu-list",
+  memory_high: "memory-high",
+  memory_max: "memory-max",
+  comment: "comment",
+} as const;
+function validateSettings(a: Record<string, unknown>): void {
+  for (const [current, legacy] of [
+    ["envlists", "envlist"],
+    ["mountlists", "mounts"],
+  ]) {
+    if (a[current] !== undefined && a[legacy] !== undefined)
+      throw new Error(`Choose either ${current} or ${legacy}, not both.`);
+  }
+}
+function settings(cmd: Cmd, a: Record<string, unknown>): string {
+  for (const [input, property] of Object.entries(fields))
+    if (a[input] !== undefined) cmd.set(property, a[input] as string);
+  return cmd
+    .bool("logging", a.logging as boolean | undefined)
+    .bool("start-on-boot", a.start_on_boot as boolean | undefined)
+    .build();
+}
+const detailCommand = (id: string): string =>
+  new Cmd("/container print").raw("detail where").set(".id", id).build();
 
-const containerToolsDefs: ToolModule = [
-  // ── Containers ─────────────────────────────────────────────────────────────
+const deviceTools: ToolModule = [
   defineTool({
     name: "list_containers",
     title: "List Containers",
     annotations: READ,
     description:
-      "List every OCI container on the device (`/container print`) with its status, image tag, name, VETH " +
-      "interface and root-dir — the starting point for any container work and the way to POLL the lifecycle, " +
-      "which is asynchronous: status moves extracting → stopped (ready to start) → running. Use this to find " +
-      "the `name`/`tag` the other tools take, to confirm an add has finished extracting before start_container, " +
-      "and to confirm a stop has completed before remove_container. Filter by partial `name_filter`, " +
-      "`tag_filter`, or `status_filter` (e.g. 'running', 'stopped'); set `detail=true` for the full property " +
-      "block. For one container use get_container. A container's stdout/stderr is in the system log " +
-      '(`/log print where topics~"container"`) when it was created with logging=yes.',
+      "Discover container .ids, exact names/tags and lifecycle status/flags. Pull/start/stop are asynchronous; running is not application health. Sensitive env/command/config fields are masked. Use get_routeros_container_guide before changes.",
     inputSchema: {
-      name_filter: z.string().optional().describe("Partial container name match"),
-      tag_filter: z.string().optional().describe("Partial image tag match"),
-      status_filter: z.string().optional().describe("e.g. 'running', 'stopped'"),
-      detail: z.boolean().default(false).describe("Show the full per-container property block"),
+      name_filter: z
+        .string()
+        .optional()
+        .describe("RouterOS name regex, escaped as a command value"),
+      tag_filter: z.string().optional(),
+      status_filter: z
+        .string()
+        .optional()
+        .describe("Legacy status regex; newer releases may expose flags instead"),
+      detail: z.boolean().default(false),
     },
     async handler(a, ctx) {
-      ctx.info("Listing containers");
-      const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.tag_filter) filters.push(`tag~"${a.tag_filter}"`);
-      if (a.status_filter) filters.push(`status~"${a.status_filter}"`);
-      const result = await executeMikrotikCommand(
-        `/container print${a.detail ? " detail" : ""}${whereClause(filters)}`,
-        ctx,
-      );
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      return isEmpty(result)
-        ? "No containers found matching the criteria."
-        : `CONTAINERS:\n\n${redactSecrets(result)}`;
+      const cmd = new Cmd("/container print");
+      if (a.detail) cmd.raw("detail");
+      const filters = Object.entries({
+        name: a.name_filter,
+        tag: a.tag_filter,
+        status: a.status_filter,
+      }).filter(([, v]) => v !== undefined);
+      if (filters.length) cmd.raw("where");
+      for (const [key, value] of filters) cmd.raw(`${key}~${quoteValue(value as string)}`);
+      const result = await containerRead(cmd.build(), ctx);
+      return result.trim()
+        ? `CONTAINERS:\n\n${redactContainerText(result)}`
+        : "No containers found.";
     },
   }),
-
   defineTool({
     name: "get_container",
     title: "Get Container Detail",
     annotations: READ,
     description:
-      "Full detail for one container (`/container print detail`) — status, image tag, interface, root-dir, " +
-      "env/mounts, cmd/entrypoint, hostname/dns, logging and start-on-boot. Identify by `name` (preferred) or " +
-      "`tag`. Use list_containers to discover identifiers.",
-    inputSchema: { ...IDENTITY },
+      "Read one exact, unique container by stable id, name or exact tag; rejects ambiguity. Sensitive env, command and image-config fields are masked. Missing state is unknown, not stopped.",
+    inputSchema: IDENTITY,
     async handler(a, ctx) {
-      const match = containerMatch(a.name, a.tag);
-      if (!match) return "Provide a container name or tag.";
-      ctx.info(`Getting container detail: ${match}`);
-      const result = await executeMikrotikCommand(`/container print detail where ${match}`, ctx);
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      return isEmpty(result)
-        ? `Container (${match}) not found.`
-        : `CONTAINER DETAILS:\n\n${redactSecrets(result)}`;
+      const id = await target(a, ctx);
+      return `CONTAINER ${id}:\n\n${redactContainerText(await containerRead(detailCommand(id), ctx))}`;
     },
   }),
-
   defineTool({
     name: "add_container",
     title: "Add Container",
     annotations: WRITE,
     description:
-      "Create an OCI container (`/container add`). " +
-      "PREREQUISITES, in order: (1) the `container` package installed + device-mode `container=yes`; " +
-      "(2) an external disk for storage (containers should never run on internal flash); " +
-      "(3) for `remote_image`, a registry URL + on-disk `tmpdir` set via set_container_config; " +
-      "(4) a VETH for networking — create it first with `/interface veth add name=veth1 " +
-      "address=172.17.0.2/24 gateway=172.17.0.1`, then bridge it and add a srcnat masquerade rule for " +
-      "internet (and a dst-nat to publish a port). " +
-      "Then create the container: supply EITHER `remote_image` (registry pull, e.g. 'library/alpine:latest') " +
-      "OR `file` (a local image tar on the device — must be a SINGLE-LAYER, UNCOMPRESSED Docker-v1 tar). " +
-      "Set `interface` to the VETH and `root_dir` to a path on the external disk (e.g. 'disk1/myapp'). " +
-      "Attach config via inline `env` ('K=v,K2=v2') / `mount` ('src=disk1/data,dst=/data'), or reference " +
-      "named lists with `envlists`/`mountlists` (add_container_env / add_container_mount). Override " +
-      "`cmd`/`entrypoint`/`workdir`; set `hostname`/`dns`; enable `logging`/`start_on_boot`; cap " +
-      "`memory_high`/`cpu_list`. ALWAYS set `name` so the lifecycle tools can find it. " +
-      "The image pull/extract is ASYNCHRONOUS: this returns immediately, then poll list_containers until " +
-      "status becomes 'stopped' (extraction done) before calling start_container.",
+      "Create one container after approved prerequisite, image/storage and network review. Requires exactly one image source, a unique name, VETH and dedicated root_dir. No package installation, device-mode, NAT or firewall changes are implicit. Use supported image-save archives; no blanket single-layer restriction. Explicit legacy envlist/mounts aliases are available; inspect target syntax before writing. Returns a pending extraction request, not a healthy deployment; poll before starting.",
     inputSchema: {
-      name: z.string().optional().describe("Container name (recommended for management)"),
-      remote_image: z.string().optional().describe("Registry image, e.g. 'library/alpine:latest'"),
-      file: z
-        .string()
+      ...SETTINGS,
+      name: textValue.describe("Unique name for read-back and ambiguous-write recovery"),
+      interface: textValue.describe("Previously configured VETH"),
+      root_dir: textValue.describe("Dedicated root path on verified storage"),
+      remote_image: textValue
         .optional()
-        .describe("Local Docker-v1 tar on the device (alternative to remote_image)"),
-      interface: z.string().optional().describe("VETH interface name"),
-      root_dir: z.string().optional().describe("Filesystem root, e.g. 'disk1/myapp'"),
-      env: z.string().optional().describe("Inline env vars: 'K=v,K2=v2' (7.21+)"),
-      envlists: z.string().optional().describe("Named env list name(s) (add_container_env)"),
-      mount: z.string().optional().describe("Inline mount: 'src=disk1/data,dst=/data' (7.21+)"),
-      mountlists: z.string().optional().describe("Named mount name(s) (add_container_mount)"),
-      cmd: z.string().optional().describe("Override container CMD"),
-      entrypoint: z.string().optional().describe("Override container ENTRYPOINT"),
-      workdir: z.string().optional().describe("Override working directory"),
-      hostname: z.string().optional(),
-      dns: z.string().optional().describe("DNS server for the container"),
-      user: z.string().optional(),
-      stop_signal: z.string().optional().describe("Signal used to stop the container"),
-      devices: z.string().optional().describe("Pass-through physical devices (7.20+)"),
-      cpu_list: z.string().optional().describe("CPU core affinity"),
-      memory_high: z.string().optional().describe("RAM limit, e.g. '256M'"),
-      logging: z.boolean().optional().describe("Send stdout/stderr to the RouterOS log"),
-      start_on_boot: z.boolean().optional().describe("Auto-start on device boot"),
-      comment: z.string().optional(),
+        .describe("Reviewed architecture-compatible image with pinned version/digest"),
+      file: textValue
+        .optional()
+        .describe("Uploaded Docker/Podman saved image archive supported by the target"),
     },
     async handler(a, ctx) {
-      if (!a.remote_image && !a.file)
-        return "Provide remote_image (registry pull) or file (local tar).";
-      ctx.info(`Adding container: ${a.name ?? a.remote_image ?? a.file}`);
-      const cmd = new Cmd("/container add")
-        .opt("name", a.name)
-        .opt("remote-image", a.remote_image)
-        .opt("file", a.file)
-        .opt("interface", a.interface)
-        .opt("root-dir", a.root_dir)
-        .opt("env", a.env)
-        .opt("envlists", a.envlists)
-        .opt("mount", a.mount)
-        .opt("mountlists", a.mountlists)
-        .opt("cmd", a.cmd)
-        .opt("entrypoint", a.entrypoint)
-        .opt("workdir", a.workdir)
-        .opt("hostname", a.hostname)
-        .opt("dns", a.dns)
-        .opt("user", a.user)
-        .opt("stop-signal", a.stop_signal)
-        .opt("devices", a.devices)
-        .opt("cpu-list", a.cpu_list)
-        .opt("memory-high", a.memory_high)
-        .bool("logging", a.logging)
-        .bool("start-on-boot", a.start_on_boot)
-        .opt("comment", a.comment)
-        .build();
-      const result = await executeMikrotikCommand(cmd, ctx);
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      if (looksLikeError(result)) return `Failed to add container: ${redactSecrets(result)}`;
-      return (
-        `Container added (image is pulling/extracting asynchronously — poll list_containers until status is ` +
-        `'stopped', then start_container).\n\n${redactSecrets(result)}`
+      if (Boolean(a.remote_image) === Boolean(a.file))
+        throw new Error("Provide exactly one image source: remote_image OR file.");
+      if (!a.name || !a.interface || !a.root_dir)
+        throw new Error("Provide name, interface and root_dir.");
+      validateSettings(a);
+      const count = await containerRead(
+        new Cmd("/container print count-only where").set("name", a.name).build(),
+        ctx,
       );
+      if (count.trim() !== "0")
+        throw new Error(
+          "Container name already exists or uniqueness could not be verified; no mutation performed.",
+        );
+      const cmd = new Cmd("/container add")
+        .set("name", a.name)
+        .opt("remote-image", a.remote_image)
+        .opt("file", a.file);
+      await containerWrite(settings(cmd, a), ctx);
+      const readback = await containerReadBack(
+        new Cmd("/container print detail where").set("name", a.name).build(),
+        ctx,
+      );
+      return `Container add accepted; extraction is asynchronous. Inspect the observed state before start; do not repeat add.\n\n${readback}`;
     },
   }),
-
   defineTool({
     name: "update_container",
     title: "Update Container",
     annotations: WRITE_IDEMPOTENT,
     description:
-      "Modify an existing container's properties in place (`/container set [find …]`) without recreating it — " +
-      "change `start_on_boot`, `logging`, `cmd`/`entrypoint`/`workdir`, `hostname`/`dns`, `interface`, " +
-      "`root_dir`, inline `env`/`mount` or `envlists`/`mountlists`, resource caps, or `comment`. Identify by " +
-      "`name` or `tag`. Best practice: stop the container first (stop_container) before changing runtime " +
-      "properties like interface, env, mounts or cmd — they take effect on the next start_container, not " +
-      "live. To create a new container use add_container; to change the image, remove and re-add.",
-    inputSchema: {
-      ...IDENTITY,
-      interface: z.string().optional(),
-      root_dir: z.string().optional(),
-      env: z.string().optional(),
-      envlists: z.string().optional(),
-      mount: z.string().optional(),
-      mountlists: z.string().optional(),
-      cmd: z.string().optional(),
-      entrypoint: z.string().optional(),
-      workdir: z.string().optional(),
-      hostname: z.string().optional(),
-      dns: z.string().optional(),
-      cpu_list: z.string().optional(),
-      memory_high: z.string().optional(),
-      logging: z.boolean().optional(),
-      start_on_boot: z.boolean().optional(),
-      comment: z.string().optional(),
-    },
+      "Update exactly one container. Runtime settings require positive fully-stopped evidence; logging, comment and start_on_boot can change without stopping. Named env/mount lists can affect other consumers. Inspect target syntax; no automatic compatibility retries.",
+    inputSchema: { ...IDENTITY, ...SETTINGS },
     async handler(a, ctx) {
-      const match = containerMatch(a.name, a.tag);
-      if (!match) return "Provide a container name or tag.";
-      ctx.info(`Updating container: ${match}`);
-      const cmd = new Cmd(`/container set [find ${match}]`)
-        .opt("interface", a.interface)
-        .opt("root-dir", a.root_dir)
-        .opt("env", a.env)
-        .opt("envlists", a.envlists)
-        .opt("mount", a.mount)
-        .opt("mountlists", a.mountlists)
-        .opt("cmd", a.cmd)
-        .opt("entrypoint", a.entrypoint)
-        .opt("workdir", a.workdir)
-        .opt("hostname", a.hostname)
-        .opt("dns", a.dns)
-        .opt("cpu-list", a.cpu_list)
-        .opt("memory-high", a.memory_high)
-        .bool("logging", a.logging)
-        .bool("start-on-boot", a.start_on_boot)
-        .opt("comment", a.comment)
-        .build();
-      if (cmd.endsWith("]")) return "No updates specified.";
-      const result = await executeMikrotikCommand(cmd, ctx);
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      if (looksLikeError(result)) return `Failed to update container: ${redactSecrets(result)}`;
-      return `Container (${match}) updated.`;
+      validateSettings(a);
+      const changes = Object.keys(SETTINGS).filter((key) => a[key] !== undefined);
+      if (!changes.length) return "No updates specified.";
+      const id = await target(a, ctx);
+      if (changes.some((key) => !["logging", "comment", "start_on_boot"].includes(key)))
+        await requireStopped(id, ctx);
+      await containerWrite(settings(new Cmd("/container set").set("numbers", id), a), ctx);
+      return `Container update accepted. Observed read-back:\n\n${await containerReadBack(detailCommand(id), ctx)}`;
     },
   }),
-
-  defineTool({
-    name: "start_container",
-    title: "Start Container",
-    annotations: WRITE,
-    description:
-      "Start a stopped container (`/container start [find …]`). Identify by `name` or `tag`. The container " +
-      "must have finished extracting (status 'stopped') first — check with list_containers. View its output " +
-      "in the log when logging=yes. To stop it use stop_container.",
-    inputSchema: { ...IDENTITY },
-    async handler(a, ctx) {
-      const match = containerMatch(a.name, a.tag);
-      if (!match) return "Provide a container name or tag.";
-      ctx.info(`Starting container: ${match}`);
-      const count = await executeMikrotikCommand(`/container print count-only where ${match}`, ctx);
-      if (commandUnsupported(count)) return NOT_AVAILABLE;
-      if (count.trim() === "0") return `Container (${match}) not found.`;
-      const result = await executeMikrotikCommand(`/container start [find ${match}]`, ctx);
-      if (looksLikeError(result)) return `Failed to start container: ${result}`;
-      return `Container (${match}) starting.`;
-    },
-  }),
-
-  defineTool({
-    name: "stop_container",
-    title: "Stop Container",
-    annotations: WRITE,
-    description:
-      "Stop a running container (`/container stop [find …]`). Identify by `name` or `tag`. Stopping is " +
-      "asynchronous — poll list_containers until status is 'stopped' before removing it. To start it again " +
-      "use start_container.",
-    inputSchema: { ...IDENTITY },
-    async handler(a, ctx) {
-      const match = containerMatch(a.name, a.tag);
-      if (!match) return "Provide a container name or tag.";
-      ctx.info(`Stopping container: ${match}`);
-      const count = await executeMikrotikCommand(`/container print count-only where ${match}`, ctx);
-      if (commandUnsupported(count)) return NOT_AVAILABLE;
-      if (count.trim() === "0") return `Container (${match}) not found.`;
-      const result = await executeMikrotikCommand(`/container stop [find ${match}]`, ctx);
-      if (looksLikeError(result)) return `Failed to stop container: ${result}`;
-      return `Container (${match}) stopping (poll list_containers for status 'stopped').`;
-    },
-  }),
-
-  defineTool({
-    name: "remove_container",
-    title: "Remove Container",
-    annotations: DESTRUCTIVE,
-    description:
-      "Permanently delete a container (`/container remove [find …]`). The container must be FULLY STOPPED " +
-      "first — RouterOS rejects removal while it is running or still stopping. If removal fails for that " +
-      "reason, stop it (stop_container), wait until list_containers shows status 'stopped', then retry. " +
-      "Identify by `name` or `tag`. This does not delete its root-dir data on disk.",
-    inputSchema: { ...IDENTITY },
-    async handler(a, ctx) {
-      const match = containerMatch(a.name, a.tag);
-      if (!match) return "Provide a container name or tag.";
-      ctx.info(`Removing container: ${match}`);
-      const count = await executeMikrotikCommand(`/container print count-only where ${match}`, ctx);
-      if (commandUnsupported(count)) return NOT_AVAILABLE;
-      if (count.trim() === "0") return `Container (${match}) not found.`;
-      const result = await executeMikrotikCommand(`/container remove [find ${match}]`, ctx);
-      if (looksLikeError(result)) {
-        return (
-          `Failed to remove container: ${result}\n\nIf it is still running/stopping, stop it first ` +
-          `(stop_container), wait until list_containers shows status 'stopped', then retry.`
-        );
-      }
-      return `Container (${match}) removed.`;
-    },
-  }),
-
-  // ── Global config `/container config` ──────────────────────────────────────
+  ...(["start", "stop", "remove"] as const).map((operation) =>
+    defineTool({
+      name: `${operation}_container`,
+      title: `${operation[0].toUpperCase()}${operation.slice(1)} Container`,
+      annotations: operation === "remove" ? DESTRUCTIVE : WRITE,
+      description:
+        operation === "remove"
+          ? "Remove exactly one container after a positive stopped check. Back up application data first; do not assume root-dir survives removal. Does not separately delete volumes/layers. Verify absence; never blindly retry an ambiguous write."
+          : `${operation} exactly one container by stable id, exact unique name or tag. Start requires positive stopped evidence. Asynchronous: inspect state with bounded polling; accepted does not mean healthy/completed.`,
+      inputSchema: IDENTITY,
+      async handler(a, ctx) {
+        const id = await target(a, ctx);
+        if (operation !== "stop") await requireStopped(id, ctx);
+        await containerWrite(new Cmd(`/container ${operation}`).set("numbers", id).build(), ctx);
+        if (operation === "remove") {
+          const count = await containerReadBack(
+            new Cmd("/container print count-only where").set(".id", id).build(),
+            ctx,
+          );
+          return count.trim() === "0"
+            ? `Container ${id} removal verified. Application-volume contents were not inspected.`
+            : "Removal accepted but absence is UNVERIFIED/pending; inspect before retrying.";
+        }
+        return `Container ${operation} accepted; lifecycle may still be pending.\n\n${await containerReadBack(detailCommand(id), ctx)}`;
+      },
+    }),
+  ),
   defineTool({
     name: "get_container_config",
     title: "Get Container Global Config",
     annotations: READ,
     description:
-      "Read the global container configuration (`/container config print`) — the image registry URL, the " +
-      "tmpdir used for pulls/extraction, the layer directory, and the RAM-high limit. Use to verify the " +
-      "registry/tmpdir are set before pulling images. To change them use set_container_config.",
+      "Read registry, extraction storage and memory settings. Registry credentials are masked. Settings are router-wide and may affect every container.",
     async handler(_a, ctx) {
-      ctx.info("Getting container config");
-      const result = await executeMikrotikCommand("/container config print", ctx);
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      return isEmpty(result)
-        ? "No container config found."
-        : `CONTAINER CONFIG:\n\n${redactSecrets(result)}`;
+      return `CONTAINER CONFIG:\n\n${redactContainerText(await containerRead("/container config print", ctx))}`;
     },
   }),
-
   defineTool({
     name: "set_container_config",
     title: "Set Container Global Config",
     annotations: WRITE_IDEMPOTENT,
     description:
-      "Configure the global container settings (`/container config set`) — the router-wide singleton that " +
-      "MUST be set before pulling any `remote_image` with add_container. Set `registry_url` (Docker Hub is " +
-      "'https://registry-1.docker.io') and `tmpdir` to a path on an EXTERNAL disk (e.g. 'disk1/pull') — pulls " +
-      "and extraction need real space and IOPS, never internal flash. Optionally set `layer_dir`, a `ram_high` " +
-      "cap, and `username`/`password` for a private registry (credentials are redacted from output). The " +
-      "router also needs working DNS + internet to reach the registry. To read the current values use " +
-      "get_container_config.",
+      "Update router-wide registry/extraction/storage/memory settings and read back. Use verified storage and HTTPS registry; may affect other workloads. memory_high is a soft threshold. ram_high is a compatibility input alias for the same RouterOS memory-high property.",
     inputSchema: {
-      registry_url: z.string().optional().describe("Image registry URL"),
-      tmpdir: z.string().optional().describe("Pull/extract temp dir, e.g. 'disk1/pull'"),
-      layer_dir: z.string().optional().describe("Directory for extracted image layers"),
-      ram_high: z.string().optional().describe("RAM-high limit, e.g. '256M'"),
-      username: z.string().optional().describe("Registry username (private registries)"),
-      password: z.string().optional().describe("Registry password (private registries)"),
+      registry_url: z.string().optional(),
+      tmpdir: z.string().optional(),
+      layer_dir: z.string().optional(),
+      memory_high: z.string().optional(),
+      ram_high: z
+        .string()
+        .optional()
+        .describe("Deprecated alias of memory_high; never sent as ram-high"),
+      username: z.string().optional(),
+      password: z.string().optional(),
     },
     async handler(a, ctx) {
-      ctx.info("Setting container config");
+      if (a.memory_high !== undefined && a.ram_high !== undefined)
+        throw new Error("Choose memory_high or its ram_high alias, not both.");
       const cmd = new Cmd("/container config set")
         .opt("registry-url", a.registry_url)
         .opt("tmpdir", a.tmpdir)
         .opt("layer-dir", a.layer_dir)
-        .opt("ram-high", a.ram_high)
+        .opt("memory-high", a.memory_high ?? a.ram_high)
         .opt("username", a.username)
         .opt("password", a.password)
         .build();
       if (cmd === "/container config set") return "No updates specified.";
-      const result = await executeMikrotikCommand(cmd, ctx);
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      if (looksLikeError(result)) return `Failed to set container config: ${redactSecrets(result)}`;
-      const detail = await executeMikrotikCommand("/container config print", ctx);
-      return `Container config updated.\n\n${redactSecrets(detail)}`;
+      await containerWrite(cmd, ctx);
+      return `Container config update accepted.\n\n${await containerReadBack("/container config print", ctx)}`;
     },
   }),
-
-  // ── Environment lists `/container envs` ────────────────────────────────────
   defineTool({
     name: "list_container_envs",
-    title: "List Container Env Variables",
+    title: "List Container Env Metadata",
     annotations: READ,
     description:
-      "List named environment-variable entries (`/container envs print`) — each has a `list` (the group name " +
-      "referenced by a container's envlists), a `key` and a `value`. Optionally filter by partial `list_filter`. " +
-      "To add one use add_container_env; to delete use remove_container_env.",
-    inputSchema: {
-      list_filter: z.string().optional().describe("Partial env-list (group) name match"),
-    },
+      "List environment .ids, list names and keys WITHOUT retrieving values. Treat every value as potentially secret. Shared lists may have multiple container consumers.",
+    inputSchema: { list_filter: z.string().optional().describe("Exact list name") },
     async handler(a, ctx) {
-      ctx.info("Listing container envs");
-      const filters: string[] = [];
-      if (a.list_filter) filters.push(`list~"${a.list_filter}"`);
-      const result = await executeMikrotikCommand(
-        `/container envs print${whereClause(filters)}`,
-        ctx,
-      );
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      return isEmpty(result)
-        ? "No container env variables found."
-        : `CONTAINER ENVS:\n\n${redactSecrets(result)}`;
+      const cmd = new Cmd("/container envs print")
+        .raw("detail")
+        .set("proplist", ".id,list,key,disabled");
+      if (a.list_filter !== undefined) cmd.raw("where").set("list", a.list_filter);
+      return `CONTAINER ENV METADATA (values omitted):\n\n${redactContainerText(await containerRead(cmd.build(), ctx))}`;
     },
   }),
-
   defineTool({
     name: "add_container_env",
     title: "Add Container Env Variable",
     annotations: WRITE,
     description:
-      "Add an environment variable to a named list (`/container envs add list= key= value=`). Group related " +
-      "variables under the same `list` name, then point a container at the group with `envlists=<list>` " +
-      "(add_container or update_container) — a container that is already running must be restarted to pick up " +
-      "env changes. Named lists are reusable across containers; for a one-off, self-contained setup the inline " +
-      "`env` on add_container is simpler. The grouping `list=` property requires RouterOS 7.20+. Values may be " +
-      "secrets and are redacted from output.",
-    inputSchema: {
-      list: z.string().describe("Env-list (group) name, e.g. 'MYAPP'"),
-      key: z.string().describe("Variable name, e.g. 'TZ'"),
-      value: z.string().describe("Variable value"),
-    },
+      "Add a sensitive value to a named env list. Current CLI groups by list; check target syntax. Review all consumers before changing a shared list. Existing running containers may need an approved stop/start; no implicit restart.",
+    inputSchema: { list: textValue, key: textValue, value: z.string() },
     async handler(a, ctx) {
-      ctx.info(`Adding container env: list=${a.list} key=${a.key}`);
-      const cmd = new Cmd("/container envs add")
-        .set("list", a.list)
-        .set("key", a.key)
-        .set("value", a.value)
-        .build();
-      const result = await executeMikrotikCommand(cmd, ctx);
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      if (looksLikeError(result)) return `Failed to add env variable: ${redactSecrets(result)}`;
-      return `Env '${a.key}' added to list '${a.list}'.`;
+      const count = await containerRead(
+        new Cmd("/container envs print count-only where")
+          .set("list", a.list)
+          .set("key", a.key)
+          .build(),
+        ctx,
+      );
+      if (count.trim() !== "0")
+        throw new Error("Env entry exists or uniqueness is unknown; no mutation performed.");
+      await containerWrite(
+        new Cmd("/container envs add")
+          .set("list", a.list)
+          .set("key", a.key)
+          .set("value", a.value)
+          .build(),
+        ctx,
+      );
+      const countAfter = await containerReadBack(
+        new Cmd("/container envs print count-only where")
+          .set("list", a.list)
+          .set("key", a.key)
+          .build(),
+        ctx,
+      );
+      return countAfter.trim() === "1"
+        ? "Env entry creation verified; value omitted."
+        : "Env add accepted; read-back UNVERIFIED. Inspect before retrying.";
     },
   }),
-
   defineTool({
     name: "remove_container_env",
     title: "Remove Container Env Variable",
     annotations: DESTRUCTIVE,
     description:
-      "Delete an environment variable from a list (`/container envs remove [find list= key=]`). Supply the " +
-      "`list` (group) name and the `key`. Verifies it exists first. To browse entries use list_container_envs.",
-    inputSchema: {
-      list: z.string().describe("Env-list (group) name"),
-      key: z.string().describe("Variable name to remove"),
-    },
+      "Remove one env entry by stable id OR exact list+key. Reject duplicates/unreadable selection. Review containers consuming this list first; no implicit restart.",
+    inputSchema: { id: IDENTITY.id, list: textValue.optional(), key: textValue.optional() },
     async handler(a, ctx) {
-      ctx.info(`Removing container env: list=${a.list} key=${a.key}`);
-      const where = `list=${quoteValue(a.list)} key=${quoteValue(a.key)}`;
-      const count = await executeMikrotikCommand(
-        `/container envs print count-only where ${where}`,
+      if (a.id ? a.list !== undefined || a.key !== undefined : !a.list || !a.key)
+        throw new Error("Provide id OR both list and key.");
+      const id = await resolveContainerItem(
+        "/container envs",
+        a.id ? { ".id": a.id } : { list: a.list, key: a.key },
         ctx,
       );
-      if (commandUnsupported(count)) return NOT_AVAILABLE;
-      if (count.trim() === "0") return `Env '${a.key}' in list '${a.list}' not found.`;
-      const result = await executeMikrotikCommand(`/container envs remove [find ${where}]`, ctx);
-      if (looksLikeError(result)) return `Failed to remove env variable: ${result}`;
-      return `Env '${a.key}' removed from list '${a.list}'.`;
+      await containerWrite(new Cmd("/container envs remove").set("numbers", id).build(), ctx);
+      const count = await containerReadBack(
+        new Cmd("/container envs print count-only where").set(".id", id).build(),
+        ctx,
+      );
+      return count.trim() === "0"
+        ? "Env removal verified."
+        : "Env removal accepted; absence UNVERIFIED. Inspect before retrying.";
     },
   }),
-
-  // ── Volume mounts `/container mounts` ──────────────────────────────────────
   defineTool({
     name: "list_container_mounts",
     title: "List Container Mounts",
     annotations: READ,
     description:
-      "List named volume mounts (`/container mounts print`) — each has a `name` (referenced by a container's " +
-      "mountlists), a host source `src` (e.g. 'disk1/appdata') and a container destination `dst` (e.g. " +
-      "'/data'). Optionally filter by partial `name_filter`. To add one use add_container_mount; to delete use " +
-      "remove_container_mount.",
+      "Read mount metadata. Current CLI groups by list; legacy CLI may use name. No application files are read. A list can contain several mounts.",
     inputSchema: {
-      name_filter: z.string().optional().describe("Partial mount name match"),
+      list_filter: textValue.optional(),
+      name_filter: textValue.optional().describe("Legacy exact name filter"),
     },
     async handler(a, ctx) {
-      ctx.info("Listing container mounts");
-      const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      const result = await executeMikrotikCommand(
-        `/container mounts print${whereClause(filters)}`,
-        ctx,
-      );
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      return isEmpty(result) ? "No container mounts found." : `CONTAINER MOUNTS:\n\n${result}`;
+      if (a.list_filter !== undefined && a.name_filter !== undefined)
+        throw new Error("Choose list_filter or legacy name_filter.");
+      const cmd = new Cmd("/container mounts print detail");
+      if (a.list_filter !== undefined) cmd.raw("where").set("list", a.list_filter);
+      if (a.name_filter !== undefined) cmd.raw("where").set("name", a.name_filter);
+      return `CONTAINER MOUNTS:\n\n${redactContainerText(await containerRead(cmd.build(), ctx))}`;
     },
   }),
-
   defineTool({
     name: "add_container_mount",
     title: "Add Container Mount",
     annotations: WRITE,
     description:
-      "Create a named volume mount (`/container mounts add name= src= dst=`) — persists container data on the " +
-      "host so it survives restarts/recreation. Maps a host source `src` (put it on an EXTERNAL disk, e.g. " +
-      "'disk1/appdata', never internal flash) to a path `dst` inside the container (e.g. '/data'). Point a " +
-      "container at it with `mountlists=<name>` (add_container or update_container); a running container must " +
-      "be restarted to apply mount changes. For a one-off, the inline `mount` on add_container is simpler. " +
-      "Named mounts and `mountlists` require RouterOS 7.21+.",
+      "Add a persistent mount using current list= OR legacy name=, never both. Verify target syntax first. Use appropriate storage; a missing source may be populated from the image. Review consumers; this neither formats storage nor restarts containers.",
     inputSchema: {
-      name: z.string().describe("Mount name, e.g. 'appdata'"),
-      src: z.string().describe("Host source path, e.g. 'disk1/appdata'"),
-      dst: z.string().describe("Container destination path, e.g. '/data'"),
+      list: textValue.optional().describe("Current CLI mount-list name"),
+      name: textValue
+        .optional()
+        .describe("Legacy CLI mount name; do not use for current list syntax"),
+      src: textValue,
+      dst: textValue,
     },
     async handler(a, ctx) {
-      ctx.info(`Adding container mount: name=${a.name}`);
-      const cmd = new Cmd("/container mounts add")
-        .set("name", a.name)
+      if (Boolean(a.list) === Boolean(a.name)) throw new Error("Provide list OR legacy name.");
+      const selector = new Cmd("")
+        .opt("list", a.list)
+        .opt("name", a.name)
         .set("src", a.src)
         .set("dst", a.dst)
-        .build();
-      const result = await executeMikrotikCommand(cmd, ctx);
-      if (commandUnsupported(result)) return NOT_AVAILABLE;
-      if (looksLikeError(result)) return `Failed to add mount: ${result}`;
-      return `Mount '${a.name}' (${a.src} → ${a.dst}) added.`;
+        .build()
+        .trim();
+      const count = await containerRead(
+        `/container mounts print count-only where ${selector}`,
+        ctx,
+      );
+      if (count.trim() !== "0")
+        throw new Error("Mount exists or uniqueness is unknown; no mutation performed.");
+      await containerWrite(
+        new Cmd("/container mounts add")
+          .opt("list", a.list)
+          .opt("name", a.name)
+          .set("src", a.src)
+          .set("dst", a.dst)
+          .build(),
+        ctx,
+      );
+      const countAfter = await containerReadBack(
+        `/container mounts print count-only where ${selector}`,
+        ctx,
+      );
+      return countAfter.trim() === "1"
+        ? "Mount creation verified; inspect application data separately."
+        : "Mount add accepted; read-back UNVERIFIED. Inspect before retrying.";
     },
   }),
-
   defineTool({
     name: "remove_container_mount",
     title: "Remove Container Mount",
     annotations: DESTRUCTIVE,
     description:
-      "Delete a named volume mount (`/container mounts remove [find name=...]`). Verifies it exists first. " +
-      "Does not delete the host data at `src`. To browse mounts use list_container_mounts.",
-    inputSchema: { name: z.string().describe("Mount name to remove") },
+      "Remove one mount definition by stable id or unique list/name, optionally narrowed by src/dst. Rejects multi-entry lists. Review shared consumers first; no host files are deleted by this tool.",
+    inputSchema: {
+      id: IDENTITY.id,
+      list: textValue.optional(),
+      name: textValue.optional(),
+      src: textValue.optional(),
+      dst: textValue.optional(),
+    },
     async handler(a, ctx) {
-      ctx.info(`Removing container mount: name=${a.name}`);
-      const count = await executeMikrotikCommand(
-        `/container mounts print count-only where name="${a.name}"`,
+      if (
+        [a.id, a.list, a.name].filter((v) => v !== undefined).length !== 1 ||
+        (a.id && (a.src || a.dst))
+      )
+        throw new Error("Provide id OR list/name with optional src/dst.");
+      const id = await resolveContainerItem(
+        "/container mounts",
+        a.id ? { ".id": a.id } : { list: a.list, name: a.name, src: a.src, dst: a.dst },
         ctx,
       );
-      if (commandUnsupported(count)) return NOT_AVAILABLE;
-      if (count.trim() === "0") return `Mount '${a.name}' not found.`;
-      const result = await executeMikrotikCommand(
-        `/container mounts remove [find name="${a.name}"]`,
+      await containerWrite(new Cmd("/container mounts remove").set("numbers", id).build(), ctx);
+      const count = await containerReadBack(
+        new Cmd("/container mounts print count-only where").set(".id", id).build(),
         ctx,
       );
-      if (looksLikeError(result)) return `Failed to remove mount: ${result}`;
-      return `Mount '${a.name}' removed.`;
+      return count.trim() === "0"
+        ? "Mount definition removal verified; host files were not touched."
+        : "Mount removal accepted; absence UNVERIFIED. Inspect before retrying.";
     },
   }),
 ];
 
-// Containers need the `container` package AND device-mode permission; both are
-// probed once per device, so an unsupported router says so without a round-trip.
-export const containerTools: ToolModule = withRequires(
-  { packages: ["container"], deviceMode: "container", minVersion: "7.0" },
-  containerToolsDefs,
-);
+export const containerTools: ToolModule = [
+  defineTool({
+    name: "get_routeros_container_guide",
+    title: "Get RouterOS Container Guide",
+    description:
+      "Read shared version-aware container knowledge: prerequisites, image compatibility, VETH isolation, lifecycle, secrets and troubleshooting. No device access. Use before auditing, deploying or changing containers.",
+    annotations: READ,
+    noDevice: true,
+    inputSchema: { topic: z.enum(["all", ...CONTAINER_GUIDE_TOPICS]).default("all") },
+    async handler(a) {
+      return getRouterosContainerGuide(a.topic);
+    },
+  }),
+  ...withRequires(
+    { packages: ["container"], deviceMode: "container", minVersion: "7.0" },
+    deviceTools,
+  ),
+];

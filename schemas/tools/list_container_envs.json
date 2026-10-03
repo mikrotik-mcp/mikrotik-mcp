@@ -4,7 +4,7 @@
   "type": "object",
   "properties": {
     "list_filter": {
-      "description": "Partial env-list (group) name match",
+      "description": "Exact list name",
       "type": "string"
     }
   },

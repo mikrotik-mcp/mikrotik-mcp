@@ -12,6 +12,7 @@
  * test runner and is trivially unit-testable.
  */
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { redactContainerInput } from "../utils/container-redaction";
 
 /** Coarse risk class derived from a tool's MCP annotations. */
 export type Risk = "READ" | "WRITE" | "WRITE_IDEMPOTENT" | "DESTRUCTIVE" | "DANGEROUS";
@@ -137,7 +138,8 @@ export function buildEvent(raw: RawCall, id: string, opts: CaptureOptions): Tool
   let output = "";
   let truncated = false;
   if (opts.captureBody) {
-    const args = opts.redactInput === false ? raw.args : redact(raw.args);
+    const args =
+      opts.redactInput === false ? raw.args : redact(redactContainerInput(raw.tool, raw.args));
     const rin = truncate(JSON.stringify(args ?? {}), opts.maxBodyBytes);
     // Invitation URLs are bearer capabilities even though their field is named clientPath.
     const rout = truncate(

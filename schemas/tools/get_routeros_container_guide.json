@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_routeros_container_guide",
+  "type": "object",
+  "properties": {
+    "topic": {
+      "default": "all",
+      "type": "string",
+      "enum": [
+        "all",
+        "prerequisites",
+        "images",
+        "networking",
+        "lifecycle",
+        "security",
+        "troubleshooting"
+      ]
+    }
+  },
+  "required": ["topic"],
+  "additionalProperties": false
+}

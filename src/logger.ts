@@ -7,6 +7,7 @@
  * client treats as a side-channel it can surface in its logs.
  */
 import { stderr } from "node:process";
+import { containerCommandForLog } from "./utils/container-redaction";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -31,7 +32,7 @@ const useColor = stderr.isTTY ?? false;
 
 /** Bound diagnostics only; never use this for device commands or tool results. */
 export function formatLogMessage(message: string): string {
-  const compact = message.replace(
+  const compact = containerCommandForLog(message).replace(
     /\bfrom=\*[\da-f]+(?:,\*[\da-f]+)+/gi,
     (list) => `from=<${list.split(",").length} IDs omitted>`,
   );
