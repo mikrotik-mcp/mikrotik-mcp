@@ -18,6 +18,7 @@ import { loadConfig } from "./config";
 import { closeAll as closeConnectionPool } from "./core/connection-pool";
 import { closeMemoryStore } from "./memory/accessor";
 import { setConfig } from "./core/runtime";
+import { startRoutingMonitor, stopRoutingMonitor } from "./service-routing/service";
 import { createDeviceClient, describeTransport } from "./core/transport";
 import { logger } from "./logger";
 import { allToolModules } from "./tools";
@@ -199,6 +200,7 @@ async function main(): Promise<void> {
   }
   const cfg = loadConfig();
   setConfig(cfg);
+  startRoutingMonitor();
   await printBanner();
   warnIfPlaintextPasswordInContainer(Object.values(cfg.devices).some((d) => !!d.password));
   const deviceNames = Object.keys(cfg.devices);
@@ -260,6 +262,7 @@ async function main(): Promise<void> {
     stopAlertSampler();
     stopScheduler();
     stopAttackDetection();
+    stopRoutingMonitor();
     process.exit(0);
   };
   process.on("SIGINT", () => shutdown("SIGINT"));

@@ -1,4 +1,5 @@
 export type ViewId =
+  | "service-routing"
   | "client-checks"
   | "router-migration"
   | "support-bundles"
@@ -37,6 +38,11 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  {
+    id: "service-routing",
+    label: "Service Routing",
+    sub: "Domain policies, exit evidence and authorized failover",
+  },
   {
     id: "client-checks",
     label: "Client Check",
@@ -163,6 +169,7 @@ export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
     label: "Operate",
     views: [
       "plan",
+      "service-routing",
       "router-migration",
       "simulator",
       "txn",

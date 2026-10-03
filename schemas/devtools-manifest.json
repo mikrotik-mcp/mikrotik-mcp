@@ -83,6 +83,22 @@
       ]
     },
     {
+      "slug": "service-routing",
+      "label": "Service Routing",
+      "group": "System & Ops",
+      "description": "Scoped dual-stack domain policies, router VRF service probes and explicitly authorized failover.",
+      "alwaysOn": false,
+      "tools": [
+        "list_service_routing",
+        "service_routing_inventory",
+        "create_service_routing",
+        "probe_service_routing",
+        "preview_service_routing",
+        "apply_service_routing",
+        "arm_service_routing"
+      ]
+    },
+    {
       "slug": "investigations",
       "label": "Client Investigations",
       "group": "System & Ops",
@@ -2391,6 +2407,66 @@
         "visibility": ["model"],
         "automatic": true
       }
+    },
+    {
+      "name": "list_service_routing",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "service_routing_inventory",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "create_service_routing",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "probe_service_routing",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "preview_service_routing",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "apply_service_routing",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "arm_service_routing",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
     },
     {
       "name": "inspect_flow_path",

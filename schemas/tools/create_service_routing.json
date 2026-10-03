@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "create_service_routing",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-zA-Z0-9_.-]+$",
+      "description": "Approved HTTPS alias in serviceProbes.targets; its exact hostname is routed"
+    },
+    "family": {
+      "type": "string",
+      "enum": ["ipv4", "ipv6"]
+    },
+    "sources": {
+      "minItems": 1,
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tables": {
+      "minItems": 1,
+      "maxItems": 3,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[a-zA-Z0-9_.-]+$"
+      }
+    },
+    "primary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-zA-Z0-9_.-]+$"
+    },
+    "maxLatencyMs": {
+      "default": 5000,
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 15000
+    },
+    "failuresBeforeSwitch": {
+      "default": 3,
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 10
+    },
+    "cooldownSeconds": {
+      "default": 300,
+      "type": "integer",
+      "minimum": 120,
+      "maximum": 3600
+    }
+  },
+  "required": [
+    "name",
+    "target",
+    "family",
+    "sources",
+    "tables",
+    "primary",
+    "maxLatencyMs",
+    "failuresBeforeSwitch",
+    "cooldownSeconds"
+  ],
+  "additionalProperties": false
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.19.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 939,
+  "toolCount": 946,
   "tools": [
     {
       "name": "create_client_check",
@@ -945,6 +945,248 @@
           }
         },
         "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_service_routing",
+      "title": "List Service Routing Policies",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read persistent domain routing policies, path evidence, primary exit, history and authorization expiry for this router. No probes or router changes.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "service_routing_inventory",
+      "title": "Discover Service Routing Exits",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read enabled FIB tables and administrator-approved HTTPS target aliases. A table is not proof of a working path; HTTPS per-exit probes require a matching VRF.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "create_service_routing",
+      "title": "Create Service Routing Draft",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Save a single-family policy for one approved exact hostname and explicit client subnets. No router changes. Create separate IPv4/IPv6 policies. Shared CDN IPs can affect other services. Preview, then explicitly confirm apply; never infer authorization from a draft.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-zA-Z0-9_.-]+$",
+            "description": "Approved HTTPS alias in serviceProbes.targets; its exact hostname is routed"
+          },
+          "family": {
+            "type": "string",
+            "enum": ["ipv4", "ipv6"]
+          },
+          "sources": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tables": {
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_.-]+$"
+            }
+          },
+          "primary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-zA-Z0-9_.-]+$"
+          },
+          "maxLatencyMs": {
+            "default": 5000,
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 15000
+          },
+          "failuresBeforeSwitch": {
+            "default": 3,
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 10
+          },
+          "cooldownSeconds": {
+            "default": 300,
+            "type": "integer",
+            "minimum": 120,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "name",
+          "target",
+          "family",
+          "sources",
+          "tables",
+          "primary",
+          "maxLatencyMs",
+          "failuresBeforeSwitch",
+          "cooldownSeconds"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "probe_service_routing",
+      "title": "Probe Service Exits",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Run bounded, IP-approved HTTPS HEAD fetches from the router through matching VRFs, certificate validation on, redirects off. No files/bodies stored. Table-only exits remain UNKNOWN. SSH overhead is included; not end-client reachability or throughput proof.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "preview_service_routing",
+      "title": "Preview Service Routing Change",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read router state and save a two-minute, state-bound preview for applying/switching or removing only owned rules. Reject FastTrack and foreign policy-routing conflicts. Does not create exits, NAT, DNS interception or change router configuration.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "remove": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "table", "remove"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "apply_service_routing",
+      "title": "Apply Approved Service Routing Preview",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "After explicit user confirmation, apply the exact fresh preview with a backup, exclusive Safe Mode and read-back. Router DNS maintains the owned destination list. Does not touch output/input chains. An ambiguous write is never retried; inspect router state. An apply pauses automatic failover.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "confirm": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "planId", "confirm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "arm_service_routing",
+      "title": "Authorize Time-Limited Service Failover",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Explicitly authorize automatic switching between saved exits for 1-60 minutes, or pause with 0. Requires fresh passing VRF evidence for every exit, consecutive definite failures and cooldown; UNKNOWN never triggers a switch. Expiry stops automation but retains the current route. No new exits or global policy rewrites.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60
+          },
+          "confirm": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "minutes", "confirm"],
         "additionalProperties": false
       }
     },

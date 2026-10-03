@@ -77,6 +77,7 @@ import { HomeInternetView } from "./home-internet";
 import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
+import { ServiceRoutingView } from "./service-routing";
 import { RoundTripView } from "./round-trip";
 import { PageBoundary } from "./page-boundary";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
@@ -179,6 +180,14 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  "service-routing": {
+    what: "Scope service traffic to approved exits with explicit per-family policies.",
+    tips: [
+      "Draft, check exits, preview and confirm. A draft never changes a router.",
+      "VRF HTTPS probes are router-originated; ordinary routing tables remain unknown.",
+      "Automatic failover requires fresh evidence and a time-limited authorization.",
+    ],
+  },
   "client-checks": {
     what: "Measure HTTP transfer performance from an affected device to this MCP host.",
     tips: [
@@ -709,6 +718,11 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       <>
         <circle cx="10" cy="10" r="6" />
         <path d="m15 15 6 6M7 10h6M10 7v6" />
+      </>
+    ),
+    "service-routing": (
+      <>
+        <path d="M3 6h7l4 6h7M3 18h7l4-6M18 9l3 3-3 3" />
       </>
     ),
     "service-contracts": (
@@ -1695,6 +1709,7 @@ function App(): ReactNode {
               {view === "home-internet" && <HomeInternetView />}
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}
+              {view === "service-routing" && <ServiceRoutingView />}
               {view === "round-trip" && <RoundTripView />}
 
               {/* ── RADIUS & User Manager ── */}

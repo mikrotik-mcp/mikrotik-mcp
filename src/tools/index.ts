@@ -14,6 +14,7 @@ import { connectedDeviceTools } from "./connected-devices";
 import { investigationTools } from "./investigations";
 import { homeInternetTools } from "./home-internet";
 import { serviceContractTools } from "./service-contracts";
+import { serviceRoutingTools } from "./service-routing";
 import { roundTripTools } from "./round-trip";
 import { appViewTools } from "./app-views";
 import { backupTools } from "./backup";
@@ -214,6 +215,14 @@ export const moduleCatalog: ModuleInfo[] = [
     description:
       "Administrator-approved DNS/TCP/TLS/HTTPS service checks, immutable contracts, history and fail-closed rollout gates with explicit MCP-host perspective.",
     tools: serviceContractTools,
+  },
+  {
+    label: "Service Routing",
+    slug: "service-routing",
+    group: "System & Ops",
+    description:
+      "Scoped dual-stack domain policies, router VRF service probes and explicitly authorized failover.",
+    tools: serviceRoutingTools,
   },
   {
     label: "Client Investigations",

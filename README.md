@@ -46,6 +46,9 @@ Then just ask:
 
 ## Highlights
 
+- **Service Routing:** per-family domain policies, VRF HTTPS exit checks and
+  explicitly authorized failover, with preview, backup and Safe Mode. [Guide](docs/service-routing.md)
+
 - **Client Check** — invite the affected phone/laptop with an expiring QR/link,
   measure browser HTTP latency, loaded latency and bounded transfers, and compare
   Wi-Fi/VPN runs in the dashboard. Optional investigation links keep evidence together.

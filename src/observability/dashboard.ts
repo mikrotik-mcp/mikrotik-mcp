@@ -64,6 +64,7 @@ import { workspaceRoutes } from "./workspace-routes";
 import { clientCheckRoutes } from "../client-check/routes";
 import { clientCheckNetwork } from "../client-check/network";
 import { serviceContractRoutes } from "./service-contract-routes";
+import { operationsRoutes } from "./operations-routes";
 import { roundTripRoutes } from "./round-trip-routes";
 import {
   allowDevice,
@@ -1675,6 +1676,8 @@ export async function runDashboard(
 
     const serviceContractResp = await serviceContractRoutes(req, url);
     if (serviceContractResp) return serviceContractResp;
+    const operationsResp = await operationsRoutes(req, url);
+    if (operationsResp) return operationsResp;
 
     const roundTripResp = await roundTripRoutes(req, url);
     if (roundTripResp) return roundTripResp;
