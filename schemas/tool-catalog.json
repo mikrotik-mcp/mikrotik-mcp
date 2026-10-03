@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.19.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 937,
+  "toolCount": 938,
   "tools": [
     {
       "name": "create_client_check",
@@ -2064,7 +2064,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Creates an 802.1Q VLAN sub-interface (`/interface vlan`) on a specified parent physical or bridge interface. Use this to segment layer-2 traffic by VLAN ID (1–4094); set `use_service_tag=true` for 802.1ad QinQ double-tagging. For listing existing VLAN interfaces use `list_vlan_interfaces`; for editing an existing VLAN use `update_vlan_interface`. Returns the created interface's full detail including its name, which is the identifier accepted by `get_vlan_interface`, `update_vlan_interface`, and `remove_vlan_interface`. ARP mode accepts: enabled (default), disabled, proxy-arp, reply-only.",
+      "description": "Creates an 802.1Q VLAN sub-interface (`/interface vlan`) on a specified parent physical or bridge interface. This creates only a VLAN sub-interface, NOT bridge port membership, PVID, firewall isolation or SSID mapping. For a bridge member use the bridge as routed parent; read get_vlan_segmentation_guide before migration. Set `use_service_tag=true` for 802.1ad QinQ double-tagging. For listing existing VLAN interfaces use `list_vlan_interfaces`; for editing an existing VLAN use `update_vlan_interface`. Returns the created interface's full detail including its name, which is the identifier accepted by `get_vlan_interface`, `update_vlan_interface`, and `remove_vlan_interface`. ARP mode accepts: enabled (default), disabled, proxy-arp, reply-only.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -2278,14 +2278,46 @@
       }
     },
     {
+      "name": "get_vlan_segmentation_guide",
+      "title": "Read VLAN Segmentation Knowledge",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read the RouterOS homelab VLAN design guide before VLAN, guest Wi-Fi, IoT or management-network work. Covers bridge CPU/tagged/untagged/PVID, dual-stack IPv4/IPv6 isolation, SSIDs/CAPsMAN, VPN return routing, Safe Mode/rollback, validation and clean Device/Group/Shared memory. Reference only; no router contact, live audit, memory write or authorization. Select a topic for concise guidance, or all for the full checklist.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "topic": {
+            "default": "all",
+            "type": "string",
+            "enum": [
+              "all",
+              "overview",
+              "discovery",
+              "layer2",
+              "policy",
+              "migration",
+              "verification"
+            ]
+          }
+        },
+        "required": ["topic"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "design_network_segment",
-      "title": "Design Isolated VLAN Segment",
+      "title": "Preview or Build Partial IPv4 VLAN Scaffolding",
       "risk": "dangerous",
       "annotations": {
         "destructiveHint": true,
         "openWorldHint": false
       },
-      "description": "Stands up a complete isolated network segment in one call: a VLAN interface on the bridge, its gateway IP, a DHCP server + pool + network, optional internet access (srcnat masquerade), and inter-VLAN isolation firewall rules — e.g. 'a guest VLAN that reaches the internet but not the LAN'. DEFAULTS TO A DRY RUN (`apply=false`) showing every command grouped; set `apply=true` to build it. Bridge VLAN tagging is added when `tagged_ports`/`untagged_ports` are given (requires bridge vlan-filtering). Isolation drops forward traffic from this subnet to each `isolate_from` subnet. Returns the plan or a build report.",
+      "description": "Preview partial IPv4 VLAN interface/gateway/DHCP scaffolding (apply=false, no router I/O). Read get_vlan_segmentation_guide first. Does NOT produce a complete isolated network. Optional NAT requires explicit wan_interface; isolation drops require a reviewed isolation_before .id. Bridge membership includes the CPU when ports are supplied, but port PVID/admission, filtering, Wi-Fi, INPUT and IPv6 policies remain separate work. apply=true runs sequential non-idempotent writes only after explicit approval, backup and a protected management/Safe Mode plan; failures may leave partial state. Read back and test clients; never retry blindly or claim isolation from command success.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -2302,11 +2334,15 @@
           },
           "subnet": {
             "type": "string",
-            "description": "CIDR for the segment, e.g. '192.168.30.0/24'"
+            "format": "cidrv4",
+            "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$",
+            "description": "Canonical IPv4 network CIDR, e.g. '192.168.30.0/24'"
           },
           "gateway": {
             "type": "string",
-            "description": "Router's address in the segment, e.g. '192.168.30.1'"
+            "format": "ipv4",
+            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$",
+            "description": "Usable router address inside the subnet, excluded from the DHCP pool"
           },
           "bridge": {
             "default": "bridge",
@@ -2314,7 +2350,7 @@
             "type": "string"
           },
           "tagged_ports": {
-            "description": "Comma-separated trunk/tagged ports (+ the bridge)",
+            "description": "Comma-separated verified tagged ports; the bridge/CPU is included once automatically",
             "type": "string"
           },
           "untagged_ports": {
@@ -2327,20 +2363,32 @@
             "type": "boolean"
           },
           "dhcp_range": {
-            "description": "Pool range; defaults to .10–.254 of the subnet",
+            "description": "Single start-end IPv4 range excluding gateway/network/broadcast. Required outside /24; /24 defaults to .10–.254",
             "type": "string"
           },
           "internet": {
             "default": true,
-            "description": "Allow internet access via srcnat masquerade",
+            "description": "Add egress-scoped IPv4 masquerade (requires wan_interface); not a firewall allow. Set false to reuse existing NAT",
             "type": "boolean"
+          },
+          "wan_interface": {
+            "description": "Verified egress interface for new masquerade. Required when internet=true; never inferred",
+            "type": "string",
+            "minLength": 1
           },
           "isolate_from": {
             "description": "Subnets this segment must NOT reach, e.g. ['192.168.1.0/24']",
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "format": "cidrv4",
+              "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
             }
+          },
+          "isolation_before": {
+            "description": "Current enabled forward rule .id from a fresh read; insert drops before this reviewed rule, not after broad accepts. Required with isolate_from",
+            "type": "string",
+            "pattern": "^\\*[0-9a-f]+$"
           },
           "apply": {
             "default": false,
@@ -2360,7 +2408,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Creates a bridge interface (`/interface bridge`) — combines multiple interfaces into a Layer-2 switch domain. Set `vlan_filtering=true` to enable 802.1Q VLAN awareness; set `protocol_mode` for STP/RSTP/MSTP spanning-tree. For adding a member interface to an existing bridge use `add_bridge_port`; for standalone 802.1Q VLAN sub-interfaces use `create_vlan_interface`. Returns the created bridge's full detail including its `.id`.",
+      "description": "Creates a bridge interface (`/interface bridge`) — combines multiple interfaces into a Layer-2 switch domain. For VLAN migration read get_vlan_segmentation_guide first. Stage a new bridge with filtering off; enable it LAST after VLAN membership and protected management access are ready. Set `protocol_mode` for STP/RSTP/MSTP spanning-tree. For adding a member interface to an existing bridge use `add_bridge_port`; for standalone 802.1Q VLAN sub-interfaces use `create_vlan_interface`. Returns the created bridge's full detail including its `.id`.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -2529,7 +2577,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Modifies settings on an existing bridge interface (`/interface bridge set`). Use to rename a bridge (`new_name`), toggle VLAN filtering, change STP/RSTP/MSTP protocol mode, adjust MTU, or enable/disable the bridge. For adding or removing member interfaces use `add_bridge_port` / `remove_bridge_port`; for VLAN table entries use `add_bridge_vlan`. Identified by the current bridge `name`; supply only the fields you want to change.",
+      "description": "Modifies settings on an existing bridge interface (`/interface bridge set`). Use to rename a bridge (`new_name`), toggle VLAN filtering, change STP/RSTP/MSTP protocol mode, adjust MTU, or enable/disable the bridge. VLAN filtering can interrupt management: read get_vlan_segmentation_guide, verify CPU membership, PVID/admission and recovery access before enabling it LAST. Do not disable existing filtering to simplify migration. For adding or removing member interfaces use `add_bridge_port` / `remove_bridge_port`; for VLAN table entries use `add_bridge_vlan`. Identified by the current bridge `name`; supply only the fields you want to change.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -2884,7 +2932,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Adds a VLAN membership entry to a bridge's 802.1Q VLAN table (`/interface bridge vlan add`). Use to define which ports carry a specific VLAN as tagged (trunk) or untagged (access). Requires `vlan-filtering` to be enabled on the bridge (set via `create_bridge` or `update_bridge`). `vlan_ids` accepts a single ID (e.g. '100') or comma-separated list (e.g. '100,200'); `tagged` and `untagged` accept comma-separated interface names. For standalone 802.1Q VLAN sub-interfaces use `create_vlan_interface`; for listing existing VLAN table entries use `list_bridge_vlans`; for setting per-port native VLAN use the `pvid` parameter in `add_bridge_port`.",
+      "description": "Adds a VLAN membership entry to a bridge's 802.1Q VLAN table (`/interface bridge vlan add`). Use to define which ports carry a specific VLAN as tagged (trunk) or untagged (access). Entries can be staged BEFORE enabling filtering; filtering enforces membership and should be enabled LAST after management is protected. For routed VLANs verify tagged bridge/CPU membership. Use one VLAN ID per entry containing access ports and align their PVID/admission; read get_vlan_segmentation_guide first. `vlan_ids` accepts a single ID (e.g. '100') or comma-separated list (e.g. '100,200'); `tagged` and `untagged` accept comma-separated interface names. For standalone 802.1Q VLAN sub-interfaces use `create_vlan_interface`; for listing existing VLAN table entries use `list_bridge_vlans`; for setting per-port native VLAN use the `pvid` parameter in `add_bridge_port`.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

@@ -26,6 +26,7 @@ import { z } from "zod";
 import type { DeviceDirectoryEntry } from "../core/runtime";
 import { logger } from "../logger";
 import { PROMPTS_DIR } from "../paths";
+import { vlanPromptGuidance } from "../core/vlan-guidance";
 import { transactionPromptGuidance } from "../txn/guidance";
 import { substitutePrompt } from "./compose";
 
@@ -84,7 +85,7 @@ function parseFrontmatter(raw: string): ParsedPrompt | null {
     title: meta.title ?? meta.name,
     description: meta.description ?? "",
     arguments: args,
-    body: transactionPromptGuidance(meta.name, body.trim()),
+    body: vlanPromptGuidance(meta.name, transactionPromptGuidance(meta.name, body.trim())),
   };
 }
 
@@ -205,17 +206,33 @@ export function registerPrompts(server: McpServer, opts: PromptRegisterOptions =
     server.registerPrompt(
       parsed.name,
       { title: parsed.title, description: parsed.description, argsSchema },
-      (args: Record<string, unknown>) => ({
-        messages: [
-          {
-            role: "user" as const,
-            content: {
-              type: "text" as const,
-              text: substitutePrompt(parsed.body, args),
+      (args: Record<string, unknown>) => {
+        const values = { ...args };
+        for (const arg of parsed.arguments) {
+          if (
+            !arg.required &&
+            (typeof values[arg.name] !== "string" || !String(values[arg.name]).trim())
+          ) {
+            values[arg.name] = "(not specified; ask if needed)";
+          }
+        }
+        return {
+          messages: [
+            {
+              role: "user" as const,
+              content: {
+                type: "text" as const,
+                // The injected selector must reach the model, even when the file
+                // has no {{device}} placeholder. Otherwise it can act on the default.
+                text:
+                  (multiDevice && !hasOwnDevice && typeof args.device === "string"
+                    ? `Target device (configured MCP key or label): ${JSON.stringify(args.device)}. Resolve this exact device; do not substitute the default.\n\n`
+                    : "") + substitutePrompt(parsed.body, values),
+              },
             },
-          },
-        ],
-      }),
+          ],
+        };
+      },
     );
     count++;
   }

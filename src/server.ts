@@ -8,6 +8,8 @@ import type { ListToolsResult } from "@modelcontextprotocol/sdk/types.js";
 import type { SendLog } from "./core/context";
 import { registerTools } from "./core/registry";
 import { registerUiResources } from "./core/ui-resources";
+import { VLAN_INSTRUCTIONS } from "./core/vlan-guidance";
+import { registerVlanKnowledgeResource } from "./core/vlan-resource";
 import { loadFileCacheSync, updateSummaryLine } from "./core/update-check";
 import { listDevices, deviceDirectory, deviceLabels, getConfig } from "./core/runtime";
 import { registerPrompts } from "./prompts";
@@ -45,10 +47,12 @@ Tool discovery — MANDATORY workflow:
 Safety model — tools are annotated by risk:
   • readOnlyHint     → inspection only, no changes
   • destructiveHint  → removes or replaces configuration
-Before a single-device batch of risky changes, consider enable_safe_mode: RouterOS then holds
-every change in memory and auto-reverts if the session drops, so a mistake that
-locks you out is undone automatically. commit_safe_mode persists; rollback
-discards. Prefer specific filters on list_* tools to keep output small.
+Before a single-device batch of risky changes, assess enable_safe_mode and an
+independent management recovery path. RouterOS can roll back eligible uncommitted
+changes after session loss, but Safe Mode has limits and is NOT a backup or a
+universal rollback guarantee. Use only your own session; inspect uncertain writes
+instead of replaying them. Commit only an approved, verified plan; otherwise use
+the agreed rollback/recovery path. Prefer filtered list_* reads to keep output small.
 
 Change workflow — ALWAYS take a restore point before a plan. Before calling
 plan_changes or apply_plan (or any batch of write/destructive tools), first call
@@ -170,6 +174,12 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
         )
       : INSTRUCTIONS;
 
+  instructions += `\n\n${VLAN_INSTRUCTIONS}`;
+  if (availableTools.has("get_vlan_segmentation_guide")) {
+    instructions +=
+      "\nTool-only clients: discover get_vlan_segmentation_guide with find_tools; topic=all returns the full guide without router I/O.";
+  }
+
   // Promote only a usable workflow; do not direct a read-only or curated session
   // toward write tools it does not expose. This performs no device I/O.
   const sshParticipants = names.filter((name) => !getConfig().devices[name]?.mac);
@@ -274,6 +284,7 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
   // MCP App views (`ui://…`) — interactive dashboards rendered inline by hosts
   // that support the Apps extension (Claude, ChatGPT). Plain clients ignore them.
   const uiViewCount = registerUiResources(server);
+  registerVlanKnowledgeResource(server);
   // Optionally paginate `tools/list` so a very large catalog (several hundred
   // tools) ships in client-friendly pages WITHOUT disabling any tool.
   installToolPagination(server, getConfig().mcp.toolPageSize);

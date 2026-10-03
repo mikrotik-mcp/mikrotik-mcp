@@ -33,7 +33,7 @@ export const bridgeTools: ToolModule = [
     annotations: WRITE,
     description:
       "Creates a bridge interface (`/interface bridge`) — combines multiple interfaces into a Layer-2 switch domain. " +
-      "Set `vlan_filtering=true` to enable 802.1Q VLAN awareness; set `protocol_mode` for STP/RSTP/MSTP spanning-tree. " +
+      "For VLAN migration read get_vlan_segmentation_guide first. Stage a new bridge with filtering off; enable it LAST after VLAN membership and protected management access are ready. Set `protocol_mode` for STP/RSTP/MSTP spanning-tree. " +
       "For adding a member interface to an existing bridge use `add_bridge_port`; " +
       "for standalone 802.1Q VLAN sub-interfaces use `create_vlan_interface`. " +
       "Returns the created bridge's full detail including its `.id`.",
@@ -177,6 +177,7 @@ export const bridgeTools: ToolModule = [
     description:
       "Modifies settings on an existing bridge interface (`/interface bridge set`). " +
       "Use to rename a bridge (`new_name`), toggle VLAN filtering, change STP/RSTP/MSTP protocol mode, adjust MTU, or enable/disable the bridge. " +
+      "VLAN filtering can interrupt management: read get_vlan_segmentation_guide, verify CPU membership, PVID/admission and recovery access before enabling it LAST. Do not disable existing filtering to simplify migration. " +
       "For adding or removing member interfaces use `add_bridge_port` / `remove_bridge_port`; " +
       "for VLAN table entries use `add_bridge_vlan`. " +
       "Identified by the current bridge `name`; supply only the fields you want to change.",
@@ -502,7 +503,8 @@ export const bridgeTools: ToolModule = [
     description:
       "Adds a VLAN membership entry to a bridge's 802.1Q VLAN table (`/interface bridge vlan add`). " +
       "Use to define which ports carry a specific VLAN as tagged (trunk) or untagged (access). " +
-      "Requires `vlan-filtering` to be enabled on the bridge (set via `create_bridge` or `update_bridge`). " +
+      "Entries can be staged BEFORE enabling filtering; filtering enforces membership and should be enabled LAST after management is protected. " +
+      "For routed VLANs verify tagged bridge/CPU membership. Use one VLAN ID per entry containing access ports and align their PVID/admission; read get_vlan_segmentation_guide first. " +
       "`vlan_ids` accepts a single ID (e.g. '100') or comma-separated list (e.g. '100,200'); " +
       "`tagged` and `untagged` accept comma-separated interface names. " +
       "For standalone 802.1Q VLAN sub-interfaces use `create_vlan_interface`; " +

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_vlan_segmentation_guide",
+  "type": "object",
+  "properties": {
+    "topic": {
+      "default": "all",
+      "type": "string",
+      "enum": ["all", "overview", "discovery", "layer2", "policy", "migration", "verification"]
+    }
+  },
+  "required": ["topic"],
+  "additionalProperties": false
+}

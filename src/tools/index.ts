@@ -312,8 +312,8 @@ export const moduleCatalog: ModuleInfo[] = [
     slug: "vlan-designer",
     group: "Interfaces",
     description:
-      "Stand up a complete isolated VLAN segment (interface, gateway, DHCP, internet, inter-VLAN " +
-      "isolation) from one intent, with preview-before-apply.",
+      "Read VLAN design/safety knowledge and preview partial IPv4 scaffolding; full L2, dual-stack " +
+      "isolation and client verification remain explicit migration work.",
     tools: vlanDesignerTools,
   },
   {

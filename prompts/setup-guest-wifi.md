@@ -14,32 +14,31 @@ arguments:
     required: true
 ---
 
-Build an **isolated guest network** on this MikroTik device. Guests must reach the
-internet but must NOT reach the LAN or the router's management. Plan the whole
-change first, show it to the user, then apply it under Safe Mode.
+Plan an **isolated guest network** on the explicitly selected MikroTik device.
+Guests may use approved internet/services, but not local devices or administration.
+Start read-only, show the complete plan and request approval before any writes.
 
 Guest subnet: {{subnet}}
 Guest VLAN ID: {{vlan_id}}
 WAN interface: {{wan_interface}}
 
-Proposed build (adapt to what you discover with `list_interfaces`,
-`list_ip_addresses`, `list_filter_rules`):
-
-1. **Segment** — if a VLAN is requested, `create_vlan_interface` (vlan_id
-   {{vlan_id}}) on the LAN bridge/trunk; otherwise pick a dedicated interface.
-2. **Gateway IP** — `add_ip_address` using the first usable address of {{subnet}}.
-3. **DHCP** — `create_dhcp_pool`, `create_dhcp_network` (gateway + DNS), and
-   `create_dhcp_server` bound to the guest interface.
-4. **NAT** — ensure a `create_nat_rule` masquerade exists for {{subnet}} out
-   {{wan_interface}}.
-5. **Isolation (the important part)** — in the `forward` chain via
-   `create_filter_rule`:
-   - allow {{subnet}} → WAN (established/related + new),
-   - **drop {{subnet}} → LAN subnets (RFC1918)**,
-     and in the `input` chain drop {{subnet}} → router except DHCP/DNS. Consider an
-     `add_address_list_entry` list named `guest` to keep the rules tidy.
-6. **Verify** — re-list the rules and confirm ordering; `enable_safe_mode` before
-   applying, test, then `commit_safe_mode`.
-
-Present the plan as an ordered list of exact tool calls with arguments before
-executing anything.
+1. Discover port roles, AP VLAN support and Wi-Fi package, bridge membership,
+   existing addressing, policy routing and IPv4/IPv6 firewall order with `find_tools`.
+2. Plan the SSID-to-VLAN mapping on AP and uplink, access PVID/admission, trunk
+   membership and bridge/CPU gateway access. Without VLANs, require a genuinely
+   separate L2 interface/bridge; a second subnet on the same LAN is not isolation.
+3. Check subnet overlap and assign a valid gateway/pool excluding reserved hosts.
+   Identify working DNS and egress. Reuse existing NAT where appropriate; never
+   add unscoped masquerade. NAT does not allow traffic through a forward firewall.
+4. Plan INPUT management protection and FORWARD isolation in BOTH IPv4 and IPv6.
+   RFC1918-only drops miss local public addresses, remote/VPN subnets and IPv6.
+   Scope essential DHCP/DNS/ICMPv6 allowances; put approved service exceptions
+   before denies and denies before conflicting broad accepts. Do not blindly append.
+5. Treat guest-to-guest isolation as an additional AP/switch requirement. Prove
+   it separately; routed rules cannot prevent all same-VLAN communication.
+6. Show exact changes, an independent recovery path and backup/rollback plan.
+   After approval only, stage under the suitable safe execution workflow, enable
+   VLAN filtering LAST and canary one client before migrating everyone.
+7. Test DHCP, DNS, allowed internet, denied local/management access and guest peer
+   isolation from actual clients over both families. Read-back alone is insufficient.
+   Commit only if verification succeeds and the approval covers this exact change.

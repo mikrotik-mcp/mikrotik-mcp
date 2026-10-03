@@ -15,11 +15,15 @@
     },
     "subnet": {
       "type": "string",
-      "description": "CIDR for the segment, e.g. '192.168.30.0/24'"
+      "format": "cidrv4",
+      "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$",
+      "description": "Canonical IPv4 network CIDR, e.g. '192.168.30.0/24'"
     },
     "gateway": {
       "type": "string",
-      "description": "Router's address in the segment, e.g. '192.168.30.1'"
+      "format": "ipv4",
+      "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$",
+      "description": "Usable router address inside the subnet, excluded from the DHCP pool"
     },
     "bridge": {
       "default": "bridge",
@@ -27,7 +31,7 @@
       "type": "string"
     },
     "tagged_ports": {
-      "description": "Comma-separated trunk/tagged ports (+ the bridge)",
+      "description": "Comma-separated verified tagged ports; the bridge/CPU is included once automatically",
       "type": "string"
     },
     "untagged_ports": {
@@ -40,20 +44,32 @@
       "type": "boolean"
     },
     "dhcp_range": {
-      "description": "Pool range; defaults to .10–.254 of the subnet",
+      "description": "Single start-end IPv4 range excluding gateway/network/broadcast. Required outside /24; /24 defaults to .10–.254",
       "type": "string"
     },
     "internet": {
       "default": true,
-      "description": "Allow internet access via srcnat masquerade",
+      "description": "Add egress-scoped IPv4 masquerade (requires wan_interface); not a firewall allow. Set false to reuse existing NAT",
       "type": "boolean"
+    },
+    "wan_interface": {
+      "description": "Verified egress interface for new masquerade. Required when internet=true; never inferred",
+      "type": "string",
+      "minLength": 1
     },
     "isolate_from": {
       "description": "Subnets this segment must NOT reach, e.g. ['192.168.1.0/24']",
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "format": "cidrv4",
+        "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
       }
+    },
+    "isolation_before": {
+      "description": "Current enabled forward rule .id from a fresh read; insert drops before this reviewed rule, not after broad accepts. Required with isolate_from",
+      "type": "string",
+      "pattern": "^\\*[0-9a-f]+$"
     },
     "apply": {
       "default": false,

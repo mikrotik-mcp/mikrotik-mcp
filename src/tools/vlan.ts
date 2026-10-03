@@ -23,7 +23,7 @@ export const vlanTools: ToolModule = [
     annotations: WRITE,
     description:
       "Creates an 802.1Q VLAN sub-interface (`/interface vlan`) on a specified parent physical or bridge interface." +
-      " Use this to segment layer-2 traffic by VLAN ID (1–4094); set `use_service_tag=true` for 802.1ad QinQ double-tagging." +
+      " This creates only a VLAN sub-interface, NOT bridge port membership, PVID, firewall isolation or SSID mapping. For a bridge member use the bridge as routed parent; read get_vlan_segmentation_guide before migration. Set `use_service_tag=true` for 802.1ad QinQ double-tagging." +
       " For listing existing VLAN interfaces use `list_vlan_interfaces`; for editing an existing VLAN use `update_vlan_interface`." +
       " Returns the created interface's full detail including its name, which is the identifier accepted by `get_vlan_interface`, `update_vlan_interface`, and `remove_vlan_interface`." +
       " ARP mode accepts: enabled (default), disabled, proxy-arp, reply-only.",

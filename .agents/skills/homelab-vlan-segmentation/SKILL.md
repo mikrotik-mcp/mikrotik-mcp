@@ -10,9 +10,10 @@ metadata:
 How to split a home network into isolated VLANs so IoT devices, guests, and your main
 PCs cannot talk to each other. The most impactful security upgrade for a home network.
 
-All firewall rules shown here add isolation between segments — they do not remove
-existing protections. Apply changes in a maintenance window and verify connectivity
-between segments after each step before moving on.
+Examples are design sketches, not paste-ready changes or proof of isolation.
+Existing rule order and IPv6 may invalidate a simple IPv4 deny. Inspect first,
+preserve management/recovery access and existing protections, obtain approval,
+then apply in a maintenance window with backups and client-side verification.
 
 ## When to Use
 
@@ -207,57 +208,43 @@ Services → DHCP Server → Select your VLAN interface
 
 ## MikroTik Configuration
 
-```
-# Step 1: Create a bridge with VLAN filtering enabled
-/interface bridge
-add name=bridge vlan-filtering=yes
+In this MCP, read `get_vlan_segmentation_guide` (or the resource
+`mikrotik://knowledge/vlan-segmentation`). It is shared by MCP prompts, the dashboard
+and Raycast. Use `audit-vlan-segmentation` for a read-only review and
+`setup-vlan-network` for a staged proposal. Guidance never grants write permission.
 
-# Step 2: Add physical ports to the bridge
-# Trunk port to router/uplink (tagged for all VLANs)
-/interface bridge port
-add bridge=bridge interface=ether1 frame-types=admit-only-vlan-tagged
+1. Resolve exact devices and discover the physical port map, bridges, VLAN table,
+   PVIDs, IP/DHCP, IPv6/ND, Wi-Fi package, firewall order and routing dependencies.
+   Never assume ether1 is a trunk or put the WAN/ONT in the LAN bridge.
+2. Confirm an independent management/recovery path, host-side snapshot and backup.
+   Stage a NEW bridge with `vlan-filtering=no`; do not turn off filtering on an
+   existing production bridge. Safe Mode helps but is not a universal rollback.
+3. Plan one access VLAN per port, matching PVID/untagged membership and ingress
+   admission. Trunks carry an explicit tagged allowlist. Include the bridge/CPU
+   as tagged for each VLAN terminated/routed there; inspect dynamic membership.
+   Put routed VLAN interfaces on the bridge, not an enslaved physical port.
+4. Define non-overlapping gateway/subnet/DHCP ranges, excluding reserved addresses.
+   Use a separate routed /64 for each IPv6 SLAAC segment. Verify upstream return
+   routes, VPN allowed-addresses, NAT and policy-routing consumers before migration.
+5. Map SSIDs on the AP and trunk. Verify `wifi-qcom`, `wifi-qcom-ac` or legacy
+   wireless behavior; do not copy CAPsMAN datapath `vlan-id` blindly to qcom-ac.
+6. Review BOTH IPv4 and IPv6 INPUT and FORWARD policy. Essential DHCP/DNS/ICMPv6
+   and approved services precede denies; denies must precede broad accepts they
+   constrain. Appending a drop at the bottom does not prove isolation. Do not
+   treat RFC1918-only drops as a complete local-network policy or blanket-block ND.
+7. After exact-plan approval, stage the change using the appropriate safe workflow.
+   Enable VLAN filtering LAST after membership and management access are ready.
+   Canary one port/SSID; test real wired/wireless clients, management and allow/deny
+   paths for both families before committing and retiring the old access path.
 
-# Access port for trusted devices (untagged VLAN 10)
-/interface bridge port
-add bridge=bridge interface=ether2 pvid=10 frame-types=admit-only-untagged-and-priority-tagged
+`design_network_segment` only builds partial IPv4 scaffolding. It does not configure
+port PVID/admission, filtering activation, SSIDs, INPUT/IPv6 policies or recovery.
+New NAT needs an explicit egress, and isolation rules need a reviewed placement
+anchor. Command success is not evidence of isolation. Use a complete migration plan.
 
-# Access port for IoT devices (untagged VLAN 20)
-/interface bridge port
-add bridge=bridge interface=ether3 pvid=20 frame-types=admit-only-untagged-and-priority-tagged
-
-# Step 3: Define which VLANs are allowed on which ports
-/interface bridge vlan
-add bridge=bridge tagged=ether1 untagged=ether2 vlan-ids=10
-add bridge=bridge tagged=ether1 untagged=ether3 vlan-ids=20
-
-# Step 4: Create VLAN interfaces on the bridge (gateway IPs)
-/interface vlan
-add interface=bridge name=vlan10 vlan-id=10
-add interface=bridge name=vlan20 vlan-id=20
-
-# Step 5: Assign gateway IPs
-/ip address
-add interface=vlan10 address=192.168.10.1/24
-add interface=vlan20 address=192.168.20.1/24
-
-# Step 6: DHCP pools and servers
-/ip pool
-add name=pool-trusted ranges=192.168.10.100-192.168.10.254
-add name=pool-iot ranges=192.168.20.100-192.168.20.254
-
-/ip dhcp-server
-add interface=vlan10 address-pool=pool-trusted name=dhcp-trusted
-add interface=vlan20 address-pool=pool-iot name=dhcp-iot
-
-/ip dhcp-server network
-add address=192.168.10.0/24 gateway=192.168.10.1
-add address=192.168.20.0/24 gateway=192.168.20.1
-
-# Step 7: Firewall — block IoT from reaching trusted VLAN
-/ip firewall filter
-add chain=forward src-address=192.168.20.0/24 dst-address=192.168.10.0/24 \
-    action=drop comment="Block IoT to Trusted"
-```
+References: [Bridge VLAN table](https://help.mikrotik.com/docs/spaces/ROS/pages/28606465/Bridge+VLAN+Table),
+[WiFi](https://help.mikrotik.com/docs/spaces/ROS/pages/224559120/WiFi),
+[IPv4/IPv6 firewall](https://help.mikrotik.com/docs/spaces/ROS/pages/328513/Building+Advanced+Firewall).
 
 ## Switch Trunk vs Access Ports
 
@@ -298,11 +285,11 @@ add chain=forward src-address=192.168.20.0/24 dst-address=192.168.10.0/24 \
 
 ## Best Practices
 
-- Start with 4 VLANs: Trusted, IoT, Servers, Guest — add more as needed
+- Start with the roles actually needed; VLAN IDs/subnets above are illustrative, not defaults
 - Put Pi-hole in the Servers VLAN (192.168.30.x)
 - Add a firewall rule allowing DNS (port 53) from all VLANs to the Pi-hole IP — before any RFC1918 block rule
 - Test isolation after every rule change: from the IoT VLAN, try to ping a trusted device — it should fail
-- Use a management VLAN for switch and AP web UIs and restrict access to the Trusted VLAN only
+- Use a management VLAN and restrict administration to explicitly approved admin sources/VPNs, not every trusted client
 - Document your VLAN design in a table (VLAN ID, name, subnet, purpose)
 
 ## Related Skills

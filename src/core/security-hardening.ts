@@ -1291,10 +1291,11 @@ function auditNetworkSegmentation(state: DeviceSecurityState): Finding[] {
         "TOPOLOGY FACT (proven): these subnets share one physical interface with no VLAN/bridge object. " +
         `ISOLATION CLAIM (${isolationVerified ? "some inter-subnet filtering present — verify coverage" : "needs_live_verification"}): ` +
         "static config cannot fully prove no firewall enforces isolation between them. " +
-        "Suggested VLAN plan: keep the server subnet on the native/untagged bridge, move the client " +
-        `pool (${servedByDhcp.join(", ")}) to a new VLAN (e.g. vlan-id 20) via /interface vlan + ` +
-        "/interface bridge vlan, then add a forward-chain rule dropping client→server except allowed " +
-        "ports. NEVER auto-applied — this is planned network work, not a bug fix.",
+        "Read get_vlan_segmentation_guide before designing a migration. Confirm port roles, preserve " +
+        `management access and plan separate L2 domains for client pools (${servedByDhcp.join(", ")}) ` +
+        "and servers without assuming a native VLAN or example ID. Review bridge CPU/PVID membership, " +
+        "IPv4/IPv6 INPUT and FORWARD policy, rule order and endpoint tests. NEVER auto-applied — " +
+        "this is planned network work, not a bug fix.",
     });
   }
   return findings;
