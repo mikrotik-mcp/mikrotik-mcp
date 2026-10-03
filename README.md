@@ -317,8 +317,10 @@ MIKROTIK_CONFIG_PATH=/absolute/path/devices.json docker compose up -d mikrotik-m
 
 See **[Docker deployment and persistence](docs/docker.md#persistent-devicesjson)**
 for directory mounts, permissions and explicit configuration overrides.
-Maintainers: follow **[Publishing to Docker Hub](docs/docker-publishing.md)** for
-version checks, native smoke tests, multi-platform push and verified `latest` promotion.
+Maintainers: run **`bun run docker:publish`** for the interactive Docker Hub
+publisher (automatic account detection/login, release review, multi-platform push
+and verified `latest` promotion). Preview safely with `bun run docker:publish --dry-run`.
+See **[Publishing to Docker Hub](docs/docker-publishing.md)** for details and manual commands.
 
 Every tool gains an optional `device` argument, and **Safe Mode is per-device**:
 
