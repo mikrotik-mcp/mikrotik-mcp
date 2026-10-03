@@ -11,10 +11,25 @@
  * losing a secret.
  *
  * The `mergeSecrets`/`serializeConfig`/`backupName` helpers are pure and unit
- * tested; `atomicWrite` is the only side-effecting one (temp file + rename).
+ * tested; `atomicWrite` uses temp + rename, with a backed-up in-place fallback
+ * for a single file bind-mounted into a container.
  */
 import { randomUUID } from "node:crypto";
-import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fchmodSync,
+  fstatSync,
+  fsyncSync,
+  ftruncateSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { dirname } from "node:path";
 import { REDACTED } from "./observability/event";
 import { CREDENTIAL_SOURCE } from "./config-device-draft";
@@ -116,14 +131,67 @@ export function backupName(path: string, ts: number): string {
  * Write `text` to `path` atomically: write a sibling temp file then `rename` it
  * over the target (rename is atomic on the same filesystem), so a crash mid-write
  * never leaves a half-written config. Creates the parent directory if needed.
+ * Linux rejects replacing a file mount point with EBUSY. Only that error falls
+ * back to an inode-preserving write with a durable private backup. That fallback
+ * is NOT crash-atomic; mount the parent directory when atomicity is required.
  */
 export function atomicWrite(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp-${randomUUID()}`;
   try {
-    writeFileSync(tmp, text, { encoding: "utf8", mode: 0o600, flag: "wx" });
-    renameSync(tmp, path);
+    writeFileSync(tmp, text, { encoding: "utf8", mode: 0o600, flag: "wx", flush: true });
+    try {
+      renameSync(tmp, path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EBUSY") throw error;
+      writeMountedFile(path, text);
+    }
   } finally {
     rmSync(tmp, { force: true });
+  }
+}
+
+/** Replace bytes on an already-open regular file, handling short writes. */
+function replaceContents(fd: number, bytes: Buffer): void {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const written = writeSync(fd, bytes, offset, bytes.length - offset, offset);
+    if (written === 0) throw new Error("Configuration write made no progress.");
+    offset += written;
+  }
+  ftruncateSync(fd, bytes.length);
+  fsyncSync(fd);
+}
+
+/**
+ * Preserve the bind mount's inode; never unlink it or downgrade permission errors.
+ * Backup must succeed before any bytes change. An ordinary I/O failure attempts
+ * restoration; process/power failure requires the retained .bak-mounted-* file.
+ * One MCP process must own this file (no concurrent host-editor/replica writes).
+ */
+function writeMountedFile(path: string, text: string): void {
+  const fd = openSync(path, constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    if (!fstatSync(fd).isFile()) throw new Error("Configuration target must be a regular file.");
+    fchmodSync(fd, 0o600);
+    const previous = readFileSync(fd);
+    const backup = `${path}.bak-mounted-${randomUUID()}`;
+    writeFileSync(backup, previous, { mode: 0o600, flag: "wx", flush: true });
+    try {
+      replaceContents(fd, Buffer.from(text, "utf8"));
+    } catch {
+      try {
+        replaceContents(fd, previous);
+      } catch {
+        throw new Error(
+          "Configuration write and recovery failed; restore the retained mounted-file backup.",
+        );
+      }
+      throw new Error(
+        "Configuration write failed; previous contents restored and backup retained.",
+      );
+    }
+  } finally {
+    closeSync(fd);
   }
 }

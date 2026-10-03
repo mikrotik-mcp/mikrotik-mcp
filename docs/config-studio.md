@@ -24,8 +24,8 @@ Open the **Configuration** panel and click **✎ Edit config**.
 - **Test connection** — each device entry can be probed (`probeDevice`) against
   the _unsaved_ config before you commit, so bad credentials are caught early.
 - **Diff preview** — see a unified diff of current vs. edited config before saving.
-- **Safe-apply with auto-rollback** — saving writes the file (atomically, with a
-  timestamped backup), hot-swaps the in-memory config, and starts a **rollback
+- **Safe-apply with auto-rollback** — saving writes the file (with a timestamped
+  backup), hot-swaps the in-memory config, and starts a **rollback
   countdown**. You must click **Keep changes** within the window; if you don't
   (you locked yourself out, or the browser lost the server), the change auto-reverts
   to the backup — RouterOS-Safe-Mode-style, for the config file itself.
@@ -34,6 +34,11 @@ Open the **Configuration** panel and click **✎ Edit config**.
 
 Config Studio writes to the `--config` file it was started with, or to
 `~/.mikrotik-mcp/config.json` when the config was assembled from env/flags.
+The Docker image defaults to `/home/bun/.mikrotik-mcp/devices.json`; a writable
+mount retains the complete settings there across container recreation. Normal
+files and directory mounts use atomic replacement. A single-file bind mount
+uses a flushed backup plus an in-place write when rename returns `EBUSY`; that
+fallback is not crash-atomic. See [Docker persistence](./docker.md#persistent-devicesjson).
 
 ## Honest constraint
 

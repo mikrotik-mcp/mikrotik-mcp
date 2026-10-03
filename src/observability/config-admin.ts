@@ -58,7 +58,7 @@ export interface AdminDeps {
   source: () => ConfigSource;
   /** Read a file's text, or null when it doesn't exist. Other errors must throw. */
   readFile: (path: string) => string | null;
-  /** Persist text to a path (atomically in prod). */
+  /** Persist text to a path (atomic rename, or backed-up in-place for a file mount). */
   writeText: (path: string, text: string) => void;
   now: () => number;
   /** Schedule `fn` after `ms`; returns an opaque handle for {@link AdminDeps.cancel}. */
