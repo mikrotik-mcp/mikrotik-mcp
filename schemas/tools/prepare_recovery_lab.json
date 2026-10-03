@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "prepare_recovery_lab",
+  "type": "object",
+  "properties": {
+    "snapshotId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^7\\.\\d+(?:\\.\\d+)?(?:beta\\d+|rc\\d+)?$"
+    },
+    "mode": {
+      "default": "restore",
+      "type": "string",
+      "enum": ["restore", "upgrade"]
+    }
+  },
+  "required": ["snapshotId", "version", "mode"],
+  "additionalProperties": false
+}

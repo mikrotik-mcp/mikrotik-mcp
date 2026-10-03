@@ -2,9 +2,16 @@ import { z } from "zod";
 import { createContext } from "../core/context";
 import { serviceRoutingTools } from "../tools/service-routing";
 import { flightRecorderTools } from "../tools/flight-recorder";
+import { recoveryLabTools } from "../tools/recovery-lab";
 import { readOperationBody, DashboardInputError } from "./bounded-request";
 
 const routing: Record<string, string> = {
+  "GET /api/recovery-lab": "get_recovery_lab",
+  "GET /api/recovery-lab/inventory": "recovery_lab_inventory",
+  "POST /api/recovery-lab/prepare": "prepare_recovery_lab",
+  "POST /api/recovery-lab/start": "start_recovery_lab",
+  "POST /api/recovery-lab/poll": "poll_recovery_lab",
+  "POST /api/recovery-lab/destroy": "destroy_recovery_lab",
   "GET /api/flight-recorder": "get_flight_recorder",
   "POST /api/flight-recorder/configure": "configure_flight_recorder",
   "POST /api/flight-recorder/freeze": "freeze_network_incident",
@@ -18,9 +25,13 @@ const routing: Record<string, string> = {
   "POST /api/service-routing/arm": "arm_service_routing",
 };
 export async function operationsRoutes(req: Request, url: URL): Promise<Response | null> {
-  if (!["/api/service-routing", "/api/flight-recorder"].some((p) => url.pathname.startsWith(p)))
+  if (
+    !["/api/service-routing", "/api/flight-recorder", "/api/recovery-lab"].some((p) =>
+      url.pathname.startsWith(p),
+    )
+  )
     return null;
-  const tool = [...serviceRoutingTools, ...flightRecorderTools].find(
+  const tool = [...serviceRoutingTools, ...flightRecorderTools, ...recoveryLabTools].find(
     (t) => t.name === routing[`${req.method} ${url.pathname}`],
   );
   if (!tool) return Response.json({ error: "Unsupported workspace operation" }, { status: 405 });

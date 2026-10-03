@@ -1,7 +1,39 @@
 /** Manual visual QA: synthetic data only; no router connections, database or config writes. */
 import { file, serve } from "bun";
 import { blankFlight, freezeFlight } from "../src/flight-recorder/model";
+import { buildRecoverySubset, sha256, REQUIRED_CHECKS } from "../src/recovery-lab/model";
 const now = Date.now();
+const subset = buildRecoverySubset(
+  "/interface bridge\nadd name=lan\n/interface vlan\nadd name=iot interface=lan vlan-id=30\n/ip address\nadd address=10.30.0.1/24 interface=iot\n/interface wifi\nset [find] disabled=no\n/user-manager user\nadd name=example password=secret",
+);
+const rehearsal = {
+  id: "00000000-0000-4000-8000-000000000002",
+  device: "demo-home",
+  updatedAt: now,
+  preparedAt: now - 300000,
+  startedAt: now - 250000,
+  snapshotId: "snap_demo_reviewed",
+  snapshotSha: sha256("fixture"),
+  snapshotAt: now - 3600000,
+  sourceVersion: "7.19.1",
+  version: "7.20.1",
+  mode: "upgrade",
+  ...subset,
+  commandSha256: sha256(subset.commands.join("\n")),
+  state: "passed",
+  runnerId: "isolated-demo",
+  result: {
+    checks: REQUIRED_CHECKS.map((name) => ({
+      name,
+      state: "pass",
+      detail:
+        name === "isolation"
+          ? "Synthetic fixture: isolated-network verification example"
+          : "Synthetic fixture: check passed example",
+    })),
+    cleanup: "destroyed",
+  },
+};
 const flight = blankFlight("demo-home", now);
 flight.enabled = true;
 flight.samples = Array.from({ length: 30 }, (_, i) => ({
@@ -76,6 +108,19 @@ const server = serve({
     if (path === "/api/service-routing") return Response.json({ policies: [policy] });
     if (path === "/api/flight-recorder")
       return Response.json({ recorder: flight, toolEventsAvailable: true });
+    if (path === "/api/recovery-lab") return Response.json({ runs: [rehearsal], configured: true });
+    if (path === "/api/recovery-lab/inventory")
+      return Response.json({
+        snapshots: [
+          {
+            id: "snap_demo_reviewed",
+            at: now - 3600000,
+            label: "Before upgrade",
+            version: "7.19.1",
+          },
+        ],
+        runner: { versions: [{ version: "7.20.1", architecture: "x86_64" }] },
+      });
     if (path === "/api/service-routing/inventory")
       return Response.json({
         tables: ["main", "warp"],

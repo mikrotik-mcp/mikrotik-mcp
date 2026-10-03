@@ -1,4 +1,5 @@
 export type ViewId =
+  | "recovery-lab"
   | "flight-recorder"
   | "service-routing"
   | "client-checks"
@@ -39,6 +40,11 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  {
+    id: "recovery-lab",
+    label: "Recovery Lab",
+    sub: "Rehearse portable recovery in an isolated CHR environment",
+  },
   {
     id: "flight-recorder",
     label: "Flight Recorder",
@@ -178,6 +184,7 @@ export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
       "plan",
       "service-routing",
       "router-migration",
+      "recovery-lab",
       "simulator",
       "txn",
       "snapshots",

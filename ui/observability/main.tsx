@@ -79,6 +79,7 @@ import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
 import { ServiceRoutingView } from "./service-routing";
 import { FlightRecorderView } from "./flight-recorder";
+import { RecoveryLabView } from "./recovery-lab";
 import { RoundTripView } from "./round-trip";
 import { PageBoundary } from "./page-boundary";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
@@ -181,6 +182,14 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  "recovery-lab": {
+    what: "Prepare a portable snapshot subset and rehearse it on a separately configured isolated CHR runner.",
+    tips: [
+      "Preparation stays local; explicit confirmation is required before transmitting a subset to the runner.",
+      "Unsupported scopes, secrets, scripts, Wi-Fi/ASIC behavior and binary backups are not rehearsed.",
+      "Unknown submission outcomes require polling the same run, not resubmission. Cleanup must be confirmed.",
+    ],
+  },
   "flight-recorder": {
     what: "Keep bounded local evidence before an incident, then freeze a pre/post-event window.",
     tips: [
@@ -738,6 +747,11 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       <>
         <rect x="3" y="4" width="18" height="16" rx="3" />
         <path d="M6 12h3l2-4 3 8 2-4h2" />
+      </>
+    ),
+    "recovery-lab": (
+      <>
+        <path d="M8 3h8M10 3v6l-6 10a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2L14 9V3M7 15h10" />
       </>
     ),
     "service-contracts": (
@@ -1726,6 +1740,7 @@ function App(): ReactNode {
               {view === "service-contracts" && <ServiceContractsView />}
               {view === "service-routing" && <ServiceRoutingView />}
               {view === "flight-recorder" && <FlightRecorderView />}
+              {view === "recovery-lab" && <RecoveryLabView />}
               {view === "round-trip" && <RoundTripView />}
 
               {/* ── RADIUS & User Manager ── */}

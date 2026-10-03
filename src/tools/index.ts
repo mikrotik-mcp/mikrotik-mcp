@@ -16,6 +16,7 @@ import { homeInternetTools } from "./home-internet";
 import { serviceContractTools } from "./service-contracts";
 import { serviceRoutingTools } from "./service-routing";
 import { flightRecorderTools } from "./flight-recorder";
+import { recoveryLabTools } from "./recovery-lab";
 import { roundTripTools } from "./round-trip";
 import { appViewTools } from "./app-views";
 import { backupTools } from "./backup";
@@ -232,6 +233,14 @@ export const moduleCatalog: ModuleInfo[] = [
     description:
       "Durable bounded pre/post-incident telemetry, off-router log metadata and MCP change correlation.",
     tools: flightRecorderTools,
+  },
+  {
+    label: "Recovery Lab",
+    slug: "recovery-lab",
+    group: "System & Ops",
+    description:
+      "Isolated CHR rehearsal orchestration with immutable snapshot subsets, coverage and verified runner evidence.",
+    tools: recoveryLabTools,
   },
   {
     label: "Client Investigations",

@@ -29,6 +29,7 @@ vi.mock("../../src/core/registry", () => ({
   defineTool: (tool: unknown) => tool,
   READ: {},
   WRITE: {},
+  DESTRUCTIVE: {},
 }));
 vi.mock("../../src/core/runtime", () => ({
   resolveDeviceName: (d: string) => {

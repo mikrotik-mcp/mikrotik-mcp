@@ -50,6 +50,8 @@ Then just ask:
   explicitly authorized failover, with preview, backup and Safe Mode. [Guide](docs/service-routing.md)
 - **Flight Recorder:** opt-in, durable pre/post-incident telemetry and log metadata,
   with an evidence timeline and scoped JSON export. [Guide](docs/flight-recorder.md)
+- **Recovery Lab:** reviewed portable restore/upgrade rehearsals, coverage and cleanup
+  evidence. Execution requires a separately deployed isolated CHR runner. [Guide](docs/recovery-lab.md)
 
 - **Client Check** — invite the affected phone/laptop with an expiring QR/link,
   measure browser HTTP latency, loaded latency and bounded transfers, and compare

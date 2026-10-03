@@ -112,6 +112,21 @@
       ]
     },
     {
+      "slug": "recovery-lab",
+      "label": "Recovery Lab",
+      "group": "System & Ops",
+      "description": "Isolated CHR rehearsal orchestration with immutable snapshot subsets, coverage and verified runner evidence.",
+      "alwaysOn": false,
+      "tools": [
+        "get_recovery_lab",
+        "recovery_lab_inventory",
+        "prepare_recovery_lab",
+        "start_recovery_lab",
+        "poll_recovery_lab",
+        "destroy_recovery_lab"
+      ]
+    },
+    {
       "slug": "investigations",
       "label": "Client Investigations",
       "group": "System & Ops",
@@ -2512,6 +2527,58 @@
     {
       "name": "export_network_incident",
       "module": "flight-recorder",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "get_recovery_lab",
+      "module": "recovery-lab",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "recovery_lab_inventory",
+      "module": "recovery-lab",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "prepare_recovery_lab",
+      "module": "recovery-lab",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "start_recovery_lab",
+      "module": "recovery-lab",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "poll_recovery_lab",
+      "module": "recovery-lab",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "destroy_recovery_lab",
+      "module": "recovery-lab",
       "group": "System & Ops",
       "noDevice": false,
       "requires": null,

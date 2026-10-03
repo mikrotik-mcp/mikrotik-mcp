@@ -8,6 +8,7 @@ import type { ViewId } from "./navigation";
 export const FEATURE_RELEASES: Record<ViewId, string | null> = {
   "service-routing": null,
   "flight-recorder": null,
+  "recovery-lab": null,
   "client-checks": "5.17.0",
   "router-migration": "5.17.0",
   "support-bundles": "5.17.0",
