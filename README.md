@@ -233,9 +233,9 @@ mikrotik-mcp devices        # site-a (default) · site-b
 #### Docker: one writable `devices.json` for all MCP settings
 
 Use the published **[alimaster/mikrotik-mcp](https://hub.docker.com/r/alimaster/mikrotik-mcp)**
-image (`5.19.0`, or the moving `latest` tag). Docker selects `linux/amd64` or
+image (`5.20.0`, or the moving `latest` tag). Docker selects `linux/amd64` or
 `linux/arm64` automatically; no local build is needed. Compose defaults to
-`5.19.0`; set `MIKROTIK_IMAGE_TAG` explicitly to select a different release.
+`5.20.0`; set `MIKROTIK_IMAGE_TAG` explicitly to select a different release.
 
 The Bun container reads **`/home/bun/.mikrotik-mcp/devices.json`** automatically.
 Despite its name, this is the **complete MCP configuration**, not just the router
@@ -266,13 +266,13 @@ Create a real JSON file on the host (no comments or trailing commas). For exampl
 ```
 
 ```bash
-docker pull alimaster/mikrotik-mcp:5.19.0
+docker pull alimaster/mikrotik-mcp:5.20.0
 docker run -d --name mikrotik-mcp --restart unless-stopped \
   -p 127.0.0.1:8000:8000 -p 127.0.0.1:9090:9090 \
   --mount type=volume,src=mikrotik-state,dst=/home/bun/.mikrotik-mcp \
   --mount type=bind,src=/absolute/path/devices.json,dst=/home/bun/.mikrotik-mcp/devices.json \
   --mount type=bind,src=/absolute/path/mikrotik_ed25519,dst=/run/secrets/mikrotik_key,readonly \
-  alimaster/mikrotik-mcp:5.19.0
+  alimaster/mikrotik-mcp:5.20.0
 ```
 
 Dashboard: **http://localhost:9090** · MCP: **http://localhost:8000/mcp**.
@@ -317,6 +317,8 @@ MIKROTIK_CONFIG_PATH=/absolute/path/devices.json docker compose up -d mikrotik-m
 
 See **[Docker deployment and persistence](docs/docker.md#persistent-devicesjson)**
 for directory mounts, permissions and explicit configuration overrides.
+Maintainers: follow **[Publishing to Docker Hub](docs/docker-publishing.md)** for
+version checks, native smoke tests, multi-platform push and verified `latest` promotion.
 
 Every tool gains an optional `device` argument, and **Safe Mode is per-device**:
 

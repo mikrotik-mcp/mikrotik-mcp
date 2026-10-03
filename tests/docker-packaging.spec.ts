@@ -12,7 +12,8 @@ const runtime = dockerfile.split(" AS runtime")[1];
 describe("Docker production packaging", () => {
   test("pulls the versioned Docker Hub image without an implicit local build", () => {
     const compose = read("docker-compose.yml");
-    expect(compose).toContain("image: alimaster/mikrotik-mcp:${MIKROTIK_IMAGE_TAG:-5.19.0}");
+    const { version } = JSON.parse(read("package.json")) as { version: string };
+    expect(compose).toContain(`image: alimaster/mikrotik-mcp:\${MIKROTIK_IMAGE_TAG:-${version}}`);
     expect(compose).not.toMatch(/^\s+build:/m);
     expect(compose).not.toMatch(/^\s+platform:/m);
   });
