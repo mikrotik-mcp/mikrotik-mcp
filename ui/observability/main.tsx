@@ -78,6 +78,7 @@ import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
 import { ServiceRoutingView } from "./service-routing";
+import { FlightRecorderView } from "./flight-recorder";
 import { RoundTripView } from "./round-trip";
 import { PageBoundary } from "./page-boundary";
 import { ConfigHistoryPanel, FieldGuidePanel } from "./config-panels";
@@ -180,6 +181,14 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  "flight-recorder": {
+    what: "Keep bounded local evidence before an incident, then freeze a pre/post-event window.",
+    tips: [
+      "Enable collection explicitly; it is disabled by default and never changes router configuration.",
+      "Management failures, interface transitions and CPU pressure can freeze evidence automatically.",
+      "Log metadata is SSH-polled; short events and logs may be missed. Correlation is not causation.",
+    ],
+  },
   "service-routing": {
     what: "Scope service traffic to approved exits with explicit per-family policies.",
     tips: [
@@ -723,6 +732,12 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
     "service-routing": (
       <>
         <path d="M3 6h7l4 6h7M3 18h7l4-6M18 9l3 3-3 3" />
+      </>
+    ),
+    "flight-recorder": (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <path d="M6 12h3l2-4 3 8 2-4h2" />
       </>
     ),
     "service-contracts": (
@@ -1710,6 +1725,7 @@ function App(): ReactNode {
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}
               {view === "service-routing" && <ServiceRoutingView />}
+              {view === "flight-recorder" && <FlightRecorderView />}
               {view === "round-trip" && <RoundTripView />}
 
               {/* ── RADIUS & User Manager ── */}

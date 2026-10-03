@@ -15,6 +15,7 @@ import { investigationTools } from "./investigations";
 import { homeInternetTools } from "./home-internet";
 import { serviceContractTools } from "./service-contracts";
 import { serviceRoutingTools } from "./service-routing";
+import { flightRecorderTools } from "./flight-recorder";
 import { roundTripTools } from "./round-trip";
 import { appViewTools } from "./app-views";
 import { backupTools } from "./backup";
@@ -223,6 +224,14 @@ export const moduleCatalog: ModuleInfo[] = [
     description:
       "Scoped dual-stack domain policies, router VRF service probes and explicitly authorized failover.",
     tools: serviceRoutingTools,
+  },
+  {
+    label: "Network Flight Recorder",
+    slug: "flight-recorder",
+    group: "System & Ops",
+    description:
+      "Durable bounded pre/post-incident telemetry, off-router log metadata and MCP change correlation.",
+    tools: flightRecorderTools,
   },
   {
     label: "Client Investigations",

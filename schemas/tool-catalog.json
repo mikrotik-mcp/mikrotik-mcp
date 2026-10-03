@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.19.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 946,
+  "toolCount": 950,
   "tools": [
     {
       "name": "create_client_check",
@@ -1187,6 +1187,109 @@
           }
         },
         "required": ["id", "minutes", "confirm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_flight_recorder",
+      "title": "Read Network Flight Recorder",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read bounded persistent telemetry, off-router log metadata, capture gaps and frozen incidents for this router. No active probes. Times are host receipt times; correlation never proves cause, identity or a network outage.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "configure_flight_recorder",
+      "title": "Configure Network Flight Recorder",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Explicitly enable/disable periodic read-only router collection and local retention. No router configuration writes. Stores bounded resources, interface state, classified log metadata and MCP write/failure metadata; no raw messages or credentials. Requires the MCP process to stay running. SSH polling can miss logs; not a lossless syslog service.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "intervalSeconds": {
+            "default": 60,
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 300
+          },
+          "windowMinutes": {
+            "default": 60,
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 360
+          },
+          "retentionDays": {
+            "default": 7,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          }
+        },
+        "required": ["enabled", "intervalSeconds", "windowMinutes", "retentionDays"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "freeze_network_incident",
+      "title": "Freeze Network Incident Evidence",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Preserve this router's available rolling evidence plus two minutes of future samples when recording is enabled. Local operation only. Empty history stays empty; cannot recover past logs. Maximum 30 incidents, configured age retention.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": ["title"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_network_incident",
+      "title": "Export Network Incident Evidence",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Export a device-scoped frozen incident with coverage gaps and separate router/receive timestamps. No raw logs or command bodies. Review device/interface names before sharing. Do not attribute an attack to a user based only on these observations.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"],
         "additionalProperties": false
       }
     },

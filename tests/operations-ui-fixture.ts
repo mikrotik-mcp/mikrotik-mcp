@@ -1,6 +1,28 @@
 /** Manual visual QA: synthetic data only; no router connections, database or config writes. */
 import { file, serve } from "bun";
+import { blankFlight, freezeFlight } from "../src/flight-recorder/model";
 const now = Date.now();
+const flight = blankFlight("demo-home", now);
+flight.enabled = true;
+flight.samples = Array.from({ length: 30 }, (_, i) => ({
+  at: now - (29 - i) * 60000,
+  finishedAt: now - (29 - i) * 60000,
+  reachable: i !== 19 && i !== 20,
+  cpu: i === 19 || i === 20 ? undefined : 12 + (i % 7) * 6,
+  interfaces: [],
+  gaps: i === 19 || i === 20 ? ["Management read failed; network outage is not established."] : [],
+}));
+flight.events = [
+  {
+    id: "example",
+    at: now - 10 * 60000,
+    source: "mcp",
+    title: "update_route",
+    risk: "WRITE",
+    failed: false,
+  },
+];
+freezeFlight(flight, "Management read interruption", "management", now - 8 * 60000).complete = true;
 const policy = {
   id: "00000000-0000-4000-8000-000000000001",
   device: "demo-home",
@@ -52,6 +74,8 @@ const server = serve({
         { status: 409 },
       );
     if (path === "/api/service-routing") return Response.json({ policies: [policy] });
+    if (path === "/api/flight-recorder")
+      return Response.json({ recorder: flight, toolEventsAvailable: true });
     if (path === "/api/service-routing/inventory")
       return Response.json({
         tables: ["main", "warp"],

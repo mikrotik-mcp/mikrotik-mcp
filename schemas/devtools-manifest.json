@@ -99,6 +99,19 @@
       ]
     },
     {
+      "slug": "flight-recorder",
+      "label": "Network Flight Recorder",
+      "group": "System & Ops",
+      "description": "Durable bounded pre/post-incident telemetry, off-router log metadata and MCP change correlation.",
+      "alwaysOn": false,
+      "tools": [
+        "get_flight_recorder",
+        "configure_flight_recorder",
+        "freeze_network_incident",
+        "export_network_incident"
+      ]
+    },
+    {
       "slug": "investigations",
       "label": "Client Investigations",
       "group": "System & Ops",
@@ -2463,6 +2476,42 @@
     {
       "name": "arm_service_routing",
       "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "get_flight_recorder",
+      "module": "flight-recorder",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "configure_flight_recorder",
+      "module": "flight-recorder",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "freeze_network_incident",
+      "module": "flight-recorder",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "export_network_incident",
+      "module": "flight-recorder",
       "group": "System & Ops",
       "noDevice": false,
       "requires": null,

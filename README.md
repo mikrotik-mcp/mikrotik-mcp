@@ -48,6 +48,8 @@ Then just ask:
 
 - **Service Routing:** per-family domain policies, VRF HTTPS exit checks and
   explicitly authorized failover, with preview, backup and Safe Mode. [Guide](docs/service-routing.md)
+- **Flight Recorder:** opt-in, durable pre/post-incident telemetry and log metadata,
+  with an evidence timeline and scoped JSON export. [Guide](docs/flight-recorder.md)
 
 - **Client Check** — invite the affected phone/laptop with an expiring QR/link,
   measure browser HTTP latency, loaded latency and bounded transfers, and compare

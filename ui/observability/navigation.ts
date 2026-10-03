@@ -1,4 +1,5 @@
 export type ViewId =
+  | "flight-recorder"
   | "service-routing"
   | "client-checks"
   | "router-migration"
@@ -38,6 +39,11 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  {
+    id: "flight-recorder",
+    label: "Flight Recorder",
+    sub: "Preserved evidence before, during and after an incident",
+  },
   {
     id: "service-routing",
     label: "Service Routing",
@@ -148,6 +154,7 @@ export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
     id: "investigate",
     label: "Investigate",
     views: [
+      "flight-recorder",
       "investigations",
       "client-checks",
       "support-bundles",

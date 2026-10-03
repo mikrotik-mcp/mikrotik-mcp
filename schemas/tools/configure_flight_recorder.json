@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "configure_flight_recorder",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "intervalSeconds": {
+      "default": 60,
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 300
+    },
+    "windowMinutes": {
+      "default": 60,
+      "type": "integer",
+      "minimum": 15,
+      "maximum": 360
+    },
+    "retentionDays": {
+      "default": 7,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30
+    }
+  },
+  "required": ["enabled", "intervalSeconds", "windowMinutes", "retentionDays"],
+  "additionalProperties": false
+}
