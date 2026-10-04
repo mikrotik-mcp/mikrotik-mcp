@@ -164,8 +164,8 @@ source commit, native tests and any platform limitations in the release record.
 After reviewing backups and confirming pending configuration changes:
 
 ```sh
-MIKROTIK_IMAGE_TAG=5.20.0 docker compose pull mikrotik-mcp
-MIKROTIK_IMAGE_TAG=5.20.0 docker compose up -d mikrotik-mcp
+MIKROTIK_IMAGE_TAG=5.21.0 docker compose pull mikrotik-mcp
+MIKROTIK_IMAGE_TAG=5.21.0 docker compose up -d mikrotik-mcp
 docker compose ps mikrotik-mcp
 docker compose logs --tail 50 mikrotik-mcp
 ```
@@ -200,3 +200,22 @@ and [manifest promotion](https://docs.docker.com/reference/cli/docker/buildx/ima
 - Repository gate: 2,550 tests, typecheck and lint passed. The stale MCPB manifest
   version was aligned to 5.20.0 and Compose/docs updated separately from application code.
 - No running user service was upgraded or restarted by this publication.
+
+## 5.21.0 publication record — October 4, 2026
+
+- Application source: release `5.21.0` / `8d1386c` (no application-source edits).
+- Published version: `alimaster/mikrotik-mcp:5.21.0`. `latest` was left unchanged;
+  promotion requires a separate operator confirmation.
+- Index digest: `sha256:f1926e20c4472681101b45b8abc5a1b8538533195501df424a71a534b526f58c`.
+- Registry read-back verified `linux/amd64` and `linux/arm64`, plus build attestations.
+- Local-build and pulled-digest native ARM64 checks passed: Bun 1.4.2, application
+  5.21.0, UID 1000, CLI version, healthcheck, dashboard on 9090, MCP initialization
+  and all 960 catalog tools, including OpenVPN sessions and service-routing traffic.
+  Tests used `--network none`, synthetic mounted JSON and no real router credentials.
+- Native AMD64 execution was not tested. Cross-building is not a runtime test.
+- Native ARM64 image size: 151,527,383 bytes, as reported by Docker image inspect;
+  this is the local image size, not compressed registry transfer size.
+- Repository gate: 2,755 tests, typecheck and lint passed. All 15 UI assets built;
+  the bundled observability dashboard exceeded the 2,000 kB chunk warning threshold.
+- MCPB manifest, Compose default and current Docker examples were aligned to 5.21.0.
+- No running user service was upgraded or restarted; no router settings were changed.
