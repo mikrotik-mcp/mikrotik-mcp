@@ -1,0 +1,9 @@
+{
+  "defaultDevice": "offline",
+  "devices": {
+    "offline": { "host": "127.0.0.1", "port": 1, "username": "smoke", "disabled": true }
+  },
+  "mcp": { "transport": "streamable-http", "host": "0.0.0.0", "port": 18000 },
+  "dashboard": { "enabled": true, "host": "0.0.0.0", "port": 9090 },
+  "disableUpdateCheck": true
+}

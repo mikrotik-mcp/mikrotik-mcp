@@ -5,6 +5,11 @@ ARG BUN_VERSION=1.4.2
 FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION}-alpine AS build-base
 WORKDIR /app
 
+# Prepare writable defaults on the builder too: no target-platform RUN or QEMU.
+FROM build-base AS defaults
+RUN mkdir -p /state/.mikrotik-mcp && chmod 0700 /state/.mikrotik-mcp
+COPY --chmod=0600 docker/devices.example.json /state/.mikrotik-mcp/devices.json
+
 FROM build-base AS dependencies
 # Keep Bun's catalog/peer settings and lockfile together. No Node, Git or hooks.
 COPY package.json bun.lock bunfig.toml ./
@@ -24,15 +29,16 @@ RUN bun build src/cli.ts src/index.ts --target=bun --packages=bundle \
     && bun run build:ui \
     && bun scripts/package-docker.ts /out
 
+# Intentionally NOT pinned to BUILDPLATFORM or ARM. BuildKit selects the requested
+# linux/amd64 or linux/arm64 base; Docker Desktop runs it on Windows/macOS as well.
 FROM oven/bun:${BUN_VERSION}-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     MIKROTIK_CONFIG_FILE=/home/bun/.mikrotik-mcp/devices.json
 # App files are root-owned/read-only to bun; state alone is writable/persistable.
-RUN mkdir -p /home/bun/.mikrotik-mcp && chown bun:bun /home/bun/.mikrotik-mcp
 # Defaults live in JSON, not ENV: saved settings must survive a restart unchanged.
 # Mount a writable file here, or mount its parent directory for atomic saves.
-COPY --chown=bun:bun --chmod=0600 docker/devices.example.json /home/bun/.mikrotik-mcp/devices.json
+COPY --from=defaults --chown=bun:bun /state/ /home/bun/
 COPY --from=build /out/ ./
 USER bun
 EXPOSE 8000 9090

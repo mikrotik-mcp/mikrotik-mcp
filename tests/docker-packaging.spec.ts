@@ -37,6 +37,26 @@ describe("Docker production packaging", () => {
     expect(runtime).toContain("/home/bun/.mikrotik-mcp");
   });
 
+  test("cross-builds without executing target binaries or pinning the runtime architecture", () => {
+    expect(runtime).not.toMatch(/^RUN\s/m);
+    expect(dockerfile).not.toMatch(/--platform=(?:linux\/|\$TARGETPLATFORM)/);
+    expect(runtime).toContain("COPY --from=defaults --chown=bun:bun /state/ /home/bun/");
+    expect(dockerfile).toContain("chmod 0700 /state/.mikrotik-mcp");
+    expect(dockerfile).toContain(
+      "COPY --chmod=0600 docker/devices.example.json /state/.mikrotik-mcp/devices.json",
+    );
+  });
+
+  test("checks both architectures on native CI runners without publishing", () => {
+    const workflow = read(".github/workflows/docker.yml");
+    for (const value of ["ubuntu-24.04", "ubuntu-24.04-arm", "linux/amd64", "linux/arm64"]) {
+      expect(workflow).toContain(value);
+    }
+    expect(workflow).toContain("--network none");
+    expect(workflow).toContain("check-docker-runtime.ts");
+    expect(workflow).not.toMatch(/setup-qemu|docker (?:push|login)|--push/);
+  });
+
   test("keeps offline build verification and all UI assets", () => {
     expect(dockerfile).toContain("bun run test:built");
     expect(dockerfile).toContain("bun run build:ui");
@@ -73,7 +93,7 @@ describe("Docker production packaging", () => {
     expect(defaults.dashboard).toEqual({ enabled: false, host: "0.0.0.0", port: 9090 });
     expect(runtime).not.toMatch(/MIKROTIK_(MCP|DASHBOARD)__/);
     expect(runtime).toContain("MIKROTIK_CONFIG_FILE=/home/bun/.mikrotik-mcp/devices.json");
-    expect(runtime).toContain("COPY --chown=bun:bun --chmod=0600 docker/devices.example.json");
+    expect(runtime).toContain("COPY --from=defaults --chown=bun:bun /state/ /home/bun/");
     const healthcheck = read("scripts/docker-healthcheck.ts");
     expect(healthcheck).toContain("process.env.MIKROTIK_MCP__PORT");
     expect(healthcheck).toContain("config.mcp?.port");

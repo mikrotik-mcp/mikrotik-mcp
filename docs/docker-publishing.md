@@ -95,10 +95,16 @@ docker buildx create --name mikrotik-publisher --driver docker-container --boots
 
 ## 2. Build and smoke-test natively
 
-Use `linux/arm64` on Apple Silicon/ARM Linux, or `linux/amd64` on x86 Linux.
+Select the Linux engine's native architecture, not a hardcoded ARM default.
+Ubuntu/x86 and Windows Docker Desktop on Intel/AMD use `linux/amd64`; Apple
+Silicon and ARM Linux use `linux/arm64`.
 
 ```sh
-RELEASE_PLATFORM=linux/arm64
+case "$(docker info --format '{{.Architecture}}')" in
+  x86_64|amd64) RELEASE_PLATFORM=linux/amd64 ;;
+  aarch64|arm64) RELEASE_PLATFORM=linux/arm64 ;;
+  *) echo "Unsupported Docker engine architecture"; exit 1 ;;
+esac
 docker buildx build --pull --platform "$RELEASE_PLATFORM" --load \
   --tag "$RELEASE_IMAGE:$RELEASE_VERSION-verify" .
 docker run --rm --network none "$RELEASE_IMAGE:$RELEASE_VERSION-verify" --version
@@ -118,6 +124,12 @@ For an MCP listener bound to `127.0.0.1:8000`, set the synthetic config's
 `mcp.allowedHosts` to `127.0.0.1:8000`; keep Host-header protection enabled.
 Do not reuse the running service's JSON or state volume. Health alone does not
 prove MCP protocol/catalog correctness or router connectivity.
+
+The repository's `.github/workflows/docker.yml` automates this runtime acceptance
+on **both native architectures** using `scripts/check-docker-runtime.ts` and a
+disposable JSON fixture. It builds locally on the runner without registry login
+or publication. Verify both jobs have passed for the release source; one native
+pass plus a cross-build does not imply the other architecture was executed.
 
 Repeat native smoke checks on each supported architecture where available. This
 project builds JavaScript on `BUILDPLATFORM`; a successful AMD64 cross-build on

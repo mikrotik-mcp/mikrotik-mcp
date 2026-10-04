@@ -239,6 +239,12 @@ image (`5.22.0`, or the moving `latest` tag). Docker selects `linux/amd64` or
 `linux/arm64` automatically; no local build is needed. Compose defaults to
 `5.22.0`; set `MIKROTIK_IMAGE_TAG` explicitly to select a different release.
 
+**Not ARM-only:** the same image runs on x86-64 and ARM64 Linux hosts (including
+Ubuntu), and on Windows/macOS through Docker Desktop's **Linux containers**.
+Windows users should enable the WSL2 backend; do not select Windows containers.
+See the [host compatibility and PowerShell quick start](docs/docker.md#host-compatibility)
+for platform-specific setup. Neither Compose nor the runtime is pinned to ARM.
+
 The Bun container reads **`/home/bun/.mikrotik-mcp/devices.json`** automatically.
 Despite its name, this is the **complete MCP configuration**, not just the router
 list: `mcp`, `dashboard`, `ssh`, `memory`, `tools`, `access`, `alerts`, `flows`,

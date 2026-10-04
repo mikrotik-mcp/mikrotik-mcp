@@ -1,0 +1,61 @@
+name: Docker portability
+
+on:
+  pull_request:
+  push:
+    branches: [master, main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-runtime:
+    name: Native ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            machine: x86_64
+            arch: x64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            machine: aarch64
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify native runner and build
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          MACHINE: ${{ matrix.machine }}
+        run: |
+          test "$(uname -m)" = "$MACHINE"
+          docker build --platform "$PLATFORM" --tag mikrotik-mcp:ci .
+      - name: Exercise packaged runtime without router or internet access
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          install -m 600 tests/fixtures/docker-smoke.json "$RUNNER_TEMP/mikrotik-docker-smoke.json"
+          sudo chown 1000:1000 "$RUNNER_TEMP/mikrotik-docker-smoke.json"
+          docker run -d --name mikrotik-docker-smoke --network none \
+            --mount "type=bind,src=$RUNNER_TEMP/mikrotik-docker-smoke.json,dst=/home/bun/.mikrotik-mcp/devices.json" \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/scripts/check-docker-runtime.ts,dst=/tmp/check-docker-runtime.ts,readonly" \
+            mikrotik-mcp:ci
+          for attempt in $(seq 1 60); do
+            if docker exec mikrotik-docker-smoke bun --no-env-file dist/docker-healthcheck.js; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec mikrotik-docker-smoke bun --no-env-file dist/docker-healthcheck.js
+          docker exec mikrotik-docker-smoke bun --no-env-file /tmp/check-docker-runtime.ts "$ARCH"
+      - name: Container diagnostics
+        if: failure()
+        run: docker logs --tail 100 mikrotik-docker-smoke
+      - name: Remove only this job's smoke container
+        if: always()
+        run: docker rm -f mikrotik-docker-smoke || true

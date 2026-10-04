@@ -17,6 +17,70 @@ It requires an existing writable `devices.json`, runs HTTP by default and includ
 (a Cloudflare tunnel) — see [Deploying to ChatGPT Apps](#deploying-to-chatgpt-apps).
 The sections below explain the pieces it wires up.
 
+## Host compatibility
+
+This is a **multi-architecture Linux image**, not an ARM-only image. Docker selects
+the variant matching its Linux engine. The Alpine filesystem inside the image
+does not require Alpine on the host: Ubuntu, Debian and other Linux distributions
+run the same image.
+
+| Host                                                            | Container engine                               | Image variant                 |
+| --------------------------------------------------------------- | ---------------------------------------------- | ----------------------------- |
+| Ubuntu / Debian / Fedora and other supported x86-64 Linux hosts | Docker Engine + Compose v2                     | `linux/amd64`                 |
+| ARM64 Linux, including 64-bit Raspberry Pi OS                   | Docker Engine + Compose v2                     | `linux/arm64`                 |
+| Windows x86-64                                                  | Docker Desktop, WSL2 backend, Linux containers | `linux/amd64`                 |
+| macOS on Intel / Apple Silicon                                  | Docker Desktop                                 | `linux/amd64` / `linux/arm64` |
+
+Windows-on-ARM requires a compatible Docker Desktop ARM release and Linux backend;
+its host support follows Docker's support policy. Native Windows containers,
+32-bit x86 and 32-bit ARM are not image targets. Windows Server needs a supported
+Linux VM/engine; installing this image does not turn it into a Windows container.
+See [Docker's multi-platform model](https://docs.docker.com/build/building/multi-platform/)
+and [Windows installation requirements](https://docs.docker.com/desktop/setup/install/windows-install/).
+
+Check the **engine**, not the host terminal's OS:
+
+```sh
+docker info --format '{{.OSType}}/{{.Architecture}}'
+docker buildx imagetools inspect alimaster/mikrotik-mcp:5.22.0
+```
+
+The engine should report `linux/x86_64` or `linux/aarch64` (some versions use
+`amd64` / `arm64`). Do not force `platform: linux/arm64` on an Intel/AMD machine,
+or globally override `DOCKER_DEFAULT_PLATFORM`. Compose intentionally has no
+`platform` setting. It also avoids host-network mode for Desktop compatibility.
+
+### Windows PowerShell quick start
+
+Install/start Docker Desktop with its WSL2 backend and **Linux containers**, then
+run these commands from this repository's directory in PowerShell:
+
+```powershell
+if (-not (Test-Path -LiteralPath .\devices.json)) {
+  Copy-Item .\docker\devices.example.json .\devices.json
+}
+notepad .\devices.json
+# Configure your devices and set dashboard.enabled to true before starting.
+docker compose pull mikrotik-mcp
+docker compose up -d mikrotik-mcp
+docker compose ps mikrotik-mcp
+```
+
+Dashboard: **http://localhost:9090**; MCP: **http://localhost:8000/mcp**.
+The existing JSON is never overwritten by the copy step. Keep it UTF-8 and mount
+SSH keys separately; a Windows key path in JSON is not a container path. For a
+different configuration file, set `$env:MIKROTIK_CONFIG_PATH = 'C:/path/devices.json'`
+before `docker compose up`; quote paths containing spaces. Named volumes keep
+SQLite databases on the Linux filesystem and survive container recreation.
+
+### Linux and macOS
+
+Use the shell quick start at the top of this page. On Linux, ensure container UID
+1000 can read/write the mounted JSON while preserving restrictive permissions;
+see [Persistent devices.json](#persistent-devicesjson). On Docker Desktop, ensure
+the source file's directory is shared with Docker. No host installation of Bun
+or Node.js is required when using the published image.
+
 ## Published image
 
 Docker Hub: **[alimaster/mikrotik-mcp](https://hub.docker.com/r/alimaster/mikrotik-mcp)**.
@@ -58,12 +122,33 @@ To deliberately test a newer version, use `--build-arg BUN_VERSION=x.y.z`.
 The builder runs on `BUILDPLATFORM` and produces architecture-independent
 JavaScript and HTML; the final Bun image uses the requested target platform.
 This avoids QEMU/JSC failures during cross-platform builds. No `.node` binaries
-are copied from the builder. To publish both supported architectures, use
+are copied from the builder. Even the private state directory and default JSON
+are prepared on `BUILDPLATFORM`: the final stage contains no `RUN`, so assembling
+the other architecture never executes its binaries. The state directory is
+owned by `bun` with mode `0700`; the seed JSON is `0600`.
+To publish both supported architectures, use
 `docker buildx build --platform linux/amd64,linux/arm64` with your desired output.
 Run the resulting image on matching hardware: Bun 1.4.2's x64 JavaScriptCore was
 observed aborting with `MemoryExhaustion` under QEMU on an ARM Docker Desktop host.
 Successful cross-building is not a native amd64 runtime validation; do not
 disable production JIT or skip verification to hide an emulation failure.
+
+For a local build on any supported host, `docker build -t mikrotik-mcp:local .`
+uses the engine's native architecture. For a two-architecture build without
+publishing, use a multi-platform-capable Buildx builder and an OCI output:
+
+```sh
+docker buildx build --platform linux/amd64,linux/arm64 --output type=oci,dest=mikrotik-mcp.oci.tar .
+```
+
+The `Docker portability` GitHub workflow builds and smoke-tests separately on
+native Ubuntu x86-64 and ARM64 runners (no QEMU). It checks the packaged Bun and
+MCP versions, non-root UID, healthcheck, dashboard HTML, MCP initialization and
+tool pagination, and a writable disposable JSON mount. The MCP port is changed
+in that fixture to verify that the healthcheck follows JSON settings. Containers
+have `--network none`, no real device credentials, and no published ports. This
+does not claim a Windows Desktop end-to-end test or verify live router access;
+CI results must pass before claiming native validation of a release.
 
 The multi-stage build installs the frozen lockfile with the repository's Bun
 settings, then uses Bun's bundler to minify the CLI and bundle ordinary runtime
