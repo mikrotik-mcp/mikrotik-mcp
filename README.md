@@ -445,6 +445,13 @@ and last-seen.
 
 **RADIUS & User Manager.** Servers, sessions, profiles, limitations and vouchers.
 
+In **Users → Edit → Service profile**, keep the current profile or choose another
+profile on the selected router. Saving reuses an eligible assignment (or creates
+one), activates it and verifies the result. Previous assignments and accounting
+history are preserved; queued profiles can still take over after expiry. Existing
+connections may need to reconnect to receive new limits. No session is forcibly
+disconnected. If a save cannot be confirmed, check **Assignments** before retrying.
+
 Reports & insights collects accounting in the background and shows verified-session
 progress on the first visit. Complete snapshots are saved privately alongside the
 dashboard database in `<dashboard.dbPath>.um-reports/` and restored after restart

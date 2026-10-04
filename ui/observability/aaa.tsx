@@ -31,6 +31,7 @@ import { UmReports } from "./um-reports";
 import { bytes, clock } from "./format";
 import { generateUserPassword, UserCreatedDialog } from "./aaa-user-credentials";
 import type { CreatedUserReceipt } from "./aaa-user-credentials";
+import { UserProfileField } from "./aaa-user-profile";
 import type { OpResult } from "../../src/tools/aaa-data";
 import type { UmUserCounters } from "../../src/observability/um-reports";
 
@@ -152,106 +153,6 @@ function connectionTime(seconds: number): string {
   return `${days ? `${days}d ` : ""}${[Math.floor(whole / 3600) % 24, Math.floor(whole / 60) % 60, whole % 60].map((v) => String(v).padStart(2, "0")).join(":")}`;
 }
 
-/** Fetch only while creating a user; profiles belong to the currently selected router. */
-function InitialProfileField({
-  device,
-  value,
-  onChange,
-  disabled,
-}: {
-  device: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled: boolean;
-}): ReactNode {
-  const [profiles, setProfiles] = useState<Row[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    const q = device ? `?device=${encodeURIComponent(device)}` : "";
-    void api<AaaList>(`/api/aaa/list/um-profiles${q}`, controller.signal)
-      .then((result) => {
-        if (controller.signal.aborted) return;
-        if (!result.available)
-          throw new Error("User Manager profiles are unavailable on this device.");
-        setProfiles(result.rows.filter((row) => row.name));
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted)
-          setError(e instanceof Error ? e.message : "Unable to load profiles.");
-      });
-    return () => controller.abort();
-  }, [device, attempt]);
-  const selected = profiles?.find((row) => row.name === value);
-  return (
-    <div className="mb-3.5 grid gap-3 rounded-lg border border-brand/25 bg-brand/5 p-3.5 sm:grid-cols-2">
-      <div>
-        <div className="text-sm font-medium">
-          Initial profile <span className="font-normal text-muted-foreground">· optional</span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Assign a service profile as part of creating this user.
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Profile rules apply when User Manager’s “Use profiles” setting is enabled.
-        </p>
-      </div>
-      <div className="flex min-w-0 flex-col gap-2">
-        <Select
-          aria-label="Initial profile"
-          className="w-full"
-          value={value}
-          onValueChange={onChange}
-          disabled={disabled || profiles === null || !!error}
-          options={[
-            {
-              value: "",
-              label: !profiles && !error ? "Loading profiles…" : "No profile — assign later",
-            },
-            ...(profiles ?? []).map((row) => ({ value: row.name, label: row.name })),
-          ]}
-        />
-        {error ? (
-          <div className="text-xs text-destructive" role="alert">
-            {error}
-            <Button
-              size="sm"
-              ghost
-              disabled={disabled}
-              onClick={() => {
-                setProfiles(null);
-                setError(null);
-                setAttempt((n) => n + 1);
-              }}
-              className="mt-2"
-            >
-              Retry profiles
-            </Button>
-          </div>
-        ) : profiles?.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            No profiles yet. Create one in the Profiles tab, or continue without one.
-          </p>
-        ) : selected ? (
-          <p className="text-xs text-muted-foreground">
-            {selected.validity && <>Validity: {selected.validity} · </>}
-            {selected["starts-when"] === "first-auth"
-              ? "Starts on first authentication"
-              : selected["starts-when"] === "assigned"
-                ? "Starts immediately when assigned"
-                : "Uses the profile’s activation settings"}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Existing users and profiles are not changed.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── one CRUD entity (table + inline add/edit form) ───────────────────────────
 function EntityManager({ config, device }: { config: EntityConfig; device: string }): ReactNode {
   const showCounters = config.slug === "um-users";
@@ -264,6 +165,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<Row>({});
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
   const [createdUser, setCreatedUser] = useState<CreatedUserReceipt | null>(null);
   const [cloneNotice, setCloneNotice] = useState("");
   const addButton = useRef<HTMLButtonElement>(null);
@@ -350,7 +252,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
           setCloneNotice("");
         }
         if (!r.ok) {
-          if (r.created) {
+          if (r.created || r.reviewRequired) {
             setEditing(null);
             setForm({});
             await load();
@@ -360,7 +262,9 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
           return false;
         }
         await load();
-        toast.success(path === "add" && config.slug === "um-users" ? r.message : label);
+        toast.success(
+          (path === "add" || path === "update") && config.slug === "um-users" ? r.message : label,
+        );
         return true;
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -436,6 +340,10 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
   };
 
   const save = async (): Promise<void> => {
+    if (showCounters && form.profile && !profileReady) {
+      setError("Wait for profiles to load or retry before saving a profile change.");
+      return;
+    }
     if (showCounters && editing === "new" && (!form.name?.trim() || !form.password)) {
       setError("Enter a name and password for the new user.");
       return;
@@ -559,12 +467,14 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
               {cloneNotice}
             </Note>
           )}
-          {editing === "new" && config.slug === "um-users" && (
-            <InitialProfileField
-              key={device}
+          {config.slug === "um-users" && (
+            <UserProfileField
+              key={`${device}:${editing}`}
               device={device}
+              user={editing === "new" ? undefined : editing}
               value={form.profile ?? ""}
               onChange={(profile) => setForm((current) => ({ ...current, profile }))}
+              onReadyChange={setProfileReady}
               disabled={busy}
             />
           )}
@@ -672,7 +582,13 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
             )}
           </div>
           <div className={FORM_ACTIONS}>
-            <Button size="sm" type="accent" loading={busy} onClick={() => void save()}>
+            <Button
+              size="sm"
+              type="accent"
+              loading={busy}
+              disabled={showCounters && !!form.profile && !profileReady}
+              onClick={() => void save()}
+            >
               {editing === "new" ? "Create" : "Save"}
             </Button>
             <Button

@@ -16,6 +16,7 @@ import { executeMikrotikCommand } from "../core/connector";
 import type { ToolContext } from "../core/context";
 import { commandUnsupported, isEmpty, looksLikeError, quoteValue, Cmd } from "../core/routeros";
 import { parseKeyValues, parseRecords } from "../core/routeros-parse";
+import { updateUmUserWithProfile } from "./um-user-profile";
 
 export const UM_NOT_AVAILABLE =
   "User Manager is not available on this device (the user-manager package is not installed).";
@@ -29,6 +30,8 @@ export interface OpResult {
   message: string;
   /** User exists, but its requested initial profile could not be confirmed. Do not retry creation. */
   created?: boolean;
+  /** A multi-step edit may have applied. Refresh instead of blindly resubmitting the draft. */
+  reviewRequired?: boolean;
 }
 
 /** A read returning rows plus whether the backing package/menu is available. */
@@ -299,6 +302,8 @@ export async function updateAaaEntity(
   const entity = entityFor(slug);
   if (entity.readonly) return { ok: false, message: `${slug} is read-only.` };
   const pairs = pickFields(entity, fields);
+  if (slug === "um-users" && fields.profile !== undefined && fields.profile !== "")
+    return updateUmUserWithProfile(ctx, id, fields.profile, pairs);
   if (pairs.length === 0) return { ok: false, message: "No updates supplied." };
   const cmd = applyFields(new Cmd(`/${entity.menu} set ${findClause(entity, id)}`), pairs).build();
   const out = await executeMikrotikCommand(cmd, ctx);

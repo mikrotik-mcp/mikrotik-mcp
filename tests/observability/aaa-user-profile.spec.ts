@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   profileMode = "ok";
-  assignments = [{ user: "existing", profile: "Monthly" }];
+  assignments = [{ ".id": "*1", user: "existing", profile: "Monthly", state: "running-active" }];
   vi.mocked(api).mockImplementation(async (path) => {
     if (path === "/api/devices")
       return { defaultDevice: "home", devices: [{ name: "home" }, { name: "remote" }] };
@@ -33,7 +33,10 @@ beforeEach(() => {
         rows:
           profileMode === "empty"
             ? []
-            : [{ name: "Monthly", validity: "30d", "starts-when": "first-auth" }],
+            : [
+                { name: "Monthly", validity: "30d", "starts-when": "first-auth" },
+                { name: "10M-Standard", validity: "unlimited", "starts-when": "first-auth" },
+              ],
       };
     }
     if (path.startsWith("/api/aaa/list/um-user-profiles"))
@@ -363,4 +366,141 @@ test("keeps duplicate settings editable when profile lookup fails", async () => 
   expect(host.textContent).toContain("Profile assignments could not be read");
   expect(button("Create").disabled).toBe(false);
   expect(host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!.value).toBe("");
+});
+
+test("edits the user's active service profile with a clear preview and an explicit save", async () => {
+  await open();
+  await click(button("Cancel"));
+  await click(button("Edit"));
+  expect(host.querySelector('[aria-label="Service profile"]')?.textContent).toContain(
+    "Keep current · Monthly",
+  );
+  expect(host.textContent).toContain("Current");
+  await choose("Service profile", "10M-Standard");
+  expect(host.textContent).toContain("Previous assignments and history are kept");
+  expect(host.textContent).toContain("Existing connections may need to reconnect");
+  expect(postJson).not.toHaveBeenCalled();
+  await click(button("Save"));
+  expect(postJson).toHaveBeenCalledExactlyOnceWith("/api/aaa/update", {
+    device: "home",
+    slug: "um-users",
+    id: "existing",
+    fields: {
+      name: "existing",
+      group: "default",
+      "shared-users": "2",
+      comment: "A template",
+      disabled: "no",
+      profile: "10M-Standard",
+    },
+  });
+  expect(host.querySelector('[aria-label="Service profile"]')).toBeNull();
+});
+
+test("saving other user fields leaves profiles untouched and selecting the current one is a no-op", async () => {
+  await open();
+  await click(button("Cancel"));
+  await click(button("Edit"));
+  await click(button("Save"));
+  expect(vi.mocked(postJson).mock.calls[0][1]).not.toHaveProperty("fields.profile");
+  await click(button("Edit"));
+  await choose("Service profile", "10M-Standard");
+  await choose("Service profile", "Monthly");
+  await click(button("Save"));
+  expect(vi.mocked(postJson).mock.calls[1][1]).toHaveProperty("fields.profile", "");
+});
+
+test("profile lookup failure preserves editable user fields and retry restores the picker", async () => {
+  profileMode = "error";
+  await open();
+  await click(button("Cancel"));
+  await click(button("Edit"));
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="Service profile"]')!.disabled).toBe(
+    true,
+  );
+  expect(button("Save").disabled).toBe(false);
+  await fill("Comment", "Keep my draft");
+  profileMode = "ok";
+  await click(button("Retry profiles"));
+  await choose("Service profile", "10M-Standard");
+  await click(button("Save"));
+  expect(vi.mocked(postJson).mock.calls[0][1]).toMatchObject({
+    fields: { profile: "10M-Standard", comment: "Keep my draft" },
+  });
+});
+
+test("no assignment and queued or expired assignments are not mislabeled as active", async () => {
+  assignments = [];
+  await open();
+  await click(button("Cancel"));
+  await click(button("Edit"));
+  expect(host.textContent).toContain("No active profile");
+  await click(button("Cancel"));
+  assignments = [
+    { user: "existing", profile: "Monthly", state: "used" },
+    { user: "existing", profile: "10M-Standard", state: "running" },
+  ];
+  await click(button("Edit"));
+  expect(host.textContent).toContain("No active profile");
+  expect(host.textContent).toContain("2 assignments retained");
+  await choose("Service profile", "10M-Standard");
+  await click(button("Save"));
+  expect(vi.mocked(postJson).mock.calls[0][1]).toHaveProperty("fields.profile", "10M-Standard");
+});
+
+test("ambiguous active profiles cannot be changed accidentally", async () => {
+  assignments.push({ user: "existing", profile: "10M-Standard", state: "running-active" });
+  await open();
+  await click(button("Cancel"));
+  await click(button("Edit"));
+  expect(host.textContent).toContain("Multiple active profiles");
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="Service profile"]')!.disabled).toBe(
+    true,
+  );
+  await click(button("Save"));
+  expect(vi.mocked(postJson).mock.calls[0][1]).not.toHaveProperty("fields.profile");
+});
+
+test("partial edits refresh and close the draft without encouraging a blind replay", async () => {
+  await open();
+  await click(button("Cancel"));
+  await click(button("Edit"));
+  await choose("Service profile", "10M-Standard");
+  vi.mocked(postJson).mockResolvedValueOnce({
+    ok: false,
+    reviewRequired: true,
+    message: "Save unconfirmed; check Assignments before retrying.",
+  });
+  await click(button("Save"));
+  expect(host.querySelector('[aria-label="Service profile"]')).toBeNull();
+  expect(host.textContent).toContain("Save unconfirmed; check Assignments");
+  expect(postJson).toHaveBeenCalledTimes(1);
+  expect(toast.success).not.toHaveBeenCalled();
+});
+
+test("changing routers aborts a pending edit-profile lookup and clears the draft", async () => {
+  await open();
+  await click(button("Cancel"));
+  const original = vi.mocked(api).getMockImplementation()!;
+  let resolve!: (value: unknown) => void;
+  let signal: AbortSignal | undefined;
+  vi.mocked(api).mockImplementation((path, abort) => {
+    if (path.startsWith("/api/aaa/list/um-user-profiles")) {
+      signal = abort;
+      return new Promise((done) => {
+        resolve = done;
+      });
+    }
+    return original(path, abort);
+  });
+  await click(button("Edit"));
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="Service profile"]')!.disabled).toBe(
+    true,
+  );
+  await choose("Router", "remote");
+  expect(signal?.aborted).toBe(true);
+  await act(async () => resolve({ available: true, rows: assignments }));
+  await click(button("Users"));
+  expect(host.querySelector('[aria-label="Service profile"]')).toBeNull();
+  expect(postJson).not.toHaveBeenCalled();
 });
