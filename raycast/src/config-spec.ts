@@ -614,7 +614,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
   },
   {
     id: "serviceProbes", title: "Service Probes", icon: "🩺", kind: "object", path: "serviceProbes",
-    blurb: "MCP-host service checks. Approve target host/IP ranges and scheduled contract IDs in the JSON editor; no destinations are allowed by default.",
+    blurb: "Approve service checks and host/IP ranges in the dashboard Service Probes editor or JSON. Scheduled contract IDs are managed in JSON; no destinations are allowed by default.",
     fields: [{ key: "timeoutMs", label: "Probe deadline (ms)", type: "number", placeholder: "5000", help: "100–10000 ms per DNS plus connection check. Targets and enrollment are administrator-owned." }],
   },
   {

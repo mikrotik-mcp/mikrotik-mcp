@@ -18,6 +18,8 @@ const routing: Record<string, string> = {
   "POST /api/flight-recorder/export": "export_network_incident",
   "GET /api/service-routing": "list_service_routing",
   "GET /api/service-routing/inventory": "service_routing_inventory",
+  "GET /api/service-routing/addresses": "service_routing_address_page",
+  "GET /api/service-routing/traffic": "service_routing_traffic",
   "POST /api/service-routing": "create_service_routing",
   "POST /api/service-routing/probe": "probe_service_routing",
   "POST /api/service-routing/preview": "preview_service_routing",
@@ -36,7 +38,17 @@ export async function operationsRoutes(req: Request, url: URL): Promise<Response
   );
   if (!tool) return Response.json({ error: "Unsupported workspace operation" }, { status: 405 });
   try {
-    const input = req.method === "POST" ? JSON.parse(await readOperationBody(req)) : {};
+    const input =
+      req.method === "POST"
+        ? JSON.parse(await readOperationBody(req))
+        : url.pathname === "/api/service-routing/addresses"
+          ? {
+              family: url.searchParams.get("family"),
+              offset: Number(url.searchParams.get("offset") ?? "0"),
+            }
+          : url.pathname === "/api/service-routing/traffic"
+            ? { id: url.searchParams.get("id") }
+            : {};
     const device = url.searchParams.get("device");
     if (!device) throw new DashboardInputError(400, "Select an explicit router first.");
     const result = await tool.handler(

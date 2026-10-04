@@ -6,6 +6,7 @@ import {
   applyRouting,
   armRouting,
   probeRouting,
+  routingTraffic,
 } from "../../src/service-routing/service";
 import { operationsRoutes } from "../../src/observability/operations-routes";
 import { parseRecords } from "../../src/core/routeros-parse";
@@ -17,6 +18,7 @@ const mock = vi.hoisted(() => ({
   readOnly: false,
   rules: [] as Record<string, string>[],
   addresses: [] as Record<string, string>[],
+  dns: [] as Record<string, string>[],
   commands: [] as string[],
   fail: false,
   commitOk: true,
@@ -32,6 +34,7 @@ vi.mock("../../src/core/registry", () => ({
   DESTRUCTIVE: {},
 }));
 vi.mock("../../src/core/runtime", () => ({
+  onConfigChanged: () => {},
   resolveDeviceName: (d: string) => {
     if (!["lab", "other"].includes(d)) throw new Error("Unknown router");
     return d;
@@ -74,8 +77,12 @@ vi.mock("../../src/operations/store", () => ({
     unlock: (d: string) => mock.locks.delete(d),
   }),
 }));
-vi.mock("../../src/home/read", () => ({
-  rows: async (path: string) => {
+vi.mock("../../src/service-routing/read", () => ({
+  readRoutingAddressPage: async () => ({
+    rows: structuredClone(mock.addresses),
+    total: mock.addresses.length,
+  }),
+  readRoutingRows: async (path: string) => {
     if (path === "/routing table")
       return [
         { name: "main", fib: "yes" },
@@ -86,20 +93,27 @@ vi.mock("../../src/home/read", () => ({
         "routing-table": t,
         "dst-address": "0.0.0.0/0",
         active: "yes",
+        gateway: "192.0.2.1",
       }));
     if (path.endsWith("mangle")) return structuredClone(mock.rules);
     if (path.endsWith("address-list")) return structuredClone(mock.addresses);
     if (path === "/ip vrf") return [{ name: "main" }];
+    if (path === "/ip dns static") return structuredClone(mock.dns);
     return [];
   },
+}));
+vi.mock("../../src/home/read", () => ({
   checkedRead: async (command: string) => {
     mock.commands.push(command);
+    if (command.includes("get version")) return "7.24.2 (stable)";
+    if (command.includes("get allow-remote-requests")) return "true";
     if (command.includes("count-only")) return "0";
     if (command.includes(" add")) {
       if (mock.fail) throw new Error("Lost SSH response");
       if (command.includes("mangle")) mock.rules.push(parseRecords(`0 ${command}`).rows[0]);
-      if (command.includes("address-list"))
+      if (/^\/(ip|ipv6) firewall address-list/.test(command))
         mock.addresses.push(parseRecords(`0 ${command}`).rows[0]);
+      if (command.startsWith("/ip dns static")) mock.dns.push(parseRecords(`0 ${command}`).rows[0]);
     }
     return "";
   },
@@ -133,6 +147,7 @@ beforeEach(() => {
   mock.locks.clear();
   mock.rules = [];
   mock.addresses = [];
+  mock.dns = [];
   mock.commands = [];
   mock.readOnly = false;
   mock.fail = false;
@@ -140,6 +155,66 @@ beforeEach(() => {
   mock.commit.mockResolvedValue({ ok: true });
 });
 describe("service routing lifecycle", () => {
+  it("creates manual domain drafts without sending a probe and denies unapproved/mismatched probe hosts", async () => {
+    const p = await createRouting({ ...input, target: undefined, domain: "API.Example.com" }, ctx);
+    expect(p.host).toBe("api.example.com");
+    expect(mock.commands).toHaveLength(0);
+    await expect(probeRouting(p.id, ctx)).rejects.toThrow(/manual domain/);
+    await expect(armRouting(p.id, 30, true, ctx)).rejects.toThrow(/probe/);
+    await expect(createRouting({ ...input, domain: "other.com" }, ctx)).rejects.toThrow(
+      /must match/,
+    );
+    await expect(
+      createRouting({ ...input, domain: "*.example.com", dnsLearningConfirmed: true }, ctx),
+    ).rejects.toThrow(/must match/);
+  });
+  it("previews and verifies a wildcard DNS learner without broadening DNS settings", async () => {
+    const p = await createRouting(
+      { ...input, target: undefined, domain: "*.example.com", dnsLearningConfirmed: true },
+      ctx,
+    );
+    const plan = await previewRouting(p.id, "main", false, ctx);
+    expect(plan.plan?.warnings?.join(" ")).toContain("adlists");
+    const applied = await applyRouting(p.id, plan.plan!.id, true, ctx);
+    expect(applied.state).toBe("active");
+    expect(mock.dns).toHaveLength(1);
+    expect(mock.commands.some((c) => c.includes("/ip dns set"))).toBe(false);
+  });
+  it("serves scoped read-only traffic with no SSH for drafts and validates API IDs", async () => {
+    const p = await createRouting({ ...input, domain: "example.com" }, ctx);
+    mock.readOnly = true;
+    expect((await routingTraffic(p.id, ctx)).state).toBe("inactive");
+    await expect(routingTraffic(p.id, { ...ctx, device: "other" })).rejects.toThrow(/not found/);
+    const url = new URL(`http://localhost/api/service-routing/traffic?device=lab&id=${p.id}`);
+    expect((await operationsRoutes(new Request(url), url))?.status).toBe(200);
+    url.searchParams.set("id", "bad");
+    expect((await operationsRoutes(new Request(url), url))?.status).toBe(400);
+    expect(mock.commands).toHaveLength(0);
+  });
+  it("exposes read-only address pages with explicit device and validated pagination", async () => {
+    mock.readOnly = true;
+    for (const [query, status] of [
+      ["device=lab&family=ipv4&offset=0", 200],
+      ["device=other&family=ipv6&offset=200", 200],
+      ["device=unknown&family=ipv4", 400],
+      ["family=ipv4", 400],
+      ["device=lab&family=wrong", 400],
+      ["device=lab&family=ipv4&offset=-1", 400],
+      ["device=lab&family=ipv4&offset=NaN", 400],
+    ] as const) {
+      const url = new URL(`http://localhost/api/service-routing/addresses?${query}`);
+      const response = await operationsRoutes(new Request(url), url);
+      expect(response?.status).toBe(status);
+      if (status === 200)
+        expect(await response!.json()).toMatchObject({
+          device: url.searchParams.get("device"),
+          family: url.searchParams.get("family"),
+          rows: [],
+          total: 0,
+        });
+    }
+    expect(mock.commands).toHaveLength(0);
+  });
   it("creates only local drafts and keeps ownership isolated", async () => {
     const p = await createRouting(input, ctx);
     expect(mock.commands).toHaveLength(0);

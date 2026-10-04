@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "service_routing_address_page",
+  "type": "object",
+  "properties": {
+    "family": {
+      "type": "string",
+      "enum": ["ipv4", "ipv6"]
+    },
+    "offset": {
+      "default": 0,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    }
+  },
+  "required": ["family", "offset"],
+  "additionalProperties": false
+}

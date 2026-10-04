@@ -42,6 +42,26 @@ const current = {
   },
 };
 
+test("probe-only saves cannot overwrite other live server settings or device credentials", () => {
+  const live = {
+    ...current,
+    readOnly: true,
+    serviceProbes: { targets: {}, timeoutMs: 5000, scheduled: {} },
+  };
+  const stale = {
+    ...live,
+    readOnly: false,
+    devices: {},
+    dashboard: { token: "old" },
+    serviceProbes: { ...live.serviceProbes, timeoutMs: 2500 },
+  };
+  const merged = mergeConfigDraft(scopeConfigDraft(stale, live, "serviceProbes"), live);
+  expect(merged).toEqual({ ...live, serviceProbes: stale.serviceProbes });
+  expect(selectConfigScope(stale, "serviceProbes")).toEqual({ serviceProbes: stale.serviceProbes });
+  for (const invalid of [null, false, "", []])
+    expect(scopeConfigDraft(invalid, live, "serviceProbes")).toBe(invalid);
+});
+
 test("scoped saves preserve the other editor's latest state, including secrets", () => {
   const stale = redact(current) as Record<string, unknown>;
   const live = {

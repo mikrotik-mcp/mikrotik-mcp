@@ -91,6 +91,8 @@
       "tools": [
         "list_service_routing",
         "service_routing_inventory",
+        "service_routing_address_page",
+        "service_routing_traffic",
         "create_service_routing",
         "probe_service_routing",
         "preview_service_routing",
@@ -2450,6 +2452,22 @@
     },
     {
       "name": "service_routing_inventory",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "service_routing_address_page",
+      "module": "service-routing",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "service_routing_traffic",
       "module": "service-routing",
       "group": "System & Ops",
       "noDevice": false,

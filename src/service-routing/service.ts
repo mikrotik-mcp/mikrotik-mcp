@@ -6,7 +6,9 @@ import type { ToolContext } from "../core/context";
 import { getConfig, resolveDeviceName } from "../core/runtime";
 import { assertDeviceAccess } from "../core/scoped-access";
 import { executeMikrotikCommand } from "../core/connector";
-import { rows, checkedRead } from "../home/read";
+import { checkedRead } from "../home/read";
+import { readRoutingRows as rows, readRoutingAddressPage } from "./read";
+import { routerRoutingInventory } from "./inventory";
 import { captureSnapshot } from "../snapshots/capture";
 import { getSafeModeManager } from "../ssh/safe-mode";
 import { addressAllowed } from "../service-contracts/model";
@@ -22,6 +24,8 @@ import {
   chooseExit,
 } from "./model";
 import type { RoutingPolicy, RoutingFacts, PathSample } from "./model";
+import { domainMatches, isWildcard } from "./domain";
+import { readPolicyTraffic } from "./traffic";
 
 const kind = "service-routing";
 function access(ctx: ToolContext, tool: string, write = false): string {
@@ -51,9 +55,11 @@ function save(policy: RoutingPolicy, message?: string): Promise<void> {
   return operationsStore().then((store) => store.put(kind, policy));
 }
 export async function routingInventory(ctx: ToolContext) {
-  access(ctx, "service_routing_inventory");
-  const tables = await rows("/routing table", "name,fib,disabled", ctx);
+  const device = access(ctx, "service_routing_inventory");
+  const snapshot = await routerRoutingInventory.read(device, ctx);
+  const tables = snapshot.sections.tables.rows;
   return {
+    ...snapshot,
     tables: tables.filter((r) => enabled(r) && ["yes", "true"].includes(r.fib)).map((r) => r.name),
     targets: Object.entries(getConfig().serviceProbes.targets)
       .filter(([, t]) => t.kind === "https")
@@ -64,19 +70,44 @@ export async function listRouting(ctx: ToolContext) {
   const device = access(ctx, "list_service_routing");
   return { policies: (await operationsStore()).list<RoutingPolicy>(kind, device) };
 }
+export async function routingAddressPage(
+  family: "ipv4" | "ipv6",
+  offset: number,
+  ctx: ToolContext,
+) {
+  const device = access(ctx, "service_routing_address_page");
+  return {
+    device,
+    family,
+    offset,
+    ...(await readRoutingAddressPage(
+      `${routingPath(family)} address-list`,
+      { ...ctx, device },
+      offset,
+    )),
+  };
+}
 export async function createRouting(input: unknown, ctx: ToolContext) {
   const device = access(ctx, "create_service_routing", true),
     a = routingInput.parse(input);
-  const target = getConfig().serviceProbes.targets[a.target];
-  if (!target || target.kind !== "https")
+  const target = a.target ? getConfig().serviceProbes.targets[a.target] : undefined;
+  if (a.target && (!target || target.kind !== "https"))
     throw new Error("Select an administrator-approved HTTPS probe alias first.");
+  // Legacy approved targets may also use an IP literal; domain drafts use the stricter DNS schema.
+  const host = a.domain ?? target?.host.toLowerCase();
+  if (!host) throw new Error("Enter a domain or choose an approved service.");
+  if (target && !domainMatches(host, target.host))
+    throw new Error(
+      "The approved probe hostname must match the exact domain or its wildcard subdomains.",
+    );
   const store = await operationsStore();
   if (store.list(kind, device).length >= 100) throw new Error("Router policy limit reached (100).");
   const policy: RoutingPolicy = {
     ...a,
     id: randomUUID(),
     device,
-    host: target.host,
+    host,
+    probeHost: target?.host,
     updatedAt: Date.now(),
     state: "draft",
     samples: [],
@@ -85,20 +116,20 @@ export async function createRouting(input: unknown, ctx: ToolContext) {
   await save(policy, "Draft saved. No router changes or probes yet.");
   return policy;
 }
+export async function routingTraffic(id: string, ctx: ToolContext) {
+  const device = access(ctx, "service_routing_traffic");
+  return readPolicyTraffic(await routingPolicy(id, device), { ...ctx, device });
+}
 async function facts(policy: RoutingPolicy, ctx: ToolContext): Promise<RoutingFacts> {
   const base = routingPath(policy.family);
   // Sequential bounded reads avoid occupying the entire shared SSH pool.
   const tables = await rows("/routing table", "name,fib,disabled", ctx);
   const routes = await rows(
     policy.family === "ipv4" ? "/ip route" : "/ipv6 route",
-    "routing-table,dst-address,gateway,active,disabled",
+    "routing-table,dst-address,gateway,active,disabled,blackhole,type",
     ctx,
   );
-  const mangle = await rows(
-    `${base} mangle`,
-    "chain,action,new-routing-mark,jump-target,src-address-list,dst-address-list,dst-address-type,dst-address,passthrough,disabled,comment",
-    ctx,
-  );
+  const mangle = await rows(`${base} mangle`, undefined, ctx);
   const filters = await rows(`${base} filter`, "action,disabled", ctx);
   if (policy.family === "ipv4") {
     const active = (
@@ -112,8 +143,21 @@ async function facts(policy: RoutingPolicy, ctx: ToolContext): Promise<RoutingFa
     `${base} address-list`,
     "list,address,comment,dynamic,disabled",
     ctx,
+    [`${ownerTag(policy.id)}-src`, `${ownerTag(policy.id)}-dst`],
   );
-  return { tables, routes, mangle, filters, vrfs, addresses };
+  const result: RoutingFacts = { tables, routes, mangle, filters, vrfs, addresses };
+  if (isWildcard(policy.host)) {
+    result.dns = await rows(
+      "/ip dns static",
+      "name,regexp,type,address-list,match-subdomain,forward-to,disabled,comment",
+      ctx,
+    );
+    result.version = (await checkedRead(":put [/system resource get version]", ctx)).trim();
+    result.dnsRemoteRequests = ["yes", "true"].includes(
+      (await checkedRead(":put [/ip dns get allow-remote-requests]", ctx)).trim(),
+    );
+  }
+  return result;
 }
 export function fetchCommand(
   address: string,
@@ -122,11 +166,15 @@ export function fetchCommand(
   path: string,
   port: number,
 ): string {
-  return `:put [:serialize to=json value=[${new Cmd("/tool fetch").set("address", `${address}@${table}`).set("host", host).set("mode", "https").set("src-path", path).set("port", port).set("http-method", "head").set("check-certificate", "yes").set("http-max-redirect-count", 0).set("idle-timeout", "5s").set("output", "none").flag("as-value", true).build()}]]`;
+  return `:put [:serialize to=json value=[${new Cmd("/tool fetch").set("address", `${address}@${table}`).set("host", host).set("mode", "https").set("src-path", path).set("port", port).set("http-method", "head").set("check-certificate", "yes").set("http-max-redirect-count", 0).set("idle-timeout", "5s").set("duration", "5s").set("output", "none").raw("as-value").build()}]]`;
 }
 async function probe(policy: RoutingPolicy, ctx: ToolContext): Promise<void> {
+  if (!policy.target)
+    throw new Error(
+      "This is a manual domain route. Add an approved HTTPS probe in a new policy to check exits or authorize failover.",
+    );
   const target = getConfig().serviceProbes.targets[policy.target];
-  if (!target || target.kind !== "https" || target.host !== policy.host)
+  if (!target || target.kind !== "https" || target.host !== (policy.probeHost ?? policy.host))
     throw new Error("Probe approval changed. Create a new policy.");
   const vrfs = await rows("/ip vrf", "name,disabled", ctx);
   let addresses: string[] = [];
@@ -203,6 +251,19 @@ async function preview(policy: RoutingPolicy, table: string, remove: boolean, ct
     expiresAt: Date.now() + 120_000,
     fingerprint: fingerprint(snapshot),
     commands: planCommands(policy, table, snapshot, remove),
+    warnings: [
+      "IP-based matching includes other services sharing the resolved IPs. Counters measure client-to-service matched packets, not successful delivery or download totals.",
+      ...(isWildcard(policy.host)
+        ? [
+            "Subdomains only; apex excluded. Clients must query this router DNS. External DNS, client DoH/DoT and previously cached answers can bypass learning. FWD uses existing upstream DNS and bypasses router adlists for matching names, for all DNS clients; no DNS interception or exposure is added.",
+          ]
+        : []),
+      ...(policy.precedence === "before-existing"
+        ? [
+            "This scoped policy is inserted before existing routing rules. On shared IPs it takes precedence; other rules are not rewritten. Existing connections may be interrupted.",
+          ]
+        : []),
+    ],
   };
   await save(policy, "Preview created. Review scope and commands; valid for two minutes.");
   return policy;
@@ -247,6 +308,8 @@ async function apply(policy: RoutingPolicy, planId: string, ctx: ToolContext) {
     if (plan.remove) {
       if (after.addresses.some((r) => r.comment === ownerTag(policy.id)))
         throw new Error("Owned address-list removal not confirmed.");
+      if (after.dns?.some((r) => r.comment === ownerTag(policy.id)))
+        throw new Error("Owned DNS entry removal not confirmed.");
     } else {
       planCommands({ ...policy, state: "active", activeTable: plan.table }, plan.table, after);
     }
@@ -266,7 +329,9 @@ async function apply(policy: RoutingPolicy, planId: string, ctx: ToolContext) {
         ? "Owned routing policy removed."
         : `Routing read-back verified: ${plan.table}. Client delivery still requires a client check.`,
     );
+    routerRoutingInventory.clear();
   } catch (error) {
+    routerRoutingInventory.clear();
     if (owned && !commitAttempted) await safe.rollback().catch(() => {});
     policy.error = error instanceof Error ? error.message : "Apply failed";
     await save(
@@ -290,6 +355,10 @@ export async function armRouting(id: string, minutes: number, confirm: boolean, 
   return locked(device, async () => {
     const policy = await routingPolicy(id, device);
     if (minutes) {
+      if (!policy.target)
+        throw new Error(
+          "Automatic failover requires an approved HTTPS probe; this is a manual domain route.",
+        );
       const other = (await operationsStore())
         .list<RoutingPolicy>(kind, device)
         .some((p) => p.id !== id && (p.armedUntil ?? 0) > Date.now());

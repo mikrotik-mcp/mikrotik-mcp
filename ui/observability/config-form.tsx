@@ -35,6 +35,7 @@ import { Badge, Button, Card, Input, Note, Select } from "./geist";
 import { Sheet } from "./sheet";
 import { DeviceEditor } from "./device-editor";
 import { RouterAddressList } from "./router-address-list";
+import { ServiceProbesEditor } from "./service-probes-editor";
 import { CONFIG_SECTIONS, DEVICE_FIELDS } from "./config-spec";
 import type { CfgField, CfgSection } from "./config-spec";
 import { Label } from "@/components/ui/label";
@@ -881,7 +882,9 @@ export function ConfigForm({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => 
   return (
     <div className="mt-1 grid min-w-0 grid-cols-1 gap-3.5">
       {CONFIG_SECTIONS.filter((s) => s.kind !== "deviceMap").map((s) =>
-        s.kind === "modules" ? (
+        s.id === "serviceProbes" ? (
+          <ServiceProbesEditor key={s.id} cfg={cfg} onChange={onChange} />
+        ) : s.kind === "modules" ? (
           <ModulesCard key={s.id} cfg={cfg} onChange={onChange} />
         ) : (
           <ObjectCard key={s.id} cfg={cfg} onChange={onChange} section={s} />

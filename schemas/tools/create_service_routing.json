@@ -9,11 +9,25 @@
       "maxLength": 80
     },
     "target": {
+      "description": "Optional approved HTTPS probe alias; legacy drafts without domain route this alias's exact host",
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
-      "pattern": "^[a-zA-Z0-9_.-]+$",
-      "description": "Approved HTTPS alias in serviceProbes.targets; its exact hostname is routed"
+      "pattern": "^[a-zA-Z0-9_.-]+$"
+    },
+    "domain": {
+      "description": "Exact domain or *.example.com (subdomains only, not the apex). Wildcards need client DNS through this router.",
+      "type": "string",
+      "maxLength": 253
+    },
+    "dnsLearningConfirmed": {
+      "description": "For wildcard only: confirms clients use this router DNS, shared-IP scope and FWD adlist bypass are understood. Does not enable or intercept DNS.",
+      "type": "boolean"
+    },
+    "precedence": {
+      "description": "Explicitly allow this scoped policy before existing routing rules. Preview still binds their full configuration; FastTrack is never bypassed.",
+      "type": "string",
+      "enum": ["before-existing"]
     },
     "family": {
       "type": "string",
@@ -65,7 +79,6 @@
   },
   "required": [
     "name",
-    "target",
     "family",
     "sources",
     "tables",

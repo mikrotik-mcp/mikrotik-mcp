@@ -3,6 +3,7 @@ import ipaddr from "ipaddr.js";
 import { createHash } from "node:crypto";
 import { Cmd, quoteValue } from "../core/routeros";
 import { parseRecords } from "../core/routeros-parse";
+import { routingDomain, isWildcard, wildcardRegexp, wildcardRegexOverlaps } from "./domain";
 
 const name = z
   .string()
@@ -13,9 +14,28 @@ const name = z
 export const routingInput = z
   .object({
     name: z.string().trim().min(1).max(80),
-    target: name.describe(
-      "Approved HTTPS alias in serviceProbes.targets; its exact hostname is routed",
-    ),
+    target: name
+      .optional()
+      .describe(
+        "Optional approved HTTPS probe alias; legacy drafts without domain route this alias's exact host",
+      ),
+    domain: routingDomain
+      .optional()
+      .describe(
+        "Exact domain or *.example.com (subdomains only, not the apex). Wildcards need client DNS through this router.",
+      ),
+    dnsLearningConfirmed: z
+      .boolean()
+      .optional()
+      .describe(
+        "For wildcard only: confirms clients use this router DNS, shared-IP scope and FWD adlist bypass are understood. Does not enable or intercept DNS.",
+      ),
+    precedence: z
+      .enum(["before-existing"])
+      .optional()
+      .describe(
+        "Explicitly allow this scoped policy before existing routing rules. Preview still binds their full configuration; FastTrack is never bypassed.",
+      ),
     family: z.enum(["ipv4", "ipv6"]),
     sources: z
       .array(z.string().refine((v) => ipaddr.isValidCIDR(v), "Use an explicit client subnet CIDR"))
@@ -28,6 +48,13 @@ export const routingInput = z
     cooldownSeconds: z.number().int().min(120).max(3600).default(300),
   })
   .superRefine((v, ctx) => {
+    if (!v.domain && !v.target)
+      ctx.addIssue({ code: "custom", message: "Enter a domain or choose an approved service" });
+    if (v.domain && isWildcard(v.domain) && !v.dnsLearningConfirmed)
+      ctx.addIssue({
+        code: "custom",
+        message: "Confirm client DNS learning and its limitations for wildcard routing",
+      });
     if (!v.tables.includes(v.primary) || new Set(v.tables).size !== v.tables.length)
       ctx.addIssue({ code: "custom", message: "Choose one unique candidate table as primary" });
     for (const s of v.sources) {
@@ -48,6 +75,9 @@ export interface RoutingFacts {
   filters: Row[];
   vrfs: Row[];
   addresses: Row[];
+  dns?: Row[];
+  dnsRemoteRequests?: boolean;
+  version?: string;
 }
 export interface PathSample {
   table: string;
@@ -64,12 +94,14 @@ export interface RoutingPlan {
   fingerprint: string;
   expiresAt: number;
   commands: string[];
+  warnings?: string[];
 }
 export interface RoutingPolicy extends RoutingInput {
   id: string;
   device: string;
   updatedAt: number;
   host: string;
+  probeHost?: string;
   state: "draft" | "active" | "removed" | "uncertain";
   activeTable?: string;
   lastSwitchAt?: number;
@@ -89,10 +121,22 @@ export const routingPath = (family: string): string =>
 export function fingerprint(facts: RoutingFacts): string {
   return createHash("sha256")
     .update(
-      JSON.stringify(facts, (key, value) =>
-        ["#", ".id", "bytes", "packets", "last-handshake", "expires-after"].includes(key)
-          ? undefined
-          : value,
+      JSON.stringify(
+        {
+          ...facts,
+          addresses: facts.addresses.filter(
+            (r) =>
+              !(
+                r.list?.startsWith("mcp-sr-") &&
+                r.list.endsWith("-dst") &&
+                (["yes", "true"].includes(r.dynamic) || (r.flags ?? "").includes("D"))
+              ),
+          ),
+        },
+        (key, value) =>
+          ["#", ".id", "bytes", "packets", "last-handshake", "expires-after"].includes(key)
+            ? undefined
+            : value,
       ),
     )
     .digest("hex");
@@ -110,6 +154,11 @@ export function planCommands(
   if (policy.state === "uncertain")
     throw new Error("Reconcile uncertain router state before another change.");
   const owned = facts.mangle.filter((r) => r.comment === tag);
+  const wildcard = isWildcard(policy.host);
+  const dns = facts.dns ?? [];
+  const ownedDns = dns.filter((r) => r.comment === tag);
+  if (wildcard && dns.some((r) => r["address-list"] === `${tag}-dst` && r.comment !== tag))
+    throw new Error("A foreign DNS entry uses the owned destination list; reconcile first.");
   if (facts.mangle.some((r) => r.chain === chain && r.comment !== tag))
     throw new Error("Private chain contains foreign rules; review it first.");
   if (owned.some((r) => r.chain !== chain && r.chain !== "prerouting"))
@@ -118,7 +167,56 @@ export function planCommands(
     return [
       new Cmd(`${path} mangle remove ${selector(tag)}`).build(),
       new Cmd(`${path} address-list remove ${selector(tag)}`).build(),
+      ...(wildcard
+        ? [
+            new Cmd(`/ip dns static remove ${selector(tag)}`).build(),
+            ...["/ip firewall", "/ipv6 firewall"].map((base) =>
+              new Cmd(
+                `${base} address-list remove [find where list=${quoteValue(`${tag}-dst`)} dynamic=yes]`,
+              ).build(),
+            ),
+          ]
+        : []),
     ];
+  if (wildcard) {
+    const version = /^(\d+)\.(\d+)(?:\.(\d+))?(?:\s|$)/.exec(facts.version ?? "");
+    if (!version || Number(version[1]) < 7 || (Number(version[1]) === 7 && Number(version[2]) < 17))
+      throw new Error(
+        "Wildcard workflow requires stable RouterOS 7.17 or newer; version could not be verified.",
+      );
+    if (!facts.dnsRemoteRequests || !policy.dnsLearningConfirmed)
+      throw new Error(
+        "Wildcard routing needs confirmed client DNS through this router and allow-remote-requests already enabled. MCP will not expose DNS automatically.",
+      );
+    const base = policy.host.slice(2);
+    if (
+      dns.some(
+        (r) =>
+          enabled(r) &&
+          r.comment !== tag &&
+          ((r.regexp && wildcardRegexOverlaps(r.regexp, policy.host)) ||
+            r.name === base ||
+            r.name?.endsWith(`.${base}`) ||
+            (["yes", "true"].includes(r["match-subdomain"]) && base.endsWith(`.${r.name}`))),
+      )
+    )
+      throw new Error(
+        "Existing DNS entries may overlap this wildcard. Review them first; MCP will not replace them.",
+      );
+    if (owned.length) {
+      if (
+        ownedDns.length !== 1 ||
+        !enabled(ownedDns[0]) ||
+        ownedDns[0].type !== "FWD" ||
+        ownedDns[0].regexp !== wildcardRegexp(policy.host) ||
+        ownedDns[0]["address-list"] !== `${tag}-dst` ||
+        ownedDns[0]["forward-to"] ||
+        ownedDns[0].name
+      )
+        throw new Error("Owned DNS learning scope changed externally.");
+    } else if (ownedDns.length)
+      throw new Error("Owned DNS entry is partially present; reconcile first.");
+  }
   const listRows = facts.addresses.filter((r) => [`${tag}-src`, `${tag}-dst`].includes(r.list));
   const staticRows = listRows.filter(
     (r) => !["yes", "true"].includes(r.dynamic) && !(r.flags ?? "").includes("D"),
@@ -126,7 +224,7 @@ export function planCommands(
   if (owned.length) {
     const expectedLists = [
       ...policy.sources.map((address) => ({ list: `${tag}-src`, address })),
-      { list: `${tag}-dst`, address: policy.host },
+      ...(!wildcard ? [{ list: `${tag}-dst`, address: policy.host }] : []),
     ];
     if (
       staticRows.length !== expectedLists.length ||
@@ -152,16 +250,23 @@ export function planCommands(
       (r) =>
         r["routing-table"] === table &&
         r["dst-address"] === dst &&
+        !!r.gateway &&
+        r.blackhole !== "yes" &&
+        r.blackhole !== "true" &&
+        !["blackhole", "unreachable", "prohibit"].includes(r.type) &&
         enabled(r) &&
         (["yes", "true"].includes(r.active) || (r.flags ?? "").includes("A")),
     )
   )
-    throw new Error("Exit has no observed active default route for this family.");
+    throw new Error(
+      "Exit has no observed active forwarding default route for this family (discard routes are not exits).",
+    );
   if (facts.filters.some((r) => enabled(r) && r.action === "fasttrack-connection"))
     throw new Error(
       "FastTrack may bypass this policy. Configure an explicit exclusion before applying.",
     );
   if (
+    policy.precedence !== "before-existing" &&
     facts.mangle.some(
       (r) =>
         enabled(r) && r.comment !== tag && ["mark-routing", "jump", "route"].includes(r.action),
@@ -180,6 +285,7 @@ export function planCommands(
       ...facts,
       mangle: facts.mangle.filter((r) => r.comment !== tag),
       addresses: facts.addresses.filter((r) => ![`${tag}-src`, `${tag}-dst`].includes(r.list)),
+      dns: facts.dns?.filter((r) => r.comment !== tag),
     })
       .filter((command) => command.startsWith(`${path} mangle add`))
       .map((command) => parseRecords(`0 ${command}`).rows[0]);
@@ -214,13 +320,24 @@ export function planCommands(
         .set("comment", tag)
         .build(),
     );
-  result.push(
-    new Cmd(`${path} address-list add`)
-      .set("list", `${tag}-dst`)
-      .set("address", policy.host)
-      .set("comment", tag)
-      .build(),
-  );
+  if (wildcard)
+    result.push(
+      new Cmd("/ip dns static add")
+        .set("type", "FWD")
+        .set("regexp", wildcardRegexp(policy.host))
+        .set("address-list", `${tag}-dst`)
+        .bool("disabled", false)
+        .set("comment", tag)
+        .build(),
+    );
+  else
+    result.push(
+      new Cmd(`${path} address-list add`)
+        .set("list", `${tag}-dst`)
+        .set("address", policy.host)
+        .set("comment", tag)
+        .build(),
+    );
   const exclude =
     policy.family === "ipv4"
       ? [

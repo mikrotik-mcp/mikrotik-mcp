@@ -24,24 +24,24 @@ export function setDraftField(value: Draft, key: string, fieldValue: unknown): D
   return next;
 }
 
-export type ConfigScope = "devices" | "server";
+export type ConfigScope = "devices" | "server" | "serviceProbes";
 
-/** The two editors own disjoint sections of the same configuration. */
+function ownsConfigKey(key: string, scope: ConfigScope): boolean {
+  if (scope === "serviceProbes") return key === "serviceProbes";
+  const deviceKey = key === "devices" || key === "defaultDevice";
+  return scope === "devices" ? deviceKey : !deviceKey;
+}
+
+/** Select only settings owned by this editor, including the narrow probe editor. */
 export function selectConfigScope(cfg: Draft, scope: ConfigScope): Draft {
-  return Object.fromEntries(
-    Object.entries(cfg).filter(([key]) =>
-      scope === "devices"
-        ? key === "devices" || key === "defaultDevice"
-        : key !== "devices" && key !== "defaultDevice",
-    ),
-  );
+  return Object.fromEntries(Object.entries(cfg).filter(([key]) => ownsConfigKey(key, scope)));
 }
 
 /** Merge against live state on the server, not a stale browser snapshot. */
 export function scopeConfigDraft(raw: unknown, current: Draft, scope: ConfigScope): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   return {
-    ...selectConfigScope(current, scope === "devices" ? "server" : "devices"),
+    ...Object.fromEntries(Object.entries(current).filter(([key]) => !ownsConfigKey(key, scope))),
     ...selectConfigScope(raw as Draft, scope),
   };
 }

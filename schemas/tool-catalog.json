@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.20.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 956,
+  "toolCount": 958,
   "tools": [
     {
       "name": "create_client_check",
@@ -967,18 +967,71 @@
     },
     {
       "name": "service_routing_inventory",
-      "title": "Discover Service Routing Exits",
+      "title": "Inspect Router Routing Configuration",
       "risk": "read",
       "annotations": {
         "readOnlyHint": true,
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Read enabled FIB tables and administrator-approved HTTPS target aliases. A table is not proof of a working path; HTTPS per-exit probes require a matching VRF.",
+      "description": "Read live IPv4/IPv6 routes, ordered mangle and routing rules, address lists, tables, VRFs and filter rules independently of saved MCP policies. Includes dynamic/disabled entries, per-section failures and observation timestamps; bounded reads, 20-second cache. Missing data is not zero. Also lists enabled FIB exits and approved HTTPS aliases. Table presence is not path health; HTTPS exit probes require a matching VRF. No router changes.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "service_routing_address_page",
+      "title": "Read Routing Address List Page",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read the next bounded page of this router's IPv4 or IPv6 address-list members. Use nextOffset from service_routing_inventory or the preceding page. At most 200 rows per request; live lists may change between pages. Read-only, no router changes.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": ["ipv4", "ipv6"]
+          },
+          "offset": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          }
+        },
+        "required": ["family", "offset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "service_routing_traffic",
+      "title": "Read Service Routing Traffic",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read the exact active MCP-owned routing mark's client-to-service byte and packet counters for one saved policy. Decimal strings preserve 64-bit totals. Four-second cache; missing, disabled or modified rules are unavailable, not zero. Excludes return/download traffic and does not prove delivery, DNS coverage or billing usage. No reset or router change.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": ["id"],
         "additionalProperties": false
       }
     },
@@ -990,7 +1043,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Save a single-family policy for one approved exact hostname and explicit client subnets. No router changes. Create separate IPv4/IPv6 policies. Shared CDN IPs can affect other services. Preview, then explicitly confirm apply; never infer authorization from a draft.",
+      "description": "Save a single-family exact domain or *.example.com route for explicit client subnets. The wildcard excludes the apex and requires client DNS through this router, existing remote DNS, RouterOS 7.17+ and dnsLearningConfirmed. Wildcard FWD bypasses adlists for matching DNS queries. HTTPS target is optional for manual routing, required for health probes/failover; when domain is absent use the approved target's host (legacy). Shared CDN IPs can affect other services. No router change until preview and explicit apply. Never infer authorization from a draft.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -1001,11 +1054,25 @@
             "maxLength": 80
           },
           "target": {
+            "description": "Optional approved HTTPS probe alias; legacy drafts without domain route this alias's exact host",
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "pattern": "^[a-zA-Z0-9_.-]+$",
-            "description": "Approved HTTPS alias in serviceProbes.targets; its exact hostname is routed"
+            "pattern": "^[a-zA-Z0-9_.-]+$"
+          },
+          "domain": {
+            "description": "Exact domain or *.example.com (subdomains only, not the apex). Wildcards need client DNS through this router.",
+            "type": "string",
+            "maxLength": 253
+          },
+          "dnsLearningConfirmed": {
+            "description": "For wildcard only: confirms clients use this router DNS, shared-IP scope and FWD adlist bypass are understood. Does not enable or intercept DNS.",
+            "type": "boolean"
+          },
+          "precedence": {
+            "description": "Explicitly allow this scoped policy before existing routing rules. Preview still binds their full configuration; FastTrack is never bypassed.",
+            "type": "string",
+            "enum": ["before-existing"]
           },
           "family": {
             "type": "string",
@@ -1057,7 +1124,6 @@
         },
         "required": [
           "name",
-          "target",
           "family",
           "sources",
           "tables",
@@ -1102,7 +1168,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Read router state and save a two-minute, state-bound preview for applying/switching or removing only owned rules. Reject FastTrack and foreign policy-routing conflicts. Does not create exits, NAT, DNS interception or change router configuration.",
+      "description": "Read router state and save a two-minute state-bound preview for applying/switching or removing owned rules. Reject FastTrack, overlapping wildcard DNS and foreign routing conflicts unless before-existing precedence was explicitly selected. Wildcard plans add an owned DNS FWD learner, not DNS interception. Does not create exits, NAT or change the router until apply.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

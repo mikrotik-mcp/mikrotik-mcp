@@ -53,7 +53,7 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   {
     id: "service-routing",
     label: "Service Routing",
-    sub: "Domain policies, exit evidence and authorized failover",
+    sub: "Router routes, policy rules and managed service exits",
   },
   {
     id: "client-checks",

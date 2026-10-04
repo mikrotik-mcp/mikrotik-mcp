@@ -19,6 +19,7 @@ import { Button, Select } from "./geist";
 import { toast } from "./toast-action";
 import { testDeviceConnection } from "./config-connection";
 import { cn } from "@/lib/utils";
+import { ServiceProbesEditor } from "./service-probes-editor";
 
 type Cfg = Record<string, unknown>;
 const asObj = (v: unknown): Cfg =>
@@ -370,7 +371,13 @@ export function ConfigEditor({
           onClick={() => void doSave()}
           disabled={!valid || !!pending || busy || testingAll}
         >
-          {busy ? "Working…" : scope === "devices" ? "Save devices" : "Save"}
+          {busy
+            ? "Working…"
+            : scope === "devices"
+              ? "Save devices"
+              : scope === "serviceProbes"
+                ? "Save probes"
+                : "Save"}
         </Button>
         <Button
           size="sm"
@@ -451,6 +458,8 @@ export function ConfigEditor({
         {mode === "form" ? (
           scope === "devices" ? (
             deviceForm
+          ) : scope === "serviceProbes" ? (
+            <ServiceProbesEditor cfg={cfg} onChange={change} />
           ) : (
             <ConfigForm cfg={cfg} onChange={change} />
           )

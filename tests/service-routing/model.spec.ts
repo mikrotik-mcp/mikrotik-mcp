@@ -34,8 +34,8 @@ const facts: RoutingFacts = {
     { name: "warp", fib: "yes" },
   ],
   routes: [
-    { "routing-table": "main", "dst-address": "0.0.0.0/0", active: "yes" },
-    { "routing-table": "warp", "dst-address": "0.0.0.0/0", active: "yes" },
+    { "routing-table": "main", "dst-address": "0.0.0.0/0", active: "yes", gateway: "192.0.2.1" },
+    { "routing-table": "warp", "dst-address": "0.0.0.0/0", active: "yes", gateway: "192.0.2.2" },
   ],
   mangle: [],
   filters: [],
@@ -65,13 +65,24 @@ describe("service routing safety", () => {
     const p = { ...policy, family: "ipv6" as const, sources: ["fd10::/64"] };
     const commands = planCommands(p, "main", {
       ...facts,
-      routes: [{ "routing-table": "main", "dst-address": "::/0", active: "yes" }],
+      routes: [
+        { "routing-table": "main", "dst-address": "::/0", active: "yes", gateway: "2001:db8::1" },
+      ],
     }).join("\n");
     expect(commands).toContain("/ipv6 firewall");
     expect(commands).not.toContain("/ip firewall");
     expect(commands).toContain("fc00::/7");
   });
   it("blocks missing routes, FastTrack, foreign marks and chain jumps", () => {
+    expect(() =>
+      planCommands(policy, "main", {
+        ...facts,
+        routes: [{ ...facts.routes[0], blackhole: "yes" }],
+      }),
+    ).toThrow(/discard routes/);
+    expect(() =>
+      planCommands(policy, "main", { ...facts, routes: [{ ...facts.routes[0], gateway: "" }] }),
+    ).toThrow(/forwarding default/);
     expect(() => planCommands(policy, "main", { ...facts, routes: [] })).toThrow(/default route/);
     expect(() =>
       planCommands(policy, "main", { ...facts, filters: [{ action: "fasttrack-connection" }] }),
@@ -125,6 +136,9 @@ describe("service routing safety", () => {
   });
   it("pins HTTPS fetch to a VRF and validated IP with no redirects or bodies", () => {
     const command = fetchCommand("203.0.113.5", "warp", "example.com", "/health", 443);
+    expect(command).toContain(" as-value]");
+    expect(command).not.toContain("as-value=yes");
+    expect(command).toContain("duration=5s");
     expect(command).toContain("203.0.113.5@warp");
     expect(command).toContain("check-certificate=yes");
     expect(command).toContain("http-max-redirect-count=0");

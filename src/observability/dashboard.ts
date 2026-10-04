@@ -557,13 +557,16 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
     ["/api/config", "/api/config/validate", "/api/config/preview"].includes(p) &&
     scope !== null &&
     scope !== "devices" &&
-    scope !== "server"
+    scope !== "server" &&
+    scope !== "serviceProbes"
   )
     return json({ ok: false, error: "Unknown configuration scope" }, 400);
   const mergeDraft = (raw: unknown) => {
     const current = getConfig();
     return mergeConfigDraft(
-      scope === "devices" || scope === "server" ? scopeConfigDraft(raw, current, scope) : raw,
+      scope === "devices" || scope === "server" || scope === "serviceProbes"
+        ? scopeConfigDraft(raw, current, scope)
+        : raw,
       current,
     );
   };

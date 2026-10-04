@@ -6,6 +6,8 @@ import {
   listRouting,
   createRouting,
   routingInventory,
+  routingAddressPage,
+  routingTraffic,
   probeRouting,
   previewRouting,
   applyRouting,
@@ -26,13 +28,38 @@ export const serviceRoutingTools: ToolModule = [
   }),
   defineTool({
     name: "service_routing_inventory",
-    title: "Discover Service Routing Exits",
+    title: "Inspect Router Routing Configuration",
     annotations: READ,
     description:
-      "Read enabled FIB tables and administrator-approved HTTPS target aliases. A table is not proof of a working path; HTTPS per-exit probes require a matching VRF.",
+      "Read live IPv4/IPv6 routes, ordered mangle and routing rules, address lists, tables, VRFs and filter rules independently of saved MCP policies. Includes dynamic/disabled entries, per-section failures and observation timestamps; bounded reads, 20-second cache. Missing data is not zero. Also lists enabled FIB exits and approved HTTPS aliases. Table presence is not path health; HTTPS exit probes require a matching VRF. No router changes.",
     inputSchema: {},
     async handler(_, ctx) {
       return JSON.stringify(await routingInventory(ctx));
+    },
+  }),
+  defineTool({
+    name: "service_routing_address_page",
+    title: "Read Routing Address List Page",
+    annotations: READ,
+    description:
+      "Read the next bounded page of this router's IPv4 or IPv6 address-list members. Use nextOffset from service_routing_inventory or the preceding page. At most 200 rows per request; live lists may change between pages. Read-only, no router changes.",
+    inputSchema: {
+      family: z.enum(["ipv4", "ipv6"]),
+      offset: z.number().int().min(0).max(1_000_000).default(0),
+    },
+    async handler(a, ctx) {
+      return JSON.stringify(await routingAddressPage(a.family, a.offset, ctx));
+    },
+  }),
+  defineTool({
+    name: "service_routing_traffic",
+    title: "Read Service Routing Traffic",
+    annotations: READ,
+    description:
+      "Read the exact active MCP-owned routing mark's client-to-service byte and packet counters for one saved policy. Decimal strings preserve 64-bit totals. Four-second cache; missing, disabled or modified rules are unavailable, not zero. Excludes return/download traffic and does not prove delivery, DNS coverage or billing usage. No reset or router change.",
+    inputSchema: { id: z.uuid() },
+    async handler(a, ctx) {
+      return JSON.stringify(await routingTraffic(a.id, ctx));
     },
   }),
   defineTool({
@@ -40,7 +67,7 @@ export const serviceRoutingTools: ToolModule = [
     title: "Create Service Routing Draft",
     annotations: WRITE,
     description:
-      "Save a single-family policy for one approved exact hostname and explicit client subnets. No router changes. Create separate IPv4/IPv6 policies. Shared CDN IPs can affect other services. Preview, then explicitly confirm apply; never infer authorization from a draft.",
+      "Save a single-family exact domain or *.example.com route for explicit client subnets. The wildcard excludes the apex and requires client DNS through this router, existing remote DNS, RouterOS 7.17+ and dnsLearningConfirmed. Wildcard FWD bypasses adlists for matching DNS queries. HTTPS target is optional for manual routing, required for health probes/failover; when domain is absent use the approved target's host (legacy). Shared CDN IPs can affect other services. No router change until preview and explicit apply. Never infer authorization from a draft.",
     inputSchema: routingInput.shape,
     async handler(a, ctx) {
       return JSON.stringify(await createRouting(a, ctx));
@@ -62,7 +89,7 @@ export const serviceRoutingTools: ToolModule = [
     title: "Preview Service Routing Change",
     annotations: READ,
     description:
-      "Read router state and save a two-minute, state-bound preview for applying/switching or removing only owned rules. Reject FastTrack and foreign policy-routing conflicts. Does not create exits, NAT, DNS interception or change router configuration.",
+      "Read router state and save a two-minute state-bound preview for applying/switching or removing owned rules. Reject FastTrack, overlapping wildcard DNS and foreign routing conflicts unless before-existing precedence was explicitly selected. Wildcard plans add an owned DNS FWD learner, not DNS interception. Does not create exits, NAT or change the router until apply.",
     inputSchema: {
       id: z.uuid(),
       table: z.string().min(1).max(64),

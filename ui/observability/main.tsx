@@ -199,9 +199,10 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
     ],
   },
   "service-routing": {
-    what: "Scope service traffic to approved exits with explicit per-family policies.",
+    what: "Inspect actual IPv4/IPv6 routes and ordered policy rules; manage MCP service policies separately.",
     tips: [
       "Draft, check exits, preview and confirm. A draft never changes a router.",
+      "Router configuration includes existing dynamic, disabled and inactive entries. Inspect a row for its full match conditions.",
       "VRF HTTPS probes are router-originated; ordinary routing tables remain unknown.",
       "Automatic failover requires fresh evidence and a time-limited authorization.",
     ],

@@ -1,0 +1,141 @@
+.route-domain {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--primary) 4%, var(--background));
+}
+.route-domain__path {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  min-width: 0;
+  color: var(--primary);
+  padding: 0.5rem 0;
+}
+.route-domain__path code {
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+}
+.route-domain__path strong {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.route-domain__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}
+.route-domain__notice > svg {
+  flex: none;
+  color: var(--primary);
+}
+.route-domain__notice p,
+.route-domain__notice small {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  margin-top: 0.5rem;
+}
+.route-domain__notice .ops-check {
+  margin: 0.8rem 0;
+  align-items: flex-start;
+  line-height: 1.6;
+}
+.route-traffic {
+  min-width: 0;
+}
+.route-traffic__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+.route-traffic__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  color: var(--primary);
+  margin-bottom: 0.6rem;
+}
+.route-traffic__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 1rem;
+}
+.route-traffic__metrics dt {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.route-traffic__metrics dd {
+  margin: 0.4rem 0 0;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(0.95rem, 1.6vw, 1.5rem);
+  overflow-wrap: anywhere;
+}
+.route-traffic__chart {
+  position: relative;
+  height: 112px;
+  width: 100%;
+}
+.route-traffic__chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.route-traffic__chart > span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.route-traffic__grid {
+  stroke: var(--border);
+  stroke-dasharray: 3 5;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.route-traffic__line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.route-traffic__axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.65rem;
+  margin: 0.5rem 0 1rem;
+}
+.route-traffic__reset {
+  color: var(--primary);
+  font-size: 0.8rem;
+}
+@media (max-width: 540px) {
+  .route-domain {
+    padding: 0.8rem;
+  }
+  .route-traffic__metrics {
+    gap: 0.6rem;
+  }
+  .route-traffic__metrics dt {
+    font-size: 0.65rem;
+  }
+}

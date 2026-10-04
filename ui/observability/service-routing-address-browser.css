@@ -1,0 +1,429 @@
+.address-browser {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--card) 65%, var(--background));
+  overflow: hidden;
+}
+.address-browser__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 12px;
+}
+.address-browser__header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.address-browser__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+.address-browser h4 {
+  font-size: 13px;
+  font-weight: 650;
+  margin: 0;
+}
+.address-browser__header p {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+.address-browser__header p span {
+  margin: 0 4px;
+}
+.address-browser__scope {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 12px;
+}
+.address-browser__scope button {
+  flex: 1;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.address-browser__scope button[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  border-color: color-mix(in oklab, var(--primary) 35%, transparent);
+  color: var(--primary);
+}
+.address-browser__scope span {
+  opacity: 0.75;
+  margin-inline-start: 6px;
+  font-size: 10px;
+}
+.address-browser__controls {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 8px;
+}
+.address-browser__controls > .relative {
+  width: 132px;
+  min-width: 0;
+  font-size: 11px;
+}
+.address-browser__search {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.address-browser__search > svg {
+  position: absolute;
+  top: 11px;
+  left: 10px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.address-browser__search input {
+  padding-inline: 34px;
+  height: 38px;
+  font-size: 12px;
+}
+.address-browser__search > button {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  width: 30px;
+  height: 30px;
+}
+.address-browser__filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+.address-browser__filters > .relative {
+  max-width: 230px;
+  min-width: 0;
+  height: 30px;
+  font-size: 11px;
+}
+.routing-inspector-scroll {
+  min-width: 0;
+}
+/* Radix uses an intrinsic-width table wrapper for horizontal scrolling. These
+   vertical-only viewports must shrink with the modal, including long IPs. */
+.routing-inspector-scroll > [data-slot="scroll-area-viewport"] > div,
+.address-browser__results > [data-slot="scroll-area-viewport"] > div {
+  display: block !important;
+  width: 100%;
+  min-width: 0 !important;
+}
+.address-browser__filters > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  text-align: right;
+}
+.address-browser__chips {
+  min-width: 0;
+  overflow: hidden;
+  margin: 0 12px 10px;
+}
+.address-browser__chips [data-slot="scroll-area-viewport"] > div > div {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 4px;
+}
+.address-browser__chips button {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--muted-foreground);
+}
+.address-browser__chips button[aria-pressed="true"] {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.address-browser__chips button span {
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+.address-browser__coverage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-block: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  background: color-mix(in oklab, var(--muted) 30%, transparent);
+}
+.address-browser__coverage[data-complete="true"] > svg {
+  color: var(--success, #2dd4bf);
+}
+.address-browser__coverage small {
+  display: block;
+  font-size: 10px;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+.address-browser__coverage strong {
+  margin-inline-start: auto;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--foreground);
+  font-weight: 500;
+}
+.address-browser__results {
+  height: clamp(210px, 31vh, 390px);
+  min-width: 0;
+  overflow: hidden;
+}
+.address-browser__results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px;
+}
+.address-browser__row {
+  position: relative;
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 65%, transparent);
+}
+.address-browser__row:last-child {
+  border-bottom: 0;
+}
+.address-browser__row[data-disabled="true"] code {
+  color: var(--muted-foreground);
+}
+.address-browser__row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.address-browser__row-top code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  user-select: text;
+}
+.address-browser__row-top > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.address-browser__row-top button {
+  width: 25px;
+  height: 25px;
+  color: var(--muted-foreground);
+}
+.address-browser__family {
+  color: var(--muted-foreground);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+}
+.address-browser__approx {
+  font-size: 9px;
+  color: var(--warning, #f5a623);
+}
+.address-browser__row-meta {
+  padding-inline-end: 24px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.address-browser__row-meta > span {
+  color: var(--primary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.address-browser__row-meta small {
+  color: var(--muted-foreground);
+  font-size: 9px;
+}
+.address-browser__comment {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 3px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-inline-end: 24px;
+}
+.address-browser__entry-details > summary {
+  position: absolute;
+  right: 0;
+  top: 34px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  list-style: none;
+}
+.address-browser__entry-details > summary::-webkit-details-marker {
+  display: none;
+}
+.address-browser__entry-details[open] > summary svg {
+  transform: rotate(90deg);
+}
+.address-browser__entry-details > summary:focus-visible {
+  outline: 2px solid var(--ring);
+  border-radius: 4px;
+}
+.address-browser__entry-details dl {
+  font-size: 10px;
+  padding: 8px;
+  margin: 8px 0 0;
+  background: var(--background);
+  border-radius: 6px;
+}
+.address-browser__entry-details dl > div {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.address-browser__entry-details dt {
+  color: var(--muted-foreground);
+}
+.address-browser__entry-details dd {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+@media (min-width: 640px) {
+  .address-browser__results ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 20px;
+    align-items: start;
+  }
+}
+.address-browser__empty {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 9px;
+  padding: 20px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.address-browser__empty strong {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.address-browser__empty p {
+  font-size: 11px;
+}
+.address-browser__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.address-browser__footer > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.address-browser__footer button {
+  width: 28px;
+  height: 28px;
+}
+.address-browser__note {
+  margin: 0;
+  padding: 0 12px 10px;
+  font-size: 9px;
+  color: var(--muted-foreground);
+}
+.address-browser__error {
+  color: var(--destructive);
+  font-size: 11px;
+  padding: 8px 14px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.address-browser button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.address-browser__spinner {
+  animation: address-search-spin 1s linear infinite;
+}
+.routing-entry-properties {
+  margin-top: 16px;
+}
+.routing-entry-properties > summary {
+  cursor: pointer;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  padding: 5px 0 10px;
+}
+@keyframes address-search-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .address-browser__spinner {
+    animation: none;
+  }
+}
+@media (max-width: 480px) {
+  .address-browser__header {
+    padding-inline: 10px;
+  }
+  .address-browser__header > button {
+    font-size: 0;
+    padding-inline: 6px;
+  }
+  .address-browser__scope button {
+    padding-inline: 6px;
+  }
+  .address-browser__scope span {
+    display: none;
+  }
+  .address-browser__filters > span {
+    max-width: 100px;
+  }
+  .address-browser__controls {
+    flex-wrap: wrap;
+  }
+  .address-browser__controls > .relative {
+    width: 100%;
+    height: 30px;
+  }
+  .address-browser__results ul {
+    padding-inline: 10px;
+  }
+  .address-browser__coverage {
+    padding-inline: 10px;
+  }
+}

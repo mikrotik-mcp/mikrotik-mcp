@@ -10,6 +10,30 @@ application workflow.
 
 Nothing can be probed until an administrator configures named targets. Contracts
 reference these aliases, not arbitrary URLs, hosts, credentials or request bodies.
+
+### Dashboard setup (no JSON required)
+
+Open **Config → Edit config → Form → Service Probes → Add service**, or use
+**Service Routing → Service probes** (also available under **Approved service**
+when drafting a policy). The focused routing editor changes only `serviceProbes`,
+merging other settings from the live configuration on the server.
+
+Choose a unique service ID, protocol (HTTPS, TLS, TCP or DNS), hostname, applicable
+port/path, and 1–32 allowed IPv4/IPv6 addresses or CIDRs. Paste addresses separated
+by commas or newlines. Only HTTPS targets appear in Service Routing. DNS targets
+only check resolution; TLS/TCP targets do not use an HTTP path.
+
+**Add to draft** / **Update draft** is local only. Use **Preview diff → Save**
+(**Save probes** in the focused editor), then **Keep changes** before the optional
+auto-revert timer expires. This persists through the existing configuration
+backup/safe-apply workflow; no probe or router command is run by this editor.
+Search approvals by ID, protocol, hostname or IP. Expand a target to inspect its
+allowed ranges. Existing IDs cannot be renamed because contracts/policies refer
+to them. Removing an approval requires confirmation and saving; consumers then
+fail closed, but existing router routing rules are **not** removed.
+
+### JSON configuration
+
 Example config fragment (documentation addresses; replace deliberately):
 
 ```json
@@ -36,8 +60,8 @@ Example config fragment (documentation addresses; replace deliberately):
 ```
 
 Load this through the usual `--config` file (or full `MIKROTIK_DEVICES` document).
-Config Studio and Raycast expose the timeout; use the JSON editor for the target
-map and scheduled enrollment. Creating a contract does not grant target access.
+The dashboard exposes target management and the timeout; scheduled enrollment
+remains in the JSON editor. Raycast exposes the timeout. Creating a contract does not grant target access.
 Use narrow IP/CIDR ranges: DNS answers outside them invalidate the check. Every
 answer must be approved; the socket pins the first approved IP and never resolves
 the hostname again during connection. Private ranges are permitted only when
