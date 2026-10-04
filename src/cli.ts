@@ -68,7 +68,7 @@ TRANSPORT OPTIONS
   --transport          stdio | sse | streamable-http   (MIKROTIK_MCP__TRANSPORT)
   --mcp-host           HTTP bind host                   (MIKROTIK_MCP__HOST)
   --mcp-port           HTTP bind port                   (MIKROTIK_MCP__PORT)
-  --mcp-allowed-hosts  Host header allow-list (DNS-rebinding protection)
+  --mcp-allowed-hosts  Host heaxder allow-list (DNS-rebinding protection)
 
 SSH CONNECTION POOLING  (persistent connections, on by default)
   --ssh-keep-alive          Enable/disable pooling   (MIKROTIK_SSH__KEEP_ALIVE, default true)
