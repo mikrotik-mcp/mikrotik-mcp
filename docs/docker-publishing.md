@@ -164,8 +164,8 @@ source commit, native tests and any platform limitations in the release record.
 After reviewing backups and confirming pending configuration changes:
 
 ```sh
-MIKROTIK_IMAGE_TAG=5.21.0 docker compose pull mikrotik-mcp
-MIKROTIK_IMAGE_TAG=5.21.0 docker compose up -d mikrotik-mcp
+MIKROTIK_IMAGE_TAG=5.22.0 docker compose pull mikrotik-mcp
+MIKROTIK_IMAGE_TAG=5.22.0 docker compose up -d mikrotik-mcp
 docker compose ps mikrotik-mcp
 docker compose logs --tail 50 mikrotik-mcp
 ```
@@ -218,4 +218,25 @@ and [manifest promotion](https://docs.docker.com/reference/cli/docker/buildx/ima
 - Repository gate: 2,755 tests, typecheck and lint passed. All 15 UI assets built;
   the bundled observability dashboard exceeded the 2,000 kB chunk warning threshold.
 - MCPB manifest, Compose default and current Docker examples were aligned to 5.21.0.
+- No running user service was upgraded or restarted; no router settings were changed.
+
+## 5.22.0 publication record — October 4, 2026
+
+- Application source: release `5.22.0` / `9c298af` (no application-source edits).
+- Published version: `alimaster/mikrotik-mcp:5.22.0`. `latest` was left unchanged.
+- Index digest: `sha256:98da391f20536105822e3a28db5b2057056e5ab4235e2a8a1cf84521f197c48b`.
+- The interactive publisher validated the saved Docker Hub account, rejected
+  existing version tags, pushed and verified the registry digest and both
+  `linux/amd64` and `linux/arm64` manifests, with build attestations.
+- Local-build and pulled-digest native ARM64 checks passed: Bun 1.4.2, application
+  5.22.0, UID 1000, CLI version, healthcheck, dashboard on 9090, the user profile
+  editor in the dashboard asset, MCP initialization and all 960 unique tools.
+  Tests used `--network none`, a writable synthetic JSON bind mount, no published
+  host ports and no real router credentials. No device writes were performed.
+- Native AMD64 execution was not tested. Cross-building is not a runtime test.
+- Native ARM64 image size: 151,533,902 bytes as reported by Docker image inspect;
+  this is the local image size, not compressed registry transfer size.
+- Repository gate: 2,785 tests, typecheck and lint passed. All 15 UI assets built;
+  the observability dashboard still exceeded the 2,000 kB chunk warning threshold.
+- MCPB manifest, Compose default and current Docker examples were aligned to 5.22.0.
 - No running user service was upgraded or restarted; no router settings were changed.
