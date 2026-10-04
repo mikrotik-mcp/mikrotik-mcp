@@ -1370,6 +1370,8 @@
       "description": "OpenVPN servers — legacy single + RouterOS 7.17 multi-server — and clients (`/interface ovpn-*`).",
       "alwaysOn": false,
       "tools": [
+        "list_ovpn_sessions",
+        "disconnect_ovpn_session",
         "get_ovpn_server",
         "set_ovpn_server",
         "add_ovpn_server",
@@ -7927,6 +7929,26 @@
     {
       "name": "disable_sstp_client",
       "module": "sstp",
+      "group": "VPN & Tunneling",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "list_ovpn_sessions",
+      "module": "openvpn",
+      "group": "VPN & Tunneling",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "disconnect_ovpn_session",
+      "module": "openvpn",
       "group": "VPN & Tunneling",
       "noDevice": false,
       "requires": null,

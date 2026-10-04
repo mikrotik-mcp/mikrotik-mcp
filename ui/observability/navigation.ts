@@ -1,4 +1,5 @@
 export type ViewId =
+  | "openvpn"
   | "recovery-lab"
   | "flight-recorder"
   | "service-routing"
@@ -40,6 +41,11 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  {
+    id: "openvpn",
+    label: "OpenVPN",
+    sub: "Active VPN connections, connection time & session control",
+  },
   {
     id: "recovery-lab",
     label: "Recovery Lab",
@@ -154,7 +160,7 @@ export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
   {
     id: "observe",
     label: "Observe",
-    views: ["overview", "home-internet", "devices", "interfaces", "clients", "feed"],
+    views: ["overview", "home-internet", "devices", "interfaces", "clients", "openvpn", "feed"],
   },
   {
     id: "investigate",

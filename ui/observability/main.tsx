@@ -65,6 +65,7 @@ import type { ViewId } from "./navigation";
 import { parseViewHash, viewGroup, VIEWS } from "./navigation";
 import { BackupsView } from "./backups";
 import { AaaView } from "./aaa";
+import { OpenVpnView } from "./openvpn";
 import { ChangePlanView } from "./change-plan";
 import { ActivityChart, RiskDonut } from "./charts";
 import { ClientsView } from "./clients";
@@ -318,6 +319,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Reports are read-only. Management tabs support the relevant add, edit, enable/disable and remove actions; secrets are write-only and shown redacted.",
       "Reports & insights shows traffic totals, daily and cumulative charts, connection statistics and a calendar for all users or one user. Individual session lists are not displayed or exported.",
       "If a device lacks the user-manager package, the User Manager tabs explain how to install it; RADIUS-client tabs still work.",
+    ],
+  },
+  openvpn: {
+    what: "Incoming OpenVPN connections on the selected router, read from active PPP sessions.",
+    tips: [
+      "Reads refresh every five seconds while visible; stale data is marked and times freeze.",
+      "Disconnect affects one session, not every connection with the same username. The account remains enabled and the client may reconnect.",
+      "Confirm the user, router and addresses before disconnecting. Ending your management tunnel may interrupt your own access.",
     ],
   },
   topology: {
@@ -770,6 +779,13 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       <>
         <path d="M12 3 4 6v5c0 4.4 3.2 7.6 8 9 4.8-1.4 8-4.6 8-9V6l-8-3Z" />
         <path d="M9.5 11.5 11 13l3.5-3.5" />
+      </>
+    ),
+    openvpn: (
+      <>
+        <path d="M12 3 4 6v5c0 4.4 3.2 7.6 8 9 4.8-1.4 8-4.6 8-9V6l-8-3Z" />
+        <rect x="9" y="10" width="6" height="5" rx="1" />
+        <path d="M10 10V8a2 2 0 0 1 4 0v2" />
       </>
     ),
     topology: (
@@ -1746,6 +1762,7 @@ function App(): ReactNode {
 
               {/* ── RADIUS & User Manager ── */}
               {view === "aaa" && <AaaView />}
+              {view === "openvpn" && <OpenVpnView />}
 
               {/* ── Topology ── */}
               {view === "topology" &&

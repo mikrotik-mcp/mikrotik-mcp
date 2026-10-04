@@ -1,0 +1,315 @@
+.ovpn-workspace {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.ovpn-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 1.4rem 0 2rem;
+  border-bottom: 1px solid var(--border);
+}
+.ovpn-eyebrow {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  font: 0.65rem var(--font-mono, monospace);
+  letter-spacing: 0.16em;
+  color: var(--muted-foreground);
+}
+.ovpn-intro h2 {
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  line-height: 1.16;
+  letter-spacing: -0.045em;
+  font-weight: 650;
+  margin: 1rem 0;
+}
+.ovpn-intro h2 span {
+  display: block;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.ovpn-intro p {
+  max-width: 33rem;
+  font-size: 0.82rem;
+  line-height: 1.8;
+  color: var(--muted-foreground);
+}
+.ovpn-router {
+  width: 17rem;
+  max-width: 100%;
+  flex-shrink: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.ovpn-router label {
+  font-size: 0.75rem;
+}
+.ovpn-router small,
+.ovpn-caption,
+.ovpn-footnote {
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+  line-height: 1.7;
+}
+.ovpn-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+}
+.ovpn-summary > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1.2rem;
+}
+.ovpn-summary > div + div {
+  border-left: 1px solid var(--border);
+}
+.ovpn-summary svg {
+  color: var(--primary);
+  margin-top: 0.15rem;
+  flex: none;
+}
+.ovpn-summary span {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.ovpn-summary strong {
+  display: block;
+  margin-top: 0.55rem;
+  font: 1.6rem var(--font-mono, monospace);
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+.ovpn-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.ovpn-search {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+.ovpn-search svg {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.65rem;
+  color: var(--muted-foreground);
+}
+.ovpn-search input {
+  padding-left: 2.3rem;
+}
+.ovpn-fresh {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--primary);
+}
+.ovpn-fresh i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.ovpn-fresh[data-stale="true"] {
+  color: var(--muted-foreground);
+}
+.ovpn-list {
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--card);
+}
+.ovpn-session {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(220px, 1.7fr) minmax(145px, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.3rem;
+}
+.ovpn-session + .ovpn-session {
+  border-top: 1px solid var(--border);
+}
+.ovpn-person {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.ovpn-person h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.ovpn-person small {
+  color: var(--muted-foreground);
+  font-size: 0.65rem;
+}
+.ovpn-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 42px;
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  border-radius: 0.75rem;
+  color: var(--primary);
+}
+.ovpn-path {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+.ovpn-path > div {
+  min-width: 0;
+}
+.ovpn-path svg {
+  flex: none;
+  color: var(--muted-foreground);
+}
+.ovpn-path small,
+.ovpn-duration small {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted-foreground);
+  font-size: 0.65rem;
+  margin-bottom: 0.4rem;
+}
+.ovpn-path code {
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.ovpn-duration strong {
+  font: 1.2rem var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+}
+.ovpn-duration > span {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 0.62rem;
+  margin-top: 0.35rem;
+  overflow-wrap: anywhere;
+}
+.ovpn-disconnect {
+  color: var(--destructive);
+}
+.ovpn-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.8rem;
+  text-align: center;
+  padding: 3rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 1rem;
+}
+.ovpn-empty svg {
+  color: var(--primary);
+}
+.ovpn-empty span {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+.ovpn-notice {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--background));
+  border-radius: 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.8;
+}
+.ovpn-footnote {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+.ovpn-footnote svg {
+  flex: none;
+  margin-top: 0.2rem;
+}
+.ovpn-dialog {
+  max-width: 520px;
+}
+.ovpn-dialog-scroll {
+  max-height: 55vh;
+}
+.ovpn-confirm-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.ovpn-confirm-details dt {
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+}
+.ovpn-confirm-details dd {
+  margin-top: 0.3rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.ovpn-consent {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  margin: 1rem 0 0.5rem;
+  font-size: 0.8rem;
+}
+@media (max-width: 1200px) {
+  .ovpn-session {
+    grid-template-columns: 1fr 1.4fr;
+  }
+  .ovpn-disconnect {
+    justify-self: end;
+  }
+}
+@media (max-width: 640px) {
+  .ovpn-intro {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.2rem;
+  }
+  .ovpn-router {
+    width: 100%;
+  }
+  .ovpn-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ovpn-summary > div {
+    padding: 1rem;
+  }
+  .ovpn-summary > div:last-child {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .ovpn-session {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+    gap: 1.2rem;
+  }
+  .ovpn-disconnect {
+    justify-self: stretch;
+  }
+  .ovpn-path {
+    justify-content: space-between;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ovpn-workspace .animate-spin {
+    animation: none;
+  }
+}

@@ -12,8 +12,35 @@ import {
   Cmd,
 } from "../core/routeros";
 import { redactSecrets } from "../utils";
+import {
+  listOpenVpnSessions,
+  disconnectOpenVpnSession,
+  disconnectOpenVpnInput,
+} from "../core/openvpn-sessions";
 
 export const openvpnTools: ToolModule = [
+  defineTool({
+    name: "list_ovpn_sessions",
+    title: "List Active OpenVPN Connections",
+    annotations: READ,
+    description:
+      "Read currently connected OpenVPN users on an explicit router, including assigned IP, caller address, uptime, encoding and RADIUS status. Reads only /ppp active where service=ovpn; does not read secrets, historical sessions, or outbound clients. Returns structured JSON and short-lived disconnect tokens for individual sessions. A cached read is at most two seconds old; errors are not an empty list.",
+    inputSchema: {},
+    async handler(_a, ctx) {
+      return JSON.stringify(await listOpenVpnSessions(ctx));
+    },
+  }),
+  defineTool({
+    name: "disconnect_ovpn_session",
+    title: "Disconnect One OpenVPN Connection",
+    annotations: DESTRUCTIVE,
+    description:
+      "Disconnect exactly one observed OpenVPN connection after explicit operator approval. First list_ovpn_sessions on the same explicit router, then supply its fresh disconnectToken. Rechecks internal ID, session ID, username, addresses and uptime before removal, then verifies absence. Does not disable or delete the account; clients can reconnect and PPP on-down hooks may run. Can interrupt your own management tunnel. Unknown outcomes must be reconciled by reading again, never automatically retried. Not available during Safe Mode.",
+    inputSchema: disconnectOpenVpnInput.shape,
+    async handler(a, ctx) {
+      return JSON.stringify(await disconnectOpenVpnSession(a, ctx));
+    },
+  }),
   defineTool({
     name: "get_ovpn_server",
     title: "Get OpenVPN Server Configuration",

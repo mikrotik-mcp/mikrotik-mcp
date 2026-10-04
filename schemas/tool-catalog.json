@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "5.20.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 958,
+  "toolCount": 960,
   "tools": [
     {
       "name": "create_client_check",
@@ -22461,6 +22461,53 @@
           }
         },
         "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_ovpn_sessions",
+      "title": "List Active OpenVPN Connections",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read currently connected OpenVPN users on an explicit router, including assigned IP, caller address, uptime, encoding and RADIUS status. Reads only /ppp active where service=ovpn; does not read secrets, historical sessions, or outbound clients. Returns structured JSON and short-lived disconnect tokens for individual sessions. A cached read is at most two seconds old; errors are not an empty list.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "disconnect_ovpn_session",
+      "title": "Disconnect One OpenVPN Connection",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Disconnect exactly one observed OpenVPN connection after explicit operator approval. First list_ovpn_sessions on the same explicit router, then supply its fresh disconnectToken. Rechecks internal ID, session ID, username, addresses and uptime before removal, then verifies absence. Does not disable or delete the account; clients can reconnect and PPP on-down hooks may run. Can interrupt your own management tunnel. Unknown outcomes must be reconciled by reading again, never automatically retried. Not available during Safe Mode.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "Fresh disconnectToken from list_ovpn_sessions on this router; expires after 60 seconds and is single-use."
+          },
+          "confirm": {
+            "type": "boolean",
+            "const": true,
+            "description": "Explicit operator approval to terminate this one live connection. The client can reconnect."
+          }
+        },
+        "required": ["token", "confirm"],
         "additionalProperties": false
       }
     },

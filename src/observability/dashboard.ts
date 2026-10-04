@@ -65,6 +65,7 @@ import { clientCheckRoutes } from "../client-check/routes";
 import { clientCheckNetwork } from "../client-check/network";
 import { serviceContractRoutes } from "./service-contract-routes";
 import { operationsRoutes } from "./operations-routes";
+import { openVpnRoutes } from "./openvpn-routes";
 import { roundTripRoutes } from "./round-trip-routes";
 import {
   allowDevice,
@@ -1681,6 +1682,8 @@ export async function runDashboard(
     if (serviceContractResp) return serviceContractResp;
     const operationsResp = await operationsRoutes(req, url);
     if (operationsResp) return operationsResp;
+    const openVpnResp = await openVpnRoutes(req, url);
+    if (openVpnResp) return openVpnResp;
 
     const roundTripResp = await roundTripRoutes(req, url);
     if (roundTripResp) return roundTripResp;
