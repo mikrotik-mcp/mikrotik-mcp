@@ -1,3 +1,5 @@
+import { NAVIGATION_SECTIONS, PAGE_SEARCH_TERMS } from "./navigation-sections";
+
 export type ViewId =
   | "openvpn"
   | "recovery-lab"
@@ -156,57 +158,7 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "feed", label: "Live Feed", sub: "Every tool call, in real time" },
 ];
 
-export const NAV_GROUPS: { id: string; label: string; views: ViewId[] }[] = [
-  {
-    id: "observe",
-    label: "Observe",
-    views: ["overview", "home-internet", "devices", "interfaces", "clients", "openvpn", "feed"],
-  },
-  {
-    id: "investigate",
-    label: "Investigate",
-    views: [
-      "flight-recorder",
-      "investigations",
-      "client-checks",
-      "support-bundles",
-      "service-contracts",
-      "round-trip",
-      "topology",
-      "fabric",
-      "flows",
-      "packets",
-    ],
-  },
-  {
-    id: "protect",
-    label: "Protect",
-    views: ["attacks", "vulns", "policies", "access", "aaa", "capsman"],
-  },
-  {
-    id: "operate",
-    label: "Operate",
-    views: [
-      "plan",
-      "service-routing",
-      "router-migration",
-      "recovery-lab",
-      "simulator",
-      "txn",
-      "snapshots",
-      "drift",
-      "backups",
-      "s3",
-      "schedules",
-      "explain",
-    ],
-  },
-  {
-    id: "workspace",
-    label: "Workspace",
-    views: ["prompts", "modules", "config", "memory", "alerts", "releases"],
-  },
-];
+export const NAV_GROUPS = NAVIGATION_SECTIONS;
 
 export function viewGroup(view: ViewId) {
   return NAV_GROUPS.find((group) => group.views.includes(view)) ?? NAV_GROUPS[0];
@@ -227,7 +179,9 @@ export function navigationGroups(query: string) {
       .map((id) => VIEWS.find((view) => view.id === id)!)
       .filter((view) =>
         words.every((word) =>
-          `${view.label} ${view.sub} ${group.label}`.toLowerCase().includes(word),
+          `${view.label} ${view.sub} ${group.label} ${PAGE_SEARCH_TERMS[view.id] ?? ""}`
+            .toLowerCase()
+            .includes(word),
         ),
       ),
   })).filter((group) => group.items.length > 0);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -17,6 +17,7 @@ import {
 } from "./components/beui/registry/components/motion/animated-sidebar";
 import { Button } from "./components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "./components/ui/scroll-area";
 import { navigationGroups, viewGroup, VIEWS } from "./navigation";
 import {
   NAVIGATION_PINS_KEY,
@@ -77,6 +78,7 @@ export function DashboardSidebar({
   const sidebar = useAnimatedSidebar();
   const collapsed = !sidebar.open && !sidebar.isMobile;
   const [query, setQuery] = useState("");
+  const navigationViewport = useRef<HTMLDivElement>(null);
   const [pins, setPins] = useState(() => readNavigationPins());
   const [pinNotice, setPinNotice] = useState("");
   useEffect(() => {
@@ -96,6 +98,20 @@ export function DashboardSidebar({
   const [groupState, setGroupState] = useState(() => ({ view, expanded: new Set([activeGroup]) }));
   // A newly navigated page reveals its own group without an effect-driven render.
   const expanded = groupState.view === view ? groupState.expanded : new Set([activeGroup]);
+  useEffect(() => {
+    if (query.trim() || (sidebar.isMobile && !sidebar.openMobile)) return;
+    const viewport = navigationViewport.current;
+    const activeLink = viewport?.querySelector<HTMLElement>(
+      '.shell-nav-group .shell-nav-link[aria-current="page"]',
+    );
+    if (!viewport || !activeLink) return;
+    const bounds = viewport.getBoundingClientRect();
+    const link = activeLink.getBoundingClientRect();
+    if (!bounds.height || !link.height) return;
+    // Scroll this viewport only: scrollIntoView would also move the dashboard.
+    if (link.bottom > bounds.bottom) viewport.scrollTop += link.bottom - bounds.bottom + 12;
+    else if (link.top < bounds.top) viewport.scrollTop += link.top - bounds.top - 12;
+  }, [view, query, collapsed, sidebar.isMobile, sidebar.openMobile]);
   // A desktop resize must not leave an invisible modal trapping keyboard focus.
   useEffect(() => {
     const desktop = window.matchMedia("(min-width: 900px)");
@@ -230,75 +246,87 @@ export function DashboardSidebar({
           </button>
         )}
       </div>
-      <nav className="shell-nav" aria-label="Dashboard navigation">
-        {!query.trim() && (
-          <section className="shell-pinned" aria-label="Pinned pages">
-            <div className="shell-pinned-heading">
-              <Pin size={12} aria-hidden="true" />
-              <span>Pinned</span>
-              <span>{pins.length}</span>
-            </div>
-            {pins.length > 0 ? (
-              <div className="shell-nav-track">
-                {pins.map((id) =>
-                  pageRow(
-                    VIEWS.find((item) => item.id === id)!,
-                    instance,
-                    true,
-                  ),
-                )}
+      <ScrollArea className="shell-nav-scroll" viewportProps={{ ref: navigationViewport }}>
+        <nav className="shell-nav" aria-label="Dashboard navigation">
+          {!query.trim() && (
+            <section className="shell-pinned" aria-label="Pinned pages">
+              <div className="shell-pinned-heading">
+                <Pin size={12} aria-hidden="true" />
+                <span>Pinned</span>
+                <span>{pins.length}</span>
               </div>
-            ) : (
-              <p className="shell-pin-hint">Pin your go-to pages for quick access.</p>
-            )}
-          </section>
-        )}
-        <p
-          className={pinNotice.includes("unavailable") ? "shell-pin-hint" : "sr-only"}
-          role="status"
-        >
-          {pinNotice}
-        </p>
-        {groups.map((group) => {
-          const open = collapsed || Boolean(query.trim()) || expanded.has(group.id);
-          return (
-            <section className="shell-nav-group" key={group.id}>
-              <button
-                type="button"
-                className="shell-group-heading"
-                aria-expanded={open}
-                aria-controls={`${instance}-${group.id}`}
-                onClick={() =>
-                  setGroupState(() => {
-                    const next = new Set(expanded);
-                    if (next.has(group.id)) next.delete(group.id);
-                    else next.add(group.id);
-                    return { view, expanded: next };
-                  })
-                }
-              >
-                <span>{group.label}</span>
-                <span className="shell-group-meta">
-                  {group.views.includes("alerts") && firingCount > 0 && (
-                    <span className="shell-alert-dot" aria-label={`${firingCount} alerts firing`} />
+              {pins.length > 0 ? (
+                <div className="shell-nav-track">
+                  {pins.map((id) =>
+                    pageRow(
+                      VIEWS.find((item) => item.id === id)!,
+                      instance,
+                      true,
+                    ),
                   )}
-                  {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                </span>
-              </button>
-              <div id={`${instance}-${group.id}`} className="shell-nav-track" hidden={!open}>
-                {group.items.map((item) => pageRow(item, instance))}
-              </div>
+                </div>
+              ) : (
+                <p className="shell-pin-hint">Pin your go-to pages for quick access.</p>
+              )}
             </section>
-          );
-        })}
-        {groups.length === 0 && (
-          <div className="shell-nav-empty" role="status">
-            <Search size={20} />
-            <strong>No matching pages</strong>
-            <span>Try “flows”, “backup” or “router”.</span>
-          </div>
-        )}
-      </nav>
+          )}
+          <p
+            className={pinNotice.includes("unavailable") ? "shell-pin-hint" : "sr-only"}
+            role="status"
+          >
+            {pinNotice}
+          </p>
+          {groups.map((group) => {
+            const open = collapsed || Boolean(query.trim()) || expanded.has(group.id);
+            return (
+              <section className="shell-nav-group" key={group.id}>
+                <button
+                  type="button"
+                  className="shell-group-heading"
+                  aria-label={group.label}
+                  title={group.description}
+                  data-active={group.id === activeGroup}
+                  aria-expanded={open}
+                  aria-controls={`${instance}-${group.id}`}
+                  onClick={() =>
+                    setGroupState(() => {
+                      const next = new Set(expanded);
+                      if (next.has(group.id)) next.delete(group.id);
+                      else next.add(group.id);
+                      return { view, expanded: next };
+                    })
+                  }
+                >
+                  <span>{group.label}</span>
+                  <span className="shell-group-meta">
+                    <span className="shell-group-size" aria-hidden="true">
+                      {group.items.length}
+                    </span>
+                    {group.views.includes("alerts") && firingCount > 0 && (
+                      <span
+                        className="shell-alert-dot"
+                        aria-label={`${firingCount} alerts firing`}
+                      />
+                    )}
+                    {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  </span>
+                </button>
+                <div id={`${instance}-${group.id}`} className="shell-nav-track" hidden={!open}>
+                  <p className="shell-group-description">{group.description}</p>
+                  {group.items.map((item) => pageRow(item, instance))}
+                </div>
+              </section>
+            );
+          })}
+          {groups.length === 0 && (
+            <div className="shell-nav-empty" role="status">
+              <Search size={20} />
+              <strong>No matching pages</strong>
+              <span>Try “flows”, “backup” or “router”.</span>
+            </div>
+          )}
+        </nav>
+      </ScrollArea>
       <footer className="shell-sidebar-footer">
         <div className="shell-instance">
           <StreamStatus mode={liveMode} />

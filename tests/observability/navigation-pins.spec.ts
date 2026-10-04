@@ -8,6 +8,11 @@ import {
 } from "../../ui/observability/navigation-pins";
 
 describe("pinned dashboard pages", () => {
+  it("keeps existing shortcuts and their order when pages move between categories", () => {
+    const previousPins = ["capsman", "aaa", "openvpn", "alerts", "simulator", "access", "devices"];
+    expect(parseNavigationPins(JSON.stringify(previousPins))).toEqual(previousPins);
+  });
+
   it("starts empty and ignores corrupt or outdated browser preferences", () => {
     for (const raw of [null, "bad json", "null", "{}", "true", '"overview"'])
       expect(parseNavigationPins(raw)).toEqual([]);

@@ -1,0 +1,45 @@
+/* Task-based navigation: quiet counts, context on expansion, one shared scrollbar. */
+.shell-nav-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  margin: -5px -6px 0;
+}
+.shell-nav-scroll .shell-nav {
+  overflow: visible;
+  margin: 0;
+  padding: 0 6px 12px;
+}
+.shell-group-heading[data-active="true"] {
+  color: var(--brand);
+}
+.shell-group-heading {
+  gap: 6px;
+  text-align: start;
+  letter-spacing: 0.7px;
+}
+.shell-group-heading:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.shell-group-meta {
+  flex-shrink: 0;
+  gap: 7px;
+}
+.shell-group-size {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+.shell-group-description {
+  margin: 0 9px 9px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.shell-animated-sidebar[data-state="collapsed"] .shell-group-description {
+  display: none;
+}

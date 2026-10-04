@@ -1547,7 +1547,7 @@ function App(): ReactNode {
               <Menu />
             </AnimatedSidebarTrigger>
             <div className="shell-breadcrumb">
-              <span>Workspace</span>
+              <span>Dashboard</span>
               <ChevronRight size={13} aria-hidden="true" />
               <b>{viewGroup(view).label}</b>
             </div>

@@ -679,6 +679,8 @@ Full reference: **[docs/observability.md](docs/observability.md)**.
 
 The dashboard includes a responsive operations shell with searchable grouped
 navigation, pinned page shortcuts, a mobile drawer, and coordinated light/dark themes.
+Its 41 pages are organised into eight task-based categories, with shared-scrollbar
+navigation, category counts and common-term search. [Navigation guide](docs/dashboard-navigation.md).
 The activity chart pairs a dotted canvas with animated successful-call trends and
 independent error bars, with reduced-motion and pause controls.
 BeUI now powers the dashboard's shared buttons, inputs, badges, checkboxes,
