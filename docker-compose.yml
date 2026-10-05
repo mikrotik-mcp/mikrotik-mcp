@@ -3,7 +3,7 @@ name: mikrotik-mcp
 services:
   mikrotik-mcp:
     # Published multi-platform image; opt into another release explicitly.
-    image: alimaster/mikrotik-mcp:${MIKROTIK_IMAGE_TAG:-6.0.0}
+    image: alimaster/mikrotik-mcp:${MIKROTIK_IMAGE_TAG:-6.1.0}
     container_name: mikrotik-mcp
     restart: unless-stopped
     command: ["serve"]

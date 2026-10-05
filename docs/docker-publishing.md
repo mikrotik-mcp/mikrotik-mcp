@@ -176,8 +176,8 @@ source commit, native tests and any platform limitations in the release record.
 After reviewing backups and confirming pending configuration changes:
 
 ```sh
-MIKROTIK_IMAGE_TAG=6.0.0 docker compose pull mikrotik-mcp
-MIKROTIK_IMAGE_TAG=6.0.0 docker compose up -d mikrotik-mcp
+MIKROTIK_IMAGE_TAG=6.1.0 docker compose pull mikrotik-mcp
+MIKROTIK_IMAGE_TAG=6.1.0 docker compose up -d mikrotik-mcp
 docker compose ps mikrotik-mcp
 docker compose logs --tail 50 mikrotik-mcp
 ```
@@ -272,6 +272,34 @@ and [manifest promotion](https://docs.docker.com/reference/cli/docker/buildx/ima
   the observability dashboard exceeded the 2,000 kB chunk warning threshold.
 - Aligned the previously stale MCPB manifest, Compose default and current Docker
   examples to 6.0.0.
+- Removed only this publication's disposable smoke containers and verification
+  image tag. The pulled release image and build cache were retained.
+- No running user service was upgraded or restarted; no router settings changed.
+
+## 6.1.0 publication record — October 5, 2026
+
+- Application source: release `6.1.0` / `f1fc0dd` (no application-source edits).
+- Published version: `alimaster/mikrotik-mcp:6.1.0`. `latest` was left unchanged.
+- Index digest: `sha256:3513a4f6eec5369da44f6875e2f6d6f2961060e124dd4cb7a2cb15fa0b6599d4`.
+- The interactive publisher validated the saved Docker Hub account, checked that
+  the version tag was absent, pushed and read back the matching digest and both
+  `linux/amd64` and `linux/arm64` manifests, with build attestations.
+- Local-build and pulled-digest native ARM64 checks passed: Bun 1.4.2, application
+  6.1.0, UID 1000, CLI version, health, dashboard on 9090, MCP initialization and
+  all 963 unique tools. The packaged catalog includes RouterOS v7 Wi-Fi status,
+  channel scanning and security-profile inspection tools.
+  Checks used `--network none`, a writable synthetic JSON mount, no published
+  host ports and no real router credentials.
+- Native AMD64 execution was not tested. Cross-building is not a runtime test.
+- Native ARM64 local image size: 151,769,261 bytes, not compressed transfer size.
+- Repository gate: 2,968 tests, typecheck and lint passed. One repeated gate hit
+  an existing wall-clock-sensitive assertion (`refreshAfterMs` was 29,999 rather
+  than 30,000); its focused suite and the full gate subsequently passed without
+  source changes. Publication used that verified source.
+- All 15 UI assets built; the observability dashboard still exceeded the
+  2,000 kB chunk warning threshold.
+- Aligned the previously stale MCPB manifest, Compose default and current Docker
+  examples to 6.1.0 separately from application code.
 - Removed only this publication's disposable smoke containers and verification
   image tag. The pulled release image and build cache were retained.
 - No running user service was upgraded or restarted; no router settings changed.
