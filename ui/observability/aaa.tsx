@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Copy, Eye, EyeOff, Plus, RefreshCw, Shuffle } from "lucide-react";
+import { Eye, EyeOff, Plus, RefreshCw, Shuffle } from "lucide-react";
 import { Input as BeuiInput } from "@/components/beui/registry/components/motion/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -32,6 +32,7 @@ import { bytes, clock } from "./format";
 import { generateUserPassword, UserCreatedDialog } from "./aaa-user-credentials";
 import type { CreatedUserReceipt } from "./aaa-user-credentials";
 import { UserProfileField } from "./aaa-user-profile";
+import { UserActionRow } from "./aaa-user-actions";
 import type { OpResult } from "../../src/tools/aaa-data";
 import type { UmUserCounters } from "../../src/observability/um-reports";
 
@@ -653,8 +654,8 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
               const id = r[config.idKey];
               const off = isDisabled(r);
               const counter = counters.rows.get(r.name);
-              return (
-                <TableRow key={id || rowLabel(r, config)}>
+              const cells = (
+                <>
                   {config.columns.map((c) => (
                     <TableCell
                       key={c.key}
@@ -721,21 +722,29 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                       </TableCell>
                     </>
                   )}
+                </>
+              );
+              if (showCounters) {
+                return (
+                  <UserActionRow
+                    key={`${device}:${id}`}
+                    name={r.name}
+                    busy={busy}
+                    disabled={off}
+                    onDuplicate={() => void duplicateUser(r)}
+                    onEdit={() => openEdit(r)}
+                    onToggle={() => void post("toggle", { id, enable: off })}
+                    onRemove={() => void post("remove", { id })}
+                  >
+                    {cells}
+                  </UserActionRow>
+                );
+              }
+              return (
+                <TableRow key={id || rowLabel(r, config)}>
+                  {cells}
                   <TableCell className="text-right">
                     <span className="flex justify-end gap-1.5">
-                      {showCounters && (
-                        <Button
-                          size="sm"
-                          ghost
-                          icon={<Copy />}
-                          disabled={busy}
-                          aria-label={`Duplicate ${r.name}`}
-                          title="Copy settings into a new user"
-                          onClick={() => void duplicateUser(r)}
-                        >
-                          Duplicate
-                        </Button>
-                      )}
                       {config.toggle && (
                         <Button
                           size="sm"
@@ -956,7 +965,6 @@ const UM_USERS_CONFIG: EntityConfig = {
     { key: "name", label: "Name" },
     { key: "group", label: "Group" },
     { key: "shared-users", label: "Shared" },
-    { key: "caller-id", label: "Caller ID" },
     { key: "comment", label: "Comment" },
     { key: "_status", label: "Status" },
   ],

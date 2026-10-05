@@ -76,6 +76,18 @@ const button = (label: string) =>
 const click = async (el: HTMLElement) => {
   await act(async () => el.click());
 };
+const userAction = async (label: string, name = "existing") => {
+  const trigger = host.querySelector<HTMLButtonElement>(`[aria-label="Actions for ${name}"]`)!;
+  await act(async () => {
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  await click(
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === label,
+    )!,
+  );
+};
 const open = async () => {
   await act(async () => root.render(h(AaaView)));
   await click(button("Users"));
@@ -105,6 +117,46 @@ const fillName = async () => {
   await fill("Name", "alice");
   await fill("Password", "New!234x");
 };
+test("removes only the Caller ID column and preserves its editable value", async () => {
+  await open();
+  await click(button("Cancel"));
+  const headers = [...host.querySelectorAll("th")].map((el) => el.textContent);
+  expect(headers).not.toContain("Caller ID");
+  expect(headers).toEqual([
+    "Name",
+    "Group",
+    "Shared",
+    "Comment",
+    "Status",
+    "Total connected time",
+    "Last connection",
+    "↓ Download",
+    "↑ Upload",
+    "Actions",
+  ]);
+  expect(host.querySelectorAll('[aria-label^="Actions for "]')).toHaveLength(2);
+  expect(button("Edit")).toBeUndefined();
+  expect(button("Duplicate")).toBeUndefined();
+  await userAction("Edit");
+  expect(host.textContent).toContain("Caller ID (MAC)");
+});
+test.each(["Disable", "Remove"])(
+  "menu %s mutates only the selected user on the selected router",
+  async (action) => {
+    await open();
+    await click(button("Cancel"));
+    await userAction(action, "existing-copy");
+    expect(postJson).toHaveBeenCalledExactlyOnceWith(
+      `/api/aaa/${action === "Disable" ? "toggle" : "remove"}`,
+      {
+        device: "home",
+        slug: "um-users",
+        id: "existing-copy",
+        ...(action === "Disable" ? { enable: false } : {}),
+      },
+    );
+  },
+);
 test("loads same-router profiles only on add and submits the chosen profile with the user", async () => {
   await open();
   expect(api).toHaveBeenCalledWith(
@@ -122,7 +174,7 @@ test("loads same-router profiles only on add and submits the chosen profile with
     fields: { name: "alice", password: "New!234x", profile: "Monthly" },
   });
   expect(host.querySelector('[aria-label="Initial profile"]')).toBeNull();
-  await click(button("Edit"));
+  await userAction("Edit");
   expect(host.querySelector('[aria-label="Initial profile"]')).toBeNull();
 });
 test("supports no profile and resets choices when the router changes", async () => {
@@ -218,11 +270,11 @@ test("toggles password visibility without changing the value and hides it in eve
   expect(input().type).toBe("password");
   expect(input().value).toBe("");
   await click(host.querySelector('[aria-label="Show password"]')!);
-  await click(button("Edit"));
+  await userAction("Edit");
   expect(input().type).toBe("password");
   expect(input().value).toBe("");
   await click(host.querySelector('[aria-label="Show password"]')!);
-  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  await userAction("Duplicate");
   expect(input().type).toBe("password");
   expect(input().value).toBe("");
   expect(postJson).not.toHaveBeenCalled();
@@ -280,7 +332,7 @@ test("keeps failed drafts, but shows credentials with a warning for confirmed cr
 test("duplicates only editable non-secret settings and the single assigned profile into a new draft", async () => {
   await open();
   await click(button("Cancel"));
-  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  await userAction("Duplicate");
   expect(postJson).not.toHaveBeenCalled();
   expect(host.textContent).toContain("Settings copied from existing");
   expect(host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!.value).toBe("");
@@ -305,7 +357,7 @@ test("does not silently pick one of multiple profiles or create a passwordless d
   assignments.push({ user: "existing", profile: "Other" });
   await open();
   await click(button("Cancel"));
-  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  await userAction("Duplicate");
   expect(host.textContent).toContain("multiple profiles");
   await click(button("Create"));
   expect(postJson).not.toHaveBeenCalled();
@@ -343,7 +395,7 @@ test("ignores an old router's pending duplicate when the selected router changes
     }
     return original(path, abort);
   });
-  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  await userAction("Duplicate");
   await choose("Router", "remote");
   expect(signal?.aborted).toBe(true);
   await act(async () => resolve({ available: true, rows: assignments }));
@@ -362,7 +414,7 @@ test("keeps duplicate settings editable when profile lookup fails", async () => 
       ? Promise.reject(new Error("Device disconnected"))
       : original(path, signal),
   );
-  await click(host.querySelector('[aria-label="Duplicate existing"]')!);
+  await userAction("Duplicate");
   expect(host.textContent).toContain("Profile assignments could not be read");
   expect(button("Create").disabled).toBe(false);
   expect(host.querySelector<HTMLInputElement>('[autocomplete="new-password"]')!.value).toBe("");
@@ -371,7 +423,7 @@ test("keeps duplicate settings editable when profile lookup fails", async () => 
 test("edits the user's active service profile with a clear preview and an explicit save", async () => {
   await open();
   await click(button("Cancel"));
-  await click(button("Edit"));
+  await userAction("Edit");
   expect(host.querySelector('[aria-label="Service profile"]')?.textContent).toContain(
     "Keep current · Monthly",
   );
@@ -400,10 +452,10 @@ test("edits the user's active service profile with a clear preview and an explic
 test("saving other user fields leaves profiles untouched and selecting the current one is a no-op", async () => {
   await open();
   await click(button("Cancel"));
-  await click(button("Edit"));
+  await userAction("Edit");
   await click(button("Save"));
   expect(vi.mocked(postJson).mock.calls[0][1]).not.toHaveProperty("fields.profile");
-  await click(button("Edit"));
+  await userAction("Edit");
   await choose("Service profile", "10M-Standard");
   await choose("Service profile", "Monthly");
   await click(button("Save"));
@@ -414,7 +466,7 @@ test("profile lookup failure preserves editable user fields and retry restores t
   profileMode = "error";
   await open();
   await click(button("Cancel"));
-  await click(button("Edit"));
+  await userAction("Edit");
   expect(host.querySelector<HTMLButtonElement>('[aria-label="Service profile"]')!.disabled).toBe(
     true,
   );
@@ -433,14 +485,14 @@ test("no assignment and queued or expired assignments are not mislabeled as acti
   assignments = [];
   await open();
   await click(button("Cancel"));
-  await click(button("Edit"));
+  await userAction("Edit");
   expect(host.textContent).toContain("No active profile");
   await click(button("Cancel"));
   assignments = [
     { user: "existing", profile: "Monthly", state: "used" },
     { user: "existing", profile: "10M-Standard", state: "running" },
   ];
-  await click(button("Edit"));
+  await userAction("Edit");
   expect(host.textContent).toContain("No active profile");
   expect(host.textContent).toContain("2 assignments retained");
   await choose("Service profile", "10M-Standard");
@@ -452,7 +504,7 @@ test("ambiguous active profiles cannot be changed accidentally", async () => {
   assignments.push({ user: "existing", profile: "10M-Standard", state: "running-active" });
   await open();
   await click(button("Cancel"));
-  await click(button("Edit"));
+  await userAction("Edit");
   expect(host.textContent).toContain("Multiple active profiles");
   expect(host.querySelector<HTMLButtonElement>('[aria-label="Service profile"]')!.disabled).toBe(
     true,
@@ -464,7 +516,7 @@ test("ambiguous active profiles cannot be changed accidentally", async () => {
 test("partial edits refresh and close the draft without encouraging a blind replay", async () => {
   await open();
   await click(button("Cancel"));
-  await click(button("Edit"));
+  await userAction("Edit");
   await choose("Service profile", "10M-Standard");
   vi.mocked(postJson).mockResolvedValueOnce({
     ok: false,
@@ -493,7 +545,7 @@ test("changing routers aborts a pending edit-profile lookup and clears the draft
     }
     return original(path, abort);
   });
-  await click(button("Edit"));
+  await userAction("Edit");
   expect(host.querySelector<HTMLButtonElement>('[aria-label="Service profile"]')!.disabled).toBe(
     true,
   );
