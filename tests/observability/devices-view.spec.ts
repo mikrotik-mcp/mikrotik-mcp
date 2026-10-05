@@ -338,9 +338,10 @@ test("router inventory lists and counts draft addresses with a stable primary, n
   const addresses = (name: string) =>
     [...(list(name)?.querySelectorAll("li code") ?? [])].map((el) => el.textContent);
   expect(addresses("edge")).toEqual(["192.0.2.1:2222", "10.0.0.1:2222", "[2001:db8::1]:2222"]);
-  expect(list("edge")?.querySelector('[data-primary="true"]')?.textContent).toBe(
-    "192.0.2.1:2222Primary",
-  );
+  const primary = list("edge")?.querySelector('[data-primary="true"]');
+  expect(primary?.querySelector("code")?.textContent).toBe("192.0.2.1:2222");
+  expect(primary?.textContent).toContain("Primary");
+  expect(primary?.querySelector('[aria-label^="Network for 192.0.2.1:"]')).not.toBeNull();
   expect(list("edge")?.querySelectorAll('[data-primary="false"]')).toHaveLength(2);
   expect(list("edge")?.closest('[data-slot="scroll-area-viewport"]')).not.toBeNull();
   expect(addresses("branch")).toEqual(["192.0.2.2:22"]);
@@ -383,9 +384,9 @@ test("router inventory lists and counts draft addresses with a stable primary, n
   await click(dialogButton("Continue"));
   await click(dialogButton("Update draft"));
   expect(count("edge")?.textContent).toBe("4 addresses");
-  expect(list("edge")?.querySelector('[data-primary="true"]')?.textContent).toBe(
-    "[2001:db8::1]:2222Primary",
-  );
+  const updatedPrimary = list("edge")?.querySelector('[data-primary="true"]');
+  expect(updatedPrimary?.querySelector("code")?.textContent).toBe("[2001:db8::1]:2222");
+  expect(updatedPrimary?.textContent).toContain("Primary");
   expect(initial.devices.edge.fallbackHosts).toHaveLength(2);
   expect(
     calls.some((c) => c.path.includes("test-device") || c.path === "/api/config?scope=devices"),

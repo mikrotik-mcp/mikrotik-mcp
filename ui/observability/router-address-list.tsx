@@ -1,6 +1,7 @@
 import { Star } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { IpNetwork } from "./ip-network";
 
 /** Draft addresses, not connection status: Primary never follows the active fallback. */
 export function RouterAddressList({
@@ -33,9 +34,12 @@ export function RouterAddressList({
                 isPrimary ? "border-primary/30 bg-primary/5" : "border-border/60",
               )}
             >
-              <code dir="ltr" className="min-w-0 text-[11px] break-all">
-                {address}:{port}
-              </code>
+              <div className="grid min-w-0 flex-1 gap-1">
+                <code dir="ltr" className="min-w-0 text-[11px] break-all">
+                  {address}:{port}
+                </code>
+                <IpNetwork address={host} />
+              </div>
               <small
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1 text-[10px]",

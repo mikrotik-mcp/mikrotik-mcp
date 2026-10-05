@@ -139,7 +139,7 @@ import {
   startHealthChecks,
   stopHealthChecks,
 } from "./health";
-import { getDeviceGeo, startGeoLookups, stopGeoLookups } from "./geo";
+import { getDeviceGeo, ipGeoRoute, startGeoLookups, stopGeoLookups } from "./geo";
 import { flagSvg } from "./flags";
 import { configureRecorder, getEventStore, subscribe, subscriberCount } from "./recorder";
 import { readTrafficSample, subscribeTraffic } from "./traffic-hub";
@@ -1684,6 +1684,9 @@ export async function runDashboard(
     if (operationsResp) return operationsResp;
     const openVpnResp = await openVpnRoutes(req, url);
     if (openVpnResp) return openVpnResp;
+
+    const ipNetworkResp = ipGeoRoute(req, url);
+    if (ipNetworkResp) return ipNetworkResp;
 
     const roundTripResp = await roundTripRoutes(req, url);
     if (roundTripResp) return roundTripResp;

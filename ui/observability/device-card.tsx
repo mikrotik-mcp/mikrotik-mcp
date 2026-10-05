@@ -23,6 +23,7 @@ import { withToken } from "./api";
 import { ms, num } from "./format";
 import { DeviceHealthCard } from "./health";
 import { DeviceAddressStatus } from "./device-address-status";
+import { IpNetwork } from "./ip-network";
 import type { CapabilitiesJson, DeviceInfo } from "./types";
 
 export interface DeviceActions {
@@ -118,6 +119,7 @@ export function DeviceCard({
           <code>{d.address ?? (d.mac || `${d.host}:${d.port}`)}</code>
           <span>{channel}</span>
         </div>
+        {!d.mac && <IpNetwork address={d.host} />}
         {d.description && <p className="device-dossier__description">{d.description}</p>}
         <div className="device-dossier__checked">
           <Clock3 size={12} />

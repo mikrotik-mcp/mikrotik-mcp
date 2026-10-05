@@ -253,6 +253,19 @@ export function getIpGeo(address: string): IpGeo {
   return next.result;
 }
 
+/** Dashboard authentication is enforced by the outer handler; only literal IPs leave the host. */
+export function ipGeoRoute(req: Request, url: URL): Response | null {
+  if (url.pathname !== "/api/ip-network") return null;
+  const headers = { "cache-control": "no-store" };
+  if (req.method !== "GET")
+    return Response.json({ error: "Method not allowed" }, { status: 405, headers });
+  const address = url.searchParams.get("ip") ?? "";
+  const ip = address.length <= 128 ? sourceIpLiteral(address) : null;
+  if (!ip)
+    return Response.json({ error: "Provide an IPv4 or IPv6 address." }, { status: 400, headers });
+  return Response.json(getIpGeo(ip), { headers });
+}
+
 async function resolveDevice(name: string, host: string | undefined): Promise<void> {
   const ip = host ? await publicIpOf(host) : null;
   const geo = ip ? await fetchGeo(ip) : null;

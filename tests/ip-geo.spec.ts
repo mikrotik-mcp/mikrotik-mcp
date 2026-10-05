@@ -14,6 +14,31 @@ afterEach(() => {
 });
 const response = (code = "NL") => Response.json({ country: "Netherlands", country_code: code });
 
+test("IP network endpoint validates literals, rejects writes and never geolocates private addresses", async () => {
+  const request = (ip: string, method = "GET") => {
+    const url = new URL(`http://dashboard/api/ip-network?ip=${encodeURIComponent(ip)}`);
+    return geo.ipGeoRoute(new Request(url, { method }), url)!;
+  };
+  expect(
+    geo.ipGeoRoute(new Request("http://dashboard/other"), new URL("http://dashboard/other")),
+  ).toBeNull();
+  expect(request("8.8.8.8", "POST").status).toBe(405);
+  for (const value of ["localhost", "https://8.8.8.8", "8.8.8.8/24", "999.1.1.1", "x".repeat(129)])
+    expect(request(value).status).toBe(400);
+  expect(await request("10.0.0.1").json()).toEqual({ status: "private" });
+  expect(await request("fd00::1").json()).toEqual({ status: "private" });
+  expect(fetchMock).not.toHaveBeenCalled();
+  fetchMock.mockResolvedValue(
+    Response.json({ country_code: "NL", asn: 13335, asn_organization: "Example Network" }),
+  );
+  expect(await request("1.1.1.1").json()).toEqual({ status: "pending" });
+  await vi.waitFor(() => expect(geo.getIpGeo("1.1.1.1").status).toBe("resolved"));
+  const result = request("1.1.1.1");
+  expect(result.headers.get("cache-control")).toBe("no-store");
+  expect(await result.json()).toMatchObject({ asn: "AS13335", asnOrganization: "Example Network" });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 test("parses IPv4/IPv6 literals and endpoints without resolving hostnames or paths", () => {
   expect(geo.sourceIpLiteral("8.8.8.8:443")).toBe("8.8.8.8");
   expect(geo.sourceIpLiteral("[2606:4700::1111]:443")).toBe("2606:4700::1111");

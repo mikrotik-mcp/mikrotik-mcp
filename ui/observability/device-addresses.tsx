@@ -2,6 +2,7 @@ import { Globe2, Plus, Star, Trash2 } from "lucide-react";
 import { Input } from "@/components/beui/registry/components/motion/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "./geist";
+import { IpNetwork } from "./ip-network";
 import "./device-addresses.css";
 
 /** Preserve host as the canonical Primary; the rest are ordered fallbacks. */
@@ -40,16 +41,19 @@ export function DeviceAddressesEditor({
           {hosts.map((value, index) => (
             <div className="device-addresses__row" data-primary={index === 0} key={index}>
               <span className="device-addresses__order">{String(index + 1).padStart(2, "0")}</span>
-              <Input
-                id={index === 0 ? "f_host" : `f_fallback_${index}`}
-                aria-label={index === 0 ? "Host / IP" : `Alternate IP ${index}`}
-                value={value}
-                placeholder={index === 0 ? "192.168.88.1" : "203.0.113.10 or IPv6"}
-                onChange={(v) => change(hosts.map((h, i) => (i === index ? v.trim() : h)))}
-                autoComplete="off"
-                spellCheck={false}
-                classNames={{ field: "rounded-lg", input: "font-mono text-sm" }}
-              />
+              <div className="grid min-w-0 gap-1">
+                <Input
+                  id={index === 0 ? "f_host" : `f_fallback_${index}`}
+                  aria-label={index === 0 ? "Host / IP" : `Alternate IP ${index}`}
+                  value={value}
+                  placeholder={index === 0 ? "192.168.88.1" : "203.0.113.10 or IPv6"}
+                  onChange={(v) => change(hosts.map((h, i) => (i === index ? v.trim() : h)))}
+                  autoComplete="off"
+                  spellCheck={false}
+                  classNames={{ field: "rounded-lg", input: "font-mono text-sm" }}
+                />
+                <IpNetwork address={value} />
+              </div>
               <button
                 type="button"
                 className="device-addresses__primary"

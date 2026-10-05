@@ -1,6 +1,7 @@
 import { Clock3, Radio, Star } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNow } from "./use-now";
+import { IpNetwork } from "./ip-network";
 import type { DeviceEndpoints } from "../../src/core/device-endpoints";
 import "./device-addresses.css";
 
@@ -53,6 +54,7 @@ export function DeviceAddressStatus({ endpoints }: { endpoints: DeviceEndpoints 
               <i aria-hidden="true" />
               <div>
                 <code>{host}</code>
+                <IpNetwork address={host} />
                 <small>
                   {connections.length
                     ? connections.map((c) => `${c.transport.toUpperCase()} :${c.port}`).join(" · ")
