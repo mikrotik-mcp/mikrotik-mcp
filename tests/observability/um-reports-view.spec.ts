@@ -83,6 +83,38 @@ test("retains accounting statistics and charts without a session list or its con
   const query = new URL(vi.mocked(api).mock.calls[0][0], "http://fixture").searchParams;
   for (const key of ["search", "state", "page"]) expect(query.has(key)).toBe(false);
 });
+test("report date filters use the shared picker and send date-only boundaries to the API", async () => {
+  vi.setSystemTime(new Date(2026, 8, 28, 12));
+  const from = host.querySelector<HTMLButtonElement>('[aria-label="From date"]')!;
+  const through = host.querySelector<HTMLButtonElement>('[aria-label="Through date"]')!;
+  expect(from.dataset.slot).toBe("date-time-picker");
+  expect(through.dataset.slot).toBe("date-time-picker");
+  expect(host.querySelector('input[type="date"]')).toBeNull();
+  await act(async () => from.click());
+  expect(document.querySelector('input[type="time"]')).toBeNull();
+  const day = (n: number) =>
+    document.querySelector<HTMLButtonElement>(
+      `button[data-day="${new Date(2026, 8, n).toLocaleDateString()}"]`,
+    )!;
+  await act(async () => day(27).click());
+  let query = new URL(vi.mocked(api).mock.calls.at(-1)![0], "http://fixture").searchParams;
+  expect(query.get("from")).toBe("2026-09-27");
+  await act(async () => through.click());
+  expect(day(26).disabled).toBe(true);
+  await act(async () => day(28).click());
+  query = new URL(vi.mocked(api).mock.calls.at(-1)![0], "http://fixture").searchParams;
+  expect(query.get("to")).toBe("2026-09-28");
+  await act(async () => from.click());
+  expect(day(29).disabled).toBe(true);
+  await act(async () =>
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent === "Clear")!
+      .click(),
+  );
+  query = new URL(vi.mocked(api).mock.calls.at(-1)![0], "http://fixture").searchParams;
+  expect(query.get("from")).toBe("");
+  expect(query.get("to")).toBe("2026-09-28");
+});
 test("exports full-period statistics without individual session records", async () => {
   const button = [...host.querySelectorAll("button")].find(
     (b) => b.textContent === "Export report",

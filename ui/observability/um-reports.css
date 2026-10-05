@@ -80,14 +80,15 @@
   border-radius: 12px;
   background: var(--card);
 }
-.um-controls label {
+.um-controls > label,
+.um-controls .um-date-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 7px;
   min-width: 130px;
   flex: 1;
 }
-.um-controls label:first-child {
+.um-controls > label:first-child {
   min-width: 230px;
 }
 .um-controls [role="combobox"] {
@@ -98,6 +99,10 @@
   text-overflow: ellipsis;
 }
 .um-controls label > span {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.um-date-field > label {
   font-size: 10px;
   color: var(--muted-foreground);
 }

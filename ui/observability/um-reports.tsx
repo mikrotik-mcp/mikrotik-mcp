@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { format, parseISO } from "date-fns";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -15,8 +16,9 @@ import {
 } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { api } from "./api";
-import { Button, Input, Note, Select } from "./geist";
+import { Button, Note, Select } from "./geist";
 import { bytes, num } from "./format";
 import { saveDownload } from "./workspace-ui";
 import type { UmCollectionState, UmReport } from "../../src/observability/um-reports";
@@ -237,30 +239,28 @@ export function UmReports({ device }: { device: string }) {
             ]}
           />
         </label>
-        <label>
-          <span>From</span>
-          <Input
-            type="date"
+        <div className="um-date-field">
+          <label htmlFor="um-report-from">From</label>
+          <DateTimePicker
+            id="um-report-from"
             aria-label="From date"
-            value={from}
-            max={to || undefined}
-            onChange={(e) => {
-              setFrom(e.target.value);
-            }}
+            showTime={false}
+            value={from ? parseISO(from) : undefined}
+            max={to ? parseISO(to) : undefined}
+            onChange={(date) => setFrom(date ? format(date, "yyyy-MM-dd") : "")}
           />
-        </label>
-        <label>
-          <span>Through</span>
-          <Input
-            type="date"
+        </div>
+        <div className="um-date-field">
+          <label htmlFor="um-report-to">Through</label>
+          <DateTimePicker
+            id="um-report-to"
             aria-label="Through date"
-            value={to}
-            min={from || undefined}
-            onChange={(e) => {
-              setTo(e.target.value);
-            }}
+            showTime={false}
+            value={to ? parseISO(to) : undefined}
+            min={from ? parseISO(from) : undefined}
+            onChange={(date) => setTo(date ? format(date, "yyyy-MM-dd") : "")}
           />
-        </label>
+        </div>
         <Button
           size="sm"
           ghost
