@@ -25,6 +25,12 @@ import {
 
 const read = vi.hoisted(() => vi.fn(async (_command: string) => "[]"));
 vi.mock("../../src/core/connector", () => ({ executeMikrotikCommand: read }));
+vi.mock("../../src/observability/um-last-connections", () => ({
+  getUmLastConnections: () => ({
+    status: "ready",
+    values: new Map([["alice", "2026-10-05 12:34:56"]]),
+  }),
+}));
 const original = getConfig();
 beforeEach(() => {
   setConfig(
@@ -128,16 +134,40 @@ describe("User Manager accounting reports", () => {
         ]),
       );
     const [one, two] = await Promise.all([getUmUserCounters("edge"), getUmUserCounters("edge")]);
-    expect(one).toBe(two);
+    expect(one).toEqual(two);
     expect(one.rows).toEqual([
-      { id: "*1", name: "alice", download: 4000, upload: 700, seconds: 176400, active: 2 },
-      { id: "*2", name: "bob", download: 0, upload: 0, seconds: 0, active: 0 },
-      { id: "*3", name: "new-user", download: null, upload: null, seconds: null, active: null },
+      {
+        id: "*1",
+        name: "alice",
+        download: 4000,
+        upload: 700,
+        seconds: 176400,
+        active: 2,
+        lastConnection: "2026-10-05 12:34:56",
+      },
+      {
+        id: "*2",
+        name: "bob",
+        download: 0,
+        upload: 0,
+        seconds: 0,
+        active: 0,
+        lastConnection: null,
+      },
+      {
+        id: "*3",
+        name: "new-user",
+        download: null,
+        upload: null,
+        seconds: null,
+        active: null,
+        lastConnection: null,
+      },
     ]);
     expect(JSON.stringify(one)).not.toContain("hidden");
     expect(read).toHaveBeenCalledTimes(2);
     expect(read.mock.calls.some(([cmd]) => cmd.includes("session"))).toBe(false);
-    expect(await getUmUserCounters("edge")).toBe(one);
+    expect(await getUmUserCounters("edge")).toEqual(one);
     expect(read).toHaveBeenCalledTimes(2);
     await expect(getUmUserCounters("missing")).rejects.toThrow();
     expect(read).toHaveBeenCalledTimes(2);

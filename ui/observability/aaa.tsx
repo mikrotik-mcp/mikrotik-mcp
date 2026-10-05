@@ -437,8 +437,19 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
           )}
           <span className="basis-full text-muted-foreground">
             Cumulative User Manager totals, not the current connection only. Values update when the
-            NAS sends RADIUS accounting; refresh does not reset counters.
+            NAS sends RADIUS accounting; refresh does not reset counters. Last connection uses
+            router local time and refreshes in the background every 30s.
           </span>
+          {counters.data?.lastConnections?.status === "unavailable" && (
+            <span className="basis-full text-warning">
+              Last connection dates unavailable. Other counters are unaffected.
+            </span>
+          )}
+          {counters.data?.lastConnections?.status === "stale" && (
+            <span className="basis-full text-muted-foreground">
+              Last connection dates are cached while the next read completes.
+            </span>
+          )}
           {counters.error && (
             <span role="alert" className="basis-full text-warning">
               {counters.error}
@@ -627,6 +638,9 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
               {showCounters && (
                 <>
                   <TableHead className="text-right">Total connected time</TableHead>
+                  <TableHead title="Start of the latest retained accounting session · router local time">
+                    Last connection
+                  </TableHead>
                   <TableHead className="text-right text-chart-1">↓ Download</TableHead>
                   <TableHead className="text-right text-chart-2">↑ Upload</TableHead>
                 </>
@@ -672,6 +686,26 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                         title="Cumulative accounted connection time across this user's sessions"
                       >
                         {counter?.seconds == null ? "—" : connectionTime(counter.seconds)}
+                      </TableCell>
+                      <TableCell
+                        className="whitespace-nowrap"
+                        title="Latest retained session start · router local time (not browser time)"
+                      >
+                        {counter?.lastConnection ? (
+                          <div className="grid gap-1 font-mono tabular-nums">
+                            <span>{counter.lastConnection.slice(0, 10)}</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {counter.lastConnection.slice(11)}
+                              {counters.data?.lastConnections?.status === "stale" && " · cached"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">
+                            {counters.data?.lastConnections?.status === "pending"
+                              ? "Loading…"
+                              : "Unknown"}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell
                         className="text-right font-mono tabular-nums text-chart-1"

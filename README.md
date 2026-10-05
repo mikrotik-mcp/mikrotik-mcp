@@ -451,6 +451,10 @@ and last-seen.
 
 **RADIUS & User Manager.** Servers, sessions, profiles, limitations and vouchers.
 
+The **Users** table also shows each user's last recorded connection date and time
+(router-local time), using a separate background cache so traffic counters stay fast.
+See [last connection reporting](docs/user-manager-last-connections.md).
+
 In **Users → Edit → Service profile**, keep the current profile or choose another
 profile on the selected router. Saving reuses an eligible assignment (or creates
 one), activates it and verifies the result. Previous assignments and accounting

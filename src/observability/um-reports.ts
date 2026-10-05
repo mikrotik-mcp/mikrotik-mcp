@@ -7,6 +7,7 @@ import { parseKeyValues, parseRouterosDate, parseSize } from "../core/routeros-p
 import { getConfig, onConfigChanged, resolveDeviceName } from "../core/runtime";
 import { assertDeviceAccess } from "../core/scoped-access";
 import { loadUmReportCache, saveUmReportCache, umReportCachePath } from "./um-report-cache";
+import { getUmLastConnections } from "./um-last-connections";
 
 type Row = Record<string, string>;
 const DAY = 86_400_000;
@@ -437,6 +438,7 @@ export interface UmUserCounters {
   collectedAt: number;
   available: boolean;
   error?: string;
+  lastConnections?: { status: "pending" | "ready" | "stale" | "unavailable"; collectedAt?: number };
   rows: {
     id: string;
     name: string;
@@ -444,6 +446,8 @@ export interface UmUserCounters {
     seconds: number | null;
     download: number | null;
     upload: number | null;
+    /** Latest retained session start, in router-local wall-clock time. */
+    lastConnection?: string | null;
   }[];
 }
 const userCounterCache = new Map<
@@ -455,7 +459,7 @@ const userCounterCache = new Map<
   }
 >();
 
-/** Short, shared read for the Users table; never walks historical sessions. */
+/** Short counter read; last connection summaries refresh independently in the background. */
 export async function getUmUserCounters(device?: string): Promise<UmUserCounters> {
   const name = resolveDeviceName(device);
   assertDeviceAccess([name], "list_user_manager_users", "READ");
@@ -465,8 +469,21 @@ export async function getUmUserCounters(device?: string): Promise<UmUserCounters
     entry = { config };
     userCounterCache.set(name, entry);
   }
-  if (entry.pending) return entry.pending;
-  if (entry.value && Date.now() - entry.value.collectedAt < 2500) return entry.value;
+  const withLastConnections = (value: UmUserCounters): UmUserCounters => {
+    if (!value.available || !value.rows.length) return value;
+    const latest = getUmLastConnections(name);
+    return {
+      ...value,
+      lastConnections: { status: latest.status, collectedAt: latest.collectedAt },
+      rows: value.rows.map((row) => ({
+        ...row,
+        lastConnection: latest.values.get(row.name) ?? null,
+      })),
+    };
+  };
+  if (entry.pending) return entry.pending.then(withLastConnections);
+  if (entry.value && Date.now() - entry.value.collectedAt < 2500)
+    return withLastConnections(entry.value);
   const target = entry;
   target.pending = (async (): Promise<UmUserCounters> => {
     const ctx = createContext(undefined, name);
@@ -503,7 +520,7 @@ export async function getUmUserCounters(device?: string): Promise<UmUserCounters
   })().finally(() => {
     target.pending = undefined;
   });
-  return target.pending;
+  return target.pending.then(withLastConnections);
 }
 
 /** RouterOS JSON serializes long durations as epoch dates, not ISO durations. */

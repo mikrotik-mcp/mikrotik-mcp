@@ -80,7 +80,9 @@ test("shows user-perspective totals and refreshes without replacing an open edit
   expect(row("alice").textContent).toContain("2 active connections");
   expect(row("zero").textContent).toContain("00:00:00");
   expect(row("zero").textContent).toContain("0 B");
-  expect(row("unknown").textContent).toContain("———");
+  expect(
+    [...row("unknown").querySelectorAll("td")].filter((cell) => cell.textContent === "—"),
+  ).toHaveLength(3);
   await click(button("Add"));
   const input = [...host.querySelectorAll("label")]
     .find((el) => el.textContent?.startsWith("Name"))!
@@ -111,6 +113,36 @@ test("retains last known totals on errors and accepts counter resets on recovery
   expect(row("alice").textContent).toContain("0 B");
   expect(host.textContent).not.toContain("Counters unavailable");
   expect(host.textContent).toContain("Live · 5s refresh");
+});
+
+test("shows router-local last connection dates, unknowns and background refresh states", async () => {
+  readCounters = async (device) => ({
+    ...counters(device),
+    lastConnections: { status: "ready", collectedAt: Date.now() },
+    rows: counters(device).rows.map((r) => ({
+      ...r,
+      lastConnection: r.name === "alice" ? "2026-10-05 23:45:56" : null,
+    })),
+  });
+  await open();
+  expect(host.textContent).toContain("Last connection");
+  expect(row("alice").textContent).toContain("2026-10-05");
+  expect(row("alice").textContent).toContain("23:45:56");
+  expect(row("alice").querySelector('[title*="router local time"]')).not.toBeNull();
+  expect(row("zero").textContent).toContain("Unknown");
+  readCounters = async (device) => ({
+    ...counters(device),
+    lastConnections: { status: "pending" },
+  });
+  await ticks(5000);
+  expect(row("zero").textContent).toContain("Loading…");
+  readCounters = async (device) => ({
+    ...counters(device),
+    lastConnections: { status: "stale" },
+    rows: counters(device).rows.map((r) => ({ ...r, lastConnection: "2026-10-05 23:45:56" })),
+  });
+  await ticks(5000);
+  expect(row("alice").textContent).toContain("23:45:56 · cached");
 });
 
 test("pauses hidden tabs, avoids overlapping requests, and stops when leaving Users", async () => {
