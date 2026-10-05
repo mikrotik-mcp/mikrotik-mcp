@@ -7,6 +7,7 @@ import {
 } from "../core/openvpn-sessions";
 import { readOperationBody, DashboardInputError } from "./bounded-request";
 import { clientError, errorResponse } from "./http-error";
+import { getIpGeo } from "./geo";
 
 /** Outer dashboard authentication and error mapping still apply; writes also enforce scoped access. */
 export async function openVpnRoutes(req: Request, url: URL): Promise<Response | null> {
@@ -17,9 +18,16 @@ export async function openVpnRoutes(req: Request, url: URL): Promise<Response | 
     if (!device?.trim()) throw new DashboardInputError(400, "Select an explicit router first.");
     const ctx = createContext(undefined, device);
     let result: unknown;
-    if (req.method === "GET" && url.pathname === "/api/openvpn/sessions")
-      result = await listOpenVpnSessions(ctx);
-    else if (req.method === "POST" && url.pathname === "/api/openvpn/disconnect") {
+    if (req.method === "GET" && url.pathname === "/api/openvpn/sessions") {
+      const snapshot = await listOpenVpnSessions(ctx);
+      result = {
+        ...snapshot,
+        sessions: snapshot.sessions.map((session) => ({
+          ...session,
+          sourceGeo: getIpGeo(session.callerId),
+        })),
+      };
+    } else if (req.method === "POST" && url.pathname === "/api/openvpn/disconnect") {
       const body = await readOperationBody(req);
       let input: unknown;
       try {

@@ -47,7 +47,7 @@ Then just ask:
 ## Highlights
 
 - **Service probes:** add, edit, search and remove approved HTTPS/TLS/TCP/DNS targets directly in Config or Service Routing, with explicit IP/CIDR boundaries and safe-apply confirmation. [Setup guide](docs/service-contracts.md#dashboard-setup-no-json-required).
-- **OpenVPN connections:** a dedicated dashboard page for active users, source/tunnel IPs and live connection time, with confirmed single-session disconnect and read-only access controls. [Guide](docs/openvpn-connections.md).
+- **OpenVPN connections:** active users, source/tunnel IPs, cached source-country flags and live connection time, with confirmed single-session disconnect and read-only access controls. [Guide](docs/openvpn-connections.md).
 - **Service Routing:** live IPv4/IPv6 routes, fuzzy address-list search, exact/wildcard domain-to-exit policies with optional health probes, per-policy live matched-traffic counters and charts, VRF HTTPS exit checks and
   explicitly authorized failover, with preview, backup and Safe Mode. [Guide](docs/service-routing.md)
 - **Flight Recorder:** opt-in, durable pre/post-incident telemetry and log metadata,

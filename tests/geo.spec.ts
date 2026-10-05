@@ -24,6 +24,16 @@ describe("isPublicIpLiteral", () => {
       "100.64.0.1", // CGNAT
       "0.0.0.0",
       "::1",
+      "::",
+      "0:0:0:0:0:0:0:1",
+      "fc00::1",
+      "fd12::1",
+      "fe80::1",
+      "febf::1",
+      "ff02::1",
+      "::ffff:192.168.1.1",
+      "224.0.0.1",
+      "255.255.255.255",
     ]) {
       expect(isPublicIpLiteral(ip)).toBe(false);
     }
@@ -33,10 +43,17 @@ describe("isPublicIpLiteral", () => {
     expect(isPublicIpLiteral("router.example.com")).toBe(false);
     expect(isPublicIpLiteral("localhost")).toBe(false);
     expect(isPublicIpLiteral("")).toBe(false);
+    expect(isPublicIpLiteral("999.1.1.1")).toBe(false);
+    expect(isPublicIpLiteral("not:an:ip")).toBe(false);
   });
 
   test("accepts a public range just outside the private 172.16/12 block", () => {
     expect(isPublicIpLiteral("172.15.0.1")).toBe(true);
     expect(isPublicIpLiteral("172.32.0.1")).toBe(true);
+  });
+
+  test("accepts public IPv6 literals", () => {
+    expect(isPublicIpLiteral("2606:4700:4700::1111")).toBe(true);
+    expect(isPublicIpLiteral("::ffff:8.8.8.8")).toBe(true);
   });
 });

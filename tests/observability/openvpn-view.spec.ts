@@ -6,7 +6,11 @@ import { OpenVpnConnections } from "../../ui/observability/openvpn";
 import { api, postJson } from "../../ui/observability/api";
 import type { OpenVpnSnapshot } from "../../src/core/openvpn-sessions-model";
 vi.hoisted(() => Reflect.deleteProperty(Element.prototype, "animate"));
-vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
+vi.mock("../../ui/observability/api", () => ({
+  api: vi.fn(),
+  postJson: vi.fn(),
+  withToken: (path: string) => `${path}?token=example`,
+}));
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const snapshot: OpenVpnSnapshot = {
@@ -157,4 +161,46 @@ test("polls without overlapping and freezes time with visible stale state on fai
   expect(host.querySelectorAll(".ovpn-session")).toHaveLength(2);
   expect((host.querySelector(".ovpn-disconnect") as HTMLButtonElement).disabled).toBe(true);
   expect(host.textContent).toContain("01:00:00");
+});
+
+test("shows a same-origin country flag beside the source IP, searches countries and reuses it in the dialog", async () => {
+  const data = structuredClone(snapshot);
+  data.sessions[0].sourceGeo = { status: "resolved", countryCode: "nl", country: "Netherlands" };
+  data.sessions[1].sourceGeo = { status: "private" };
+  vi.mocked(api).mockResolvedValue(data);
+  await mount();
+  const source = host.querySelector(".ovpn-client-source")!;
+  expect(source.textContent).toContain("198.51.100.1");
+  expect(source.querySelector("img")?.getAttribute("src")).toBe("/api/flag/nl?token=example");
+  expect(source.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain("Netherlands");
+  expect(host.querySelectorAll(".ovpn-country")[1].getAttribute("title")).toContain("Private");
+  await act(async () => {
+    const input = host.querySelector("input")!;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "netherlands",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(host.querySelectorAll(".ovpn-session")).toHaveLength(1);
+  await act(async () => (host.querySelector(".ovpn-disconnect") as HTMLButtonElement).click());
+  expect(document.querySelector('[role="dialog"] .ovpn-country img')?.getAttribute("src")).toBe(
+    "/api/flag/nl?token=example",
+  );
+  expect(postJson).not.toHaveBeenCalled();
+});
+
+test("country lookup states and a failed flag never hide the IP or imply a country", async () => {
+  const data = structuredClone(snapshot);
+  data.sessions[0].sourceGeo = { status: "resolved", countryCode: "nl", country: "Netherlands" };
+  data.sessions[1].sourceGeo = { status: "pending" };
+  vi.mocked(api).mockResolvedValue(data);
+  await mount();
+  expect(host.querySelectorAll(".ovpn-country")[1].getAttribute("aria-label")).toContain(
+    "Looking up",
+  );
+  await act(async () => host.querySelector(".ovpn-country img")!.dispatchEvent(new Event("error")));
+  expect(host.querySelector(".ovpn-country")?.textContent).toBe("NL");
+  expect(host.textContent).toContain("198.51.100.1");
+  expect(host.textContent).toContain("198.51.100.2");
 });

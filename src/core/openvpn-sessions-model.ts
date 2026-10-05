@@ -10,6 +10,12 @@ export interface OpenVpnSession {
   uptime: string;
   uptimeSeconds: number | null;
   disconnectToken?: string;
+  /** Dashboard-only enrichment of callerId; never inferred from the tunnel address. */
+  sourceGeo?: {
+    status: "pending" | "resolved" | "private" | "unavailable";
+    countryCode?: string;
+    country?: string;
+  };
 }
 export interface OpenVpnSnapshot {
   device: string;

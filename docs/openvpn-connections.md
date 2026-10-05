@@ -9,6 +9,21 @@ Each connection shows the username, client source address, assigned tunnel IP,
 connection duration and reported encoding. Search by username, IP or session ID.
 Multiple connections with the same username remain separate.
 
+The source IP has a compact country flag with an approximate-location tooltip;
+country names/codes are searchable too. The same flag appears when reviewing a
+disconnect. This is the location of the public **client source**, not the assigned
+tunnel IP or a claim about the person's nationality/location.
+
+Country lookups use the dashboard's existing `ipkit.ir` provider (with `ipquery.io`
+fallback), from the MCP host. Only the public source IP is sent—not usernames,
+session IDs or credentials. Private, loopback, link-local and invalid addresses
+are never queried. Results are shared by IP across routers for 24 hours; failed
+lookups retry after five minutes. At most four lookups run concurrently, with a
+bounded cache/queue. Lookups do not block session reads: a globe indicates a
+pending, unavailable or private source, with an explanatory tooltip. Flag SVGs
+are served through the dashboard's existing same-origin `/api/flag/…` cache;
+a missing image falls back to the two-letter country code.
+
 The page refreshes every five seconds while visible, without overlapping reads.
 Backend reads coalesce and cache for two seconds. The clock advances between
 successful reads; stale/error states freeze it and keep the last known rows.

@@ -3,6 +3,7 @@ import {
   Activity,
   ArrowRight,
   Clock3,
+  Globe2,
   LockKeyhole,
   RefreshCw,
   Search,
@@ -29,11 +30,49 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { api, postJson } from "./api";
+import { api, postJson, withToken } from "./api";
 import { WorkspaceError } from "./operations-ui";
 import { connectionDuration } from "../../src/core/openvpn-sessions-model";
 import type { OpenVpnSession, OpenVpnSnapshot } from "../../src/core/openvpn-sessions-model";
 import "./openvpn.css";
+
+function ClientSource({ session }: { session: OpenVpnSession }) {
+  const geo = session.sourceGeo;
+  const [failedCode, setFailedCode] = useState("");
+  const code = geo?.countryCode?.toLowerCase() ?? "";
+  const resolved = geo?.status === "resolved" && /^[a-z]{2}$/.test(code);
+  const country = geo?.country || code.toUpperCase();
+  const label = resolved
+    ? `${country} · approximate source-IP location`
+    : geo?.status === "pending"
+      ? "Looking up source-IP country"
+      : geo?.status === "private"
+        ? "Private or non-public source IP · no country lookup"
+        : "Source-IP country unavailable";
+  return (
+    <span className="ovpn-client-source">
+      <span className="ovpn-country" role="img" aria-label={label} title={label}>
+        {resolved ? (
+          failedCode === code ? (
+            <span>{code.toUpperCase()}</span>
+          ) : (
+            <img
+              src={withToken(`/api/flag/${code}`)}
+              width={20}
+              height={20}
+              alt=""
+              loading="lazy"
+              onError={() => setFailedCode(code)}
+            />
+          )
+        ) : (
+          <Globe2 size={16} aria-hidden="true" />
+        )}
+      </span>
+      <code dir="ltr">{session.callerId || "Not reported"}</code>
+    </span>
+  );
+}
 
 export function OpenVpnView() {
   const [devices, setDevices] = useState<string[]>([]);
@@ -178,7 +217,7 @@ export function OpenVpnConnections({ device }: { device: string }) {
   const elapsed = stale || !sample ? 0 : Math.max(0, Math.floor((now - sample.receivedAt) / 1000));
   const sessions = data?.sessions ?? [];
   const matching = sessions.filter((s) =>
-    [s.name, s.address, s.callerId, s.sessionId]
+    [s.name, s.address, s.callerId, s.sessionId, s.sourceGeo?.country, s.sourceGeo?.countryCode]
       .join(" ")
       .toLowerCase()
       .includes(query.trim().toLowerCase()),
@@ -250,7 +289,7 @@ export function OpenVpnConnections({ device }: { device: string }) {
           <Search size={16} />
           <Input
             aria-label="Search OpenVPN connections"
-            placeholder="Find a user, source or tunnel IP…"
+            placeholder="Find a user, IP or country…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -328,7 +367,7 @@ export function OpenVpnConnections({ device }: { device: string }) {
               <div className="ovpn-path">
                 <div>
                   <small>Client source</small>
-                  <code>{session.callerId || "Not reported"}</code>
+                  <ClientSource session={session} />
                 </div>
                 <ArrowRight size={16} />
                 <div>
@@ -398,7 +437,9 @@ export function OpenVpnConnections({ device }: { device: string }) {
                   </div>
                   <div>
                     <dt>Client source</dt>
-                    <dd>{selected.callerId || "Not reported"}</dd>
+                    <dd>
+                      <ClientSource session={selected} />
+                    </dd>
                   </div>
                   <div>
                     <dt>Tunnel IP</dt>

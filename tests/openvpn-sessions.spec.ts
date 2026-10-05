@@ -9,6 +9,10 @@ import {
   disconnectOpenVpnCommand,
 } from "../src/core/openvpn-sessions";
 import { openVpnRoutes } from "../src/observability/openvpn-routes";
+import { getIpGeo } from "../src/observability/geo";
+vi.mock("../src/observability/geo", () => ({
+  getIpGeo: vi.fn(() => ({ status: "resolved", countryCode: "nl", country: "Netherlands" })),
+}));
 const { run, allowed, safe } = vi.hoisted(() => ({
   run: vi.fn(),
   allowed: vi.fn(),
@@ -219,5 +223,22 @@ test("dashboard requires device, rejects cross-origin writes and disables HTTP c
     write,
   );
   expect(expired?.status).toBe(409);
+  expect(run).toHaveBeenCalledTimes(1);
+});
+
+test("dashboard enriches only the caller IP, without mutating cached sessions or disconnect tickets", async () => {
+  run.mockResolvedValue(JSON.stringify([row]));
+  const url = new URL(`http://localhost/api/openvpn/sessions?device=${ctx.device}`);
+  const response = await openVpnRoutes(new Request(url), url);
+  const body = await response?.json();
+  expect(body.sessions[0].sourceGeo).toEqual({
+    status: "resolved",
+    countryCode: "nl",
+    country: "Netherlands",
+  });
+  expect(getIpGeo).toHaveBeenLastCalledWith(row["caller-id"]);
+  const original = await listOpenVpnSessions(ctx);
+  expect(original.sessions[0].sourceGeo).toBeUndefined();
+  expect(body.sessions[0].disconnectToken).toBe(original.sessions[0].disconnectToken);
   expect(run).toHaveBeenCalledTimes(1);
 });

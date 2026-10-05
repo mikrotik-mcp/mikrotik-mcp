@@ -190,6 +190,28 @@
   font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
+.ovpn-client-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.ovpn-country {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font: 0.55rem var(--font-mono, monospace);
+}
+.ovpn-country img {
+  display: block;
+  border-radius: 50%;
+}
 .ovpn-duration strong {
   font: 1.2rem var(--font-mono, monospace);
   font-variant-numeric: tabular-nums;

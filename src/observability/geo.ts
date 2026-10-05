@@ -13,6 +13,7 @@
  * offline test runner never performs network I/O.
  */
 import { lookup } from "node:dns/promises";
+import { BlockList, isIP } from "node:net";
 import { getConfig } from "../core/runtime";
 import { logger } from "../logger";
 
@@ -43,14 +44,27 @@ export function getDeviceGeo(name: string): DeviceGeo | null {
   return cache.get(name)?.geo ?? null;
 }
 
-const IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
-// Non-routable ranges that geolocation can't place: RFC1918, loopback,
-// link-local, "this network", CGNAT, and IPv6 loopback/ULA.
-const PRIVATE_RE =
-  /^(?:10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|f[cd])/i;
+// BlockList handles IPv6 spelling and IPv4-mapped IPv6 as well as native IPv4.
+const nonPublic = new BlockList();
+for (const [address, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.168.0.0", 16],
+  ["100.64.0.0", 10],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+] as const)
+  nonPublic.addSubnet(address, prefix, "ipv4");
+nonPublic.addSubnet("::", 96, "ipv6");
+nonPublic.addSubnet("fc00::", 7, "ipv6");
+nonPublic.addSubnet("fe80::", 10, "ipv6");
+nonPublic.addSubnet("ff00::", 8, "ipv6");
 
 function isIpLiteral(host: string): boolean {
-  return IPV4_RE.test(host) || host.includes(":");
+  return isIP(host) !== 0;
 }
 
 /**
@@ -59,7 +73,8 @@ function isIpLiteral(host: string): boolean {
  * those to the geo provider, they can't be placed anyway.
  */
 export function isPublicIpLiteral(host: string): boolean {
-  return isIpLiteral(host) && !PRIVATE_RE.test(host);
+  const version = isIP(host);
+  return version !== 0 && !nonPublic.check(host, version === 6 ? "ipv6" : "ipv4");
 }
 
 /** Resolve a host to a routable PUBLIC IP, or null when private/unresolvable. */
@@ -72,7 +87,7 @@ async function publicIpOf(host: string): Promise<string | null> {
       return null; // unresolvable hostname → no geo
     }
   }
-  return PRIVATE_RE.test(ip) ? null : ip;
+  return isPublicIpLiteral(ip) ? ip : null;
 }
 
 function toGeo(
@@ -80,7 +95,7 @@ function toGeo(
   code: string | undefined,
   city: string | undefined,
 ): DeviceGeo | null {
-  if (!code) return null;
+  if (!code || !/^[a-z]{2}$/i.test(code)) return null;
   return { countryCode: code.toLowerCase(), country: country ?? code, city: city || undefined };
 }
 
@@ -128,6 +143,71 @@ async function fetchGeo(ip: string): Promise<DeviceGeo | null> {
     );
     return null;
   }
+}
+
+export interface IpGeo {
+  status: "pending" | "resolved" | "private" | "unavailable";
+  countryCode?: string;
+  country?: string;
+}
+
+interface IpGeoEntry {
+  result: IpGeo;
+  expires: number;
+}
+const ipCache = new Map<string, IpGeoEntry>();
+const geoQueue: { ip: string; entry: IpGeoEntry }[] = [];
+const IP_CACHE_LIMIT = 1024;
+const GEO_CONCURRENCY = 4;
+let activeLookups = 0;
+
+/** Parse only literals (including IP:port); never resolve a caller ID as a hostname. */
+export function sourceIpLiteral(address: string): string | null {
+  const value = address.trim();
+  if (isIpLiteral(value)) return value.toLowerCase();
+  const endpoint = /^(?:\[([^\]]+)\]|(\d{1,3}(?:\.\d{1,3}){3}))(?::(\d{1,5}))?$/.exec(value);
+  if (!endpoint || (endpoint[3] && +endpoint[3] > 65535)) return null;
+  const ip = endpoint[1] ?? endpoint[2];
+  return isIpLiteral(ip) ? ip.toLowerCase() : null;
+}
+
+/** Bounded background work: a slow GeoIP provider must never delay session reads. */
+function drainGeoQueue(): void {
+  while (activeLookups < GEO_CONCURRENCY && geoQueue.length) {
+    const job = geoQueue.shift()!;
+    activeLookups++;
+    void fetchGeo(job.ip)
+      .then((geo) => {
+        job.entry.result = geo
+          ? { status: "resolved", countryCode: geo.countryCode, country: geo.country }
+          : { status: "unavailable" };
+        job.entry.expires = Date.now() + (geo ? REFRESH_MS : 5 * 60_000);
+      })
+      .finally(() => {
+        activeLookups--;
+        drainGeoQueue();
+      });
+  }
+}
+
+/** Cached source-IP country, resolved asynchronously and shared across routers/sessions. */
+export function getIpGeo(address: string): IpGeo {
+  const ip = sourceIpLiteral(address);
+  if (!ip) return { status: "unavailable" };
+  if (!isPublicIpLiteral(ip)) return { status: "private" };
+  const entry = ipCache.get(ip);
+  if (entry && entry.expires > Date.now()) return entry.result;
+  if (ipCache.size >= IP_CACHE_LIMIT && !entry) {
+    // Keep pending entries to coalesce requests and keep the queue bounded.
+    const settled = [...ipCache].find(([, value]) => value.result.status !== "pending");
+    if (!settled) return { status: "unavailable" };
+    ipCache.delete(settled[0]);
+  }
+  const next: IpGeoEntry = { result: { status: "pending" }, expires: Infinity };
+  ipCache.set(ip, next);
+  geoQueue.push({ ip, entry: next });
+  drainGeoQueue();
+  return next.result;
 }
 
 async function resolveDevice(name: string, host: string | undefined): Promise<void> {
