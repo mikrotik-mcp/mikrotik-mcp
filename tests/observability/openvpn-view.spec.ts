@@ -204,3 +204,80 @@ test("country lookup states and a failed flag never hide the IP or imply a count
   expect(host.textContent).toContain("198.51.100.1");
   expect(host.textContent).toContain("198.51.100.2");
 });
+
+test("shows ASN organization beneath the flagged IP and includes it in disconnect review", async () => {
+  const data = structuredClone(snapshot);
+  data.sessions[0].sourceGeo = {
+    status: "resolved",
+    countryCode: "ir",
+    country: "Iran",
+    asn: "AS44244",
+    asnOrganization: "Iran Cell Service and Communication Company",
+  };
+  vi.mocked(api).mockResolvedValue(data);
+  await mount();
+  const source = host.querySelector(".ovpn-client-source")!;
+  const organization = source.querySelector(".ovpn-source-network")!;
+  expect(source.querySelector(".ovpn-source-address")?.textContent).toContain("198.51.100.1");
+  expect(organization.textContent).toBe("Iran Cell Service and Communication Company");
+  expect(organization.getAttribute("title")).toContain("AS44244");
+  expect(source.querySelector("img")?.getAttribute("src")).toBe("/api/flag/ir?token=example");
+  await act(async () => (host.querySelector(".ovpn-disconnect") as HTMLButtonElement).click());
+  expect(document.querySelector('[role="dialog"] .ovpn-source-network')?.textContent).toBe(
+    "Iran Cell Service and Communication Company",
+  );
+  expect(postJson).not.toHaveBeenCalled();
+});
+
+test.each(["iran cell", "as44244", "44244"])(
+  "searches source organizations and ASN: %s",
+  async (query) => {
+    const data = structuredClone(snapshot);
+    data.sessions[0].sourceGeo = {
+      status: "resolved",
+      countryCode: "ir",
+      country: "Iran",
+      asn: "AS44244",
+      asnOrganization: "Iran Cell Service and Communication Company",
+    };
+    vi.mocked(api).mockResolvedValue(data);
+    await mount();
+    await act(async () => {
+      const input = host.querySelector("input")!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, query);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelectorAll(".ovpn-session")).toHaveLength(1);
+    expect(host.textContent).toContain("198.51.100.1");
+    expect(host.textContent).not.toContain("198.51.100.2");
+  },
+);
+
+test.each([
+  [{ status: "pending" }, "Looking up network…"],
+  [{ status: "private" }, "Private network"],
+  [{ status: "unavailable" }, "Network unavailable"],
+  [{ status: "resolved", countryCode: "ir", country: "Iran" }, "Network unavailable"],
+  [{ status: "resolved", countryCode: "ir", country: "Iran", asn: "AS44244" }, "AS44244"],
+] as const)("does not invent an operator when metadata is partial: %j", async (geo, expected) => {
+  const data = structuredClone(snapshot);
+  data.sessions[0].sourceGeo = geo;
+  vi.mocked(api).mockResolvedValue(data);
+  await mount();
+  expect(host.querySelector(".ovpn-source-network")?.textContent).toBe(expected);
+  expect(host.textContent).toContain("198.51.100.1");
+});
+
+test("renders a provider organization as text, never HTML", async () => {
+  const data = structuredClone(snapshot);
+  data.sessions[0].sourceGeo = {
+    status: "resolved",
+    countryCode: "ir",
+    asnOrganization: '<img src=x onerror="alert(1)">',
+  };
+  vi.mocked(api).mockResolvedValue(data);
+  await mount();
+  const network = host.querySelector(".ovpn-source-network")!;
+  expect(network.textContent).toBe('<img src=x onerror="alert(1)">');
+  expect(network.querySelector("img")).toBeNull();
+});

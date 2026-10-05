@@ -42,6 +42,17 @@ function ClientSource({ session }: { session: OpenVpnSession }) {
   const code = geo?.countryCode?.toLowerCase() ?? "";
   const resolved = geo?.status === "resolved" && /^[a-z]{2}$/.test(code);
   const country = geo?.country || code.toUpperCase();
+  const networkKnown = geo?.status === "resolved" && (geo.asnOrganization || geo.asn);
+  const network = networkKnown
+    ? geo.asnOrganization || geo.asn
+    : geo?.status === "pending"
+      ? "Looking up network…"
+      : geo?.status === "private"
+        ? "Private network"
+        : "Network unavailable";
+  const networkTitle = networkKnown
+    ? [geo.asnOrganization, geo.asn, "Source-IP network organization"].filter(Boolean).join(" · ")
+    : network;
   const label = resolved
     ? `${country} · approximate source-IP location`
     : geo?.status === "pending"
@@ -51,25 +62,30 @@ function ClientSource({ session }: { session: OpenVpnSession }) {
         : "Source-IP country unavailable";
   return (
     <span className="ovpn-client-source">
-      <span className="ovpn-country" role="img" aria-label={label} title={label}>
-        {resolved ? (
-          failedCode === code ? (
-            <span>{code.toUpperCase()}</span>
+      <span className="ovpn-source-address">
+        <span className="ovpn-country" role="img" aria-label={label} title={label}>
+          {resolved ? (
+            failedCode === code ? (
+              <span>{code.toUpperCase()}</span>
+            ) : (
+              <img
+                src={withToken(`/api/flag/${code}`)}
+                width={20}
+                height={20}
+                alt=""
+                loading="lazy"
+                onError={() => setFailedCode(code)}
+              />
+            )
           ) : (
-            <img
-              src={withToken(`/api/flag/${code}`)}
-              width={20}
-              height={20}
-              alt=""
-              loading="lazy"
-              onError={() => setFailedCode(code)}
-            />
-          )
-        ) : (
-          <Globe2 size={16} aria-hidden="true" />
-        )}
+            <Globe2 size={16} aria-hidden="true" />
+          )}
+        </span>
+        <code dir="ltr">{session.callerId || "Not reported"}</code>
       </span>
-      <code dir="ltr">{session.callerId || "Not reported"}</code>
+      <span className="ovpn-source-network" data-known={!!networkKnown} title={networkTitle}>
+        {network}
+      </span>
     </span>
   );
 }
@@ -217,7 +233,16 @@ export function OpenVpnConnections({ device }: { device: string }) {
   const elapsed = stale || !sample ? 0 : Math.max(0, Math.floor((now - sample.receivedAt) / 1000));
   const sessions = data?.sessions ?? [];
   const matching = sessions.filter((s) =>
-    [s.name, s.address, s.callerId, s.sessionId, s.sourceGeo?.country, s.sourceGeo?.countryCode]
+    [
+      s.name,
+      s.address,
+      s.callerId,
+      s.sessionId,
+      s.sourceGeo?.country,
+      s.sourceGeo?.countryCode,
+      s.sourceGeo?.asn,
+      s.sourceGeo?.asnOrganization,
+    ]
       .join(" ")
       .toLowerCase()
       .includes(query.trim().toLowerCase()),
@@ -289,7 +314,7 @@ export function OpenVpnConnections({ device }: { device: string }) {
           <Search size={16} />
           <Input
             aria-label="Search OpenVPN connections"
-            placeholder="Find a user, IP or country…"
+            placeholder="Find a user, IP, country or network…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -345,7 +370,7 @@ export function OpenVpnConnections({ device }: { device: string }) {
           </strong>
           <span>
             {sessions.length
-              ? "Try another username or IP address."
+              ? "Try another user, IP, country, network organization or ASN."
               : `No incoming OpenVPN sessions were reported by ${device} at the last read.`}
           </span>
         </div>

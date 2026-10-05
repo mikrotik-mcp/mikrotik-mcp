@@ -11,7 +11,13 @@ import {
 import { openVpnRoutes } from "../src/observability/openvpn-routes";
 import { getIpGeo } from "../src/observability/geo";
 vi.mock("../src/observability/geo", () => ({
-  getIpGeo: vi.fn(() => ({ status: "resolved", countryCode: "nl", country: "Netherlands" })),
+  getIpGeo: vi.fn(() => ({
+    status: "resolved",
+    countryCode: "nl",
+    country: "Netherlands",
+    asn: "AS64500",
+    asnOrganization: "Example Network",
+  })),
 }));
 const { run, allowed, safe } = vi.hoisted(() => ({
   run: vi.fn(),
@@ -235,6 +241,8 @@ test("dashboard enriches only the caller IP, without mutating cached sessions or
     status: "resolved",
     countryCode: "nl",
     country: "Netherlands",
+    asn: "AS64500",
+    asnOrganization: "Example Network",
   });
   expect(getIpGeo).toHaveBeenLastCalledWith(row["caller-id"]);
   const original = await listOpenVpnSessions(ctx);

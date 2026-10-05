@@ -26,6 +26,10 @@ export interface DeviceGeo {
   country: string;
   /** City, when the provider reports one. */
   city?: string;
+  /** Source-IP autonomous system number, normalized as AS<number>. */
+  asn?: string;
+  /** Registered network organization, not the user's identity. */
+  asnOrganization?: string;
 }
 
 interface Cached {
@@ -94,9 +98,30 @@ function toGeo(
   country: string | undefined,
   code: string | undefined,
   city: string | undefined,
+  asn?: unknown,
+  organization?: unknown,
 ): DeviceGeo | null {
   if (!code || !/^[a-z]{2}$/i.test(code)) return null;
-  return { countryCode: code.toLowerCase(), country: country ?? code, city: city || undefined };
+  const geo: DeviceGeo = {
+    countryCode: code.toLowerCase(),
+    country: country ?? code,
+    city: city || undefined,
+  };
+  const asnMatch =
+    typeof asn === "string" || typeof asn === "number"
+      ? /^(?:AS)?(\d+)$/i.exec(String(asn).trim())
+      : null;
+  const asnNumber = asnMatch ? Number(asnMatch[1]) : 0;
+  if (Number.isSafeInteger(asnNumber) && asnNumber > 0 && asnNumber <= 0xffffffff)
+    geo.asn = `AS${asnNumber}`;
+  if (typeof organization === "string") {
+    const text = organization
+      .replace(/\p{Cc}/gu, " ")
+      .trim()
+      .slice(0, 256);
+    if (text) geo.asnOrganization = text;
+  }
+  return geo;
 }
 
 /** Primary provider: ipkit.ir. Content-negotiates, so ask for JSON explicitly. */
@@ -111,9 +136,11 @@ async function fetchIpkit(ip: string): Promise<DeviceGeo | null> {
     country_code?: string;
     city?: string;
     is_private?: boolean;
+    asn?: unknown;
+    asn_organization?: unknown;
   };
   if (d.is_private) return null; // provider flags a non-routable IP
-  return toGeo(d.country, d.country_code, d.city);
+  return toGeo(d.country, d.country_code, d.city, d.asn, d.asn_organization);
 }
 
 /** Fallback provider: ipquery.io (nested under `location`). */
@@ -122,8 +149,15 @@ async function fetchIpquery(ip: string): Promise<DeviceGeo | null> {
   if (!res.ok) throw new Error(`ipquery HTTP ${res.status}`);
   const d = (await res.json()) as {
     location?: { country?: string; country_code?: string; city?: string };
+    isp?: { asn?: unknown; org?: unknown };
   };
-  return toGeo(d.location?.country, d.location?.country_code, d.location?.city);
+  return toGeo(
+    d.location?.country,
+    d.location?.country_code,
+    d.location?.city,
+    d.isp?.asn,
+    d.isp?.org,
+  );
 }
 
 /** Geolocate a public IP, trying ipkit.ir first and falling back to ipquery.io. */
@@ -149,6 +183,8 @@ export interface IpGeo {
   status: "pending" | "resolved" | "private" | "unavailable";
   countryCode?: string;
   country?: string;
+  asn?: string;
+  asnOrganization?: string;
 }
 
 interface IpGeoEntry {
@@ -178,9 +214,16 @@ function drainGeoQueue(): void {
     activeLookups++;
     void fetchGeo(job.ip)
       .then((geo) => {
-        job.entry.result = geo
-          ? { status: "resolved", countryCode: geo.countryCode, country: geo.country }
-          : { status: "unavailable" };
+        if (geo) {
+          const result: IpGeo = {
+            status: "resolved",
+            countryCode: geo.countryCode,
+            country: geo.country,
+          };
+          if (geo.asn) result.asn = geo.asn;
+          if (geo.asnOrganization) result.asnOrganization = geo.asnOrganization;
+          job.entry.result = result;
+        } else job.entry.result = { status: "unavailable" };
         job.entry.expires = Date.now() + (geo ? REFRESH_MS : 5 * 60_000);
       })
       .finally(() => {

@@ -191,11 +191,32 @@
   overflow-wrap: anywhere;
 }
 .ovpn-client-source {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.ovpn-source-address {
+  display: flex;
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
   max-width: 100%;
+}
+.ovpn-source-network {
+  max-width: min(100%, 13rem);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.65rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ovpn-source-network[data-known="true"] {
+  color: var(--foreground);
 }
 .ovpn-country {
   display: inline-grid;

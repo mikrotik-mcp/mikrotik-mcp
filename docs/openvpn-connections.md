@@ -10,8 +10,10 @@ connection duration and reported encoding. Search by username, IP or session ID.
 Multiple connections with the same username remain separate.
 
 The source IP has a compact country flag with an approximate-location tooltip;
-country names/codes are searchable too. The same flag appears when reviewing a
-disconnect. This is the location of the public **client source**, not the assigned
+country names/codes are searchable too. Beneath the IP, a compact line shows the
+reported **ASN organization** (the source network/operator); hover for its full
+name and ASN, such as `AS44244`. Both the organization and ASN are searchable.
+The same details appear when reviewing a disconnect. This is the location of the public **client source**, not the assigned
 tunnel IP or a claim about the person's nationality/location.
 
 Country lookups use the dashboard's existing `ipkit.ir` provider (with `ipquery.io`
@@ -23,6 +25,12 @@ bounded cache/queue. Lookups do not block session reads: a globe indicates a
 pending, unavailable or private source, with an explanatory tooltip. Flag SVGs
 are served through the dashboard's existing same-origin `/api/flag/…` cache;
 a missing image falls back to the two-letter country code.
+
+ASN information comes from the same response and shares the country cache—no
+extra lookup is made per session. The exact reported organization is shown, not
+an inferred mobile-provider brand or subscriber identity. A missing organization
+falls back to the ASN when available; otherwise the network is explicitly shown
+as pending, private or unavailable without hiding the IP or country flag.
 
 The page refreshes every five seconds while visible, without overlapping reads.
 Backend reads coalesce and cache for two seconds. The clock advances between

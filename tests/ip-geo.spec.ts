@@ -125,3 +125,88 @@ test("bounds concurrent work and the pending queue even with many source IPs", a
   finishes.splice(0).forEach((finish) => finish());
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1024));
 });
+
+test("retains primary-provider ASN organization in the shared country cache without extra requests", async () => {
+  const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+  fetchMock.mockResolvedValue(
+    Response.json({
+      country: "Iran",
+      country_code: "IR",
+      asn: 44244,
+      asn_organization: "Iran Cell Service and Communication Company",
+    }),
+  );
+  expect(geo.getIpGeo("5.112.105.66:1194")).toEqual({ status: "pending" });
+  await vi.waitFor(() => expect(geo.getIpGeo("5.112.105.66").status).toBe("resolved"));
+  expect(geo.getIpGeo("5.112.105.66")).toEqual({
+    status: "resolved",
+    country: "Iran",
+    countryCode: "ir",
+    asn: "AS44244",
+    asnOrganization: "Iran Cell Service and Communication Company",
+  });
+  clock.mockReturnValue(1000 + 23 * 60 * 60_000);
+  expect(geo.getIpGeo("5.112.105.66:2200").asn).toBe("AS44244");
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+test("reads fallback-provider nested network fields and normalizes AS-prefixed numbers", async () => {
+  fetchMock.mockRejectedValueOnce(new Error("primary offline")).mockResolvedValueOnce(
+    Response.json({
+      location: { country: "Iran", country_code: "IR" },
+      isp: { asn: " as44244 ", org: " Iran Cell Service and Communication Company " },
+    }),
+  );
+  geo.getIpGeo("5.112.105.66");
+  await vi.waitFor(() => expect(geo.getIpGeo("5.112.105.66").status).toBe("resolved"));
+  expect(geo.getIpGeo("5.112.105.66")).toMatchObject({
+    asn: "AS44244",
+    asnOrganization: "Iran Cell Service and Communication Company",
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test.each([undefined, null, "", "AS0", -1, 1.2, 4294967296, "ASfoo", [44244], { value: 44244 }])(
+  "malformed or missing ASN %j never hides the country or becomes a fabricated network",
+  async (asn) => {
+    fetchMock.mockResolvedValue(
+      Response.json({ country: "Iran", country_code: "IR", asn, asn_organization: null }),
+    );
+    geo.getIpGeo("5.112.105.66");
+    await vi.waitFor(() => expect(geo.getIpGeo("5.112.105.66").status).toBe("resolved"));
+    expect(geo.getIpGeo("5.112.105.66")).toEqual({
+      status: "resolved",
+      country: "Iran",
+      countryCode: "ir",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  },
+);
+
+test.each([null, {}, [], 123, " \n\t "])(
+  "ignores non-text or blank organizations: %j",
+  async (org) => {
+    fetchMock.mockResolvedValue(
+      Response.json({ country_code: "IR", asn: "AS44244", asn_organization: org }),
+    );
+    geo.getIpGeo("5.112.105.66");
+    await vi.waitFor(() => expect(geo.getIpGeo("5.112.105.66").status).toBe("resolved"));
+    expect(geo.getIpGeo("5.112.105.66").asn).toBe("AS44244");
+    expect(geo.getIpGeo("5.112.105.66").asnOrganization).toBeUndefined();
+  },
+);
+
+test("bounds organization length and removes provider control characters", async () => {
+  fetchMock.mockResolvedValue(
+    Response.json({
+      country_code: "IR",
+      asn_organization: `Example\n\tNetwork ${"x".repeat(500)}`,
+    }),
+  );
+  geo.getIpGeo("5.112.105.66");
+  await vi.waitFor(() => expect(geo.getIpGeo("5.112.105.66").status).toBe("resolved"));
+  const text = geo.getIpGeo("5.112.105.66").asnOrganization!;
+  expect(text).toHaveLength(256);
+  expect(text).not.toMatch(/[\r\n\t]/);
+  expect(text).toContain("Example  Network");
+});
