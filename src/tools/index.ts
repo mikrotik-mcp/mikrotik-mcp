@@ -82,6 +82,7 @@ import { l2FabricTools } from "./l2-fabric";
 import { advisoryTools } from "./advisories";
 import { accessTools } from "./access";
 import { networkToolTools } from "./network-tools";
+import { ipIntelligenceTools } from "./ip-intelligence";
 import { sshTestTools } from "./ssh-test";
 import { packetCaptureTools } from "./packet-capture";
 import { bandwidthServerTools } from "./tool-bandwidth-server";
@@ -1053,6 +1054,14 @@ export const moduleCatalog: ModuleInfo[] = [
     group: "System & Ops",
     description: "ping, traceroute, bandwidth-test, DNS resolve, netwatch (`/tool`).",
     tools: networkToolTools,
+  },
+  {
+    label: "IP Intelligence",
+    slug: "ip-intelligence",
+    group: "System & Ops",
+    description:
+      "Host-side public IP metadata from ipquery and ipkit, with full provider payloads and independent errors. No router I/O.",
+    tools: ipIntelligenceTools,
   },
   {
     label: "Root-Cause Analyzer",

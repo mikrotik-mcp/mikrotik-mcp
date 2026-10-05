@@ -1602,6 +1602,14 @@
       ]
     },
     {
+      "slug": "ip-intelligence",
+      "label": "IP Intelligence",
+      "group": "System & Ops",
+      "description": "Host-side public IP metadata from ipquery and ipkit, with full provider payloads and independent errors. No router I/O.",
+      "alwaysOn": false,
+      "tools": ["lookup_ip_intelligence"]
+    },
+    {
       "slug": "root-cause",
       "label": "Root-Cause Analyzer",
       "group": "System & Ops",
@@ -9277,6 +9285,14 @@
       "module": "network-tools",
       "group": "System & Ops",
       "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "lookup_ip_intelligence",
+      "module": "ip-intelligence",
+      "group": "System & Ops",
+      "noDevice": true,
       "requires": null,
       "ui": null
     },

@@ -66,6 +66,7 @@ import { clientCheckNetwork } from "../client-check/network";
 import { serviceContractRoutes } from "./service-contract-routes";
 import { operationsRoutes } from "./operations-routes";
 import { openVpnRoutes } from "./openvpn-routes";
+import { ipIntelligenceRoutes } from "./ip-intelligence-routes";
 import { roundTripRoutes } from "./round-trip-routes";
 import {
   allowDevice,
@@ -1687,6 +1688,9 @@ export async function runDashboard(
 
     const ipNetworkResp = ipGeoRoute(req, url);
     if (ipNetworkResp) return ipNetworkResp;
+
+    const ipIntelligenceResp = await ipIntelligenceRoutes(req, url);
+    if (ipIntelligenceResp) return ipIntelligenceResp;
 
     const roundTripResp = await roundTripRoutes(req, url);
     if (roundTripResp) return roundTripResp;
