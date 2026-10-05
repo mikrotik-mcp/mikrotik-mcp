@@ -355,7 +355,8 @@ export const moduleCatalog: ModuleInfo[] = [
     label: "Wireless",
     slug: "wireless",
     group: "Interfaces",
-    description: "Wireless interfaces, security profiles and access lists (legacy + wifiwave2).",
+    description:
+      "Wi-Fi SSID/security profiles, non-disruptive runtime channel monitoring and approved RF surveys (wifi, wifiwave2 and legacy wireless). Legacy access-list tools are stubs.",
     tools: wirelessTools,
   },
   {

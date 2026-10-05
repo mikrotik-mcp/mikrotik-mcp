@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "get_wireless_interface",
+  "title": "get_wireless_interface_status",
   "type": "object",
   "properties": {
-    "name": {
+    "interface": {
       "type": "string",
       "minLength": 1
     }
   },
-  "required": ["name"],
+  "required": ["interface"],
   "additionalProperties": false
 }

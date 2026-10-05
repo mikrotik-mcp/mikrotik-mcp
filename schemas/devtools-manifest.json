@@ -267,16 +267,18 @@
       "slug": "wireless",
       "label": "Wireless",
       "group": "Interfaces",
-      "description": "Wireless interfaces, security profiles and access lists (legacy + wifiwave2).",
+      "description": "Wi-Fi SSID/security profiles, non-disruptive runtime channel monitoring and approved RF surveys (wifi, wifiwave2 and legacy wireless). Legacy access-list tools are stubs.",
       "alwaysOn": false,
       "tools": [
         "create_wireless_interface",
         "list_wireless_interfaces",
         "get_wireless_interface",
+        "get_wireless_interface_status",
         "remove_wireless_interface",
         "enable_wireless_interface",
         "disable_wireless_interface",
         "scan_wireless_networks",
+        "scan_wifi_channels",
         "get_wireless_registration_table",
         "check_wireless_support",
         "create_wireless_security_profile",
@@ -3137,6 +3139,18 @@
       }
     },
     {
+      "name": "get_wireless_interface_status",
+      "module": "wireless",
+      "group": "Interfaces",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
       "name": "remove_wireless_interface",
       "module": "wireless",
       "group": "Interfaces",
@@ -3162,6 +3176,14 @@
     },
     {
       "name": "scan_wireless_networks",
+      "module": "wireless",
+      "group": "Interfaces",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "scan_wifi_channels",
       "module": "wireless",
       "group": "Interfaces",
       "noDevice": false,

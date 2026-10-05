@@ -2,6 +2,19 @@ import { describe, expect, test } from "vite-plus/test";
 import { redactSecrets } from "../../src/utils/redact-secrets";
 
 describe("redactSecrets", () => {
+  test("masks bare, escaped and shorthand Wi-Fi secrets without losing auth evidence", () => {
+    const input =
+      'security.authentication-types=wpa2-psk,wpa3-psk .passphrase="a\\"b\\\\c\nline" eap-password=bare wpa2-pre-shared-key="secret" nv2-preshared-key=hidden';
+    expect(redactSecrets(input)).toBe(
+      'security.authentication-types=wpa2-psk,wpa3-psk .passphrase="***" eap-password="***" wpa2-pre-shared-key="***" nv2-preshared-key="***"',
+    );
+  });
+
+  test("masks bare passwords and legacy static encryption keys", () => {
+    expect(redactSecrets('password=bare shared-secret=bare static-key-0=abcdef key0="abcd"')).toBe(
+      'password="***" shared-secret="***" static-key-0="***" key0="***"',
+    );
+  });
   test("masks password values", () => {
     expect(redactSecrets('name="bob" password="hunter2"')).toBe('name="bob" password="***"');
   });

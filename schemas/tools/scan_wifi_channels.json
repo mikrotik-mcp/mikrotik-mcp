@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "scan_wireless_networks",
+  "title": "scan_wifi_channels",
   "type": "object",
   "properties": {
     "interface": {
@@ -15,7 +15,7 @@
     },
     "confirm": {
       "default": false,
-      "description": "Explicit user approval for a scan that can disconnect Wi-Fi clients.",
+      "description": "Explicit user approval to temporarily disconnect Wi-Fi clients.",
       "type": "boolean"
     }
   },

@@ -1,6 +1,6 @@
 <div align="center">
   <img src="assets/logo.svg" alt="@usex/mikrotik-mcp" width="440" />
-  <p><strong>Drive one or more MikroTik routers in plain language — 924 risk-annotated tools your AI can call, over SSH.</strong><br/>
+  <p><strong>Drive one or more MikroTik routers in plain language — 950 risk-annotated tools your AI can call, over SSH.</strong><br/>
   Firewall · routing · DHCP/DNS · wireless · QoS · a complete VPN suite · transactional Safe Mode · live attack detection · and an observability dashboard that watches every call.</p>
 
   <p>

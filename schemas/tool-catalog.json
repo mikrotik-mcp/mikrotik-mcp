@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.0.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 961,
+  "toolCount": 963,
   "tools": [
     {
       "name": "create_client_check",
@@ -3701,7 +3701,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Lists all wireless interfaces (`/interface wifi`, `/interface wifiwave2`, `/interface wireless`, `/interface wlan`) — probes every supported command path and aggregates results. Filters by name_filter (substring match), disabled_only, or running_only. For full property detail on a single interface use get_wireless_interface; to see currently connected clients use get_wireless_registration_table. Falls back to `/interface print` with debugging info when no wireless interfaces match, to help identify the correct path on the device.",
+      "description": "Lists all wireless interfaces (`/interface wifi`, `/interface wifiwave2`, `/interface wireless`, `/interface wlan`) — probes every supported command path and aggregates results. Returns detail including SSID, security/authentication types and configured channel settings, with secrets redacted. Filters by name_filter (RouterOS regular expression), disabled_only, or running_only. Configured frequencies are NOT proof of the current operating channel; use get_wireless_interface_status. For full property detail on a single interface use get_wireless_interface; to see currently connected clients use get_wireless_registration_table. Falls back to `/interface print` with debugging info when no wireless interfaces match, to help identify the correct path on the device.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3731,16 +3731,40 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Retrieves the full detail of one named wireless interface (`<auto-detected path> print detail where name=...`), probing `/interface wifi`, `/interface wifiwave2`, `/interface wireless`, and `/interface wlan` in order. Use when you need all properties of a single interface; for a summary of all interfaces use list_wireless_interfaces. Returns the complete property set for the named interface, or an error if not found.",
+      "description": "Retrieves the full detail of one named wireless interface (`<auto-detected path> print detail where name=...`), probing `/interface wifi`, `/interface wifiwave2`, `/interface wireless`, and `/interface wlan` in order. Use to inspect SSID, security.authentication-types (allowed WPA2/WPA3 methods), profile references, country and channel settings. On modern Wi-Fi since RouterOS 7.15 print detail includes inherited values; on older releases also read actual-configuration. Allowed authentication types do not prove which method a client negotiated; missing values do not prove an open network. For the ACTUAL operating channel use get_wireless_interface_status, not the configured frequency list. Secrets are redacted.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_wireless_interface_status",
+      "title": "Get Actual Wi-Fi Channel and Runtime Status",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Reads one non-disruptive runtime snapshot (`<auto-detected Wi-Fi path> monitor <interface> once`). Supports modern /interface wifi, older wifiwave2 and legacy wireless. Returns actual channel/frequency/width, state and radio statistics when reported by the driver; disabled/inactive radios may not have a current channel. Does NOT scan, disconnect clients or change settings. Pair with get_wireless_interface and get_wireless_security_profile for SSID and configured WPA2/WPA3 security; never invent unavailable runtime fields.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "interface": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["interface"],
         "additionalProperties": false
       }
     },
@@ -3813,28 +3837,66 @@
     {
       "name": "scan_wireless_networks",
       "title": "Scan for Nearby Wireless Networks",
-      "risk": "read",
+      "risk": "write",
       "annotations": {
-        "readOnlyHint": true,
-        "idempotentHint": true,
+        "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Scans for visible nearby wireless networks/SSIDs/APs in range (`<auto-detected path> scan <interface> duration=<n>`). Use to discover external networks — not to list connected clients. For currently associated client stations use get_wireless_registration_table instead. `interface` is the local wireless interface name to scan from (e.g. `wlan1`); `duration` is scan time in seconds (default 5). Returns raw scan output from the device.",
+      "description": "Scans for visible nearby wireless networks/SSIDs/APs in range (`<auto-detected path> scan <interface> duration=<n>`). DISRUPTIVE: scanning can temporarily disconnect clients. Requires explicit user approval (confirm=true). Use to discover external networks — not to list connected clients or read the actual channel without disruption. For non-disruptive current-channel evidence use get_wireless_interface_status; for modern RF channel load use scan_wifi_channels. For currently associated client stations use get_wireless_registration_table instead. `interface` is the local wireless interface name to scan from (e.g. `wlan1`); `duration` is scan time in seconds (default 5). Returns raw scan output from the device.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "interface": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "duration": {
             "default": 5,
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": 1,
+            "maximum": 30
+          },
+          "confirm": {
+            "default": false,
+            "description": "Explicit user approval for a scan that can disconnect Wi-Fi clients.",
+            "type": "boolean"
           }
         },
-        "required": ["interface", "duration"],
+        "required": ["interface", "duration", "confirm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "scan_wifi_channels",
+      "title": "Survey Modern Wi-Fi Channel Load (Disruptive)",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Runs a bounded /interface wifi (or wifiwave2) frequency-scan to measure channel load, networks, noise floor and signal levels. Modern Wi-Fi equivalent of a legacy frequency survey, NOT /interface wireless frequency-monitor. DISCONNECTS associated clients/station during the scan; obtain explicit user approval and set confirm=true. Never use during a strictly read-only/non-disruptive audit; get_wireless_interface_status reads the current channel safely. Does not auto-tune or modify configuration; frequency-scan availability depends on RouterOS/driver.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "interface": {
+            "type": "string",
+            "minLength": 1
+          },
+          "duration": {
+            "default": 5,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "confirm": {
+            "default": false,
+            "description": "Explicit user approval to temporarily disconnect Wi-Fi clients.",
+            "type": "boolean"
+          }
+        },
+        "required": ["interface", "duration", "confirm"],
         "additionalProperties": false
       }
     },
@@ -3878,13 +3940,13 @@
     },
     {
       "name": "create_wireless_security_profile",
-      "title": "Create Wireless Security Profile (Legacy v6 Only — Not Implemented)",
+      "title": "Create Wireless Security Profile (Not Implemented)",
       "risk": "write",
       "annotations": {
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Stub for creating a `/interface wireless security-profiles` entry — a RouterOS v6 concept that does not exist in v7. On RouterOS v7 devices (`/interface wifi` or `/interface wifiwave2`) always returns a not-supported message; security is configured directly on the interface. On v6 this is also not implemented and returns an error. For v6 interface creation with a security profile use create_wireless_interface (security_profile arg); for v7, security is configured directly on the interface but is not exposed by this server's wireless tools.",
+      "description": "Not implemented: creating modern wifi/wifiwave2 security or legacy wireless security-profiles presets. For read-only security inspection use list_wireless_security_profiles, get_wireless_security_profile and get_wireless_interface.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3899,14 +3961,14 @@
     },
     {
       "name": "list_wireless_security_profiles",
-      "title": "List Wireless Security Profiles (Legacy v6 Only — Not Implemented)",
+      "title": "List Wi-Fi Security Profiles (Modern and Legacy)",
       "risk": "read",
       "annotations": {
         "readOnlyHint": true,
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Stub for listing `/interface wireless security-profiles` entries — a RouterOS v6 concept that does not exist in v7. On RouterOS v7 devices always returns a not-supported message; on v6 also not implemented. To inspect current wireless interface configuration (including security) use list_wireless_interfaces or get_wireless_interface instead.",
+      "description": "Reads modern /interface wifi security (or wifiwave2 security) and legacy /interface wireless security-profiles, auto-detected. Returns authentication-types (allowed WPA2/WPA3 methods), ciphers, management protection, WPS and EAP settings where available. Passwords, passphrases and pre-shared keys are redacted. Profiles are presets, not proof of effective interface settings; pair with get_wireless_interface to see assigned profiles and overrides. Does not modify the router.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3916,20 +3978,21 @@
     },
     {
       "name": "get_wireless_security_profile",
-      "title": "Get Wireless Security Profile (Legacy v6 Only — Not Implemented)",
+      "title": "Get Wi-Fi Security Profile (Modern and Legacy)",
       "risk": "read",
       "annotations": {
         "readOnlyHint": true,
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Stub for retrieving a named `/interface wireless security-profiles` entry — a RouterOS v6 concept that does not exist in v7. On RouterOS v7 devices always returns a not-supported message; on v6 also not implemented. Use get_wireless_interface to inspect the security settings on a v7 wireless interface instead.",
+      "description": "Reads one named modern wifi/wifiwave2 security profile or legacy wireless security-profiles entry. Shows configured WPA2/WPA3 authentication methods, encryption, WPS and management protection where available; secrets are redacted. Use the profile name returned by list_wireless_security_profiles or get_wireless_interface. An interface override takes precedence over a profile; missing authentication fields do not prove an open network.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": ["name"],
@@ -3938,14 +4001,14 @@
     },
     {
       "name": "remove_wireless_security_profile",
-      "title": "Remove Wireless Security Profile (Legacy v6 Only — Not Implemented)",
+      "title": "Remove Wireless Security Profile (Not Implemented)",
       "risk": "destructive",
       "annotations": {
         "destructiveHint": true,
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Stub for deleting a named `/interface wireless security-profiles` entry — a RouterOS v6 concept that does not exist in v7. On RouterOS v7 devices always returns a not-supported message; on v6 also not implemented. To delete a wireless interface entirely use remove_wireless_interface; to change security settings use update_wireless_interface.",
+      "description": "Not implemented: deleting modern wifi/wifiwave2 security or legacy wireless security-profiles presets. Use list_wireless_security_profiles or get_wireless_security_profile for read-only inspection.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3960,13 +4023,13 @@
     },
     {
       "name": "set_wireless_security_profile",
-      "title": "Assign Security Profile to Wireless Interface (Legacy v6 Only — Not Implemented)",
+      "title": "Assign Security Profile to Wireless Interface (Not Implemented)",
       "risk": "write",
       "annotations": {
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Stub for assigning a named security profile to a v6 `/interface wireless` interface — a RouterOS v6 concept that does not exist in v7. On RouterOS v7 devices always returns a not-supported message because security is set directly on the interface. On v6 also not implemented. To update a wireless interface's settings on supported versions use update_wireless_interface.",
+      "description": "Not implemented: assigning a modern wifi/wifiwave2 security profile. For legacy wireless only, update_wireless_interface supports security_profile. Use get_wireless_interface and get_wireless_security_profile to inspect settings without changes.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -4194,7 +4257,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Runs an RF survey on a wireless radio (`/interface wireless frequency-monitor`, blocking for `duration`), finds the least-congested channel, and reports a before/after. DEFAULTS TO A DRY RUN (`apply=false`) — it surveys and recommends; set `apply=true` to set the radio to the best frequency (`/interface wireless set`). Targets the LEGACY wireless stack; for wifiwave2 (`/interface wifi`) tune via those tools. Returns the per-channel usage finding and the chosen frequency.",
+      "description": "Runs an RF survey on a wireless radio (`/interface wireless frequency-monitor`, blocking for `duration`), finds the least-congested channel, and reports a before/after. DEFAULTS TO A DRY RUN (`apply=false`) — it surveys and recommends; set `apply=true` to set the radio to the best frequency (`/interface wireless set`). Targets ONLY the LEGACY wireless stack, including legacy drivers on v7; for modern wifi/wifiwave2 use get_wireless_interface_status for a non-disruptive current-channel read or scan_wifi_channels for an explicitly approved, disruptive channel-load survey (no auto-tuning). Returns the per-channel usage finding and the chosen frequency.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

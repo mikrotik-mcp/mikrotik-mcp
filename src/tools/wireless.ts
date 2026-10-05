@@ -1,7 +1,7 @@
 /**
  * Wireless — `/interface wifi` · `/interface wifiwave2` · `/interface wireless` · `/interface wlan`.
  *
- * Covers wireless interfaces, (legacy) security profiles, (legacy) access lists,
+ * Covers wireless interfaces, security profiles, (legacy) access lists,
  * scanning, the registration table, and a support check. RouterOS moved wireless
  * around a lot between v6 and v7, so every tool first auto-detects which wireless
  * command path the device speaks before issuing its real command.
@@ -11,22 +11,12 @@ import { interfaceName } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, Cmd, quoteValue } from "../core/routeros";
+import { looksLikeError, isEmpty, Cmd, quoteValue, commandUnsupported } from "../core/routeros";
 import type { ToolContext } from "../core/context";
+import { redactSecrets } from "../utils/redact-secrets";
 
-/** The v7-era wifi command paths where security profiles / access lists no longer apply. */
+/** Modern Wi-Fi stacks use `security`, rather than legacy `security-profiles`. */
 const V7_WIFI = ["/interface wifi", "/interface wifiwave2"];
-
-/** True when RouterOS reports that a command path simply doesn't exist on this device. */
-function commandUnsupported(result: string): boolean {
-  const t = result.toLowerCase();
-  return (
-    t.includes("bad command name") ||
-    t.includes("failure:") ||
-    t.includes("no such command prefix") ||
-    t.includes("invalid command name")
-  );
-}
 
 /**
  * Detects the wireless interface command path supported by the device, trying the
@@ -38,20 +28,28 @@ async function detectWirelessInterfaceType(ctx: ToolContext): Promise<string | n
   const interfaceTypes = [
     "/interface wifi", // RouterOS v7.x (newest)
     "/interface wifiwave2", // RouterOS v7.x (alternative)
-    "/interface wireless", // RouterOS v6.x
+    "/interface wireless", // Legacy drivers on RouterOS v6 or v7
     "/interface wlan", // Older versions
   ];
 
+  let supportedPath: string | null = null;
   for (const interfaceType of interfaceTypes) {
     const result = await executeMikrotikCommand(`${interfaceType} print count-only`, ctx);
-    if (result && !commandUnsupported(result)) {
+    if (commandUnsupported(result)) continue;
+    if (!/^\d+$/.test(result.trim())) {
+      throw new Error(
+        `Failed to detect wireless support: ${redactSecrets(result) || "empty response"}`,
+      );
+    }
+    supportedPath ??= interfaceType;
+    if (Number(result.trim()) > 0) {
       ctx.info(`Detected wireless interface type: ${interfaceType}`);
       return interfaceType;
     }
   }
 
   ctx.info("No wireless interface type detected");
-  return null;
+  return supportedPath;
 }
 
 export const wirelessTools: ToolModule = [
@@ -235,7 +233,9 @@ export const wirelessTools: ToolModule = [
     annotations: READ,
     description:
       "Lists all wireless interfaces (`/interface wifi`, `/interface wifiwave2`, `/interface wireless`, `/interface wlan`) — probes every supported command path and aggregates results. " +
-      "Filters by name_filter (substring match), disabled_only, or running_only. " +
+      "Returns detail including SSID, security/authentication types and configured channel settings, with secrets redacted. " +
+      "Filters by name_filter (RouterOS regular expression), disabled_only, or running_only. " +
+      "Configured frequencies are NOT proof of the current operating channel; use get_wireless_interface_status. " +
       "For full property detail on a single interface use get_wireless_interface; to see currently connected clients use get_wireless_registration_table. " +
       "Falls back to `/interface print` with debugging info when no wireless interfaces match, to help identify the correct path on the device.",
     inputSchema: {
@@ -259,18 +259,21 @@ export const wirelessTools: ToolModule = [
 
       for (const interfaceType of interfaceTypesToTry) {
         const filters: string[] = [];
-        if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+        if (a.name_filter) filters.push(`name~${quoteValue(a.name_filter)}`);
         if (a.disabled_only) filters.push("disabled=yes");
         if (a.running_only) filters.push("running=yes");
 
-        let cmd = `${interfaceType} print`;
-        if (filters.length) cmd += ` where ${filters.join(" and ")}`;
+        const cmd = new Cmd(`${interfaceType} print detail`);
+        if (filters.length) cmd.raw(`where ${filters.join(" and ")}`);
 
-        const result = await executeMikrotikCommand(cmd, ctx);
+        const result = await executeMikrotikCommand(cmd.build(), ctx);
+        if (commandUnsupported(result)) continue;
+        if (looksLikeError(result))
+          return `Failed to list wireless interfaces: ${redactSecrets(result)}`;
 
-        if (result && result.trim() !== "" && !commandUnsupported(result)) {
+        if (!isEmpty(result)) {
           workingTypes.push(interfaceType);
-          allResults.push(`=== ${interfaceType.toUpperCase()} ===\n${result}`);
+          allResults.push(`=== ${interfaceType.toUpperCase()} ===\n${redactSecrets(result)}`);
         }
       }
 
@@ -299,9 +302,11 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
     description:
       "Retrieves the full detail of one named wireless interface (`<auto-detected path> print detail where name=...`), " +
       "probing `/interface wifi`, `/interface wifiwave2`, `/interface wireless`, and `/interface wlan` in order. " +
-      "Use when you need all properties of a single interface; for a summary of all interfaces use list_wireless_interfaces. " +
-      "Returns the complete property set for the named interface, or an error if not found.",
-    inputSchema: { name: z.string() },
+      "Use to inspect SSID, security.authentication-types (allowed WPA2/WPA3 methods), profile references, country and channel settings. " +
+      "On modern Wi-Fi since RouterOS 7.15 print detail includes inherited values; on older releases also read actual-configuration. " +
+      "Allowed authentication types do not prove which method a client negotiated; missing values do not prove an open network. " +
+      "For the ACTUAL operating channel use get_wireless_interface_status, not the configured frequency list. Secrets are redacted.",
+    inputSchema: { name: z.string().trim().min(1) },
     async handler(a, ctx) {
       ctx.info(`Getting wireless interface details: name=${a.name}`);
 
@@ -309,12 +314,54 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
       if (!interfaceType) return "Error: No wireless interface support detected on this device.";
 
       const result = await executeMikrotikCommand(
-        `${interfaceType} print detail where name="${a.name}"`,
+        new Cmd(`${interfaceType} print detail`).raw("where").set("name", a.name).build(),
         ctx,
       );
+      if (looksLikeError(result))
+        return `Failed to read wireless interface: ${redactSecrets(result)}`;
       if (isEmpty(result)) return `Wireless interface '${a.name}' not found.`;
 
-      return `WIRELESS INTERFACE DETAILS:\n\n${result}`;
+      let details = redactSecrets(result);
+      if (V7_WIFI.includes(interfaceType)) {
+        const inherited = await executeMikrotikCommand(
+          new Cmd(`${interfaceType} actual-configuration print detail`)
+            .raw("where")
+            .set("name", a.name)
+            .build(),
+          ctx,
+        );
+        if (!commandUnsupported(inherited)) {
+          if (looksLikeError(inherited))
+            return `Failed to read effective Wi-Fi configuration: ${redactSecrets(inherited)}`;
+          if (!isEmpty(inherited))
+            details += `\n\nACTUAL CONFIGURATION (older RouterOS):\n${redactSecrets(inherited)}`;
+        }
+      }
+      return `WIRELESS INTERFACE DETAILS:\n\n${details}\n\nConfigured frequencies are allowed choices, not the actual operating channel. Use get_wireless_interface_status for runtime evidence.`;
+    },
+  }),
+
+  defineTool({
+    name: "get_wireless_interface_status",
+    title: "Get Actual Wi-Fi Channel and Runtime Status",
+    annotations: READ,
+    description:
+      "Reads one non-disruptive runtime snapshot (`<auto-detected Wi-Fi path> monitor <interface> once`). " +
+      "Supports modern /interface wifi, older wifiwave2 and legacy wireless. Returns actual channel/frequency/width, " +
+      "state and radio statistics when reported by the driver; disabled/inactive radios may not have a current channel. " +
+      "Does NOT scan, disconnect clients or change settings. Pair with get_wireless_interface and get_wireless_security_profile " +
+      "for SSID and configured WPA2/WPA3 security; never invent unavailable runtime fields.",
+    inputSchema: { interface: z.string().trim().min(1) },
+    async handler(a, ctx) {
+      const path = await detectWirelessInterfaceType(ctx);
+      if (!path) return "Error: No wireless interface support detected on this device.";
+      const result = await executeMikrotikCommand(
+        new Cmd(`${path} monitor`).raw(quoteValue(a.interface)).raw("once").build(),
+        ctx,
+      );
+      if (looksLikeError(result) || isEmpty(result))
+        return `Failed to read Wi-Fi runtime status: ${redactSecrets(result) || "empty response"}`;
+      return `WI-FI RUNTIME STATUS (${path}):\n\n${redactSecrets(result)}`;
     },
   }),
 
@@ -405,18 +452,26 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
   defineTool({
     name: "scan_wireless_networks",
     title: "Scan for Nearby Wireless Networks",
-    annotations: READ,
+    annotations: WRITE,
     description:
       "Scans for visible nearby wireless networks/SSIDs/APs in range (`<auto-detected path> scan <interface> duration=<n>`). " +
-      "Use to discover external networks — not to list connected clients. " +
+      "DISRUPTIVE: scanning can temporarily disconnect clients. Requires explicit user approval (confirm=true). " +
+      "Use to discover external networks — not to list connected clients or read the actual channel without disruption. " +
+      "For non-disruptive current-channel evidence use get_wireless_interface_status; for modern RF channel load use scan_wifi_channels. " +
       "For currently associated client stations use get_wireless_registration_table instead. " +
       "`interface` is the local wireless interface name to scan from (e.g. `wlan1`); `duration` is scan time in seconds (default 5). " +
       "Returns raw scan output from the device.",
     inputSchema: {
-      interface: z.string(),
-      duration: z.number().int().default(5),
+      interface: z.string().trim().min(1),
+      duration: z.number().int().min(1).max(30).default(5),
+      confirm: z
+        .boolean()
+        .default(false)
+        .describe("Explicit user approval for a scan that can disconnect Wi-Fi clients."),
     },
     async handler(a, ctx) {
+      if (!a.confirm)
+        return "Error: Wireless scan can disconnect clients. Obtain explicit user approval and set confirm=true; use get_wireless_interface_status for a non-disruptive read.";
       ctx.info(`Scanning wireless networks on interface: ${a.interface}`);
 
       const interfaceType = await detectWirelessInterfaceType(ctx);
@@ -424,13 +479,50 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
 
       const scanCmd = new Cmd(`${interfaceType} scan`)
         .raw(quoteValue(a.interface))
-        .set("duration", a.duration)
+        .set("duration", `${a.duration}s`)
         .build();
 
       const result = await executeMikrotikCommand(scanCmd, ctx);
       if (looksLikeError(result)) return `Failed to scan wireless networks: ${result}`;
 
       return `WIRELESS NETWORK SCAN RESULTS:\n\n${result}`;
+    },
+  }),
+
+  defineTool({
+    name: "scan_wifi_channels",
+    title: "Survey Modern Wi-Fi Channel Load (Disruptive)",
+    annotations: WRITE,
+    description:
+      "Runs a bounded /interface wifi (or wifiwave2) frequency-scan to measure channel load, networks, noise floor and signal levels. " +
+      "Modern Wi-Fi equivalent of a legacy frequency survey, NOT /interface wireless frequency-monitor. " +
+      "DISCONNECTS associated clients/station during the scan; obtain explicit user approval and set confirm=true. " +
+      "Never use during a strictly read-only/non-disruptive audit; get_wireless_interface_status reads the current channel safely. " +
+      "Does not auto-tune or modify configuration; frequency-scan availability depends on RouterOS/driver.",
+    inputSchema: {
+      interface: z.string().trim().min(1),
+      duration: z.number().int().min(1).max(30).default(5),
+      confirm: z
+        .boolean()
+        .default(false)
+        .describe("Explicit user approval to temporarily disconnect Wi-Fi clients."),
+    },
+    async handler(a, ctx) {
+      if (!a.confirm)
+        return "Error: Frequency scan disconnects clients. Obtain explicit user approval and set confirm=true.";
+      const path = await detectWirelessInterfaceType(ctx);
+      if (!path || !V7_WIFI.includes(path))
+        return "Error: Modern Wi-Fi frequency-scan is unavailable; this tool requires /interface wifi or /interface wifiwave2.";
+      const result = await executeMikrotikCommand(
+        new Cmd(`${path} frequency-scan`)
+          .raw(quoteValue(a.interface))
+          .set("duration", `${a.duration}s`)
+          .build(),
+        ctx,
+      );
+      if (looksLikeError(result) || isEmpty(result))
+        return `Failed to survey Wi-Fi channels: ${result || "empty response"}`;
+      return `WI-FI CHANNEL SURVEY (${path}):\n\n${result}`;
     },
   }),
 
@@ -452,13 +544,15 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
       const interfaceType = await detectWirelessInterfaceType(ctx);
       if (!interfaceType) return "Error: No wireless interface support detected on this device.";
 
-      let cmd = `${interfaceType} registration-table print`;
-      if (a.interface) cmd += ` where interface="${a.interface}"`;
+      const cmd = new Cmd(`${interfaceType} registration-table print detail`);
+      if (a.interface) cmd.raw("where").set("interface", a.interface);
 
-      const result = await executeMikrotikCommand(cmd, ctx);
+      const result = await executeMikrotikCommand(cmd.build(), ctx);
+      if (looksLikeError(result))
+        return `Failed to read wireless clients: ${redactSecrets(result)}`;
       if (isEmpty(result)) return "No wireless clients registered.";
 
-      return `WIRELESS REGISTRATION TABLE:\n\n${result}`;
+      return `WIRELESS REGISTRATION TABLE:\n\n${redactSecrets(result)}`;
     },
   }),
 
@@ -493,9 +587,9 @@ ${interfaceResult}
 Detected Wireless Interface Type: ${wirelessType || "None detected"}
 
 Compatibility Notes:
-- RouterOS v7.x uses '/interface wifi' (newest system)
-- RouterOS v7.x also supports '/interface wifiwave2' (alternative)
-- RouterOS v6.x uses '/interface wireless' (legacy system)
+- RouterOS v7.13+ modern drivers use '/interface wifi'
+- Earlier modern drivers use '/interface wifiwave2'
+- Legacy drivers use '/interface wireless' on RouterOS v6 OR v7
 - Older versions may use '/interface wlan'
 
 USAGE EXAMPLES:
@@ -510,95 +604,94 @@ For legacy systems:
 
   defineTool({
     name: "create_wireless_security_profile",
-    title: "Create Wireless Security Profile (Legacy v6 Only — Not Implemented)",
+    title: "Create Wireless Security Profile (Not Implemented)",
     annotations: WRITE,
     description:
-      "Stub for creating a `/interface wireless security-profiles` entry — a RouterOS v6 concept that does not exist in v7. " +
-      "On RouterOS v7 devices (`/interface wifi` or `/interface wifiwave2`) always returns a not-supported message; security is configured directly on the interface. " +
-      "On v6 this is also not implemented and returns an error. " +
-      "For v6 interface creation with a security profile use create_wireless_interface (security_profile arg); for v7, security is configured directly on the interface but is not exposed by this server's wireless tools.",
+      "Not implemented: creating modern wifi/wifiwave2 security or legacy wireless security-profiles presets. " +
+      "For read-only security inspection use list_wireless_security_profiles, get_wireless_security_profile and get_wireless_interface.",
     inputSchema: { name: z.string() },
-    async handler(_a, ctx) {
-      const interfaceType = await detectWirelessInterfaceType(ctx);
-      if (interfaceType && V7_WIFI.includes(interfaceType)) {
-        return "Security profiles are not used in RouterOS v7.x. Configure security directly on the wireless interface.";
-      }
-      return "Legacy security profile creation not implemented in this version.";
+    async handler() {
+      return "Error: Security profile creation is not implemented. Use list_wireless_security_profiles or get_wireless_security_profile for read-only inspection.";
     },
   }),
 
   defineTool({
     name: "list_wireless_security_profiles",
-    title: "List Wireless Security Profiles (Legacy v6 Only — Not Implemented)",
+    title: "List Wi-Fi Security Profiles (Modern and Legacy)",
     annotations: READ,
     description:
-      "Stub for listing `/interface wireless security-profiles` entries — a RouterOS v6 concept that does not exist in v7. " +
-      "On RouterOS v7 devices always returns a not-supported message; on v6 also not implemented. " +
-      "To inspect current wireless interface configuration (including security) use list_wireless_interfaces or get_wireless_interface instead.",
+      "Reads modern /interface wifi security (or wifiwave2 security) and legacy /interface wireless security-profiles, auto-detected. " +
+      "Returns authentication-types (allowed WPA2/WPA3 methods), ciphers, management protection, WPS and EAP settings where available. " +
+      "Passwords, passphrases and pre-shared keys are redacted. Profiles are presets, not proof of effective interface settings; " +
+      "pair with get_wireless_interface to see assigned profiles and overrides. Does not modify the router.",
     async handler(_a, ctx) {
       const interfaceType = await detectWirelessInterfaceType(ctx);
-      if (interfaceType && V7_WIFI.includes(interfaceType)) {
-        return "Security profiles are not used in RouterOS v7.x. Security is configured directly on wireless interfaces.";
-      }
-      return "Legacy security profile listing not implemented in this version.";
+      if (!interfaceType) return "Error: No wireless interface support detected on this device.";
+      const menu = V7_WIFI.includes(interfaceType) ? "security" : "security-profiles";
+      const result = await executeMikrotikCommand(
+        new Cmd(`${interfaceType} ${menu} print detail`).build(),
+        ctx,
+      );
+      if (looksLikeError(result))
+        return `Failed to list Wi-Fi security profiles: ${redactSecrets(result)}`;
+      if (isEmpty(result))
+        return "No Wi-Fi security profiles configured. Security may be set directly on an interface.";
+      return `WI-FI SECURITY PROFILES (${interfaceType}):\n\n${redactSecrets(result)}`;
     },
   }),
 
   defineTool({
     name: "get_wireless_security_profile",
-    title: "Get Wireless Security Profile (Legacy v6 Only — Not Implemented)",
+    title: "Get Wi-Fi Security Profile (Modern and Legacy)",
     annotations: READ,
     description:
-      "Stub for retrieving a named `/interface wireless security-profiles` entry — a RouterOS v6 concept that does not exist in v7. " +
-      "On RouterOS v7 devices always returns a not-supported message; on v6 also not implemented. " +
-      "Use get_wireless_interface to inspect the security settings on a v7 wireless interface instead.",
-    inputSchema: { name: z.string() },
-    async handler(_a, ctx) {
+      "Reads one named modern wifi/wifiwave2 security profile or legacy wireless security-profiles entry. " +
+      "Shows configured WPA2/WPA3 authentication methods, encryption, WPS and management protection where available; secrets are redacted. " +
+      "Use the profile name returned by list_wireless_security_profiles or get_wireless_interface. " +
+      "An interface override takes precedence over a profile; missing authentication fields do not prove an open network.",
+    inputSchema: { name: z.string().trim().min(1) },
+    async handler(a, ctx) {
       const interfaceType = await detectWirelessInterfaceType(ctx);
-      if (interfaceType && V7_WIFI.includes(interfaceType)) {
-        return "Security profiles are not used in RouterOS v7.x. Check security configuration on wireless interfaces directly.";
-      }
-      return "Legacy security profile details not implemented in this version.";
+      if (!interfaceType) return "Error: No wireless interface support detected on this device.";
+      const menu = V7_WIFI.includes(interfaceType) ? "security" : "security-profiles";
+      const result = await executeMikrotikCommand(
+        new Cmd(`${interfaceType} ${menu} print detail`).raw("where").set("name", a.name).build(),
+        ctx,
+      );
+      if (looksLikeError(result))
+        return `Failed to read Wi-Fi security profile: ${redactSecrets(result)}`;
+      if (isEmpty(result)) return `Wi-Fi security profile '${a.name}' not found.`;
+      return `WI-FI SECURITY PROFILE (${interfaceType}):\n\n${redactSecrets(result)}`;
     },
   }),
 
   defineTool({
     name: "remove_wireless_security_profile",
-    title: "Remove Wireless Security Profile (Legacy v6 Only — Not Implemented)",
+    title: "Remove Wireless Security Profile (Not Implemented)",
     annotations: DESTRUCTIVE,
     description:
-      "Stub for deleting a named `/interface wireless security-profiles` entry — a RouterOS v6 concept that does not exist in v7. " +
-      "On RouterOS v7 devices always returns a not-supported message; on v6 also not implemented. " +
-      "To delete a wireless interface entirely use remove_wireless_interface; to change security settings use update_wireless_interface.",
+      "Not implemented: deleting modern wifi/wifiwave2 security or legacy wireless security-profiles presets. " +
+      "Use list_wireless_security_profiles or get_wireless_security_profile for read-only inspection.",
     inputSchema: { name: z.string() },
-    async handler(_a, ctx) {
-      const interfaceType = await detectWirelessInterfaceType(ctx);
-      if (interfaceType && V7_WIFI.includes(interfaceType)) {
-        return "Security profiles are not used in RouterOS v7.x. Security is configured directly on wireless interfaces.";
-      }
-      return "Legacy security profile removal not implemented in this version.";
+    async handler() {
+      return "Error: Security profile removal is not implemented. Use get_wireless_security_profile for read-only inspection.";
     },
   }),
 
   defineTool({
     name: "set_wireless_security_profile",
-    title: "Assign Security Profile to Wireless Interface (Legacy v6 Only — Not Implemented)",
+    title: "Assign Security Profile to Wireless Interface (Not Implemented)",
     annotations: WRITE,
     description:
-      "Stub for assigning a named security profile to a v6 `/interface wireless` interface — a RouterOS v6 concept that does not exist in v7. " +
-      "On RouterOS v7 devices always returns a not-supported message because security is set directly on the interface. " +
-      "On v6 also not implemented. " +
-      "To update a wireless interface's settings on supported versions use update_wireless_interface.",
+      "Not implemented: assigning a modern wifi/wifiwave2 security profile. " +
+      "For legacy wireless only, update_wireless_interface supports security_profile. " +
+      "Use get_wireless_interface and get_wireless_security_profile to inspect settings without changes.",
     inputSchema: {
       interface_name: z.string(),
       security_profile: z.string(),
     },
-    async handler(_a, ctx) {
-      const interfaceType = await detectWirelessInterfaceType(ctx);
-      if (interfaceType && V7_WIFI.includes(interfaceType)) {
-        return "Security profiles are not used in RouterOS v7.x. Configure security directly on the wireless interface.";
-      }
-      return "Legacy security profile setting not implemented in this version.";
+    async handler() {
+      return "Error: Security profile assignment is not implemented here. Legacy wireless supports update_wireless_interface(security_profile=...); modern security is read-only in these tools.";
     },
   }),
 
