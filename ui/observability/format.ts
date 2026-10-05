@@ -13,6 +13,24 @@ export function bytes(n: number): string {
   }
   return `${v.toFixed(i ? 1 : 0)} ${u[i]}`;
 }
+/**
+ * User Manager rate limits are bit/s, even when the console's integer display
+ * appends B. This is not the unit of transfer-limit (bytes). Display decimal
+ * megabytes per second without changing the raw value used by the edit form.
+ */
+export function limitationRate(raw: string | undefined): string {
+  const value = raw?.trim();
+  if (!value) return "—";
+  const match = /^(\d+(?:\.\d+)?)\s*([kKmMgG]?)(?:B|bps)?$/.exec(value);
+  if (!match) return value;
+  const scale: Record<string, number> = { "": 1, k: 1e3, m: 1e6, g: 1e9 };
+  const bitsPerSecond = Number(match[1]) * scale[match[2].toLowerCase()];
+  if (!Number.isFinite(bitsPerSecond)) return value;
+  if (bitsPerSecond === 0) return "Unlimited";
+  const megabytesPerSecond = bitsPerSecond / 8e6;
+  if (megabytesPerSecond < 1e-6) return "<0.000001 MB/s";
+  return `${Number(megabytesPerSecond.toFixed(6))} MB/s`;
+}
 export const clock = (ts: number): string =>
   new Date(ts).toLocaleTimeString(undefined, { hour12: false });
 export const num = (n: number): string => n.toLocaleString();

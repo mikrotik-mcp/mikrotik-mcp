@@ -28,7 +28,7 @@ import { Badge, Button, Input, Note, Select } from "./geist";
 import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 import { UmReports } from "./um-reports";
-import { bytes, clock } from "./format";
+import { bytes, clock, limitationRate } from "./format";
 import { generateUserPassword, UserCreatedDialog } from "./aaa-user-credentials";
 import type { CreatedUserReceipt } from "./aaa-user-credentials";
 import { UserProfileField } from "./aaa-user-profile";
@@ -675,6 +675,11 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                               : `${counter.active} active connection${counter.active === 1 ? "" : "s"}`}
                           </span>
                         </div>
+                      ) : config.slug === "um-limitations" &&
+                        (c.key === "rate-limit-rx" || c.key === "rate-limit-tx") ? (
+                        <span className="whitespace-nowrap font-mono tabular-nums">
+                          {limitationRate(r[c.key])}
+                        </span>
                       ) : (
                         (r[c.key] ?? "")
                       )}
@@ -1014,8 +1019,8 @@ const UM_LIMITATIONS_CONFIG: EntityConfig = {
   idKey: "name",
   columns: [
     { key: "name", label: "Name" },
-    { key: "rate-limit-rx", label: "Rate ↓" },
-    { key: "rate-limit-tx", label: "Rate ↑" },
+    { key: "rate-limit-rx", label: "Rate ↓ (MB/s)" },
+    { key: "rate-limit-tx", label: "Rate ↑ (MB/s)" },
     { key: "transfer-limit", label: "Transfer" },
     { key: "uptime-limit", label: "Uptime" },
   ],
