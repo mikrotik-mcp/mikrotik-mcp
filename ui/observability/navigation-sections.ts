@@ -44,6 +44,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
     description: "Troubleshoot paths, inspect packets and collect evidence",
     views: [
       "investigations",
+      "ip-intelligence",
       "client-checks",
       "round-trip",
       "simulator",
@@ -80,6 +81,8 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
 
 /** Common operator vocabulary for pages whose product names are less obvious. */
 export const PAGE_SEARCH_TERMS: Partial<Record<ViewId, string>> = {
+  "ip-intelligence":
+    "ip lookup ipquery ipkit geo asn organization isp location vpn proxy tor reputation",
   capsman: "wifi wireless access points roaming",
   aaa: "radius user manager authentication accounting profiles",
   fabric: "bridge switch ports layer2",

@@ -79,6 +79,7 @@ import { NewFeatureBadge } from "./new-feature-badge";
 import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
 import { ServiceRoutingView } from "./service-routing";
+import { IpIntelligenceView } from "./ip-intelligence";
 import { FlightRecorderView } from "./flight-recorder";
 import { RecoveryLabView } from "./recovery-lab";
 import { RoundTripView } from "./round-trip";
@@ -183,6 +184,14 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  "ip-intelligence": {
+    what: "Compare complete public IP metadata from ipquery and ipkit, without router I/O.",
+    tips: [
+      "Public IPs are sent to both providers only when you submit; private addresses stay local.",
+      "Search every returned field, compare the sources or export the full JSON report.",
+      "Results are cached for five minutes; partial failures for thirty seconds. Provider claims are not identity or routing evidence.",
+    ],
+  },
   "recovery-lab": {
     what: "Prepare a portable snapshot subset and rehearse it on a separately configured isolated CHR runner.",
     tips: [
@@ -684,6 +693,12 @@ function ReloadServerButton(): ReactNode {
 /** Inline stroke icons for the sidebar — no icon-font dependency. */
 function NavIcon({ name }: { name: ViewId }): ReactNode {
   const paths: Record<ViewId, ReactNode> = {
+    "ip-intelligence": (
+      <>
+        <circle cx="10" cy="10" r="7" />
+        <path d="M3 10h14M10 3c-4 4-4 10 0 14M10 3c4 4 4 10 0 14M16 16l5 5" />
+      </>
+    ),
     "client-checks": (
       <>
         <rect x="6" y="2" width="12" height="20" rx="3" />
@@ -1756,6 +1771,7 @@ function App(): ReactNode {
               {view === "investigations" && <InvestigationsView />}
               {view === "service-contracts" && <ServiceContractsView />}
               {view === "service-routing" && <ServiceRoutingView />}
+              {view === "ip-intelligence" && <IpIntelligenceView />}
               {view === "flight-recorder" && <FlightRecorderView />}
               {view === "recovery-lab" && <RecoveryLabView />}
               {view === "round-trip" && <RoundTripView />}

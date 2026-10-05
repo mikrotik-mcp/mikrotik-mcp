@@ -1,6 +1,7 @@
 import { NAVIGATION_SECTIONS, PAGE_SEARCH_TERMS } from "./navigation-sections";
 
 export type ViewId =
+  | "ip-intelligence"
   | "openvpn"
   | "recovery-lab"
   | "flight-recorder"
@@ -43,6 +44,11 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  {
+    id: "ip-intelligence",
+    label: "IP Intelligence",
+    sub: "Full IP, ASN, location & risk details from two independent providers",
+  },
   {
     id: "openvpn",
     label: "OpenVPN",

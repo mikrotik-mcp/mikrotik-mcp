@@ -46,6 +46,7 @@ Then just ask:
 
 ## Highlights
 
+- **IP Intelligence:** `lookup_ip_intelligence` and Diagnostics → IP Intelligence compare full ipquery/ipkit responses: ASN/organization, location, risk and every additional field, with searchable details and JSON export. Public IPs are sent only on submission; private IPs stay local. [Guide](docs/ip-intelligence.md).
 - **Service probes:** add, edit, search and remove approved HTTPS/TLS/TCP/DNS targets directly in Config or Service Routing, with explicit IP/CIDR boundaries and safe-apply confirmation. [Setup guide](docs/service-contracts.md#dashboard-setup-no-json-required).
 - **OpenVPN connections:** active users, source/tunnel IPs, cached country flags and ASN organizations, searchable source networks and live connection time, with confirmed single-session disconnect and read-only access controls. [Guide](docs/openvpn-connections.md).
 - **Service Routing:** live IPv4/IPv6 routes, fuzzy address-list search, exact/wildcard domain-to-exit policies with optional health probes, per-policy live matched-traffic counters and charts, VRF HTTPS exit checks and
