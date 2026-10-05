@@ -7205,20 +7205,25 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Resolves a hostname using the router's own DNS resolver (`/resolve`) — tests what address the router itself would obtain for a given name. Optionally directs the query to a specific upstream `server` (IP) and supports record types via `type` (e.g. \"A\", \"AAAA\", \"MX\"; default \"A\"). Use to verify DNS reachability, that a static record override is active, or that DoH is working — all from the router's perspective, not from a client behind it. Returns the resolver's answer for the queried name and type.",
+      "description": "Resolves a hostname using the router's own DNS resolver (`:put [:resolve ...]`) — tests what address the router itself would obtain for a given name. Optionally directs the query to a specific upstream `server` (IP). `type` is \"A\" (IPv4 only, default), \"AAAA\" (IPv6 only), \"ANY\" (IPv4 then IPv6 fallback), or \"ANY6\" (IPv6 then IPv4 fallback). Returns one resolved IP address, not all DNS records; MX queries are not supported. Use to verify DNS reachability, that a static record override is active, or that DoH is working — all from the router's perspective, not from a client behind it. Queries with an explicit server are not cached by RouterOS.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "description": "DNS name to resolve, e.g. example.com"
           },
           "server": {
-            "type": "string"
+            "description": "Optional DNS server IP address",
+            "type": "string",
+            "minLength": 1
           },
           "type": {
             "default": "A",
-            "type": "string"
+            "type": "string",
+            "enum": ["A", "AAAA", "ANY", "ANY6"]
           }
         },
         "required": ["name", "type"],
@@ -26811,18 +26816,20 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Resolves a DNS hostname to an IP address (`[:resolve]`) using the RouterOS device's configured system resolver — use to verify that DNS resolution works correctly from the router's own perspective. The optional `server` argument is informational only; the handler always invokes the system resolver regardless. Returns the resolved IP address string, or an error if resolution fails. For managing static DNS entries on the device use `add_dns_static`.",
+      "description": "Resolves a DNS hostname to an IP address (`[:resolve]`) using the RouterOS device's configured system resolver — use to verify that DNS resolution works correctly from the router's own perspective. The optional `server` IP directs the query to that DNS server instead of the system resolver; explicit-server queries are not cached by RouterOS. Returns the resolved IP address string, or an error if resolution fails. For managing static DNS entries on the device use `add_dns_static`.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
+            "minLength": 1,
             "description": "DNS name to resolve, e.g. 'example.com'"
           },
           "server": {
-            "description": "Specific DNS server to query (informational; :resolve uses the system resolver)",
-            "type": "string"
+            "description": "Specific DNS server IP to query; defaults to the system resolver",
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": ["name"],

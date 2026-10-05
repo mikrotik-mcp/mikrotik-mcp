@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
+import { dnsResolveCommand } from "../core/dns-resolve";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { whereClause, looksLikeError, isEmpty, flattenLiveOutput, Cmd } from "../core/routeros";
@@ -138,24 +139,24 @@ export const networkToolTools: ToolModule = [
     annotations: READ,
     description:
       "Resolves a DNS hostname to an IP address (`[:resolve]`) using the RouterOS device's configured system resolver — use to verify that DNS resolution works correctly from the router's own perspective. " +
-      "The optional `server` argument is informational only; the handler always invokes the system resolver regardless. " +
+      "The optional `server` IP directs the query to that DNS server instead of the system resolver; explicit-server queries are not cached by RouterOS. " +
       "Returns the resolved IP address string, or an error if resolution fails. " +
       "For managing static DNS entries on the device use `add_dns_static`.",
     inputSchema: {
-      name: z.string().describe("DNS name to resolve, e.g. 'example.com'"),
+      name: z.string().trim().min(1).describe("DNS name to resolve, e.g. 'example.com'"),
       server: z
         .string()
+        .trim()
+        .min(1)
         .optional()
-        .describe(
-          "Specific DNS server to query (informational; :resolve uses the system resolver)",
-        ),
+        .describe("Specific DNS server IP to query; defaults to the system resolver"),
     },
     async handler(a, ctx) {
       ctx.info(`Resolving DNS name ${a.name}`);
-      const result = await executeMikrotikCommand(`:put [:resolve "${a.name}"]`, ctx);
+      const result = await executeMikrotikCommand(dnsResolveCommand(a.name, a.server), ctx);
       if (looksLikeError(result)) return `Failed to resolve ${a.name}: ${result}`;
       return isEmpty(result)
-        ? `Could not resolve ${a.name}.`
+        ? `Failed to resolve ${a.name}: the router returned no address.`
         : `DNS RESOLVE ${a.name}:\n\n${result}`;
     },
   }),

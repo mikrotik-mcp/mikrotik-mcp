@@ -1,6 +1,7 @@
 /** DNS server, static records, cache, and regexp — `/ip dns`. */
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
+import { dnsResolveCommand } from "../core/dns-resolve";
 import type { ToolContext } from "../core/context";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -569,26 +570,26 @@ export const dnsTools: ToolModule = [
     title: "Test DNS Resolution From Router",
     annotations: READ,
     description:
-      "Resolves a hostname using the router's own DNS resolver (`/resolve`) — tests what address " +
+      "Resolves a hostname using the router's own DNS resolver (`:put [:resolve ...]`) — tests what address " +
       "the router itself would obtain for a given name. Optionally directs the query to a specific " +
-      'upstream `server` (IP) and supports record types via `type` (e.g. "A", "AAAA", "MX"; ' +
-      'default "A"). ' +
+      'upstream `server` (IP). `type` is "A" (IPv4 only, default), "AAAA" (IPv6 only), ' +
+      '"ANY" (IPv4 then IPv6 fallback), or "ANY6" (IPv6 then IPv4 fallback). ' +
+      "Returns one resolved IP address, not all DNS records; MX queries are not supported. " +
       "Use to verify DNS reachability, that a static record override is active, or that DoH is " +
       "working — all from the router's perspective, not from a client behind it. " +
-      "Returns the resolver's answer for the queried name and type.",
+      "Queries with an explicit server are not cached by RouterOS.",
     inputSchema: {
-      name: z.string(),
-      server: z.string().optional(),
-      type: z.string().default("A"),
+      name: z.string().trim().min(1).describe("DNS name to resolve, e.g. example.com"),
+      server: z.string().trim().min(1).optional().describe("Optional DNS server IP address"),
+      type: z.enum(["A", "AAAA", "ANY", "ANY6"]).default("A"),
     },
     async handler(a, ctx) {
       ctx.info(`Testing DNS query: name=${a.name}, type=${a.type}`);
 
-      let cmd = `/resolve ${a.name}`;
-      if (a.server) cmd += ` server=${a.server}`;
-      if (a.type !== "A") cmd += ` type=${a.type}`;
-
-      const result = await executeMikrotikCommand(cmd, ctx);
+      const typeMap = { A: "ipv4", AAAA: "ipv6", ANY: "any", ANY6: "any6" } as const;
+      const type = typeMap[a.type as keyof typeof typeMap];
+      const result = await executeMikrotikCommand(dnsResolveCommand(a.name, a.server, type), ctx);
+      if (looksLikeError(result)) return `Failed to resolve ${a.name}: ${result}`;
       return isEmpty(result)
         ? `Failed to resolve ${a.name}`
         : `DNS QUERY RESULT for ${a.name}:\n\n${result}`;

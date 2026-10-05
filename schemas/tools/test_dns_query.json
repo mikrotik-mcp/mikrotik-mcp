@@ -4,14 +4,19 @@
   "type": "object",
   "properties": {
     "name": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "DNS name to resolve, e.g. example.com"
     },
     "server": {
-      "type": "string"
+      "description": "Optional DNS server IP address",
+      "type": "string",
+      "minLength": 1
     },
     "type": {
       "default": "A",
-      "type": "string"
+      "type": "string",
+      "enum": ["A", "AAAA", "ANY", "ANY6"]
     }
   },
   "required": ["name", "type"],
