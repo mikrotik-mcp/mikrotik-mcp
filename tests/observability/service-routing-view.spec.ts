@@ -111,6 +111,39 @@ test("shows the primary and unknown evidence without probing on mount", async ()
   expect(postJson).not.toHaveBeenCalled();
 });
 
+test("shows network organizations while entering public IPv4 and IPv6 client scopes without writing", async () => {
+  const original = vi.mocked(api).getMockImplementation()!;
+  vi.mocked(api).mockImplementation(async (path, signal) =>
+    path.startsWith("/api/ip-network?")
+      ? { status: "resolved", asn: "AS13335", asnOrganization: "Example Network" }
+      : original(path, signal),
+  );
+  await mount();
+  await act(async () =>
+    [...host.querySelectorAll("button")].find((b) => b.textContent === "New MCP policy")!.click(),
+  );
+  const input = document.querySelector('input[placeholder="10.10.10.0/24"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "1.1.1.1/32, 2606:4700::1111/128",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  });
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent?.match(/Example Network/g)).toHaveLength(2);
+  expect(dialog.textContent).toContain("AS13335");
+  expect(api).toHaveBeenCalledWith("/api/ip-network?ip=1.1.1.1", expect.any(AbortSignal));
+  expect(api).toHaveBeenCalledWith(
+    "/api/ip-network?ip=2606%3A4700%3A%3A1111",
+    expect.any(AbortSignal),
+  );
+  expect(postJson).not.toHaveBeenCalled();
+});
+
 test("saves an explicit domain without a probe and requires consent for a wildcard draft", async () => {
   vi.mocked(api).mockImplementation(async (path) =>
     path === "/api/devices"

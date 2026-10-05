@@ -23,6 +23,7 @@ import { ServiceProbesSettings } from "./service-probes-settings";
 import { ServiceProbePicker } from "./service-probe-picker";
 import { RoutingDomainFields } from "./service-routing-domain-fields";
 import { RoutingTrafficPanel } from "./service-routing-traffic";
+import { IpNetwork } from "./ip-network";
 import { routingDomain, isWildcard } from "../../src/service-routing/domain";
 import type { RoutingPolicy } from "../../src/service-routing/model";
 import {
@@ -445,6 +446,15 @@ export function ServiceRoutingView() {
                   onChange={(e) => setSources(e.target.value)}
                   placeholder={family === "ipv4" ? "10.10.10.0/24" : "fd00:10::/64"}
                 />
+                {/* Keep the preview within the policy schema's eight-source limit. */}
+                {[...new Set(sources.split(/[\s,]+/).filter(Boolean))]
+                  .slice(0, 8)
+                  .map((address) => (
+                    <span key={address} className="grid min-w-0 gap-1">
+                      <code className="text-xs text-muted-foreground">{address}</code>
+                      <IpNetwork address={address} />
+                    </span>
+                  ))}
                 <small>
                   Comma-separated CIDRs. Default routes are not allowed. The other IP family is
                   unchanged.

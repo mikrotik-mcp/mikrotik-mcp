@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "./api";
+import { IpNetwork } from "./ip-network";
 import { createAddressIndexCache, searchAddressEntries } from "./routing-address-search";
 import type { AddressFamily, AddressIndex } from "./routing-address-search";
 import "./service-routing-address-browser.css";
@@ -335,6 +336,7 @@ export function RoutingAddressBrowser({
                     </Button>
                   </div>
                 </div>
+                <IpNetwork address={row.address} />
                 <div className="address-browser__row-meta">
                   <span title={row.list}>{row.list}</span>
                   {row.disabled === "yes" ? (
