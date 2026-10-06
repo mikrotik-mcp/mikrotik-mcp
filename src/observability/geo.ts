@@ -14,6 +14,7 @@
  */
 import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
+import { getAsnOrganizationLabel } from "../core/asn-organization";
 import { getConfig } from "../core/runtime";
 import { logger } from "../logger";
 
@@ -28,7 +29,7 @@ export interface DeviceGeo {
   city?: string;
   /** Source-IP autonomous system number, normalized as AS<number>. */
   asn?: string;
-  /** Registered network organization, not the user's identity. */
+  /** Compact network label (local ASN directory when known), not the user's identity. */
   asnOrganization?: string;
 }
 
@@ -114,13 +115,8 @@ function toGeo(
   const asnNumber = asnMatch ? Number(asnMatch[1]) : 0;
   if (Number.isSafeInteger(asnNumber) && asnNumber > 0 && asnNumber <= 0xffffffff)
     geo.asn = `AS${asnNumber}`;
-  if (typeof organization === "string") {
-    const text = organization
-      .replace(/\p{Cc}/gu, " ")
-      .trim()
-      .slice(0, 256);
-    if (text) geo.asnOrganization = text;
-  }
+  const label = getAsnOrganizationLabel(geo.asn, organization);
+  if (label) geo.asnOrganization = label;
   return geo;
 }
 

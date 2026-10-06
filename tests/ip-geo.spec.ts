@@ -151,7 +151,7 @@ test("bounds concurrent work and the pending queue even with many source IPs", a
   await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1024));
 });
 
-test("retains primary-provider ASN organization in the shared country cache without extra requests", async () => {
+test("uses compact ASN labels in the shared country cache without extra requests", async () => {
   const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
   fetchMock.mockResolvedValue(
     Response.json({
@@ -168,14 +168,14 @@ test("retains primary-provider ASN organization in the shared country cache with
     country: "Iran",
     countryCode: "ir",
     asn: "AS44244",
-    asnOrganization: "Iran Cell Service and Communication Company",
+    asnOrganization: "IranCell-AS",
   });
   clock.mockReturnValue(1000 + 23 * 60 * 60_000);
   expect(geo.getIpGeo("5.112.105.66:2200").asn).toBe("AS44244");
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
-test("reads fallback-provider nested network fields and normalizes AS-prefixed numbers", async () => {
+test("applies the same compact label to the fallback provider and normalizes AS-prefixed numbers", async () => {
   fetchMock.mockRejectedValueOnce(new Error("primary offline")).mockResolvedValueOnce(
     Response.json({
       location: { country: "Iran", country_code: "IR" },
@@ -186,9 +186,20 @@ test("reads fallback-provider nested network fields and normalizes AS-prefixed n
   await vi.waitFor(() => expect(geo.getIpGeo("5.112.105.66").status).toBe("resolved"));
   expect(geo.getIpGeo("5.112.105.66")).toMatchObject({
     asn: "AS44244",
-    asnOrganization: "Iran Cell Service and Communication Company",
+    asnOrganization: "IranCell-AS",
   });
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test("the shared dashboard endpoint returns TCI even when the provider omits its organization", async () => {
+  fetchMock.mockResolvedValue(Response.json({ country_code: "IR", asn: 58224 }));
+  const url = new URL("http://dashboard/api/ip-network?ip=86.104.81.119");
+  const request = () => geo.ipGeoRoute(new Request(url), url)!;
+  expect(await request().json()).toEqual({ status: "pending" });
+  await vi.waitFor(() => expect(geo.getIpGeo("86.104.81.119").status).toBe("resolved"));
+  expect(await request().json()).toMatchObject({ asn: "AS58224", asnOrganization: "TCI" });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock.mock.calls[0][0]).toBe("https://ipkit.ir/86.104.81.119");
 });
 
 test.each([undefined, null, "", "AS0", -1, 1.2, 4294967296, "ASfoo", [44244], { value: 44244 }])(
@@ -212,11 +223,11 @@ test.each([null, {}, [], 123, " \n\t "])(
   "ignores non-text or blank organizations: %j",
   async (org) => {
     fetchMock.mockResolvedValue(
-      Response.json({ country_code: "IR", asn: "AS44244", asn_organization: org }),
+      Response.json({ country_code: "IR", asn: "AS13335", asn_organization: org }),
     );
     geo.getIpGeo("5.112.105.66");
     await vi.waitFor(() => expect(geo.getIpGeo("5.112.105.66").status).toBe("resolved"));
-    expect(geo.getIpGeo("5.112.105.66").asn).toBe("AS44244");
+    expect(geo.getIpGeo("5.112.105.66").asn).toBe("AS13335");
     expect(geo.getIpGeo("5.112.105.66").asnOrganization).toBeUndefined();
   },
 );
