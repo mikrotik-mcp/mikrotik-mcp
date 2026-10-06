@@ -176,8 +176,8 @@ source commit, native tests and any platform limitations in the release record.
 After reviewing backups and confirming pending configuration changes:
 
 ```sh
-MIKROTIK_IMAGE_TAG=6.1.0 docker compose pull mikrotik-mcp
-MIKROTIK_IMAGE_TAG=6.1.0 docker compose up -d mikrotik-mcp
+MIKROTIK_IMAGE_TAG=6.2.0 docker compose pull mikrotik-mcp
+MIKROTIK_IMAGE_TAG=6.2.0 docker compose up -d mikrotik-mcp
 docker compose ps mikrotik-mcp
 docker compose logs --tail 50 mikrotik-mcp
 ```
@@ -303,3 +303,28 @@ and [manifest promotion](https://docs.docker.com/reference/cli/docker/buildx/ima
 - Removed only this publication's disposable smoke containers and verification
   image tag. The pulled release image and build cache were retained.
 - No running user service was upgraded or restarted; no router settings changed.
+
+## 6.2.0 publication record — October 6, 2026
+
+- Application source: release `6.2.0` / `03d336f` (no application-source edits).
+- Published version: `alimaster/mikrotik-mcp:6.2.0`. `latest` was left unchanged.
+- Index digest: `sha256:37968b1925f5eb47aa7fb7c1a77add9d637d9b858e67c32fad0582e15f05c7a4`.
+- The interactive publisher validated the saved Docker Hub account, checked that
+  the version tag was absent, pushed and read back the matching digest and both
+  `linux/amd64` and `linux/arm64` manifests, with build attestations. A layer
+  upload timed out once; Docker retried successfully before publishing the index.
+- Local-build and pulled-digest native ARM64 checks passed: Bun 1.4.2, application
+  6.2.0, UID 1000, health, dashboard on 9090, writable JSON, MCP initialization and
+  all 963 unique tools. The 588-entry Iranian ASN directory is bundled in the CLI.
+  Checks used `--network none`, a writable synthetic JSON mount, no published
+  host ports and no real router credentials.
+- Native AMD64 execution was not tested. Cross-building is not a runtime test.
+- Native ARM64 local image size: 151,829,125 bytes, not compressed transfer size.
+- Repository gate: 2,971 tests across 226 files, typecheck and lint passed.
+  All 15 UI assets built; the observability dashboard still exceeded the
+  2,000 kB chunk warning threshold.
+- Aligned the previously stale MCPB manifest, Compose default and current Docker
+  examples to 6.2.0 separately from application code.
+- No running user service was upgraded or restarted; no router settings changed.
+- Removed only this publication's disposable smoke containers, verification image
+  tag and synthetic fixture. The pulled release image and build cache were retained.
