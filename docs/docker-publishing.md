@@ -176,8 +176,8 @@ source commit, native tests and any platform limitations in the release record.
 After reviewing backups and confirming pending configuration changes:
 
 ```sh
-MIKROTIK_IMAGE_TAG=6.3.0 docker compose pull mikrotik-mcp
-MIKROTIK_IMAGE_TAG=6.3.0 docker compose up -d mikrotik-mcp
+MIKROTIK_IMAGE_TAG=6.4.0 docker compose pull mikrotik-mcp
+MIKROTIK_IMAGE_TAG=6.4.0 docker compose up -d mikrotik-mcp
 docker compose ps mikrotik-mcp
 docker compose logs --tail 50 mikrotik-mcp
 ```
@@ -343,3 +343,21 @@ and [manifest promotion](https://docs.docker.com/reference/cli/docker/buildx/ima
 - No running user service was upgraded or restarted; no router settings changed.
 - Removed only this publication's disposable smoke containers, verification image
   tag and synthetic fixture. The pulled release image and build cache were retained.
+
+## 6.4.0 publication record — October 7, 2026
+
+- Application source: release `6.4.0` / `dc087f2`; packaging version alignment only.
+- Published `alimaster/mikrotik-mcp:6.4.0`; `latest` left unchanged.
+- Verified index digest: `sha256:72ca622e5ae361a1fd846cafd9a1946198b625a371e414d726c6130f85c4d9fe`.
+- Registry read-back confirmed `linux/amd64` and `linux/arm64`, with attestations.
+- Pulled-digest native ARM64 acceptance passed: Bun 1.4.2, MCP 6.4.0, UID 1000,
+  health, dashboard on 9090, writable synthetic JSON, initialization and 964 tools.
+  The OpenVPN history SQLite table and new dashboard asset were also verified.
+  Checks used `--network none`, no published ports and no router credentials.
+- Native AMD64 execution was not tested; a successful cross-build is not a runtime test.
+- Typecheck, lint, 2,990 Vitest tests and six native SQLite history tests passed.
+  All 15 UI assets built; the existing 2,000 kB dashboard chunk warning remains.
+- Aligned Compose, MCPB manifest and current Docker examples to 6.4.0.
+- Removed the isolated release builder and its approximately 1.844 GB build cache,
+  the downloaded release image, temporary BuildKit image and smoke container.
+  No global prune, production-volume removal, service restart or router changes.
