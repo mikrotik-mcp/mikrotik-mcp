@@ -2065,7 +2065,13 @@
       "group": "System & Ops",
       "description": "Transactional config window with auto-revert (Ctrl+X session).",
       "alwaysOn": false,
-      "tools": ["safe_mode_status", "enable_safe_mode", "commit_safe_mode", "rollback_safe_mode"]
+      "tools": [
+        "set_safe_mode_timeout",
+        "safe_mode_status",
+        "enable_safe_mode",
+        "commit_safe_mode",
+        "rollback_safe_mode"
+      ]
     },
     {
       "slug": "txn",
@@ -11128,6 +11134,14 @@
         "deviceMode": "container",
         "minVersion": "7.0"
       },
+      "ui": null
+    },
+    {
+      "name": "set_safe_mode_timeout",
+      "module": "safe-mode",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
       "ui": null
     },
     {

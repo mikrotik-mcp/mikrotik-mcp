@@ -31,7 +31,7 @@ export interface WriteOutcome {
 
 export interface ApplyOptions {
   /**
-   * Allow falling back to DIRECT writes when Safe Mode is unavailable or wedges.
+   * Allow falling back to DIRECT writes when Safe Mode is unavailable before writes.
    * Only safe when the commands cannot lock out management access (tagging /
    * add-to-list rules, etc.). Default false → a Safe Mode failure is reported,
    * not bypassed.
@@ -57,9 +57,9 @@ export async function applyCommandsDirect(
 
 /**
  * Apply the ordered writes, preferring Safe Mode on SSH devices. With
- * `allowDirectFallback`, a MAC-Telnet device, a Safe-Mode enable failure, or a
- * mid-apply wedge falls back to direct writes instead of aborting; without it,
- * such failures are reported (nothing bypassed).
+ * `allowDirectFallback`, a MAC-Telnet device or Safe-Mode enable failure may
+ * fall back to direct writes. Mid-apply failures always abort: rollback is
+ * unverified and replaying writes could duplicate changes.
  */
 export async function applyWritesSafely(
   ctx: ToolContext,
@@ -134,23 +134,13 @@ export async function applyWritesSafely(
   }
   if (wedged !== undefined) {
     await mgr.rollback().catch(() => undefined);
-    if (!fallback)
-      return {
-        applied,
-        total,
-        safeMode: `rolled back (a write failed: ${wedged})`,
-        committed: false,
-        error: wedged,
-        fellBack: false,
-      };
-    const r = await applyCommandsDirect(ctx, commands);
     return {
-      applied: r.applied,
+      applied,
       total,
-      safeMode: `Safe Mode wedged (${wedged}) — rolled back and re-applied directly (snapshot is the rollback point)`,
-      committed: !r.error,
-      error: r.error,
-      fellBack: true,
+      safeMode: `rollback requested, unverified (a write failed: ${wedged}); inspect the snapshot before retrying`,
+      committed: false,
+      error: wedged,
+      fellBack: false,
     };
   }
 

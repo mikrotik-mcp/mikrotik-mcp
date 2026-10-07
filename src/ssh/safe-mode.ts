@@ -2,9 +2,9 @@
  * Manages a persistent interactive SSH session for MikroTik **Safe Mode**.
  *
  * Safe Mode is activated by sending Ctrl+X (0x18) to the interactive shell.
- * While active, every configuration change is held in memory only — a reboot or
- * a dropped session reverts all of them automatically. Sending Ctrl+X a second
- * time commits the changes and exits Safe Mode.
+ * RouterOS tracks undo history while protection remains active. Disconnect
+ * requests rollback, but this client cannot confirm restoration from a closed
+ * channel. Sending Ctrl+X a second time commits and exits Safe Mode.
  *
  * This is the one place we keep a long-lived channel open: a one-shot `exec`
  * channel per command would each get its own session and could never share the
@@ -126,8 +126,8 @@ export class SafeModeManager {
   private active = false;
   /**
    * Set when the persistent shell drops WHILE Safe Mode was active — i.e. the
-   * session died before an explicit commit, so RouterOS has already auto-reverted
-   * every staged change. Distinguishes "never enabled / cleanly closed" from
+   * session died before an explicit commit, with an unverified outcome.
+   * Distinguishes "never enabled / cleanly closed" from
    * "died with your changes still pending" so commit/status can report the revert
    * instead of a reassuring false success. Cleared on the next enable().
    */
@@ -138,12 +138,37 @@ export class SafeModeManager {
   private probeSequence = 0;
   /** Serializes channel access so concurrent tool calls don't interleave I/O. */
   private queue: Promise<unknown> = Promise.resolve();
+  private commandTimeoutMs = HARD_CAP_MS;
+  private idleTimeoutMs = IDLE_TIMEOUT_MS;
+
+  /** Applies to subsequent commands, never extends an already-running command. */
+  setTimeouts(commandTimeoutMs: number, idleTimeoutMs: number): string {
+    if (
+      !Number.isInteger(commandTimeoutMs) ||
+      commandTimeoutMs < 1_000 ||
+      commandTimeoutMs > 600_000 ||
+      !Number.isInteger(idleTimeoutMs) ||
+      idleTimeoutMs < 1_000 ||
+      idleTimeoutMs > commandTimeoutMs
+    ) {
+      throw new Error(
+        "Timeouts must be integer milliseconds: 1000 <= idleTimeoutMs <= commandTimeoutMs <= 600000.",
+      );
+    }
+    this.commandTimeoutMs = commandTimeoutMs;
+    this.idleTimeoutMs = idleTimeoutMs;
+    return `Safe Mode command timeout: ${commandTimeoutMs}ms; idle timeout: ${idleTimeoutMs}ms. Applies to subsequent commands only; does not change RouterOS rollback timing or clear an uncertain session.`;
+  }
 
   /** The device this Safe Mode session belongs to (a configured device name). */
   constructor(private readonly deviceName: string) {}
 
   get isActive(): boolean {
     return this.active;
+  }
+
+  get requiresRecovery(): boolean {
+    return this.droppedUnexpectedly || this.uncertain;
   }
 
   /** Run `fn` exclusively — the persistent channel must not be shared mid-command. */
@@ -184,7 +209,7 @@ export class SafeModeManager {
       this.channel = await ssh.shell({ term: "dumb", cols: 220, rows: 50 });
       // The persistent shell IS the Safe Mode session: if it drops (device idle
       // timeout, network blip, RouterOS dropping the session after an error),
-      // RouterOS auto-reverts every staged change. Without this listener the
+      // Rollback cannot be verified on that disconnected channel. Without this listener the
       // manager would stay a zombie — `active` true over a dead channel — and
       // commit/status would report a reassuring success against changes that no
       // longer exist. Catch the drop so that state is corrected honestly.
@@ -216,9 +241,9 @@ export class SafeModeManager {
 
       this.active = true;
       return (
-        "Safe mode ENABLED. All changes are temporary — they will be reverted " +
-        "automatically if the connection drops or you call rollback_safe_mode. " +
-        "Call commit_safe_mode to make changes permanent."
+        "Safe mode ENABLED. RouterOS tracks reversible changes while protection remains active. " +
+        "Keep a backup; disconnect requests rollback but does not prove restoration. " +
+        "Call commit_safe_mode after verification."
       );
     });
   }
@@ -235,15 +260,19 @@ export class SafeModeManager {
     return this.lock(async () => {
       if (this.droppedUnexpectedly) {
         throw new Error(
-          "Safe Mode session dropped — RouterOS auto-reverted every staged change; nothing " +
-            "was saved. Re-enable Safe Mode and re-apply, or apply the change directly.",
+          "Safe Mode session dropped. Rollback is unverified; inspect device state against the backup before retrying writes.",
         );
       }
       if (!this.active || !this.channel) {
         throw new Error("Safe mode session is not active.");
       }
       if (this.uncertain) throw new Error(UNCERTAIN_SESSION);
-      const response = this.readUntilPrompt(IDLE_TIMEOUT_MS, undefined, HARD_CAP_MS, true);
+      const response = this.readUntilPrompt(
+        this.idleTimeoutMs,
+        undefined,
+        this.commandTimeoutMs,
+        true,
+      );
       this.channel.write(`${command}\n`);
       const { text, timedOut } = await response;
       if (timedOut) {
@@ -251,6 +280,12 @@ export class SafeModeManager {
         throw new Error(
           `Safe Mode command did not return a recognized prompt before the timeout (command: ${command}). ` +
             `Execution may have occurred; do not retry the write blindly. ${UNCERTAIN_SESSION}`,
+        );
+      }
+      if (classifyPrompt(text) !== "safe") {
+        this.uncertain = true;
+        throw new Error(
+          `Safe Mode protection was lost or could not be confirmed. Changes may already be permanent. ${UNCERTAIN_SESSION}`,
         );
       }
       return this.extractOutput(text, command);
@@ -264,16 +299,12 @@ export class SafeModeManager {
    */
   commit(): Promise<CommitResult> {
     return this.lock(async () => {
-      // A session that dropped before commit already had all staged changes
-      // reverted by RouterOS — report that, never a benign "nothing to commit".
+      // A dropped session has an unknown outcome, never a benign success.
       if (this.droppedUnexpectedly) {
-        this.droppedUnexpectedly = false;
         return {
           ok: false,
           message:
-            "Commit FAILED — the Safe Mode session dropped before this commit, so RouterOS " +
-            "automatically reverted ALL staged changes and NOTHING was saved. Re-enable Safe Mode " +
-            "and re-apply the changes (or apply them directly and verify each with a read).",
+            "Commit FAILED — the Safe Mode session dropped. Rollback is unverified; compare device state with the backup before retrying.",
         };
       }
       if (!this.active || !this.channel) {
@@ -283,23 +314,23 @@ export class SafeModeManager {
 
       // PROBE FIRST with a sentinel round-trip. A previous commit may have
       // actually succeeded even though detection was flaky (leaving us `active`).
-      // If the device is already in normal mode, the changes are committed —
-      // report success rather than sending another Ctrl+X (which would RE-ENTER
-      // Safe Mode and start the flaky loop the caller saw).
+      // If protection was released elsewhere, fence the session instead of
+      // claiming this commit succeeded or toggling back into Safe Mode.
       const before = await this.probeMode();
       if (before === "released") {
-        this.cleanup();
+        this.uncertain = true;
         return {
-          ok: true,
-          message: "Safe mode already exited — your changes are committed. Safe mode DISABLED.",
+          ok: false,
+          message:
+            "Safe Mode exited before commit was requested. Changes may be permanent; verify device state against the backup.",
         };
       }
       if (before === "unknown") {
         return {
           ok: false,
           message:
-            "Could not read a prompt to determine Safe Mode state. The session is left open so " +
-            "nothing is reverted — call get_safe_mode_status, retry commit_safe_mode, or rollback_safe_mode.",
+            "Could not determine Safe Mode state. Session left open; outcome unverified. " +
+            "Call safe_mode_status or rollback_safe_mode and inspect device state.",
         };
       }
 
@@ -329,8 +360,8 @@ export class SafeModeManager {
           return {
             ok: false,
             message:
-              "Commit status unclear — no prompt seen after the commit. The session is left open so " +
-              "nothing is reverted; verify with get_safe_mode_status or retry commit_safe_mode.",
+              "Commit status unclear — no prompt seen after commit. Session left open; outcome unverified. " +
+              "Inspect device state before retrying.",
           };
       }
     });
@@ -341,27 +372,21 @@ export class SafeModeManager {
     return this.lock(async () => {
       if (this.droppedUnexpectedly) {
         this.droppedUnexpectedly = false;
-        return (
-          "Safe Mode session had already dropped — RouterOS auto-reverted all staged changes; " +
-          "nothing was left to roll back."
-        );
+        return "Safe Mode session had already dropped. Rollback is unverified; compare device state with the backup. Do not blindly reapply writes.";
       }
       if (!this.active) return "Safe mode is not active. Nothing to roll back.";
       this.cleanup();
-      return "Safe mode session closed. MikroTik has reverted all uncommitted changes automatically.";
+      return "Safe mode session closed to request automatic rollback. Rollback is unverified and may be delayed; compare device state with the backup before retrying writes.";
     });
   }
 
   status(): string {
     if (this.droppedUnexpectedly) {
-      return (
-        "Safe mode session DROPPED unexpectedly — RouterOS auto-reverted all staged changes; they " +
-        "were NOT saved. Re-enable Safe Mode and re-apply, or apply changes directly (verify each with a read)."
-      );
+      return "Safe mode session DROPPED unexpectedly. Rollback is unverified; inspect device state against the backup before retrying writes.";
     }
     if (this.uncertain && this.active) return UNCERTAIN_SESSION;
     return this.active
-      ? "Safe mode is ACTIVE. Changes are pending — they are NOT yet persisted. " +
+      ? `Safe mode is ACTIVE (last observed). Command timeout: ${this.commandTimeoutMs}ms; idle timeout: ${this.idleTimeoutMs}ms. ` +
           "Call commit_safe_mode to persist or rollback_safe_mode to revert."
       : "Safe mode is NOT active. Changes take effect and persist immediately.";
   }
@@ -372,7 +397,7 @@ export class SafeModeManager {
    * Fired by the persistent shell's `close`/`error` events. Arrow-bound so the
    * same reference is used for add/removeListener. Acts ONLY when we still think
    * Safe Mode is active — a drop then means the session died with staged changes
-   * pending, which RouterOS has auto-reverted, so we flag it and tear the zombie
+   * pending and an unverified rollback, so we flag it and tear the zombie
    * handles down. A close during our own cleanup() (which clears `active` first)
    * is a no-op: it is an intentional teardown, not a lost session.
    */
@@ -412,6 +437,7 @@ export class SafeModeManager {
       // other; the timers are assigned before any listener can fire.
       let idleTimer: ReturnType<typeof setTimeout>;
       const hardTimer = setTimeout(() => finish(stripAnsi(buf), true), hardCapMs);
+      const onClose = (): void => finish(stripAnsi(buf), true);
       function armIdle(): void {
         clearTimeout(idleTimer);
         idleTimer = setTimeout(() => finish(stripAnsi(buf), true), idleMs);
@@ -440,10 +466,14 @@ export class SafeModeManager {
         // `channel` is non-null past the early return above; the hoisted
         // function declaration just doesn't carry that narrowing.
         channel!.removeListener("data", onData);
+        channel!.removeListener("close", onClose);
+        channel!.removeListener("error", onClose);
         resolve({ text: result, timedOut });
       }
       armIdle();
       channel.on("data", onData);
+      channel.once("close", onClose);
+      channel.once("error", onClose);
     });
   }
 

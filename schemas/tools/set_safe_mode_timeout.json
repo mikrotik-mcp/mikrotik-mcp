@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "set_safe_mode_timeout",
+  "type": "object",
+  "properties": {
+    "commandTimeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 600000,
+      "description": "Absolute command deadline in milliseconds."
+    },
+    "idleTimeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 600000,
+      "description": "Maximum silence in milliseconds; must not exceed commandTimeoutMs."
+    }
+  },
+  "required": ["commandTimeoutMs", "idleTimeoutMs"],
+  "additionalProperties": false
+}

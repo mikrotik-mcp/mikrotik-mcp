@@ -6,11 +6,39 @@
  * transactional configuration window on a chosen router.
  */
 import type { ToolModule } from "../core/registry";
+import { z } from "zod";
 import { WRITE, READ, defineTool } from "../core/registry";
 import { resolveDeviceName } from "../core/runtime";
 import { getSafeModeManager } from "../ssh/safe-mode";
 
 export const safeModeTools: ToolModule = [
+  defineTool({
+    name: "set_safe_mode_timeout",
+    title: "Set Safe Mode Command Timeouts",
+    annotations: WRITE,
+    description:
+      "Set per-device MCP Safe Mode command deadlines before or during a session. Applies only to subsequent commands. Increase for slow exports, decrease for faster failure detection. Does not change RouterOS rollback timing, MCP client deadlines, or unblock an uncertain session. Settings are in-memory and reset on MCP restart. Defaults: command 120000ms, idle 15000ms.",
+    inputSchema: {
+      commandTimeoutMs: z
+        .number()
+        .int()
+        .min(1000)
+        .max(600000)
+        .describe("Absolute command deadline in milliseconds."),
+      idleTimeoutMs: z
+        .number()
+        .int()
+        .min(1000)
+        .max(600000)
+        .describe("Maximum silence in milliseconds; must not exceed commandTimeoutMs."),
+    },
+    handler(a, ctx) {
+      return getSafeModeManager(resolveDeviceName(ctx.device)).setTimeouts(
+        a.commandTimeoutMs,
+        a.idleTimeoutMs,
+      );
+    },
+  }),
   defineTool({
     name: "safe_mode_status",
     title: "Get Safe Mode Session Status",
@@ -33,7 +61,7 @@ export const safeModeTools: ToolModule = [
     annotations: WRITE,
     description:
       "Opens a Safe Mode SSH session on the targeted device (RouterOS Ctrl+X equivalent) — all subsequent configuration changes are staged in memory and auto-reverted if the SSH connection drops before an explicit commit." +
-      " Use this to make reversible, transactional configuration changes without risk of permanent misconfiguration." +
+      " Take a backup first: protection may be lost and disconnect is not proof of rollback. Use set_safe_mode_timeout to tune subsequent command deadlines." +
       " Safe Mode is SSH-only and is not supported over MAC-Telnet connections." +
       " Check current state first with safe_mode_status; persist staged changes with commit_safe_mode; discard staged changes without saving with rollback_safe_mode.",
     async handler(_a, ctx) {
@@ -64,7 +92,7 @@ export const safeModeTools: ToolModule = [
     title: "Roll Back Safe Mode Changes",
     annotations: WRITE,
     description:
-      "Discards all pending Safe Mode changes on the targeted device by closing the SSH session, triggering RouterOS's automatic revert — all configuration changes staged since enable_safe_mode was called are undone as if they were never applied." +
+      "Closes the targeted Safe Mode SSH session to request RouterOS automatic rollback. Completion is unverified and may be delayed; compare live configuration against a backup before retrying writes." +
       " Use this when staged changes are incorrect or need to be abandoned without saving." +
       " To persist staged changes instead, use commit_safe_mode." +
       " Check current Safe Mode state with safe_mode_status.",

@@ -145,7 +145,7 @@ export async function executeMikrotikCommand(
   // which turns them into a proper `isError` tool result. Device-reported
   // command errors (syntax/failure) come back as normal output and are handled
   // by each tool via looksLikeError().
-  if (safe.isActive) {
+  if (safe.isActive || safe.requiresRecovery) {
     ctx.info(`[${deviceName}] Executing (safe mode): ${containerCommandForLog(command)}`);
     // Safe Mode holds a persistent interactive SSH session — never REST.
     ctx.transport = "ssh";
@@ -183,7 +183,7 @@ export async function executeMikrotikJson(
   const safe = getSafeModeManager(deviceName);
 
   // Safe Mode and non-REST devices have no JSON to offer — parse the text.
-  if (!safe.isActive && isRestDevice(dc)) {
+  if (!safe.isActive && !safe.requiresRecovery && isRestDevice(dc)) {
     const req = toRequest(command);
     if (req) {
       const json = await tryRestJson(command, dc, deviceName, ctx);

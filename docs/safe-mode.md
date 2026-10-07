@@ -1,12 +1,10 @@
 # Safe Mode
 
-RouterOS **Safe Mode** is a transactional configuration window. While it's
-active, every change you make is held **in memory only**. If the session drops —
-a dropped connection, a reboot, a crash — RouterOS automatically reverts every
-uncommitted change. This is the single best defense against locking yourself out
-of a remote device with a bad firewall rule.
+RouterOS **Safe Mode** records reversible configuration changes while protection
+remains active. Always take a backup and retain independent management access:
+closing an SSH session requests rollback, but does not prove rollback completed.
 
-This server exposes Safe Mode as four tools and routes commands through a
+This server exposes Safe Mode as five tools and routes commands through a
 persistent SSH session while it's active.
 
 ## How it works
@@ -30,12 +28,28 @@ are serialized onto the channel so their I/O never interleaves.
 
 ## The tools
 
-| Tool                 | Risk  | What it does                                                                       |
-| -------------------- | ----- | ---------------------------------------------------------------------------------- |
-| `safe_mode_status`   | read  | Reports whether Safe Mode is currently active.                                     |
-| `enable_safe_mode`   | write | Opens the persistent shell and activates Safe Mode (Ctrl+X).                       |
-| `commit_safe_mode`   | write | Sends Ctrl+X again to persist all pending changes, then closes the session.        |
-| `rollback_safe_mode` | write | Closes the session **without** committing, triggering RouterOS's automatic revert. |
+| Tool                    | Risk  | What it does                                                                       |
+| ----------------------- | ----- | ---------------------------------------------------------------------------------- |
+| `safe_mode_status`      | read  | Reports whether Safe Mode is currently active.                                     |
+| `enable_safe_mode`      | write | Opens the persistent shell and activates Safe Mode (Ctrl+X).                       |
+| `commit_safe_mode`      | write | Sends Ctrl+X again to persist all pending changes, then closes the session.        |
+| `rollback_safe_mode`    | write | Closes the session **without** committing, triggering RouterOS's automatic revert. |
+| `set_safe_mode_timeout` | write | Sets per-device MCP command and idle deadlines in milliseconds.                    |
+
+## Custom command timeouts
+
+Call `set_safe_mode_timeout` with `commandTimeoutMs` and `idleTimeoutMs` before
+or during a session. Both must be integer milliseconds satisfying
+`1000 <= idleTimeoutMs <= commandTimeoutMs <= 600000`.
+Defaults are 120000ms total and 15000ms silence. For a slow export, for example,
+use 300000ms total and 30000ms silence. The idle deadline resets on output;
+the absolute deadline does not. Settings affect subsequent commands only and
+reset on MCP restart. They do not change RouterOS rollback or MCP client deadlines.
+
+After a timeout or unexpected loss of the `<SAFE>` prompt, further commands and
+commit are blocked. Increasing the timeout does not clear this uncertainty.
+Request rollback, compare the router against the saved snapshot, and only then
+start a fresh session. Never blindly replay a timed-out write.
 
 ## Typical workflow
 
@@ -52,13 +66,15 @@ are serialized onto the channel so their I/O never interleaves.
    - `commit_safe_mode` — persists everything and exits Safe Mode.
    - `rollback_safe_mode` — discards everything by closing the session.
 
-## The auto-revert guarantee
+## Rollback limitations
 
-If the connection to the device is lost for **any** reason while Safe Mode is
-active — you call `rollback_safe_mode`, the process exits, the network drops, or
-the router reboots — RouterOS reverts **all** uncommitted changes back to the
-last committed state. You can only make a change permanent by explicitly calling
-`commit_safe_mode`.
+Rollback may be delayed after a disconnect. Protection can also be released
+outside MCP; a disconnected channel cannot establish whether changes persisted.
+The tool reports rollback as **unverified**, not as successfully restored.
+Inspect live configuration against your backup before retrying any change.
+`safe_mode_status` reports the last observed local session state, not a fresh
+router inspection. Batch writes do not automatically replay after a mid-batch
+failure, even when direct fallback was permitted for activation failure.
 
 This is why the built-in [prompts](./prompts.md) (`harden-router`,
 `setup-guest-wifi`, `setup-wireguard-vpn`) instruct the model to wrap risky

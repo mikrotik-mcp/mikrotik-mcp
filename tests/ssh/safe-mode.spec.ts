@@ -86,6 +86,76 @@ describe("Safe Mode interactive round trips", () => {
     return { manager, channel };
   }
 
+  test("lost Safe Mode protection fences subsequent writes and commit", async () => {
+    const writes: string[] = [];
+    const { manager } = session((input, emit) => {
+      writes.push(input);
+      emit(`${input}\r\n[admin@Home] > `);
+    });
+    await expect(manager.execute("/test")).rejects.toThrow("protection was lost");
+    await expect(manager.execute("/second")).rejects.toThrow("uncertain");
+    expect((await manager.commit()).ok).toBe(false);
+    expect(writes).toHaveLength(1);
+    expect(await manager.rollback()).toContain("unverified");
+  });
+
+  test("custom timeout validates bounds and enforces the absolute deadline", async () => {
+    vi.useFakeTimers();
+    const { manager } = session(() => {});
+    try {
+      expect(() => manager.setTimeouts(1000, 2000)).toThrow();
+      expect(() => manager.setTimeouts(600001, 1000)).toThrow();
+      expect(() => manager.setTimeouts(1000, Number.NaN)).toThrow();
+      manager.setTimeouts(2000, 2000);
+      expect(manager.status()).toContain("2000ms");
+      const result = manager.execute("/test").catch(String);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await result).toContain("timeout");
+    } finally {
+      await manager.rollback();
+      vi.useRealTimers();
+    }
+  });
+
+  test("raising idle timeout allows a slow command to complete", async () => {
+    vi.useFakeTimers();
+    const { manager } = session((input, emit) => {
+      setTimeout(() => emit(`${input}\r\nresult\r\n[admin@Home] <SAFE> `), 20_000);
+    });
+    try {
+      manager.setTimeouts(60_000, 30_000);
+      const result = manager.execute("/test");
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(await result).toBe("result");
+    } finally {
+      await manager.rollback();
+      vi.useRealTimers();
+    }
+  });
+
+  test("channel closure settles the pending read immediately and removes listeners", async () => {
+    const { manager, channel } = session(() => {
+      queueMicrotask(() => channel.emit("close"));
+    });
+    await expect(manager.execute("/test")).rejects.toThrow("Execution may have occurred");
+    expect(channel.listenerCount("data")).toBe(0);
+    expect(channel.listenerCount("close")).toBe(0);
+    expect(channel.listenerCount("error")).toBe(0);
+    await manager.rollback();
+  });
+
+  test("commit does not toggle or claim success when protection was already released", async () => {
+    const writes: string[] = [];
+    const { manager } = session((input, emit) => {
+      writes.push(input);
+      emit(`${input}\r\n${JSON.parse(input.trim().slice(5))}\r\n[admin@Home] > `);
+    });
+    expect((await manager.commit()).ok).toBe(false);
+    expect(writes).not.toContain("\x18");
+    await expect(manager.execute("/test")).rejects.toThrow("uncertain");
+    await manager.rollback();
+  });
+
   test("completes read-only commands with the real CR-redrawn Safe Mode prompt", async () => {
     const { manager, channel } = session((input, emit) => {
       expect(input).toBe("/system identity print\n");
@@ -344,20 +414,21 @@ describe("unexpected session drop — no false success", () => {
   test("a drop clears active and records the revert", () => {
     const mgr = droppedManager();
     expect(mgr.isActive).toBe(false);
+    expect(mgr.requiresRecovery).toBe(true);
     expect(mgr.status()).toMatch(/DROPPED/i);
-    expect(mgr.status()).toMatch(/NOT saved/i);
+    expect(mgr.status()).toMatch(/unverified/i);
   });
 
   test("commit after a drop reports failure, not 'nothing to commit'", async () => {
     const result = await droppedManager().commit();
     expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/reverted/i);
+    expect(result.message).toMatch(/unverified/i);
     expect(result.message).not.toMatch(/nothing to commit/i);
   });
 
   test("rollback after a drop explains the changes were already reverted", async () => {
     const msg = await droppedManager().rollback();
-    expect(msg).toMatch(/auto-reverted/i);
+    expect(msg).toMatch(/unverified/i);
   });
 
   test("a close while inactive (clean teardown) is a no-op", () => {

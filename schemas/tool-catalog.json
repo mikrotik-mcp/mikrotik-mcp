@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.2.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 963,
+  "toolCount": 964,
   "tools": [
     {
       "name": "create_client_check",
@@ -32624,6 +32624,36 @@
       }
     },
     {
+      "name": "set_safe_mode_timeout",
+      "title": "Set Safe Mode Command Timeouts",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Set per-device MCP Safe Mode command deadlines before or during a session. Applies only to subsequent commands. Increase for slow exports, decrease for faster failure detection. Does not change RouterOS rollback timing, MCP client deadlines, or unblock an uncertain session. Settings are in-memory and reset on MCP restart. Defaults: command 120000ms, idle 15000ms.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "commandTimeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 600000,
+            "description": "Absolute command deadline in milliseconds."
+          },
+          "idleTimeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 600000,
+            "description": "Maximum silence in milliseconds; must not exceed commandTimeoutMs."
+          }
+        },
+        "required": ["commandTimeoutMs", "idleTimeoutMs"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "safe_mode_status",
       "title": "Get Safe Mode Session Status",
       "risk": "read",
@@ -32648,7 +32678,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Opens a Safe Mode SSH session on the targeted device (RouterOS Ctrl+X equivalent) — all subsequent configuration changes are staged in memory and auto-reverted if the SSH connection drops before an explicit commit. Use this to make reversible, transactional configuration changes without risk of permanent misconfiguration. Safe Mode is SSH-only and is not supported over MAC-Telnet connections. Check current state first with safe_mode_status; persist staged changes with commit_safe_mode; discard staged changes without saving with rollback_safe_mode.",
+      "description": "Opens a Safe Mode SSH session on the targeted device (RouterOS Ctrl+X equivalent) — all subsequent configuration changes are staged in memory and auto-reverted if the SSH connection drops before an explicit commit. Take a backup first: protection may be lost and disconnect is not proof of rollback. Use set_safe_mode_timeout to tune subsequent command deadlines. Safe Mode is SSH-only and is not supported over MAC-Telnet connections. Check current state first with safe_mode_status; persist staged changes with commit_safe_mode; discard staged changes without saving with rollback_safe_mode.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -32680,7 +32710,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Discards all pending Safe Mode changes on the targeted device by closing the SSH session, triggering RouterOS's automatic revert — all configuration changes staged since enable_safe_mode was called are undone as if they were never applied. Use this when staged changes are incorrect or need to be abandoned without saving. To persist staged changes instead, use commit_safe_mode. Check current Safe Mode state with safe_mode_status.",
+      "description": "Closes the targeted Safe Mode SSH session to request RouterOS automatic rollback. Completion is unverified and may be delayed; compare live configuration against a backup before retrying writes. Use this when staged changes are incorrect or need to be abandoned without saving. To persist staged changes instead, use commit_safe_mode. Check current Safe Mode state with safe_mode_status.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
