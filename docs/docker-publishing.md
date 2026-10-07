@@ -176,8 +176,8 @@ source commit, native tests and any platform limitations in the release record.
 After reviewing backups and confirming pending configuration changes:
 
 ```sh
-MIKROTIK_IMAGE_TAG=6.2.0 docker compose pull mikrotik-mcp
-MIKROTIK_IMAGE_TAG=6.2.0 docker compose up -d mikrotik-mcp
+MIKROTIK_IMAGE_TAG=6.3.0 docker compose pull mikrotik-mcp
+MIKROTIK_IMAGE_TAG=6.3.0 docker compose up -d mikrotik-mcp
 docker compose ps mikrotik-mcp
 docker compose logs --tail 50 mikrotik-mcp
 ```
@@ -303,6 +303,21 @@ and [manifest promotion](https://docs.docker.com/reference/cli/docker/buildx/ima
 - Removed only this publication's disposable smoke containers and verification
   image tag. The pulled release image and build cache were retained.
 - No running user service was upgraded or restarted; no router settings changed.
+
+## 6.3.0 publication record — October 7, 2026
+
+- Application source: `fbbbdcc`, with manifest and Compose version alignment to 6.3.0.
+- Published `alimaster/mikrotik-mcp:6.3.0`; `latest` was left unchanged.
+- Index digest: `sha256:dcd0cd691c25b55e4a4308c160b6790d59b45263fe6f334f9780493a8140bde1`.
+- Registry read-back verified both `linux/amd64` and `linux/arm64` manifests.
+- Pulled-digest ARM64 checks passed: Bun 1.4.2, version 6.3.0, UID 1000,
+  CLI, health, dashboard, writable synthetic JSON, MCP initialization and 964 tools.
+  Acceptance ran without networking, host ports or real router credentials.
+- Native AMD64 execution was not tested; cross-build is not a runtime test.
+- Native ARM64 image size: 151,847,694 bytes (not compressed transfer size).
+- Type checks, all 2,986 offline tests across 226 files, and lint passed.
+- No MCP service was upgraded or restarted and no router settings changed.
+  Docker Desktop itself required a restart before publication.
 
 ## 6.2.0 publication record — October 6, 2026
 

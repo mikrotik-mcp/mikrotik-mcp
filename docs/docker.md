@@ -42,7 +42,7 @@ Check the **engine**, not the host terminal's OS:
 
 ```sh
 docker info --format '{{.OSType}}/{{.Architecture}}'
-docker buildx imagetools inspect alimaster/mikrotik-mcp:6.2.0
+docker buildx imagetools inspect alimaster/mikrotik-mcp:6.3.0
 ```
 
 The engine should report `linux/x86_64` or `linux/aarch64` (some versions use
@@ -84,13 +84,13 @@ or Node.js is required when using the published image.
 ## Published image
 
 Docker Hub: **[alimaster/mikrotik-mcp](https://hub.docker.com/r/alimaster/mikrotik-mcp)**.
-The versioned `6.2.0` image provides `linux/amd64` and `linux/arm64`; Docker
-selects the matching architecture automatically. Compose uses `6.2.0` by default,
+The versioned `6.3.0` image provides `linux/amd64` and `linux/arm64`; Docker
+selects the matching architecture automatically. Compose uses `6.3.0` by default,
 with no implicit local build. Prefer a release tag for deliberate upgrades;
 `latest` moves only after explicit promotion and may point to an older release.
 
 ```bash
-docker pull alimaster/mikrotik-mcp:6.2.0
+docker pull alimaster/mikrotik-mcp:6.3.0
 # Optional: opt into the moving tag. Use the same override for pull and up.
 MIKROTIK_IMAGE_TAG=latest docker compose pull mikrotik-mcp
 MIKROTIK_IMAGE_TAG=latest docker compose up -d mikrotik-mcp
@@ -174,12 +174,12 @@ with environment variables, a mounted config, or Docker secrets instead.
 Pull and run:
 
 ```bash
-docker pull alimaster/mikrotik-mcp:6.2.0
+docker pull alimaster/mikrotik-mcp:6.3.0
 
 docker run --rm -it \
   -e MIKROTIK_HOST=192.168.88.1 \
   -e MIKROTIK_USERNAME=automation \
-  alimaster/mikrotik-mcp:6.2.0 auth-check
+  alimaster/mikrotik-mcp:6.3.0 auth-check
 ```
 
 ## Passing configuration
@@ -205,7 +205,7 @@ docker run --rm \
   -e MIKROTIK_MCP__ALLOWED_HOSTS=mcp.example.com \
   -v /path/to/key:/run/secrets/mikrotik_key:ro \
   -p 8000:8000 \
-  alimaster/mikrotik-mcp:6.2.0 serve
+  alimaster/mikrotik-mcp:6.3.0 serve
 ```
 
 For the HTTP transports, publish the port (`-p 8000:8000`) and remember that
@@ -231,7 +231,7 @@ docker run --rm \
   -e MIKROTIK_DASHBOARD__ENABLED=true \
   -v /path/to/key:/run/secrets/mikrotik_key:ro \
   -v mikrotik-state:/home/bun/.mikrotik-mcp \
-  alimaster/mikrotik-mcp:6.2.0
+  alimaster/mikrotik-mcp:6.3.0
 ```
 
 `EXPOSE` documents ports; it does not publish them. Compose publishes MCP and
@@ -240,8 +240,8 @@ private or put an authenticated HTTPS proxy in front of them. MAC-Telnet still
 requires real Layer-2 reachability; Docker Desktop's VM/NAT does not provide that
 to the physical LAN merely because its dependencies are bundled.
 
-To inspect the result, use `docker image inspect alimaster/mikrotik-mcp:6.2.0 --format '{{.Size}}'`
-and `docker history alimaster/mikrotik-mcp:6.2.0`. Report the platform and whether a size is
+To inspect the result, use `docker image inspect alimaster/mikrotik-mcp:6.3.0 --format '{{.Size}}'`
+and `docker history alimaster/mikrotik-mcp:6.3.0`. Report the platform and whether a size is
 compressed registry storage or unpacked layer size when comparing images.
 
 ## Persistent devices.json
@@ -292,7 +292,7 @@ docker run -d --name mikrotik-mcp --restart unless-stopped \
   -p 127.0.0.1:8000:8000 -p 127.0.0.1:9090:9090 \
   --mount type=bind,src=/absolute/path/mikrotik-state,dst=/home/bun/.mikrotik-mcp \
   --mount type=bind,src=/absolute/path/mikrotik_ed25519,dst=/run/secrets/mikrotik_key,readonly \
-  alimaster/mikrotik-mcp:6.2.0
+  alimaster/mikrotik-mcp:6.3.0
 ```
 
 Both the directory (for temp files/backups) and JSON must be writable by UID/GID 1000. On Linux give that UID access through ownership or a suitable ACL; keep the
@@ -318,7 +318,7 @@ it's running in a container (`/.dockerenv` or `container=docker`) with a plainte
 # docker-compose.yml (excerpt)
 services:
   mikrotik-mcp:
-    image: alimaster/mikrotik-mcp:6.2.0
+    image: alimaster/mikrotik-mcp:6.3.0
     command: ["serve"]
     environment:
       MIKROTIK_HOST: 192.168.88.1
@@ -364,7 +364,7 @@ docker run --rm \
   -e MIKROTIK_READ_ONLY=true \
   -v /path/to/key:/run/secrets/mikrotik_key:ro \
   -p 8000:8000 \
-  alimaster/mikrotik-mcp:6.2.0 serve
+  alimaster/mikrotik-mcp:6.3.0 serve
 ```
 
 CORS defaults to the ChatGPT and Claude origins; set
@@ -396,7 +396,7 @@ Run both together with Compose:
 # docker-compose.yml (excerpt)
 services:
   mikrotik-mcp:
-    image: alimaster/mikrotik-mcp:6.2.0
+    image: alimaster/mikrotik-mcp:6.3.0
     command: ["serve"]
     environment:
       MIKROTIK_HOST: 192.168.88.1
