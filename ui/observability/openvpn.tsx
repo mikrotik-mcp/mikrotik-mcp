@@ -35,6 +35,7 @@ import { WorkspaceError } from "./operations-ui";
 import { connectionDuration } from "../../src/core/openvpn-sessions-model";
 import type { OpenVpnSession, OpenVpnSnapshot } from "../../src/core/openvpn-sessions-model";
 import "./openvpn.css";
+import { OpenVpnHistory } from "./openvpn-history";
 
 function ClientSource({ session }: { session: OpenVpnSession }) {
   const geo = session.sourceGeo;
@@ -91,6 +92,7 @@ function ClientSource({ session }: { session: OpenVpnSession }) {
 }
 
 export function OpenVpnView() {
+  const [view, setView] = useState<"live" | "history">("live");
   const [devices, setDevices] = useState<string[]>([]);
   const [device, setDevice] = useState("");
   const [error, setError] = useState("");
@@ -123,14 +125,24 @@ export function OpenVpnView() {
       <header className="ovpn-intro">
         <div>
           <span className="ovpn-eyebrow">
-            <LockKeyhole size={15} /> OPENVPN / LIVE CONNECTIONS
+            <LockKeyhole size={15} /> OPENVPN /{" "}
+            {view === "live" ? "LIVE CONNECTIONS" : "CONNECTION HISTORY"}
           </span>
           <h2>
-            Who's connected<span>to your network.</span>
+            {view === "live" ? (
+              <>
+                Who's connected<span>to your network.</span>
+              </>
+            ) : (
+              <>
+                Every observed connection.<span>A history you can explore.</span>
+              </>
+            )}
           </h2>
           <p>
-            One connection per row. See who is here, how long they have stayed, and end a session
-            when needed.
+            {view === "live"
+              ? "One connection per row. See who is here, how long they have stayed, and end a session when needed."
+              : "Explore connection patterns, source networks and countries, across your users or one person at a time."}
           </p>
         </div>
         <div className="ovpn-router">
@@ -158,8 +170,28 @@ export function OpenVpnView() {
           </Button>
         </>
       )}
+      <nav className="ovpn-toolbar" aria-label="OpenVPN views">
+        <Button
+          variant={view === "live" ? "default" : "outline"}
+          aria-pressed={view === "live"}
+          onClick={() => setView("live")}
+        >
+          Live connections
+        </Button>
+        <Button
+          variant={view === "history" ? "default" : "outline"}
+          aria-pressed={view === "history"}
+          onClick={() => setView("history")}
+        >
+          History & insights
+        </Button>
+      </nav>
       {device ? (
-        <OpenVpnConnections key={device} device={device} />
+        view === "live" ? (
+          <OpenVpnConnections key={device} device={device} />
+        ) : (
+          <OpenVpnHistory key={device} device={device} />
+        )
       ) : (
         !error && (
           <div className="ovpn-empty">

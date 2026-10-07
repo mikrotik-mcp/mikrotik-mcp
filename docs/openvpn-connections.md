@@ -1,6 +1,6 @@
 # OpenVPN connections
 
-Open **Observe → OpenVPN** (`#openvpn`) and select a router. The page shows incoming,
+Open **Users & VPN → OpenVPN** (`#openvpn`) and select a router. The live view shows incoming,
 authenticated OpenVPN connections from `/ppp active` with `service=ovpn`, including
 RADIUS-authenticated users. It does not show outbound OpenVPN clients, other PPP
 services, passwords or retained User Manager session history.
@@ -38,6 +38,63 @@ successful reads; stale/error states freeze it and keep the last known rows.
 Missing data is not displayed as zero connections. Reads are bounded to 1,000
 sessions; unsupported JSON output or oversized/invalid responses show an error,
 not a partial list. This workflow requires RouterOS v7 with JSON serialization.
+
+## History & insights
+
+With the dashboard service running, a read-only background collector records
+incoming OpenVPN sessions even when no browser is open. It reads each enabled,
+non-MAC router once per pass, waits 15 seconds after the pass, and does not overlap
+passes. Active Safe Mode sessions are skipped. Failed routers back off up to five
+minutes. The existing session reader's access policy, response limits and shared
+in-flight cache also apply. No router settings or RADIUS accounting are changed.
+
+Select **History & insights** for:
+
+- An exact-username filter (suggested recorded users) and local-time **From / Through**
+  pickers; 7/30/90-day shortcuts and **All recorded**. Click a journal username to
+  focus on that user. Filters select **estimated session start time**, inclusively.
+- Connections in the selected range alongside the selected user's all-recorded
+  count; distinct users, source IPs, known ASNs and countries; accumulated last
+  reported session uptime (not billable time or time clipped to the date range).
+- A UTC daily-start chart showing at most the last 90 calendar days of the range,
+  including zero-count days. Summary totals cover the entire selected range.
+- Top-20 source-IP, ASN/organization and country lists with shares of all matching
+  connections. Unknown networks/countries remain explicit, not dropped.
+- A paginated journal of 50 connections with estimated start, last seen, end
+  detection, tunnel IP, source network and continuity warnings.
+
+History lives in `openvpn-history.db` beside the configured dashboard events DB
+(normally `~/.mikrotik-mcp/`). It survives process restarts, and is separate from
+event-log retention. **There is no automatic history deletion.** Include this DB
+in your protected host backups; SQLite WAL/SHM files belong with the DB while it
+is open. For Docker, persist the containing data directory as well as configuration.
+The file contains usernames and connection metadata; it is created owner-only.
+It does not contain credentials, disconnect tokens or raw router replies.
+
+Each device/user/date/page report is cached for 30 seconds, with at most 128 cached
+reports. History queries only read local SQLite; refresh and changing filters do
+not issue router or GeoIP requests. Background GeoIP enrichment reuses the existing
+bounded provider cache and stores the resulting country/ASN locally. A failed or
+private-IP lookup remains unknown; successful lookups are approximate, not proof
+of a person's location. Late enrichment can finish after a connection ends.
+
+**Coverage matters:** this is an observed-session journal, not a lossless RADIUS
+accounting ledger. Connections that start and end between samples, before first
+installation, or during MCP downtime can be missed. Existing active sessions are
+recorded when first seen with their uptime-derived start (which can predate
+collection). Repeated samples update the same row; reused IDs with reset uptime
+create a new row. Failed reads never disconnect or close stored sessions. Gaps
+longer than 45 seconds are counted, and affected rows are marked uncertain.
+An end time means “first observed absent,” bounded by the previous last-seen time,
+not an exact disconnect timestamp. A stale collector shows unknown live state.
+
+API: `GET /api/openvpn/history?device=…&user=…&from=…&to=…&offset=…`.
+Dates are epoch milliseconds; bounds/user are optional; offset defaults to zero.
+Authentication and the `list_ovpn_sessions` read policy apply even to cached results.
+Storage failure returns an error rather than fabricated empty history.
+
+Checks: `bun test tests/openvpn-history.bun.test.ts` covers the real SQLite store;
+`bunx vp test run tests/openvpn-history.spec.ts` covers the collector and API.
 
 ## Disconnect one connection
 

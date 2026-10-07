@@ -66,6 +66,9 @@ import { clientCheckNetwork } from "../client-check/network";
 import { serviceContractRoutes } from "./service-contract-routes";
 import { operationsRoutes } from "./operations-routes";
 import { openVpnRoutes } from "./openvpn-routes";
+import { openOpenVpnHistory } from "./openvpn-history";
+import type { OpenVpnHistoryStore } from "./openvpn-history";
+import { startOpenVpnHistorySampler } from "./openvpn-history-sampler";
 import { ipIntelligenceRoutes } from "./ip-intelligence-routes";
 import { roundTripRoutes } from "./round-trip-routes";
 import {
@@ -1577,6 +1580,14 @@ export async function runDashboard(
   startHealthChecks(30_000);
   // Geolocate each device's public IP for the country flag (cached ~1 day).
   startGeoLookups();
+  let openVpnHistory: OpenVpnHistoryStore | undefined;
+  let stopOpenVpnHistory: (() => void) | undefined;
+  try {
+    openVpnHistory = await openOpenVpnHistory(join(dirname(cfg.dbPath), "openvpn-history.db"));
+    stopOpenVpnHistory = startOpenVpnHistorySampler(openVpnHistory);
+  } catch (e) {
+    logger.warn(`[${SERVER_TAG}] OpenVPN history disabled: ${String(e)}`);
+  }
 
   // Persisted usage history: a SQLite DB beside the events DB, filled by a slow
   // background sampler (per-client ↓/↑ snapshots + User Manager session ingest)
@@ -1683,7 +1694,7 @@ export async function runDashboard(
     if (serviceContractResp) return serviceContractResp;
     const operationsResp = await operationsRoutes(req, url);
     if (operationsResp) return operationsResp;
-    const openVpnResp = await openVpnRoutes(req, url);
+    const openVpnResp = await openVpnRoutes(req, url, openVpnHistory);
     if (openVpnResp) return openVpnResp;
 
     const ipNetworkResp = ipGeoRoute(req, url);
@@ -2108,6 +2119,8 @@ export async function runDashboard(
     server,
     store,
     stop() {
+      stopOpenVpnHistory?.();
+      openVpnHistory?.close();
       stopHealthChecks();
       stopGeoLookups();
       stopUsageSampler();
