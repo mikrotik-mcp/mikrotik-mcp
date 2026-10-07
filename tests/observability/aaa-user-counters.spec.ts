@@ -142,7 +142,7 @@ test("shows router-local last connection dates, unknowns and background refresh 
     rows: counters(device).rows.map((r) => ({ ...r, lastConnection: "2026-10-05 23:45:56" })),
   });
   await ticks(5000);
-  expect(row("alice").textContent).toContain("23:45:56 · cached");
+  expect(row("alice").textContent).toContain("23:45:56");
 });
 
 test("pauses hidden tabs, avoids overlapping requests, and stops when leaving Users", async () => {

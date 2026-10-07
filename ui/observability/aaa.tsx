@@ -702,7 +702,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
                             <span>{counter.lastConnection.slice(0, 10)}</span>
                             <span className="text-[11px] text-muted-foreground">
                               {counter.lastConnection.slice(11)}
-                              {counters.data?.lastConnections?.status === "stale" && " · cached"}
+                              {counters.data?.lastConnections?.status === "stale"}
                             </span>
                           </div>
                         ) : (

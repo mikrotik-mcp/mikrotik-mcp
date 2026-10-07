@@ -4,12 +4,43 @@ import { Cmd, looksLikeError } from "../core/routeros";
 import { parseRouterosDate } from "../core/routeros-parse";
 import { getConfig, onConfigChanged } from "../core/runtime";
 import { assertDeviceAccess } from "../core/scoped-access";
+import { loadUmReportCache, umReportCachePath } from "./um-report-cache";
 
 const CACHE_MS = 30_000;
-// Aggregate on the router: no session IDs, addresses, traffic, or credentials
-// leave the device. Datetime properties are compared before JSON serialization.
-const SESSION_QUERY = new Cmd("/user-manager session print").raw("as-value").build();
-const COMMAND = `:if ([/user-manager session print count-only] > 100000) do={ :error "Session limit exceeded" }; :local latest [:toarray ""]; :foreach row in=[${SESSION_QUERY}] do={ :local user ($row->"user"); :local started ($row->"started"); :if ([:len [:tostr $user]] > 0 && [:len [:tostr $started]] > 0) do={ :local previous ($latest->$user); :if ([:typeof $previous] = "nil") do={ :set ($latest->$user) $started } else={ :if ($started > $previous) do={ :set ($latest->$user) $started } } } }; :put [:serialize to=json value=$latest options=json.no-string-conversion]`;
+const RESCAN_MS = 15 * 60_000;
+const COLLECTION_MS = 180_000;
+const FIELDS = { sessions: [".id", "user", "started"] };
+const SESSION_IDS =
+  ":put [:serialize to=json value=[/user-manager session find] options=json.no-string-conversion]";
+type Session = { user: string; started: string | null };
+
+/** Store only identity and start time; never retain addresses or other session details. */
+function sessionRows(rows: unknown): Map<string, Session> {
+  if (!Array.isArray(rows)) throw new Error("Invalid session page");
+  const result = new Map<string, Session>();
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row))
+      throw new Error("Invalid session row");
+    const { ".id": id, user, started } = row as Record<string, unknown>;
+    if (
+      typeof id !== "string" ||
+      !/^\*[0-9a-f]+$/i.test(id) ||
+      typeof user !== "string" ||
+      result.has(id)
+    )
+      throw new Error("Invalid session identity");
+    result.set(id, { user, started: umConnectionDate(started) });
+  }
+  return result;
+}
+
+function latestDates(sessions: Map<string, Session>): Map<string, string> {
+  const values = new Map<string, string>();
+  for (const { user, started } of sessions.values()) {
+    if (user && started && started > (values.get(user) ?? "")) values.set(user, started);
+  }
+  return values;
+}
 
 /** Normalize wall-clock dates without pretending the router timezone is UTC. */
 export function umConnectionDate(value: unknown): string | null {
@@ -48,6 +79,9 @@ interface Entry {
   retryAt: number;
   pending?: Promise<void>;
   failed: boolean;
+  sessions: Map<string, Session>;
+  scannedAt: number;
+  restored: boolean;
 }
 const cache = new Map<string, Entry>();
 onConfigChanged(() => cache.clear());
@@ -62,28 +96,88 @@ export function getUmLastConnections(device: string): UmLastConnections {
   const config = getConfig();
   let entry = cache.get(device);
   if (!entry || entry.config !== config) {
-    entry = { config, values: new Map(), retryAt: 0, failed: false };
+    entry = {
+      config,
+      values: new Map(),
+      sessions: new Map(),
+      scannedAt: 0,
+      restored: false,
+      retryAt: 0,
+      failed: false,
+    };
     cache.set(device, entry);
   }
   const target = entry;
   if (!target.pending && Date.now() >= target.retryAt) {
     target.pending = (async () => {
-      const raw = await executeMikrotikCommand(COMMAND, createContext(undefined, device), {
-        maxMs: 15_000,
-      });
-      if (looksLikeError(raw) || raw.length > 2 * 1024 * 1024)
-        throw new Error("Invalid last connection response");
-      const result: unknown = JSON.parse(raw);
-      if (!result || typeof result !== "object" || (Array.isArray(result) && result.length))
-        throw new Error("Invalid last connection response");
-      const values = new Map<string, string>();
-      for (const [user, value] of Object.entries(result)) {
-        const date = umConnectionDate(value);
-        if (date) values.set(user, date);
+      if (!target.restored) {
+        target.restored = true;
+        const snapshot = await loadUmReportCache(umReportCachePath(device), device, FIELDS);
+        if (getConfig() !== config) return;
+        if (snapshot?.sources.sessions.available) {
+          try {
+            target.sessions = sessionRows(snapshot.sources.sessions.rows);
+            target.values = latestDates(target.sessions);
+            target.collectedAt = snapshot.collectedAt;
+            target.scannedAt = snapshot.collectedAt;
+          } catch {
+            // Invalid cached identities must not prevent a fresh router read.
+          }
+        }
+      }
+      const deadline = Date.now() + COLLECTION_MS;
+      const ctx = createContext(undefined, device);
+      const run = async (command: string) => {
+        if (getConfig() !== config) throw new Error("Configuration changed");
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new Error("Last connection read deadline exceeded");
+        const raw = await executeMikrotikCommand(command, ctx, {
+          maxMs: Math.min(60_000, remaining),
+        });
+        if (looksLikeError(raw) || raw.length > 2 * 1024 * 1024)
+          throw new Error("Invalid last connection response");
+        return raw;
+      };
+      const ids: unknown = JSON.parse(await run(SESSION_IDS));
+      if (
+        !Array.isArray(ids) ||
+        ids.length > 100_000 ||
+        !ids.every((id) => typeof id === "string" && /^\*[0-9a-f]+$/i.test(id)) ||
+        new Set(ids).size !== ids.length
+      )
+        throw new Error("Invalid session identities");
+      // Starts are immutable during a session. Re-read unknown/new records every
+      // poll; periodically rebuild to handle restored databases and reused IDs.
+      const full = !target.scannedAt || Date.now() - target.scannedAt >= RESCAN_MS;
+      const sessions = new Map<string, Session>();
+      const missing: string[] = [];
+      for (const id of ids) {
+        const known = full ? undefined : target.sessions.get(id);
+        if (known?.started) sessions.set(id, known);
+        else missing.push(id);
+      }
+      for (let offset = 0; offset < missing.length; offset += 2000) {
+        const batch = missing.slice(offset, offset + 2000);
+        const query = new Cmd("/user-manager session print")
+          .raw("as-value")
+          .set("from", batch.join(","))
+          .build();
+        const page = sessionRows(
+          JSON.parse(
+            await run(
+              `:put [:serialize to=json value=[${query}] options=json.no-string-conversion]`,
+            ),
+          ),
+        );
+        if (page.size !== batch.length || !batch.every((id) => page.has(id)))
+          throw new Error("Incomplete session page");
+        for (const [id, session] of page) sessions.set(id, session);
       }
       if (getConfig() !== config) return;
-      target.values = values;
+      target.sessions = sessions;
+      target.values = latestDates(sessions);
       target.collectedAt = Date.now();
+      if (full) target.scannedAt = target.collectedAt;
       target.failed = false;
     })()
       .catch(() => {
