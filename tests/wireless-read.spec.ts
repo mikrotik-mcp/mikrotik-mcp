@@ -5,6 +5,8 @@ import { quoteValue } from "../src/core/routeros";
 import { wirelessTools } from "../src/tools/wireless";
 
 const { run } = vi.hoisted(() => ({ run: vi.fn() }));
+const { survey } = vi.hoisted(() => ({ survey: vi.fn() }));
+vi.mock("../src/core/wifi-survey", () => ({ runWifiSurvey: survey }));
 vi.mock("../src/core/connector", () => ({ executeMikrotikCommand: run }));
 const ctx: ToolContext = { device: "home-ax3", info: vi.fn(), error: vi.fn() };
 const paths = ["/interface wifi", "/interface wifiwave2", "/interface wireless", "/interface wlan"];
@@ -30,6 +32,7 @@ function stack(path: string, output = security) {
 }
 beforeEach(() => {
   run.mockReset();
+  survey.mockReset();
   stack(paths[0]);
 });
 
@@ -199,14 +202,17 @@ describe("runtime monitoring and bounded scans", () => {
     },
   );
 
-  test.each([paths[0], paths[1]])("modern RF survey uses %s frequency-scan", async (path) => {
-    stack(path, "CHANNEL NETWORKS LOAD NF\n5180 2 25 -98");
-    expect(
-      await invoke("scan_wifi_channels", { interface: "wifi1", confirm: true, duration: 3 }),
-    ).toContain("5180");
-    expect(run).toHaveBeenCalledWith(`${path} frequency-scan wifi1 duration=3s`, ctx);
-    expect(run.mock.calls.every(([cmd]) => !cmd.includes("frequency-monitor"))).toBe(true);
-  });
+  test.each([paths[0], paths[1]])(
+    "modern survey delegates %s to recoverable runner",
+    async (path) => {
+      stack(path);
+      survey.mockResolvedValue("5180 2 25 -98");
+      expect(
+        await invoke("scan_wifi_channels", { interface: "wifi1", confirm: true, duration: 3 }),
+      ).toContain("5180");
+      expect(survey).toHaveBeenCalledWith(path, "wifi1", 3, ctx);
+    },
+  );
 
   test("rejects modern RF surveys on legacy drivers", async () => {
     stack(paths[2]);

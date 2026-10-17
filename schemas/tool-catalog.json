@@ -3875,7 +3875,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Runs a bounded /interface wifi (or wifiwave2) frequency-scan to measure channel load, networks, noise floor and signal levels. Modern Wi-Fi equivalent of a legacy frequency survey, NOT /interface wireless frequency-monitor. DISCONNECTS associated clients/station during the scan; obtain explicit user approval and set confirm=true. Never use during a strictly read-only/non-disruptive audit; get_wireless_interface_status reads the current channel safely. Does not auto-tune or modify configuration; frequency-scan availability depends on RouterOS/driver.",
+      "description": "Runs a bounded /interface wifi (or wifiwave2) frequency-scan to measure channel load, networks, noise floor and signal levels. Modern Wi-Fi equivalent of a legacy frequency survey, NOT /interface wireless frequency-monitor. DISCONNECTS associated clients/station during the scan; obtain explicit user approval and set confirm=true. Runs once as a router-owned background job so temporary SSH loss does not stop the scan; retries only result reads for up to duration + 60 seconds. Never use during a strictly read-only/non-disruptive audit; get_wireless_interface_status reads the current channel safely. Captures results through unique temporary report/status files (requires file/test permissions), then removes them after recovery; on timeout reports their paths for later retrieval. Does not auto-tune or modify configuration, and never automatically retries a disruptive scan; frequency-scan availability depends on RouterOS/driver.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

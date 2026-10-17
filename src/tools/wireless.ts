@@ -7,6 +7,7 @@
  * command path the device speaks before issuing its real command.
  */
 import { z } from "zod";
+import { runWifiSurvey } from "../core/wifi-survey";
 import { interfaceName } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -497,8 +498,10 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
       "Runs a bounded /interface wifi (or wifiwave2) frequency-scan to measure channel load, networks, noise floor and signal levels. " +
       "Modern Wi-Fi equivalent of a legacy frequency survey, NOT /interface wireless frequency-monitor. " +
       "DISCONNECTS associated clients/station during the scan; obtain explicit user approval and set confirm=true. " +
+      "Runs once as a router-owned background job so temporary SSH loss does not stop the scan; retries only result reads for up to duration + 60 seconds. " +
       "Never use during a strictly read-only/non-disruptive audit; get_wireless_interface_status reads the current channel safely. " +
-      "Does not auto-tune or modify configuration; frequency-scan availability depends on RouterOS/driver.",
+      "Captures results through unique temporary report/status files (requires file/test permissions), then removes them after recovery; on timeout reports their paths for later retrieval. " +
+      "Does not auto-tune or modify configuration, and never automatically retries a disruptive scan; frequency-scan availability depends on RouterOS/driver.",
     inputSchema: {
       interface: z.string().trim().min(1),
       duration: z.number().int().min(1).max(30).default(5),
@@ -513,16 +516,7 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
       const path = await detectWirelessInterfaceType(ctx);
       if (!path || !V7_WIFI.includes(path))
         return "Error: Modern Wi-Fi frequency-scan is unavailable; this tool requires /interface wifi or /interface wifiwave2.";
-      const result = await executeMikrotikCommand(
-        new Cmd(`${path} frequency-scan`)
-          .raw(quoteValue(a.interface))
-          .set("duration", `${a.duration}s`)
-          .build(),
-        ctx,
-      );
-      if (looksLikeError(result) || isEmpty(result))
-        return `Failed to survey Wi-Fi channels: ${result || "empty response"}`;
-      return `WI-FI CHANNEL SURVEY (${path}):\n\n${result}`;
+      return runWifiSurvey(path, a.interface, a.duration, ctx);
     },
   }),
 
