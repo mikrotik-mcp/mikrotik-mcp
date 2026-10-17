@@ -10,10 +10,9 @@ const dockerfile = read("Dockerfile");
 const runtime = dockerfile.split(" AS runtime")[1];
 
 describe("Docker production packaging", () => {
-  test("pulls the versioned Docker Hub image without an implicit local build", () => {
+  test("defaults to latest with a tag override and no implicit local build", () => {
     const compose = read("docker-compose.yml");
-    const { version } = JSON.parse(read("package.json")) as { version: string };
-    expect(compose).toContain(`image: alimaster/mikrotik-mcp:\${MIKROTIK_IMAGE_TAG:-${version}}`);
+    expect(compose).toContain("image: alimaster/mikrotik-mcp:${MIKROTIK_IMAGE_TAG:-latest}");
     expect(compose).not.toMatch(/^\s+build:/m);
     expect(compose).not.toMatch(/^\s+platform:/m);
   });
