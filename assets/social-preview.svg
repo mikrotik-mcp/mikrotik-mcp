@@ -1,83 +1,34 @@
-<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MikroTik MCP — the complete MCP server for MikroTik RouterOS, +700 tools across +110 modules">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1C1714"/>
-      <stop offset="1" stop-color="#120E0C"/>
-    </linearGradient>
-    <radialGradient id="halo" cx="0.18" cy="0.30" r="0.55">
-      <stop offset="0" stop-color="#D2724F" stop-opacity="0.30"/>
-      <stop offset="1" stop-color="#D2724F" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="coral" x1="80" y1="40" x2="440" y2="480" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#E08763"/>
-      <stop offset="0.5" stop-color="#D2724F"/>
-      <stop offset="1" stop-color="#B9532F"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.62">
-      <stop offset="0" stop-color="#FBF7EF" stop-opacity="0.20"/>
-      <stop offset="1" stop-color="#FBF7EF" stop-opacity="0"/>
-    </radialGradient>
-    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="18" stdDeviation="26" flood-color="#000000" flood-opacity="0.45"/>
-    </filter>
-    <clipPath id="sq">
-      <path d="M 492.00,256.00 L 491.68,334.04 L 490.73,361.35 L 489.14,381.37 L 486.91,397.63 L 484.01,411.43 L 480.45,423.42 L 476.20,433.97 L 471.23,443.31 L 465.50,451.62 L 458.99,458.99 L 451.62,465.50 L 443.31,471.23 L 433.97,476.20 L 423.42,480.45 L 411.43,484.01 L 397.63,486.91 L 381.37,489.14 L 361.35,490.73 L 334.04,491.68 L 256.00,492.00 L 177.96,491.68 L 150.65,490.73 L 130.63,489.14 L 114.37,486.91 L 100.57,484.01 L 88.58,480.45 L 78.03,476.20 L 68.69,471.23 L 60.38,465.50 L 53.01,458.99 L 46.50,451.62 L 40.77,443.31 L 35.80,433.97 L 31.55,423.42 L 27.99,411.43 L 25.09,397.63 L 22.86,381.37 L 21.27,361.35 L 20.32,334.04 L 20.00,256.00 L 20.32,177.96 L 21.27,150.65 L 22.86,130.63 L 25.09,114.37 L 27.99,100.57 L 31.55,88.58 L 35.80,78.03 L 40.77,68.69 L 46.50,60.38 L 53.01,53.01 L 60.38,46.50 L 68.69,40.77 L 78.03,35.80 L 88.58,31.55 L 100.57,27.99 L 114.37,25.09 L 130.63,22.86 L 150.65,21.27 L 177.96,20.32 L 256.00,20.00 L 334.04,20.32 L 361.35,21.27 L 381.37,22.86 L 397.63,25.09 L 411.43,27.99 L 423.42,31.55 L 433.97,35.80 L 443.31,40.77 L 451.62,46.50 L 458.99,53.01 L 465.50,60.38 L 471.23,68.69 L 476.20,78.03 L 480.45,88.58 L 484.01,100.57 L 486.91,114.37 L 489.14,130.63 L 490.73,150.65 L 491.68,177.96 L 492.00,256.00 Z"/>
-    </clipPath>
-  </defs>
-
-  <rect width="1280" height="640" fill="url(#bg)"/>
-  <rect width="1280" height="640" fill="url(#halo)"/>
-
-  <!-- Content block (logo + wordmark) nudged left for right-edge breathing room -->
-  <g transform="translate(-44 0)">
-
-  <!-- Logo -->
-  <g transform="translate(96 168) scale(0.595)" filter="url(#soft)">
-    <path clip-path="url(#sq)" fill="url(#coral)" d="M0 0h512v512H0z"/>
-    <rect clip-path="url(#sq)" width="512" height="512" fill="url(#glow)"/>
-
-    <!-- managed-network topology: central hub routing to four nodes -->
-    <g stroke="#F6F1E7" stroke-width="15" stroke-linecap="round" opacity="0.96">
-      <line x1="240" y1="236" x2="140" y2="136"/>
-      <line x1="240" y1="236" x2="340" y2="136"/>
-      <line x1="240" y1="236" x2="140" y2="336"/>
-      <line x1="240" y1="236" x2="340" y2="336"/>
-    </g>
-    <circle cx="240" cy="236" r="42" fill="#F6F1E7"/>
-    <circle cx="140" cy="136" r="25" fill="#F6F1E7"/>
-    <circle cx="340" cy="136" r="25" fill="#F6F1E7"/>
-    <circle cx="140" cy="336" r="25" fill="#F6F1E7"/>
-    <circle cx="340" cy="336" r="25" fill="#F6F1E7"/>
-    <!-- terminal chevron inside the hub: SSH / MCP tooling -->
-    <path d="M225 221 L240 236 L225 251" fill="none" stroke="#B9532F" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-
-    <!-- MCP badge -->
-    <g transform="translate(326 400)">
-      <rect width="122" height="54" rx="18" fill="#F6F1E7"/>
-      <rect width="122" height="54" rx="18" fill="none" stroke="#000000" stroke-opacity="0.06" stroke-width="2"/>
-      <text x="61" y="37" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" font-weight="800" letter-spacing="1.5" fill="#B9532F">MCP</text>
-    </g>
-  </g>
-
-  <!-- Wordmark + copy -->
-  <g font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
-    <text x="470" y="214" font-size="22" font-weight="700" letter-spacing="3" fill="#D2724F">+790&#160;TOOLS&#160;&#160;·&#160;&#160;+110&#160;MODULES&#160;&#160;·&#160;&#160;SSH&#160;&#160;·&#160;&#160;SAFE&#160;MODE</text>
-    <text x="468" y="300" font-size="82" font-weight="800" letter-spacing="-1" fill="#F6F1E7">MikroTik <tspan fill="#E08763">MCP</tspan></text>
-    <text x="470" y="360" font-size="29" font-weight="500" fill="#B9ABA0">The complete MCP server for MikroTik RouterOS.</text>
-    <text x="470" y="398" font-size="29" font-weight="500" fill="#B9ABA0">Read &#38; configure every scope in natural language.</text>
-
-    <!-- capability chips -->
-    <g font-size="26" font-weight="600">
-      <rect x="470" y="446" width="200" height="62" rx="16" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.10"/>
-      <text x="570" y="486" text-anchor="middle" fill="#F6F1E7">Firewall &#38; NAT</text>
-
-      <rect x="686" y="446" width="244" height="62" rx="16" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.10"/>
-      <text x="808" y="486" text-anchor="middle" fill="#F6F1E7">WireGuard &#183; IPsec</text>
-
-      <rect x="946" y="446" width="226" height="62" rx="16" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.10"/>
-      <text x="1059" y="486" text-anchor="middle" fill="#F6F1E7">BGP &#183; OSPF &#183; QoS</text>
-    </g>
-  </g>
-
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" fill="none" role="img" aria-labelledby="title desc">
+<title id="title">MikroTik MCP — Your network. One conversation.</title>
+<desc id="desc">The MCP server for MikroTik RouterOS. An orange M-shaped route connects to a quiet network diagram on ivory.</desc>
+<defs>
+<linearGradient id="tile" x1="12" y1="12" x2="244" y2="244" gradientUnits="userSpaceOnUse"><stop stop-color="#FC8054"/><stop offset="1" stop-color="#EB5735"/></linearGradient>
+<filter id="shadow" x="-50%" y="-50%" width="200%" height="220%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#713821" flood-opacity=".13"/><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#713821" flood-opacity=".08"/></filter>
+</defs>
+<rect width="1280" height="640" fill="#F6F5F0"/>
+<g font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<g transform="translate(64 48) scale(.1875)"><rect x="12" y="12" width="232" height="232" rx="64" fill="#F2653D"/>
+<path d="M72 176V82L128 138L184 82V140" stroke="#FFFCF5" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="184" cy="176" r="10" fill="#FFFCF5"/></g>
+<text x="128" y="81" fill="#202321" font-size="27" font-weight="600" letter-spacing="-.8">MikroTik MCP</text>
+<text x="66" y="257" fill="#202321" font-size="76" font-weight="600" letter-spacing="-3.8">Your network.</text>
+<text x="66" y="342" fill="#202321" font-size="76" font-weight="600" letter-spacing="-3.8">One conversation.</text>
+<text x="70" y="405" fill="#656B66" font-size="25" letter-spacing="-.4">The MCP server for MikroTik RouterOS.</text>
+<path d="M70 538H1210" stroke="#DBDDD5"/>
+<text x="70" y="580" fill="#656B66" font-size="14" font-weight="500" letter-spacing="2">OPEN SOURCE · BUILT WITH BUN</text>
+<text x="1210" y="580" text-anchor="end" fill="#656B66" font-size="16">mikrotik-mcp</text>
+</g>
+<g stroke="#D6DAD0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M1016 114V158M1016 478V502M820 318H778M1210 318H1254"/>
+<path d="M872 222H816Q798 222 798 204V170M1160 414H1214Q1232 414 1232 432V462"/>
+<circle cx="1016" cy="105" r="7"/><circle cx="1016" cy="509" r="7"/>
+<circle cx="769" cy="318" r="7"/><circle cx="1263" cy="318" r="7"/>
+<circle cx="798" cy="161" r="7"/><circle cx="1232" cy="471" r="7"/>
+</g>
+<g transform="translate(849 151) scale(1.3046875)" filter="url(#shadow)">
+<rect x="12" y="12" width="232" height="232" rx="64" fill="url(#tile)"/>
+<path d="M72 176V82L128 138L184 82V140" stroke="#FFFCF5" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="184" cy="176" r="10" fill="#FFFCF5"/>
+<rect x="12.5" y="12.5" width="231" height="231" rx="63.5" stroke="#FFFFFF" stroke-opacity=".35"/>
+</g>
 </svg>
