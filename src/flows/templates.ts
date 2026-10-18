@@ -69,6 +69,7 @@ export class TemplateRegistry {
   private readonly templates = new Map<string, Template>();
   private pending: PendingSet[] = [];
   private droppedPending = 0;
+  private changedTemplates = 0;
   private readonly maxPending: number;
 
   constructor(maxPending = DEFAULT_MAX_PENDING) {
@@ -85,6 +86,10 @@ export class TemplateRegistry {
    * definition would decode every later record incorrectly.
    */
   learn(template: Template): void {
+    const previous = this.get(template.sourceId, template.templateId);
+    if (previous && JSON.stringify(previous.fields) !== JSON.stringify(template.fields)) {
+      this.changedTemplates++;
+    }
     this.templates.set(TemplateRegistry.key(template.sourceId, template.templateId), template);
   }
 
@@ -132,6 +137,10 @@ export class TemplateRegistry {
     return this.droppedPending;
   }
 
+  get changedCount(): number {
+    return this.changedTemplates;
+  }
+
   /** Every known template, for the collector-health view. */
   list(): Template[] {
     return [...this.templates.values()];
@@ -142,5 +151,6 @@ export class TemplateRegistry {
     this.templates.clear();
     this.pending = [];
     this.droppedPending = 0;
+    this.changedTemplates = 0;
   }
 }

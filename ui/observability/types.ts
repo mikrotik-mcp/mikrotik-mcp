@@ -430,6 +430,8 @@ export interface FlowHealth {
     templatesDropped: number;
     exporters: Record<string, number>;
     queued: number;
+    exporterHealth?: import("../../src/flows/exporter-decoder").ExporterHealth[];
+    storageDropped?: number;
   };
   store: {
     rawRows: number;

@@ -21,6 +21,7 @@ import type { Socket } from "node:dgram";
 import { logger } from "../logger";
 import type { FlowRecord } from "./decode";
 import { ExporterFlowDecoder } from "./exporter-decoder";
+import type { ExporterHealth } from "./exporter-decoder";
 import type { FlowStore } from "./store";
 
 export const DEFAULT_FLOW_PORT = 2055;
@@ -52,6 +53,8 @@ export interface CollectorStats {
   exporters: Record<string, number>;
   /** Records buffered in memory, not yet written. */
   queued: number;
+  exporterHealth: ExporterHealth[];
+  storageDropped: number;
 }
 
 class FlowCollector {
@@ -67,6 +70,7 @@ class FlowCollector {
   private packets = 0;
   private flows = 0;
   private decodeErrors = 0;
+  private storageDropped = 0;
   private lastError: string | undefined;
   private exporters = new Map<string, number>();
 
@@ -132,6 +136,7 @@ class FlowCollector {
     this.packets = 0;
     this.flows = 0;
     this.decodeErrors = 0;
+    this.storageDropped = 0;
     this.lastError = undefined;
     this.exporters = new Map();
   }
@@ -167,6 +172,7 @@ class FlowCollector {
     try {
       this.store.insert(batch);
     } catch (e) {
+      this.storageDropped += batch.length;
       logger.error(`Flow store insert failed (${batch.length} records dropped): ${String(e)}`);
     }
   }
@@ -197,6 +203,7 @@ class FlowCollector {
       ...this.decoder.stats(),
       exporters: Object.fromEntries(this.exporters),
       queued: this.queue.length,
+      storageDropped: this.storageDropped,
     };
   }
 

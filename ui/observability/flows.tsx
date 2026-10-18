@@ -124,6 +124,63 @@ function HealthStrip({ health }: { health: FlowHealth | null }): ReactNode {
           {exporters.map(([addr, n]) => `${addr} (${n.toLocaleString()} pkt)`).join(" · ")}
         </p>
       )}
+      {!!c.storageDropped && (
+        <p
+          role="alert"
+          className="mt-3 rounded-md border border-red-500/30 p-3 text-sm text-red-500"
+        >
+          {c.storageDropped.toLocaleString()} decoded records could not be saved. Check available
+          disk space and server logs; totals are incomplete.
+        </p>
+      )}
+      {!!c.exporterHealth?.length && (
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className="text-sm font-semibold">Exporter signals</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Silence is not proof of an outage. Sequence gaps can include delayed packets; IPFIX loss
+            is not inferred.
+          </p>
+          <ul className="mt-3 divide-y divide-border">
+            {c.exporterHealth.map((source) => (
+              <li
+                key={`${source.exporter}/${source.version}/${source.domain}`}
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-sm break-all">{source.exporter}</span>
+                    <Badge type={!c.running ? "secondary" : source.stale ? "warning" : "success"}>
+                      {!c.running ? "Stopped" : source.stale ? "Silent >5m" : "Receiving"}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {source.version === 10 ? "IPFIX" : `NetFlow v${source.version}`} · domain{" "}
+                    {source.domain} · last received {new Date(source.lastSeen).toLocaleTimeString()}
+                  </p>
+                </div>
+                <dl className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
+                  {[
+                    ["Records", source.records.toLocaleString()],
+                    [
+                      "Sequence gaps",
+                      source.version === 9 ? source.sequenceGaps.toLocaleString() : "Not measured",
+                    ],
+                    ["Reordered / reset", source.reordered.toLocaleString()],
+                    ["Template changes", source.templateChanges.toLocaleString()],
+                    ["Pending sets", source.pending.toLocaleString()],
+                    ["Decode errors", source.errors.toLocaleString()],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="mt-1 font-mono tabular-nums">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Panel>
   );
 }

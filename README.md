@@ -46,6 +46,8 @@ Then just ask:
 
 ## Highlights
 
+- **Collector health:** per-exporter freshness, template changes and incomplete-data diagnostics in Flows; see [collector health](docs/collector-health.md).
+
 - **IP Intelligence:** `lookup_ip_intelligence` and Diagnostics → IP Intelligence compare full ipquery/ipkit responses: ASN/organization, location, risk and every additional field, with searchable details and JSON export. Public IPs are sent only on submission; private IPs stay local. [Guide](docs/ip-intelligence.md).
 - **Service probes:** add, edit, search and remove approved HTTPS/TLS/TCP/DNS targets directly in Config or Service Routing, with explicit IP/CIDR boundaries and safe-apply confirmation. [Setup guide](docs/service-contracts.md#dashboard-setup-no-json-required).
 - **OpenVPN connections:** live sessions and persistent observed history, per-user/date connection counts, IP/ASN/country breakdowns and daily charts. Local cached reports avoid router reads; collection gaps remain visible. Includes confirmed single-session disconnect. [Guide](docs/openvpn-connections.md).

@@ -1826,6 +1826,7 @@
       "description": "NetFlow/IPFIX export (`/ip traffic-flow`) plus the host-side collector and analytics: top talkers, conversations, application mix and anomalies — cheap continuous metadata, no payload.",
       "alwaysOn": false,
       "tools": [
+        "get_flow_collector_health",
         "get_traffic_flow_settings",
         "set_traffic_flow_settings",
         "list_traffic_flow_targets",
@@ -10027,6 +10028,18 @@
       "noDevice": false,
       "requires": null,
       "ui": null
+    },
+    {
+      "name": "get_flow_collector_health",
+      "module": "traffic-flow",
+      "group": "Tools",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
     },
     {
       "name": "get_traffic_flow_settings",

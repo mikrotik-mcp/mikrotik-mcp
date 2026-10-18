@@ -120,6 +120,20 @@ function talkerTable(
 
 export const trafficFlowTools: ToolModule = [
   defineTool({
+    name: "get_flow_collector_health",
+    title: "Inspect Flow Collector Health",
+    annotations: READ,
+    description:
+      "Reads host collector health per exporter, protocol and observation domain: last receipt, " +
+      "template changes, pending templates, decode errors and failed storage writes. NetFlow v9 " +
+      "sequence gaps are observations, not proven packet loss (UDP can reorder). IPFIX loss is " +
+      "not estimated. Silent >5m means no exports received, not proof the router is offline. " +
+      "Counters reset when the collector restarts. No router changes.",
+    handler() {
+      return JSON.stringify(getFlowCollector().stats(), null, 2);
+    },
+  }),
+  defineTool({
     name: "get_traffic_flow_settings",
     title: "Get Traffic Flow Settings",
     annotations: READ,

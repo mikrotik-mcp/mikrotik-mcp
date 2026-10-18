@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.4.1",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 964,
+  "toolCount": 965,
   "tools": [
     {
       "name": "create_client_check",
@@ -29169,6 +29169,23 @@
           }
         },
         "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_flow_collector_health",
+      "title": "Inspect Flow Collector Health",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Reads host collector health per exporter, protocol and observation domain: last receipt, template changes, pending templates, decode errors and failed storage writes. NetFlow v9 sequence gaps are observations, not proven packet loss (UDP can reorder). IPFIX loss is not estimated. Silent >5m means no exports received, not proof the router is offline. Counters reset when the collector restarts. No router changes.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       }
     },
