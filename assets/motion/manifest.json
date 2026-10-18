@@ -1,0 +1,98 @@
+{
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 60,
+  "sceneDuration": 6,
+  "format": "H.264 / yuv420p / silent / faststart",
+  "provenance": "Locally authored SVG motion, project logo; synthetic documentation IPs; no live router data or screen recording.",
+  "chapters": [
+    {
+      "id": "intro",
+      "title": ["Your network.", "One clear picture."],
+      "subtitle": "The MikroTik MCP dashboard",
+      "startsAt": 0,
+      "pages": []
+    },
+    {
+      "id": "monitoring",
+      "title": ["See the signal.", "Skip the noise."],
+      "subtitle": "Health, flows and activity. In context.",
+      "startsAt": 6,
+      "pages": [
+        "Overview",
+        "Home Internet",
+        "Service Health",
+        "Flows",
+        "Live Feed",
+        "Alerts",
+        "Schedules"
+      ]
+    },
+    {
+      "id": "network",
+      "title": ["Every router.", "Connected."],
+      "subtitle": "Ports, paths and Wi-Fi. One workspace.",
+      "startsAt": 12,
+      "pages": ["Devices", "Interfaces", "Topology", "L2 Fabric", "CAPsMAN", "Service Routing"]
+    },
+    {
+      "id": "users-vpn",
+      "title": ["Know who.", "Know when."],
+      "subtitle": "Clients, VPN sessions and accounting.",
+      "startsAt": 18,
+      "pages": ["Clients", "OpenVPN", "RADIUS & UM"]
+    },
+    {
+      "id": "diagnostics",
+      "title": ["Follow the path.", "Find the why."],
+      "subtitle": "From a symptom to inspectable evidence.",
+      "startsAt": 24,
+      "pages": [
+        "Investigations",
+        "IP Intelligence",
+        "Client Check",
+        "Round-trip Lab",
+        "Simulator",
+        "Packets",
+        "Flight Recorder",
+        "Support Bundles"
+      ]
+    },
+    {
+      "id": "security",
+      "title": ["Look closer.", "Decide better."],
+      "subtitle": "Exposure, incidents and bounded policy checks.",
+      "startsAt": 30,
+      "pages": ["Attacks", "Vulnerabilities", "Policies"]
+    },
+    {
+      "id": "configuration",
+      "title": ["See the change.", "Before it lands."],
+      "subtitle": "Preview the diff. Keep approval explicit.",
+      "startsAt": 36,
+      "pages": ["Explain", "Change Plan", "Transactions", "Drift Guard"]
+    },
+    {
+      "id": "recovery",
+      "title": ["Keep a copy.", "Have a way back."],
+      "subtitle": "Snapshots, backup vaults and recovery rehearsals.",
+      "startsAt": 42,
+      "pages": ["Snapshots", "Backups", "S3 Backups", "Router Migration", "Recovery Lab"]
+    },
+    {
+      "id": "workspace",
+      "title": ["Keep context.", "Keep control."],
+      "subtitle": "Memory, permissions and your MCP settings.",
+      "startsAt": 48,
+      "pages": ["Prompts", "Memory", "Modules", "Access Scope", "Config", "Releases"]
+    },
+    {
+      "id": "outro",
+      "title": ["Understand.", "Then act."],
+      "subtitle": "MikroTik MCP",
+      "startsAt": 54,
+      "pages": []
+    }
+  ]
+}

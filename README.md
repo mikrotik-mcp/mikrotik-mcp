@@ -44,6 +44,16 @@ Then just ask:
 > _"Build an IKEv2 site-to-site tunnel to 203.0.113.5 for 192.168.20.0/24."_
 > _"Why can't VLAN 50 reach the internet?"_
 
+## Dashboard film
+
+[![Watch the MikroTik MCP dashboard film — Your network. One clear picture.](assets/motion/00-intro.png)](assets/motion/dashboard-film.mp4)
+
+**[Watch or download the film (MP4)](assets/motion/dashboard-film.mp4)** · 60 seconds · 1080p · No audio
+
+An illustrated tour of all eight dashboard areas, from monitoring and routing to VPN sessions,
+security and recovery. Uses synthetic data, not a live screen recording or private router data.
+[Chapters and rendering instructions](assets/motion/README.md).
+
 ## Highlights
 
 - **Address sets:** exact IPv4/IPv6 set algebra, immutable revisions and guarded publication/rollback in Service Routing. [Workflow and safety limits](docs/address-sets.md).
