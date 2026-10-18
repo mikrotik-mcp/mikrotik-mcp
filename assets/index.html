@@ -580,6 +580,130 @@
         color: var(--ink);
         font-size: 13px;
       }
+      .site-select {
+        position: relative;
+        max-width: 100%;
+      }
+      .site-select-trigger {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: 42px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        color: var(--ink);
+        font-size: 13px;
+        line-height: 1.4;
+        text-align: left;
+        transition:
+          background 160ms,
+          border-color 160ms;
+      }
+      .site-select-trigger:hover,
+      .site-select-trigger[aria-expanded="true"] {
+        background: var(--white);
+        border-color: var(--subtle);
+      }
+      .site-select-trigger:focus-visible {
+        outline: 2px solid var(--green);
+        outline-offset: 3px;
+      }
+      .site-select-value {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .site-select svg {
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        color: var(--muted);
+      }
+      .site-select .site-select-chevron {
+        width: 13px;
+        height: 13px;
+        transition: transform 160ms;
+      }
+      [aria-expanded="true"] .site-select-chevron {
+        transform: rotate(180deg);
+      }
+      .site-select-menu {
+        position: absolute;
+        z-index: 30;
+        top: calc(100% + 8px);
+        right: 0;
+        width: max(100%, 270px);
+        max-width: calc(100vw - 40px);
+        max-height: min(320px, var(--select-space, 320px));
+        margin: 0;
+        padding: 5px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: var(--line) transparent;
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        background: var(--white);
+        box-shadow:
+          0 12px 36px #0000001a,
+          0 2px 6px #0000000a;
+        animation: select-reveal 140ms ease-out;
+      }
+      :root[data-theme="dark"] .site-select-menu {
+        box-shadow:
+          0 16px 40px #0005,
+          0 2px 8px #0003;
+      }
+      .site-select-menu[data-side="above"] {
+        top: auto;
+        bottom: calc(100% + 8px);
+      }
+      .site-select-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 38px;
+        padding: 9px 10px;
+        border-radius: 9px;
+        color: var(--ink);
+        font-size: 13px;
+        line-height: 1.4;
+        cursor: pointer;
+      }
+      .site-select-option[data-active="true"] {
+        background: var(--panel);
+        outline: 1px solid var(--line);
+        outline-offset: -1px;
+      }
+      .site-select-option[data-current="true"] {
+        color: var(--green);
+      }
+      .site-select-option .site-select-check {
+        margin-left: auto;
+        color: var(--green);
+        visibility: hidden;
+      }
+      .site-select-option[data-current="true"] .site-select-check {
+        visibility: visible;
+      }
+      .gallery-tools .site-select {
+        width: 260px;
+      }
+      @keyframes select-reveal {
+        from {
+          opacity: 0;
+          transform: translateY(-3px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
       .browser-frame {
         margin: 0;
         background: #101827;
@@ -788,10 +912,25 @@
       .enhanced .theme-control {
         display: block;
       }
-      .theme-control select {
+      .theme-control .site-select-trigger {
         font-size: 12px;
         border-radius: 24px;
-        padding: 7px 8px;
+        min-width: 116px;
+        padding: 9px 13px;
+        background: transparent;
+      }
+      .theme-control .site-select-trigger:hover,
+      .theme-control .site-select-trigger[aria-expanded="true"] {
+        background: var(--panel);
+      }
+      .theme-control .site-select-menu {
+        width: 174px;
+      }
+      @media (pointer: coarse) {
+        .site-select-trigger,
+        .site-select-option {
+          min-height: 44px;
+        }
       }
       .install-panel p {
         font-size: 13px;
@@ -1146,9 +1285,9 @@
         </div>
         <div class="theme-control">
           <select id="site-theme" aria-label="Website appearance">
-            <option value="system">◐ System</option>
-            <option value="light">☀ Light</option>
-            <option value="dark">☾ Dark</option>
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
           </select>
         </div>
         <a class="button small dark" href="#install"
@@ -1526,6 +1665,197 @@
         document.documentElement.classList.add("enhanced");
         document.getElementById("site-theme").value =
           document.documentElement.dataset.themePreference;
+        const selectIcon = (name) => {
+          const paths = {
+            system: "M4 3h16v12H4z M8 21h8 M12 15v6",
+            light:
+              "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M12 2v2 M12 20v2 M2 12h2 M20 12h2 M5 5l1.5 1.5 M17.5 17.5 19 19 M5 19l1.5-1.5 M17.5 6.5 19 5",
+            dark: "M20.5 13.5A9 9 0 0 1 10.5 3.5a9 9 0 1 0 10 10Z",
+            dashboard: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
+            chevron: "m7 10 5 5 5-5",
+            check: "m5 12 4 4L19 6",
+          };
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          const path = document.createElementNS(svg.namespaceURI, "path");
+          svg.setAttribute("viewBox", "0 0 24 24");
+          svg.setAttribute("fill", "none");
+          svg.setAttribute("stroke", "currentColor");
+          svg.setAttribute("stroke-width", "1.5");
+          svg.setAttribute("stroke-linecap", "round");
+          svg.setAttribute("stroke-linejoin", "round");
+          svg.setAttribute("aria-hidden", "true");
+          path.setAttribute("d", paths[name]);
+          svg.append(path);
+          return svg;
+        };
+        document.querySelectorAll("select").forEach((select) => {
+          const options = Array.from(select.options);
+          const labels = Array.from(select.labels);
+          const name = select.getAttribute("aria-label") || labels[0].textContent;
+          const theme = select.id === "site-theme";
+          const wrapper = document.createElement("div");
+          wrapper.className = "site-select";
+          const trigger = document.createElement("button");
+          trigger.type = "button";
+          trigger.id = select.id + "-control";
+          trigger.className = "site-select-trigger";
+          trigger.setAttribute("role", "combobox");
+          trigger.setAttribute("aria-haspopup", "listbox");
+          trigger.setAttribute("aria-expanded", "false");
+          trigger.setAttribute("aria-label", name);
+          if (select.hasAttribute("aria-describedby")) {
+            trigger.setAttribute("aria-describedby", select.getAttribute("aria-describedby"));
+          }
+          const value = document.createElement("span");
+          value.className = "site-select-value";
+          const chevron = selectIcon("chevron");
+          chevron.classList.add("site-select-chevron");
+          let icon = selectIcon(theme ? select.value : "dashboard");
+          trigger.append(icon, value, chevron);
+          const menu = document.createElement("div");
+          menu.id = select.id + "-options";
+          menu.className = "site-select-menu";
+          menu.setAttribute("role", "listbox");
+          menu.setAttribute("aria-label", name);
+          menu.hidden = true;
+          trigger.setAttribute("aria-controls", menu.id);
+          let active = select.selectedIndex;
+          let typed = "";
+          let lastKeyTime = 0;
+          const items = options.map((option, index) => {
+            const item = document.createElement("div");
+            item.id = select.id + "-option-" + index;
+            item.className = "site-select-option";
+            item.setAttribute("role", "option");
+            if (theme) item.append(selectIcon(option.value));
+            const text = document.createElement("span");
+            text.textContent = option.textContent;
+            const check = selectIcon("check");
+            check.classList.add("site-select-check");
+            item.append(text, check);
+            item.addEventListener("pointermove", () => highlight(index));
+            item.addEventListener("click", () => {
+              active = index;
+              commit();
+            });
+            menu.append(item);
+            return item;
+          });
+          const sync = () => {
+            value.textContent = select.selectedOptions[0].textContent;
+            const nextIcon = selectIcon(theme ? select.value : "dashboard");
+            icon.replaceWith(nextIcon);
+            icon = nextIcon;
+            items.forEach((item, index) => {
+              item.dataset.current = String(index === select.selectedIndex);
+              item.setAttribute("aria-selected", String(index === select.selectedIndex));
+            });
+          };
+          const highlight = (index) => {
+            active = Math.max(0, Math.min(items.length - 1, index));
+            items.forEach((item, i) => {
+              item.dataset.active = String(i === active);
+              item.setAttribute("aria-selected", String(i === active));
+            });
+            trigger.setAttribute("aria-activedescendant", items[active].id);
+            const top = items[active].offsetTop;
+            const bottom = top + items[active].offsetHeight;
+            if (top < menu.scrollTop) menu.scrollTop = top;
+            else if (bottom > menu.scrollTop + menu.clientHeight)
+              menu.scrollTop = bottom - menu.clientHeight;
+          };
+          const close = () => {
+            menu.hidden = true;
+            trigger.setAttribute("aria-expanded", "false");
+            trigger.removeAttribute("aria-activedescendant");
+            typed = "";
+            sync();
+          };
+          const open = () => {
+            menu.hidden = false;
+            trigger.setAttribute("aria-expanded", "true");
+            const rect = trigger.getBoundingClientRect();
+            const below = window.innerHeight - rect.bottom - 16;
+            const above = rect.top - 16;
+            const upwards = below < Math.min(320, menu.scrollHeight) && above > below;
+            menu.dataset.side = upwards ? "above" : "below";
+            menu.style.setProperty("--select-space", Math.max(44, upwards ? above : below) + "px");
+            highlight(select.selectedIndex);
+          };
+          const commit = () => {
+            if (menu.hidden) return;
+            const changed = select.selectedIndex !== active;
+            select.selectedIndex = active;
+            close();
+            if (changed) select.dispatchEvent(new Event("change", { bubbles: true }));
+          };
+          trigger.addEventListener("click", () => {
+            trigger.focus();
+            if (menu.hidden) open();
+            else close();
+          });
+          trigger.addEventListener("keydown", (event) => {
+            if (event.ctrlKey || event.metaKey) return;
+            const { key } = event;
+            const wasOpen = !menu.hidden;
+            if (key === "Tab") {
+              commit();
+              return;
+            }
+            if (key === "Escape") {
+              if (wasOpen) {
+                event.preventDefault();
+                close();
+              }
+              return;
+            }
+            if (key === "Enter" || key === " ") {
+              event.preventDefault();
+              if (wasOpen) commit();
+              else open();
+              return;
+            }
+            const steps = { ArrowDown: 1, ArrowUp: -1, PageDown: 10, PageUp: -10 };
+            if (Object.hasOwn(steps, key) || key === "Home" || key === "End") {
+              event.preventDefault();
+              if (event.altKey && key === "ArrowUp") {
+                commit();
+                return;
+              }
+              if (!wasOpen) open();
+              if (key === "Home") highlight(0);
+              else if (key === "End") highlight(items.length - 1);
+              else if (wasOpen) highlight(active + steps[key]);
+              return;
+            }
+            if (key.length !== 1 || event.altKey) return;
+            event.preventDefault();
+            if (!wasOpen) open();
+            const now = Date.now();
+            typed = now - lastKeyTime > 700 ? key.toLowerCase() : typed + key.toLowerCase();
+            lastKeyTime = now;
+            if (Array.from(typed).every((char) => char === typed[0])) typed = typed[0];
+            for (let offset = typed.length === 1 ? 1 : 0; offset <= items.length; offset++) {
+              const index = (active + offset) % items.length;
+              if (options[index].textContent.toLowerCase().startsWith(typed)) {
+                highlight(index);
+                break;
+              }
+            }
+          });
+          menu.addEventListener("mousedown", (event) => event.preventDefault());
+          trigger.addEventListener("blur", commit);
+          document.addEventListener("pointerdown", (event) => {
+            if (!wrapper.contains(event.target)) commit();
+          });
+          window.addEventListener("resize", close);
+          select.addEventListener("change", sync);
+          select.before(wrapper);
+          wrapper.append(select, trigger, menu);
+          labels.forEach((label) => (label.htmlFor = trigger.id));
+          sync();
+          select.hidden = true;
+        });
         const scenarios = {
           investigate: [
             "“Why is traffic taking the wrong route?”",
