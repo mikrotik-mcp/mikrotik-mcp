@@ -26,24 +26,24 @@
     "publish": "npx @raycast/api@latest publish"
   },
   "dependencies": {
-    "@raycast/api": "^2.2.1",
-    "@raycast/utils": "^2.3.1",
+    "@raycast/api": "^2.8.2",
+    "@raycast/utils": "^2.3.2",
     "@visx/curve": "^4.0.0",
     "@visx/gradient": "^4.0.0",
     "@visx/group": "^4.0.0",
     "@visx/scale": "^4.0.0",
     "@visx/shape": "^4.0.0",
     "raycast-notifier": "^0.1.1",
-    "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^2.2.0",
-    "@types/node": "26.5.0",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "^19.2.7",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "^19.3.0",
     "eslint": "^9.22.0",
-    "prettier": "^3.9.6",
+    "prettier": "^3.9.10",
     "typescript": "^5.9.3"
   },
   "icon": "extension-icon.png",
