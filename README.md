@@ -46,6 +46,8 @@ Then just ask:
 
 ## Highlights
 
+- **Policy verifier:** prove bounded IPv4 filter policies over address/port sets, with counterexamples and explicit Unknown results in Simulator. [Scope and limits](docs/policy-verifier.md).
+
 - **Collector health:** per-exporter freshness, template changes and incomplete-data diagnostics in Flows; see [collector health](docs/collector-health.md).
 
 - **IP Intelligence:** `lookup_ip_intelligence` and Diagnostics → IP Intelligence compare full ipquery/ipkit responses: ASN/organization, location, risk and every additional field, with searchable details and JSON export. Public IPs are sent only on submission; private IPs stay local. [Guide](docs/ip-intelligence.md).

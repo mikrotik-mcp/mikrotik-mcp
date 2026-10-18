@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "verify_filter_policy",
+  "type": "object",
+  "properties": {
+    "config_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200000
+    },
+    "source": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "destination": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "source_ports": {
+      "default": "0-65535",
+      "type": "string",
+      "maxLength": 64
+    },
+    "destination_ports": {
+      "default": "0-65535",
+      "type": "string",
+      "maxLength": 64
+    },
+    "protocol": {
+      "default": "tcp",
+      "type": "string",
+      "enum": ["tcp", "udp"]
+    },
+    "chain": {
+      "default": "forward",
+      "type": "string",
+      "enum": ["input", "forward", "output"]
+    },
+    "in_interface": {
+      "default": "bridge",
+      "type": "string",
+      "maxLength": 128
+    },
+    "out_interface": {
+      "default": "ether1",
+      "type": "string",
+      "maxLength": 128
+    },
+    "connection_state": {
+      "default": "new",
+      "type": "string",
+      "enum": ["new", "established", "related", "invalid"]
+    },
+    "expect": {
+      "default": "drop",
+      "type": "string",
+      "enum": ["accept", "drop", "reject"]
+    }
+  },
+  "required": [
+    "config_text",
+    "source",
+    "destination",
+    "source_ports",
+    "destination_ports",
+    "protocol",
+    "chain",
+    "in_interface",
+    "out_interface",
+    "connection_state",
+    "expect"
+  ],
+  "additionalProperties": false
+}

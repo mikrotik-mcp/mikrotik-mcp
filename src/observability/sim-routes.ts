@@ -20,6 +20,7 @@ import { getConfig } from "../core/runtime";
 import { unreachableRules } from "../sim/firewall";
 import type { SimPacket } from "../sim/firewall";
 import { buildModel } from "../sim/model";
+import { verificationSchema, verifyPolicy } from "../sim/verify";
 import { diffTraces, tracePacket } from "../sim/trace";
 import { listSuites, saveSuite, getSuite } from "../sim/suites";
 import { openSnapshotStore } from "../snapshots/store";
@@ -70,6 +71,13 @@ async function configFor(
 export async function simRoutes(req: Request, url: URL): Promise<Response | null> {
   const p = url.pathname;
   if (!p.startsWith("/api/sim")) return null;
+
+  if (p === "/api/sim/verify" && req.method === "POST") {
+    const parsed = verificationSchema.safeParse(await bodyJson(req));
+    if (!parsed.success)
+      return json({ error: "Provide an export, valid scope and declared packet context." }, 400);
+    return json(verifyPolicy(parsed.data));
+  }
 
   if (p === "/api/sim/suites" && req.method === "GET") {
     return json({ suites: await listSuites() });

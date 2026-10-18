@@ -23,6 +23,7 @@ import type { ToolModule } from "../core/registry";
 import { looksLikeError } from "../core/routeros";
 import { resolveDeviceName } from "../core/runtime";
 import { buildModel } from "../sim/model";
+import { verificationSchema, verifyPolicy } from "../sim/verify";
 import type { SimModel } from "../sim/model";
 import { unreachableRules } from "../sim/firewall";
 import type { SimPacket } from "../sim/firewall";
@@ -133,6 +134,17 @@ const SCOPE_NOTE =
   "path that is out of scope downgrades the verdict to UNKNOWN rather than guessing.";
 
 export const simulateTools: ToolModule = [
+  defineTool({
+    name: "verify_filter_policy",
+    title: "Verify a Filter Policy over Address and Port Sets",
+    annotations: READ,
+    description:
+      "Exhaustively checks IPv4 source/destination ranges and port ranges using equivalence partitions, not sampling. Returns proved, violated with a counterexample and rule trace, or unknown. Supplied static export only; packet fields are at filter-chain entry, AFTER any destination NAT. This is NOT routing/NAT/IPv6/conntrack verification and cannot prove no WAN leak. Unsupported constructs, dynamic lists or >4096 cells fail closed to unknown. No router I/O.",
+    inputSchema: verificationSchema.shape,
+    handler(a) {
+      return JSON.stringify(verifyPolicy(a), null, 2);
+    },
+  }),
   defineTool({
     name: "simulate_packet",
     title: "Simulate a Packet",

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.4.1",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 965,
+  "toolCount": 966,
   "tools": [
     {
       "name": "create_client_check",
@@ -18312,6 +18312,90 @@
           }
         },
         "required": ["dns_name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "verify_filter_policy",
+      "title": "Verify a Filter Policy over Address and Port Sets",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Exhaustively checks IPv4 source/destination ranges and port ranges using equivalence partitions, not sampling. Returns proved, violated with a counterexample and rule trace, or unknown. Supplied static export only; packet fields are at filter-chain entry, AFTER any destination NAT. This is NOT routing/NAT/IPv6/conntrack verification and cannot prove no WAN leak. Unsupported constructs, dynamic lists or >4096 cells fail closed to unknown. No router I/O.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "config_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200000
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "destination": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "source_ports": {
+            "default": "0-65535",
+            "type": "string",
+            "maxLength": 64
+          },
+          "destination_ports": {
+            "default": "0-65535",
+            "type": "string",
+            "maxLength": 64
+          },
+          "protocol": {
+            "default": "tcp",
+            "type": "string",
+            "enum": ["tcp", "udp"]
+          },
+          "chain": {
+            "default": "forward",
+            "type": "string",
+            "enum": ["input", "forward", "output"]
+          },
+          "in_interface": {
+            "default": "bridge",
+            "type": "string",
+            "maxLength": 128
+          },
+          "out_interface": {
+            "default": "ether1",
+            "type": "string",
+            "maxLength": 128
+          },
+          "connection_state": {
+            "default": "new",
+            "type": "string",
+            "enum": ["new", "established", "related", "invalid"]
+          },
+          "expect": {
+            "default": "drop",
+            "type": "string",
+            "enum": ["accept", "drop", "reject"]
+          }
+        },
+        "required": [
+          "config_text",
+          "source",
+          "destination",
+          "source_ports",
+          "destination_ports",
+          "protocol",
+          "chain",
+          "in_interface",
+          "out_interface",
+          "connection_state",
+          "expect"
+        ],
         "additionalProperties": false
       }
     },

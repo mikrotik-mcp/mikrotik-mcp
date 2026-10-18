@@ -1131,7 +1131,13 @@
       "group": "Security",
       "description": "Offline packet simulator: trace a hypothetical packet through NAT, routing and firewall against a config snapshot — no device touched. Reports UNKNOWN rather than guessing when the path crosses something it does not model.",
       "alwaysOn": false,
-      "tools": ["simulate_packet", "simulate_change", "explain_rule_reachability", "simulate_suite"]
+      "tools": [
+        "verify_filter_policy",
+        "simulate_packet",
+        "simulate_change",
+        "explain_rule_reachability",
+        "simulate_suite"
+      ]
     },
     {
       "slug": "policy",
@@ -6842,6 +6848,14 @@
     {
       "name": "request_letsencrypt_certificate",
       "module": "cert-steward",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "verify_filter_policy",
+      "module": "simulator",
       "group": "Security",
       "noDevice": false,
       "requires": null,

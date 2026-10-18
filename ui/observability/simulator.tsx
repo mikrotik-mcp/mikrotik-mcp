@@ -19,6 +19,7 @@ import { Panel, StatCard } from "./atoms";
 import { Badge, Button, Dot, Input, Select } from "./geist";
 import type { GeistType } from "./geist";
 import { toast } from "./toast-action";
+import { PolicyVerifier } from "./policy-verifier";
 import type {
   SimChangePayload,
   SimPacketPayload,
@@ -243,6 +244,7 @@ export function SimulatorView(): ReactNode {
 
   return (
     <div className="space-y-4">
+      <PolicyVerifier />
       <Panel
         title="Packet"
         extra={
