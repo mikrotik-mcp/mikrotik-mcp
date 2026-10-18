@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# Pin the latest stable Bun (checked 2026-10-03); override deliberately at build time.
-ARG BUN_VERSION=1.4.2
+# Match package.json's packageManager; override deliberately at build time.
+ARG BUN_VERSION=1.4.3
 # Build architecture-independent JS natively (avoid running JSC under QEMU).
 FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION}-alpine AS build-base
 WORKDIR /app
