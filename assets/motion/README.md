@@ -12,6 +12,14 @@ This is an **illustrated product tour**, not a screen recording or a redesign of
 - `manifest.json`: timing, format, provenance and covered pages.
 - `chapters.vtt`: chapter track.
 
+## Playback in the project README
+
+The root README uses a GitHub-hosted video attachment URL on its own paragraph for inline playback.
+A repository MP4 link is a file/download link, not an embedded player, and GitHub strips raw HTML
+`<video>` tags. When replacing the film, upload the new MP4 as a GitHub attachment and update that
+standalone URL. Keep the [web player](https://mikrotik-mcp.usestrict.dev/motion/index.html) and
+repository download link as fallbacks; never copy an expiring media redirect URL into the README.
+
 ## Reproduce
 
 From the repository root, with Bun, installed development dependencies and FFmpeg (`libx264`) available:

@@ -46,9 +46,11 @@ Then just ask:
 
 ## Dashboard
 
-[![Watch the MikroTik MCP dashboard film — Your network. One clear picture.](assets/motion/00-intro.png)](assets/motion/dashboard-film.mp4)
+<!-- Keep the GitHub video attachment URL alone in its paragraph so it renders as a player. -->
 
-**[Watch or download the film (MP4)](assets/motion/dashboard-film.mp4)** · 60 seconds · 1080p · No audio
+https://github.com/user-attachments/assets/f6dba72e-60f8-47ef-9045-2e871d92c8f0
+
+**[Watch in browser](https://mikrotik-mcp.usestrict.dev/motion/index.html)** · [Download MP4](assets/motion/dashboard-film.mp4) · 60 seconds · 1080p · No audio
 
 An illustrated tour of all eight dashboard areas, from monitoring and routing to VPN sessions,
 security and recovery. Uses synthetic data, not a live screen recording or private router data.
