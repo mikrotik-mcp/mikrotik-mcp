@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "preview_address_set",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+    },
+    "references": {
+      "default": [],
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "enum": ["filter", "mangle"]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^\\*[0-9A-Fa-f]+$"
+          },
+          "field": {
+            "type": "string",
+            "enum": ["src-address-list", "dst-address-list"]
+          },
+          "expected": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": ["table", "id", "field", "expected"],
+        "additionalProperties": false
+      }
+    },
+    "rollback": {
+      "default": false,
+      "type": "boolean"
+    },
+    "allowLargeChange": {
+      "default": false,
+      "description": "Explicitly acknowledge /0 or coverage changing by more than 50% of the parent",
+      "type": "boolean"
+    }
+  },
+  "required": ["id", "references", "rollback", "allowLargeChange"],
+  "additionalProperties": false
+}

@@ -1002,6 +1002,20 @@
       ]
     },
     {
+      "slug": "address-sets",
+      "label": "Address Sets",
+      "group": "Security",
+      "description": "Versioned CIDR algebra, publication previews and guarded rollback of selected rule references.",
+      "alwaysOn": false,
+      "tools": [
+        "compose_address_set",
+        "list_address_sets",
+        "create_address_set",
+        "preview_address_set",
+        "apply_address_set"
+      ]
+    },
+    {
       "slug": "connected-devices",
       "label": "Connected Devices",
       "group": "Security",
@@ -6280,6 +6294,50 @@
     {
       "name": "disable_address_list_entry",
       "module": "address-list",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "compose_address_set",
+      "module": "address-sets",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "list_address_sets",
+      "module": "address-sets",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "create_address_set",
+      "module": "address-sets",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "preview_address_set",
+      "module": "address-sets",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "apply_address_set",
+      "module": "address-sets",
       "group": "Security",
       "noDevice": false,
       "requires": null,

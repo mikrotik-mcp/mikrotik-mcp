@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "compose_address_set",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$"
+    },
+    "family": {
+      "default": "ipv4",
+      "type": "string",
+      "enum": ["ipv4", "ipv6"]
+    },
+    "operation": {
+      "default": "union",
+      "type": "string",
+      "enum": ["union", "intersection", "difference"]
+    },
+    "left": {
+      "minItems": 1,
+      "maxItems": 2048,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 80
+      }
+    },
+    "right": {
+      "default": [],
+      "maxItems": 2048,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 80
+      }
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Provenance label, not a URL to fetch"
+    },
+    "parent": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+    }
+  },
+  "required": ["name", "family", "operation", "left", "right", "source"],
+  "additionalProperties": false
+}

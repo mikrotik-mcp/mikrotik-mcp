@@ -10,6 +10,7 @@ import { routerMigrationTools } from "./router-migration";
 import { supportBundleTools } from "./support-bundle";
 
 import { addressListTools } from "./address-list";
+import { addressSetTools } from "./address-sets";
 import { connectedDeviceTools } from "./connected-devices";
 import { investigationTools } from "./investigations";
 import { homeInternetTools } from "./home-internet";
@@ -732,6 +733,14 @@ export const moduleCatalog: ModuleInfo[] = [
     group: "Security",
     description: "Firewall address-lists (`/ip firewall address-list`).",
     tools: addressListTools,
+  },
+  {
+    label: "Address Sets",
+    slug: "address-sets",
+    group: "Security",
+    description:
+      "Versioned CIDR algebra, publication previews and guarded rollback of selected rule references.",
+    tools: addressSetTools,
   },
   {
     label: "Connected Devices",

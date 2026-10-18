@@ -20,6 +20,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ServiceProbesSettings } from "./service-probes-settings";
+import { AddressSets } from "./address-sets";
 import { ServiceProbePicker } from "./service-probe-picker";
 import { RoutingDomainFields } from "./service-routing-domain-fields";
 import { RoutingTrafficPanel } from "./service-routing-traffic";
@@ -48,9 +49,13 @@ export function ServiceRoutingView() {
   const [consent, setConsent] = useState(false);
   const [review, setReview] = useState(false);
   const [arming, setArming] = useState(false);
-  const [view, setView] = useState<"router" | "policies">("router");
+  const [view, setView] = useState<"router" | "policies" | "sets">("router");
+  const [addressBusy, setAddressBusy] = useState(false);
   const [inventoryRevision, setInventoryRevision] = useState(0);
-  const routing = useRoutingInventory(w.device, w.busy || creating || review || arming);
+  const routing = useRoutingInventory(
+    w.device,
+    w.busy || creating || review || arming || addressBusy,
+  );
   const inventory = routing.data,
     inventoryError = routing.error;
   const [name, setName] = useState("");
@@ -66,6 +71,7 @@ export function ServiceRoutingView() {
     policy = policies.find((p) => p.id === selected) ?? policies[0];
   const blockers = policy && inventory ? policyBlockers(inventory, policy) : [];
   const changeDevice = (next: string) => {
+    if (addressBusy) return;
     w.setDevice(next);
     setSelected("");
     setReview(false);
@@ -76,11 +82,18 @@ export function ServiceRoutingView() {
   const { busy, refresh } = w;
   useEffect(() => {
     const timer = setInterval(() => {
-      if (!busy && !creating && !review && !arming && document.visibilityState === "visible")
+      if (
+        !busy &&
+        !creating &&
+        !review &&
+        !arming &&
+        !addressBusy &&
+        document.visibilityState === "visible"
+      )
         void refresh();
     }, 30_000);
     return () => clearInterval(timer);
-  }, [busy, refresh, creating, review, arming]);
+  }, [busy, refresh, creating, review, arming, addressBusy]);
   function openCreate() {
     setCreating(true);
     setName("");
@@ -130,7 +143,7 @@ export function ServiceRoutingView() {
         device={w.device}
         devices={w.devices}
         onDevice={changeDevice}
-        busy={w.busy || creating || review || arming}
+        busy={w.busy || creating || review || arming || addressBusy}
         onRefresh={() => {
           setInventoryRevision((n) => n + 1);
           void w.refresh();
@@ -150,6 +163,7 @@ export function ServiceRoutingView() {
       <nav className="routing-mode" aria-label="Service routing workspace">
         <Button
           variant={view === "router" ? "secondary" : "ghost"}
+          disabled={addressBusy}
           aria-pressed={view === "router"}
           onClick={() => setView("router")}
         >
@@ -158,14 +172,30 @@ export function ServiceRoutingView() {
         </Button>
         <Button
           variant={view === "policies" ? "secondary" : "ghost"}
+          disabled={addressBusy}
           aria-pressed={view === "policies"}
           onClick={() => setView("policies")}
         >
           <Route size={16} />
           MCP policies ({policies.length})
         </Button>
+        <Button
+          variant={view === "sets" ? "secondary" : "ghost"}
+          disabled={addressBusy}
+          aria-pressed={view === "sets"}
+          onClick={() => setView("sets")}
+        >
+          Address sets
+        </Button>
       </nav>
-      {view === "router" ? (
+      {view === "sets" ? (
+        <AddressSets
+          key={w.device}
+          device={w.device}
+          inventory={inventory}
+          onBusy={setAddressBusy}
+        />
+      ) : view === "router" ? (
         <RouterRoutingInventory
           key={`${w.device}-${inventoryRevision}`}
           data={inventory}

@@ -46,6 +46,8 @@ Then just ask:
 
 ## Highlights
 
+- **Address sets:** exact IPv4/IPv6 set algebra, immutable revisions and guarded publication/rollback in Service Routing. [Workflow and safety limits](docs/address-sets.md).
+
 - **Policy verifier:** prove bounded IPv4 filter policies over address/port sets, with counterexamples and explicit Unknown results in Simulator. [Scope and limits](docs/policy-verifier.md).
 
 - **Collector health:** per-exporter freshness, template changes and incomplete-data diagnostics in Flows; see [collector health](docs/collector-health.md).

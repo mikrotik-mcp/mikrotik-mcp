@@ -1,11 +1,17 @@
 import { z } from "zod";
 import { createContext } from "../core/context";
 import { serviceRoutingTools } from "../tools/service-routing";
+import { addressSetTools } from "../tools/address-sets";
 import { flightRecorderTools } from "../tools/flight-recorder";
 import { recoveryLabTools } from "../tools/recovery-lab";
 import { readOperationBody, DashboardInputError } from "./bounded-request";
 
 const routing: Record<string, string> = {
+  "GET /api/address-sets": "list_address_sets",
+  "POST /api/address-sets": "create_address_set",
+  "POST /api/address-sets/compose": "compose_address_set",
+  "POST /api/address-sets/preview": "preview_address_set",
+  "POST /api/address-sets/apply": "apply_address_set",
   "GET /api/recovery-lab": "get_recovery_lab",
   "GET /api/recovery-lab/inventory": "recovery_lab_inventory",
   "POST /api/recovery-lab/prepare": "prepare_recovery_lab",
@@ -28,19 +34,30 @@ const routing: Record<string, string> = {
 };
 export async function operationsRoutes(req: Request, url: URL): Promise<Response | null> {
   if (
-    !["/api/service-routing", "/api/flight-recorder", "/api/recovery-lab"].some((p) =>
-      url.pathname.startsWith(p),
-    )
+    ![
+      "/api/address-sets",
+      "/api/service-routing",
+      "/api/flight-recorder",
+      "/api/recovery-lab",
+    ].some((p) => url.pathname.startsWith(p))
   )
     return null;
-  const tool = [...serviceRoutingTools, ...flightRecorderTools, ...recoveryLabTools].find(
-    (t) => t.name === routing[`${req.method} ${url.pathname}`],
-  );
+  const tool = [
+    ...addressSetTools,
+    ...serviceRoutingTools,
+    ...flightRecorderTools,
+    ...recoveryLabTools,
+  ].find((t) => t.name === routing[`${req.method} ${url.pathname}`]);
   if (!tool) return Response.json({ error: "Unsupported workspace operation" }, { status: 405 });
   try {
     const input =
       req.method === "POST"
-        ? JSON.parse(await readOperationBody(req))
+        ? JSON.parse(
+            await readOperationBody(
+              req,
+              url.pathname.startsWith("/api/address-sets") ? 512_000 : 8192,
+            ),
+          )
         : url.pathname === "/api/service-routing/addresses"
           ? {
               family: url.searchParams.get("family"),
