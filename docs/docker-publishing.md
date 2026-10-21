@@ -361,3 +361,25 @@ and [manifest promotion](https://docs.docker.com/reference/cli/docker/buildx/ima
 - Removed the isolated release builder and its approximately 1.844 GB build cache,
   the downloaded release image, temporary BuildKit image and smoke container.
   No global prune, production-volume removal, service restart or router changes.
+
+## 6.6.0 publication record — October 21, 2026
+
+- Application source: release `6.6.0` / `1e9ee80`; MCPB manifest aligned to 6.6.0.
+- Published `alimaster/mikrotik-mcp:6.6.0` and promoted the verified digest to `latest`.
+- Both tags read back as `sha256:7e0d582a7ab1ceac14da9b0f66e9a488fc66e19296cba47c71d3af45aad417a6`.
+- Registry read-back confirmed `linux/amd64` and `linux/arm64`, with attestations.
+- BuildKit registry export stalled; the cached multi-platform build was exported
+  as OCI, loaded into Docker's containerd image store and published successfully
+  through Docker Engine. No application-source workaround was needed.
+- Pulled-digest native ARM64 acceptance passed: Bun 1.4.3, MCP 6.6.0, UID 1000,
+  health, dashboard on 9090, writable synthetic JSON, initialization and 972 tools.
+  Checks used `--network none`, no published ports and no router credentials.
+- Native AMD64 and ARM64 runtime jobs passed for the same source commit in
+  [Docker CI run 39591572327](https://github.com/mikrotik-mcp/mikrotik-mcp/actions/runs/39591572327).
+  The published AMD64 image was not executed locally.
+- Typecheck, lint, 3,091 Vitest tests across 236 files, and the native SQLite
+  observability test (eight assertions) passed. Container UI builds also passed.
+- Removed the isolated release builder and its 1.906 GB cache, smoke container,
+  local release and temporary BuildKit images, and 94 MiB OCI archive/fixtures.
+  Unrelated caches, images, services and data volumes were preserved.
+- No running MCP service was upgraded or restarted; no router settings changed.
