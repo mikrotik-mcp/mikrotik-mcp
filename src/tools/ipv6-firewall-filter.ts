@@ -3,19 +3,10 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import {
-  whereClause,
-  quoteValue,
-  looksLikeError,
-  isEmpty,
-  extractCreatedId,
-  readBackUnavailable,
-  Cmd,
-} from "../core/routeros";
+import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
-
-const isDigits = (s: string): boolean => /^\d+$/.test(s);
+import { executeRuleCreate, readCreatedRule } from "./_create-rule";
 
 const resolveRuleId = ruleResolver("/ipv6 firewall filter");
 
@@ -328,11 +319,9 @@ export const ipv6FirewallFilterTools: ToolModule = [
         .opt("comment", a.comment)
         .flag("disabled", a.disabled)
         .flag("log", a.log)
-        .opt("log-prefix", a.log ? a.log_prefix : undefined)
-        .opt("place-before", a.place_before)
-        .build();
+        .opt("log-prefix", a.log ? a.log_prefix : undefined);
 
-      const result = await executeMikrotikCommand(cmd, ctx);
+      const result = await executeRuleCreate("/ipv6 firewall filter", cmd, ctx, a.place_before);
 
       const trimmed = result.trim();
 
@@ -340,35 +329,7 @@ export const ipv6FirewallFilterTools: ToolModule = [
         return `Failed to create IPv6 firewall filter rule: ${trimmed}`;
       }
 
-      // RouterOS echoes the new rule's .id on success. Read it back by that id
-      // (extracted as a clean token); if the read-back can't return the record,
-      // still report success — the rule was created.
-      const createdId = extractCreatedId(trimmed);
-      if (createdId) {
-        const details = await executeMikrotikCommand(
-          `/ipv6 firewall filter print detail where .id=${createdId}`,
-          ctx,
-        );
-        return readBackUnavailable(details)
-          ? `IPv6 firewall filter rule created (id ${createdId}).`
-          : `IPv6 firewall filter rule created successfully:\n\n${details}`;
-      }
-
-      const count = await executeMikrotikCommand(
-        "/ipv6 firewall filter print detail count-only",
-        ctx,
-      );
-      const c = count.trim();
-      if (isDigits(c) && Number.parseInt(c, 10) > 0) {
-        const details = await executeMikrotikCommand(
-          `/ipv6 firewall filter print detail from=${Number.parseInt(c, 10) - 1}`,
-          ctx,
-        );
-        return readBackUnavailable(details)
-          ? "IPv6 firewall filter rule created successfully."
-          : `IPv6 firewall filter rule created successfully:\n\n${details}`;
-      }
-      return "IPv6 firewall filter rule created successfully.";
+      return readCreatedRule("/ipv6 firewall filter", trimmed, "IPv6 firewall filter rule", ctx);
     },
   }),
 

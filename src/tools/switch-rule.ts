@@ -3,18 +3,9 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import {
-  whereClause,
-  quoteValue,
-  looksLikeError,
-  isEmpty,
-  extractCreatedId,
-  readBackUnavailable,
-  Cmd,
-} from "../core/routeros";
+import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
 import type { ToolContext } from "../core/context";
-
-const isDigits = (s: string): boolean => /^\d+$/.test(s);
+import { executeRuleCreate, readCreatedRule } from "./_create-rule";
 
 interface SwitchRuleArgs {
   rule_id?: string;
@@ -185,10 +176,9 @@ export const switchRuleTools: ToolModule = [
         .bool("mirror", a.mirror)
         .opt("rate", a.rate)
         .opt("comment", a.comment)
-        .flag("disabled", a.disabled)
-        .build();
+        .flag("disabled", a.disabled);
 
-      const result = await executeMikrotikCommand(cmd, ctx);
+      const result = await executeRuleCreate("/interface ethernet switch rule", cmd, ctx);
 
       const trimmed = result.trim();
 
@@ -196,35 +186,7 @@ export const switchRuleTools: ToolModule = [
         return `Failed to add switch rule: ${trimmed}`;
       }
 
-      // RouterOS echoes the new rule's .id on success. Read it back by that id
-      // (extracted as a clean token); if the read-back can't return the record,
-      // still report success — the rule was added.
-      const createdId = extractCreatedId(trimmed);
-      if (createdId) {
-        const details = await executeMikrotikCommand(
-          `/interface ethernet switch rule print detail where .id=${createdId}`,
-          ctx,
-        );
-        return readBackUnavailable(details)
-          ? `Switch rule added (id ${createdId}).`
-          : `Switch rule added successfully:\n\n${details}`;
-      }
-
-      const count = await executeMikrotikCommand(
-        "/interface ethernet switch rule print detail count-only",
-        ctx,
-      );
-      const c = count.trim();
-      if (isDigits(c) && Number.parseInt(c, 10) > 0) {
-        const details = await executeMikrotikCommand(
-          `/interface ethernet switch rule print detail from=${Number.parseInt(c, 10) - 1}`,
-          ctx,
-        );
-        return readBackUnavailable(details)
-          ? "Switch rule added successfully."
-          : `Switch rule added successfully:\n\n${details}`;
-      }
-      return "Switch rule added successfully.";
+      return readCreatedRule("/interface ethernet switch rule", trimmed, "Switch rule", ctx);
     },
   }),
 

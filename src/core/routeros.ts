@@ -204,17 +204,12 @@ export function flattenLiveOutput(text: string): string {
 }
 
 /**
- * Extract the internal `.id` RouterOS echoes after a successful `add`. ROS prints
- * the new item's id — a `*` followed by hex (e.g. `*1A`), or a bare ordinal — but
- * it may append a trailing warning or stray whitespace, so the raw `add` output
- * must NOT be used verbatim as a `print … where .id=<x>` key (a polluted key
- * yields "no such item"). Returns the first id token, or undefined when none.
+ * Extract the internal ID printed by `:put [add …]`, allowing surrounding whitespace
+ * and trailing warnings. Ordinals and IDs mentioned inside warnings are not proof
+ * of creation and must never become a read-back selector.
  */
 export function extractCreatedId(output: string): string | undefined {
-  const star = output.match(/\*[0-9A-Fa-f]+/);
-  if (star) return star[0];
-  const num = output.trim().match(/^\d+$/);
-  return num ? num[0] : undefined;
+  return output.trim().match(/^(\*[0-9A-Fa-f]+)(?=\s|$)/)?.[1];
 }
 
 /**

@@ -9,14 +9,11 @@ import {
   looksLikeError,
   isEmpty,
   placeBeforeError,
-  extractCreatedId,
-  readBackUnavailable,
   Cmd,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
-
-const isDigits = (s: string): boolean => /^\d+$/.test(s);
+import { executeRuleCreate, readCreatedRule } from "./_create-rule";
 
 const resolveNatRuleId = ruleResolver("/ip firewall nat");
 
@@ -356,11 +353,9 @@ export const firewallNatTools: ToolModule = [
         .opt("comment", a.comment)
         .flag("disabled", a.disabled)
         .flag("log", a.log)
-        .opt("log-prefix", a.log ? a.log_prefix : undefined)
-        .opt("place-before", a.place_before)
-        .build();
+        .opt("log-prefix", a.log ? a.log_prefix : undefined);
 
-      const result = await executeMikrotikCommand(cmd, ctx);
+      const result = await executeRuleCreate("/ip firewall nat", cmd, ctx, a.place_before);
 
       const trimmed = result.trim();
 
@@ -370,33 +365,7 @@ export const firewallNatTools: ToolModule = [
         return `Failed to create NAT rule: ${hint ?? trimmed}`;
       }
 
-      // RouterOS echoes the new rule's .id on success. Read it back by that id
-      // (extracted as a clean token); if the read-back can't return the record,
-      // still report success — the rule was created.
-      const createdId = extractCreatedId(trimmed);
-      if (createdId) {
-        const details = await executeMikrotikCommand(
-          `/ip firewall nat print detail where .id=${createdId}`,
-          ctx,
-        );
-        return readBackUnavailable(details)
-          ? `NAT rule created (id ${createdId}).`
-          : `NAT rule created successfully:\n\n${details}`;
-      }
-
-      // No id echoed — verify by fetching the last rule.
-      const count = await executeMikrotikCommand("/ip firewall nat print detail count-only", ctx);
-      const c = count.trim();
-      if (isDigits(c) && Number.parseInt(c, 10) > 0) {
-        const details = await executeMikrotikCommand(
-          `/ip firewall nat print detail from=${Number.parseInt(c, 10) - 1}`,
-          ctx,
-        );
-        return readBackUnavailable(details)
-          ? "NAT rule created successfully."
-          : `NAT rule created successfully:\n\n${details}`;
-      }
-      return "NAT rule created successfully.";
+      return readCreatedRule("/ip firewall nat", trimmed, "NAT rule", ctx);
     },
   }),
 

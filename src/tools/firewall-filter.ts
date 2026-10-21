@@ -17,15 +17,12 @@ import {
   isEmpty,
   placeBeforeError,
   interfaceValueError,
-  extractCreatedId,
-  readBackUnavailable,
   Cmd,
 } from "../core/routeros";
 import { filterDetailBlocks } from "../core/routeros-parse";
 import type { ToolContext } from "../core/context";
 import { listItemIds, ruleResolver } from "./_resolve-rule-id";
-
-const isDigits = (s: string): boolean => /^\d+$/.test(s);
+import { executeRuleCreate, readCreatedRule } from "./_create-rule";
 
 /** Resolve a filter rule identifier (`*1F` or positional row index) to its `.id`. */
 const resolveFilterRuleId = ruleResolver("/ip firewall filter");
@@ -398,11 +395,9 @@ export const firewallFilterTools: ToolModule = [
         .opt("comment", a.comment)
         .flag("disabled", a.disabled)
         .flag("log", a.log)
-        .opt("log-prefix", a.log ? a.log_prefix : undefined)
-        .opt("place-before", a.place_before)
-        .build();
+        .opt("log-prefix", a.log ? a.log_prefix : undefined);
 
-      const result = await executeMikrotikCommand(cmd, ctx);
+      const result = await executeRuleCreate("/ip firewall filter", cmd, ctx, a.place_before);
 
       const trimmed = result.trim();
 
@@ -417,37 +412,7 @@ export const firewallFilterTools: ToolModule = [
         return `Failed to create firewall filter rule: ${hint ?? trimmed}`;
       }
 
-      // RouterOS echoes the new rule's .id on success. Read it back by that id
-      // (extracted as a clean token so a trailing warning can't corrupt the
-      // lookup); if the read-back can't return the record, still report success
-      // — the rule was created.
-      const createdId = extractCreatedId(trimmed);
-      if (createdId) {
-        const details = await executeMikrotikCommand(
-          `/ip firewall filter print detail where .id=${createdId}`,
-          ctx,
-        );
-        return readBackUnavailable(details)
-          ? `Firewall filter rule created (id ${createdId}).`
-          : `Firewall filter rule created successfully:\n\n${details}`;
-      }
-
-      // No id echoed — verify by fetching the last rule.
-      const count = await executeMikrotikCommand(
-        "/ip firewall filter print detail count-only",
-        ctx,
-      );
-      const c = count.trim();
-      if (isDigits(c) && Number.parseInt(c, 10) > 0) {
-        const details = await executeMikrotikCommand(
-          `/ip firewall filter print detail from=${Number.parseInt(c, 10) - 1}`,
-          ctx,
-        );
-        return readBackUnavailable(details)
-          ? "Firewall filter rule created successfully."
-          : `Firewall filter rule created successfully:\n\n${details}`;
-      }
-      return "Firewall filter rule created successfully.";
+      return readCreatedRule("/ip firewall filter", trimmed, "Firewall filter rule", ctx);
     },
   }),
 

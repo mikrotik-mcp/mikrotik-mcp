@@ -131,8 +131,10 @@ describe("extractCreatedId", () => {
     expect(extractCreatedId("*1A\nwarning: rule may lock you out")).toBe("*1A");
     expect(extractCreatedId("  *2b  ")).toBe("*2b");
   });
-  test("accepts a bare ordinal id", () => {
-    expect(extractCreatedId("5")).toBe("5");
+  test("rejects ordinals, partial IDs and IDs mentioned only in warnings", () => {
+    expect(extractCreatedId("5")).toBeUndefined();
+    expect(extractCreatedId("*1Agarbage")).toBeUndefined();
+    expect(extractCreatedId("warning: existing rule *1A")).toBeUndefined();
   });
   test("returns undefined when no id is present", () => {
     expect(extractCreatedId("")).toBeUndefined();
