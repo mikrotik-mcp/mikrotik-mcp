@@ -146,9 +146,9 @@
       "slug": "tool-gateway",
       "label": "Tool Gateway",
       "group": "Discovery & Meta",
-      "description": "Always-discoverable meta-tools that make the whole catalog reachable when the host can't surface a specific tool: search by intent (`find_tools`), inspect a schema (`describe_tool`), and run any tool by name with full validation (`invoke_tool`).",
+      "description": "Always-discoverable meta-tools that make the whole catalog reachable when the host can't surface a specific tool: search by intent (`find_tools`), inspect a schema (`describe_tool`), run any tool by name with full validation (`invoke_tool`), and inspect a saved invocation by ID (`get_tool_call`).",
       "alwaysOn": true,
-      "tools": ["find_tools", "describe_tool", "invoke_tool"]
+      "tools": ["get_tool_call", "find_tools", "describe_tool", "invoke_tool"]
     },
     {
       "slug": "explain",
@@ -2698,6 +2698,18 @@
       "ui": {
         "resourceUri": "ui://mikrotik/investigations.html?v=2",
         "visibility": ["model"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "get_tool_call",
+      "module": "tool-gateway",
+      "group": "Discovery & Meta",
+      "noDevice": true,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
         "automatic": true
       }
     },

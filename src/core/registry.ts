@@ -25,7 +25,8 @@ import type { ToolRequires } from "./capability";
 import { explainUnmet } from "./capability";
 import { getCapabilities, peekCapabilities } from "./capability-cache";
 import { logger } from "../logger";
-import { riskOf } from "../observability/event";
+import { redactAuditText, riskOf } from "../observability/event";
+import type { ToolCallLog } from "../observability/event";
 import { recordToolToMemory } from "../memory/auto-record";
 import { emitAlertEvent } from "../alerts/engine";
 import { isRecording, recordToolCall } from "../observability/recorder";
@@ -180,6 +181,8 @@ export const DANGEROUS: ToolAnnotations = {
 export interface ToolResult {
   text: string;
   structuredContent?: Record<string, unknown>;
+  /** Explicit outcome for evidence readers whose successful output can quote historical errors. */
+  isError?: boolean;
 }
 
 export type HandlerOutput = string | ToolResult;
@@ -394,7 +397,10 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             ),
         };
       }
-      const callback = async (args: Record<string, unknown>): Promise<CallToolResult> => {
+      const execute = async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<CallToolResult> => {
         // Peel injected selectors off before handing args to the handler.
         const { device, reason, ...rest } = args as { device?: unknown; reason?: unknown };
         const deviceName = typeof device === "string" ? device : undefined;
@@ -461,7 +467,6 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           }
         }
 
-        const ctx = createContext(sendLog, deviceName);
         // For state-changing tools on a multi-device server, stamp the result
         // with the exact router this call hit — per-call proof of targeting so
         // the model can trust writes (the live device map is fixed for the
@@ -475,13 +480,10 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
                 return `↳ executed on device: ${t.key}${label}${how} → ${t.target}`;
               })()
             : null;
-        // Observability: capture timing + outcome for the dashboard (no-op when
-        // the dashboard is disabled). Tracked across try/catch, emitted in finally.
+        // Outcome shared with memory and alerting; audit recording also covers the guards above.
         const startedAt = Date.now();
-        let outText = "";
         let isErr = false;
         let errMsg: string | undefined;
-        let hasStructured = false;
         try {
           // Capability guard. Runs regardless of `capabilityGating` — listing
           // behaviour is UX, this is the safety net that turns "bad command
@@ -494,7 +496,6 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
               ctx.error(text);
               isErr = true;
               errMsg = text;
-              outText = text;
               return { content: [{ type: "text", text }], isError: true };
             }
           }
@@ -502,12 +503,15 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           // Normalize: a plain string is just text; an object may also carry
           // `structuredContent` for an MCP App view.
           const out = typeof raw === "string" ? { text: raw } : raw;
-          outText = out.text;
           // Backstop: if a handler returned a raw RouterOS parser error or a
           // flattened "Failed to …:" device-error string, surface it as a real
           // error instead of a success-looking result — so the host and the
           // observability dashboard's status column reflect the failure.
-          if (containsRawParserError(out.text) || indicatesFailure(out.text)) {
+          if (
+            out.isError === true ||
+            (out.isError !== false &&
+              (containsRawParserError(out.text) || indicatesFailure(out.text)))
+          ) {
             ctx.error(`Tool reported a failure: ${out.text.trim()}`);
             isErr = true;
             errMsg = out.text.trim();
@@ -534,7 +538,6 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           // Structured data for the UI view (ignored by text-only hosts).
           if (out.structuredContent) {
             result.structuredContent = out.structuredContent;
-            hasStructured = true;
           }
           const report = auto && reportViewForTool(def.name);
           if (report && out.structuredContent?.__mikrotikView !== "report") {
@@ -558,7 +561,6 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           ctx.error(msg);
           isErr = true;
           errMsg = msg;
-          outText = `Error: ${msg}`;
           return {
             content: [
               { type: "text", text: `Error: ${msg}` },
@@ -567,26 +569,6 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             isError: true,
           };
         } finally {
-          if (isRecording()) {
-            recordToolCall({
-              tool: def.name,
-              title: def.title,
-              risk,
-              device: deviceName,
-              ts: startedAt,
-              durationMs: Date.now() - startedAt,
-              isError: isErr,
-              error: errMsg,
-              args: rest,
-              output: outText,
-              // Stamped by the connector on the context, so this reflects what
-              // actually carried the command rather than what was configured.
-              deviceTransport: ctx.transport,
-              restFallback: ctx.restFallback,
-              hasStructured,
-              reason: typeof reason === "string" ? reason : undefined,
-            });
-          }
           recordToolToMemory({
             tool: def.name,
             device: deviceName,
@@ -606,6 +588,86 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             detail: isErr ? errMsg : undefined,
           });
         }
+      };
+
+      // Assign before guards so rejected and failed invocations remain traceable too.
+      const callback = async (args: Record<string, unknown>): Promise<CallToolResult> => {
+        const id = crypto.randomUUID();
+        const ts = Date.now();
+        const device = typeof args.device === "string" ? args.device : undefined;
+        const recordedDevice = def.noDevice
+          ? undefined
+          : device === undefined
+            ? getConfig().defaultDevice
+            : (tryResolveDeviceName(device) ?? device);
+        const logs: ToolCallLog[] = [];
+        let logSize = 0;
+        let logsTruncated = false;
+        const ctx = createContext(
+          (level, message) => {
+            if (isRecording()) {
+              const safe = redactAuditText(message);
+              if (logs.length < 64 && logSize + safe.length <= 16_384) {
+                logs.push({ offsetMs: Date.now() - ts, level, message: safe });
+                logSize += safe.length;
+              } else logsTruncated = true;
+            }
+            sendLog?.(level, `[${id}] ${message}`);
+          },
+          device,
+          id,
+        );
+        let result: CallToolResult;
+        try {
+          result = await execute(args, ctx);
+        } catch (error) {
+          // Guards can fail before the handler's own catch block.
+          result = {
+            content: [
+              {
+                type: "text",
+                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        const output = result.content
+          .filter((c) => c.type === "text")
+          .map((c) => c.text)
+          .join("\n");
+        const { device: _device, reason, ...input } = args;
+        const recorded = recordToolCall(
+          {
+            tool: def.name,
+            title: def.title,
+            risk,
+            device: recordedDevice,
+            ts,
+            durationMs: Date.now() - ts,
+            isError: result.isError === true,
+            error: result.isError ? output : undefined,
+            args: input,
+            output,
+            hasStructured: result.structuredContent !== undefined,
+            deviceTransport: ctx.transport,
+            restFallback: ctx.restFallback,
+            reason: typeof reason === "string" ? reason : undefined,
+            logs,
+            logsTruncated,
+          },
+          id,
+        );
+        result.content.push({
+          type: "text",
+          text: `Tool call ID: ${id}${recorded ? "" : " (history not saved; recording is disabled or unavailable)"}`,
+        });
+        result._meta = {
+          ...result._meta,
+          "mikrotik/toolCallId": id,
+          "mikrotik/recorded": recorded,
+        };
+        return result;
       };
 
       server.registerTool(

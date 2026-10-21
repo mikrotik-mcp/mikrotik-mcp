@@ -49,7 +49,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { HBars, Panel, StatCard } from "./atoms";
+import { CopyButton, HBars, Panel, StatCard } from "./atoms";
+import { ToolCallLookup } from "./tool-call-lookup";
 import { DEFAULT_FEED_LIMIT, FEED_LIMITS } from "./prefs";
 import { ThemeToggle } from "./theme";
 import { DashboardSidebar, StreamStatus } from "./dashboard-shell";
@@ -1344,6 +1345,7 @@ function App(): ReactNode {
         if (filter.status === "error" && !e.isError) return false;
         if (
           q &&
+          !e.id.toLowerCase().includes(q) &&
           !e.tool.toLowerCase().includes(q) &&
           !e.input.toLowerCase().includes(q) &&
           !e.output.toLowerCase().includes(q) &&
@@ -2032,11 +2034,12 @@ function App(): ReactNode {
                     </span>
                   }
                 >
+                  <ToolCallLookup onFound={setSelected} />
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <Input
                       className="min-w-[180px] flex-1"
                       type="search"
-                      placeholder="Search tool / input / output / error…"
+                      placeholder="Filter by call ID, tool, input or error…"
                       value={filter.q}
                       onChange={(e) => setFilter((f) => ({ ...f, q: e.target.value }))}
                     />
@@ -2160,7 +2163,32 @@ function App(): ReactNode {
                                 />
                               </TableCell>
                               <TableCell className="tabular-nums">{clock(e.ts)}</TableCell>
-                              <TableCell>{e.tool}</TableCell>
+                              <TableCell>
+                                <button
+                                  className="text-left hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    void openDetail(e);
+                                  }}
+                                >
+                                  {e.tool}
+                                </button>
+                                <div
+                                  className="mt-1 flex items-center gap-1 font-mono text-[10px] text-muted-foreground"
+                                  onClick={(ev) => ev.stopPropagation()}
+                                >
+                                  <span title={e.id}>
+                                    ID {e.id.slice(0, 8)}
+                                    {e.id.length > 8 ? "…" : ""}
+                                  </span>
+                                  <CopyButton
+                                    text={e.id}
+                                    icon
+                                    title={`Copy call ID ${e.id}`}
+                                    className="size-5 border-0 bg-transparent"
+                                  />
+                                </div>
+                              </TableCell>
                               <TableCell>
                                 <AnimatedBadge
                                   size="sm"

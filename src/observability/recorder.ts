@@ -18,7 +18,6 @@ let store: EventStore | null = null;
 let capture: CaptureOptions = { captureBody: true, maxBodyBytes: 16_384 };
 let maxEvents = 100_000;
 let transport = "stdio";
-let counter = 0;
 let sinceLastPrune = 0;
 const subscribers = new Set<(e: ToolEvent) => void>();
 
@@ -72,15 +71,19 @@ export function subscriberCount(): number {
  * observability must not break the tool path — so storage/broadcast failures are
  * swallowed (and would surface in logs via the caller, not here).
  */
-export function recordToolCall(raw: Omit<RawCall, "transport">): void {
-  if (!enabled || !store) return;
+export function recordToolCall(raw: Omit<RawCall, "transport">, id = crypto.randomUUID()): boolean {
+  if (!enabled || !store) return false;
   try {
-    const id = `${raw.ts.toString(36)}-${(counter++).toString(36)}`;
     const event = buildEvent({ ...raw, transport }, id, capture);
     store.insert(event);
-    if (++sinceLastPrune >= PRUNE_EVERY) {
-      sinceLastPrune = 0;
-      store.prune(maxEvents);
+    // A maintenance failure must not misreport an already-persisted call as missing.
+    try {
+      if (++sinceLastPrune >= PRUNE_EVERY) {
+        sinceLastPrune = 0;
+        store.prune(maxEvents);
+      }
+    } catch {
+      /* retention can retry on the next batch */
     }
     for (const fn of subscribers) {
       try {
@@ -89,8 +92,10 @@ export function recordToolCall(raw: Omit<RawCall, "transport">): void {
         // a misbehaving subscriber must not stop the others
       }
     }
+    return true;
   } catch {
     // recording is best-effort; never disrupt the tool call
+    return false;
   }
 }
 
@@ -104,6 +109,5 @@ export function shutdownRecorder(): void {
   store = null;
   enabled = false;
   subscribers.clear();
-  counter = 0;
   sinceLastPrune = 0;
 }

@@ -13,13 +13,21 @@
  */
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { redactContainerInput } from "../utils/container-redaction";
+import { redactSecrets } from "../utils/redact-secrets";
+
+/** A bounded diagnostic message, not a complete device-command transcript. */
+export interface ToolCallLog {
+  offsetMs: number;
+  level: "info" | "error";
+  message: string;
+}
 
 /** Coarse risk class derived from a tool's MCP annotations. */
 export type Risk = "READ" | "WRITE" | "WRITE_IDEMPOTENT" | "DESTRUCTIVE" | "DANGEROUS";
 
 /** One recorded tool call: the unit the dashboard streams, stores and charts. */
 export interface ToolEvent {
-  /** Monotonic-ish unique id (epoch-ms + counter), assigned by the recorder. */
+  /** Invocation UUID shared with the MCP response; older records retain their original IDs. */
   id: string;
   /** Epoch milliseconds when the call started. */
   ts: number;
@@ -60,6 +68,11 @@ export interface ToolEvent {
   truncated: boolean;
   /** LLM-provided rationale for dangerous actions (auto-injected audit field). */
   reason?: string;
+  /** Absent on records captured before diagnostic logging was introduced. */
+  logs?: ToolCallLog[];
+  logsTruncated?: boolean;
+  /** Absent on legacy records whose capture settings are unknown. */
+  bodyCaptured?: boolean;
 }
 
 /** Map MCP annotations to a coarse risk class (mirrors the registry presets). */
@@ -71,7 +84,8 @@ export function riskOf(a: ToolAnnotations | undefined): Risk {
 }
 
 /** Keys whose values are secrets and must never be stored verbatim. */
-const SENSITIVE_KEY = /pass|secret|private[-_]?key|passphrase|psk|preshared|token|credential/i;
+const SENSITIVE_KEY =
+  /pass|secret|private[-_]?key|passphrase|psk|preshared|token|credential|authorization|cookie/i;
 /** The marker {@link redact} substitutes for any secret value. */
 export const REDACTED = "«redacted»";
 
@@ -88,7 +102,27 @@ export function redact(value: unknown): unknown {
     }
     return out;
   }
-  return value;
+  return typeof value === "string" ? redactAuditText(value) : value;
+}
+
+/** Redact structured and RouterOS credentials before exposing saved diagnostics. */
+export function redactAuditText(text: string): string {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === "object") return JSON.stringify(redact(parsed));
+  } catch {
+    /* RouterOS output and partial JSON are handled as text below. */
+  }
+  return redactSecrets(text)
+    .replace(
+      /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/g,
+      REDACTED,
+    )
+    .replace(
+      /((?:[\w-]*(?:password|secret|private[-_]?key|preshared[-_]?key|psk|token|credential)[\w-]*)["']?\s*[:=]\s*)("(?:\\[\s\S]|[^"\\])*(?:"|$)|'[^']*(?:'|$)|[^\s,;}]+)/gi,
+      `$1${REDACTED}`,
+    )
+    .replace(/(authorization["']?\s*[:=]\s*["']?(?:bearer|basic)\s+)\S+/gi, `$1${REDACTED}`);
 }
 
 /** Truncate `text` to `maxBytes` (UTF-16 length proxy), flagging if it was cut. */
@@ -129,23 +163,53 @@ export interface RawCall {
   output: string;
   hasStructured: boolean;
   reason?: string;
+  logs?: ToolCallLog[];
+  logsTruncated?: boolean;
 }
 
 /** Build a sanitised {@link ToolEvent} (sans id) from a finished call. */
 export function buildEvent(raw: RawCall, id: string, opts: CaptureOptions): ToolEvent {
-  const outputBytes = raw.output.length;
+  const outputBytes = new TextEncoder().encode(raw.output).length;
   let input = "";
   let output = "";
   let truncated = false;
+  const logs: ToolCallLog[] = [];
+  let logsTruncated = raw.logsTruncated ?? false;
   if (opts.captureBody) {
+    let remaining = Math.min(opts.maxBodyBytes > 0 ? opts.maxBodyBytes : 16_384, 16_384);
+    for (const entry of raw.logs ?? []) {
+      const message = redactAuditText(entry.message);
+      const size = new TextEncoder().encode(message).length;
+      if (logs.length >= 64 || size > remaining) {
+        logsTruncated = true;
+        continue;
+      }
+      logs.push({ ...entry, message });
+      remaining -= size;
+    }
     const args =
       opts.redactInput === false ? raw.args : redact(redactContainerInput(raw.tool, raw.args));
-    const rin = truncate(JSON.stringify(args ?? {}), opts.maxBodyBytes);
+    const inputText = JSON.stringify(args ?? {});
+    const rin = truncate(
+      opts.redactInput === false ? inputText : redactAuditText(inputText),
+      opts.maxBodyBytes,
+    );
+    const historyLookup =
+      raw.tool === "get_tool_call" ||
+      (raw.tool === "invoke_tool" &&
+        raw.args !== null &&
+        typeof raw.args === "object" &&
+        "name" in raw.args &&
+        typeof raw.args.name === "string" &&
+        raw.args.name.trim() === "get_tool_call");
+    // Do not duplicate another device's evidence into a lookup record with a different access scope.
     // Invitation URLs are bearer capabilities even though their field is named clientPath.
     const rout = truncate(
-      raw.tool === "create_client_check"
-        ? "Client check created. Private invitation omitted from activity history."
-        : raw.output,
+      historyLookup && !raw.isError
+        ? "History retrieved. Evidence is not duplicated in lookup history; inspect the requested call_id with get_tool_call to apply current access checks."
+        : raw.tool === "create_client_check"
+          ? "Client check created. Private invitation omitted from activity history."
+          : redactAuditText(raw.output),
       opts.maxBodyBytes,
     );
     input = rin.text;
@@ -161,15 +225,18 @@ export function buildEvent(raw: RawCall, id: string, opts: CaptureOptions): Tool
     device: raw.device,
     transport: raw.transport,
     deviceTransport: raw.deviceTransport,
-    restFallback: raw.restFallback,
+    restFallback: raw.restFallback ? redactAuditText(raw.restFallback) : undefined,
     durationMs: raw.durationMs,
     isError: raw.isError,
-    error: raw.error,
+    error: raw.error ? truncate(redactAuditText(raw.error), opts.maxBodyBytes).text : undefined,
     input,
     output,
     outputBytes,
     hasStructured: raw.hasStructured,
     truncated,
-    reason: raw.reason,
+    reason: raw.reason ? truncate(redactAuditText(raw.reason), opts.maxBodyBytes).text : undefined,
+    bodyCaptured: opts.captureBody,
+    logs: opts.captureBody ? logs : undefined,
+    logsTruncated: opts.captureBody ? logsTruncated : undefined,
   };
 }

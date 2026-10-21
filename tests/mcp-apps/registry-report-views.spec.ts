@@ -47,7 +47,8 @@ describe("new report coverage", () => {
       expect(result.structuredContent).toBe(data);
       if (disabled) {
         expect(config._meta).toBeUndefined();
-        expect(result._meta).toBeUndefined();
+        expect(result._meta?.[REPORT_VIEW_META]).toBeUndefined();
+        expect(result._meta?.["mikrotik/toolCallId"]).toEqual(expect.any(String));
       } else {
         expect(config._meta.ui.resourceUri).toBe(uiViewUri("fabric"));
         expect(result._meta[REPORT_VIEW_META].data).toBe(data);

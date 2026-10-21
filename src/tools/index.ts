@@ -260,7 +260,7 @@ export const moduleCatalog: ModuleInfo[] = [
     description:
       "Always-discoverable meta-tools that make the whole catalog reachable when the host can't " +
       "surface a specific tool: search by intent (`find_tools`), inspect a schema (`describe_tool`), " +
-      "and run any tool by name with full validation (`invoke_tool`).",
+      "run any tool by name with full validation (`invoke_tool`), and inspect a saved invocation by ID (`get_tool_call`).",
     tools: toolGatewayTools,
   },
   {

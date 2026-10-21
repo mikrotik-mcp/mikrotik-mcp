@@ -7,8 +7,11 @@
  * logging notifications, forwarded over the protocol too.
  */
 import { formatLogMessage, logger } from "../logger";
+import { redactAuditText } from "../observability/event";
 
 export interface ToolContext {
+  /** Correlates this invocation with its result and saved activity record. */
+  callId?: string;
   /** Informational progress message. */
   info: (message: string) => void;
   /** Error / failure message. */
@@ -49,16 +52,19 @@ export type SendLog = (level: "info" | "error", message: string) => void;
  * MCP client as logging notifications in addition to the local stderr log.
  * `device` is the target device name selected for this tool call.
  */
-export function createContext(sendLog?: SendLog, device?: string): ToolContext {
+export function createContext(sendLog?: SendLog, device?: string, callId?: string): ToolContext {
   return {
     device,
+    callId,
     info(message: string) {
-      logger.info(message);
-      sendLog?.("info", formatLogMessage(message));
+      const safe = redactAuditText(message);
+      logger.info(callId ? `[${callId}] ${safe}` : safe);
+      sendLog?.("info", formatLogMessage(safe));
     },
     error(message: string) {
-      logger.error(message);
-      sendLog?.("error", formatLogMessage(message));
+      const safe = redactAuditText(message);
+      logger.error(callId ? `[${callId}] ${safe}` : safe);
+      sendLog?.("error", formatLogMessage(safe));
     },
   };
 }

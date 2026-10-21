@@ -422,11 +422,16 @@ of them, across every transport**. Why you'll want it on:
 - 👁️ **Live feed of every call** — tool, inputs, outputs, target device, duration,
   success/error — streaming in over a Bun-native WebSocket (SSE fallback). Filter by
   tool / risk / device / status / free-text, pause & resume, export to CSV or JSON.
+- 🔎 **Trace by call ID** — every registered MCP invocation returns a unique ID.
+  Copy or look it up in Live Feed, or use `get_tool_call({"call_id":"…"})` to inspect
+  saved inputs, outcomes, errors and bounded diagnostic logs without re-running it.
+  Requires dashboard recording for retrieval; [capture and retention details](docs/observability.md#trace-a-tool-call).
 - 📈 **Analytics at a glance** — calls in window, calls/min, error rate, avg / p95 / p99
   latency, distinct tools, output volume; top tools, by-risk and status donuts,
   by-device bars, and a recent-errors panel.
-- 🔒 **Secrets redacted before storage** — any password, private key, PSK or token is
-  replaced with `«redacted»` before anything is stored or streamed. Set
+- 🔒 **Configurable input redaction** — enable `--dashboard-redact-input=true` to mask
+  credential fields before storage (defaults off for local debugging). Known credentials
+  in output/diagnostic logs and MCP history lookups are masked. Set
   `--dashboard-capture-body=false` to keep metadata only.
 - 🕸️ **Devices & connectivity map** — a hub-and-spoke graph of the server to each
   device, coloured by live SSH reachability, with per-device online/offline, latency,
@@ -446,8 +451,9 @@ behind each, guarded blocking), **Schedules** (audit posture over time and what 
 **Simulator**, **Transactions**, **Flows** and **Rollout** — plus **Config Studio** (edit
 the config JSON with autocomplete + safe-apply auto-rollback), a **live topology map** from
 MNDP discovery, a **releases/upgrade** timeline, and a **reload/restart** button. Everything persists to a Bun-native SQLite
-store on your machine — no external database. Binds to loopback (`127.0.0.1`) by default;
-set a bearer token (`--dashboard-token`) to expose it safely.
+store on your machine — no external database. Set `--dashboard-host 127.0.0.1`
+for local-only access (the default bind is `0.0.0.0`); require a bearer token
+(`--dashboard-token`) and a trusted network when exposing history remotely.
 
 <details>
 <summary><b>📸 Every dashboard screen (14 screenshots)</b></summary>

@@ -65,6 +65,26 @@ export function DetailDrawer({
   return (
     <Sheet title={title} onClose={onClose}>
       <div className="grid gap-3">
+        <section
+          className="rounded-lg border border-primary/25 bg-primary/5 p-3"
+          aria-label="Tool call reference"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h2 className={SECTION_LABEL}>Tool call ID</h2>
+            <CopyButton text={event.id} icon title="Copy full call ID" />
+          </div>
+          <code dir="ltr" className="block break-all text-xs text-foreground">
+            {event.id}
+          </code>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <span>Share this ID with your AI to inspect this exact call.</span>
+            <CopyButton
+              text={`get_tool_call(${JSON.stringify({ call_id: event.id })})`}
+              label="Copy MCP lookup"
+              title="Copy MCP lookup"
+            />
+          </div>
+        </section>
         <div className="grid grid-cols-[minmax(120px,0.4fr)_1fr] overflow-hidden rounded-lg border border-border font-mono">
           <div className={KV_K}>title</div>
           <div className={KV_V}>{event.title}</div>
@@ -112,6 +132,13 @@ export function DetailDrawer({
           <div className={KV_K}>structured</div>
           <div className={KV_V}>{event.hasStructured ? "yes (renders an MCP App view)" : "no"}</div>
         </div>
+        {(event.bodyCaptured === false || event.truncated) && (
+          <p className="rounded border border-warning/30 bg-warning/5 p-2 text-xs text-warning">
+            {event.bodyCaptured === false
+              ? "Body capture was disabled for this call. Input, output and diagnostic logs were not saved."
+              : "This record was truncated to the capture limit. Missing text cannot be recovered from history."}
+          </p>
+        )}
         {event.error && (
           <>
             <h2 className={SECTION_LABEL}>ERROR</h2>
@@ -151,6 +178,42 @@ export function DetailDrawer({
         <pre className={cn(BODY_PRE, "text-muted-foreground")}>
           {event.output ? highlightDeviceOutput(event.output) : "—"}
         </pre>
+        <h2 className={SECTION_LABEL}>Diagnostic timeline</h2>
+        <p className="text-[11px] text-muted-foreground">
+          Messages emitted during this call, not independent proof of router state.
+        </p>
+        {event.logs?.length ? (
+          <ol className="m-0 grid max-h-[35vh] gap-0 overflow-auto rounded-lg border border-border p-0 text-xs">
+            {event.logs.map((log, index) => (
+              <li
+                key={index}
+                className="grid grid-cols-[4.5rem_1fr] gap-3 border-b border-border/50 p-3 last:border-0"
+              >
+                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                  +{ms(log.offsetMs)}
+                </span>
+                <pre
+                  className={cn(
+                    "m-0 whitespace-pre-wrap break-words font-mono text-[11px]",
+                    log.level === "error" ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {log.level === "error" ? "Error · " : ""}
+                  {log.message}
+                </pre>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            No diagnostic messages saved for this call.
+          </p>
+        )}
+        {event.logsTruncated && (
+          <p className="text-xs text-warning">
+            Additional diagnostic messages were omitted to keep this record bounded.
+          </p>
+        )}
       </div>
     </Sheet>
   );

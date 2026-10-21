@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_tool_call",
+  "type": "object",
+  "properties": {
+    "call_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "description": "Full Tool call ID (UUID for new calls; legacy activity IDs are also accepted)."
+    }
+  },
+  "required": ["call_id"],
+  "additionalProperties": false
+}

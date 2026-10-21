@@ -75,7 +75,10 @@ describe("container knowledge delivery over real offline MCP protocol", () => {
           arguments: {},
         });
         expect(result.isError).toBeFalsy();
-        expect(result.content).toEqual([{ type: "text", text: getRouterosContainerGuide() }]);
+        expect(result.content).toEqual([
+          { type: "text", text: getRouterosContainerGuide() },
+          { type: "text", text: expect.stringContaining("Tool call ID:") },
+        ]);
         expect(
           (
             await client.callTool({

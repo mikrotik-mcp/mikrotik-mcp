@@ -22,6 +22,9 @@ export interface ToolEvent {
   hasStructured: boolean;
   truncated: boolean;
   reason?: string;
+  logs?: { offsetMs: number; level: "info" | "error"; message: string }[];
+  logsTruncated?: boolean;
+  bodyCaptured?: boolean;
 }
 export interface Bucket {
   t: number;
