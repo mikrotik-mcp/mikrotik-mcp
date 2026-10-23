@@ -79,6 +79,42 @@ function KeyPicker({ value, onSelect }: { value: string; onSelect: (key: SshKeyO
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [version, setVersion] = useState(0);
+  const [showCreate, setShowCreate] = useState(false);
+  const [keyName, setKeyName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [created, setCreated] = useState<SshKeyOption | null>(null);
+  const createInFlight = useRef(false);
+  /** Create on the MCP host, then select only the path in this unsaved device draft. */
+  async function createKey() {
+    if (createInFlight.current) return;
+    createInFlight.current = true;
+    setCreating(true);
+    setCreateError("");
+    try {
+      const result = await postJson<{ key?: SshKeyOption; error?: string }>(
+        "/api/config/ssh-keys",
+        { name: keyName.trim() },
+      );
+      if (!result.key) throw new Error(result.error || "Could not create the key.");
+      const key = result.key;
+      setCreated(key);
+      setQuery("");
+      setError("");
+      setData((current) => ({
+        ...current,
+        keys: [key, ...(current?.keys ?? []).filter((item) => item.path !== key.path)],
+      }));
+      onSelect(key);
+      setShowCreate(false);
+      setKeyName("");
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Could not create the key.");
+    } finally {
+      setCreating(false);
+      createInFlight.current = false;
+    }
+  }
   useEffect(() => {
     const abort = new AbortController();
     void api<{ keys: SshKeyOption[]; warning?: string }>("/api/config/ssh-keys", abort.signal)
@@ -103,23 +139,108 @@ function KeyPicker({ value, onSelect }: { value: string; onSelect: (key: SshKeyO
         <span>
           <Fingerprint size={17} /> Public keys on this MCP host
         </span>
-        <Button
-          size="sm"
-          ghost
-          aria-label="Refresh public keys"
-          onClick={() => {
-            setData(null);
-            setError("");
-            setVersion(version + 1);
-          }}
-        >
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            ghost
+            disabled={creating}
+            aria-expanded={showCreate}
+            onClick={() => {
+              setShowCreate(!showCreate);
+              setCreateError("");
+            }}
+          >
+            <KeyRound size={14} /> Create key
+          </Button>
+          <Button
+            size="sm"
+            ghost
+            aria-label="Refresh public keys"
+            disabled={creating}
+            onClick={() => {
+              setData(null);
+              setError("");
+              setVersion(version + 1);
+            }}
+          >
+            Refresh
+          </Button>
+        </div>
       </div>
       <p>
         Select a public identity to use its companion private-key file. Private key contents never
         leave the server.
       </p>
+      {showCreate && (
+        <div
+          className="space-y-3 rounded-xl border border-border bg-background/60 p-4"
+          aria-label="Create SSH key"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <strong>New SSH identity</strong>
+            <Badge>RSA · 3072 bit</Badge>
+          </div>
+          <Input
+            id="ssh_create_name"
+            label="Key name"
+            value={keyName}
+            onChange={setKeyName}
+            disabled={creating}
+            placeholder="mikrotik_home"
+          />
+          <p className="device-editor__caption">
+            Creates a new key pair in the MCP host’s .ssh folder, without a passphrase for
+            unattended access. Private file permissions are owner-only. Existing files are never
+            replaced. This file remains even if you cancel the device draft.
+          </p>
+          {createError && (
+            <p role="alert" className="text-destructive">
+              {createError}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={creating || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(keyName.trim())}
+              onClick={() => void createKey()}
+            >
+              {creating ? "Generating key…" : "Generate & select key"}
+            </Button>
+            <Button size="sm" ghost disabled={creating} onClick={() => setShowCreate(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+      {created && (
+        <div
+          className="space-y-3 rounded-xl border border-border bg-background/60 p-4"
+          role="status"
+        >
+          <strong className="flex items-center gap-2">
+            <ShieldCheck size={16} /> Public key ready to import
+          </strong>
+          <code className="block break-all text-xs">{created.fingerprint}</code>
+          <textarea
+            aria-label="Generated public key"
+            readOnly
+            value={created.publicKey}
+            rows={3}
+            className="w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-xs"
+          />
+          <CopyButton text={created.publicKey} title="Copy generated public key" />
+          <p className="device-editor__caption">
+            Copy this public key into a file named {created.name}.pub, upload it in WinBox → Files,
+            then import it under System → Users → SSH Keys for your login user. Never upload the
+            private file.
+          </p>
+          <p className="device-editor__caption">
+            Importing a key may disable password SSH login for that user. Keep your existing
+            management session open and test the new key before disconnecting. No router changes
+            have been made here.
+          </p>
+        </div>
+      )}
       {data && data.keys.length > 3 && (
         <Input
           aria-label="Search public keys"
@@ -143,7 +264,7 @@ function KeyPicker({ value, onSelect }: { value: string; onSelect: (key: SshKeyO
             <p>
               {query
                 ? "No matching public keys."
-                : "No public keys found. Add a .pub companion in the server’s .ssh folder, or enter a private-key path below."}
+                : "No public keys yet. Choose Create key above, or enter an existing private-key path below."}
             </p>
           )}
           {keys.map((key) => (

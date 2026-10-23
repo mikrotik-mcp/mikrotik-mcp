@@ -487,6 +487,64 @@ test("quick selection uses companion path, clears higher-priority inline key and
   ).toBe(true);
 });
 
+test("creates and selects a public identity without saving or mutating the router", async () => {
+  await render();
+  await click("Continue");
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    if (
+      typeof args[0] === "string" &&
+      args[0].includes("ssh-keys") &&
+      args[1]?.method === "POST" &&
+      typeof args[1].body === "string"
+    ) {
+      calls.push({ path: args[0], body: JSON.parse(args[1].body) });
+      return Response.json({
+        key: {
+          name: "new_home",
+          path: "/keys/new_home",
+          type: "ssh-rsa",
+          fingerprint: "SHA256:new",
+          publicKey: "ssh-rsa public-new",
+          usable: true,
+        },
+      });
+    }
+    return original(...args);
+  });
+  await click("Create key");
+  expect(button("Generate & select key").disabled).toBe(true);
+  await input("ssh_create_name", "new_home");
+  await click("Generate & select key");
+  expect(document.querySelector<HTMLInputElement>("#f_keyFilename")?.value).toBe("/keys/new_home");
+  expect(
+    document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Generated public key']")
+      ?.value,
+  ).toBe("ssh-rsa public-new");
+  expect(document.body.textContent).toContain("Public key ready to import");
+  expect(calls.filter((c) => c.path.includes("ssh-keys") && c.body)).toEqual([
+    { path: "/api/config/ssh-keys", body: { name: "new_home" } },
+  ]);
+  expect(applied).not.toHaveBeenCalled();
+  expect(saved).not.toHaveBeenCalled();
+});
+
+test("failed key creation preserves the draft and offers a retry", async () => {
+  await render();
+  await click("Continue");
+  vi.mocked(fetch).mockResolvedValue(
+    Response.json({ error: "That key name already exists." }, { status: 400 }),
+  );
+  await click("Create key");
+  await input("ssh_create_name", "taken");
+  await click("Generate & select key");
+  expect(document.body.textContent).toContain("That key name already exists.");
+  expect(document.body.textContent).not.toContain("Public key ready to import");
+  expect(applied).not.toHaveBeenCalled();
+  expect(saved).not.toHaveBeenCalled();
+  expect(button("Generate & select key").disabled).toBe(false);
+});
+
 test("invalid names, ports and .pub paths cannot advance; cancellation never accepts changes", async () => {
   await render();
   await input("dev_name", "branch");
