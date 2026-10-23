@@ -214,7 +214,10 @@ test("upgrading an evidence-aware database creates a portable backup and preserv
     expect(after.facts(BrowseSchema.parse({ scope: "device" })).total).toBe(1);
     expect(after.facts(BrowseSchema.parse({ scope: "shared" })).total).toBe(0);
     after.close();
-    const backupName = readdirSync(directory).find((name) => name.includes(".pre-shared-memory-"))!;
+    // SQLite may leave WAL/SHM sidecars beside the portable backup.
+    const backupName = readdirSync(directory).find(
+      (name) => name.includes(".pre-shared-memory-") && name.endsWith(".bak"),
+    )!;
     expect(backupName).toBeDefined();
     const backup = new Database(join(directory, backupName), { readonly: true });
     expect(backup.query("SELECT content FROM observations").get()).toEqual({
