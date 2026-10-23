@@ -24,7 +24,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -36,7 +36,10 @@ jobs:
         run: bun run test:types
 
       - name: Test
-        run: bun test
+        run: bun run test
+
+      - name: Test Bun-native persistence
+        run: bun run test:bun
 
       - name: Build
         run: bun run build
