@@ -189,6 +189,7 @@ import { subscribeTxn } from "./txn-hub";
 import { alertRoutes } from "./alert-routes";
 import { clientError, errorResponse, logError } from "./http-error";
 import { closeMemoryStore, memoryRoutes } from "./memory-routes";
+import { dashboardSocketLifecycle } from "./websocket-lifecycle";
 
 const SERVER_TAG = "mikrotik-mcp";
 
@@ -2053,6 +2054,7 @@ export async function runDashboard(
       }
     },
     websocket: {
+      ...dashboardSocketLifecycle,
       open(ws: ServerWebSocket<SocketData>) {
         if (ws.data.traffic !== undefined) {
           // Traffic channel: push each broadcast sample for the chosen device.
@@ -2086,9 +2088,6 @@ export async function runDashboard(
       },
       message() {
         // The dashboard is push-only; inbound messages are ignored (keep-alive).
-      },
-      close(ws: ServerWebSocket<SocketData>) {
-        ws.data.unsub?.();
       },
     },
   });
