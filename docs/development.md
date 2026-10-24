@@ -25,7 +25,7 @@ All scripts are defined in `package.json`.
 | `bun run inspect`           | Open the [MCP Inspector](./inspector.md) UI against the dev server. |
 | `bun run inspect:config`    | Inspector UI using `mcp-inspector.config.json`.                     |
 | `bun run inspect:cli`       | Headless `tools/list` via the Inspector (CI smoke test).            |
-| `bun test`                  | Run the test suite with Bun's built-in test runner.                 |
+| `bun run test`              | Run the offline Vitest suite.                                       |
 | `bun run test:types`        | Type-check the whole project (`tsc --noEmit`).                      |
 | `bun run build`             | Bundle to `dist/` with **bunup** and mark the CLI executable.       |
 | `bun run dev`               | `bunup --watch` — rebuild on change.                                |
@@ -49,7 +49,7 @@ Both packages are development dependencies; the Bun server does not require a
 TypeScript compiler at runtime.
 
 Vite+ supplies the Vitest runner. Keep `@vitest/ui` and `@vitest/coverage-v8`
-at the same version as that runner (currently `4.1.11` with Vite+ `0.3.1`),
+at the same version as the installed runner (check `vp test --version`),
 rather than upgrading those plugins independently to the newest major.
 
 MCP App frontends use `ext-apps` 2 with its `@modelcontextprotocol/client` and
@@ -60,7 +60,24 @@ MIME type; the `ext-apps` 2 server helper is typed for SDK 2.
 ```bash
 bun run test        # offline Vitest suite
 bun run test:types  # TypeScript 7: tsc --noEmit
+bun run test:bun    # native SQLite and WebSocket integration tests
+bun run test:coverage       # one-shot V8 report, no watch server
+bun run test:coverage:check # fails unless all four metrics exceed 90%
 ```
+
+Current unit coverage includes all TypeScript under `src/`, including unimported
+files, but temporarily excludes `ui/` at the user's request. It excludes
+declaration-only `.d.ts` files. It does not include the
+separate Raycast extension, maintenance scripts or website assets. Reports are
+written to `coverage/index.html`, `coverage/coverage-summary.json` and
+`coverage/coverage-final.json`. Four workers and a 15-second per-test timeout
+allow for V8 instrumentation overhead; ordinary test settings are unchanged.
+The native Bun integration suite is verified separately, not merged into the
+V8 report: low SQLite implementation coverage here does not mean those native
+tests were skipped. The 90.01% gate is deliberately separate from reporting;
+it currently fails and must not be described as an achieved repository target.
+See [coverage audit](testing/coverage-audit-2026-10-24.md) for the current
+source-only milestone and the earlier, separate combined-scope baseline.
 
 ## Building
 
