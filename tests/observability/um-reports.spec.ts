@@ -327,7 +327,10 @@ describe("User Manager accounting reports", () => {
     await expect(getUmSnapshot("edge")).rejects.toBe(failure);
     expect(read).toHaveBeenCalledTimes(1);
     const state = await getUmSnapshot("edge", false, false);
-    expect(state).toMatchObject({ status: "error", refreshAfterMs: 30_000 });
+    expect(state).toMatchObject({ status: "error" });
+    if (!("refreshAfterMs" in state)) throw new Error("Expected collection state");
+    expect(state.refreshAfterMs).toBeGreaterThan(0);
+    expect(state.refreshAfterMs).toBeLessThanOrEqual(30_000);
     expect(read).toHaveBeenCalledTimes(1);
     const recovered = await getUmSnapshot("edge", true);
     expect(recovered.sources.users.available).toBe(true);

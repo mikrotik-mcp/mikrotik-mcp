@@ -53,3 +53,28 @@ test("key inventory reads validated public companions only, with bounded regular
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("inventory limits candidate work and reports directory failures without exposing filesystem details", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mcp-inventory-limits-"));
+  try {
+    const notDirectory = join(dir, "file");
+    await writeFile(notDirectory, "not a directory");
+    const failed = await listSshKeys([], notDirectory);
+    expect(failed.keys).toEqual([]);
+    expect(failed.warning).toContain("could not read");
+    expect(failed.warning).not.toContain(dir);
+    const bounded = await listSshKeys(
+      Array.from({ length: 101 }, (_, i) => join(dir, `missing-${i}`)),
+      dir,
+    );
+    expect(bounded.keys).toEqual([]);
+    expect(bounded.warning).toContain("first 100");
+    await mkdir(join(dir, "folder.pub"));
+    const configuredDirectory = await listSshKeys([join(dir, "folder")], dir);
+    expect(configuredDirectory.keys).toEqual([]);
+    await writeFile(join(dir, "malformed.pub"), "ssh-rsa AAAA invalid");
+    expect((await listSshKeys([], dir)).keys).toEqual([]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
