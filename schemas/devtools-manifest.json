@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "version": "6.6.0",
+  "version": "6.7.0",
   "modules": [
     {
       "slug": "client-check",
