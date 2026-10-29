@@ -63,7 +63,21 @@ export function openVpnSessionsCommand(): string {
     .raw("where")
     .set("service", "ovpn")
     .build();
-  return `{ :if ([:len [${find}]] > ${SESSION_LIMIT}) do={ :error "OpenVPN session limit exceeded" }; :local rows [:toarray ""]; :foreach row in=[${read}] do={ :set ($row->"uptime") [:tostr ($row->"uptime")]; :set ($row->"session-id") [:tostr ($row->"session-id")]; :set ($rows->[:len $rows]) $row }; :put [:serialize to=json options=json.no-string-conversion value=$rows] }`;
+  return `{ :if ([:len [${find}]] > ${SESSION_LIMIT}) do={ :error "OpenVPN session limit exceeded" }; :local stats [/interface print stats as-value where dynamic=yes]; :local rows [:toarray ""]; :foreach row in=[${read}] do={ :local target ("<ovpn-" . ($row->"name") . ">"); :foreach iface in=$stats do={ :if (($iface->"name") = $target) do={ :set ($row->"rx-byte") ($iface->"rx-byte"); :set ($row->"tx-byte") ($iface->"tx-byte") } }; :set ($row->"uptime") [:tostr ($row->"uptime")]; :set ($row->"session-id") [:tostr ($row->"session-id")]; :set ($rows->[:len $rows]) $row }; :put [:serialize to=json options=json.no-string-conversion value=$rows] }`;
+}
+
+/** Dynamic OpenVPN interface TX/RX counters are client download/upload. */
+export function openVpnClientBytes(tx: unknown, rx: unknown): [number | null, number | null] {
+  if (
+    (typeof tx !== "number" && (typeof tx !== "string" || !/^\d+$/.test(tx))) ||
+    (typeof rx !== "number" && (typeof rx !== "string" || !/^\d+$/.test(rx)))
+  )
+    return [null, null];
+  const download = Number(tx);
+  const upload = Number(rx);
+  return Number.isSafeInteger(download) && Number.isSafeInteger(upload)
+    ? [download, upload]
+    : [null, null];
 }
 
 export function parseOpenVpnSessions(output: string): OpenVpnSession[] {
@@ -80,6 +94,9 @@ export function parseOpenVpnSessions(output: string): OpenVpnSession[] {
   if (!Array.isArray(rows) || rows.length > SESSION_LIMIT)
     throw new Error("Invalid OpenVPN session snapshot.");
   const ids = new Set<string>();
+  const names = rows.map((row) =>
+    row && typeof row === "object" ? (row as Record<string, unknown>).name : undefined,
+  );
   return rows.map((row: unknown) => {
     const r = z
       .object({
@@ -92,11 +109,18 @@ export function parseOpenVpnSessions(output: string): OpenVpnSession[] {
         uptime: z.string().default(""),
         encoding: z.string().default(""),
         radius: z.union([z.boolean(), z.string()]).optional(),
+        "tx-byte": z.union([z.number(), z.string()]).optional(),
+        "rx-byte": z.union([z.number(), z.string()]).optional(),
       })
       .parse(row);
     if (ids.has(r[".id"]))
       throw new Error("Duplicate OpenVPN session identifier; refresh required.");
     ids.add(r[".id"]);
+    // RouterOS dynamic interface names are per username; two simultaneous logins cannot be attributed safely.
+    const [downloadBytes, uploadBytes] =
+      names.filter((name) => name === r.name).length === 1
+        ? openVpnClientBytes(r["tx-byte"], r["rx-byte"])
+        : [null, null];
     return {
       id: r[".id"],
       name: r.name,
@@ -107,6 +131,8 @@ export function parseOpenVpnSessions(output: string): OpenVpnSession[] {
       radius: r.radius === true || r.radius === "yes" || r.radius === "true",
       uptime: r.uptime,
       uptimeSeconds: openVpnUptime(r.uptime),
+      downloadBytes,
+      uploadBytes,
     };
   });
 }

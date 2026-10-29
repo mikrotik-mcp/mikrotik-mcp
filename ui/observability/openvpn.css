@@ -355,10 +355,40 @@
 }
 .ovpn-session {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) minmax(220px, 1.7fr) minmax(145px, 1fr) auto;
+  grid-template-columns: minmax(125px, 1fr) minmax(185px, 1.5fr) minmax(120px, 0.9fr) minmax(
+      180px,
+      1.2fr
+    ) auto;
   align-items: center;
   gap: 1rem;
   padding: 1.3rem;
+}
+.ovpn-traffic {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.ovpn-traffic div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.ovpn-traffic small {
+  color: var(--muted-foreground);
+  font-size: 0.65rem;
+}
+.ovpn-traffic strong {
+  color: var(--foreground);
+  font: 0.8rem var(--font-mono, monospace);
+}
+.ovpn-traffic span {
+  color: var(--primary);
+  font: 0.65rem var(--font-mono, monospace);
 }
 .ovpn-session + .ovpn-session {
   border-top: 1px solid var(--border);
@@ -540,6 +570,9 @@
 @media (max-width: 1200px) {
   .ovpn-session {
     grid-template-columns: 1fr 1.4fr;
+  }
+  .ovpn-traffic {
+    grid-column: 1 / -1;
   }
   .ovpn-disconnect {
     justify-self: end;

@@ -9,6 +9,11 @@ export interface OpenVpnSession {
   radius: boolean;
   uptime: string;
   uptimeSeconds: number | null;
+  /** From the client's perspective; null means RouterOS did not report a safe counter. */
+  downloadBytes?: number | null;
+  uploadBytes?: number | null;
+  downloadBytesPerSecond?: number | null;
+  uploadBytesPerSecond?: number | null;
   disconnectToken?: string;
   /** Dashboard-only enrichment of callerId; never inferred from the tunnel address. */
   sourceGeo?: {
@@ -24,6 +29,30 @@ export interface OpenVpnSnapshot {
   observedAt: number;
   sessions: OpenVpnSession[];
   canDisconnect: boolean;
+}
+
+/** Return a rate only when both observations belong to the same uninterrupted session. */
+export function openVpnTrafficRate(
+  current: OpenVpnSession,
+  previous: OpenVpnSession | undefined,
+  seconds: number,
+  key: "downloadBytes" | "uploadBytes",
+): number | null {
+  if (
+    !previous ||
+    current.id !== previous.id ||
+    current.sessionId !== previous.sessionId ||
+    current.name !== previous.name ||
+    current.uptimeSeconds === null ||
+    previous.uptimeSeconds === null ||
+    current.uptimeSeconds < previous.uptimeSeconds ||
+    seconds <= 0 ||
+    current[key] == null ||
+    previous[key] == null ||
+    current[key] < previous[key]
+  )
+    return null;
+  return (current[key] - previous[key]) / seconds;
 }
 
 /** RouterOS :tostr time supports unit and clock forms; unknown values are not zero. */

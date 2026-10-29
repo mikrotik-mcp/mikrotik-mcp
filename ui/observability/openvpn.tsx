@@ -32,10 +32,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { api, postJson, withToken } from "./api";
 import { WorkspaceError } from "./operations-ui";
-import { connectionDuration } from "../../src/core/openvpn-sessions-model";
+import { connectionDuration, openVpnTrafficRate } from "../../src/core/openvpn-sessions-model";
 import type { OpenVpnSession, OpenVpnSnapshot } from "../../src/core/openvpn-sessions-model";
 import "./openvpn.css";
 import { OpenVpnHistory } from "./openvpn-history";
+import { bytes } from "./format";
 
 function ClientSource({ session }: { session: OpenVpnSession }) {
   const geo = session.sourceGeo;
@@ -215,6 +216,7 @@ export function OpenVpnConnections({ device }: { device: string }) {
   const [now, setNow] = useState(Date.now);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<OpenVpnSession>();
+  const sampleRef = useRef<{ data: OpenVpnSnapshot; receivedAt: number } | undefined>(undefined);
   const [confirmed, setConfirmed] = useState(false);
   const alive = useRef(true);
   const sending = useRef(false);
@@ -239,6 +241,32 @@ export function OpenVpnConnections({ device }: { device: string }) {
             AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]),
           );
           if (!abort.signal.aborted) {
+            const previous = sampleRef.current;
+            const interval =
+              previous?.data.device === data.device
+                ? (data.observedAt - previous.data.observedAt) / 1000
+                : 0;
+            for (const session of data.sessions) {
+              const earlier = previous?.data.sessions.find(
+                (item) =>
+                  item.id === session.id &&
+                  item.sessionId === session.sessionId &&
+                  item.name === session.name,
+              );
+              session.downloadBytesPerSecond = openVpnTrafficRate(
+                session,
+                earlier,
+                interval,
+                "downloadBytes",
+              );
+              session.uploadBytesPerSecond = openVpnTrafficRate(
+                session,
+                earlier,
+                interval,
+                "uploadBytes",
+              );
+            }
+            sampleRef.current = { data, receivedAt: Date.now() };
             setSample({ data, receivedAt: Date.now() });
             setError("");
             setNow(Date.now());
@@ -442,6 +470,30 @@ export function OpenVpnConnections({ device }: { device: string }) {
                   )}
                 </strong>
                 <span>{session.encoding || "Encoding not reported"}</span>
+              </div>
+              <div className="ovpn-traffic" aria-label={`${session.name} session traffic`}>
+                <div>
+                  <small>↓ Downloaded</small>
+                  <strong>
+                    {session.downloadBytes == null ? "Unavailable" : bytes(session.downloadBytes)}
+                  </strong>
+                  <span>
+                    {session.downloadBytesPerSecond == null
+                      ? "Measuring…"
+                      : `${bytes(session.downloadBytesPerSecond)}/s`}
+                  </span>
+                </div>
+                <div>
+                  <small>↑ Uploaded</small>
+                  <strong>
+                    {session.uploadBytes == null ? "Unavailable" : bytes(session.uploadBytes)}
+                  </strong>
+                  <span>
+                    {session.uploadBytesPerSecond == null
+                      ? "Measuring…"
+                      : `${bytes(session.uploadBytesPerSecond)}/s`}
+                  </span>
+                </div>
               </div>
               <Button
                 variant="outline"

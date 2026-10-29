@@ -1,10 +1,15 @@
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import { createContext } from "../src/core/context";
-import { connectionDuration, openVpnUptime } from "../src/core/openvpn-sessions-model";
+import {
+  connectionDuration,
+  openVpnTrafficRate,
+  openVpnUptime,
+} from "../src/core/openvpn-sessions-model";
 import {
   disconnectOpenVpnSession,
   listOpenVpnSessions,
   parseOpenVpnSessions,
+  openVpnClientBytes,
   openVpnSessionsCommand,
   disconnectOpenVpnCommand,
 } from "../src/core/openvpn-sessions";
@@ -78,6 +83,9 @@ test("reads only ovpn, projects no secrets and stringifies time and numeric sess
   expect(command).toContain("service=ovpn");
   expect(command).toContain("json.no-string-conversion");
   expect(command).toContain('[:tostr ($row->"uptime")]');
+  expect(command).toContain("stats as-value");
+  expect(command).toContain("/interface print stats as-value where dynamic=yes");
+  expect(command).toContain('($iface->"tx-byte")');
   expect(command).not.toContain("/ppp secret");
   expect(command).not.toContain("count-only");
   expect(command).not.toContain(".proplist");
@@ -88,6 +96,37 @@ test("reads only ovpn, projects no secrets and stringifies time and numeric sess
     uptimeSeconds: 93784,
   });
   expect(parseOpenVpnSessions("[]")).toEqual([]);
+});
+test("maps per-session RouterOS TX/RX counters to client download/upload", () => {
+  expect(openVpnClientBytes(2048, 1024)).toEqual([2048, 1024]);
+  expect(
+    parseOpenVpnSessions(JSON.stringify([{ ...row, "tx-byte": 2048, "rx-byte": 1024 }]))[0],
+  ).toMatchObject({
+    downloadBytes: 2048,
+    uploadBytes: 1024,
+  });
+  expect(openVpnClientBytes("unavailable", 1)).toEqual([null, null]);
+  expect(openVpnClientBytes(9007199254740992, 1)).toEqual([null, null]);
+  expect(
+    parseOpenVpnSessions(
+      JSON.stringify([
+        { ...row, "tx-byte": 2048, "rx-byte": 1024 },
+        { ...row, ".id": "*B1", "session-id": "other", "tx-byte": 2048, "rx-byte": 1024 },
+      ]),
+    )[0].downloadBytes,
+  ).toBeNull();
+});
+test("calculates traffic rate only across increasing counters in the same live session", () => {
+  const first = parseOpenVpnSessions(
+    JSON.stringify([{ ...row, "tx-byte": 2048, "rx-byte": 1024 }]),
+  )[0];
+  const next = parseOpenVpnSessions(
+    JSON.stringify([{ ...row, uptime: "1d02:03:09", "tx-byte": 4096, "rx-byte": 1536 }]),
+  )[0];
+  expect(openVpnTrafficRate(next, first, 5, "downloadBytes")).toBe(409.6);
+  expect(openVpnTrafficRate(next, first, 5, "uploadBytes")).toBe(102.4);
+  expect(openVpnTrafficRate({ ...next, sessionId: "new" }, first, 5, "downloadBytes")).toBeNull();
+  expect(openVpnTrafficRate({ ...next, downloadBytes: 1 }, first, 5, "downloadBytes")).toBeNull();
 });
 test.each([
   "",
