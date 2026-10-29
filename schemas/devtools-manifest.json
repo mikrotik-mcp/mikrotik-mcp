@@ -811,6 +811,8 @@
       "description": "BGP connections, templates, sessions and advertisements (`/routing bgp`).",
       "alwaysOn": false,
       "tools": [
+        "list_bgp_instances",
+        "update_bgp_instance_med_comparison",
         "list_bgp_connections",
         "get_bgp_connection",
         "add_bgp_connection",
@@ -5450,6 +5452,26 @@
         "visibility": ["model", "app"],
         "automatic": true
       }
+    },
+    {
+      "name": "list_bgp_instances",
+      "module": "routing-bgp",
+      "group": "Dynamic Routing",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "update_bgp_instance_med_comparison",
+      "module": "routing-bgp",
+      "group": "Dynamic Routing",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
     },
     {
       "name": "list_bgp_connections",
