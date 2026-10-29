@@ -37,6 +37,10 @@ export const dhcpTools: ToolModule = [
           "Add dynamic ARP entry for each lease (use with reply-only ARP on the interface)",
         ),
       always_broadcast: z.boolean().optional().describe("Always send replies as broadcast"),
+      ipv6_only_preferred: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ advertise DHCP option 108 for IPv6-only preferred clients"),
       bootp_support: z
         .enum(["none", "static", "dynamic"])
         .optional()
@@ -70,6 +74,7 @@ export const dhcpTools: ToolModule = [
         .opt("delay-threshold", a.delay_threshold)
         .bool("add-arp", a.add_arp)
         .bool("always-broadcast", a.always_broadcast)
+        .bool("ipv6-only-preferred", a.ipv6_only_preferred)
         .opt("bootp-support", a.bootp_support)
         .bool("conflict-detection", a.conflict_detection)
         .opt("use-radius", a.use_radius)

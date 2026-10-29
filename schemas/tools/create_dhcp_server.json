@@ -37,6 +37,10 @@
       "description": "Always send replies as broadcast",
       "type": "boolean"
     },
+    "ipv6_only_preferred": {
+      "description": "RouterOS 7.25+ advertise DHCP option 108 for IPv6-only preferred clients",
+      "type": "boolean"
+    },
     "bootp_support": {
       "description": "Which BOOTP requests to answer",
       "type": "string",

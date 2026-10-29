@@ -24,6 +24,14 @@
     "rapid_commit": {
       "type": "boolean"
     },
+    "add_dns_entries": {
+      "description": "RouterOS 7.25+ create AAAA DNS entries for client FQDNs",
+      "type": "boolean"
+    },
+    "add_dns_entries_suffix": {
+      "description": "Suffix for dynamically created DHCPv6 DNS entries",
+      "type": "string"
+    },
     "preference": {
       "type": "integer",
       "minimum": 0,

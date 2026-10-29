@@ -34,6 +34,10 @@ export const vlanTools: ToolModule = [
       comment: z.string().optional(),
       disabled: z.boolean().default(false),
       mtu: z.number().int().optional(),
+      forced_mac_address: z
+        .string()
+        .optional()
+        .describe("RouterOS 7.25+ forced VLAN interface MAC address"),
       use_service_tag: z.boolean().default(false).describe("Use 802.1ad service tag (QinQ)"),
       arp: ArpMode.default("enabled"),
       arp_timeout: z.string().optional(),
@@ -58,6 +62,7 @@ export const vlanTools: ToolModule = [
         .opt("comment", a.comment)
         .flag("disabled", a.disabled)
         .opt("mtu", a.mtu)
+        .opt("forced-mac-address", a.forced_mac_address)
         .flag("use-service-tag", a.use_service_tag)
         .raw(a.arp !== "enabled" ? `arp=${a.arp}` : null)
         .opt("arp-timeout", a.arp_timeout)
@@ -152,6 +157,10 @@ export const vlanTools: ToolModule = [
       comment: z.string().optional(),
       disabled: z.boolean().optional(),
       mtu: z.number().int().optional(),
+      forced_mac_address: z
+        .string()
+        .optional()
+        .describe("RouterOS 7.25+ forced VLAN interface MAC address"),
       use_service_tag: z.boolean().optional(),
       arp: ArpMode.optional(),
       arp_timeout: z.string().optional(),
@@ -174,6 +183,7 @@ export const vlanTools: ToolModule = [
         .opt("comment", a.comment)
         .bool("disabled", a.disabled)
         .opt("mtu", a.mtu)
+        .opt("forced-mac-address", a.forced_mac_address)
         .bool("use-service-tag", a.use_service_tag)
         .opt("arp", a.arp)
         .opt("arp-timeout", a.arp_timeout)

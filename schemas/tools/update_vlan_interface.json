@@ -31,6 +31,10 @@
       "minimum": -9007199254740991,
       "maximum": 9007199254740991
     },
+    "forced_mac_address": {
+      "description": "RouterOS 7.25+ forced VLAN interface MAC address",
+      "type": "string"
+    },
     "use_service_tag": {
       "type": "boolean"
     },

@@ -30,6 +30,14 @@ export const ipv6DhcpServerTools: ToolModule = [
       lease_time: z.string().default("3d").describe("Lease duration e.g. '1d', '12h', '30m'"),
       binding_script: z.string().optional(),
       rapid_commit: z.boolean().optional(),
+      add_dns_entries: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ create AAAA DNS entries for client FQDNs"),
+      add_dns_entries_suffix: z
+        .string()
+        .optional()
+        .describe("Suffix for dynamically created DHCPv6 DNS entries"),
       preference: z.number().int().min(0).max(255).optional(),
       route_distance: z.number().int().optional(),
       use_radius: z.boolean().optional().describe("Authenticate clients via RADIUS"),
@@ -54,6 +62,8 @@ export const ipv6DhcpServerTools: ToolModule = [
         .set("lease-time", a.lease_time)
         .opt("binding-script", a.binding_script)
         .bool("rapid-commit", a.rapid_commit)
+        .bool("add-dns-entries", a.add_dns_entries)
+        .opt("add-dns-entries-suffix", a.add_dns_entries_suffix)
         .opt("preference", a.preference)
         .opt("route-distance", a.route_distance)
         .bool("use-radius", a.use_radius)
