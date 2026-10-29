@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "add_web_proxy_access_rule",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["allow", "deny"]
+    },
+    "src_address": {
+      "type": "string"
+    },
+    "dst_address": {
+      "type": "string"
+    },
+    "comment": {
+      "type": "string"
+    },
+    "place_before": {
+      "type": "string"
+    }
+  },
+  "required": ["action"],
+  "additionalProperties": false
+}

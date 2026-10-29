@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "update_web_proxy",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "src_address": {
+      "type": "string"
+    },
+    "anonymous": {
+      "type": "boolean"
+    },
+    "max_cache_size": {
+      "type": "string"
+    },
+    "confirm_firewall_ready": {
+      "description": "Required when enabling: IPv4 and IPv6 input firewall access has been verified.",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

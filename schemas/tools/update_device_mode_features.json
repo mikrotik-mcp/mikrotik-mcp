@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "update_device_mode_features",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "description": "Changes the entire mode and resets prior per-feature overrides; include any overrides to keep in this request.",
+      "type": "string",
+      "enum": ["home", "basic", "advanced", "rose"]
+    },
+    "scheduler": {
+      "type": "boolean"
+    },
+    "socks": {
+      "type": "boolean"
+    },
+    "fetch": {
+      "type": "boolean"
+    },
+    "pptp": {
+      "type": "boolean"
+    },
+    "l2tp": {
+      "type": "boolean"
+    },
+    "bandwidth_test": {
+      "type": "boolean"
+    },
+    "traffic_gen": {
+      "type": "boolean"
+    },
+    "sniffer": {
+      "type": "boolean"
+    },
+    "ipsec": {
+      "type": "boolean"
+    },
+    "romon": {
+      "type": "boolean"
+    },
+    "proxy": {
+      "type": "boolean"
+    },
+    "hotspot": {
+      "type": "boolean"
+    },
+    "smb": {
+      "type": "boolean"
+    },
+    "email": {
+      "type": "boolean"
+    },
+    "zerotier": {
+      "type": "boolean"
+    },
+    "container": {
+      "type": "boolean"
+    },
+    "install_any_version": {
+      "type": "boolean"
+    },
+    "partitions": {
+      "type": "boolean"
+    },
+    "routerboard": {
+      "type": "boolean"
+    },
+    "activation_timeout": {
+      "description": "Physical confirmation window, 10 seconds to 1 day (RouterOS duration, e.g. 5m or 00:05:00).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20
+    },
+    "flagging_enabled": {
+      "type": "boolean"
+    },
+    "flagged": {
+      "description": "Set false only after a security audit of the router configuration.",
+      "type": "boolean"
+    },
+    "confirm_mode_resets_overrides": {
+      "description": "Required with mode: existing per-feature overrides will be reset unless included in this request.",
+      "type": "boolean",
+      "const": true
+    },
+    "confirm_flagged_audit_complete": {
+      "description": "Required to clear flagged after auditing configuration, passwords, and RouterOS version.",
+      "type": "boolean",
+      "const": true
+    },
+    "physical_confirmation_available": {
+      "type": "boolean",
+      "const": true,
+      "description": "Operator is physically present and has authorized the device-mode change."
+    }
+  },
+  "required": ["physical_confirmation_available"],
+  "additionalProperties": false
+}

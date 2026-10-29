@@ -31,6 +31,7 @@ import { complianceAuditTools } from "./compliance-audit";
 import { configDriftTools } from "./config-drift";
 import { configSnapshotTools } from "./config-snapshot";
 import { deviceTools } from "./devices";
+import { deviceModeTools } from "./device-mode";
 import { dhcpTools } from "./dhcp";
 import { hotspotBuilderTools } from "./hotspot-builder";
 import { containerTools } from "./container";
@@ -57,6 +58,7 @@ import { interfaceTools } from "./interfaces";
 import { ipAddressTools } from "./ip-address";
 import { ipPoolTools } from "./ip-pool";
 import { ipServiceTools } from "./ip-service";
+import { webProxyTools } from "./web-proxy";
 import { ipSshTools } from "./ip-ssh";
 import { ipCloudTools } from "./ip-cloud";
 import { ipDhcpClientTools } from "./ip-dhcp-client";
@@ -704,6 +706,14 @@ export const moduleCatalog: ModuleInfo[] = [
     tools: firewallFilterTools,
   },
   {
+    label: "Web Proxy",
+    slug: "web-proxy",
+    group: "Security",
+    description:
+      "HTTP/HTTPS CONNECT proxy settings, live status and ordered access rules (`/ip proxy`).",
+    tools: webProxyTools,
+  },
+  {
     label: "Firewall — NAT",
     slug: "firewall-nat",
     group: "Security",
@@ -1038,6 +1048,13 @@ export const moduleCatalog: ModuleInfo[] = [
     group: "System & Ops",
     description: "Identity, resources, health, clock/NTP, packages, reboot/shutdown.",
     tools: systemTools,
+  },
+  {
+    label: "Device Mode",
+    slug: "device-mode",
+    group: "System & Ops",
+    description: "Read device-mode capabilities and request physically confirmed feature changes.",
+    tools: deviceModeTools,
   },
   {
     label: "System Config",

@@ -945,6 +945,22 @@
       ]
     },
     {
+      "slug": "web-proxy",
+      "label": "Web Proxy",
+      "group": "Security",
+      "description": "HTTP/HTTPS CONNECT proxy settings, live status and ordered access rules (`/ip proxy`).",
+      "alwaysOn": false,
+      "tools": [
+        "get_web_proxy",
+        "update_web_proxy",
+        "monitor_web_proxy",
+        "list_web_proxy_access_rules",
+        "add_web_proxy_access_rule",
+        "remove_web_proxy_access_rule",
+        "move_web_proxy_access_rule"
+      ]
+    },
+    {
       "slug": "firewall-nat",
       "label": "Firewall — NAT",
       "group": "Security",
@@ -1570,6 +1586,14 @@
         "reboot_system",
         "shutdown_system"
       ]
+    },
+    {
+      "slug": "device-mode",
+      "label": "Device Mode",
+      "group": "System & Ops",
+      "description": "Read device-mode capabilities and request physically confirmed feature changes.",
+      "alwaysOn": false,
+      "tools": ["get_device_mode", "update_device_mode_features"]
     },
     {
       "slug": "system-config",
@@ -6104,6 +6128,70 @@
       "ui": null
     },
     {
+      "name": "get_web_proxy",
+      "module": "web-proxy",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "update_web_proxy",
+      "module": "web-proxy",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "monitor_web_proxy",
+      "module": "web-proxy",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "list_web_proxy_access_rules",
+      "module": "web-proxy",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "add_web_proxy_access_rule",
+      "module": "web-proxy",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "remove_web_proxy_access_rule",
+      "module": "web-proxy",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "move_web_proxy_access_rule",
+      "module": "web-proxy",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
       "name": "create_nat_rule",
       "module": "firewall-nat",
       "group": "Security",
@@ -9104,6 +9192,26 @@
     {
       "name": "shutdown_system",
       "module": "system",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "get_device_mode",
+      "module": "device-mode",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "update_device_mode_features",
+      "module": "device-mode",
       "group": "System & Ops",
       "noDevice": false,
       "requires": null,

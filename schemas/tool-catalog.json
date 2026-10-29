@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.7.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 972,
+  "toolCount": 981,
   "tools": [
     {
       "name": "create_client_check",
@@ -15212,6 +15212,178 @@
       }
     },
     {
+      "name": "get_web_proxy",
+      "title": "Get Web Proxy Settings",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read RouterOS `/ip proxy` settings, including enabled, port, outgoing source and cache.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_web_proxy",
+      "title": "Update Web Proxy Settings",
+      "risk": "dangerous",
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "description": "Configure RouterOS `/ip proxy`. Enabling a listener does not restrict who may connect: configure IPv4/IPv6 input firewall rules and inspect web proxy access rules first. The outgoing src_address can select existing source-based policy routing; verify the route and NAT separately.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "src_address": {
+            "type": "string"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "max_cache_size": {
+            "type": "string"
+          },
+          "confirm_firewall_ready": {
+            "description": "Required when enabling: IPv4 and IPv6 input firewall access has been verified.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "monitor_web_proxy",
+      "title": "Monitor Web Proxy",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read one `/ip proxy monitor once` sample, including connection and request counters.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_web_proxy_access_rules",
+      "title": "List Web Proxy Access Rules",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read ordered `/ip proxy access` rules and their `.id`s. An unmatched request is allowed by RouterOS; use firewall input rules to control source address lists.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_web_proxy_access_rule",
+      "title": "Add Web Proxy Access Rule",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Add an allow/deny rule to `/ip proxy access`. Order matters; place_before is an existing `.id` or zero-based row. Use dst_address to block private targets; the proxy firewall controls client sources.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["allow", "deny"]
+          },
+          "src_address": {
+            "type": "string"
+          },
+          "dst_address": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "place_before": {
+            "type": "string"
+          }
+        },
+        "required": ["action"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "remove_web_proxy_access_rule",
+      "title": "Remove Web Proxy Access Rule",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Remove one `/ip proxy access` rule by `.id` or zero-based row, after inspecting the ordered list.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          }
+        },
+        "required": ["rule_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "move_web_proxy_access_rule",
+      "title": "Move Web Proxy Access Rule",
+      "risk": "write-idempotent",
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Move one `/ip proxy access` rule before the item at a zero-based destination position; reads back the resulting order.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["rule_id", "destination"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "create_nat_rule",
       "title": "Create IPv4 Firewall NAT Rule",
       "risk": "write",
@@ -26512,6 +26684,131 @@
           }
         },
         "required": ["confirm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_device_mode",
+      "title": "Get RouterOS Device Mode",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read `/system device-mode print` to see which restricted RouterOS features are available and whether physical confirmation is pending.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_device_mode_features",
+      "title": "Request Device Mode Feature Update",
+      "risk": "dangerous",
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "description": "Request any RouterOS device-mode feature or mode setting. Changing mode replaces existing per-feature overrides; inspect get_device_mode first. Clearing flagged requires a security audit. Every update needs physical confirmation and a reboot; the command response only confirms a pending request. Read back after confirmation. Unsupported properties depend on RouterOS version and hardware.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "mode": {
+            "description": "Changes the entire mode and resets prior per-feature overrides; include any overrides to keep in this request.",
+            "type": "string",
+            "enum": ["home", "basic", "advanced", "rose"]
+          },
+          "scheduler": {
+            "type": "boolean"
+          },
+          "socks": {
+            "type": "boolean"
+          },
+          "fetch": {
+            "type": "boolean"
+          },
+          "pptp": {
+            "type": "boolean"
+          },
+          "l2tp": {
+            "type": "boolean"
+          },
+          "bandwidth_test": {
+            "type": "boolean"
+          },
+          "traffic_gen": {
+            "type": "boolean"
+          },
+          "sniffer": {
+            "type": "boolean"
+          },
+          "ipsec": {
+            "type": "boolean"
+          },
+          "romon": {
+            "type": "boolean"
+          },
+          "proxy": {
+            "type": "boolean"
+          },
+          "hotspot": {
+            "type": "boolean"
+          },
+          "smb": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "boolean"
+          },
+          "zerotier": {
+            "type": "boolean"
+          },
+          "container": {
+            "type": "boolean"
+          },
+          "install_any_version": {
+            "type": "boolean"
+          },
+          "partitions": {
+            "type": "boolean"
+          },
+          "routerboard": {
+            "type": "boolean"
+          },
+          "activation_timeout": {
+            "description": "Physical confirmation window, 10 seconds to 1 day (RouterOS duration, e.g. 5m or 00:05:00).",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "flagging_enabled": {
+            "type": "boolean"
+          },
+          "flagged": {
+            "description": "Set false only after a security audit of the router configuration.",
+            "type": "boolean"
+          },
+          "confirm_mode_resets_overrides": {
+            "description": "Required with mode: existing per-feature overrides will be reset unless included in this request.",
+            "type": "boolean",
+            "const": true
+          },
+          "confirm_flagged_audit_complete": {
+            "description": "Required to clear flagged after auditing configuration, passwords, and RouterOS version.",
+            "type": "boolean",
+            "const": true
+          },
+          "physical_confirmation_available": {
+            "type": "boolean",
+            "const": true,
+            "description": "Operator is physically present and has authorized the device-mode change."
+          }
+        },
+        "required": ["physical_confirmation_available"],
         "additionalProperties": false
       }
     },
