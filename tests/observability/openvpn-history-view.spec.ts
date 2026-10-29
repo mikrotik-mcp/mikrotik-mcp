@@ -2,7 +2,7 @@
 import { act, createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { OpenVpnHistory } from "../../ui/observability/openvpn-history";
+import { OpenVpnHistory, historyTreemapRows } from "../../ui/observability/openvpn-history";
 import { api } from "../../ui/observability/api";
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), withToken: (s: string) => s }));
 vi.mock("../../ui/observability/components/ui/chart", () => ({
@@ -16,6 +16,8 @@ vi.mock("recharts", () => ({
   CartesianGrid: () => null,
   XAxis: () => null,
   YAxis: () => null,
+  Treemap: () => null,
+  Tooltip: () => null,
 }));
 const host = document.createElement("div");
 let root: ReturnType<typeof createRoot>;
@@ -34,6 +36,7 @@ test("history renders coverage and grouped metrics, drills into a user and never
     allTime: 7,
     totals: { connections: 1, users: 1, ips: 1, networks: 1, countries: 1, seconds: 3600 },
     timeline: [],
+    people: [{ label: "demo", detail: "", count: 1 }],
     ips: [{ label: "1.1.1.1", detail: "Cloudflare", count: 1 }],
     networks: [{ label: "AS13335", detail: "Cloudflare", count: 1 }],
     countries: [{ label: "Australia", detail: "au", count: 1 }],
@@ -60,10 +63,25 @@ test("history renders coverage and grouped metrics, drills into a user and never
   expect(host.textContent).toContain("2 collection gaps");
   expect(host.textContent).toContain("Timing / continuity uncertain");
   expect(host.textContent).toContain("AS13335");
+  expect(host.textContent).toContain("Where connections come from");
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>(".ovpn-treemap-switch button:nth-child(3)")!.click(),
+  );
+  expect(
+    host
+      .querySelector<HTMLButtonElement>(".ovpn-treemap-switch button:nth-child(3)")!
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
   expect(host.querySelectorAll('[data-slot="scroll-area"]').length).toBe(4);
   await act(async () => host.querySelector<HTMLButtonElement>(".ovpn-history-user-link")!.click());
   expect(vi.mocked(api).mock.calls.some(([url]) => url.includes("user=demo"))).toBe(true);
   expect(vi.mocked(api).mock.calls.every(([url]) => url.startsWith("/api/openvpn/history?"))).toBe(
     true,
   );
+});
+test("treemap preserves full report total when the breakdown contains only top groups", () => {
+  expect(historyTreemapRows([{ label: "demo", detail: "", count: 7 }], 10)).toEqual([
+    { name: "demo", detail: "", value: 7 },
+    { name: "Other", detail: "Beyond the top 20", value: 3 },
+  ]);
 });

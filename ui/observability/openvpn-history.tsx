@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Database, RefreshCw, Search } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Tooltip, Treemap, XAxis, YAxis } from "recharts";
+import type { TreemapNode } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
@@ -13,6 +14,64 @@ import type { HistoryGroup, OpenVpnHistoryReport } from "../../src/observability
 
 const timestamp = (at: number) => new Date(at).toLocaleString();
 const chartConfig = { count: { label: "Connections", color: "var(--chart-1)" } };
+type TreemapView = "person" | "ip" | "asn" | "country";
+const treemapViews: { value: TreemapView; label: string }[] = [
+  { value: "person", label: "People" },
+  { value: "ip", label: "Source IPs" },
+  { value: "asn", label: "Networks" },
+  { value: "country", label: "Countries" },
+];
+
+export function historyTreemapRows(rows: HistoryGroup[], total: number) {
+  const nodes = rows
+    .filter((row) => row.count > 0)
+    .map((row) => ({
+      name: row.label,
+      detail: row.detail,
+      value: row.count,
+    }));
+  const other = Math.max(0, total - nodes.reduce((sum, node) => sum + node.value, 0));
+  if (other) nodes.push({ name: "Other", detail: "Beyond the top 20", value: other });
+  return nodes;
+}
+
+function TrafficTile({ x, y, width, height, name, value, index, depth }: TreemapNode) {
+  if (depth === 0) return <g />;
+  const palette = [
+    "var(--chart-1)",
+    "var(--chart-2)",
+    "var(--chart-3)",
+    "var(--chart-4)",
+    "var(--chart-5)",
+  ];
+  return (
+    <g>
+      <rect
+        x={x + 2}
+        y={y + 2}
+        width={Math.max(0, width - 4)}
+        height={Math.max(0, height - 4)}
+        rx={9}
+        fill={palette[index % palette.length]}
+        opacity={0.9}
+      />
+      {width > 85 && height > 38 && (
+        <>
+          <text x={x + 12} y={y + 23} fill="white" fontSize={12} fontWeight={650}>
+            {name.length > Math.floor(width / 8)
+              ? `${name.slice(0, Math.max(4, Math.floor(width / 8) - 1))}…`
+              : name}
+          </text>
+          {height > 62 && (
+            <text x={x + 12} y={y + 43} fill="white" opacity={0.85} fontSize={11}>
+              {value.toLocaleString()} connections
+            </text>
+          )}
+        </>
+      )}
+    </g>
+  );
+}
 
 function Breakdown({
   title,
@@ -80,6 +139,7 @@ export function OpenVpnHistory({ device }: { device: string }) {
   const [now, setNow] = useState(Date.now);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [treemapView, setTreemapView] = useState<TreemapView>("person");
   const fromMs = from?.getTime();
   const toMs = to?.getTime();
   const invalid = fromMs !== undefined && toMs !== undefined && fromMs > toMs;
@@ -122,6 +182,19 @@ export function OpenVpnHistory({ device }: { device: string }) {
     };
   }, [device, user, fromMs, toMs, offset, revision, invalid, key]);
   const total = data?.totals;
+  const treemapRows =
+    data && total
+      ? historyTreemapRows(
+          treemapView === "person"
+            ? data.people
+            : treemapView === "ip"
+              ? data.ips
+              : treemapView === "asn"
+                ? data.networks
+                : data.countries,
+          total.connections,
+        )
+      : [];
   const coverage = data?.coverage;
   const stale = !!error || !coverage || now - coverage.last > 45_000;
   function range(days?: number) {
@@ -311,6 +384,64 @@ export function OpenVpnHistory({ device }: { device: string }) {
               <div className="ovpn-empty">
                 No connections recorded in this range. Try another date range or user.
               </div>
+            )}
+          </section>
+          <section
+            className="ovpn-history-panel ovpn-treemap-panel"
+            aria-label="Connection distribution treemap"
+          >
+            <header>
+              <div>
+                <h3>Where connections come from</h3>
+                <small>Area represents connections in the selected range · top 20 plus Other</small>
+              </div>
+              <div className="ovpn-treemap-switch" role="group" aria-label="Group connections by">
+                {treemapViews.map((view) => (
+                  <button
+                    key={view.value}
+                    type="button"
+                    aria-pressed={treemapView === view.value}
+                    onClick={() => setTreemapView(view.value)}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+              </div>
+            </header>
+            {treemapRows.length ? (
+              <>
+                <div className="ovpn-treemap-chart">
+                  <Treemap
+                    style={{ width: "100%", height: "100%" }}
+                    data={treemapRows}
+                    dataKey="value"
+                    nameKey="name"
+                    aspectRatio={2.5}
+                    content={TrafficTile}
+                    isAnimationActive={false}
+                  >
+                    <Tooltip
+                      content={({ active, payload }) =>
+                        active && payload?.length ? (
+                          <div className="ovpn-treemap-tooltip">
+                            <strong>{String(payload[0].name)}</strong>
+                            <span>
+                              {Number(payload[0].value).toLocaleString()} connections ·{" "}
+                              {Math.round((Number(payload[0].value) / total!.connections) * 100)}%
+                            </span>
+                          </div>
+                        ) : null
+                      }
+                    />
+                  </Treemap>
+                </div>
+                <p className="ovpn-caption">
+                  {treemapRows.length} groups · {total!.connections.toLocaleString()} connections ·{" "}
+                  {user || "all users"}
+                </p>
+              </>
+            ) : (
+              <div className="ovpn-empty">No connections in this selection.</div>
             )}
           </section>
           <div className="ovpn-history-breakdowns">

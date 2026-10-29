@@ -49,6 +49,7 @@ export interface OpenVpnHistoryReport {
     seconds: number;
   };
   timeline: { day: string; count: number }[];
+  people: HistoryGroup[];
   ips: HistoryGroup[];
   networks: HistoryGroup[];
   countries: HistoryGroup[];
@@ -268,6 +269,7 @@ export class OpenVpnHistoryStore {
         .get(device, user, user)!.n,
       totals,
       timeline,
+      people: groups("user", "''"),
       ips: groups("COALESCE(NULLIF(ip,''),'Unknown IP')", "MAX(organization)"),
       networks: groups("COALESCE(NULLIF(asn,''),'Unknown ASN')", "MAX(organization)"),
       countries: groups("COALESCE(NULLIF(country,''),'Unknown country')", "MAX(countryCode)"),

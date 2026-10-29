@@ -117,6 +117,53 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
+.ovpn-treemap-panel > header {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ovpn-treemap-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--muted);
+}
+.ovpn-treemap-switch button {
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.ovpn-treemap-switch button[aria-pressed="true"] {
+  color: var(--foreground);
+  background: var(--card);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+.ovpn-treemap-switch button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.ovpn-treemap-chart {
+  width: 100%;
+  height: clamp(260px, 32vw, 420px);
+}
+.ovpn-treemap-tooltip {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--foreground) 12%, transparent);
+  font-size: 0.75rem;
+}
+.ovpn-treemap-tooltip span {
+  color: var(--muted-foreground);
+}
 .ovpn-breakdown-scroll {
   height: 260px;
 }

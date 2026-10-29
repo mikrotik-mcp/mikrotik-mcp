@@ -56,6 +56,7 @@ test("deduplicates polls, closes only absent sessions, and preserves geo and per
   expect(report.totals.connections).toBe(2);
   expect(report.allTime).toBe(2);
   expect(report.networks[0].label).toBe("AS13335");
+  expect(report.people).toEqual([{ label: "ali", detail: "", count: 2 }]);
   expect(report.sessions[1].ended).toBe(130000);
   expect(report.sessions[1].lastSeen).toBe(115000);
   expect(read(store, "missing").totals.connections).toBe(0);
