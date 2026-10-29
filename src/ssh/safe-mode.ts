@@ -273,7 +273,7 @@ export class SafeModeManager {
         this.commandTimeoutMs,
         true,
       );
-      this.channel.write(`${command}\n`);
+      this.channel.write(`${command}\r`);
       const { text, timedOut } = await response;
       if (timedOut) {
         this.uncertain = true;
@@ -496,7 +496,7 @@ export class SafeModeManager {
       const i = lines.findIndex((line) => line.trim() === token);
       return i >= 0 && PROMPT_RE.test(lines.slice(i + 1).join("\n"));
     });
-    this.channel.write(`:put "${token}"\n`);
+    this.channel.write(`:put "${token}"\r`);
     const { text, timedOut } = await response;
     // A prompt alone is not proof: the predicate also requires THIS sentinel.
     return timedOut ? "unknown" : classifyPrompt(text);

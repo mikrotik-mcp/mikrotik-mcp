@@ -158,7 +158,7 @@ describe("Safe Mode interactive round trips", () => {
 
   test("completes read-only commands with the real CR-redrawn Safe Mode prompt", async () => {
     const { manager, channel } = session((input, emit) => {
-      expect(input).toBe("/system identity print\n");
+      expect(input).toBe("/system identity print\r");
       emit(
         "/system identity print\r[admin@Ali's-Mikrotik-Home-AX3] <SAFE> /system identity print\r\n",
       );
@@ -278,7 +278,7 @@ describe("Safe Mode interactive round trips", () => {
     const writes: string[] = [];
     const { manager, channel } = session((input, emit) => {
       writes.push(input);
-      if (input === "/tool sniffer print\n") {
+      if (input === "/tool sniffer print\r") {
         emit(`${input}\r\nonly-headers: yes\r\nfilter-port: 443\r\n`);
         emit("\x1B[7m-- [Q quit|D du");
         emit("mp|down]\x1B[0m\r");
@@ -296,9 +296,9 @@ describe("Safe Mode interactive round trips", () => {
       expect(await output).toBe(
         "only-headers: yes\nfilter-port: 443\n\nfilter-direction: any\nrunning: no",
       );
-      expect(writes).toEqual(["/tool sniffer print\n", " "]);
+      expect(writes).toEqual(["/tool sniffer print\r", " "]);
       expect(await manager.execute("/tool sniffer start")).toBe("");
-      expect(writes.at(-1)).toBe("/tool sniffer start\n");
+      expect(writes.at(-1)).toBe("/tool sniffer start\r");
       expect(channel.listenerCount("data")).toBe(0);
     } finally {
       await manager.rollback();
@@ -319,13 +319,13 @@ describe("Safe Mode interactive round trips", () => {
       await vi.advanceTimersByTimeAsync(30_000);
       expect(await first).toMatch(/Execution may have occurred/);
       expect(await queued).toMatch(/uncertain|unverified/i);
-      expect(writes).toEqual(["/tool sniffer start\n"]);
+      expect(writes).toEqual(["/tool sniffer start\r"]);
       expect(manager.isActive).toBe(true); // must not fall back to one-shot SSH
       expect(manager.status()).toMatch(/uncertain|unverified/i);
       const committed = manager.commit();
       await vi.advanceTimersByTimeAsync(8_000);
       expect((await committed).ok).toBe(false);
-      expect(writes).toEqual(["/tool sniffer start\n"]);
+      expect(writes).toEqual(["/tool sniffer start\r"]);
       expect(channel.listenerCount("data")).toBe(0);
     } finally {
       await manager.rollback();
@@ -349,7 +349,7 @@ describe("Safe Mode interactive round trips", () => {
       expect(out).toContain("rule-2");
       expect(out).toContain("rule-3");
       expect(out).not.toContain("Q quit");
-      expect(writes).toEqual(["/ip firewall mangle print\n", " ", " "]);
+      expect(writes).toEqual(["/ip firewall mangle print\r", " ", " "]);
     } finally {
       await manager.rollback();
     }
@@ -370,7 +370,7 @@ describe("Safe Mode interactive round trips", () => {
       const out = manager.execute("/test").catch(String);
       await vi.advanceTimersByTimeAsync(15_000);
       expect(await out).toMatch(/timeout/);
-      expect(writes).toEqual(["/test\n"]);
+      expect(writes).toEqual(["/test\r"]);
     } finally {
       await manager.rollback();
       vi.useRealTimers();
