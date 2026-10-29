@@ -255,6 +255,8 @@ test.each(cases)(
 
 const optionalCases = cases.flatMap(({ tool, menu }) => {
   const args = tool.inputSchema && argsWithOptionalSettings(tool.inputSchema);
+  if (args && (tool.name === "add_dot1x_server" || tool.name === "update_dot1x_server"))
+    delete args.reauth_timeout; // RouterOS accepts either legacy timeout or the 7.25 period, not both.
   return args ? [{ name: tool.name, tool, menu, args }] : [];
 });
 

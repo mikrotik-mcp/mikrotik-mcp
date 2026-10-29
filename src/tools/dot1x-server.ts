@@ -38,10 +38,13 @@ export const dot1xServerTools: ToolModule = [
       reject_vlan_id: z.string().optional().describe("VLAN id or 'none'"),
       server_fail_vlan_id: z.string().optional().describe("VLAN id or 'none'"),
       reauth_timeout: z.string().optional().describe("Re-auth period or 'none'"),
+      reauth_period: z.string().optional().describe("RouterOS 7.25+ re-authentication period"),
       comment: z.string().optional(),
       disabled: z.boolean().default(false),
     },
     async handler(a, ctx) {
+      if (a.reauth_period !== undefined && a.reauth_timeout !== undefined)
+        return "Specify either reauth_period (RouterOS 7.25+) or reauth_timeout (older RouterOS), not both.";
       ctx.info(`Adding dot1x server: interface=${a.interface}`);
       const cmd = new Cmd("/interface dot1x server add")
         .set("interface", a.interface)
@@ -53,6 +56,7 @@ export const dot1xServerTools: ToolModule = [
         .opt("reject-vlan-id", a.reject_vlan_id)
         .opt("server-fail-vlan-id", a.server_fail_vlan_id)
         .opt("reauth-timeout", a.reauth_timeout)
+        .opt("reauth-period", a.reauth_period)
         .opt("comment", a.comment)
         .flag("disabled", a.disabled)
         .build();
@@ -149,10 +153,13 @@ export const dot1xServerTools: ToolModule = [
       reject_vlan_id: z.string().optional(),
       server_fail_vlan_id: z.string().optional(),
       reauth_timeout: z.string().optional(),
+      reauth_period: z.string().optional().describe("RouterOS 7.25+ re-authentication period"),
       comment: z.string().optional(),
       disabled: z.boolean().optional(),
     },
     async handler(a, ctx) {
+      if (a.reauth_period !== undefined && a.reauth_timeout !== undefined)
+        return "Specify either reauth_period (RouterOS 7.25+) or reauth_timeout (older RouterOS), not both.";
       ctx.info(`Updating dot1x server: server_id=${a.server_id}`);
       const selector = a.server_id.startsWith("*")
         ? `.id="${a.server_id}"`
@@ -167,6 +174,7 @@ export const dot1xServerTools: ToolModule = [
         .opt("reject-vlan-id", a.reject_vlan_id)
         .opt("server-fail-vlan-id", a.server_fail_vlan_id)
         .opt("reauth-timeout", a.reauth_timeout);
+      cmd.opt("reauth-period", a.reauth_period);
       if (a.comment !== undefined) cmd.raw(`comment=${quoteValue(a.comment)}`);
       if (a.disabled !== undefined) cmd.raw(`disabled=${yesno(a.disabled)}`);
 

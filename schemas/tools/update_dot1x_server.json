@@ -33,6 +33,10 @@
     "reauth_timeout": {
       "type": "string"
     },
+    "reauth_period": {
+      "description": "RouterOS 7.25+ re-authentication period",
+      "type": "string"
+    },
     "comment": {
       "type": "string"
     },
