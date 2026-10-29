@@ -5,7 +5,7 @@ import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/
 import type { ToolModule } from "../core/registry";
 import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
 import type { ToolContext } from "../core/context";
-import { ruleResolver } from "./_resolve-rule-id";
+import { listItemIds, ruleResolver } from "./_resolve-rule-id";
 import { executeRuleCreate, readCreatedRule } from "./_create-rule";
 
 const resolveRuleId = ruleResolver("/ipv6 firewall filter");
@@ -521,12 +521,23 @@ export const ipv6FirewallFilterTools: ToolModule = [
       const id = await resolveRuleId(a.rule_id, ctx);
       if (!id) return `IPv6 firewall filter rule '${a.rule_id}' not found.`;
 
+      const before = await listItemIds("/ipv6 firewall filter", ctx);
+      const from = before.indexOf(id);
+      if (a.destination < 0 || a.destination >= before.length) {
+        return `NO CHANGE: destination ${a.destination} is outside the ${before.length} rule positions.`;
+      }
+      if (from === a.destination)
+        return `NO CHANGE: IPv6 firewall filter rule ${id} is already at position ${from}.`;
       const result = await executeMikrotikCommand(
-        `/ipv6 firewall filter move ${id} destination=${a.destination}`,
+        `/ipv6 firewall filter move ${id} ${before[a.destination]}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to move IPv6 firewall filter rule: ${result}`;
-      return `IPv6 firewall filter rule '${a.rule_id}' (${id}) moved to position ${a.destination}.`;
+      const after = await listItemIds("/ipv6 firewall filter", ctx);
+      const to = after.indexOf(id);
+      return to === a.destination
+        ? `IPv6 firewall filter rule '${a.rule_id}' (${id}) moved to position ${to}.`
+        : `NO CHANGE or different position: IPv6 firewall filter rule ${id} is at ${to} (requested ${a.destination}); inspect list_ipv6_filter_rules.`;
     },
   }),
 

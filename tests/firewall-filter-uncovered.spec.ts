@@ -32,7 +32,25 @@ test("move reports a silent RouterOS no-op after reading order back", async () =
   });
   const result = await run("move_filter_rule", { rule_id: "*A", destination: 99 });
   expect(result).toContain("NO CHANGE");
-  expect(command.mock.calls.some(([text]) => text?.includes("move *A destination=99"))).toBe(true);
+  expect(command.mock.calls.some(([text]) => text?.includes(" move "))).toBe(false);
+});
+
+test("move resolves position zero to the target rule ID and verifies order", async () => {
+  let moved = false;
+  command.mockImplementation(async (text) => {
+    if (!text) return "";
+    if (text?.includes("print count-only")) return "1";
+    if (text?.startsWith(":foreach")) return moved ? "*B\n*A" : "*A\n*B";
+    if (text === "/ip firewall filter move *B *A") {
+      moved = true;
+      return "";
+    }
+    throw new Error(`Unexpected command: ${text}`);
+  });
+  expect(await run("move_filter_rule", { rule_id: "*B", destination: 0 })).toContain(
+    "moved to position 0",
+  );
+  expect(moved).toBe(true);
 });
 
 test("basic setup reports each mocked RouterOS add result", async () => {

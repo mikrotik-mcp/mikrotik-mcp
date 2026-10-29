@@ -650,10 +650,14 @@ export const firewallFilterTools: ToolModule = [
       if (!id) return `Firewall filter rule '${a.rule_id}' not found.`;
 
       const before = await listItemIds("/ip firewall filter", ctx);
-      const result = await executeMikrotikCommand(
-        `/ip firewall filter move ${id} destination=${a.destination}`,
-        ctx,
-      );
+      const from = before.indexOf(id);
+      if (a.destination < 0 || a.destination >= before.length) {
+        return `NO CHANGE: destination ${a.destination} is outside the ${before.length} rule positions.`;
+      }
+      if (from === a.destination)
+        return `NO CHANGE: firewall filter rule ${id} is already at position ${from}.`;
+      const target = before[a.destination];
+      const result = await executeMikrotikCommand(`/ip firewall filter move ${id} ${target}`, ctx);
       if (looksLikeError(result)) return `Failed to move firewall filter rule: ${result}`;
 
       // RouterOS silently no-ops a `move` whose destination is out of range or
@@ -662,7 +666,6 @@ export const firewallFilterTools: ToolModule = [
       // on (they believe the ordering changed), so read the order back and
       // report where the rule ACTUALLY is.
       const after = await listItemIds("/ip firewall filter", ctx);
-      const from = before.indexOf(id);
       const to = after.indexOf(id);
       if (to === -1) {
         return `Firewall filter rule ${id} moved, but it could not be located afterwards — verify with list_filter_rules.`;
