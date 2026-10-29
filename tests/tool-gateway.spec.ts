@@ -46,6 +46,18 @@ describe("find_tools", () => {
     if (v6 >= 0) expect(v4).toBeLessThan(v6);
   });
 
+  test("web proxy and device-mode queries surface their dedicated tools", async () => {
+    expect(await run("find_tools", { query: "read web proxy settings", limit: 5 })).toMatch(
+      /1\. get_web_proxy\s+\[web-proxy\]/,
+    );
+    expect(await run("find_tools", { query: "add web proxy access deny rule", limit: 5 })).toMatch(
+      /add_web_proxy_access_rule/,
+    );
+    expect(
+      await run("find_tools", { query: "update device mode proxy hotspot email", limit: 5 }),
+    ).toMatch(/update_device_mode_features/);
+  });
+
   test("a hopeless query explains the fallback", async () => {
     const out = await run("find_tools", { query: "zzzqqq nonsense xyzzy" });
     expect(out).toMatch(/No tools matched|run_routeros_command/);

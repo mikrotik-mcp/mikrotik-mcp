@@ -78,6 +78,7 @@ const SYNONYMS: Record<string, string[]> = {
   show: ["list", "print", "get"],
   print: ["list", "show"],
   get: ["show", "fetch"],
+  read: ["get", "list", "show"],
   fetch: ["get"],
   update: ["set", "modify", "change", "edit"],
   set: ["update", "modify", "change"],
