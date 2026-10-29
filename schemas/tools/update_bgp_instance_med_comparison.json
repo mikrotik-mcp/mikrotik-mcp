@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "update_bgp_instance_med_comparison",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exact BGP instance name"
+    },
+    "always_compare_med": {
+      "type": "boolean"
+    },
+    "confirm_routing_change": {
+      "type": "boolean",
+      "const": true,
+      "description": "Operator approved the best-path behavior change"
+    }
+  },
+  "required": ["name", "always_compare_med", "confirm_routing_change"],
+  "additionalProperties": false
+}

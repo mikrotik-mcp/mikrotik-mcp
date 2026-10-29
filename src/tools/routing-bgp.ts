@@ -9,6 +9,7 @@ import {
   looksLikeError,
   isEmpty,
   commandUnsupported,
+  quoteValue,
   Cmd,
 } from "../core/routeros";
 
@@ -16,6 +17,53 @@ const UNSUPPORTED =
   "BGP is not available on this device (requires RouterOS v7 with the routing package).";
 
 export const routingBgpTools: ToolModule = [
+  defineTool({
+    name: "list_bgp_instances",
+    title: "List BGP Instances",
+    annotations: READ,
+    description:
+      "Read BGP instances and their best-path selection settings, including RouterOS 7.25+ always-compare-med. Use before changing an instance.",
+    async handler(_a, ctx) {
+      const result = await executeMikrotikCommand("/routing bgp instance print detail", ctx);
+      if (commandUnsupported(result)) return UNSUPPORTED;
+      return isEmpty(result) ? "No BGP instances found." : `BGP INSTANCES:\n\n${result}`;
+    },
+  }),
+  defineTool({
+    name: "update_bgp_instance_med_comparison",
+    title: "Set BGP Instance MED Comparison",
+    annotations: WRITE_IDEMPOTENT,
+    description:
+      "Set RouterOS 7.25+ always-compare-med on one named BGP instance. This changes best-path selection and can reroute traffic; inspect list_bgp_instances and obtain operator approval first.",
+    inputSchema: {
+      name: z.string().min(1).describe("Exact BGP instance name"),
+      always_compare_med: z.boolean(),
+      confirm_routing_change: z
+        .literal(true)
+        .describe("Operator approved the best-path behavior change"),
+    },
+    async handler(a, ctx) {
+      const selector = new Cmd("/routing bgp instance print count-only where")
+        .set("name", a.name)
+        .build();
+      const count = await executeMikrotikCommand(selector, ctx);
+      if (commandUnsupported(count)) return UNSUPPORTED;
+      if (looksLikeError(count)) return `Failed to inspect BGP instance: ${count}`;
+      if (isEmpty(count) || count.trim() === "0") return `BGP instance '${a.name}' not found.`;
+      const cmd = new Cmd(`/routing bgp instance set [find name=${quoteValue(a.name)}]`)
+        .bool("always-compare-med", a.always_compare_med)
+        .build();
+      const result = await executeMikrotikCommand(cmd, ctx);
+      if (looksLikeError(result)) return `Failed to update BGP instance: ${result}`;
+      const details = await executeMikrotikCommand(
+        new Cmd("/routing bgp instance print detail where").set("name", a.name).build(),
+        ctx,
+      );
+      if (looksLikeError(details) || isEmpty(details))
+        return `BGP instance update was sent, but read-back failed: ${details || "no details returned"}`;
+      return `BGP instance '${a.name}' MED comparison updated:\n\n${details}`;
+    },
+  }),
   // ── Connections ───────────────────────────────────────────────────────────
   defineTool({
     name: "list_bgp_connections",
