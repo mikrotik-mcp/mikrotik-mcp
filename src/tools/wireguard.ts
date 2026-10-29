@@ -365,6 +365,13 @@ export const wireguardTools: ToolModule = [
         .int()
         .optional()
         .describe("listen-port written into the generated client config"),
+      client_mtu: z
+        .number()
+        .int()
+        .min(576)
+        .max(65535)
+        .optional()
+        .describe("RouterOS 7.25+ MTU in generated client configuration"),
       comment: z.string().optional(),
       disabled: z.boolean().default(false),
     },
@@ -388,6 +395,7 @@ export const wireguardTools: ToolModule = [
         .opt("client-endpoint", a.client_endpoint)
         .opt("client-keepalive", a.client_keepalive)
         .opt("client-listen-port", a.client_listen_port)
+        .opt("client-mtu", a.client_mtu)
         .opt("comment", a.comment)
         .flag("disabled", a.disabled)
         .build();
@@ -515,10 +523,16 @@ export const wireguardTools: ToolModule = [
         .optional()
         .describe('client persistent-keepalive for the generated config e.g. "25s"'),
       client_listen_port: z
+        .union([z.number().int(), z.literal("")])
+        .optional()
+        .describe("Client listen port; empty string unsets it on RouterOS 7.25+"),
+      client_mtu: z
         .number()
         .int()
+        .min(576)
+        .max(65535)
         .optional()
-        .describe("listen-port written into the generated client config"),
+        .describe("RouterOS 7.25+ MTU in generated client configuration"),
       comment: z.string().optional(),
       disabled: z.boolean().optional(),
     },
@@ -579,7 +593,9 @@ export const wireguardTools: ToolModule = [
             : null,
         )
         .opt("client-keepalive", a.client_keepalive)
-        .opt("client-listen-port", a.client_listen_port)
+        .raw(a.client_listen_port === "" ? "!client-listen-port" : null)
+        .opt("client-listen-port", a.client_listen_port === "" ? undefined : a.client_listen_port)
+        .opt("client-mtu", a.client_mtu)
         .raw(a.comment !== undefined ? `comment=${quoteValue(a.comment)}` : null)
         .bool("disabled", a.disabled)
         .build();

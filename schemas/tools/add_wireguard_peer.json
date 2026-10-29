@@ -63,6 +63,12 @@
       "minimum": -9007199254740991,
       "maximum": 9007199254740991
     },
+    "client_mtu": {
+      "description": "RouterOS 7.25+ MTU in generated client configuration",
+      "type": "integer",
+      "minimum": 576,
+      "maximum": 65535
+    },
     "comment": {
       "type": "string"
     },
