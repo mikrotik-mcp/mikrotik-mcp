@@ -11,7 +11,7 @@ import { interfaceName } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, quoteValue, Cmd } from "../core/routeros";
 
 const ProtocolMode = z.enum(["none", "rstp", "stp", "mstp"]);
 const ArpMode = z.enum(["disabled", "enabled", "proxy-arp", "reply-only", "local-proxy-arp"]);
@@ -75,6 +75,28 @@ export const bridgeTools: ToolModule = [
         .optional()
         .describe("Default ingress VLAN filtering for ports"),
       dhcp_snooping: z.boolean().optional().describe("Enable DHCP snooping"),
+      arp_inspection: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ validate ARP against DHCP snooping bindings"),
+      ip_source_guard: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ validate IPv4 source against DHCP snooping bindings"),
+      mlag_init_delay: z
+        .string()
+        .optional()
+        .describe("RouterOS 7.25+ MLAG LACP initialization delay"),
+      mlag_lacp_fallback: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ MLAG LACP fallback after peer loss"),
+      confirm_security_disruption: z
+        .literal(true)
+        .optional()
+        .describe(
+          "Required when enabling ARP inspection or IP source guard; DHCP bindings may be cleared and traffic interrupted",
+        ),
       igmp_snooping: z.boolean().optional().describe("Enable IGMP/MLD snooping"),
       fast_forward: z.boolean().optional().describe("Enable Fast Forward optimization"),
       mvrp: z.boolean().optional().describe("Enable Multiple VLAN Registration Protocol"),
@@ -83,6 +105,8 @@ export const bridgeTools: ToolModule = [
       transmit_hold_count: z.number().int().optional().describe("STP transmit hold count"),
     },
     async handler(a, ctx) {
+      if ((a.arp_inspection || a.ip_source_guard) && !a.confirm_security_disruption)
+        return "Enabling ARP inspection or IP source guard can clear DHCP bindings and interrupt clients. Review DHCP snooping and trusted ports, then set confirm_security_disruption=true.";
       ctx.info(`Creating bridge: name=${a.name}, vlan_filtering=${a.vlan_filtering}`);
       const cmd = new Cmd("/interface bridge add")
         .set("name", a.name)
@@ -101,6 +125,10 @@ export const bridgeTools: ToolModule = [
         .opt("frame-types", a.frame_types)
         .bool("ingress-filtering", a.ingress_filtering)
         .bool("dhcp-snooping", a.dhcp_snooping)
+        .bool("arp-inspection", a.arp_inspection)
+        .bool("ip-source-guard", a.ip_source_guard)
+        .opt("mlag-init-delay", a.mlag_init_delay)
+        .bool("mlag-lacp-fallback", a.mlag_lacp_fallback)
         .bool("igmp-snooping", a.igmp_snooping)
         .bool("fast-forward", a.fast_forward)
         .bool("mvrp", a.mvrp)
@@ -217,6 +245,28 @@ export const bridgeTools: ToolModule = [
         .optional()
         .describe("Default ingress VLAN filtering for ports"),
       dhcp_snooping: z.boolean().optional().describe("Enable DHCP snooping"),
+      arp_inspection: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ validate ARP against DHCP snooping bindings"),
+      ip_source_guard: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ validate IPv4 source against DHCP snooping bindings"),
+      mlag_init_delay: z
+        .string()
+        .optional()
+        .describe("RouterOS 7.25+ MLAG LACP initialization delay"),
+      mlag_lacp_fallback: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ MLAG LACP fallback after peer loss"),
+      confirm_security_disruption: z
+        .literal(true)
+        .optional()
+        .describe(
+          "Required when enabling ARP inspection or IP source guard; DHCP bindings may be cleared and traffic interrupted",
+        ),
       igmp_snooping: z.boolean().optional().describe("Enable IGMP/MLD snooping"),
       fast_forward: z.boolean().optional().describe("Enable Fast Forward optimization"),
       mvrp: z.boolean().optional().describe("Enable Multiple VLAN Registration Protocol"),
@@ -225,8 +275,10 @@ export const bridgeTools: ToolModule = [
       transmit_hold_count: z.number().int().optional().describe("STP transmit hold count"),
     },
     async handler(a, ctx) {
+      if ((a.arp_inspection || a.ip_source_guard) && !a.confirm_security_disruption)
+        return "Enabling ARP inspection or IP source guard can clear DHCP bindings and interrupt clients. Review DHCP snooping and trusted ports, then set confirm_security_disruption=true.";
       ctx.info(`Updating bridge: name=${a.name}`);
-      const cmd = new Cmd(`/interface bridge set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/interface bridge set [find name=${quoteValue(a.name)}]`)
         .opt("name", a.new_name)
         .opt("comment", a.comment)
         .bool("vlan-filtering", a.vlan_filtering)
@@ -244,6 +296,10 @@ export const bridgeTools: ToolModule = [
         .opt("frame-types", a.frame_types)
         .bool("ingress-filtering", a.ingress_filtering)
         .bool("dhcp-snooping", a.dhcp_snooping)
+        .bool("arp-inspection", a.arp_inspection)
+        .bool("ip-source-guard", a.ip_source_guard)
+        .opt("mlag-init-delay", a.mlag_init_delay)
+        .bool("mlag-lacp-fallback", a.mlag_lacp_fallback)
         .bool("igmp-snooping", a.igmp_snooping)
         .bool("fast-forward", a.fast_forward)
         .bool("mvrp", a.mvrp)
@@ -260,7 +316,7 @@ export const bridgeTools: ToolModule = [
 
       const target = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/interface bridge print detail where name="${target}"`,
+        new Cmd("/interface bridge print detail where").set("name", target).build(),
         ctx,
       );
       return `Bridge updated successfully:\n\n${details}`;
@@ -351,6 +407,10 @@ export const bridgeTools: ToolModule = [
         .boolean()
         .optional()
         .describe("Trust DHCP server replies on this port (DHCP snooping)"),
+      trusted_arp: z
+        .boolean()
+        .optional()
+        .describe("RouterOS 7.25+ exempt this port from ARP inspection"),
       multicast_router: MulticastRouter.optional().describe("IGMP-snooping multicast router state"),
       fast_leave: z.boolean().optional().describe("IGMP-snooping fast leave"),
       unknown_unicast_flood: z
@@ -387,6 +447,7 @@ export const bridgeTools: ToolModule = [
         .bool("restricted-role", a.restricted_role)
         .bool("restricted-tcn", a.restricted_tcn)
         .bool("trusted", a.trusted)
+        .bool("trusted-arp", a.trusted_arp)
         .opt("multicast-router", a.multicast_router)
         .bool("fast-leave", a.fast_leave)
         .bool("unknown-unicast-flood", a.unknown_unicast_flood)

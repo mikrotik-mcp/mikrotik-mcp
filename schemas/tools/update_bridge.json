@@ -79,6 +79,27 @@
       "description": "Enable DHCP snooping",
       "type": "boolean"
     },
+    "arp_inspection": {
+      "description": "RouterOS 7.25+ validate ARP against DHCP snooping bindings",
+      "type": "boolean"
+    },
+    "ip_source_guard": {
+      "description": "RouterOS 7.25+ validate IPv4 source against DHCP snooping bindings",
+      "type": "boolean"
+    },
+    "mlag_init_delay": {
+      "description": "RouterOS 7.25+ MLAG LACP initialization delay",
+      "type": "string"
+    },
+    "mlag_lacp_fallback": {
+      "description": "RouterOS 7.25+ MLAG LACP fallback after peer loss",
+      "type": "boolean"
+    },
+    "confirm_security_disruption": {
+      "description": "Required when enabling ARP inspection or IP source guard; DHCP bindings may be cleared and traffic interrupted",
+      "type": "boolean",
+      "const": true
+    },
     "igmp_snooping": {
       "description": "Enable IGMP/MLD snooping",
       "type": "boolean"

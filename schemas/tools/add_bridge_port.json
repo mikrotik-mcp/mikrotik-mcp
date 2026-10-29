@@ -98,6 +98,10 @@
       "description": "Trust DHCP server replies on this port (DHCP snooping)",
       "type": "boolean"
     },
+    "trusted_arp": {
+      "description": "RouterOS 7.25+ exempt this port from ARP inspection",
+      "type": "boolean"
+    },
     "multicast_router": {
       "description": "IGMP-snooping multicast router state",
       "type": "string",
