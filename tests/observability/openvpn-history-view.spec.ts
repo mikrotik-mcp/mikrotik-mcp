@@ -2,7 +2,11 @@
 import { act, createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { OpenVpnHistory, historyTreemapRows } from "../../ui/observability/openvpn-history";
+import {
+  OpenVpnHistory,
+  historyTreemapPercent,
+  historyTreemapRows,
+} from "../../ui/observability/openvpn-history";
 import { api } from "../../ui/observability/api";
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), withToken: (s: string) => s }));
 vi.mock("../../ui/observability/components/ui/chart", () => ({
@@ -84,4 +88,21 @@ test("treemap preserves full report total when the breakdown contains only top g
     { name: "demo", detail: "", value: 7 },
     { name: "Other", detail: "Beyond the top 20", value: 3 },
   ]);
+});
+test("network tiles show organization names and fall back to ASN identifiers", () => {
+  expect(
+    historyTreemapRows(
+      [
+        { label: "AS58224", detail: "TCI", count: 3 },
+        { label: "AS64500", detail: "", count: 1 },
+      ],
+      4,
+      true,
+    ).map((row) => row.name),
+  ).toEqual(["TCI", "AS64500"]);
+});
+test("treemap percentages use the full selected report total", () => {
+  expect(historyTreemapPercent(232, 672)).toBe(35);
+  expect(historyTreemapPercent(143, 672)).toBe(21);
+  expect(historyTreemapPercent(0, 0)).toBe(0);
 });

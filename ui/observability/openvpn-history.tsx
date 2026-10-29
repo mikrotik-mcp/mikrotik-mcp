@@ -22,11 +22,11 @@ const treemapViews: { value: TreemapView; label: string }[] = [
   { value: "country", label: "Countries" },
 ];
 
-export function historyTreemapRows(rows: HistoryGroup[], total: number) {
+export function historyTreemapRows(rows: HistoryGroup[], total: number, useOrganization = false) {
   const nodes = rows
     .filter((row) => row.count > 0)
     .map((row) => ({
-      name: row.label,
+      name: useOrganization ? row.detail || row.label : row.label,
       detail: row.detail,
       value: row.count,
     }));
@@ -35,7 +35,20 @@ export function historyTreemapRows(rows: HistoryGroup[], total: number) {
   return nodes;
 }
 
-function TrafficTile({ x, y, width, height, name, value, index, depth }: TreemapNode) {
+export const historyTreemapPercent = (value: number, total: number) =>
+  total ? Math.round((value / total) * 100) : 0;
+
+function TrafficTile({
+  x,
+  y,
+  width,
+  height,
+  name,
+  value,
+  index,
+  depth,
+  total,
+}: TreemapNode & { total: number }) {
   if (depth === 0) return <g />;
   const palette = [
     "var(--chart-1)",
@@ -64,7 +77,7 @@ function TrafficTile({ x, y, width, height, name, value, index, depth }: Treemap
           </text>
           {height > 62 && (
             <text x={x + 12} y={y + 43} fill="white" opacity={0.85} fontSize={11}>
-              {value.toLocaleString()} connections
+              {value.toLocaleString()} · {historyTreemapPercent(value, total)}%
             </text>
           )}
         </>
@@ -193,6 +206,7 @@ export function OpenVpnHistory({ device }: { device: string }) {
                 ? data.networks
                 : data.countries,
           total.connections,
+          treemapView === "asn",
         )
       : [];
   const coverage = data?.coverage;
@@ -417,7 +431,7 @@ export function OpenVpnHistory({ device }: { device: string }) {
                     dataKey="value"
                     nameKey="name"
                     aspectRatio={2.5}
-                    content={TrafficTile}
+                    content={(node) => <TrafficTile {...node} total={total!.connections} />}
                     isAnimationActive={false}
                   >
                     <Tooltip
@@ -427,7 +441,7 @@ export function OpenVpnHistory({ device }: { device: string }) {
                             <strong>{String(payload[0].name)}</strong>
                             <span>
                               {Number(payload[0].value).toLocaleString()} connections ·{" "}
-                              {Math.round((Number(payload[0].value) / total!.connections) * 100)}%
+                              {historyTreemapPercent(Number(payload[0].value), total!.connections)}%
                             </span>
                           </div>
                         ) : null
