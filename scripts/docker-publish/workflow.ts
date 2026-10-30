@@ -197,7 +197,7 @@ export async function publishRelease(plan: ReleasePlan, io: PublishIO): Promise<
   if (version.stdout.trim() !== plan.version)
     throw new PublishError("Published CLI version did not match. latest was not promoted.");
   io.note(
-    "Native Bun/version/non-root/CLI checks passed. HTTP, dashboard, MCP protocol and other architectures still need release acceptance tests (docs/docker-publishing.md).",
+    "Native Bun/version/non-root/CLI checks passed. HTTP, dashboard, MCP protocol and other architectures still need release acceptance tests (docs/content/docs/guides/docker-publishing.md).",
   );
   if (
     await io.confirm(

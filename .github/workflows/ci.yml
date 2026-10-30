@@ -44,10 +44,23 @@ jobs:
       - name: Build
         run: bun run build
 
-      # schemas/ and docs/tools-reference.md are generated from source.
+      # Schemas and website references are generated from source.
       # Fail if a tool changed but `bun run gen` wasn't re-run and committed.
       - name: Check generated artifacts are up to date
         run: |
           bun run gen
-          git diff --exit-code -- schemas docs/tools-reference.md \
+          git diff --exit-code -- schemas docs/content/docs/reference docs/content/docs/guides/config-schema.md docs/content/docs/guides/prompt-catalog.md \
             || (echo "::error::Generated files are stale. Run 'bun run gen' and commit the result." && exit 1)
+
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: docs
+      - run: bun run check:docs --complete && bun run types:check && bun run build
+        working-directory: docs

@@ -59,7 +59,7 @@
     "prepack": "bun run build && bun run gen",
     "auth-check": "bun run --bun src/cli.ts auth-check",
     "gen:schemas": "bun run --bun scripts/gen-schemas.ts && vp fmt --write schemas",
-    "gen:docs": "bun run --bun scripts/gen-tool-docs.ts && vp fmt --write docs/tools-reference.md",
+    "gen:docs": "bun run --bun scripts/gen-tool-docs.ts && vp fmt --write docs/content/docs/reference docs/content/docs/guides/config-schema.md docs/content/docs/guides/prompt-catalog.md",
     "gen": "bun run --bun gen:schemas && bun run --bun gen:docs",
     "start": "bun run --bun src/cli.ts serve",
     "start:dev": "bun run --watch --bun src/cli.ts serve",

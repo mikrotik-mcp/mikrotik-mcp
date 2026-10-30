@@ -26,7 +26,7 @@ import { getConfig } from "../core/runtime";
 
 const NO_ENGINE =
   "Alerting is not configured. Add an `alerts` block to your config file with at least one " +
-  "channel, then reload — see docs/alerting.md.";
+  "channel, then reload — see the Alerting guide in the documentation website.";
 
 /** Rules as configured, with the engine's live state folded in. */
 function renderRules(): string {

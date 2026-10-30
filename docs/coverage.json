@@ -1,0 +1,2004 @@
+{
+  "version": "6.10.0",
+  "toolCount": 983,
+  "moduleCount": 155,
+  "dashboardCount": 43,
+  "modules": [
+    {
+      "slug": "client-check",
+      "tools": [
+        "create_client_check",
+        "list_client_checks",
+        "compare_client_checks",
+        "close_client_check"
+      ]
+    },
+    {
+      "slug": "router-migration",
+      "tools": [
+        "inspect_router_migration",
+        "preview_router_migration",
+        "list_router_migrations",
+        "apply_router_migration",
+        "undo_router_migration"
+      ]
+    },
+    {
+      "slug": "support-bundle",
+      "tools": [
+        "create_support_bundle",
+        "list_support_bundles",
+        "export_support_bundle",
+        "delete_support_bundle"
+      ]
+    },
+    {
+      "slug": "home-internet",
+      "tools": [
+        "diagnose_home_internet",
+        "compare_home_paths",
+        "get_home_internet",
+        "refresh_home_devices",
+        "name_home_device",
+        "preview_home_policy",
+        "apply_home_policy",
+        "undo_home_policy"
+      ]
+    },
+    {
+      "slug": "round-trip",
+      "tools": ["trace_round_trip"]
+    },
+    {
+      "slug": "service-contracts",
+      "tools": [
+        "audit_service_contracts",
+        "list_service_probe_targets",
+        "create_service_contract",
+        "list_service_contracts",
+        "run_service_contract",
+        "service_contract_history"
+      ]
+    },
+    {
+      "slug": "service-routing",
+      "tools": [
+        "list_service_routing",
+        "service_routing_inventory",
+        "service_routing_address_page",
+        "service_routing_traffic",
+        "create_service_routing",
+        "probe_service_routing",
+        "preview_service_routing",
+        "apply_service_routing",
+        "arm_service_routing"
+      ]
+    },
+    {
+      "slug": "flight-recorder",
+      "tools": [
+        "get_flight_recorder",
+        "configure_flight_recorder",
+        "freeze_network_incident",
+        "export_network_incident"
+      ]
+    },
+    {
+      "slug": "recovery-lab",
+      "tools": [
+        "get_recovery_lab",
+        "recovery_lab_inventory",
+        "prepare_recovery_lab",
+        "start_recovery_lab",
+        "poll_recovery_lab",
+        "destroy_recovery_lab"
+      ]
+    },
+    {
+      "slug": "investigations",
+      "tools": [
+        "inspect_flow_path",
+        "list_client_flow_candidates",
+        "create_investigation",
+        "list_investigations",
+        "get_investigation"
+      ]
+    },
+    {
+      "slug": "tool-gateway",
+      "tools": ["get_tool_call", "find_tools", "describe_tool", "invoke_tool"]
+    },
+    {
+      "slug": "explain",
+      "tools": ["explain_device", "explain_section", "diff_explanations"]
+    },
+    {
+      "slug": "server-pulse",
+      "tools": ["check_server_pulse"]
+    },
+    {
+      "slug": "mcp-settings",
+      "tools": [
+        "get_mcp_settings",
+        "get_mcp_settings_schema",
+        "preview_mcp_settings",
+        "update_mcp_settings",
+        "confirm_mcp_settings",
+        "rollback_mcp_settings"
+      ]
+    },
+    {
+      "slug": "device-capabilities",
+      "tools": ["get_device_capabilities", "refresh_device_capabilities"]
+    },
+    {
+      "slug": "alerting",
+      "tools": [
+        "list_alert_rules",
+        "get_alert_history",
+        "test_alert_channel",
+        "add_alert_rule",
+        "update_alert_rule",
+        "remove_alert_rule",
+        "mute_alert_rule"
+      ]
+    },
+    {
+      "slug": "raw-command",
+      "tools": ["run_routeros_command"]
+    },
+    {
+      "slug": "interfaces",
+      "tools": ["list_interfaces", "get_interface", "enable_interface", "disable_interface"]
+    },
+    {
+      "slug": "vlan",
+      "tools": [
+        "create_vlan_interface",
+        "list_vlan_interfaces",
+        "get_vlan_interface",
+        "update_vlan_interface",
+        "remove_vlan_interface"
+      ]
+    },
+    {
+      "slug": "vlan-designer",
+      "tools": ["get_vlan_segmentation_guide", "design_network_segment"]
+    },
+    {
+      "slug": "bridge",
+      "tools": [
+        "create_bridge",
+        "list_bridges",
+        "get_bridge",
+        "update_bridge",
+        "remove_bridge",
+        "add_bridge_port",
+        "list_bridge_ports",
+        "remove_bridge_port",
+        "list_bridge_hosts",
+        "add_bridge_vlan",
+        "list_bridge_vlans"
+      ]
+    },
+    {
+      "slug": "wireless",
+      "tools": [
+        "create_wireless_interface",
+        "list_wireless_interfaces",
+        "get_wireless_interface",
+        "get_wireless_interface_status",
+        "remove_wireless_interface",
+        "enable_wireless_interface",
+        "disable_wireless_interface",
+        "scan_wireless_networks",
+        "scan_wifi_channels",
+        "get_wireless_registration_table",
+        "check_wireless_support",
+        "create_wireless_security_profile",
+        "list_wireless_security_profiles",
+        "get_wireless_security_profile",
+        "remove_wireless_security_profile",
+        "set_wireless_security_profile",
+        "create_wireless_access_list",
+        "list_wireless_access_list",
+        "remove_wireless_access_list_entry",
+        "update_wireless_interface",
+        "list_wifi_countries"
+      ]
+    },
+    {
+      "slug": "wifi-optimizer",
+      "tools": ["tune_wifi_channel"]
+    },
+    {
+      "slug": "capsman",
+      "tools": [
+        "run_capsman_audit",
+        "audit_capsman_coverage",
+        "report_weak_signal_clients",
+        "audit_capsman_load",
+        "audit_capsman_ft",
+        "audit_capsman_ha",
+        "steer_client",
+        "apply_capsman_load_balance",
+        "apply_capsman_channel_plan",
+        "enable_capsman_ft",
+        "setup_capsman_ha",
+        "apply_capsman_fixes"
+      ]
+    },
+    {
+      "slug": "poe",
+      "tools": ["get_poe_monitor", "list_poe", "get_poe_settings"]
+    },
+    {
+      "slug": "switch-settings",
+      "tools": ["list_switches", "get_switch", "update_switch"]
+    },
+    {
+      "slug": "switch-port",
+      "tools": ["list_switch_ports", "get_switch_port", "update_switch_port"]
+    },
+    {
+      "slug": "switch-port-isolation",
+      "tools": [
+        "add_switch_port_isolation",
+        "list_switch_port_isolation",
+        "get_switch_port_isolation",
+        "update_switch_port_isolation",
+        "remove_switch_port_isolation"
+      ]
+    },
+    {
+      "slug": "switch-rule",
+      "tools": [
+        "add_switch_rule",
+        "list_switch_rules",
+        "get_switch_rule",
+        "update_switch_rule",
+        "remove_switch_rule",
+        "enable_switch_rule",
+        "disable_switch_rule"
+      ]
+    },
+    {
+      "slug": "ip-address",
+      "tools": ["add_ip_address", "list_ip_addresses", "get_ip_address", "remove_ip_address"]
+    },
+    {
+      "slug": "ip-pool",
+      "tools": [
+        "create_ip_pool",
+        "list_ip_pools",
+        "get_ip_pool",
+        "update_ip_pool",
+        "remove_ip_pool",
+        "list_ip_pool_used",
+        "expand_ip_pool"
+      ]
+    },
+    {
+      "slug": "routes",
+      "tools": [
+        "add_route",
+        "list_routes",
+        "get_route",
+        "update_route",
+        "remove_route",
+        "enable_route",
+        "disable_route",
+        "get_routing_table",
+        "check_route_path",
+        "get_route_cache",
+        "flush_route_cache",
+        "add_default_route",
+        "add_blackhole_route",
+        "get_route_statistics"
+      ]
+    },
+    {
+      "slug": "multiwan",
+      "tools": ["setup_wan_failover", "setup_wan_loadbalance"]
+    },
+    {
+      "slug": "dhcp",
+      "tools": [
+        "create_dhcp_server",
+        "list_dhcp_servers",
+        "get_dhcp_server",
+        "create_dhcp_network",
+        "create_dhcp_pool",
+        "remove_dhcp_server"
+      ]
+    },
+    {
+      "slug": "ip-dhcp-client",
+      "tools": [
+        "list_dhcp_clients",
+        "get_dhcp_client",
+        "add_dhcp_client",
+        "set_dhcp_client",
+        "renew_dhcp_client",
+        "remove_dhcp_client"
+      ]
+    },
+    {
+      "slug": "hotspot-builder",
+      "tools": ["build_guest_hotspot", "generate_hotspot_vouchers"]
+    },
+    {
+      "slug": "dns",
+      "tools": [
+        "set_dns_servers",
+        "get_dns_settings",
+        "add_dns_static",
+        "list_dns_static",
+        "get_dns_static",
+        "update_dns_static",
+        "remove_dns_static",
+        "enable_dns_static",
+        "disable_dns_static",
+        "get_dns_cache",
+        "flush_dns_cache",
+        "get_dns_cache_statistics",
+        "add_dns_regexp",
+        "test_dns_query",
+        "export_dns_config"
+      ]
+    },
+    {
+      "slug": "parental-controls",
+      "tools": ["set_time_policy", "remove_time_policy"]
+    },
+    {
+      "slug": "ipv6-address",
+      "tools": [
+        "add_ipv6_address",
+        "list_ipv6_addresses",
+        "get_ipv6_address",
+        "remove_ipv6_address"
+      ]
+    },
+    {
+      "slug": "ipv6-dhcp-client",
+      "tools": [
+        "add_ipv6_dhcp_client",
+        "list_ipv6_dhcp_clients",
+        "get_ipv6_dhcp_client",
+        "release_ipv6_dhcp_client",
+        "renew_ipv6_dhcp_client",
+        "remove_ipv6_dhcp_client"
+      ]
+    },
+    {
+      "slug": "ipv6-dhcp-relay",
+      "tools": [
+        "add_ipv6_dhcp_relay",
+        "list_ipv6_dhcp_relays",
+        "get_ipv6_dhcp_relay",
+        "enable_ipv6_dhcp_relay",
+        "disable_ipv6_dhcp_relay",
+        "remove_ipv6_dhcp_relay"
+      ]
+    },
+    {
+      "slug": "ipv6-dhcp-server",
+      "tools": [
+        "create_ipv6_dhcp_server",
+        "list_ipv6_dhcp_servers",
+        "get_ipv6_dhcp_server",
+        "remove_ipv6_dhcp_server",
+        "add_ipv6_dhcp_binding",
+        "list_ipv6_dhcp_bindings",
+        "remove_ipv6_dhcp_binding",
+        "add_ipv6_dhcp_option",
+        "list_ipv6_dhcp_options",
+        "remove_ipv6_dhcp_option"
+      ]
+    },
+    {
+      "slug": "ipv6-firewall-filter",
+      "tools": [
+        "create_ipv6_filter_rule",
+        "list_ipv6_filter_rules",
+        "get_ipv6_filter_rule",
+        "update_ipv6_filter_rule",
+        "remove_ipv6_filter_rule",
+        "move_ipv6_filter_rule",
+        "enable_ipv6_filter_rule",
+        "disable_ipv6_filter_rule"
+      ]
+    },
+    {
+      "slug": "ipv6-firewall-nat",
+      "tools": [
+        "create_ipv6_nat_rule",
+        "list_ipv6_nat_rules",
+        "get_ipv6_nat_rule",
+        "update_ipv6_nat_rule",
+        "remove_ipv6_nat_rule",
+        "move_ipv6_nat_rule",
+        "enable_ipv6_nat_rule",
+        "disable_ipv6_nat_rule"
+      ]
+    },
+    {
+      "slug": "ipv6-firewall-mangle",
+      "tools": [
+        "create_ipv6_mangle_rule",
+        "list_ipv6_mangle_rules",
+        "get_ipv6_mangle_rule",
+        "update_ipv6_mangle_rule",
+        "remove_ipv6_mangle_rule",
+        "move_ipv6_mangle_rule",
+        "enable_ipv6_mangle_rule",
+        "disable_ipv6_mangle_rule"
+      ]
+    },
+    {
+      "slug": "ipv6-firewall-raw",
+      "tools": [
+        "create_ipv6_raw_rule",
+        "list_ipv6_raw_rules",
+        "get_ipv6_raw_rule",
+        "update_ipv6_raw_rule",
+        "remove_ipv6_raw_rule",
+        "move_ipv6_raw_rule",
+        "enable_ipv6_raw_rule",
+        "disable_ipv6_raw_rule"
+      ]
+    },
+    {
+      "slug": "ipv6-firewall-address-list",
+      "tools": [
+        "add_ipv6_address_list_entry",
+        "list_ipv6_address_lists",
+        "get_ipv6_address_list_entry",
+        "remove_ipv6_address_list_entry",
+        "enable_ipv6_address_list_entry",
+        "disable_ipv6_address_list_entry"
+      ]
+    },
+    {
+      "slug": "ipv6-nd",
+      "tools": [
+        "add_ipv6_nd",
+        "list_ipv6_nd",
+        "get_ipv6_nd",
+        "update_ipv6_nd",
+        "remove_ipv6_nd",
+        "add_ipv6_nd_prefix",
+        "list_ipv6_nd_prefixes",
+        "remove_ipv6_nd_prefix"
+      ]
+    },
+    {
+      "slug": "ipv6-neighbor",
+      "tools": ["list_ipv6_neighbors", "get_ipv6_neighbor", "remove_ipv6_neighbor"]
+    },
+    {
+      "slug": "ipv6-pool",
+      "tools": [
+        "create_ipv6_pool",
+        "list_ipv6_pools",
+        "get_ipv6_pool",
+        "list_ipv6_pool_used",
+        "update_ipv6_pool",
+        "remove_ipv6_pool"
+      ]
+    },
+    {
+      "slug": "ipv6-route",
+      "tools": [
+        "add_ipv6_route",
+        "add_ipv6_default_route",
+        "list_ipv6_routes",
+        "get_ipv6_route",
+        "remove_ipv6_route",
+        "enable_ipv6_route",
+        "disable_ipv6_route"
+      ]
+    },
+    {
+      "slug": "ipv6-settings",
+      "tools": ["get_ipv6_settings", "update_ipv6_settings"]
+    },
+    {
+      "slug": "routing-id",
+      "tools": [
+        "list_routing_ids",
+        "get_routing_id",
+        "add_routing_id",
+        "update_routing_id",
+        "remove_routing_id",
+        "set_routing_id_enabled"
+      ]
+    },
+    {
+      "slug": "routing-settings",
+      "tools": ["get_routing_settings", "update_routing_settings"]
+    },
+    {
+      "slug": "routing-table",
+      "tools": [
+        "list_routing_tables",
+        "get_routing_table_def",
+        "add_routing_table",
+        "update_routing_table",
+        "remove_routing_table",
+        "set_routing_table_enabled"
+      ]
+    },
+    {
+      "slug": "routing-rule",
+      "tools": [
+        "list_routing_rules",
+        "get_routing_rule",
+        "add_routing_rule",
+        "update_routing_rule",
+        "remove_routing_rule",
+        "set_routing_rule_enabled"
+      ]
+    },
+    {
+      "slug": "routing-nexthop",
+      "tools": ["list_routing_nexthops", "get_routing_nexthop_stats"]
+    },
+    {
+      "slug": "routing-filter",
+      "tools": [
+        "list_routing_filter_rules",
+        "add_routing_filter_rule",
+        "update_routing_filter_rule",
+        "remove_routing_filter_rule",
+        "set_routing_filter_rule_enabled",
+        "list_routing_filter_select_rules",
+        "list_routing_filter_num_lists",
+        "add_routing_filter_num_list",
+        "remove_routing_filter_num_list"
+      ]
+    },
+    {
+      "slug": "routing-bfd",
+      "tools": [
+        "list_bfd_configurations",
+        "add_bfd_configuration",
+        "update_bfd_configuration",
+        "remove_bfd_configuration",
+        "set_bfd_configuration_enabled",
+        "list_bfd_sessions"
+      ]
+    },
+    {
+      "slug": "routing-bgp",
+      "tools": [
+        "list_bgp_instances",
+        "update_bgp_instance_med_comparison",
+        "list_bgp_connections",
+        "get_bgp_connection",
+        "add_bgp_connection",
+        "update_bgp_connection",
+        "remove_bgp_connection",
+        "set_bgp_connection_enabled",
+        "list_bgp_templates",
+        "add_bgp_template",
+        "remove_bgp_template",
+        "list_bgp_sessions",
+        "list_bgp_advertisements"
+      ]
+    },
+    {
+      "slug": "routing-ospf",
+      "tools": [
+        "list_ospf_instances",
+        "add_ospf_instance",
+        "update_ospf_instance",
+        "remove_ospf_instance",
+        "list_ospf_areas",
+        "add_ospf_area",
+        "remove_ospf_area",
+        "list_ospf_area_ranges",
+        "add_ospf_area_range",
+        "remove_ospf_area_range",
+        "list_ospf_interface_templates",
+        "add_ospf_interface_template",
+        "remove_ospf_interface_template",
+        "list_ospf_neighbors",
+        "list_ospf_lsa"
+      ]
+    },
+    {
+      "slug": "routing-rip",
+      "tools": [
+        "list_rip_instances",
+        "add_rip_instance",
+        "update_rip_instance",
+        "remove_rip_instance",
+        "list_rip_interface_templates",
+        "add_rip_interface_template",
+        "remove_rip_interface_template",
+        "list_rip_static_neighbors",
+        "add_rip_static_neighbor",
+        "remove_rip_static_neighbor",
+        "list_rip_neighbors"
+      ]
+    },
+    {
+      "slug": "routing-pimsm",
+      "tools": [
+        "list_pimsm_instances",
+        "add_pimsm_instance",
+        "remove_pimsm_instance",
+        "list_pimsm_interface_templates",
+        "add_pimsm_interface_template",
+        "remove_pimsm_interface_template",
+        "list_pimsm_rps",
+        "add_pimsm_rp",
+        "remove_pimsm_rp",
+        "list_pimsm_neighbors"
+      ]
+    },
+    {
+      "slug": "routing-igmp-proxy",
+      "tools": [
+        "get_igmp_proxy_settings",
+        "update_igmp_proxy_settings",
+        "list_igmp_proxy_interfaces",
+        "add_igmp_proxy_interface",
+        "update_igmp_proxy_interface",
+        "remove_igmp_proxy_interface",
+        "set_igmp_proxy_interface_enabled",
+        "list_igmp_proxy_mfc"
+      ]
+    },
+    {
+      "slug": "routing-gmp",
+      "tools": ["list_gmp_interfaces", "list_gmp_group_memberships"]
+    },
+    {
+      "slug": "routing-rpki",
+      "tools": [
+        "list_rpki_sessions",
+        "add_rpki_session",
+        "update_rpki_session",
+        "remove_rpki_session",
+        "set_rpki_session_enabled"
+      ]
+    },
+    {
+      "slug": "firewall-filter",
+      "tools": [
+        "create_filter_rule",
+        "list_filter_rules",
+        "get_filter_rule",
+        "update_filter_rule",
+        "remove_filter_rule",
+        "move_filter_rule",
+        "enable_filter_rule",
+        "disable_filter_rule",
+        "create_basic_firewall_setup"
+      ]
+    },
+    {
+      "slug": "web-proxy",
+      "tools": [
+        "get_web_proxy",
+        "update_web_proxy",
+        "monitor_web_proxy",
+        "list_web_proxy_access_rules",
+        "add_web_proxy_access_rule",
+        "remove_web_proxy_access_rule",
+        "move_web_proxy_access_rule"
+      ]
+    },
+    {
+      "slug": "firewall-nat",
+      "tools": [
+        "create_nat_rule",
+        "list_nat_rules",
+        "get_nat_rule",
+        "update_nat_rule",
+        "remove_nat_rule",
+        "move_nat_rule",
+        "enable_nat_rule",
+        "disable_nat_rule"
+      ]
+    },
+    {
+      "slug": "firewall-mangle",
+      "tools": [
+        "create_mangle_rule",
+        "list_mangle_rules",
+        "get_mangle_rule",
+        "update_mangle_rule",
+        "remove_mangle_rule",
+        "move_mangle_rule",
+        "enable_mangle_rule",
+        "disable_mangle_rule"
+      ]
+    },
+    {
+      "slug": "port-forward",
+      "tools": ["forward_port"]
+    },
+    {
+      "slug": "address-list",
+      "tools": [
+        "add_address_list_entry",
+        "list_address_lists",
+        "get_address_list_entry",
+        "remove_address_list_entry",
+        "enable_address_list_entry",
+        "disable_address_list_entry"
+      ]
+    },
+    {
+      "slug": "address-sets",
+      "tools": [
+        "compose_address_set",
+        "list_address_sets",
+        "create_address_set",
+        "preview_address_set",
+        "apply_address_set"
+      ]
+    },
+    {
+      "slug": "connected-devices",
+      "tools": [
+        "list_connected_devices",
+        "get_connected_device",
+        "get_device_traffic",
+        "make_device_static",
+        "set_device_ip",
+        "set_device_label",
+        "set_device_limits",
+        "block_device",
+        "allow_device",
+        "remove_device_lease"
+      ]
+    },
+    {
+      "slug": "firewall-audit",
+      "tools": ["firewall_audit"]
+    },
+    {
+      "slug": "attack",
+      "tools": [
+        "scan_for_attacks",
+        "list_attack_incidents",
+        "get_attack_incident",
+        "block_attacker",
+        "unblock_attacker",
+        "list_attack_responses",
+        "configure_attack_response"
+      ]
+    },
+    {
+      "slug": "security-shield",
+      "tools": ["harden_firewall", "audit_firewall_hardening", "remove_firewall_hardening"]
+    },
+    {
+      "slug": "security-hardening",
+      "tools": [
+        "audit_firewall_default_deny",
+        "audit_address_list_enforcement",
+        "audit_kernel_ip_hardening",
+        "audit_ipv6_firewall_baseline",
+        "audit_ssh_hardening",
+        "audit_ip_service_exposure",
+        "audit_connection_tracking_helpers",
+        "audit_management_plane_exposure",
+        "audit_account_hygiene",
+        "audit_certificate_hygiene",
+        "audit_network_segmentation",
+        "audit_dns_resolver_exposure",
+        "add_firewall_default_deny",
+        "enforce_address_list_blocking",
+        "harden_kernel_ip_settings",
+        "bootstrap_ipv6_firewall_baseline",
+        "harden_ssh_service",
+        "harden_ip_service_exposure",
+        "harden_connection_tracking_helpers",
+        "harden_management_plane_exposure",
+        "fix_password_policy",
+        "fix_certificate_crl_policy",
+        "harden_dns_resolver_exposure",
+        "run_security_hardening_audit",
+        "apply_security_hardening_fixes"
+      ]
+    },
+    {
+      "slug": "port-scan-detection",
+      "tools": ["list_port_scan_detection_signatures", "add_port_scan_detection_rules"]
+    },
+    {
+      "slug": "port-knock",
+      "tools": ["setup_port_knock"]
+    },
+    {
+      "slug": "certificate",
+      "tools": [
+        "list_certificates",
+        "get_certificate",
+        "create_certificate",
+        "sign_certificate",
+        "remove_certificate",
+        "import_certificate"
+      ]
+    },
+    {
+      "slug": "cert-steward",
+      "tools": ["audit_certificate_expiry", "request_letsencrypt_certificate"]
+    },
+    {
+      "slug": "simulator",
+      "tools": [
+        "verify_filter_policy",
+        "simulate_packet",
+        "simulate_change",
+        "explain_rule_reachability",
+        "simulate_suite"
+      ]
+    },
+    {
+      "slug": "policy",
+      "tools": [
+        "list_policies",
+        "validate_policy_file",
+        "check_policy_snapshot",
+        "run_policy_check",
+        "explain_policy_finding",
+        "export_policy_report"
+      ]
+    },
+    {
+      "slug": "compliance-audit",
+      "tools": ["run_compliance_audit", "audit_fleet", "audit_remediate", "list_compliance_checks"]
+    },
+    {
+      "slug": "ip-service",
+      "tools": [
+        "list_ip_services",
+        "get_ip_service",
+        "set_ip_service",
+        "enable_ip_service",
+        "disable_ip_service"
+      ]
+    },
+    {
+      "slug": "ip-ssh",
+      "tools": [
+        "get_ssh_settings",
+        "set_ssh_settings",
+        "regenerate_ssh_host_key",
+        "export_ssh_host_key",
+        "import_ssh_host_key"
+      ]
+    },
+    {
+      "slug": "ip-cloud",
+      "tools": ["get_ip_cloud", "set_ip_cloud", "force_cloud_update", "set_ip_cloud_advanced"]
+    },
+    {
+      "slug": "dot1x-server",
+      "tools": [
+        "add_dot1x_server",
+        "list_dot1x_servers",
+        "get_dot1x_server",
+        "update_dot1x_server",
+        "remove_dot1x_server"
+      ]
+    },
+    {
+      "slug": "dot1x-client",
+      "tools": [
+        "add_dot1x_client",
+        "list_dot1x_clients",
+        "get_dot1x_client",
+        "update_dot1x_client",
+        "remove_dot1x_client"
+      ]
+    },
+    {
+      "slug": "wireguard",
+      "tools": [
+        "create_wireguard_interface",
+        "list_wireguard_interfaces",
+        "get_wireguard_interface",
+        "get_wireguard_status",
+        "update_wireguard_interface",
+        "remove_wireguard_interface",
+        "enable_wireguard_interface",
+        "disable_wireguard_interface",
+        "add_wireguard_peer",
+        "list_wireguard_peers",
+        "get_wireguard_peer",
+        "update_wireguard_peer",
+        "remove_wireguard_peer",
+        "enable_wireguard_peer",
+        "disable_wireguard_peer",
+        "generate_wireguard_client_config"
+      ]
+    },
+    {
+      "slug": "wireguard-mesh",
+      "tools": ["build_wireguard_mesh"]
+    },
+    {
+      "slug": "vpn-onboard",
+      "tools": ["onboard_wireguard_user", "revoke_wireguard_user"]
+    },
+    {
+      "slug": "ipsec",
+      "tools": [
+        "create_ipsec_profile",
+        "list_ipsec_profiles",
+        "get_ipsec_profile",
+        "update_ipsec_profile",
+        "remove_ipsec_profile",
+        "create_ipsec_peer",
+        "list_ipsec_peers",
+        "get_ipsec_peer",
+        "update_ipsec_peer",
+        "remove_ipsec_peer",
+        "create_ipsec_identity",
+        "list_ipsec_identities",
+        "remove_ipsec_identity",
+        "create_ipsec_proposal",
+        "list_ipsec_proposals",
+        "get_ipsec_proposal",
+        "update_ipsec_proposal",
+        "remove_ipsec_proposal",
+        "create_ipsec_policy",
+        "list_ipsec_policies",
+        "remove_ipsec_policy",
+        "get_ipsec_active_peers",
+        "get_ipsec_installed_sa",
+        "flush_ipsec_installed_sa",
+        "get_ipsec_statistics"
+      ]
+    },
+    {
+      "slug": "ppp",
+      "tools": [
+        "create_ppp_profile",
+        "list_ppp_profiles",
+        "get_ppp_profile",
+        "update_ppp_profile",
+        "remove_ppp_profile",
+        "create_ppp_secret",
+        "list_ppp_secrets",
+        "get_ppp_secret",
+        "update_ppp_secret",
+        "remove_ppp_secret",
+        "get_ppp_active",
+        "disconnect_ppp_active"
+      ]
+    },
+    {
+      "slug": "l2tp",
+      "tools": [
+        "get_l2tp_server",
+        "set_l2tp_server",
+        "create_l2tp_client",
+        "list_l2tp_clients",
+        "get_l2tp_client",
+        "remove_l2tp_client",
+        "enable_l2tp_client",
+        "disable_l2tp_client"
+      ]
+    },
+    {
+      "slug": "pptp",
+      "tools": [
+        "get_pptp_server",
+        "set_pptp_server",
+        "create_pptp_client",
+        "list_pptp_clients",
+        "get_pptp_client",
+        "remove_pptp_client"
+      ]
+    },
+    {
+      "slug": "sstp",
+      "tools": [
+        "get_sstp_server",
+        "set_sstp_server",
+        "create_sstp_client",
+        "list_sstp_clients",
+        "get_sstp_client",
+        "remove_sstp_client",
+        "enable_sstp_client",
+        "disable_sstp_client"
+      ]
+    },
+    {
+      "slug": "openvpn",
+      "tools": [
+        "list_ovpn_sessions",
+        "disconnect_ovpn_session",
+        "get_ovpn_server",
+        "set_ovpn_server",
+        "add_ovpn_server",
+        "list_ovpn_servers",
+        "update_ovpn_server",
+        "remove_ovpn_server",
+        "enable_ovpn_server",
+        "disable_ovpn_server",
+        "create_ovpn_client",
+        "list_ovpn_clients",
+        "get_ovpn_client",
+        "remove_ovpn_client",
+        "enable_ovpn_client",
+        "disable_ovpn_client"
+      ]
+    },
+    {
+      "slug": "tunnels",
+      "tools": [
+        "create_gre_tunnel",
+        "list_gre_tunnels",
+        "get_gre_tunnel",
+        "remove_gre_tunnel",
+        "create_ipip_tunnel",
+        "list_ipip_tunnels",
+        "get_ipip_tunnel",
+        "remove_ipip_tunnel",
+        "create_eoip_tunnel",
+        "list_eoip_tunnels",
+        "get_eoip_tunnel",
+        "remove_eoip_tunnel",
+        "create_vxlan_tunnel",
+        "list_vxlan_tunnels",
+        "get_vxlan_tunnel",
+        "remove_vxlan_tunnel"
+      ]
+    },
+    {
+      "slug": "radius",
+      "tools": [
+        "add_radius_server",
+        "list_radius_servers",
+        "get_radius_server",
+        "update_radius_server",
+        "remove_radius_server",
+        "enable_radius_server",
+        "disable_radius_server",
+        "get_radius_incoming",
+        "set_radius_incoming",
+        "reset_radius_counters"
+      ]
+    },
+    {
+      "slug": "user-manager",
+      "tools": [
+        "get_user_manager_settings",
+        "set_user_manager_settings",
+        "add_user_manager_user",
+        "list_user_manager_users",
+        "get_user_manager_user",
+        "update_user_manager_user",
+        "remove_user_manager_user",
+        "add_user_manager_profile",
+        "list_user_manager_profiles",
+        "remove_user_manager_profile",
+        "assign_user_manager_profile",
+        "list_user_manager_user_profiles",
+        "add_user_manager_router",
+        "list_user_manager_routers",
+        "remove_user_manager_router",
+        "add_user_manager_limitation",
+        "list_user_manager_limitations",
+        "remove_user_manager_limitation",
+        "list_user_manager_sessions"
+      ]
+    },
+    {
+      "slug": "aaa-dashboard",
+      "tools": [
+        "manage_radius_user_manager",
+        "get_aaa_section",
+        "aaa_mutate",
+        "get_aaa_settings",
+        "set_aaa_settings"
+      ]
+    },
+    {
+      "slug": "queue",
+      "tools": [
+        "create_queue_type",
+        "list_queue_types",
+        "get_queue_type",
+        "update_queue_type",
+        "remove_queue_type",
+        "create_queue_tree",
+        "list_queue_trees",
+        "get_queue_tree",
+        "update_queue_tree",
+        "remove_queue_tree",
+        "enable_queue_tree",
+        "disable_queue_tree",
+        "create_simple_queue",
+        "list_simple_queues",
+        "get_simple_queue",
+        "update_simple_queue",
+        "remove_simple_queue",
+        "enable_simple_queue",
+        "disable_simple_queue"
+      ]
+    },
+    {
+      "slug": "qos-architect",
+      "tools": ["apply_traffic_shaping"]
+    },
+    {
+      "slug": "queue-interface",
+      "tools": ["list_queue_interfaces", "get_queue_interface", "update_queue_interface"]
+    },
+    {
+      "slug": "devices",
+      "tools": ["list_mikrotik_devices"]
+    },
+    {
+      "slug": "system",
+      "tools": [
+        "get_system_identity",
+        "set_system_identity",
+        "get_system_resources",
+        "get_system_health",
+        "get_routerboard",
+        "get_system_clock",
+        "set_system_clock",
+        "get_ntp_client",
+        "set_ntp_client",
+        "get_installed_packages",
+        "check_for_updates",
+        "get_system_history",
+        "reboot_system",
+        "shutdown_system"
+      ]
+    },
+    {
+      "slug": "device-mode",
+      "tools": ["get_device_mode", "update_device_mode_features"]
+    },
+    {
+      "slug": "system-config",
+      "tools": [
+        "list_system_console",
+        "list_leds",
+        "get_leds_settings",
+        "set_leds_settings",
+        "get_license",
+        "get_note",
+        "set_note",
+        "get_ntp_server",
+        "set_ntp_server",
+        "change_password",
+        "list_ports",
+        "get_port",
+        "set_port",
+        "get_regulatory",
+        "reset_configuration",
+        "list_special_login",
+        "get_watchdog",
+        "set_watchdog"
+      ]
+    },
+    {
+      "slug": "firmware-lifecycle",
+      "tools": ["firmware_check", "firmware_stage", "firmware_upgrade", "firmware_status"]
+    },
+    {
+      "slug": "network-tools",
+      "tools": [
+        "ping",
+        "traceroute",
+        "bandwidth_test",
+        "resolve_dns",
+        "add_netwatch",
+        "list_netwatch",
+        "get_netwatch",
+        "remove_netwatch"
+      ]
+    },
+    {
+      "slug": "ip-intelligence",
+      "tools": ["lookup_ip_intelligence"]
+    },
+    {
+      "slug": "root-cause",
+      "tools": ["diagnose", "trace_path", "correlate_events", "suggest_fix"]
+    },
+    {
+      "slug": "ssh-test",
+      "tools": ["test_ssh_to_device", "test_ssh_to_host", "test_ssh_from_device"]
+    },
+    {
+      "slug": "neighbor",
+      "tools": [
+        "list_neighbors",
+        "get_neighbor_discovery_settings",
+        "set_neighbor_discovery_settings"
+      ]
+    },
+    {
+      "slug": "l2-fabric",
+      "tools": ["map_l2_fabric", "locate_host_port"]
+    },
+    {
+      "slug": "advisories",
+      "tools": ["audit_known_vulnerabilities", "list_security_advisories"]
+    },
+    {
+      "slug": "access",
+      "tools": ["get_access_scope", "narrow_access_scope"]
+    },
+    {
+      "slug": "tool-bandwidth-server",
+      "tools": ["get_bandwidth_server", "update_bandwidth_server", "list_bandwidth_server_sessions"]
+    },
+    {
+      "slug": "tool-flood-ping",
+      "tools": ["flood_ping"]
+    },
+    {
+      "slug": "tool-graphing",
+      "tools": [
+        "add_graphing_interface",
+        "add_graphing_queue",
+        "add_graphing_resource",
+        "list_graphing",
+        "remove_graphing"
+      ]
+    },
+    {
+      "slug": "tool-ip-scan",
+      "tools": ["ip_scan"]
+    },
+    {
+      "slug": "tool-mac-server",
+      "tools": [
+        "get_mac_server",
+        "update_mac_server",
+        "get_mac_winbox",
+        "update_mac_winbox",
+        "get_mac_ping",
+        "update_mac_ping",
+        "list_mac_server_sessions"
+      ]
+    },
+    {
+      "slug": "tool-sniffer",
+      "tools": [
+        "get_sniffer_settings",
+        "update_sniffer_settings",
+        "start_sniffer",
+        "stop_sniffer",
+        "save_sniffer",
+        "list_sniffer_packets",
+        "list_sniffer_hosts",
+        "list_sniffer_protocols",
+        "list_sniffer_connections"
+      ]
+    },
+    {
+      "slug": "packet-capture",
+      "tools": [
+        "start_packet_capture",
+        "mirror_traffic_to_capture",
+        "packet_capture_status",
+        "stop_packet_capture"
+      ]
+    },
+    {
+      "slug": "tool-profile",
+      "tools": ["profile_cpu"]
+    },
+    {
+      "slug": "tool-romon",
+      "tools": [
+        "get_romon",
+        "update_romon",
+        "add_romon_port",
+        "list_romon_ports",
+        "remove_romon_port"
+      ]
+    },
+    {
+      "slug": "tool-sms",
+      "tools": ["get_sms_settings", "update_sms_settings", "send_sms", "list_sms_inbox"]
+    },
+    {
+      "slug": "tool-speed-test",
+      "tools": ["speed_test"]
+    },
+    {
+      "slug": "tool-traffic-generator",
+      "tools": [
+        "add_traffic_generator_port",
+        "list_traffic_generator_ports",
+        "remove_traffic_generator_port",
+        "add_traffic_generator_stream",
+        "list_traffic_generator_streams",
+        "remove_traffic_generator_stream",
+        "start_traffic_generator",
+        "stop_traffic_generator"
+      ]
+    },
+    {
+      "slug": "tool-traffic-monitor",
+      "tools": [
+        "add_traffic_monitor",
+        "list_traffic_monitors",
+        "get_traffic_monitor",
+        "update_traffic_monitor",
+        "remove_traffic_monitor",
+        "enable_traffic_monitor",
+        "disable_traffic_monitor"
+      ]
+    },
+    {
+      "slug": "traffic-flow",
+      "tools": [
+        "get_flow_collector_health",
+        "get_traffic_flow_settings",
+        "set_traffic_flow_settings",
+        "list_traffic_flow_targets",
+        "add_traffic_flow_target",
+        "remove_traffic_flow_target",
+        "start_flow_collector",
+        "stop_flow_collector",
+        "flow_top_talkers",
+        "analyze_flows"
+      ]
+    },
+    {
+      "slug": "bandwidth-forecast",
+      "tools": ["forecast_link_saturation"]
+    },
+    {
+      "slug": "tool-wol",
+      "tools": ["wake_on_lan"]
+    },
+    {
+      "slug": "scheduler",
+      "tools": [
+        "create_scheduler",
+        "list_schedulers",
+        "get_scheduler",
+        "remove_scheduler",
+        "enable_scheduler",
+        "disable_scheduler",
+        "add_script",
+        "list_scripts",
+        "remove_script",
+        "run_script"
+      ]
+    },
+    {
+      "slug": "threat-feed",
+      "tools": ["subscribe_threat_feed", "remove_threat_feed"]
+    },
+    {
+      "slug": "users",
+      "tools": [
+        "add_user",
+        "list_users",
+        "get_user",
+        "update_user",
+        "remove_user",
+        "disable_user",
+        "enable_user",
+        "add_user_group",
+        "list_user_groups",
+        "get_user_group",
+        "update_user_group",
+        "remove_user_group",
+        "get_active_users",
+        "disconnect_user",
+        "export_user_config",
+        "set_user_ssh_keys",
+        "list_user_ssh_keys",
+        "remove_user_ssh_key"
+      ]
+    },
+    {
+      "slug": "logs",
+      "tools": [
+        "get_logs",
+        "get_logs_by_severity",
+        "get_logs_by_topic",
+        "search_logs",
+        "get_system_events",
+        "get_security_logs",
+        "clear_logs",
+        "get_log_statistics",
+        "export_logs",
+        "monitor_logs"
+      ]
+    },
+    {
+      "slug": "logging",
+      "tools": [
+        "add_logging_rule",
+        "list_logging_rules",
+        "remove_logging_rule",
+        "add_logging_action",
+        "list_logging_actions",
+        "remove_logging_action"
+      ]
+    },
+    {
+      "slug": "backup",
+      "tools": [
+        "create_backup",
+        "list_backups",
+        "create_export",
+        "export_section",
+        "download_file",
+        "upload_file",
+        "restore_backup",
+        "import_configuration",
+        "remove_file",
+        "backup_info"
+      ]
+    },
+    {
+      "slug": "config-snapshot",
+      "tools": [
+        "capture_config_snapshot",
+        "list_config_snapshots",
+        "get_config_snapshot",
+        "diff_config_snapshots",
+        "remove_config_snapshot"
+      ]
+    },
+    {
+      "slug": "config-drift",
+      "tools": [
+        "config_set_baseline",
+        "config_check_drift",
+        "config_reconcile",
+        "config_promote_drift"
+      ]
+    },
+    {
+      "slug": "s3-backup",
+      "tools": [
+        "s3_backup_status",
+        "upload_backup_to_s3",
+        "download_backup_from_s3",
+        "list_s3_backups",
+        "s3_backup_info",
+        "delete_s3_backup"
+      ]
+    },
+    {
+      "slug": "local-backup",
+      "tools": [
+        "create_local_backup",
+        "list_local_backups",
+        "get_local_backup",
+        "rename_local_backup",
+        "delete_local_backup",
+        "restore_local_backup"
+      ]
+    },
+    {
+      "slug": "disk",
+      "tools": [
+        "list_disks",
+        "get_disk",
+        "format_disk",
+        "set_disk",
+        "share_disk",
+        "add_disk",
+        "eject_disk",
+        "remove_disk"
+      ]
+    },
+    {
+      "slug": "container",
+      "tools": [
+        "get_routeros_container_guide",
+        "list_containers",
+        "get_container",
+        "add_container",
+        "update_container",
+        "start_container",
+        "stop_container",
+        "remove_container",
+        "get_container_config",
+        "set_container_config",
+        "list_container_envs",
+        "add_container_env",
+        "remove_container_env",
+        "list_container_mounts",
+        "add_container_mount",
+        "remove_container_mount"
+      ]
+    },
+    {
+      "slug": "safe-mode",
+      "tools": [
+        "set_safe_mode_timeout",
+        "safe_mode_status",
+        "enable_safe_mode",
+        "commit_safe_mode",
+        "rollback_safe_mode"
+      ]
+    },
+    {
+      "slug": "txn",
+      "tools": [
+        "begin_transaction",
+        "add_transaction_step",
+        "verify_transaction",
+        "commit_transaction",
+        "abort_transaction"
+      ]
+    },
+    {
+      "slug": "dr-drill",
+      "tools": ["run_failover_drill"]
+    },
+    {
+      "slug": "rollout",
+      "tools": ["plan_rollout", "start_rollout", "rollout_status", "abort_rollout"]
+    },
+    {
+      "slug": "schedule",
+      "tools": [
+        "list_schedules",
+        "add_schedule",
+        "remove_schedule",
+        "run_schedule_now",
+        "get_audit_timeline"
+      ]
+    },
+    {
+      "slug": "change-plan",
+      "tools": ["plan_changes", "apply_plan"]
+    },
+    {
+      "slug": "memory",
+      "tools": [
+        "memory_get_scope",
+        "memory_set_scope",
+        "memory_remember",
+        "memory_recall",
+        "memory_review",
+        "memory_revise",
+        "memory_history",
+        "memory_create_entities",
+        "memory_create_relations",
+        "memory_add_observations",
+        "memory_delete_entities",
+        "memory_delete_observations",
+        "memory_delete_relations",
+        "memory_read_graph",
+        "memory_search_nodes",
+        "memory_open_nodes"
+      ]
+    },
+    {
+      "slug": "app-views",
+      "tools": ["show_system_dashboard", "show_interfaces", "show_firewall_filter"]
+    }
+  ],
+  "dashboard": [
+    {
+      "id": "ip-intelligence",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/ip-intelligence.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "openvpn",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/openvpn.tsx", "ui/observability/openvpn-history.tsx"],
+      "reviewScope": "Controls, tabs, fields, draft/apply boundaries, cache and data limitations checked against source; secondary screens captured read-only."
+    },
+    {
+      "id": "recovery-lab",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/recovery-lab.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "flight-recorder",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/flight-recorder.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "service-routing",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": [
+        "ui/observability/service-routing.tsx",
+        "ui/observability/service-routing-inventory.tsx",
+        "ui/observability/service-probes-editor.tsx"
+      ],
+      "reviewScope": "Controls, tabs, fields, draft/apply boundaries, cache and data limitations checked against source; secondary screens captured read-only."
+    },
+    {
+      "id": "client-checks",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/client-checks.tsx", "src/client-check/model.ts"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "router-migration",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/router-migration.tsx"],
+      "reviewScope": "Controls, forms, confirmation gates, output interpretation and limitations checked against source."
+    },
+    {
+      "id": "support-bundles",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/support-bundles.tsx"],
+      "reviewScope": "Controls, forms, confirmation gates, output interpretation and limitations checked against source."
+    },
+    {
+      "id": "prompts",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/prompts.tsx"],
+      "reviewScope": "Controls, forms, confirmation gates, output interpretation and limitations checked against source."
+    },
+    {
+      "id": "home-internet",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/home-internet.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "overview",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/main.tsx"],
+      "reviewScope": "Dashboard actions, filters, data meaning and failure boundaries reviewed against current source."
+    },
+    {
+      "id": "devices",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": [
+        "ui/observability/devices-view.tsx",
+        "ui/observability/device-editor.tsx",
+        "ui/observability/device-addresses.tsx",
+        "src/core/device-endpoints.ts"
+      ],
+      "reviewScope": "Controls, tabs, fields, draft/apply boundaries, cache and data limitations checked against source; secondary screens captured read-only."
+    },
+    {
+      "id": "interfaces",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/interfaces.tsx"],
+      "reviewScope": "Dashboard actions, filters, data meaning and failure boundaries reviewed against current source."
+    },
+    {
+      "id": "clients",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/clients.tsx"],
+      "reviewScope": "Forms, controls, evidence interpretation, source prerequisites and execution boundaries reviewed."
+    },
+    {
+      "id": "investigations",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": [
+        "ui/observability/investigations.tsx",
+        "ui/observability/investigation-result.tsx"
+      ],
+      "reviewScope": "Forms, controls, evidence interpretation, source prerequisites and execution boundaries reviewed."
+    },
+    {
+      "id": "service-contracts",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/service-contracts.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "aaa",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": [
+        "ui/observability/aaa.tsx",
+        "ui/observability/aaa-user-profile.tsx",
+        "ui/observability/um-reports.tsx"
+      ],
+      "reviewScope": "Controls, tabs, fields, draft/apply boundaries, cache and data limitations checked against source; secondary screens captured read-only."
+    },
+    {
+      "id": "topology",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/topology.tsx"],
+      "reviewScope": "Forms, controls, evidence interpretation, source prerequisites and execution boundaries reviewed."
+    },
+    {
+      "id": "round-trip",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/round-trip.tsx"],
+      "reviewScope": "Forms, controls, evidence interpretation, source prerequisites and execution boundaries reviewed."
+    },
+    {
+      "id": "fabric",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/posture.tsx"],
+      "reviewScope": "Dashboard actions, filters, data meaning and failure boundaries reviewed against current source."
+    },
+    {
+      "id": "vulns",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/posture.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "access",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/access-view.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "packets",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/packet-capture.tsx", "src/observability/dashboard.ts"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "flows",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/flows.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "site-activity",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/site-activity.tsx"],
+      "reviewScope": "Controls, tabs, fields, draft/apply boundaries, cache and data limitations checked against source; secondary screens captured read-only."
+    },
+    {
+      "id": "snapshots",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/snapshots.tsx"],
+      "reviewScope": "Controls, confirmation paths, state meanings and implemented limitations checked against source; stale read-only/all-or-nothing claims removed."
+    },
+    {
+      "id": "drift",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/drift.tsx", "src/observability/drift-routes.ts"],
+      "reviewScope": "Controls, confirmation paths, state meanings and implemented limitations checked against source; stale read-only/all-or-nothing claims removed."
+    },
+    {
+      "id": "attacks",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/attacks.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "policies",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/policies.tsx"],
+      "reviewScope": "Controls, confirmation paths, state meanings and implemented limitations checked against source; stale read-only/all-or-nothing claims removed."
+    },
+    {
+      "id": "explain",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/explain.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "simulator",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/simulator.tsx", "ui/observability/policy-verifier.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "schedules",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/schedules.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "txn",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/transactions.tsx"],
+      "reviewScope": "Controls, confirmation paths, state meanings and implemented limitations checked against source; stale read-only/all-or-nothing claims removed."
+    },
+    {
+      "id": "plan",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/change-plan.tsx", "ui/observability/rollout.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "s3",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/s3.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "backups",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/backups.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "modules",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/modules.tsx"],
+      "reviewScope": "Dashboard actions, filters, data meaning and failure boundaries reviewed against current source."
+    },
+    {
+      "id": "config",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": [
+        "ui/observability/config-editor.tsx",
+        "ui/observability/config-form.tsx",
+        "ui/observability/config-panels.tsx"
+      ],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "memory",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": [
+        "ui/observability/memory-workspace.tsx",
+        "ui/observability/memory-editors.tsx",
+        "ui/observability/memory-sharing.tsx"
+      ],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "alerts",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/alerts.tsx"],
+      "reviewScope": "Controls, states, workflows, execution boundaries and limitations checked against source. Primary full-page preview retained."
+    },
+    {
+      "id": "releases",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/releases.tsx"],
+      "reviewScope": "Dashboard actions, filters, data meaning and failure boundaries reviewed against current source."
+    },
+    {
+      "id": "capsman",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/capsman.tsx"],
+      "reviewScope": "Controls, confirmation paths, state meanings and implemented limitations checked against source; stale read-only/all-or-nothing claims removed."
+    },
+    {
+      "id": "feed",
+      "screenshot": true,
+      "detailsReviewed": true,
+      "privacyCheck": "Local OCR passed for IPv4 and known AAA/OpenVPN usernames; IPs, snapshot/backup names and AAA/OpenVPN usernames masked",
+      "fullPage": true,
+      "reviewedSources": ["ui/observability/main.tsx", "ui/observability/tool-call-lookup.tsx"],
+      "reviewScope": "Dashboard actions, filters, data meaning and failure boundaries reviewed against current source."
+    }
+  ]
+}

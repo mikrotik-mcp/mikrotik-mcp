@@ -22,7 +22,7 @@ Closes #
 - [ ] Each tool has a `title`, a clear `description`, and a correct risk preset
       (`READ` / `WRITE` / `WRITE_IDEMPOTENT` / `DESTRUCTIVE` / `DANGEROUS`)
 - [ ] User values go through the `Cmd` builder / are quoted (no raw interpolation)
-- [ ] I ran `bun run gen` and committed the updated `schemas/` + `docs/tools-reference.md`
+- [ ] I ran `bun run gen` and committed the updated schemas and generated website references
 
 **RouterOS commands this runs** (so reviewers can verify):
 
@@ -36,6 +36,6 @@ How I verified it (device model + RouterOS version, or why no device was needed)
 
 - [ ] `bun run lint` passes
 - [ ] `bun run test:types` passes
-- [ ] `bun test` passes
+- [ ] `bun run test` passes
 - [ ] `bun run build` succeeds
 - [ ] Docs updated if behaviour or configuration changed

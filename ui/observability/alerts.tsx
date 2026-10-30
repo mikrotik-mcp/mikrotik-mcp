@@ -210,7 +210,7 @@ export function AlertsView(): ReactNode {
       <div className="grid gap-3">
         <Note>
           Alerting is not configured. Add an <code>alerts</code> block with at least one channel to
-          your config file, then reload — see <code>docs/alerting.md</code>.
+          your config file, then reload — see the Alerting guide in the documentation website.
         </Note>
       </div>
     );
