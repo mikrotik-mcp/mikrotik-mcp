@@ -1,0 +1,475 @@
+{
+  "maskPolicy": [
+    "IP addresses",
+    "snapshot names",
+    "backup names",
+    "AAA usernames",
+    "OpenVPN connection usernames"
+  ],
+  "captures": [
+    {
+      "id": "ip-intelligence",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "openvpn",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "recovery-lab",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "flight-recorder",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1560,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "service-routing",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 3919,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "client-checks",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "router-migration",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "support-bundles",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "prompts",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "home-internet",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1363,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "overview",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1693,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "devices",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2768,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "interfaces",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2591,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "clients",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "investigations",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1400,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "service-contracts",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "aaa",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2493,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "topology",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "round-trip",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1833,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "fabric",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "vulns",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "access",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2116,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "packets",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "flows",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2896,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "site-activity",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1835,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "snapshots",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "drift",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "attacks",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "policies",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "explain",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "simulator",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1561,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "schedules",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "txn",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "plan",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "s3",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "backups",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "modules",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 5210,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "config",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2362,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "memory",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 3899,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "alerts",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "releases",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 8703,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "capsman",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "feed",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1449,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "openvpn-history",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 3054,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "aaa-users",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "aaa-profiles",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "aaa-limitations",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "aaa-nas-clients",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "aaa-assignments",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "aaa-settings",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "aaa-radius-servers",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 1314,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "devices-connection",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2769,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "devices-authentication",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2769,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "devices-create-key",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2769,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "devices-manage-routers",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 4180,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "site-activity-collection",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 2480,
+      "viewportHeight": 1314,
+      "width": 2365
+    },
+    {
+      "id": "service-probes-editor",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 3919,
+      "viewportHeight": 1314,
+      "width": 2380
+    },
+    {
+      "id": "service-routing-policy",
+      "fullPage": true,
+      "canvasCount": 0,
+      "height": 3919,
+      "viewportHeight": 1314,
+      "width": 2380
+    }
+  ]
+}
