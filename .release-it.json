@@ -6,6 +6,9 @@
     "tag": true,
     "push": true
   },
+  "hooks": {
+    "after:bump": ["bun --no-env-file scripts/sync-release-manifest.ts ${version}", "bun run gen"]
+  },
   "github": {
     "release": true
   }
