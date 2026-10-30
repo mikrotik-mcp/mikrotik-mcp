@@ -19,6 +19,7 @@ import {
   BookOpen,
   Check,
   ChevronRight,
+  Globe2,
   HelpCircle,
   Menu,
   Pencil,
@@ -97,6 +98,7 @@ import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
 import { TransactionsView } from "./transactions";
 import { FlowsView } from "./flows";
+import { SiteActivityView } from "./site-activity";
 import { PoliciesView } from "./policies";
 import { SimulatorView } from "./simulator";
 import { SchedulesView } from "./schedules";
@@ -185,6 +187,14 @@ function initialView(): ViewId {
  * tips — so a newcomer is never lost. Kept terse and action-oriented.
  */
 const HELP: Record<ViewId, { what: string; tips: string[] }> = {
+  "site-activity": {
+    what: "Shows destinations observed through Traffic Flow, client DNS responses and Web Proxy, stored locally for 30 days.",
+    tips: [
+      "A DNS name appears only when the same client resolved that destination recently.",
+      "IP-only rows do not prove which site was opened; shared hosting and encrypted DNS limit visibility.",
+      "Router traffic export and DNS mirroring must be configured before new visits appear.",
+    ],
+  },
   "ip-intelligence": {
     what: "Compare complete public IP metadata from ipquery and ipkit, without router I/O.",
     tips: [
@@ -693,7 +703,9 @@ function ReloadServerButton(): ReactNode {
 
 /** Inline stroke icons for the sidebar — no icon-font dependency. */
 function NavIcon({ name }: { name: ViewId }): ReactNode {
+  if (name === "site-activity") return <Globe2 aria-hidden="true" />;
   const paths: Record<ViewId, ReactNode> = {
+    "site-activity": null,
     "ip-intelligence": (
       <>
         <circle cx="10" cy="10" r="7" />
@@ -1853,6 +1865,7 @@ function App(): ReactNode {
 
               {/* ── Flows ── */}
               {view === "flows" && <FlowsView />}
+              {view === "site-activity" && <SiteActivityView />}
               {view === "txn" && <TransactionsView />}
 
               {/* ── Change Plan ── */}

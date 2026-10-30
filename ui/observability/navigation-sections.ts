@@ -21,6 +21,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
       "home-internet",
       "service-contracts",
       "flows",
+      "site-activity",
       "feed",
       "alerts",
       "schedules",

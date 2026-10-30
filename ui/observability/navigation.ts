@@ -25,6 +25,7 @@ export type ViewId =
   | "access"
   | "packets"
   | "flows"
+  | "site-activity"
   | "snapshots"
   | "drift"
   | "policies"
@@ -116,6 +117,11 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "access", label: "Access Scope", sub: "What this session may call — and what it blocked" },
   { id: "packets", label: "Packets", sub: "Live TZSP capture & decode" },
   { id: "flows", label: "Flows", sub: "NetFlow/IPFIX top talkers, conversations & anomalies" },
+  {
+    id: "site-activity",
+    label: "Site Activity",
+    sub: "Observed destinations by client, DNS and Web Proxy",
+  },
   { id: "snapshots", label: "Snapshots", sub: "Config history & time-travel diff" },
   { id: "drift", label: "Drift Guard", sub: "Golden config baselines & live drift detection" },
   {

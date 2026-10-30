@@ -12,7 +12,7 @@ test("grouped navigation preserves every page exactly once", () => {
   const ids = NAV_GROUPS.flatMap((group) => group.views);
   expect(new Set(ids).size).toBe(ids.length);
   expect([...ids].sort()).toEqual(VIEWS.map((view) => view.id).sort());
-  expect(VIEWS).toHaveLength(42);
+  expect(VIEWS).toHaveLength(43);
   expect(NAV_GROUPS).toHaveLength(8);
   expect(new Set(NAV_GROUPS.map((group) => group.id)).size).toBe(NAV_GROUPS.length);
   for (const group of NAV_GROUPS) {
@@ -25,7 +25,16 @@ test("grouped navigation preserves every page exactly once", () => {
 const expectedSections: [string, ViewId[]][] = [
   [
     "monitoring",
-    ["overview", "home-internet", "service-contracts", "flows", "feed", "alerts", "schedules"],
+    [
+      "overview",
+      "home-internet",
+      "service-contracts",
+      "flows",
+      "site-activity",
+      "feed",
+      "alerts",
+      "schedules",
+    ],
   ],
   ["network", ["devices", "interfaces", "topology", "fabric", "capsman", "service-routing"]],
   ["users-vpn", ["clients", "openvpn", "aaa"]],

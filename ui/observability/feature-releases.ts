@@ -30,6 +30,7 @@ export const FEATURE_RELEASES: Record<ViewId, string | null> = {
   access: null,
   packets: null,
   flows: null,
+  "site-activity": null,
   snapshots: null,
   drift: null,
   policies: null,

@@ -966,6 +966,8 @@ Higher-level workflows built on top of the per-scope tools:
   routing and firewall against a snapshot; reports UNKNOWN rather than guessing.
 - **[Traffic Flow](docs/traffic-flow.md)** — NetFlow/IPFIX collection and continuous
   top-talker / conversation / application analytics; flow metadata only, no payload.
+- **[Site Activity](docs/site-activity.md)** — 30-day host-side destination history by client IP,
+  combining Flow, per-client DNS evidence and Web Proxy observations without saving page content.
 - **[Port-Scan Detection](docs/port-scan-detection.md)** · **[Packet Capture Studio](docs/packet-capture.md)** ·
   **[Discovery](docs/discovery.md)** · **[Config Studio](docs/config-studio.md)**.
 
