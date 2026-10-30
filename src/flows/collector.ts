@@ -64,6 +64,7 @@ class FlowCollector {
   private readonly decoder = new ExporterFlowDecoder();
   private store: FlowStore | null = null;
   private queue: FlowRecord[] = [];
+  private subscribers = new Set<(records: FlowRecord[]) => void>();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private pruneTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -171,6 +172,13 @@ class FlowCollector {
     this.queue = [];
     try {
       this.store.insert(batch);
+      for (const subscriber of this.subscribers) {
+        try {
+          subscriber(batch);
+        } catch (e) {
+          logger.warn(`Flow activity subscriber failed: ${String(e)}`);
+        }
+      }
     } catch (e) {
       this.storageDropped += batch.length;
       logger.error(`Flow store insert failed (${batch.length} records dropped): ${String(e)}`);
@@ -210,6 +218,11 @@ class FlowCollector {
   /** Force a write — used by the read tools so a query sees the newest flows. */
   drain(): void {
     this.flush();
+  }
+
+  subscribe(subscriber: (records: FlowRecord[]) => void): () => void {
+    this.subscribers.add(subscriber);
+    return () => this.subscribers.delete(subscriber);
   }
 }
 

@@ -95,6 +95,15 @@ export class OpenVpnHistoryStore {
       gaps INTEGER NOT NULL DEFAULT 0, failures INTEGER NOT NULL DEFAULT 0)`);
   }
 
+  /** Current tunnel IP ownership, without another RouterOS read. */
+  activeTunnelOwners(now = Date.now()): { ip: string; user: string; device: string }[] {
+    return this.db
+      .query<{ ip: string; user: string; device: string }, [number]>(
+        "SELECT tunnel ip,user,device FROM ovpn_history WHERE ended IS NULL AND tunnel<>'' AND lastSeen>=?",
+      )
+      .all(now - 60_000);
+  }
+
   ingest(snapshot: OpenVpnSnapshot) {
     const { device, observedAt: at, sessions } = snapshot;
     this.db.transaction(() => {

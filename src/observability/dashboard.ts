@@ -70,6 +70,12 @@ import { openVpnRoutes } from "./openvpn-routes";
 import { openOpenVpnHistory } from "./openvpn-history";
 import type { OpenVpnHistoryStore } from "./openvpn-history";
 import { startOpenVpnHistorySampler } from "./openvpn-history-sampler";
+import { openSiteActivityStore } from "./site-activity";
+import type { SiteActivityStore } from "./site-activity";
+import { startSiteActivityCollector } from "./site-activity-collector";
+import { siteActivityRoutes } from "./site-activity-routes";
+import { getFlowCollector } from "../flows/collector";
+import { flowStore } from "../tools/traffic-flow";
 import { ipIntelligenceRoutes } from "./ip-intelligence-routes";
 import { roundTripRoutes } from "./round-trip-routes";
 import {
@@ -1592,6 +1598,26 @@ export async function runDashboard(
   } catch (e) {
     logger.warn(`[${SERVER_TAG}] OpenVPN history disabled: ${String(e)}`);
   }
+  let siteActivity: SiteActivityStore | undefined;
+  let stopSiteActivity: (() => void) | undefined;
+  let dashboardStartedFlows = false;
+  if (getConfig().flows.enabled && !getFlowCollector().running) {
+    try {
+      const started = await getFlowCollector().start(await flowStore(), getConfig().flows.port);
+      dashboardStartedFlows = started.ok;
+      if (!started.ok) logger.warn(`[${SERVER_TAG}] Flow collector: ${started.error}`);
+    } catch (e) {
+      logger.warn(`[${SERVER_TAG}] Flow collector unavailable: ${String(e)}`);
+    }
+  }
+  try {
+    siteActivity = await openSiteActivityStore(join(dirname(cfg.dbPath), "site-activity.db"));
+    stopSiteActivity = await startSiteActivityCollector(siteActivity, openVpnHistory);
+  } catch (e) {
+    logger.warn(`[${SERVER_TAG}] Site activity unavailable: ${String(e)}`);
+    siteActivity?.close();
+    siteActivity = undefined;
+  }
 
   // Persisted usage history: a SQLite DB beside the events DB, filled by a slow
   // background sampler (per-client ↓/↑ snapshots + User Manager session ingest)
@@ -1730,6 +1756,8 @@ export async function runDashboard(
 
     const flowResp = await flowRoutes(req, url);
     if (flowResp) return flowResp;
+    const siteActivityResp = await siteActivityRoutes(req, url, siteActivity);
+    if (siteActivityResp) return siteActivityResp;
 
     const rolloutResp = await rolloutRoutes(req, url);
     if (rolloutResp) return rolloutResp;
@@ -2123,6 +2151,9 @@ export async function runDashboard(
     stop() {
       stopOpenVpnHistory?.();
       openVpnHistory?.close();
+      stopSiteActivity?.();
+      siteActivity?.close();
+      if (dashboardStartedFlows) getFlowCollector().stop();
       stopHealthChecks();
       stopGeoLookups();
       stopUsageSampler();
