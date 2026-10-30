@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="168" viewBox="0 0 660 168" fill="none" role="img" aria-labelledby="title desc">
+<title id="title">MikroTik MCP</title>
+<desc id="desc">The MCP server for MikroTik RouterOS.</desc>
+<style>.wordmark{fill:#202321}.caption{fill:#656B66}@media(prefers-color-scheme:dark){.wordmark{fill:#F8F7F2}.caption{fill:#B9BDB7}}</style>
+<g transform="translate(8 12) scale(.5625)"><rect x="12" y="12" width="232" height="232" rx="64" fill="#F2653D"/>
+<path d="M72 176V82L128 138L184 82V140" stroke="#FFFCF5" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="184" cy="176" r="10" fill="#FFFCF5"/></g>
+<g font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<text class="wordmark" x="178" y="88" font-size="52" font-weight="600" letter-spacing="-2">MikroTik <tspan fill="#F2653D">MCP</tspan></text>
+<text class="caption" x="180" y="122" font-size="19" letter-spacing=".2">Your network. One conversation.</text>
+</g>
+</svg>

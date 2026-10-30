@@ -1,0 +1,48 @@
+{
+  "name": "@usex/docs",
+  "version": "0.1.0",
+  "private": true,
+  "author": {
+    "name": "Ali Torki",
+    "email": "ali_4286@live.com"
+  },
+  "repository": "https://github.com/mikrotik-mcp/mikrotik-mcp",
+  "scripts": {
+    "dev": "bun --bun next dev --turbopack -p 4000",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start",
+    "build:docs": "bun ./scripts/generate-docs.mjs",
+    "types:check": "bun --bun fumadocs-mdx && tsc --noEmit",
+    "check:docs": "bun ./scripts/check-docs.mjs"
+  },
+  "dependencies": {
+    "@types/mdx": "^2.0.14",
+    "fumadocs-core": "^16.17.9",
+    "fumadocs-mdx": "^15.4.10",
+    "fumadocs-ui": "^16.17.9",
+    "next": "16.4.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "shiki": "^4.5.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "eslint": "^10.13.0",
+    "eslint-config-next": "16.4.3",
+    "github-slugger": "^2.0.0",
+    "mdast-util-to-string": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "unified": "^11.0.5"
+  },
+  "engines": {
+    "bun": ">=1.4.4"
+  },
+  "packageManager": "bun@1.4.4"
+}

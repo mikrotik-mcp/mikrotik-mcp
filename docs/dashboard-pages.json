@@ -1,0 +1,217 @@
+[
+  {
+    "id": "ip-intelligence",
+    "label": "IP Intelligence",
+    "sub": "Full IP, ASN, location & risk details from two independent providers"
+  },
+  {
+    "id": "openvpn",
+    "label": "OpenVPN",
+    "sub": "Active VPN connections, connection time & session control"
+  },
+  {
+    "id": "recovery-lab",
+    "label": "Recovery Lab",
+    "sub": "Rehearse portable recovery in an isolated CHR environment"
+  },
+  {
+    "id": "flight-recorder",
+    "label": "Flight Recorder",
+    "sub": "Preserved evidence before, during and after an incident"
+  },
+  {
+    "id": "service-routing",
+    "label": "Service Routing",
+    "sub": "Router routes, policy rules and managed service exits"
+  },
+  {
+    "id": "client-checks",
+    "label": "Client Check",
+    "sub": "Measure from the affected phone or laptop — compare Wi-Fi and VPN"
+  },
+  {
+    "id": "router-migration",
+    "label": "Router Migration",
+    "sub": "Map, rehearse and prepare a replacement router safely"
+  },
+  {
+    "id": "support-bundles",
+    "label": "Support Bundles",
+    "sub": "Review and export minimised network evidence"
+  },
+  {
+    "id": "prompts",
+    "label": "Prompts",
+    "sub": "Ready-made workflows, tailored to your next request"
+  },
+  {
+    "id": "home-internet",
+    "label": "Home Internet",
+    "sub": "Understand slowdowns, manage your household & compare paths"
+  },
+  {
+    "id": "overview",
+    "label": "Overview",
+    "sub": "Calls, latency & risk at a glance"
+  },
+  {
+    "id": "devices",
+    "label": "Devices",
+    "sub": "Router management, connectivity & system health"
+  },
+  {
+    "id": "interfaces",
+    "label": "Interfaces",
+    "sub": "Every port and tunnel — live traffic & counters"
+  },
+  {
+    "id": "clients",
+    "label": "Clients",
+    "sub": "Connected LAN devices — usage, block/allow, pin IP"
+  },
+  {
+    "id": "investigations",
+    "label": "Investigations",
+    "sub": "Client and service evidence across routers"
+  },
+  {
+    "id": "service-contracts",
+    "label": "Service Health",
+    "sub": "Approved endpoint checks, contracts and evidence"
+  },
+  {
+    "id": "aaa",
+    "label": "RADIUS & UM",
+    "sub": "User accounting, session insights & RADIUS management"
+  },
+  {
+    "id": "topology",
+    "label": "Topology",
+    "sub": "Layer-2 neighbours via MNDP / CDP / LLDP"
+  },
+  {
+    "id": "round-trip",
+    "label": "Round-trip Lab",
+    "sub": "Forward and return paths across snapshots"
+  },
+  {
+    "id": "fabric",
+    "label": "L2 Fabric",
+    "sub": "Which host sits on which physical bridge port"
+  },
+  {
+    "id": "vulns",
+    "label": "Vulnerabilities",
+    "sub": "Published CVEs matched to this version, ranked by real exposure"
+  },
+  {
+    "id": "access",
+    "label": "Access Scope",
+    "sub": "What this session may call — and what it blocked"
+  },
+  {
+    "id": "packets",
+    "label": "Packets",
+    "sub": "Live TZSP capture & decode"
+  },
+  {
+    "id": "flows",
+    "label": "Flows",
+    "sub": "NetFlow/IPFIX top talkers, conversations & anomalies"
+  },
+  {
+    "id": "site-activity",
+    "label": "Site Activity",
+    "sub": "Observed destinations by client, DNS and Web Proxy"
+  },
+  {
+    "id": "snapshots",
+    "label": "Snapshots",
+    "sub": "Config history & time-travel diff"
+  },
+  {
+    "id": "drift",
+    "label": "Drift Guard",
+    "sub": "Golden config baselines & live drift detection"
+  },
+  {
+    "id": "attacks",
+    "label": "Attacks",
+    "sub": "Live attack incidents, evidence and guarded blocking"
+  },
+  {
+    "id": "policies",
+    "label": "Policies",
+    "sub": "Your own compliance rules, linted against config"
+  },
+  {
+    "id": "explain",
+    "label": "Explain",
+    "sub": "Config → architecture document, diagram and consequence diffs"
+  },
+  {
+    "id": "simulator",
+    "label": "Simulator",
+    "sub": "Trace a hypothetical packet — no device touched"
+  },
+  {
+    "id": "schedules",
+    "label": "Schedules",
+    "sub": "Auditors on a cron — alerting only on what changed"
+  },
+  {
+    "id": "txn",
+    "label": "Transactions",
+    "sub": "Cross-device two-phase commit — prepare, verify, commit everywhere"
+  },
+  {
+    "id": "plan",
+    "label": "Change Plan",
+    "sub": "Dry-run intended RouterOS commands"
+  },
+  {
+    "id": "s3",
+    "label": "S3 Backups",
+    "sub": "List, download & delete S3 backup objects"
+  },
+  {
+    "id": "backups",
+    "label": "Backups",
+    "sub": "Local config vault — create, restore, manage"
+  },
+  {
+    "id": "modules",
+    "label": "Modules",
+    "sub": "Enable/disable tool modules — curate the surface"
+  },
+  {
+    "id": "config",
+    "label": "Config",
+    "sub": "Effective configuration & safe editor"
+  },
+  {
+    "id": "memory",
+    "label": "Memory",
+    "sub": "Evidence, lessons & relevant context across sessions"
+  },
+  {
+    "id": "alerts",
+    "label": "Alerts",
+    "sub": "Rules that reach out — Slack, Discord, ntfy, webhook, MCP"
+  },
+  {
+    "id": "releases",
+    "label": "Releases",
+    "sub": "Update, downgrade & read every version's notes"
+  },
+  {
+    "id": "capsman",
+    "label": "CAPsMAN",
+    "sub": "Wi-Fi fabric: coverage, weak signal, load, FT & HA"
+  },
+  {
+    "id": "feed",
+    "label": "Live Feed",
+    "sub": "Every tool call, in real time"
+  }
+]
