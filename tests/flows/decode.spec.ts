@@ -620,6 +620,29 @@ describe("IPFIX", () => {
     expect(result.records[0].end).toBe(start + 5000);
   });
 
+  test("RouterOS IPFIX uptime fields use arrival time instead of becoming future dates", () => {
+    const registry = new TemplateRegistry();
+    const arrival = 1_800_000_000_000;
+    const fields: [number, number][] = [
+      [8, 4],
+      [12, 4],
+      [21, 4],
+      [22, 4],
+    ];
+    const data = new Writer();
+    data.ip("10.0.0.7").ip("93.184.216.34").u32(49_310_000).u32(49_300_000);
+    const result = decodeFlowPacket(
+      ipfixPacket([
+        { id: 2, body: templateSetBody(300, fields) },
+        { id: 300, body: [...data.done()] },
+      ]),
+      registry,
+      arrival,
+    );
+    expect(result.records[0].start).toBe(arrival - 10_000);
+    expect(result.records[0].end).toBe(arrival);
+  });
+
   test("64-bit counters beyond 2^32 survive", () => {
     const registry = new TemplateRegistry();
     const big = 8_000_000_000; // 8 GB in one flow

@@ -366,8 +366,20 @@ function decodeRecord(
 
   // Relative (sysUpTime-based) timestamps need the header to become wall clock;
   // IPFIX absolute milliseconds are already there.
-  if (record.start === 0 && relativeStart !== undefined) record.start = bootTime + relativeStart;
-  if (record.end === 0 && relativeEnd !== undefined) record.end = bootTime + relativeEnd;
+  if (
+    ctx.version === 10 &&
+    record.start === 0 &&
+    record.end === 0 &&
+    relativeStart !== undefined &&
+    relativeEnd !== undefined
+  ) {
+    // RouterOS exports IE 21/22 as uptime-relative even in IPFIX, which has no uptime header.
+    record.end = ctx.receivedAt;
+    record.start = record.end - Math.max(0, relativeEnd - relativeStart);
+  } else {
+    if (record.start === 0 && relativeStart !== undefined) record.start = bootTime + relativeStart;
+    if (record.end === 0 && relativeEnd !== undefined) record.end = bootTime + relativeEnd;
+  }
   if (record.start === 0) record.start = ctx.unixSecs > 0 ? ctx.unixSecs * 1000 : ctx.receivedAt;
   if (record.end === 0) record.end = record.start;
   // An exporter with an unset clock would otherwise date every flow to 1970.
