@@ -1,0 +1,995 @@
+---
+title: "Configuration schema"
+description: "Every configuration block, default and validation rule, generated from the runtime schema."
+---
+
+Use these definitions inside your `devices.json`. Defaults apply only when a value is omitted. Environment variables and CLI flags can override supported fields; see [Configuration](/docs/guides/configuration) and [CLI](/docs/guides/cli). Required properties are listed inside each object. Optional secrets are not example values.
+
+## serviceProbes
+
+```json
+{
+  "default": {
+    "scheduled": {},
+    "targets": {},
+    "timeoutMs": 5000
+  },
+  "type": "object",
+  "properties": {
+    "scheduled": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "maxItems": 5,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      }
+    },
+    "targets": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z\\d_-]{1,64}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["dns", "tcp", "tls", "https"]
+          },
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^[a-z\\d](?:[a-z\\d.-]*[a-z\\d])?$"
+          },
+          "port": {
+            "default": 443,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "path": {
+            "default": "/health",
+            "type": "string",
+            "maxLength": 1024
+          },
+          "addresses": {
+            "minItems": 1,
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["kind", "host", "port", "path", "addresses"],
+        "additionalProperties": false
+      }
+    },
+    "timeoutMs": {
+      "default": 5000,
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 10000
+    }
+  },
+  "required": ["scheduled", "targets", "timeoutMs"],
+  "additionalProperties": false
+}
+```
+
+## devices
+
+```json
+{
+  "default": {
+    "default": {
+      "host": "127.0.0.1",
+      "username": "admin",
+      "password": "",
+      "port": 22,
+      "timeoutMs": 10000,
+      "tags": []
+    }
+  },
+  "type": "object",
+  "propertyNames": {
+    "type": "string"
+  },
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "host": {
+        "default": "127.0.0.1",
+        "type": "string"
+      },
+      "fallbackHosts": {
+        "maxItems": 7,
+        "type": "array",
+        "items": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "ipv4",
+              "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+            },
+            {
+              "type": "string",
+              "format": "ipv6",
+              "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+            }
+          ]
+        }
+      },
+      "username": {
+        "default": "admin",
+        "type": "string"
+      },
+      "password": {
+        "default": "",
+        "type": "string"
+      },
+      "port": {
+        "default": 22,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
+      },
+      "keyFilename": {
+        "type": "string"
+      },
+      "privateKey": {
+        "type": "string"
+      },
+      "keyPassphrase": {
+        "type": "string"
+      },
+      "timeoutMs": {
+        "default": 10000,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
+      },
+      "jumpVia": {
+        "type": "string"
+      },
+      "jumpHost": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "default": 22,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "username": {
+            "default": "admin",
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "keyFilename": {
+            "type": "string"
+          },
+          "privateKey": {
+            "type": "string"
+          },
+          "keyPassphrase": {
+            "type": "string"
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["host", "port", "username"],
+        "additionalProperties": false
+      },
+      "mac": {
+        "type": "string"
+      },
+      "sourceMac": {
+        "type": "string"
+      },
+      "macHost": {
+        "type": "string"
+      },
+      "macPort": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
+      },
+      "api": {
+        "type": "boolean"
+      },
+      "apiPort": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
+      },
+      "apiInsecureTls": {
+        "type": "boolean"
+      },
+      "description": {
+        "type": "string"
+      },
+      "tags": {
+        "default": [],
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "disabled": {
+        "type": "boolean"
+      }
+    },
+    "required": ["host", "username", "password", "port", "timeoutMs", "tags"],
+    "additionalProperties": false
+  }
+}
+```
+
+## defaultDevice
+
+```json
+{
+  "default": "default",
+  "type": "string"
+}
+```
+
+## mcp
+
+```json
+{
+  "default": {
+    "transport": "stdio",
+    "host": "0.0.0.0",
+    "port": 8000,
+    "allowedHosts": "",
+    "allowedOrigins": "",
+    "corsOrigins": "",
+    "toolPageSize": 0,
+    "appViews": false,
+    "capabilityGating": "annotate"
+  },
+  "type": "object",
+  "properties": {
+    "transport": {
+      "default": "stdio",
+      "type": "string",
+      "enum": ["stdio", "sse", "streamable-http"]
+    },
+    "host": {
+      "default": "0.0.0.0",
+      "type": "string"
+    },
+    "port": {
+      "default": 8000,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "allowedHosts": {
+      "default": "",
+      "type": "string"
+    },
+    "allowedOrigins": {
+      "default": "",
+      "type": "string"
+    },
+    "corsOrigins": {
+      "default": "",
+      "type": "string"
+    },
+    "toolPageSize": {
+      "default": 0,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "appViews": {
+      "default": false,
+      "type": "boolean"
+    },
+    "capabilityGating": {
+      "default": "annotate",
+      "type": "string",
+      "enum": ["off", "annotate", "filter"]
+    }
+  },
+  "required": [
+    "transport",
+    "host",
+    "port",
+    "allowedHosts",
+    "allowedOrigins",
+    "corsOrigins",
+    "toolPageSize",
+    "appViews",
+    "capabilityGating"
+  ],
+  "additionalProperties": false
+}
+```
+
+## s3
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "accessKeyId": {
+      "type": "string"
+    },
+    "secretAccessKey": {
+      "type": "string"
+    },
+    "sessionToken": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "endpoint": {
+      "type": "string"
+    },
+    "bucket": {
+      "type": "string"
+    },
+    "prefix": {
+      "default": "",
+      "type": "string"
+    },
+    "presignExpiresIn": {
+      "default": 3600,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": ["prefix", "presignExpiresIn"],
+  "additionalProperties": false
+}
+```
+
+## dashboard
+
+```json
+{
+  "default": {
+    "enabled": false,
+    "host": "0.0.0.0",
+    "port": 9090,
+    "dbPath": "/Users/alimaster/.mikrotik-mcp/events.db",
+    "maxEvents": 100000,
+    "captureBody": true,
+    "redactInput": false,
+    "maxBodyBytes": 16384,
+    "feedLimit": 200
+  },
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "type": "boolean"
+    },
+    "host": {
+      "default": "0.0.0.0",
+      "type": "string"
+    },
+    "port": {
+      "default": 9090,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "dbPath": {
+      "default": "/Users/alimaster/.mikrotik-mcp/events.db",
+      "type": "string"
+    },
+    "maxEvents": {
+      "default": 100000,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "captureBody": {
+      "default": true,
+      "type": "boolean"
+    },
+    "redactInput": {
+      "default": false,
+      "type": "boolean"
+    },
+    "maxBodyBytes": {
+      "default": 16384,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "token": {
+      "type": "string"
+    },
+    "feedLimit": {
+      "default": 200,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 10000
+    }
+  },
+  "required": [
+    "enabled",
+    "host",
+    "port",
+    "dbPath",
+    "maxEvents",
+    "captureBody",
+    "redactInput",
+    "maxBodyBytes",
+    "feedLimit"
+  ],
+  "additionalProperties": false
+}
+```
+
+## alerts
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": true,
+      "type": "boolean"
+    },
+    "rules": {
+      "default": [],
+      "type": "array",
+      "items": {}
+    },
+    "channels": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "slack": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": ["url"],
+          "additionalProperties": false
+        },
+        "discord": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": ["url"],
+          "additionalProperties": false
+        },
+        "ntfy": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "required": ["url"],
+          "additionalProperties": false
+        },
+        "webhook": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "method": {
+              "type": "string"
+            },
+            "headers": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["url"],
+          "additionalProperties": false
+        },
+        "mcp": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "maxHistory": {
+      "default": 5000,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": ["enabled", "rules", "channels", "maxHistory"],
+  "additionalProperties": false
+}
+```
+
+## flows
+
+```json
+{
+  "default": {
+    "enabled": false,
+    "port": 2055,
+    "db": "/Users/alimaster/.mikrotik-mcp/flows.db",
+    "retentionHours": 24,
+    "rollupDays": 30,
+    "maxRows": 2000000
+  },
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "type": "boolean"
+    },
+    "port": {
+      "default": 2055,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "db": {
+      "default": "/Users/alimaster/.mikrotik-mcp/flows.db",
+      "type": "string"
+    },
+    "retentionHours": {
+      "default": 24,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "rollupDays": {
+      "default": 30,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "maxRows": {
+      "default": 2000000,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": ["enabled", "port", "db", "retentionHours", "rollupDays", "maxRows"],
+  "additionalProperties": false
+}
+```
+
+## policy
+
+```json
+{
+  "default": {
+    "paths": ["./mikrotik-policies/*.yaml"],
+    "includeStarterPack": true
+  },
+  "type": "object",
+  "properties": {
+    "paths": {
+      "default": ["./mikrotik-policies/*.yaml"],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "includeStarterPack": {
+      "default": true,
+      "type": "boolean"
+    }
+  },
+  "required": ["paths", "includeStarterPack"],
+  "additionalProperties": false
+}
+```
+
+## schedules
+
+```json
+{
+  "default": {
+    "enabled": false,
+    "jobs": [],
+    "concurrency": 4,
+    "timeoutMs": 600000,
+    "jitterMs": 3000,
+    "tickSeconds": 30,
+    "retainDays": 90
+  },
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "type": "boolean"
+    },
+    "jobs": {
+      "default": [],
+      "type": "array",
+      "items": {}
+    },
+    "concurrency": {
+      "default": 4,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 64
+    },
+    "timeoutMs": {
+      "default": 600000,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "jitterMs": {
+      "default": 3000,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "tickSeconds": {
+      "default": 30,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "retainDays": {
+      "default": 90,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "enabled",
+    "jobs",
+    "concurrency",
+    "timeoutMs",
+    "jitterMs",
+    "tickSeconds",
+    "retainDays"
+  ],
+  "additionalProperties": false
+}
+```
+
+## attacks
+
+```json
+{
+  "default": {
+    "enabled": false,
+    "mode": "detect",
+    "pollSeconds": 120,
+    "windowMinutes": 10,
+    "concurrency": 4,
+    "minConfidence": "high",
+    "blockTimeout": "1h",
+    "maxBlocksPerHour": 6,
+    "neverBlock": [],
+    "autoRespondTo": ["brute-force", "credential-spray"],
+    "learningDays": 7,
+    "readScanList": true,
+    "retainDays": 90
+  },
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "type": "boolean"
+    },
+    "mode": {
+      "default": "detect",
+      "type": "string",
+      "enum": ["detect", "respond"]
+    },
+    "pollSeconds": {
+      "default": 120,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "windowMinutes": {
+      "default": 10,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "concurrency": {
+      "default": 4,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 32
+    },
+    "minConfidence": {
+      "default": "high",
+      "type": "string",
+      "enum": ["medium", "high", "confirmed"]
+    },
+    "blockTimeout": {
+      "default": "1h",
+      "type": "string"
+    },
+    "maxBlocksPerHour": {
+      "default": 6,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "neverBlock": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "autoRespondTo": {
+      "default": ["brute-force", "credential-spray"],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "learningDays": {
+      "default": 7,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "readScanList": {
+      "default": true,
+      "type": "boolean"
+    },
+    "retainDays": {
+      "default": 90,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "enabled",
+    "mode",
+    "pollSeconds",
+    "windowMinutes",
+    "concurrency",
+    "minConfidence",
+    "blockTimeout",
+    "maxBlocksPerHour",
+    "neverBlock",
+    "autoRespondTo",
+    "learningDays",
+    "readScanList",
+    "retainDays"
+  ],
+  "additionalProperties": false
+}
+```
+
+## ssh
+
+```json
+{
+  "default": {
+    "keepAlive": true,
+    "keepAliveInterval": 10000,
+    "idleTimeout": 30000
+  },
+  "type": "object",
+  "properties": {
+    "keepAlive": {
+      "default": true,
+      "type": "boolean"
+    },
+    "keepAliveInterval": {
+      "default": 10000,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "idleTimeout": {
+      "default": 30000,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": ["keepAlive", "keepAliveInterval", "idleTimeout"],
+  "additionalProperties": false
+}
+```
+
+## readOnly
+
+```json
+{
+  "default": false,
+  "type": "boolean"
+}
+```
+
+## access
+
+```json
+{
+  "default": {
+    "enabled": false,
+    "devices": [],
+    "denyDevices": [],
+    "tools": [],
+    "denyTools": []
+  },
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "type": "boolean"
+    },
+    "maxRisk": {
+      "type": "string",
+      "enum": ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"]
+    },
+    "devices": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "denyDevices": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tools": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "denyTools": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "label": {
+      "type": "string"
+    }
+  },
+  "required": ["enabled", "devices", "denyDevices", "tools", "denyTools"],
+  "additionalProperties": false
+}
+```
+
+## tools
+
+```json
+{
+  "default": {
+    "enabledModules": [],
+    "disabledModules": [],
+    "enabledGroups": [],
+    "disabledGroups": []
+  },
+  "type": "object",
+  "properties": {
+    "enabledModules": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "disabledModules": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "enabledGroups": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "disabledGroups": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["enabledModules", "disabledModules", "enabledGroups", "disabledGroups"],
+  "additionalProperties": false
+}
+```
+
+## memory
+
+```json
+{
+  "default": {
+    "enabled": true,
+    "dbPath": "/Users/alimaster/.mikrotik-mcp/memory.db"
+  },
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": true,
+      "type": "boolean"
+    },
+    "dbPath": {
+      "default": "/Users/alimaster/.mikrotik-mcp/memory.db",
+      "type": "string"
+    }
+  },
+  "required": ["enabled", "dbPath"],
+  "additionalProperties": false
+}
+```
+
+## backupDir
+
+```json
+{
+  "type": "string"
+}
+```
+
+## disableUpdateCheck
+
+```json
+{
+  "default": false,
+  "type": "boolean"
+}
+```

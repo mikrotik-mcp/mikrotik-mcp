@@ -1,0 +1,367 @@
+[
+  {
+    "source": "docs-old/README.md",
+    "sha256": "51808d915c3a1fb50815213189b399578e61d4a9d35ddc4ff8fe8875fcfaf6c0",
+    "destination": "docs/content/docs/index.md"
+  },
+  {
+    "source": "docs-old/access-scope-settings.md",
+    "sha256": "24665ad8179b4a7f52109f1d1ac6d3ea73bf21dc8dd66fba9673aee005996751",
+    "destination": "docs/content/docs/guides/access-scope-settings.md"
+  },
+  {
+    "source": "docs-old/address-sets.md",
+    "sha256": "547024254e46f2f7f590fffbbe74d7731d4229e44a35c1be77a16e8a616db27b",
+    "destination": "docs/content/docs/guides/address-sets.md"
+  },
+  {
+    "source": "docs-old/alerting.md",
+    "sha256": "e5e44b9df2b2884a8418096c67c54757321f5dd86dcec1d80b251897981d6073",
+    "destination": "docs/content/docs/guides/alerting.md"
+  },
+  {
+    "source": "docs-old/architecture.md",
+    "sha256": "946c63b844984350372d7fe2bbc49b462e7b34d1db40e3eea89f8394e1e8a562",
+    "destination": "docs/content/docs/guides/architecture.md"
+  },
+  {
+    "source": "docs-old/attack-detection.md",
+    "sha256": "e1101996d9ce001c7b83f5cc399f3d2c81b3560e0280a9136d948cc244461572",
+    "destination": "docs/content/docs/guides/attack-detection.md"
+  },
+  {
+    "source": "docs-old/capabilities.md",
+    "sha256": "783e77b17737934ba80e5425d01701ab66af0533e1b82d3cae41e405d4a59148",
+    "destination": "docs/content/docs/guides/capabilities.md"
+  },
+  {
+    "source": "docs-old/capsman-orchestrator-plan.md",
+    "sha256": "2ba4236071930b83c46c64783992a81762b6d26aaa36eb4c7b52d6ad51b9b927",
+    "destination": "docs/content/docs/archive/capsman-orchestrator-plan.md"
+  },
+  {
+    "source": "docs-old/capsman.md",
+    "sha256": "3e7ec5a7ee982af953649586c8cfdc57712ce23867a5d85929c44fca461f9d34",
+    "destination": "docs/content/docs/guides/capsman.md"
+  },
+  {
+    "source": "docs-old/change-plan.md",
+    "sha256": "29a84dc0b37b8890f7ddb4e1170c5e0433ba2055a09c07c375d4e750842c77a0",
+    "destination": "docs/content/docs/guides/change-plan.md"
+  },
+  {
+    "source": "docs-old/client-flow-paths.md",
+    "sha256": "33031dcbb28183aad543fe5439b061631f4d7592d7686db6dfe7512ddfb64aed",
+    "destination": "docs/content/docs/guides/client-flow-paths.md"
+  },
+  {
+    "source": "docs-old/client-investigations.md",
+    "sha256": "12322af7c7cf14ecb02791832ed547bf907575727a3540f4c264330ed40cc189",
+    "destination": "docs/content/docs/guides/client-investigations.md"
+  },
+  {
+    "source": "docs-old/collector-health.md",
+    "sha256": "cbe6be89ff6380c4a2fd6fe04e829c08d271f5acd4236eef93b88db4c26d8385",
+    "destination": "docs/content/docs/guides/collector-health.md"
+  },
+  {
+    "source": "docs-old/config-narrative.md",
+    "sha256": "7736b688f1075d61fc6b079b2349876a871333a9cdf83624efca0d1525315b48",
+    "destination": "docs/content/docs/guides/config-narrative.md"
+  },
+  {
+    "source": "docs-old/config-snapshots.md",
+    "sha256": "bf7da6eb08e73ae636c473cc8b02eaa142c2b7fe4ea8b7f3ee54f628d33ae8c6",
+    "destination": "docs/content/docs/guides/config-snapshots.md"
+  },
+  {
+    "source": "docs-old/config-studio.md",
+    "sha256": "2f7bd8e6119dcfdeb33d20aeee07faaf2597fbf94859a0ab06cd124b19452633",
+    "destination": "docs/content/docs/guides/config-studio.md"
+  },
+  {
+    "source": "docs-old/configuration.md",
+    "sha256": "46f088c53840c0c8f2cfb07d4204c7ff17c68db47374a06bb8a6005df2c6b1f3",
+    "destination": "docs/content/docs/guides/configuration.md"
+  },
+  {
+    "source": "docs-old/connecting-clients.md",
+    "sha256": "e67091ee3243ae49f605aad5a1759fc928e723ed1d9eccaa7bd59efeffe9fa19",
+    "destination": "docs/content/docs/guides/connecting-clients.md"
+  },
+  {
+    "source": "docs-old/dashboard-design.md",
+    "sha256": "32e4569b2e4d387a3cc1e587b91b597f2959c7a4e634dc66b2fb5065772f0e99",
+    "destination": "docs/content/docs/guides/dashboard-design.md"
+  },
+  {
+    "source": "docs-old/dashboard-navigation.md",
+    "sha256": "32349bd7e04ab27e9fed32c8499c0bdb06dc2c3632c5b370c8b353ddf9158263",
+    "destination": "docs/content/docs/guides/dashboard-navigation.md"
+  },
+  {
+    "source": "docs-old/development.md",
+    "sha256": "a8b70fe844ff4d718abc9787c43af708e6d129a1eec8ac55215c039cf5e4fa5c",
+    "destination": "docs/content/docs/guides/development.md"
+  },
+  {
+    "source": "docs-old/devtools.md",
+    "sha256": "6a5ca4dcc44ba4f5a61495038a9df8c791efb732c61935b48ed2dd7b5a3905cf",
+    "destination": "docs/content/docs/guides/devtools.md"
+  },
+  {
+    "source": "docs-old/discovery.md",
+    "sha256": "b53bde683d6851231170769e6aaeab9fe4d9688a3ac6f785c1ac68c9d0d5af8a",
+    "destination": "docs/content/docs/guides/discovery.md"
+  },
+  {
+    "source": "docs-old/docker-publishing.md",
+    "sha256": "3b07720cea64b314e94c3a7795b05cfdc9e3356089c3320beae1d7f2de043c8d",
+    "destination": "docs/content/docs/guides/docker-publishing.md"
+  },
+  {
+    "source": "docs-old/docker.md",
+    "sha256": "8b0fe5fac844748737f058763bfec5ba6ec4e1919c5cf4bd06e4c74e9f6a34cd",
+    "destination": "docs/content/docs/guides/docker.md"
+  },
+  {
+    "source": "docs-old/enterprise-roadmap.md",
+    "sha256": "1c83710c845f59d68289301b531063712647815e979992891225be53e2e50d1e",
+    "destination": "docs/content/docs/archive/enterprise-roadmap.md"
+  },
+  {
+    "source": "docs-old/firewall-audit.md",
+    "sha256": "4f35e686b8be397223b721d3068cea41436e436579b81e58fa5de77b0c4f2758",
+    "destination": "docs/content/docs/guides/firewall-audit.md"
+  },
+  {
+    "source": "docs-old/fleet-rollout.md",
+    "sha256": "7a427aa4b2cfb432456039dfcc9be7a71a7d57295a6dba9edb790a525e142ad3",
+    "destination": "docs/content/docs/guides/fleet-rollout.md"
+  },
+  {
+    "source": "docs-old/flight-recorder.md",
+    "sha256": "426278c24bbb25b40c1d8a54774d943708bc7476e545caaef9744ff2b57678da",
+    "destination": "docs/content/docs/guides/flight-recorder.md"
+  },
+  {
+    "source": "docs-old/getting-started.md",
+    "sha256": "7096245dfa60157c2ecf0fed80ef44ef0aef9d89d2cd5095e16fc0356cbcac1e",
+    "destination": "docs/content/docs/guides/getting-started.md"
+  },
+  {
+    "source": "docs-old/inspector.md",
+    "sha256": "6f79d99819a92cff2a5977c8eee129fbb1755d2fb582fa26bd2d01facf2e9581",
+    "destination": "docs/content/docs/guides/inspector.md"
+  },
+  {
+    "source": "docs-old/ip-intelligence.md",
+    "sha256": "7682012d8e48e0a901a2bf340f440cd206331edfaaf6cc8a294e56970253f03e",
+    "destination": "docs/content/docs/guides/ip-intelligence.md"
+  },
+  {
+    "source": "docs-old/mcp-app-workspaces.md",
+    "sha256": "e713827833c08a5eda33457039b787ee7722d83bc3b58889fbe1ff2b80536eb3",
+    "destination": "docs/content/docs/guides/mcp-app-workspaces.md"
+  },
+  {
+    "source": "docs-old/multi-device.md",
+    "sha256": "f4dd29e33920cdbf64b941839ca0bfe091db241955be7c57c3b78780e273998f",
+    "destination": "docs/content/docs/guides/multi-device.md"
+  },
+  {
+    "source": "docs-old/network-workspaces.md",
+    "sha256": "9c9e3b4d6bfe4d4b83eb190172d9aca5204073118fd3e95085393de9cd38a832",
+    "destination": "docs/content/docs/guides/network-workspaces.md"
+  },
+  {
+    "source": "docs-old/observability.md",
+    "sha256": "0ce03bbb4e0297fe4b9961f83819ebe2227091a163ee4de622a8808e9bb21d83",
+    "destination": "docs/content/docs/guides/observability.md"
+  },
+  {
+    "source": "docs-old/openvpn-connections.md",
+    "sha256": "77df4f225225f582e4d8aec8c5637d0ef93e869df338b902af0050bdd872b052",
+    "destination": "docs/content/docs/guides/openvpn-connections.md"
+  },
+  {
+    "source": "docs-old/packet-capture.md",
+    "sha256": "b7c6c739773cf4a654f65e04ae3e3d870edab69ec1c5f92c9dc875d4687a637e",
+    "destination": "docs/content/docs/guides/packet-capture.md"
+  },
+  {
+    "source": "docs-old/policy-as-code.md",
+    "sha256": "4827f101ad504ba267ea55a096b76864220645d3fbb7e8e1388e0f25efc26694",
+    "destination": "docs/content/docs/guides/policy-as-code.md"
+  },
+  {
+    "source": "docs-old/policy-verifier.md",
+    "sha256": "a3db52348720b756b1e05b08df4a8ac58a680f814306300a45abeca4c2f31a2c",
+    "destination": "docs/content/docs/guides/policy-verifier.md"
+  },
+  {
+    "source": "docs-old/port-scan-detection.md",
+    "sha256": "5841da8cd7163b55aca7cc918e4f85b70f106702ea0f47beadb006b2f851bf69",
+    "destination": "docs/content/docs/guides/port-scan-detection.md"
+  },
+  {
+    "source": "docs-old/prompts.md",
+    "sha256": "e918a9d4d298749f9b867b4ca4af54e41f711c58809267d6d7f34f3fadc68d97",
+    "destination": "docs/content/docs/guides/prompts.md"
+  },
+  {
+    "source": "docs-old/recovery-lab.md",
+    "sha256": "3898d028084bd2f43088d47c0da641e11c9ba5ec4d6d9ecd6846e4bf10270752",
+    "destination": "docs/content/docs/guides/recovery-lab.md"
+  },
+  {
+    "source": "docs-old/recovery-runner-protocol.md",
+    "sha256": "5cd20ac6dd31cb53cde00d57f8fc287816319a8557636f46832ac956f4b19094",
+    "destination": "docs/content/docs/guides/recovery-runner-protocol.md"
+  },
+  {
+    "source": "docs-old/round-trip-paths.md",
+    "sha256": "cfe4dc772bed0b29fb42a29aafa0e5653be0e8106b03e42b621f413902b6d3db",
+    "destination": "docs/content/docs/guides/round-trip-paths.md"
+  },
+  {
+    "source": "docs-old/safe-mode.md",
+    "sha256": "d6ac77153dee9d52c289fd5ef10b585315b1cb0890df0305fb78aab6ef922a0b",
+    "destination": "docs/content/docs/guides/safe-mode.md"
+  },
+  {
+    "source": "docs-old/scheduled-audits.md",
+    "sha256": "a92389ceca19aafde3616152ca2c9280dd55e9887b68fdf477963154c3ed0649",
+    "destination": "docs/content/docs/guides/scheduled-audits.md"
+  },
+  {
+    "source": "docs-old/security-hardening.md",
+    "sha256": "8748aba8f292188ac22c73626931826ffdc11b292b2d0e7337a789e66e88b6ee",
+    "destination": "docs/content/docs/guides/security-hardening.md"
+  },
+  {
+    "source": "docs-old/security.md",
+    "sha256": "c202de81c978c6684240ab4bbc307c44d419864d7e8367ebb1d6b1c5523e3dc5",
+    "destination": "docs/content/docs/guides/security.md"
+  },
+  {
+    "source": "docs-old/service-contracts.md",
+    "sha256": "14ab8f20cbd31b5801c07cce6a34cb9bd066e44e25a377aed75a14426067a470",
+    "destination": "docs/content/docs/guides/service-contracts.md"
+  },
+  {
+    "source": "docs-old/service-routing.md",
+    "sha256": "4bc39962d3c25aefae709410a874039f8fabd3b2038c89b78f7eb376cb556c98",
+    "destination": "docs/content/docs/guides/service-routing.md"
+  },
+  {
+    "source": "docs-old/simulator.md",
+    "sha256": "9cdc381bad4ac84952823ed072e17b5e7564e688694f522a27537cbd6dba34f3",
+    "destination": "docs/content/docs/guides/simulator.md"
+  },
+  {
+    "source": "docs-old/site-activity.md",
+    "sha256": "bc71050b1535f2f7e67466f9beb7bda4c9d7871c4b2d0d70a97e3621cd71ea99",
+    "destination": "docs/content/docs/guides/site-activity.md"
+  },
+  {
+    "source": "docs-old/tasks/01-rest-transport.md",
+    "sha256": "45abd128412fcf0e8a4ac755aa7712ee419172bbeb9386b32211ca745dff80ac",
+    "destination": "docs/content/docs/archive/task-01-rest-transport.md"
+  },
+  {
+    "source": "docs-old/tasks/02-capability-probe.md",
+    "sha256": "95f0aee1d4402c5b2b28d7ae728c60f6b33cd122f66d4d2bd877d25774524e67",
+    "destination": "docs/content/docs/archive/task-02-capability-probe.md"
+  },
+  {
+    "source": "docs-old/tasks/03-cross-device-transactions.md",
+    "sha256": "c12c2ec3a92db1eb1ec6149e803c1e05edd36eea7cf78707a2cfe2f3184754e4",
+    "destination": "docs/content/docs/archive/task-03-cross-device-transactions.md"
+  },
+  {
+    "source": "docs-old/tasks/04-traffic-flow.md",
+    "sha256": "42ab71ccbab54cad240cd9f0843be98d1e63f2a4d58db26c7882c015951242e2",
+    "destination": "docs/content/docs/archive/task-04-traffic-flow.md"
+  },
+  {
+    "source": "docs-old/tasks/05-staged-fleet-rollout.md",
+    "sha256": "6c38bef21bf299583890e10734e92364865d0f9b5506626fd2ed79c64df82164",
+    "destination": "docs/content/docs/archive/task-05-staged-fleet-rollout.md"
+  },
+  {
+    "source": "docs-old/tasks/06-policy-as-code.md",
+    "sha256": "d13ee421bd6e9cf9647f69a7e473f5ffb872900ab8b6d04f2cb8c329b6a03fb1",
+    "destination": "docs/content/docs/archive/task-06-policy-as-code.md"
+  },
+  {
+    "source": "docs-old/tasks/07-alerting-webhooks.md",
+    "sha256": "a5bc0cbcc097d0d57e6506bd798169485297c1c6aa0380397f8398e67720517f",
+    "destination": "docs/content/docs/archive/task-07-alerting-webhooks.md"
+  },
+  {
+    "source": "docs-old/tasks/08-offline-simulator.md",
+    "sha256": "74b5f11a477f46644d3ed116e87012bda1f799d28dba2409535d65d6ddbe241c",
+    "destination": "docs/content/docs/archive/task-08-offline-simulator.md"
+  },
+  {
+    "source": "docs-old/tasks/09-scheduled-audits.md",
+    "sha256": "d770de5852010ba3cc567622b476bec6e769622a037067bdc0c399a2a323fd0f",
+    "destination": "docs/content/docs/archive/task-09-scheduled-audits.md"
+  },
+  {
+    "source": "docs-old/tasks/10-explain-device.md",
+    "sha256": "105d0f5e318af2462970e48524aafe3d5927f25545f23468d47fb1a21cdd72ca",
+    "destination": "docs/content/docs/archive/task-10-explain-device.md"
+  },
+  {
+    "source": "docs-old/tasks/11-attack-detection.md",
+    "sha256": "e24679a0ff87f57c4495e53e51f448265f21d99f5d47be2acec028d1bff9cbd8",
+    "destination": "docs/content/docs/archive/task-11-attack-detection.md"
+  },
+  {
+    "source": "docs-old/tasks/README.md",
+    "sha256": "209543a45a6d64f70e15eb6522c9122fdf48bf36b504e8b2770b19a83fd507fd",
+    "destination": "docs/content/docs/archive/implementation-plan-index.md"
+  },
+  {
+    "source": "docs-old/testing/coverage-audit-2026-10-24.md",
+    "sha256": "55b4789b276102502b7564bd78a577dbaa22dc1c75bfa1161a562f415e015fce",
+    "destination": "docs/content/docs/archive/coverage-audit-2026-10-24.md"
+  },
+  {
+    "source": "docs-old/tools-reference.md",
+    "sha256": "b21024d3084c72c0b6edc1316178b6749a7d4e82184ad6eece0ea1e658e97de6",
+    "destination": "docs/content/docs/reference/index.md"
+  },
+  {
+    "source": "docs-old/traffic-flow.md",
+    "sha256": "a980d7d1b8eae7c5d77bbb4478edaa0a9f9e2aa7e955f1b9565ec37d0131f5f4",
+    "destination": "docs/content/docs/guides/traffic-flow.md"
+  },
+  {
+    "source": "docs-old/transactions.md",
+    "sha256": "f88c7e3021ac9c9bd9503ee4567780c9bdf86001eacea3cdcbae48c91333e25b",
+    "destination": "docs/content/docs/guides/transactions.md"
+  },
+  {
+    "source": "docs-old/transports.md",
+    "sha256": "2697355077c807d1a7f97a03e09110ae7dbe24feeb0204f904f0e74672a08df6",
+    "destination": "docs/content/docs/guides/transports.md"
+  },
+  {
+    "source": "docs-old/user-manager-last-connections.md",
+    "sha256": "a21985c2f54efcd38af139551a4d980068c802db6f09d27bdd13fe4b19c98b80",
+    "destination": "docs/content/docs/guides/user-manager-last-connections.md"
+  },
+  {
+    "source": "docs-old/vpn-guide.md",
+    "sha256": "a46a391b188e219d73fcbfa4dc217a5ba99964178a69ed6a043cc2af09fb28f5",
+    "destination": "docs/content/docs/guides/vpn-guide.md"
+  },
+  {
+    "source": "docs-old/wifi-diagnostics.md",
+    "sha256": "42e8713ca2027212c4165bf16b17130a54409a18760f572a4a1492c56e917da8",
+    "destination": "docs/content/docs/guides/wifi-diagnostics.md"
+  }
+]

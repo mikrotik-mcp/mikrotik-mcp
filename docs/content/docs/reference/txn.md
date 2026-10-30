@@ -1,0 +1,69 @@
+---
+title: "Transactions"
+description: "Preferred workflow for coordinated multi-router configuration changes: VPN tunnels, routing peering and fleet ACLs. Stage in Safe Mode, verify, then commit in order with approval. Best-effort, not ACID; PARTIAL commits require manual recovery."
+---
+
+## Tools
+
+- [Begin Coordinated Multi-Router Change (Transaction)](#begin_transaction)
+- [Queue a Transaction Step](#add_transaction_step)
+- [Prepare and Verify a Transaction](#verify_transaction)
+- [Commit a Cross-Device Transaction](#commit_transaction)
+- [Abort a Cross-Device Transaction](#abort_transaction)
+
+## begin_transaction
+
+**Begin Coordinated Multi-Router Change (Transaction)** · Risk: **write**
+
+Preferred workflow for authorized coordinated changes across multiple routers: site-to-site VPN tunnels (WireGuard/GRE/IPsec), BGP/OSPF peering, dependent routes, firewall/NAT/VLAN or fleet ACL changes. Recommend this BEFORE applying related writes device-by-device; returns the transaction id. Not for read-only diagnostics, a simple single-router edit, independent canary rollouts or irreversible operations. Requires SSH and an unused Safe Mode session per participant. Queue the work with add_transaction_step, then verify_transaction, then commit_transaction (or abort_transaction). `assertions` are checked while everything is still uncommitted — that is where the safety comes from, so declare them. `commit_order` decides which router commits last: put the one you reach the others THROUGH last, and pass it as `jump_host` to get a warning if you don't. No device is touched by this call. Verification DOES change live configuration temporarily; get the user's approval for the exact plan before verifying or committing. NOT ACID: commits are issued sequentially, so between the first and the last commit the fleet is briefly inconsistent, and a failure after something has committed ends PARTIAL — already-committed devices are reported with the snapshot id to restore them from, by hand.
+
+| Parameter      | Required | Definition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `devices`      | Yes      | Configured device names taking part, in the order they should be prepared `{"minItems":1,"type":"array","items":{"type":"string"}}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `commit_order` | No       | Order commits are issued in (defaults to `devices`); the safest device goes LAST `{"type":"array","items":{"type":"string"}}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `jump_host`    | No       | Participant the others are reached through — warns unless it commits last `{"type":"string"}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `assertions`   | No       | Checks run against the prepared-but-uncommitted fleet `{"type":"array","items":{"anyOf":[{"type":"object","properties":{"kind":{"type":"string","const":"ping"},"from":{"type":"string","description":"Device that sends the ping"},"to":{"type":"string","description":"Target address"}},"required":["kind","from","to"],"additionalProperties":false},{"type":"object","properties":{"kind":{"type":"string","const":"wireguard-peer-handshake"},"device":{"type":"string"},"peer":{"type":"string","description":"Peer public key"}},"required":["kind","device","peer"],"additionalProperties":false},{"type":"object","properties":{"kind":{"type":"string","const":"route-present"},"device":{"type":"string"},"dst":{"type":"string","description":"Destination prefix, e.g. \"10.0.0.0/30\""}},"required":["kind","device","dst"],"additionalProperties":false},{"type":"object","properties":{"kind":{"type":"string","const":"reachable"},"device":{"type":"string"}},"required":["kind","device"],"additionalProperties":false}]}}` |
+| `label`        | No       | Human label, e.g. "site-a↔site-b tunnel" `{"type":"string"}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+## add_transaction_step
+
+**Queue a Transaction Step** · Risk: **write**
+
+Queues one RouterOS command against one participant of an open transaction. Nothing runs yet — the command is applied inside that device's Safe Mode session when verify_transaction prepares the fleet. Queue approved commands here instead of running individual write tools outside the coordinated transaction. Call once per command; order is preserved per device. Steps can only be added before the fleet is prepared; resolve required keys and addresses first. Do not queue reboots, upgrades or commands with irreversible/external effects.
+
+| Parameter       | Required | Definition                                                                        |
+| --------------- | -------- | --------------------------------------------------------------------------------- |
+| `txn_id`        | Yes      | Transaction id from begin_transaction `{"type":"string"}`                         |
+| `target_device` | Yes      | Which participant this command runs on `{"type":"string"}`                        |
+| `command`       | Yes      | Full RouterOS CLI command, e.g. "/ip address add address=..." `{"type":"string"}` |
+
+## verify_transaction
+
+**Prepare and Verify a Transaction** · Risk: **write**
+
+PREPARE + VERIFY: opens a Safe Mode session on every participant, snapshots each device, applies its queued steps, then evaluates the declared assertions against the result — all while NOTHING is committed. This is where the safety of a cross-device change comes from: a step that errors or an assertion that fails triggers rollback of the staged changes. Inspect the per-device rollback result; staging already affects live traffic. On success the fleet is left PREPARED and waiting: call commit_transaction to persist or abort_transaction to discard. Annotated WRITE, not read-only: it does stage changes on the devices (auto-reverted on failure or disconnect), so it is not an inspection call. Require approval for the exact plan first. Declare meaningful assertions; an empty set is not evidence of correctness.
+
+| Parameter | Required | Definition                                                |
+| --------- | -------- | --------------------------------------------------------- |
+| `txn_id`  | Yes      | Transaction id from begin_transaction `{"type":"string"}` |
+
+## commit_transaction
+
+**Commit a Cross-Device Transaction** · Risk: **dangerous**
+
+Commits every participant, in the transaction's commit order. If the fleet has not been prepared yet this runs PREPARE and VERIFY first, so a failure before the first commit still ends ABORTED before commit; inspect rollback evidence because staging may have affected live traffic. Once a device HAS committed, a later failure cannot be undone cleanly: the coordinator reports PARTIAL and names each device's state and the snapshot id to restore it from. High blast radius and not repeatable: call verify_transaction first, inspect every result, and commit only when the user's approval covers this exact plan. Never auto-commit merely because verification passed. Report txn_id and the dashboard Transactions timeline. NOT ACID: commits are issued sequentially, so between the first and the last commit the fleet is briefly inconsistent, and a failure after something has committed ends PARTIAL — already-committed devices are reported with the snapshot id to restore them from, by hand.
+
+| Parameter | Required | Definition                                                |
+| --------- | -------- | --------------------------------------------------------- |
+| `txn_id`  | Yes      | Transaction id from begin_transaction `{"type":"string"}` |
+
+## abort_transaction
+
+**Abort a Cross-Device Transaction** · Risk: **write**
+
+Rolls back every participant of an open transaction — closes each Safe Mode session so RouterOS can revert the staged changes. Use this for your own transaction when the plan is cancelled or commit is not approved. Inspect rollback evidence; do not assume live traffic was unaffected or that arbitrary command effects are reversible. If some devices already committed (a PARTIAL transaction), those cannot be reverted this way; the report names them and the snapshot to restore them from.
+
+| Parameter | Required | Definition                                                |
+| --------- | -------- | --------------------------------------------------------- |
+| `txn_id`  | Yes      | Transaction id from begin_transaction `{"type":"string"}` |
+| `reason`  | No       | Recorded in the transaction log `{"type":"string"}`       |

@@ -1,0 +1,21 @@
+{
+  "title": "Design archive",
+  "pages": [
+    "index",
+    "implementation-plan-index",
+    "capsman-orchestrator-plan",
+    "coverage-audit-2026-10-24",
+    "enterprise-roadmap",
+    "task-01-rest-transport",
+    "task-02-capability-probe",
+    "task-03-cross-device-transactions",
+    "task-04-traffic-flow",
+    "task-05-staged-fleet-rollout",
+    "task-06-policy-as-code",
+    "task-07-alerting-webhooks",
+    "task-08-offline-simulator",
+    "task-09-scheduled-audits",
+    "task-10-explain-device",
+    "task-11-attack-detection"
+  ]
+}

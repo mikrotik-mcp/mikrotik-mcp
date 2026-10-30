@@ -1,0 +1,19 @@
+---
+title: "QoS Architect"
+description: "Build a traffic-shaping policy from structured classes in one call, with a preview-before-apply dry run (`/queue simple`)."
+---
+
+## Tools
+
+- [Apply Traffic-Shaping Policy](#apply_traffic_shaping)
+
+## apply_traffic_shaping
+
+**Apply Traffic-Shaping Policy** · Risk: **write**
+
+Builds a traffic-shaping policy as a batch of `/queue simple` classes (target address, max-limit, priority) in one call — e.g. prioritize a VoIP subnet and cap a guest network. DEFAULTS TO A DRY RUN: with `apply=false` (default) it returns the exact RouterOS commands it WOULD run so the shape can be reviewed first; set `apply=true` to create the queues and verify them. Classes are created in array order, and RouterOS evaluates simple queues top-down, so list the most specific/important first. For classification by port/protocol (not address) use the firewall mangle tools to mark packets, then a queue tree. Returns the dry-run plan or the created queues.
+
+| Parameter | Required | Definition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `classes` | Yes      | Shaping classes to create, in priority order `{"minItems":1,"type":"array","items":{"type":"object","properties":{"name":{"type":"string","description":"Queue name, e.g. 'voip' or 'guest-cap'"},"target":{"type":"string","description":"Target address/subnet this class applies to, e.g. '192.168.20.0/24'"},"max_limit":{"type":"string","description":"RouterOS max-limit as 'upload/download', e.g. '10M/10M' (or a single value)"},"priority":{"default":8,"description":"1 (highest) … 8 (lowest); lower number wins under contention","type":"integer","minimum":1,"maximum":8},"comment":{"type":"string"}},"required":["name","target","max_limit","priority"],"additionalProperties":false}}` |
+| `apply`   | Yes      | false = preview the commands only (default); true = create the queues `{"default":false,"type":"boolean"}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
