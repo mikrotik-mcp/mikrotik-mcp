@@ -168,7 +168,7 @@ test("uses compact ASN labels in the shared country cache without extra requests
     country: "Iran",
     countryCode: "ir",
     asn: "AS44244",
-    asnOrganization: "IranCell-AS",
+    asnOrganization: "IranCell",
   });
   clock.mockReturnValue(1000 + 23 * 60 * 60_000);
   expect(geo.getIpGeo("5.112.105.66:2200").asn).toBe("AS44244");
@@ -186,7 +186,7 @@ test("applies the same compact label to the fallback provider and normalizes AS-
   await vi.waitFor(() => expect(geo.getIpGeo("5.112.105.66").status).toBe("resolved"));
   expect(geo.getIpGeo("5.112.105.66")).toMatchObject({
     asn: "AS44244",
-    asnOrganization: "IranCell-AS",
+    asnOrganization: "IranCell",
   });
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
