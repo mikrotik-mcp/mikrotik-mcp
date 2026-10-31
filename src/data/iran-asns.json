@@ -6,7 +6,7 @@
   "entries": [
     {
       "asn": "AS1756",
-      "name": "Hamyar-AS - Shiraz Hamyar Co., IR"
+      "name": "Hamyar - Shiraz Hamyar Co., IR"
     },
     {
       "asn": "AS3263",
@@ -38,7 +38,7 @@
     },
     {
       "asn": "AS9147",
-      "name": "JN-AS - Homaye Jahan Nama Co. ( Private Joint Stock), IR"
+      "name": "Homaye Jahan Nama - Homaye Jahan Nama Co. ( Private Joint Stock), IR"
     },
     {
       "asn": "AS12660",
@@ -50,7 +50,7 @@
     },
     {
       "asn": "AS12880",
-      "name": "DCI-AS - Iran Information Technology Company PJSC, IR"
+      "name": "DCI - Iran Information Technology Company PJSC, IR"
     },
     {
       "asn": "AS13231",
@@ -62,7 +62,7 @@
     },
     {
       "asn": "AS15611",
-      "name": "IROST-AS - Iranian Research Organization for Science & Technology, IR"
+      "name": "IROST - Iranian Research Organization for Science & Technology, IR"
     },
     {
       "asn": "AS15907",
@@ -70,11 +70,11 @@
     },
     {
       "asn": "AS16018",
-      "name": "SepahBank-AS - Public JSC Bank Sepah, IR"
+      "name": "SepahBank - Public JSC Bank Sepah, IR"
     },
     {
       "asn": "AS16235",
-      "name": "POYANAZM-AS - Pouya Nazm Najafabad Computer Co(PJS), IR"
+      "name": "POYANAZM - Pouya Nazm Najafabad Computer Co(PJS), IR"
     },
     {
       "asn": "AS16286",
@@ -86,7 +86,7 @@
     },
     {
       "asn": "AS16320",
-      "name": "Eniac-Tech-AS - Fanavaran Eniac Rayaneh PJSC, IR"
+      "name": "Eniac-Tech - Fanavaran Eniac Rayaneh PJSC, IR"
     },
     {
       "asn": "AS16322",
@@ -102,7 +102,7 @@
     },
     {
       "asn": "AS21341",
-      "name": "SINET-AS - Soroush Rasanheh Company Ltd, IR"
+      "name": "SINET - Soroush Rasanheh Company Ltd, IR"
     },
     {
       "asn": "AS21419",
@@ -134,23 +134,23 @@
     },
     {
       "asn": "AS29068",
-      "name": "UT-AS - University of Tehran, IR"
+      "name": "University of Tehran - University of Tehran, IR"
     },
     {
       "asn": "AS29077",
-      "name": "PARSCYBERIAN-AS - MOSHAVERIN PARSAYE BARIN Company Ltd., IR"
+      "name": "PARSCYBERIAN - MOSHAVERIN PARSAYE BARIN Company Ltd., IR"
     },
     {
       "asn": "AS29079",
-      "name": "IRNA-AS - IRNA, IR"
+      "name": "IRNA - IRNA, IR"
     },
     {
       "asn": "AS29577",
-      "name": "IUT-AS - Isfahan University of Technology, IR"
+      "name": "Isfahan University - Isfahan University of Technology, IR"
     },
     {
       "asn": "AS30902",
-      "name": "neda-AS - Moasese Gostaresh Etelaat Va Ertebatat Farhangi Neda Rayaneh, IR"
+      "name": "neda - Moasese Gostaresh Etelaat Va Ertebatat Farhangi Neda Rayaneh, IR"
     },
     {
       "asn": "AS31175",
@@ -158,15 +158,15 @@
     },
     {
       "asn": "AS31182",
-      "name": "SB24-AS - Saman Bank PJSC, IR"
+      "name": "Saman Bank - Saman Bank PJSC, IR"
     },
     {
       "asn": "AS31303",
-      "name": "NIOC-AS - National Iranian Oil Company, IR"
+      "name": "NIOC - National Iranian Oil Company, IR"
     },
     {
       "asn": "AS31476",
-      "name": "MORVA-AS - Morva System Engineering Technical Company Private Joint Stock, IR"
+      "name": "MORVA - Morva System Engineering Technical Company Private Joint Stock, IR"
     },
     {
       "asn": "AS31549",
@@ -182,7 +182,7 @@
     },
     {
       "asn": "AS34513",
-      "name": "TSTonline-AS - Tarashe Sabz Tehran Co. Ltd., IR"
+      "name": "TSTonline - Tarashe Sabz Tehran Co. Ltd., IR"
     },
     {
       "asn": "AS34592",
@@ -206,7 +206,7 @@
     },
     {
       "asn": "AS35043",
-      "name": "ALLAMEH-UNIVERSITY-AS - Allameh Tabataba'i University, IR"
+      "name": "ALLAMEH-UNIVERSITY - Allameh Tabataba'i University, IR"
     },
     {
       "asn": "AS35088",
@@ -214,15 +214,15 @@
     },
     {
       "asn": "AS35285",
-      "name": "IRNIC-AS - Institute for Research in Fundamental Sciences, IR"
+      "name": "IRNIC - Institute for Research in Fundamental Sciences, IR"
     },
     {
       "asn": "AS35615",
-      "name": "MEB-AS - Middle East Bank (PJSC), IR"
+      "name": "MEB - Middle East Bank (PJSC), IR"
     },
     {
       "asn": "AS35690",
-      "name": "IRANINSURANCE-AS - IRAN INSURANCE JOINT STOCK COMPANY, IR"
+      "name": "IRANINSURANCE - IRAN INSURANCE JOINT STOCK COMPANY, IR"
     },
     {
       "asn": "AS35766",
@@ -234,11 +234,11 @@
     },
     {
       "asn": "AS39200",
-      "name": "IRNICAnyCAST-AS - Institute for Research in Fundamental Sciences, IR"
+      "name": "IRNICAnyCAST - Institute for Research in Fundamental Sciences, IR"
     },
     {
       "asn": "AS39308",
-      "name": "ASK-AS - ANDISHE SABZ KHAZAR CO. P.J.S., IR"
+      "name": "ASK - ANDISHE SABZ KHAZAR CO. P.J.S., IR"
     },
     {
       "asn": "AS39364",
@@ -254,7 +254,7 @@
     },
     {
       "asn": "AS39571",
-      "name": "Sadad-AS - Sadad Informatics Corporation PJSC, IR"
+      "name": "Sadad - Sadad Informatics Corporation PJSC, IR"
     },
     {
       "asn": "AS39650",
@@ -270,7 +270,7 @@
     },
     {
       "asn": "AS41620",
-      "name": "IUSTCC-AS - Iran University Of Science and Technology, IR"
+      "name": "IUSTCC - Iran University Of Science and Technology, IR"
     },
     {
       "asn": "AS41856",
@@ -278,7 +278,7 @@
     },
     {
       "asn": "AS41881",
-      "name": "Fanava-AS - Fanava Group, IR"
+      "name": "Fanava - Fanava Group, IR"
     },
     {
       "asn": "AS42019",
@@ -290,11 +290,11 @@
     },
     {
       "asn": "AS42337",
-      "name": "RESPINA-AS - Respina Networks & Beyond PJSC, IR"
+      "name": "RESPINA - Respina Networks & Beyond PJSC, IR"
     },
     {
       "asn": "AS42440",
-      "name": "RDG-AS - Rayaneh Danesh Golestan Complex P.J.S. Co., IR"
+      "name": "RDG - Rayaneh Danesh Golestan Complex P.J.S. Co., IR"
     },
     {
       "asn": "AS42468",
@@ -302,7 +302,7 @@
     },
     {
       "asn": "AS42586",
-      "name": "IRIB-AS - IRIB (Islamic Republic of Iran Broadcasting), IR"
+      "name": "IRIB - IRIB (Islamic Republic of Iran Broadcasting), IR"
     },
     {
       "asn": "AS42750",
@@ -310,7 +310,7 @@
     },
     {
       "asn": "AS42867",
-      "name": "NIOCI-AS - National Iranian Oil Company PJSC, IR"
+      "name": "NIOCI - National Iranian Oil Company PJSC, IR"
     },
     {
       "asn": "AS42907",
@@ -318,7 +318,7 @@
     },
     {
       "asn": "AS42915",
-      "name": "SAPCO-AS - Engeneering Designing and Supply the parts of Iran Khodro PJSC, IR"
+      "name": "SAPCO - Engeneering Designing and Supply the parts of Iran Khodro PJSC, IR"
     },
     {
       "asn": "AS42990",
@@ -346,7 +346,7 @@
     },
     {
       "asn": "AS43415",
-      "name": "SITSCO-AS - Secure Infrastructure of Transactional Services Company PJSC, IR"
+      "name": "SITSCO - Secure Infrastructure of Transactional Services Company PJSC, IR"
     },
     {
       "asn": "AS43487",
@@ -354,7 +354,7 @@
     },
     {
       "asn": "AS43510",
-      "name": "MEHVARMACHINE-AS - Mehvar Machine, IR"
+      "name": "MEHVARMACHINE - Mehvar Machine, IR"
     },
     {
       "asn": "AS43528",
@@ -370,7 +370,7 @@
     },
     {
       "asn": "AS43965",
-      "name": "TUMS-IR-AS - Tehran University of Medical Science, IR"
+      "name": "TUMS-IR - Tehran University of Medical Science, IR"
     },
     {
       "asn": "AS44045",
@@ -378,7 +378,7 @@
     },
     {
       "asn": "AS44090",
-      "name": "MahanNet-AS - Enteghal Dadeh Mahan Co. PJSC, IR"
+      "name": "MahanNet - Enteghal Dadeh Mahan Co. PJSC, IR"
     },
     {
       "asn": "AS44208",
@@ -390,11 +390,11 @@
     },
     {
       "asn": "AS44244",
-      "name": "IranCell-AS - Iran Cell Service and Communication Company, IR"
+      "name": "IranCell - Iran Cell Service and Communication Company, IR"
     },
     {
       "asn": "AS44285",
-      "name": "SEFROYEKPARDAZENG-AS - Sefroyek Pardaz Engineering PJSC, IR"
+      "name": "SEFROYEKPARDAZENG - Sefroyek Pardaz Engineering PJSC, IR"
     },
     {
       "asn": "AS44375",
@@ -406,7 +406,7 @@
     },
     {
       "asn": "AS44410",
-      "name": "ENTEKHAB-AS - Towse'eh Sarmayeh Gozari Entekhab Group PJSC, IR"
+      "name": "ENTEKHAB - Towse'eh Sarmayeh Gozari Entekhab Group PJSC, IR"
     },
     {
       "asn": "AS44436",
@@ -422,7 +422,7 @@
     },
     {
       "asn": "AS44889",
-      "name": "AZMA-AS - Farhang Azma Communications Company LTD, IR"
+      "name": "AZMA - Farhang Azma Communications Company LTD, IR"
     },
     {
       "asn": "AS44932",
@@ -438,7 +438,7 @@
     },
     {
       "asn": "AS47262",
-      "name": "HAMARA-AS - Hamara System Tabriz Engineering Company, IR"
+      "name": "HAMARA - Hamara System Tabriz Engineering Company, IR"
     },
     {
       "asn": "AS47308",
@@ -446,7 +446,7 @@
     },
     {
       "asn": "AS47330",
-      "name": "Mobinnet-AS - Mobin Net Communication Company (Private Joint Stock), IR"
+      "name": "Mobinnet - Mobin Net Communication Company (Private Joint Stock), IR"
     },
     {
       "asn": "AS47376",
@@ -458,7 +458,7 @@
     },
     {
       "asn": "AS47558",
-      "name": "kntu-AS - Kajeh Nasir Toosi University of Technology, IR"
+      "name": "kntu - Kajeh Nasir Toosi University of Technology, IR"
     },
     {
       "asn": "AS47603",
@@ -466,15 +466,15 @@
     },
     {
       "asn": "AS47817",
-      "name": "PSRGD-AS - Bank Pasargad PJSC, IR"
+      "name": "PSRGD - Bank Pasargad PJSC, IR"
     },
     {
       "asn": "AS47843",
-      "name": "TANA-AS - TOSE'EH ERTEBATAT NOVIN ARIA CO PJS, IR"
+      "name": "TANA - TOSE'EH ERTEBATAT NOVIN ARIA CO PJS, IR"
     },
     {
       "asn": "AS47981",
-      "name": "IUMS-AS - Iran University of Medical Sciences, IR"
+      "name": "IUMS - Iran University of Medical Sciences, IR"
     },
     {
       "asn": "AS48029",
@@ -490,7 +490,7 @@
     },
     {
       "asn": "AS48159",
-      "name": "TIC-AS - Telecommunication Infrastructure Company, IR"
+      "name": "TIC - Telecommunication Infrastructure Company, IR"
     },
     {
       "asn": "AS48281",
@@ -498,15 +498,15 @@
     },
     {
       "asn": "AS48289",
-      "name": "DSA-AS - Dadeh Pardazan Sabz Alborz Co.(P.J.S.), IR"
+      "name": "DSA - Dadeh Pardazan Sabz Alborz Co.(P.J.S.), IR"
     },
     {
       "asn": "AS48309",
-      "name": "AGS-AS - Ariana Gostar Spadana (PJSC), IR"
+      "name": "AGS - Ariana Gostar Spadana (PJSC), IR"
     },
     {
       "asn": "AS48359",
-      "name": "Hesabgar-AS - Hesabgar Pardaz Gharb PJSC, IR"
+      "name": "Hesabgar - Hesabgar Pardaz Gharb PJSC, IR"
     },
     {
       "asn": "AS48391",
@@ -514,7 +514,7 @@
     },
     {
       "asn": "AS48431",
-      "name": "MAXNET-AS - Bozorg Net-e Aria, IR"
+      "name": "MAXNET - Bozorg Net-e Aria, IR"
     },
     {
       "asn": "AS48434",
@@ -526,7 +526,7 @@
     },
     {
       "asn": "AS48555",
-      "name": "IRITCO-AS - Iranian Information Technology PJSC, IR"
+      "name": "IRITCO - Iranian Information Technology PJSC, IR"
     },
     {
       "asn": "AS48601",
@@ -534,15 +534,15 @@
     },
     {
       "asn": "AS48608",
-      "name": "Mellat-AS - Mellat Insurance Public Joint Stock Company, IR"
+      "name": "Mellat - Mellat Insurance Public Joint Stock Company, IR"
     },
     {
       "asn": "AS48715",
-      "name": "SEFROYEKPARDAZENG-AS - Sefroyek Pardaz Engineering PJSC, IR"
+      "name": "SEFROYEKPARDAZENG - Sefroyek Pardaz Engineering PJSC, IR"
     },
     {
       "asn": "AS48762",
-      "name": "IAA-AS - Iran Aseman Airlines PJSC, IR"
+      "name": "IAA - Iran Aseman Airlines PJSC, IR"
     },
     {
       "asn": "AS48898",
@@ -566,15 +566,15 @@
     },
     {
       "asn": "AS49103",
-      "name": "IR-ASRETELECOM-AS - Asr-e Enteghal-e Dadeha Company (Private J.S.), IR"
+      "name": "IR-ASRETELECOM - Asr-e Enteghal-e Dadeha Company (Private J.S.), IR"
     },
     {
       "asn": "AS49148",
-      "name": "ADPDIGITAL-AS - Atieh Dadeh Pardaz PJSC, IR"
+      "name": "ADPDIGITAL - Atieh Dadeh Pardaz PJSC, IR"
     },
     {
       "asn": "AS49207",
-      "name": "SANGANCO-AS - Sangan Khorasan Steel Mineral Industry Company (JSC), IR"
+      "name": "SANGANCO - Sangan Khorasan Steel Mineral Industry Company (JSC), IR"
     },
     {
       "asn": "AS49228",
@@ -586,7 +586,7 @@
     },
     {
       "asn": "AS49433",
-      "name": "RFB-AS - Bank Refah Kargaran, IR"
+      "name": "RFB - Bank Refah Kargaran, IR"
     },
     {
       "asn": "AS49556",
@@ -598,7 +598,7 @@
     },
     {
       "asn": "AS49666",
-      "name": "TIC-GW-AS - Telecommunication Infrastructure Company, IR"
+      "name": "TIC-GW - Telecommunication Infrastructure Company, IR"
     },
     {
       "asn": "AS49680",
@@ -614,7 +614,7 @@
     },
     {
       "asn": "AS49847",
-      "name": "RAYAZMA-AS - Pardazeshgar Ray Azma Co. Ltd., IR"
+      "name": "RAYAZMA - Pardazeshgar Ray Azma Co. Ltd., IR"
     },
     {
       "asn": "AS49972",
@@ -642,15 +642,15 @@
     },
     {
       "asn": "AS50558",
-      "name": "SYSTEC-AS - Rayaneh Pardazan Baran Co. Ltd., IR"
+      "name": "SYSTEC - Rayaneh Pardazan Baran Co. Ltd., IR"
     },
     {
       "asn": "AS50692",
-      "name": "IKCO-AS - Iran Khodro Co. P.J.S., IR"
+      "name": "IKCO - Iran Khodro Co. P.J.S., IR"
     },
     {
       "asn": "AS50733",
-      "name": "Bina-AS - Ertebat Gostaran Bina PJSC, IR"
+      "name": "Bina - Ertebat Gostaran Bina PJSC, IR"
     },
     {
       "asn": "AS50749",
@@ -662,11 +662,11 @@
     },
     {
       "asn": "AS50810",
-      "name": "Mobinnet-AS - Mobin Net Communication Company (Private Joint Stock), IR"
+      "name": "Mobinnet - Mobin Net Communication Company (Private Joint Stock), IR"
     },
     {
       "asn": "AS50855",
-      "name": "rqbank-AS - Resalat Interest-free loaning Bank PJS, IR"
+      "name": "rqbank - Resalat Interest-free loaning Bank PJS, IR"
     },
     {
       "asn": "AS51026",
@@ -678,7 +678,7 @@
     },
     {
       "asn": "AS51235",
-      "name": "ADG-AS - ARAAX DADEH GOSTAR information and communication Development Co (Private Joint Stock), IR"
+      "name": "ADG - ARAAX DADEH GOSTAR information and communication Development Co (Private Joint Stock), IR"
     },
     {
       "asn": "AS51241",
@@ -698,7 +698,7 @@
     },
     {
       "asn": "AS51431",
-      "name": "IR-AVABARID-AS - Rasaneh Avabarid Private Joint Stock Company, IR"
+      "name": "IR-AVABARID - Rasaneh Avabarid Private Joint Stock Company, IR"
     },
     {
       "asn": "AS51433",
@@ -722,19 +722,19 @@
     },
     {
       "asn": "AS51732",
-      "name": "MAPNA-AS - MAPNA Power Plants Development & Construction PLC, IR"
+      "name": "MAPNA - MAPNA Power Plants Development & Construction PLC, IR"
     },
     {
       "asn": "AS51777",
-      "name": "ALBORZ-AS - Alborz Insurance Company, IR"
+      "name": "ALBORZ - Alborz Insurance Company, IR"
     },
     {
       "asn": "AS51785",
-      "name": "Karafarin-AS - Karafarin Bank Plc., IR"
+      "name": "Karafarin - Karafarin Bank Plc., IR"
     },
     {
       "asn": "AS51889",
-      "name": "GPDN-AS - Gostaresh Pardazesh Dana Negar Co.(PJSC), IR"
+      "name": "GPDN - Gostaresh Pardazesh Dana Negar Co.(PJSC), IR"
     },
     {
       "asn": "AS52049",
@@ -746,7 +746,7 @@
     },
     {
       "asn": "AS52140",
-      "name": "UNHCR-IR-AS - United Nations High Commissioner for Refugees, IR"
+      "name": "UNHCR-IR - United Nations High Commissioner for Refugees, IR"
     },
     {
       "asn": "AS52155",
@@ -754,7 +754,7 @@
     },
     {
       "asn": "AS52196",
-      "name": "TREC-AS - Tehran Regional Electricity Joint Stock Company, IR"
+      "name": "TREC - Tehran Regional Electricity Joint Stock Company, IR"
     },
     {
       "asn": "AS52209",
@@ -766,7 +766,7 @@
     },
     {
       "asn": "AS56402",
-      "name": "DADEHGOSTAR-AS - Dadeh Gostar Asr Novin P.J.S. Co., IR"
+      "name": "DADEHGOSTAR - Dadeh Gostar Asr Novin P.J.S. Co., IR"
     },
     {
       "asn": "AS56461",
@@ -782,11 +782,11 @@
     },
     {
       "asn": "AS56503",
-      "name": "BADR-AS - PJSC \"Badr Rayan Jonoob\", IR"
+      "name": "BADR - PJSC \"Badr Rayan Jonoob\", IR"
     },
     {
       "asn": "AS56547",
-      "name": "TMUNICIPALITY-AS - Tehran Municipality ICT Organization, IR"
+      "name": "TMUNICIPALITY - Tehran Municipality ICT Organization, IR"
     },
     {
       "asn": "AS56548",
@@ -794,7 +794,7 @@
     },
     {
       "asn": "AS56616",
-      "name": "Sharif-AS - Tarahan Shabake Sharif LTD, IR"
+      "name": "Sharif - Tarahan Shabake Sharif LTD, IR"
     },
     {
       "asn": "AS56632",
@@ -810,7 +810,7 @@
     },
     {
       "asn": "AS56765",
-      "name": "SBU-AS - Shahid Beheshti university, IR"
+      "name": "SBU - Shahid Beheshti university, IR"
     },
     {
       "asn": "AS57027",
@@ -818,7 +818,7 @@
     },
     {
       "asn": "AS57067",
-      "name": "IRDC-AS - KEYANA Information Technology Co. Ltd., IR"
+      "name": "IRDC - KEYANA Information Technology Co. Ltd., IR"
     },
     {
       "asn": "AS57218",
@@ -826,7 +826,7 @@
     },
     {
       "asn": "AS57230",
-      "name": "Ariawebco-AS - Aria Web Development LLC, IR"
+      "name": "Ariawebco - Aria Web Development LLC, IR"
     },
     {
       "asn": "AS57235",
@@ -866,7 +866,7 @@
     },
     {
       "asn": "AS57574",
-      "name": "AGRIBANK-AS - Agriculture Bank PJSC, IR"
+      "name": "AGRIBANK - Agriculture Bank PJSC, IR"
     },
     {
       "asn": "AS57577",
@@ -898,7 +898,7 @@
     },
     {
       "asn": "AS58053",
-      "name": "TAMIKCO-AS - Tam Iran Khodro Company, IR"
+      "name": "TAMIKCO - Tam Iran Khodro Company, IR"
     },
     {
       "asn": "AS58080",
@@ -918,7 +918,7 @@
     },
     {
       "asn": "AS58169",
-      "name": "IGMC-AS - Iran Grid Management Company (IGMC), IR"
+      "name": "IGMC - Iran Grid Management Company (IGMC), IR"
     },
     {
       "asn": "AS58192",
@@ -950,7 +950,7 @@
     },
     {
       "asn": "AS58333",
-      "name": "SamanInsurance-AS - Saman Insurance Co. (Public Joint Stock), IR"
+      "name": "SamanInsurance - Saman Insurance Co. (Public Joint Stock), IR"
     },
     {
       "asn": "AS59431",
@@ -966,7 +966,7 @@
     },
     {
       "asn": "AS59501",
-      "name": "RahbordHooshmand-Shahr-AS - Rahbord Houshmand Shahr PJSC, IR"
+      "name": "RahbordHooshmand-Shahr - Rahbord Houshmand Shahr PJSC, IR"
     },
     {
       "asn": "AS59506",
@@ -1002,7 +1002,7 @@
     },
     {
       "asn": "AS59708",
-      "name": "Rayanhamafza-AS - Rayan Hamafza Company Public Joint Stock, IR"
+      "name": "Rayanhamafza - Rayan Hamafza Company Public Joint Stock, IR"
     },
     {
       "asn": "AS59754",
@@ -1010,7 +1010,7 @@
     },
     {
       "asn": "AS59757",
-      "name": "Sarmadins-AS - Sarmad Insurance PJSC, IR"
+      "name": "Sarmadins - Sarmad Insurance PJSC, IR"
     },
     {
       "asn": "AS59794",
@@ -1018,11 +1018,11 @@
     },
     {
       "asn": "AS59797",
-      "name": "IPMI-AS - Industrial Projects Management Company (P.J.S) of Iran, IR"
+      "name": "IPMI - Industrial Projects Management Company (P.J.S) of Iran, IR"
     },
     {
       "asn": "AS59838",
-      "name": "NAK-AS - Naghsh Awal Keyfiat PJSC, IR"
+      "name": "NAK - Naghsh Awal Keyfiat PJSC, IR"
     },
     {
       "asn": "AS59882",
@@ -1030,15 +1030,15 @@
     },
     {
       "asn": "AS59884",
-      "name": "PTC-AS - PERSIA TELECOM COMPANY, IR"
+      "name": "PTC - PERSIA TELECOM COMPANY, IR"
     },
     {
       "asn": "AS59912",
-      "name": "ZNU-AS - University of Zanjan, IR"
+      "name": "ZNU - University of Zanjan, IR"
     },
     {
       "asn": "AS59961",
-      "name": "RMTO-AS - Road Maintenance & Transportation Organization, IR"
+      "name": "RMTO - Road Maintenance & Transportation Organization, IR"
     },
     {
       "asn": "AS59962",
@@ -1058,7 +1058,7 @@
     },
     {
       "asn": "AS60148",
-      "name": "ITO-AS - Iran Information Technology Company PJSC, IR"
+      "name": "ITO - Iran Information Technology Company PJSC, IR"
     },
     {
       "asn": "AS60178",
@@ -1078,7 +1078,7 @@
     },
     {
       "asn": "AS60340",
-      "name": "saipa-AS - Iranian company of Saipa automobile manufacturing Public Joint Stock, IR"
+      "name": "saipa - Iranian company of Saipa automobile manufacturing Public Joint Stock, IR"
     },
     {
       "asn": "AS60374",
@@ -1086,7 +1086,7 @@
     },
     {
       "asn": "AS60407",
-      "name": "TOURISMBANK-AS - Tourism Bank (Public Joint Stock), IR"
+      "name": "TOURISMBANK - Tourism Bank (Public Joint Stock), IR"
     },
     {
       "asn": "AS60423",
@@ -1094,11 +1094,11 @@
     },
     {
       "asn": "AS60516",
-      "name": "GHAVAMIN-AS - Bank Ghavamin (Public Joint Stock), IR"
+      "name": "GHAVAMIN - Bank Ghavamin (Public Joint Stock), IR"
     },
     {
       "asn": "AS60562",
-      "name": "FAS-AS - Ministry Of Health and Medical Education, IR"
+      "name": "FAS - Ministry Of Health and Medical Education, IR"
     },
     {
       "asn": "AS60577",
@@ -1110,7 +1110,7 @@
     },
     {
       "asn": "AS60627",
-      "name": "RA-AS - Rayankadeh Apadana Company Ltd, IR"
+      "name": "RA - Rayankadeh Apadana Company Ltd, IR"
     },
     {
       "asn": "AS60631",
@@ -1130,11 +1130,11 @@
     },
     {
       "asn": "AS60811",
-      "name": "SaipaYadak-AS - Saipa Yadak Co. PLC, IR"
+      "name": "SaipaYadak - Saipa Yadak Co. PLC, IR"
     },
     {
       "asn": "AS60887",
-      "name": "IRISA-AS - International Systems Engineering & Automation Company PJS, IR"
+      "name": "IRISA - International Systems Engineering & Automation Company PJS, IR"
     },
     {
       "asn": "AS60976",
@@ -1142,11 +1142,11 @@
     },
     {
       "asn": "AS61036",
-      "name": "FanavaDP-AS - Fanava Group, IR"
+      "name": "FanavaDP - Fanava Group, IR"
     },
     {
       "asn": "AS61055",
-      "name": "IranHOST-AS - Roshangar Rayaneh Tehran Co. Ltd., IR"
+      "name": "IranHOST - Roshangar Rayaneh Tehran Co. Ltd., IR"
     },
     {
       "asn": "AS61061",
@@ -1158,23 +1158,23 @@
     },
     {
       "asn": "AS61173",
-      "name": "GWSN-AS - Green Web Samaneh Novin PJSC, IR"
+      "name": "GWSN - Green Web Samaneh Novin PJSC, IR"
     },
     {
       "asn": "AS61176",
-      "name": "CDI-AS - City Development and Innovation PJSC, IR"
+      "name": "CDI - City Development and Innovation PJSC, IR"
     },
     {
       "asn": "AS61209",
-      "name": "USB-AS - University of Sistan and Baluchestan, IR"
+      "name": "USB - University of Sistan and Baluchestan, IR"
     },
     {
       "asn": "AS61239",
-      "name": "NRDC-AS - Naji Research & Development Company Private Join-Stock, IR"
+      "name": "NRDC - Naji Research & Development Company Private Join-Stock, IR"
     },
     {
       "asn": "AS61246",
-      "name": "IRIMO-AS - IRAN METEOROLOGICAL ORGANIZATION, IR"
+      "name": "IRIMO - IRAN METEOROLOGICAL ORGANIZATION, IR"
     },
     {
       "asn": "AS61248",
@@ -1190,7 +1190,7 @@
     },
     {
       "asn": "AS61386",
-      "name": "TASNIM-AS - Ati Sazan Farhang Tasnim Intitute, IR"
+      "name": "TASNIM - Ati Sazan Farhang Tasnim Intitute, IR"
     },
     {
       "asn": "AS61962",
@@ -1198,7 +1198,7 @@
     },
     {
       "asn": "AS62039",
-      "name": "Mapna-AS - Iran Power Plant Projects Management (MAPNA) PJS, IR"
+      "name": "Mapna - Iran Power Plant Projects Management (MAPNA) PJS, IR"
     },
     {
       "asn": "AS62048",
@@ -1222,7 +1222,7 @@
     },
     {
       "asn": "AS62198",
-      "name": "ACFC-AS - Melal Credit Company (Public Joint Stock), IR"
+      "name": "ACFC - Melal Credit Company (Public Joint Stock), IR"
     },
     {
       "asn": "AS62229",
@@ -1238,11 +1238,11 @@
     },
     {
       "asn": "AS62265",
-      "name": "Mahan-Air-AS - Mahan Air PJSC, IR"
+      "name": "Mahan-Air - Mahan Air PJSC, IR"
     },
     {
       "asn": "AS62318",
-      "name": "Bimeh-Ma-AS - Bimeh Ma PJSC, IR"
+      "name": "Bimeh-Ma - Bimeh Ma PJSC, IR"
     },
     {
       "asn": "AS62334",
@@ -1250,7 +1250,7 @@
     },
     {
       "asn": "AS62367",
-      "name": "PNA-AS - Pardakht Nowin Arian PJSC, IR"
+      "name": "PNA - Pardakht Nowin Arian PJSC, IR"
     },
     {
       "asn": "AS62442",
@@ -1262,7 +1262,7 @@
     },
     {
       "asn": "AS64422",
-      "name": "SIMRA-AS - SIMA RAYAN SHARIF COMPANY (LTD.), IR"
+      "name": "SIMRA - SIMA RAYAN SHARIF COMPANY (LTD.), IR"
     },
     {
       "asn": "AS64434",
@@ -1274,7 +1274,7 @@
     },
     {
       "asn": "AS197207",
-      "name": "MCCI-AS - Mobile Communication Company of Iran PLC, IR"
+      "name": "MCCI - Mobile Communication Company of Iran PLC, IR"
     },
     {
       "asn": "AS197330",
@@ -1306,7 +1306,7 @@
     },
     {
       "asn": "AS198569",
-      "name": "Rahanet-AS - Rahanet Zanjan Co. (Private Joint-Stock), IR"
+      "name": "Rahanet - Rahanet Zanjan Co. (Private Joint-Stock), IR"
     },
     {
       "asn": "AS198926",
@@ -1346,7 +1346,7 @@
     },
     {
       "asn": "AS200370",
-      "name": "FPCC-AS - Farzanegan Pars Communications Company PJS, IR"
+      "name": "FPCC - Farzanegan Pars Communications Company PJS, IR"
     },
     {
       "asn": "AS200376",
@@ -1362,7 +1362,7 @@
     },
     {
       "asn": "AS200554",
-      "name": "KimiaCloud-AS - Dade Pardaz Kimia Pouyesh PJS., IR"
+      "name": "KimiaCloud - Dade Pardaz Kimia Pouyesh PJS., IR"
     },
     {
       "asn": "AS200645",
@@ -1370,7 +1370,7 @@
     },
     {
       "asn": "AS200796",
-      "name": "DPA-AS - Data Pardaz Afraz Private Joint Stock Company, IR"
+      "name": "DPA - Data Pardaz Afraz Private Joint Stock Company, IR"
     },
     {
       "asn": "AS200816",
@@ -1426,7 +1426,7 @@
     },
     {
       "asn": "AS201871",
-      "name": "TIC-AS - Tehran Internet Co., IR"
+      "name": "TIC - Tehran Internet Co., IR"
     },
     {
       "asn": "AS201999",
@@ -1446,11 +1446,11 @@
     },
     {
       "asn": "AS202468",
-      "name": "AbrArvan-AS - Noyan Abr Arvan Co. ( Private Joint Stock), IR"
+      "name": "AbrArvan - Noyan Abr Arvan Co. ( Private Joint Stock), IR"
     },
     {
       "asn": "AS202571",
-      "name": "kharazmi-AS - Kharazmi University, IR"
+      "name": "kharazmi - Kharazmi University, IR"
     },
     {
       "asn": "AS202601",
@@ -1502,7 +1502,7 @@
     },
     {
       "asn": "AS203558",
-      "name": "Fanap-DC-AS - Tose'h Fanavari Ertebabat Pasargad Arian Co. PJS, IR"
+      "name": "Fanap-DC - Tose'h Fanavari Ertebabat Pasargad Arian Co. PJS, IR"
     },
     {
       "asn": "AS203616",
@@ -1550,7 +1550,7 @@
     },
     {
       "asn": "AS204105",
-      "name": "Payabastar-AS - Paya Bastar Arina Co. Private J.S., IR"
+      "name": "Payabastar - Paya Bastar Arina Co. Private J.S., IR"
     },
     {
       "asn": "AS204203",
@@ -1594,7 +1594,7 @@
     },
     {
       "asn": "AS204812",
-      "name": "ParsTamin-AS - Pars Tamin Navid Company (Private Joint-Stock), IR"
+      "name": "ParsTamin - Pars Tamin Navid Company (Private Joint-Stock), IR"
     },
     {
       "asn": "AS204813",
@@ -1658,7 +1658,7 @@
     },
     {
       "asn": "AS205550",
-      "name": "TCEC-AS - Tejarat Iranian Technology infrastructure PJSC, IR"
+      "name": "TCEC - Tejarat Iranian Technology infrastructure PJSC, IR"
     },
     {
       "asn": "AS205560",
@@ -1690,7 +1690,7 @@
     },
     {
       "asn": "AS205837",
-      "name": "SADADPSP-AS - Sadad Electronic Payment Company P.J.S., IR"
+      "name": "SADADPSP - Sadad Electronic Payment Company P.J.S., IR"
     },
     {
       "asn": "AS205883",
@@ -1698,7 +1698,7 @@
     },
     {
       "asn": "AS205894",
-      "name": "EDBI-AS - Export Development Bank of Iran - Public Joint Stock, IR"
+      "name": "EDBI - Export Development Bank of Iran - Public Joint Stock, IR"
     },
     {
       "asn": "AS205899",
@@ -1850,7 +1850,7 @@
     },
     {
       "asn": "AS208896",
-      "name": "IR-ADA-AS - Asr-e Danesh Afzar Company (Private J.S.), IR"
+      "name": "IR-ADA - Asr-e Danesh Afzar Company (Private J.S.), IR"
     },
     {
       "asn": "AS209079",
@@ -1858,11 +1858,11 @@
     },
     {
       "asn": "AS209279",
-      "name": "POSHTVAR-AS - Padideh Sazan Poshtvar Co. PJS, IR"
+      "name": "POSHTVAR - Padideh Sazan Poshtvar Co. PJS, IR"
     },
     {
       "asn": "AS209462",
-      "name": "hosco-AS - South Hormozgan Steel PJSC, IR"
+      "name": "hosco - South Hormozgan Steel PJSC, IR"
     },
     {
       "asn": "AS209596",
@@ -1886,7 +1886,7 @@
     },
     {
       "asn": "AS210392",
-      "name": "AriaOxin-AS - Azarakhsh Ava-e Ahvaz Co, IR"
+      "name": "AriaOxin - Azarakhsh Ava-e Ahvaz Co, IR"
     },
     {
       "asn": "AS210405",
@@ -1906,7 +1906,7 @@
     },
     {
       "asn": "AS210583",
-      "name": "KHATAMUNI-AS - Khatam Academic Institute, IR"
+      "name": "KHATAMUNI - Khatam Academic Institute, IR"
     },
     {
       "asn": "AS210603",
@@ -1978,7 +1978,7 @@
     },
     {
       "asn": "AS211670",
-      "name": "FASA-AS - Fasa University, IR"
+      "name": "FASA - Fasa University, IR"
     },
     {
       "asn": "AS211703",
@@ -1986,7 +1986,7 @@
     },
     {
       "asn": "AS211705",
-      "name": "IEC-AS - Iranian Electronic Counter Anzali Free Zone(Private Joint Stock Company), IR"
+      "name": "IEC - Iranian Electronic Counter Anzali Free Zone(Private Joint Stock Company), IR"
     },
     {
       "asn": "AS211881",
@@ -2014,7 +2014,7 @@
     },
     {
       "asn": "AS212080",
-      "name": "NEGIN-AS - Karafarini va FANAVARIHAYEH Novin Negin Pars Co PJS, IR"
+      "name": "NEGIN - Karafarini va FANAVARIHAYEH Novin Negin Pars Co PJS, IR"
     },
     {
       "asn": "AS212161",
@@ -2042,11 +2042,11 @@
     },
     {
       "asn": "AS212355",
-      "name": "Emdadkhodro-Iran-AS - Emdadkhodro Iran, IR"
+      "name": "Emdadkhodro-Iran - Emdadkhodro Iran, IR"
     },
     {
       "asn": "AS212476",
-      "name": "SepehrPayment-AS - Barmak Khotvaneh, IR"
+      "name": "SepehrPayment - Barmak Khotvaneh, IR"
     },
     {
       "asn": "AS212544",
@@ -2054,7 +2054,7 @@
     },
     {
       "asn": "AS212607",
-      "name": "POUYANIT-AS - Saeid Shahrokhi, IR"
+      "name": "POUYANIT - Saeid Shahrokhi, IR"
     },
     {
       "asn": "AS212631",
@@ -2106,7 +2106,7 @@
     },
     {
       "asn": "AS213732",
-      "name": "PEP-AS - Peyman Ertebatat Pouya Company (Ltd), IR"
+      "name": "PEP - Peyman Ertebatat Pouya Company (Ltd), IR"
     },
     {
       "asn": "AS213759",
@@ -2206,7 +2206,7 @@
     },
     {
       "asn": "AS214805",
-      "name": "RoyaGard-AS - Kimiyagaran Padideh Modern Company LLC, IR"
+      "name": "RoyaGard - Kimiyagaran Padideh Modern Company LLC, IR"
     },
     {
       "asn": "AS214824",
@@ -2246,7 +2246,7 @@
     },
     {
       "asn": "AS215351",
-      "name": "MGADMIN-AS - Mohammadreza Gholami, IR"
+      "name": "MGADMIN - Mohammadreza Gholami, IR"
     },
     {
       "asn": "AS215496",
@@ -2282,7 +2282,7 @@
     },
     {
       "asn": "AS215850",
-      "name": "EVTSP-AS - PJSC Toseh Etemad Vosoogh Gostar, IR"
+      "name": "EVTSP - PJSC Toseh Etemad Vosoogh Gostar, IR"
     },
     {
       "asn": "AS215892",
@@ -2290,7 +2290,7 @@
     },
     {
       "asn": "AS215938",
-      "name": "Ertebanet-AS - Mizban Pardazesh Nasle Farda PJSC, IR"
+      "name": "Ertebanet - Mizban Pardazesh Nasle Farda PJSC, IR"
     },
     {
       "asn": "AS215974",
@@ -2334,7 +2334,7 @@
     },
     {
       "asn": "AS218970",
-      "name": "CHOMIK-AS - Amin NezhadKahnoji, IR"
+      "name": "CHOMIK - Amin NezhadKahnoji, IR"
     },
     {
       "asn": "AS219019",
@@ -2354,7 +2354,7 @@
     },
     {
       "asn": "AS219466",
-      "name": "MEHRANHOST-AS - Mehran Saeedikia, IR"
+      "name": "MEHRANHOST - Mehran Saeedikia, IR"
     }
   ]
 }
