@@ -35,6 +35,8 @@ For a self-hosted deployment, use the build/start commands above behind your HTT
 
 Vercel Web Analytics is included in the root layout. Enable **Web Analytics** for the documentation project in Vercel, then deploy to start collecting page views. Local builds do not verify production analytics delivery.
 
+Vercel Speed Insights is also included in the root layout. After deployment, open **Speed Insights** for the documentation project in Vercel to verify real-user page performance metrics. Local builds do not verify production metrics delivery.
+
 ## Content and screenshots
 
 - `content/docs/guides/`: setup, operations and contributor guides.

@@ -1,4 +1,5 @@
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { RootProvider } from "fumadocs-ui/provider/next";
 import { Inter, JetBrains_Mono, Manrope } from "next/font/google";
 // Types
@@ -37,6 +38,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           {children}
         </RootProvider>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
