@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@types/mdx": "^2.0.14",
+    "@vercel/analytics": "^2.0.1",
     "fumadocs-core": "^16.17.9",
     "fumadocs-mdx": "^15.4.10",
     "fumadocs-ui": "^16.17.9",

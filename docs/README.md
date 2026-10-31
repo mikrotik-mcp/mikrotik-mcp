@@ -33,6 +33,8 @@ Deploy this repository as a Next.js application with **Root Directory = docs**. 
 
 For a self-hosted deployment, use the build/start commands above behind your HTTPS reverse proxy. No production deployment is performed by the local preview command.
 
+Vercel Web Analytics is included in the root layout. Enable **Web Analytics** for the documentation project in Vercel, then deploy to start collecting page views. Local builds do not verify production analytics delivery.
+
 ## Content and screenshots
 
 - `content/docs/guides/`: setup, operations and contributor guides.
