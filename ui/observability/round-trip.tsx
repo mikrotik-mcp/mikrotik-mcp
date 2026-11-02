@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -366,6 +367,8 @@ export function RoundTripView(): ReactNode {
   } catch {
     preview = undefined;
   }
+  if (loading && !choices.length && !loadError)
+    return <LoadingState label="Loading saved router configurations" layout="form" />;
   return (
     <section className="grid gap-5">
       <header className="overflow-hidden rounded-2xl border border-border bg-card">

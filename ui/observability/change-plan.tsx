@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Play, TriangleAlert } from "lucide-react";
@@ -144,6 +145,7 @@ export function ChangePlanView(): ReactNode {
           </div>
         </Panel>
 
+        {busy && !res && <LoadingState label="Preparing change plan" layout="form" />}
         {res && (
           <Panel
             title="Plan"

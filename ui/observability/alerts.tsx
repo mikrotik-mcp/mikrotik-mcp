@@ -6,11 +6,12 @@
  * person opening this page under pressure cares about. Configuration and
  * history sit below it.
  */
+import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { api, postJson } from "./api";
 import type { Trigger } from "../../src/alerts/model";
-import { Badge, Note, Select, Spinner } from "./geist";
+import { Badge, Note, Select } from "./geist";
 // The shadcn Button, not geist's — only this one has the `xs` size and the
 // outline/ghost variants this page's dense action rows need.
 import { Button } from "@/components/ui/button";
@@ -203,7 +204,7 @@ export function AlertsView(): ReactNode {
     );
   }, [data]);
 
-  if (!data) return <Spinner />;
+  if (!data) return <LoadingState label="Loading alerts" />;
 
   if (!data.configured) {
     return (

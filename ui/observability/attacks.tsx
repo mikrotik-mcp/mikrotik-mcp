@@ -22,6 +22,7 @@
  *     shortcut lives here and writes to the existing Schedules feature rather than
  *     growing a second scheduler.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, postJson } from "./api";
@@ -507,6 +508,7 @@ export function AttacksView(): ReactNode {
     [incidents, payload],
   );
 
+  if (!payload && !error) return <LoadingState label="Loading threat evidence" layout="cards" />;
   return (
     <div className="space-y-4">
       {payload?.posture && (

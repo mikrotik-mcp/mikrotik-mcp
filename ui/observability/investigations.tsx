@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Search, ArrowRight, Clock, Network, Router } from "lucide-react";
@@ -21,6 +22,7 @@ export function InvestigationsView(): ReactNode {
   const vantageId = useId();
   const seed = new URLSearchParams(location.search);
   const [device, setDevice] = useState(seed.get("investigationDevice") ?? "");
+  const [initialLoading, setInitialLoading] = useState(true);
   const [devices, setDevices] = useState<string[]>([]);
   const [client, setClient] = useState(seed.get("investigationClient") ?? "");
   const [target, setTarget] = useState("");
@@ -42,6 +44,9 @@ export function InvestigationsView(): ReactNode {
       })
       .catch(() => {
         if (!disposed) setError("Could not load devices. Check the dashboard connection.");
+      })
+      .finally(() => {
+        if (!disposed) setInitialLoading(false);
       });
     return () => {
       disposed = true;
@@ -102,6 +107,7 @@ export function InvestigationsView(): ReactNode {
         setError("Could not open this case. Access is checked for every evidence device.");
     }
   }
+  if (initialLoading) return <LoadingState label="Loading investigations" layout="form" />;
   return (
     <section className="grid gap-6">
       <div className="rounded-xl border border-border bg-card p-5 sm:p-7">

@@ -9,6 +9,7 @@
  * schema-driven {@link EntityManager}; sessions are read-only; RADIUS-incoming
  * (CoA) and UM global settings are singleton forms.
  */
+import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Eye, EyeOff, Plus, RefreshCw, Shuffle } from "lucide-react";
@@ -620,11 +621,7 @@ function EntityManager({ config, device }: { config: EntityConfig; device: strin
       )}
 
       {!data ? (
-        !error && (
-          <div className="text-muted-foreground text-[11px]" role="status">
-            Loading…
-          </div>
-        )
+        !error && <LoadingState label="Loading RADIUS records" />
       ) : rows.length === 0 ? (
         <div className="px-1 py-5 text-muted-foreground text-[11px]">
           {config.empty ?? "Nothing here yet."}
@@ -874,12 +871,7 @@ function SingletonForm({
         </Button>
       </Note>
     );
-  if (!row)
-    return (
-      <p className="text-xs text-muted-foreground" role="status">
-        Loading {title}…
-      </p>
-    );
+  if (!row) return <LoadingState label={`Loading ${title}`} layout="form" />;
   return (
     <div className={FORM_BOX}>
       <div className={FORM_TITLE}>{title}</div>

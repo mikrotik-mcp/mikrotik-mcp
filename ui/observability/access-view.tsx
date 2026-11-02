@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -404,14 +405,7 @@ export function AccessView(): ReactNode {
           <span>{notice}</span>
         </div>
       )}
-      {!data && !error && (
-        <div className="access-loading" role="status">
-          <span />
-          <span />
-          <span />
-          Loading permission settings…
-        </div>
-      )}
+      {!data && !error && <LoadingState label="Loading permission settings" layout="form" />}
 
       {data && access && draft && (
         <>

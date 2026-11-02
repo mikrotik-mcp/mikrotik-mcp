@@ -6,6 +6,7 @@
  * load board, a weak-signal client table with the recommended neighbor AP, and a
  * roaming/HA audit strip. Every write targets the selected router explicitly.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -276,9 +277,7 @@ export function CapsmanView(): ReactNode {
           </Button>
         </Note>
       ) : !routers ? (
-        <div role="status">
-          <Spinner /> Loading routers…
-        </div>
+        <LoadingState label="Loading routers" layout="cards" />
       ) : !device ? (
         <Note>No configured routers.</Note>
       ) : (
@@ -556,11 +555,7 @@ function CapsmanFabric({ device }: { device: string }): ReactNode {
   }, [overview]);
 
   if (loading && !overview) {
-    return (
-      <div className="text-muted-foreground flex items-center gap-2 p-6 text-sm">
-        <Spinner /> Loading CAPsMAN fabric…
-      </div>
-    );
+    return <LoadingState label="Loading CAPsMAN fabric" layout="cards" />;
   }
   if (error) {
     return (

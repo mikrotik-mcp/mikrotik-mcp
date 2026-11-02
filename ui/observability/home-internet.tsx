@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import {
   Activity,
@@ -59,6 +60,7 @@ function Picker({
   );
 }
 export function HomeInternetView() {
+  const [initialLoading, setInitialLoading] = useState(true);
   const [devices, setDevices] = useState<string[]>([]),
     [device, setDevice] = useState(""),
     [error, setError] = useState("");
@@ -74,7 +76,8 @@ export function HomeInternetView() {
       .catch(() => {
         if (!cancelled)
           setError("Could not load routers. Check the dashboard connection and reload.");
-      });
+      })
+      .finally(() => setInitialLoading(false));
     return () => {
       cancelled = true;
     };
@@ -105,6 +108,7 @@ export function HomeInternetView() {
           {error}
         </p>
       )}
+      {initialLoading && <LoadingState label="Loading home network" layout="cards" />}
       {device && <Workspace key={device} device={device} />}
     </div>
   );

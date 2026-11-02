@@ -17,7 +17,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { api, postJson } from "./api";
-import { Button, Note, Spinner } from "./geist";
+import { LoadingState } from "./loading-state";
+import { Button, Note } from "./geist";
 import { MARKDOWN } from "./whats-new";
 import { renderMarkdown } from "./markdown";
 import { toast } from "./toast-action";
@@ -215,11 +216,7 @@ export function ReleasesView(): ReactNode {
   }, [data, latest, busy, load]);
 
   if (loading) {
-    return (
-      <div className="text-muted-foreground flex items-center gap-2 p-6 text-sm">
-        <Spinner /> Loading releases…
-      </div>
-    );
+    return <LoadingState label="Loading releases" layout="cards" />;
   }
   if (error || !data) {
     return (

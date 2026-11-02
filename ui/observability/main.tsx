@@ -9,6 +9,7 @@
  * makes. Charts are hand-rolled SVG (no chart library). A `?token=` in the URL
  * is forwarded to every API call and the live stream when the server requires it.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -92,7 +93,7 @@ import { selectConfigScope } from "../../src/config-device-draft";
 import { DevicesView } from "./devices-view";
 import { DetailDrawer } from "./detail-drawer";
 import { bytes, clock, FEED_CAP, ms, num, RISK_CLASS, RISK_COLOR, sval, WINDOWS } from "./format";
-import { Button, Dot, Input, Select, Spinner } from "./geist";
+import { Button, Dot, Input, Select } from "./geist";
 import { JsonView } from "./highlight";
 import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
@@ -1006,12 +1007,14 @@ function App(): ReactNode {
   const [sshPool, setSshPool] = useState<SSHPoolPayload | null>(null);
   const whatsNew = useWhatsNew(meta?.version);
   const [topology, setTopology] = useState<TopologyPayload | null>(null);
+  const [topologyLoading, setTopologyLoading] = useState(true);
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
   const [editingConfig, setEditingConfig] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   // A device entry seeded from the topology map's "Add to config →" action.
   const [seed, setSeed] = useState<{ name: string; body: Record<string, unknown> } | null>(null);
   const [feed, setFeed] = useState<ToolEvent[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
   const [windowMs, setWindowMs] = useState(3_600_000);
   // The Live Feed row limit is a real config value (`dashboard.feedLimit`), so it
   // shows in the effective config and the config editor and is shared by every
@@ -1136,7 +1139,8 @@ function App(): ReactNode {
     if (pausedRef.current) return;
     void api<{ events: ToolEvent[] }>(`/api/events?limit=${FEED_CAP}`)
       .then((r) => setFeed(r.events))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setFeedLoading(false));
   }, []);
 
   const refreshContext = useRef("");
@@ -1225,7 +1229,8 @@ function App(): ReactNode {
         .catch(() => {});
       void api<TopologyPayload>("/api/topology")
         .then(setTopology)
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => setTopologyLoading(false));
     };
     fetchAll();
     const t = setInterval(() => {
@@ -1656,7 +1661,7 @@ function App(): ReactNode {
                         <StatCard k="Output volume" v={bytes(stats.outputBytes)} />
                       </>
                     ) : (
-                      <StatCard k="Loading…" v="—" />
+                      <LoadingState label="Loading overview metrics" layout="cards" />
                     )}
                   </div>
 
@@ -1796,7 +1801,9 @@ function App(): ReactNode {
 
               {/* ── Topology ── */}
               {view === "topology" &&
-                (topology && topology.nodes.length > 0 ? (
+                (!topology && topologyLoading ? (
+                  <LoadingState label="Discovering network topology" layout="cards" />
+                ) : topology && topology.nodes.length > 0 ? (
                   // The map brings its own toolbar, HUD and inspector, so it gets the
                   // page rather than sitting inside a Panel's second frame.
                   <section className="reveal grid content-start gap-[18px]">
@@ -2020,7 +2027,7 @@ function App(): ReactNode {
                     )}
                   </section>
                 ) : (
-                  <EmptyState icon={<Spinner />} title="Loading configuration…" />
+                  <LoadingState label="Loading configuration" layout="form" />
                 ))}
 
               {/* ── Memory ── */}
@@ -2034,7 +2041,10 @@ function App(): ReactNode {
               {view === "capsman" && <CapsmanView />}
 
               {/* ── Live Feed ── */}
-              {view === "feed" && (
+              {view === "feed" && feedLoading && !feed.length && (
+                <LoadingState label="Loading tool call history" />
+              )}
+              {view === "feed" && (!feedLoading || feed.length > 0) && (
                 <Panel
                   className="reveal"
                   title="Live tool calls"

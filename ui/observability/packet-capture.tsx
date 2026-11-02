@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Download, Square } from "lucide-react";
@@ -23,13 +24,17 @@ const protoColor = (p: string | undefined): string =>
 /** Live packet capture: protocol mix, top talkers, a scrolling packet list, pcap export. */
 export function PacketCapture(): ReactNode {
   const [data, setData] = useState<CapturePayload | null>(null);
+  const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const load = (): void =>
       void api<CapturePayload>("/api/capture/packets?limit=150")
-        .then(setData)
-        .catch(() => {});
+        .then((value) => {
+          setData(value);
+          setError(false);
+        })
+        .catch(() => setError(true));
     load();
     const t = setInterval(load, 1500);
     return () => clearInterval(t);
@@ -47,6 +52,9 @@ export function PacketCapture(): ReactNode {
     else toast.success("Capture stopped");
   };
 
+  if (!data && !error) return <LoadingState label="Loading packet capture" />;
+  if (!data && error)
+    return <p role="alert">Packet capture is unavailable. Retrying automatically.</p>;
   if (!stats || (!stats.running && stats.packets === 0)) {
     return (
       <div className="text-muted-foreground text-[13px] leading-relaxed">

@@ -7,6 +7,7 @@
  * amber / red as the coordinator moves. Live updates ride the shared
  * `/api/stream` socket (message type `txn`) — no second socket.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, postJson } from "./api";
@@ -217,7 +218,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode
     }
   };
 
-  if (!txn) return <Panel title="Transaction">Loading…</Panel>;
+  if (!txn) return <LoadingState label="Loading transaction" layout="cards" />;
 
   const live = txn.state === undefined;
   return (

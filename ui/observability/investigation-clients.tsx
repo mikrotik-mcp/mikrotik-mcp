@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Monitor, RefreshCw, Search } from "lucide-react";
@@ -90,9 +91,7 @@ export function InvestigationClients({
         </label>
         <div aria-live="polite" className="text-xs text-muted-foreground">
           {loading ? (
-            <p className="p-3">
-              Reading clients from {device}… You can still enter an IP or MAC above.
-            </p>
+            <LoadingState label={`Reading clients from ${device}`} />
           ) : failed ? (
             <p role="alert" className="p-3">
               Client list unavailable. Refresh to retry, or enter an IP or MAC above.

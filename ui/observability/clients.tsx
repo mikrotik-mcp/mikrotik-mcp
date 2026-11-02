@@ -11,6 +11,7 @@
  * every second. Rate limits still come from `/queue simple`. Mutations return a
  * refreshed device `view` so the table updates without a second request.
  */
+import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { RefreshCw, Wifi } from "lucide-react";
@@ -664,7 +665,7 @@ export function ClientsView(): ReactNode {
         )}
 
         {!view ? (
-          <div className="text-muted-foreground text-[11px]">loading connected devices…</div>
+          <LoadingState label="Loading connected devices" />
         ) : shown.length === 0 ? (
           <div className="grid justify-items-center gap-2 rounded-lg border border-dashed border-border px-4 py-[54px] text-center">
             <Wifi className="size-7 text-muted-foreground opacity-80" />

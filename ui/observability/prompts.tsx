@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -13,7 +14,7 @@ import {
 import { composePrompt, missingPromptArguments, promptCategory } from "../../src/prompts/compose";
 import type { PromptTemplate } from "../../src/prompts/compose";
 import { api } from "./api";
-import { Button, Input, Select, Spinner } from "./geist";
+import { Button, Input, Select } from "./geist";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
@@ -86,9 +87,7 @@ export function PromptsView() {
         </div>
       )}
       {loading && !prompts.length ? (
-        <div role="status" className="p-10">
-          <Spinner /> Loading workflows…
-        </div>
+        <LoadingState label="Loading workflows" layout="cards" />
       ) : (
         <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.6fr)]">
           <section

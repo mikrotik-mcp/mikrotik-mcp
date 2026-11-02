@@ -12,6 +12,7 @@
  *   • **Validation panel** — paste rule text and see schema errors, which is how
  *     rules actually get authored.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, postJson } from "./api";
@@ -210,6 +211,7 @@ function Validator(): ReactNode {
 }
 
 export function PoliciesView(): ReactNode {
+  const [initialLoading, setInitialLoading] = useState(true);
   const [catalog, setCatalog] = useState<PolicyCatalog | null>(null);
   const [results, setResults] = useState<PolicyResultRow[]>([]);
   const [reports, setReports] = useState<PolicyRunReport[]>([]);
@@ -227,7 +229,8 @@ export function PoliciesView(): ReactNode {
       })
       .catch((e) => {
         toast.error(`Failed to load policies: ${e instanceof Error ? e.message : String(e)}`);
-      });
+      })
+      .finally(() => setInitialLoading(false));
   }, []);
 
   useEffect(() => {
@@ -269,6 +272,7 @@ export function PoliciesView(): ReactNode {
     count: failing.filter((f) => f.severity === s).length,
   })).filter((x) => x.count > 0);
 
+  if (initialLoading) return <LoadingState label="Loading workspace records" />;
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

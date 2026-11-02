@@ -15,6 +15,7 @@
  *   • **Export** — copy or download the Markdown in one click, because that is
  *     where this document is going anyway.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, postJson } from "./api";
@@ -329,7 +330,8 @@ export function ExplainView(): ReactNode {
         }
       >
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {!payload && !error && (
+        {loading && !payload && <LoadingState label="Reading router architecture" layout="cards" />}
+        {!payload && !error && !loading && (
           <p className="text-sm text-muted-foreground">
             Reads the configuration (<span className="font-mono">/export</span>, a read-only print
             that writes nothing) and turns it into an architecture document — role, topology,

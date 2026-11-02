@@ -1,8 +1,9 @@
-import { UnifiedDiff } from "./diff-view";
 /**
  * Drift Guard dashboard view — fleet-wide golden-config drift detection,
  * per-device diff viewer with change attribution, and baseline management.
  */
+import { LoadingState } from "./loading-state";
+import { UnifiedDiff } from "./diff-view";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, deleteJson, postJson } from "./api";
@@ -361,6 +362,7 @@ function DeviceDetail({
 // ── Main view ───────────────────────────────────────────────────────────────
 
 export function DriftView(): ReactNode {
+  const [initialLoading, setInitialLoading] = useState(true);
   const [devices, setDevices] = useState<DriftDeviceStatus[]>([]);
   const [baselines, setBaselines] = useState<DriftBaseline[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
@@ -379,7 +381,8 @@ export function DriftView(): ReactNode {
       })
       .catch((e) => {
         setError(e instanceof Error ? e.message : String(e));
-      });
+      })
+      .finally(() => setInitialLoading(false));
   }, []);
 
   useEffect(() => {
@@ -398,6 +401,7 @@ export function DriftView(): ReactNode {
 
   const withBaseline = devices.filter((d) => d.status !== "no-baseline");
 
+  if (initialLoading) return <LoadingState label="Loading drift baselines" />;
   return (
     <>
       {/* Stats row */}

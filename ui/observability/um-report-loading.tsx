@@ -1,16 +1,11 @@
+import { LoadingState } from "./loading-state";
 import type { UmCollectionState } from "../../src/observability/um-reports";
 
 /** Progress describes verified rows, not invented accounting or an estimated ETA. */
 export function UmReportLoading({ progress }: { progress?: UmCollectionState["progress"] }) {
   return (
     <div className="um-loading" role="status" aria-live="polite">
-      <div className="um-loading-bars" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-        <i />
-        <i />
-      </div>
+      <LoadingState label="Preparing accounting charts" layout="chart" />
       <h3>Preparing your first saved report</h3>
       <p>
         Building the first cached snapshot in the background. You can leave this page; collection

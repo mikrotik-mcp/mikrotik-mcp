@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import { Radio, Pause, BookmarkPlus, Download, Settings2, Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,8 @@ export function FlightRecorderView() {
       setExportError("Your browser could not download this report.");
     }
   }
+  if (!w.data && w.loading && !w.error)
+    return <LoadingState label="Loading workspace evidence" layout="cards" />;
   return (
     <div className="ops-workspace">
       <WorkspaceHeader

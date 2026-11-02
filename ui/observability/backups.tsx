@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Download, Pencil, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
@@ -183,7 +184,7 @@ export function BackupsView(): ReactNode {
     if (r.ok) load();
   };
 
-  if (!data) return <div className="text-muted-foreground text-[11px]">loading backups…</div>;
+  if (!data) return <LoadingState label="Loading backups" />;
 
   const deviceOptions =
     data.devices.length === 0

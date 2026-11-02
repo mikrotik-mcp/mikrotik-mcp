@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useRef, useState } from "react";
 import {
   Activity,
@@ -412,7 +413,9 @@ export function OpenVpnConnections({ device }: { device: string }) {
             : " · Times advance between router reads."}
         </p>
       )}
-      {!data ? (
+      {!data && !error ? (
+        <LoadingState label="Reading active connections" layout="cards" />
+      ) : !data ? (
         <div className="ovpn-empty">
           <Activity size={26} />
           <strong>{error ? "Connection list unavailable" : "Reading active connections…"}</strong>

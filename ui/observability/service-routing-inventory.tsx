@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -237,6 +238,7 @@ export function RouterRoutingInventory({
     setPage(0);
     setSelected(undefined);
   };
+  if (!data && loading && !error) return <LoadingState label="Reading router configuration" />;
   if (!data)
     return (
       <section className="routing-inventory">

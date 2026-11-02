@@ -9,6 +9,7 @@
  * Both fetch their own data from a passed `endpoint` and render hand-rolled SVG
  * (no chart dependency, so the bundle still inlines to one self-contained HTML).
  */
+import { LoadingState } from "./loading-state";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { api } from "./api";
@@ -120,8 +121,7 @@ export function UsageHistoryChart({
     return out;
   }, [data, days]);
 
-  if (loading)
-    return <div className="px-1 py-4 text-[12.5px] text-muted-foreground">loading usage…</div>;
+  if (loading) return <LoadingState label="Loading usage" layout="chart" />;
   if (error)
     return (
       <div role="status" className="px-1 py-4 text-[12.5px] text-destructive">

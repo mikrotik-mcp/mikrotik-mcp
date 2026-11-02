@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import {
   FlaskConical,
@@ -93,6 +94,8 @@ export function RecoveryLabView() {
       setLoading(false);
     }
   }
+  if (!w.data && w.loading && !w.error)
+    return <LoadingState label="Loading workspace evidence" layout="cards" />;
   return (
     <div className="ops-workspace">
       <WorkspaceHeader

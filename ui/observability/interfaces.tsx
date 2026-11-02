@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useId, useState } from "react";
 import {
   Activity,
@@ -510,6 +511,7 @@ export function InterfacesView() {
       });
     return () => abort.abort();
   }, [retry]);
+  if (!devices && !error) return <LoadingState label="Loading interfaces" />;
   return (
     <section className="grid min-w-0 gap-5">
       <div className="flex flex-wrap items-end justify-between gap-4">

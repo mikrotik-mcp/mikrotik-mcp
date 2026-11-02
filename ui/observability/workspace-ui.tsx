@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowRight, ShieldCheck, Router } from "lucide-react";
@@ -68,6 +69,7 @@ export function WorkspaceFrame({
   eyebrow: string;
   children: (device: string, devices: string[]) => ReactNode;
 }) {
+  const [initialLoading, setInitialLoading] = useState(true);
   const [devices, setDevices] = useState<string[]>([]),
     [device, setDevice] = useState(""),
     [error, setError] = useState("");
@@ -81,7 +83,8 @@ export function WorkspaceFrame({
       })
       .catch((e) => {
         if (!abort.signal.aborted) setError(e.message);
-      });
+      })
+      .finally(() => setInitialLoading(false));
     return () => abort.abort();
   }, []);
   return (
@@ -111,7 +114,9 @@ export function WorkspaceFrame({
         </div>
       </header>
       {error && <Notice error>{error}</Notice>}
-      {device ? (
+      {initialLoading ? (
+        <LoadingState label="Loading workspace routers" layout="form" />
+      ) : device ? (
         <div key={device} className="min-w-0">
           {children(device, devices)}
         </div>

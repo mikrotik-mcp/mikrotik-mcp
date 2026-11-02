@@ -2,6 +2,7 @@
  * Config page panels — point-in-time version history and the schema field guide.
  * Split out of `main.tsx` to keep each concern in its own component module.
  */
+import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Star, X } from "lucide-react";
@@ -120,7 +121,7 @@ export function ConfigHistoryPanel({ onRestored }: { onRestored: () => void }): 
     }
   };
 
-  if (!data) return <div className="text-muted-foreground text-[11px]">loading history…</div>;
+  if (!data) return <LoadingState label="Loading configuration history" />;
 
   return (
     <>
@@ -366,7 +367,7 @@ export function FieldGuidePanel(): ReactNode {
     return [...m.entries()];
   }, [filtered]);
 
-  if (!schema) return <div className="text-muted-foreground text-[11px]">loading schema…</div>;
+  if (!schema) return <LoadingState label="Loading configuration schema" layout="form" />;
 
   return (
     <>

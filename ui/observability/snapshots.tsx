@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { UnifiedDiff } from "./diff-view";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -57,7 +58,7 @@ export function SnapshotsView(): ReactNode {
       .catch(() => toast.error("Diff failed"));
   };
 
-  if (!snaps) return <div className="text-muted-foreground text-[11px]">loading snapshots…</div>;
+  if (!snaps) return <LoadingState label="Loading snapshots" />;
   if (snaps.length === 0) {
     return (
       <div className="grid justify-items-center gap-2 rounded-lg border border-dashed border-border px-4 py-[54px] text-center">

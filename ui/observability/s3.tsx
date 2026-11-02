@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Cloud, Download, RefreshCw, Trash2 } from "lucide-react";
@@ -73,7 +74,7 @@ export function S3Manage(): ReactNode {
     }
   };
 
-  if (!data) return <div className="text-muted-foreground text-[11px]">loading S3 objects…</div>;
+  if (!data) return <LoadingState label="Loading S3 objects" />;
   if (!data.configured) {
     return (
       <div className="grid justify-items-center gap-2 rounded-lg border border-dashed border-border px-4 py-[54px] text-center">

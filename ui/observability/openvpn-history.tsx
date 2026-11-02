@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Database, RefreshCw, Search } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Tooltip, Treemap, XAxis, YAxis } from "recharts";
@@ -303,9 +304,7 @@ export function OpenVpnHistory({ device }: { device: string }) {
       {invalid && <WorkspaceError message="From must be before Through." />}
       {error && <WorkspaceError message={error} />}
       {!invalid && !data && !error && (
-        <div className="ovpn-empty" role="status">
-          Reading local connection history…
-        </div>
+        <LoadingState label="Reading connection history" layout="chart" />
       )}
       {!invalid && data && (
         <>

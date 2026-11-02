@@ -16,6 +16,7 @@
  *   • **Protocol & application mix** — with the long tail already folded into
  *     "other" by the server, so this is never a 200-slice donut.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
@@ -372,6 +373,7 @@ export function FlowsView(): ReactNode {
 
   const totals = top?.totals;
 
+  if (!top && !error) return <LoadingState label="Loading network activity" layout="chart" />;
   return (
     <div className="space-y-4">
       <HealthStrip health={health} />

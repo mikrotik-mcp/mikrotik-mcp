@@ -14,6 +14,7 @@
  *     shows "it started getting worse three weeks ago".
  *   • **Run history** — per run, with duration, device and failures.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, postJson } from "./api";
@@ -255,6 +256,7 @@ function RegressionRow({ item }: { item: ScheduleRegression }): ReactNode {
 }
 
 export function SchedulesView(): ReactNode {
+  const [initialLoading, setInitialLoading] = useState(true);
   const [jobs, setJobs] = useState<ScheduleJobRow[]>([]);
   const [schedulable, setSchedulable] = useState<{ tool: string; summary: string }[]>([]);
   const [points, setPoints] = useState<SchedulePoint[]>([]);
@@ -283,7 +285,8 @@ export function SchedulesView(): ReactNode {
       })
       .catch((e) => {
         setError(e instanceof Error ? e.message : String(e));
-      });
+      })
+      .finally(() => setInitialLoading(false));
   }, []);
 
   useEffect(() => {
@@ -327,6 +330,7 @@ export function SchedulesView(): ReactNode {
     return { findings, critical, failing };
   }, [jobs]);
 
+  if (initialLoading) return <LoadingState label="Loading workspace records" />;
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

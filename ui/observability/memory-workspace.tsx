@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -1087,6 +1088,9 @@ export function MemoryView() {
                 </span>
                 <span>30s refresh · local only</span>
               </div>
+              {loading && !page && (
+                <LoadingState label="Loading knowledge library" layout="cards" />
+              )}
               <div className="memory-fact-grid" aria-busy={loading}>
                 {!loading && page?.items.length === 0 ? (
                   <Empty title="Room for useful knowledge">

@@ -5,6 +5,7 @@
  * MCP tools use (`src/core/l2-fabric.ts`, `advisories.ts`, `access.ts`), so the
  * dashboard can never disagree with what a tool call reports.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Cable, Network, RefreshCw, ShieldCheck, ShieldOff } from "lucide-react";
@@ -53,7 +54,7 @@ function DevicePicker({
 }
 
 function Loading(): ReactNode {
-  return <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading…</div>;
+  return <LoadingState label="Loading security posture" layout="cards" />;
 }
 
 function ErrorBox({ message }: { message: string }): ReactNode {

@@ -16,6 +16,7 @@
  *
  * Live updates ride the shared `/api/stream` socket (message type `rollout`).
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, postJson } from "./api";
@@ -178,7 +179,7 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode
     }
   };
 
-  if (!rollout) return <Panel title="Rollout">Loading…</Panel>;
+  if (!rollout) return <LoadingState label="Loading rollout" layout="cards" />;
   const live = rollout.outcome === undefined;
   const failures = rollout.devices.filter(
     (d) => d.stage === "failed" || d.stage === "revert-failed",

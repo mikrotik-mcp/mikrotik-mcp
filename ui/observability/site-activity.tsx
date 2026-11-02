@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import {
   Activity,
@@ -239,6 +240,7 @@ export function SiteActivityView() {
     kind: kind === "*" ? "" : kind,
     search,
   });
+  if (!payload && !error) return <LoadingState label="Loading network activity" layout="chart" />;
   return (
     <div className="space-y-6 pb-12">
       <div className="rounded-3xl border border-border bg-gradient-to-br from-card via-card to-blue-500/10 p-6 md:p-8">

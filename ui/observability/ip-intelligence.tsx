@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useRef, useState } from "react";
 import { Copy, Download, Globe2, Loader2, Search, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -233,13 +234,7 @@ export function IpIntelligenceView() {
           {error}
         </div>
       )}
-      {busy && (
-        <div className="ipi-empty" role="status">
-          <Loader2 className="animate-spin" size={28} />
-          <h3>Gathering two independent perspectives</h3>
-          <p>Each provider has an 8-second request deadline.</p>
-        </div>
-      )}
+      {busy && <LoadingState label="Gathering two independent perspectives" layout="cards" />}
       {!busy && !result && !error && (
         <div className="ipi-empty">
           <Globe2 size={36} />

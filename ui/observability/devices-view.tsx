@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -175,6 +176,7 @@ export function DevicesView({
   if (!payload)
     return (
       <section className="devices-workspace">
+        <LoadingState label="Loading router fleet" layout="cards" />
         <section className="devices-empty" role="status">
           <Server aria-hidden="true" />
           <h2>Waiting for device data</h2>

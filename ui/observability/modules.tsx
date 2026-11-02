@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
@@ -221,7 +222,7 @@ export function ModulesView(): ReactNode {
     return [...byGroup.entries()].map(([group, modules]) => ({ group, modules }));
   }, [data, query]);
 
-  if (!data) return <div className="text-muted-foreground text-[11px]">loading modules…</div>;
+  if (!data) return <LoadingState label="Loading modules" layout="cards" />;
 
   const shown = groups.reduce((n, g) => n + g.modules.length, 0);
 

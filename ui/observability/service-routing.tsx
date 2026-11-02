@@ -1,3 +1,4 @@
+import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
 import { ArrowRight, Network, Plus, Play, ShieldCheck, Pause, Route, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -211,9 +212,7 @@ export function ServiceRoutingView() {
             Mode.
           </WorkspaceSafety>
           {w.loading && !w.data ? (
-            <div className="ops-empty" role="status">
-              Loading saved policies…
-            </div>
+            <LoadingState label="Loading routing policies" />
           ) : !policies.length ? (
             <div className="ops-empty">
               <Network size={38} />

@@ -12,6 +12,7 @@
  *   • Before/after for a proposed change, with the divergence step marked.
  *   • Reachability map — useful on its own and needs no packet.
  */
+import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, postJson } from "./api";
@@ -300,6 +301,7 @@ export function SimulatorView(): ReactNode {
         </p>
       </Panel>
 
+      {busy && !trace && <LoadingState label="Simulating packet traversal" />}
       {trace && (
         <>
           <Panel title={`Verdict — ${trace.source}`}>
