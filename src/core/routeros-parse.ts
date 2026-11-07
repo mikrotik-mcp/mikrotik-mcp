@@ -272,6 +272,8 @@ export interface ParsedRecords {
 
 /** A record-starting line: leading index, then the rest (flags + key=value run). */
 const INDEX_LINE = /^\s*(\d+)\s+(.*)$/;
+// Connected routes can omit the display index, including among numbered rows.
+const UNNUMBERED_FLAGS_LINE = /^\s*([A-Z][A-Za-z]*)\s+(?=[A-Za-z][\w.-]*=)(.*)$/;
 /**
  * Leading flag letters on a record line. RouterOS v6 flags are uppercase only
  * (R, X, D); v7 mixes upper and lower case — routes use `As` (active+static),
@@ -305,7 +307,7 @@ function parseDetailRecords(lines: string[]): Record<string, string>[] {
   let current: { index: string; flags: string; comment: string; chunk: string } | null = null;
   const flush = (): void => {
     if (!current) return;
-    const row: Record<string, string> = { "#": current.index };
+    const row: Record<string, string> = current.index ? { "#": current.index } : {};
     if (current.flags.trim()) row.flags = current.flags.trim();
     if (current.comment.trim()) row.comment = current.comment.trim();
     Object.assign(row, parseKvTokens(current.chunk));
@@ -313,7 +315,10 @@ function parseDetailRecords(lines: string[]): Record<string, string>[] {
     current = null;
   };
   for (const line of lines) {
-    const m = line.match(INDEX_LINE);
+    const unnumbered = line.match(UNNUMBERED_FLAGS_LINE);
+    const m =
+      line.match(INDEX_LINE) ??
+      (unnumbered ? [line, "", `${unnumbered[1]} ${unnumbered[2]}`] : null);
     if (m) {
       flush();
       let rest = m[2];
@@ -445,7 +450,7 @@ export function parseRecords(text: string): ParsedRecords {
   const lines = text.split(/\r?\n/).filter((l) => !/^\s*(Flags|Columns):/.test(l));
   const hasKv = /[A-Za-z][\w.-]*=/.test(text);
 
-  if (hasKv && lines.some((l) => INDEX_LINE.test(l))) {
+  if (hasKv && lines.some((l) => INDEX_LINE.test(l) || UNNUMBERED_FLAGS_LINE.test(l))) {
     const rows = parseDetailRecords(lines);
     // Only trust the detail shape if rows actually carried key=value data (not
     // just an index/flags) — otherwise this was columnar text with a stray `=`.

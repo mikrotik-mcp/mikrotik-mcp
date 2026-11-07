@@ -7,6 +7,7 @@ import {
   parseBandwidthResult,
 } from "../../src/bandwidth/model";
 import type { BandwidthJob } from "../../src/bandwidth/types";
+import { parseRecords } from "../../src/core/routeros-parse";
 
 export const job: BandwidthJob = {
   ...BandwidthJobSchema.parse({
@@ -20,6 +21,36 @@ export const job: BandwidthJob = {
   }),
   nextRunAt: 0,
 };
+
+test("live RouterOS unnumbered connected routes retain flags and distinct records for preflight", () => {
+  const output = [
+    "Flags: D - DYNAMIC; A - ACTIVE; c - CONNECT",
+    " 0 As dst-address=0.0.0.0/0 routing-table=main gateway=ether1",
+    "DAc dst-address=10.0.0.0/30 routing-table=main gateway=wg0",
+    "    immediate-gw=wg0 distance=0 scope=10 target-scope=5",
+    "    local-address=10.0.0.1%wg0",
+    "DAc dst-address=192.168.1.0/24 routing-table=main gateway=bridge",
+    "    immediate-gw=bridge distance=0",
+  ].join("\r\n");
+  const { rows } = parseRecords(output);
+  expect(rows).toHaveLength(3);
+  expect(rows[1]).toMatchObject({
+    flags: "DAc",
+    "dst-address": "10.0.0.0/30",
+    "immediate-gw": "wg0",
+  });
+  expect(rows[1]).not.toHaveProperty("#");
+  expect(expectedRoute(job, rows)).toBe(true);
+  expect(
+    expectedRoute(
+      job,
+      parseRecords(output.replace("DAc dst-address=10", "DIc dst-address=10")).rows,
+    ),
+  ).toBe(false);
+  expect(expectedRoute(job, parseRecords(output.split("\r\n").slice(2, 5).join("\r\n")).rows)).toBe(
+    true,
+  );
+});
 
 test("documented commands include bounded rates and correct protocol-specific parameters without invented binding", () => {
   const command = bandwidthCommand(
