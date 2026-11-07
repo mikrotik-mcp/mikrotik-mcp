@@ -232,6 +232,21 @@
       "icon": "extension-icon.png",
       "mode": "no-view",
       "interval": "1m"
+    },
+    {
+      "name": "bandwidth",
+      "title": "Tunnel Bandwidth",
+      "description": "Manage bounded tunnel bandwidth tests, preflight paths and compare stored results",
+      "icon": "extension-icon.png",
+      "mode": "view"
+    },
+    {
+      "name": "monitor-bandwidth",
+      "title": "Monitor Bandwidth Results",
+      "description": "Send native macOS notifications for completed manual and scheduled bandwidth tests, including failures",
+      "icon": "extension-icon.png",
+      "mode": "no-view",
+      "interval": "1m"
     }
   ],
   "owner": "usex",

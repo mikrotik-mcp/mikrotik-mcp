@@ -30,6 +30,7 @@ Open any command's preferences (⌘,) and set:
 | **Overview**       | Tool-call volume, latency, error rate and per-risk / per-tool breakdowns                                 |
 | **Prompt Library** | Search workflows, fill inputs, preview/copy/paste a request; optionally ask Raycast AI for a plan          |
 | **Devices**        | Router connectivity, CPU/MEM/DISK gauges, health sparklines, SSH pool, enable/disable                    |
+| **Tunnel Bandwidth** | Create/edit bounded tunnel tests, preflight, run/disable schedules and compare stored results |
 | **Clients**        | LAN devices on a router — live traffic, block/allow, pin IP, set IP, label, rate limits, usage           |
 | **RADIUS & UM**    | RADIUS client + User Manager — users, profiles, limitations, NAS, assignments, sessions, settings, usage |
 | **Topology**       | Configured devices and discovered Layer-2 neighbours (MNDP/CDP/LLDP), onboard stubs                      |
@@ -83,3 +84,34 @@ run `npm run build` in this directory. Then run `npm run dev` to import this
 checkout into Raycast and refresh its development commands. Installing packages
 alone does not compile the command entry points. See the
 [Raycast CLI documentation](https://developers.raycast.com/information/developer-tools/cli).
+
+## Tunnel Bandwidth
+
+Create and edit multiple tunnel test definitions with explicit source/destination routers
+and a destination tunnel IPv4 address. New definitions are disabled by default. Source
+interface/address fields are preflight expectations, not source binding; no undocumented
+`local-address` parameter is sent. Use **Load Source Addresses (Live Read)** explicitly
+to discover source addresses, and **Read-Only Preflight** to check the form before saving.
+Neither action starts bandwidth traffic.
+
+Tests support TCP/UDP and transmit/receive/both (from the source), duration 5–60 seconds,
+interval 300–604800 seconds, and integer local/remote TX caps of 1–100000000000 bits/sec (100 Gbps).
+**Run Now** and enabling a schedule require confirmation: tests generate traffic and may
+saturate links or increase router CPU load. Server/firewall settings are never changed
+automatically. Destination credentials come from server runtime configuration; the command
+has no password fields and stores no router credentials locally.
+
+Disable a schedule independently, or delete its definition while retaining history.
+Results refresh every five seconds from stored host state without router I/O, showing
+TX/RX charts, status/error and packet-loss tables, and selected-job/time-range comparisons with TX/RX min/mean/max and outcome counts.
+Compare protocol, direction, caps and timestamps before interpreting differences. Historical
+runs remain available through **Compare Jobs and History**, including deleted jobs.
+
+Advanced test fields include UDP packet sizes (28–64000 bytes), TCP connection count
+(1–255), report interval (0.02–5 seconds, whole-millisecond precision), and random data.
+
+### Background bandwidth notifications
+
+Enable **Monitor Bandwidth Results** background refresh for native macOS Notification Center alerts for completed manual and scheduled bandwidth tests, including failed and interrupted runs. Polling is approximately once per minute, with up to 50 retained completions per pass. The persisted per-dashboard/database cursor advances only after dispatch; retries use a stable notification group. A crash between dispatch and cursor persistence can repeat a notification. This uses the existing bundled `raycast-notifier` integration, not a toast or HUD.
+
+Raycast must be running, background refresh enabled, the dashboard reachable, and macOS notifications allowed. Disabled Raycast cannot deliver notifications; polling resumes retained backlog when re-enabled. Dispatch acceptance does not prove banner visibility. See the [bandwidth guide](../docs/content/docs/guides/bandwidth-tests.md).

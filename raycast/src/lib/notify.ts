@@ -15,7 +15,12 @@ let warnedUnsupported = false;
 
 /** Copy the notifier prebuilds into place once, reusing the promise thereafter. */
 function ready(): Promise<unknown> {
-  if (!prepared) prepared = preparePrebuilds();
+  if (!prepared) {
+    prepared = preparePrebuilds().catch((error) => {
+      prepared = null;
+      throw error;
+    });
+  }
   return prepared;
 }
 
@@ -42,11 +47,28 @@ export async function notify(title: string, message: string): Promise<void> {
     return;
   }
   try {
-    await ready();
-    await notificationCenter({ title, message, timeout: false });
+    await notifyStrict(title, message);
   } catch (error) {
     // Best-effort, but never silent: a swallowed failure here looks exactly like
     // "the flip was never detected". Surfaces in the Raycast error console.
     console.error(`notify("${title}") failed:`, error);
   }
+}
+
+/** Dispatch natively or throw; success means accepted by the notifier, not seen by the user. */
+export async function notifyStrict(
+  title: string,
+  message: string,
+  group?: string,
+): Promise<void> {
+  if (process.platform !== "darwin") {
+    throw new Error("Native notifications require macOS");
+  }
+  await ready();
+  await notificationCenter({
+    title,
+    message,
+    timeout: false,
+    ...(group ? { group } : {}),
+  });
 }
