@@ -155,6 +155,8 @@ export function emulateScreen(text: string): string[] {
  * output); otherwise drop the single first line.
  */
 export function extractCommandOutput(raw: string, command?: string): string {
+  // Submission terminators are not echoed command text and must not consume output.
+  command = command?.replace(/[\r\n]+$/, "");
   const lines = emulateScreen(raw);
   let start = 1;
   if (command !== undefined && lines.length > 0) {
@@ -293,6 +295,8 @@ export class MacTelnetConsole {
   /** Run one CLI command and return its clean output. */
   async run(cli: string): Promise<ConsoleCommandResult> {
     this.assertOpen();
+    // Submit exactly once, even when callers provide a newline-terminated command.
+    cli = cli.replace(/[\r\n]+$/, "");
     this.buffer = "";
     this.session.sendInput(enc.encode(`${cli}\r`));
     await this.waitFor(

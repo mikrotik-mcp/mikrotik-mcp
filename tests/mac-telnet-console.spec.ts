@@ -108,6 +108,20 @@ afterEach(() => {
 });
 
 describe("MacTelnetConsole orchestration", () => {
+  it("submits newline-terminated commands once and preserves multiline output", async () => {
+    const command = ':put "ok"';
+    const { console, session } = makeConsole({
+      banner: PROMPT,
+      respond: (cmd) =>
+        cmd === command ? `${PROMPT}${cmd}\r\nok\r\nsecond line\r\n${PROMPT}` : PROMPT,
+    });
+    await console.open();
+    for (const suffix of ["\n", "\r\n", "\n\n"]) {
+      expect((await console.run(command + suffix)).output).toBe("ok\nsecond line");
+      expect(session().sent.at(-1)).toBe(`${command}\r`);
+    }
+  });
+
   it("logs in, answers the size probe, and captures command output", async () => {
     const { console, session } = makeConsole({
       // Banner carries a cursor-position probe (ESC[6n) and lands on a prompt.

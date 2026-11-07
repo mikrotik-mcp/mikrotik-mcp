@@ -221,4 +221,12 @@ describe("console screen emulation", () => {
     );
     expect(extractCommandOutput(raw, "/ip address add address=1.1.1.1/24")).toBe("");
   });
+
+  test("trailing command newlines cannot consume the first output line", () => {
+    const command = ':put "ok"';
+    const raw = `[ali@MikroTik] > ${command}\r\nok\r\nsecond line\r\n[ali@MikroTik] > `;
+    for (const suffix of ["\n", "\r\n", "\n\n"]) {
+      expect(extractCommandOutput(raw, command + suffix)).toBe("ok\nsecond line");
+    }
+  });
 });
