@@ -1,6 +1,7 @@
 import { NAVIGATION_SECTIONS, PAGE_SEARCH_TERMS } from "./navigation-sections";
 
 export type ViewId =
+  | "bandwidth"
   | "ip-intelligence"
   | "openvpn"
   | "recovery-lab"
@@ -45,6 +46,11 @@ export type ViewId =
   | "capsman"
   | "feed";
 export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
+  {
+    id: "bandwidth",
+    label: "Tunnel Bandwidth",
+    sub: "Bounded tunnel tests, source throughput history and comparison",
+  },
   {
     id: "ip-intelligence",
     label: "IP Intelligence",

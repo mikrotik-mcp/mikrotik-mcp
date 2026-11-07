@@ -78,3 +78,7 @@ Only manage routers you are authorized to control. Use scoped credentials, revie
 ## License
 
 [MIT](LICENSE). Made by [Ali Torki](https://github.com/ali-master) and contributors.
+
+### Scheduled tunnel bandwidth tests
+
+The dashboard and Raycast support manual and scheduled inter-router bandwidth tests with read-only path preflight, bounded load, persisted history, charts and selected-test comparisons. Optional Raycast background polling dispatches native macOS result notifications, including failures. Source interface/address fields describe route expectations, not forced binding. See the [bandwidth testing guide](docs/content/docs/guides/bandwidth-tests.md) for setup, credentials, restart behavior and notification requirements.

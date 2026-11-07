@@ -1,0 +1,58 @@
+---
+title: Scheduled bandwidth tests
+description: Compare explicit inter-router tunnel paths with bounded host-side tests and persisted results.
+---
+
+# Scheduled bandwidth tests
+
+Open **Diagnostics → Bandwidth Tests** in the dashboard, or **Tunnel Bandwidth** in Raycast. Create a separate named test for each tunnel and direction. Definitions, schedule due times, immutable per-run settings and measurements are stored in `bandwidth.db` beside the configured dashboard event database. Opening history does not query routers.
+
+## Select and check a path
+
+Select two enabled configured routers. Use **Load live source addresses** to choose the expected source interface and its IPv4 address, and enter the destination router's explicit tunnel IPv4 address (not its management hostname). Run **Check readiness** before saving/running. Each actual test repeats preflight; an earlier successful check never authorizes stale addressing.
+
+Preflight reads source addresses, running interfaces, active IPv4 routes, destination address ownership and existing bandwidth-server settings. It requires one active longest-prefix main-table route via the expected interface and, when present, a matching `pref-src`. Ambiguous ECMP, disabled/missing interfaces, absent destination addresses and unknown paths fail closed. Source execution requires SSH with REST disabled and no active/recovering Safe Mode session; this preserves the command deadline and avoids credential-bearing REST fallback diagnostics. The destination can use its existing read transport.
+
+**This does not force an interface or source address.** The official [RouterOS Bandwidth Test parameter list](https://help.mikrotik.com/docs/spaces/ROS/pages/7962644/Bandwidth+Test) does not document `local-address`; no such argument is emitted. Interface/address fields describe the expected route. Actual source/path selection remains RouterOS routing behavior. Policy routing, NAT, firewall rules and changes after preflight may change the path or prevent delivery. IPv6/VRF binding and policy-route simulation are not implemented. Use explicit, distinct tunnel destination IPs to distinguish paths.
+
+The destination bandwidth server must already be enabled. Its credentials must already be available in the server's destination device configuration when authentication is required. SSH keys cannot authenticate a bandwidth test. No password inputs are shown, credentials are never copied into test definitions, results or notification state, and raw command/output/error text is not persisted. The existing `get_bandwidth_server` read tool is reused. Tests never enable the server, change authentication, open firewall ports or create routes.
+
+## Controls and direction
+
+- **Transmit:** source sends to destination. **Receive:** source receives from destination. **Both:** simultaneous bidirectional traffic. All TX/RX figures are from the source router's perspective.
+- TCP or UDP; finite duration **5–60 seconds**.
+- Local and remote transmit limits **1–100,000,000,000 bits/s** each; default 10 Mbps. Zero/unlimited is deliberately not accepted. These are application safety bounds, not the full RouterOS integer range.
+- UDP local/remote packet sizes **28–64,000 bytes**, emitted only for UDP.
+- TCP connection count **1–255**, emitted only for TCP.
+- Random data toggle (additional CPU load); reporting interval **20 ms–5 s**, with whole-millisecond precision.
+- Repeat interval **300–604,800 seconds**. Schedules start disabled. Enabling or manually running requires explicit acknowledgement of bandwidth and CPU impact.
+
+These measurements load both endpoint routers. They measure endpoint-generated throughput, not the forwarding capacity of an intermediate router. Compare tests with equivalent protocol, direction, packet size, limits and duration; capped results are not an uncapped link-capacity estimate.
+
+## Scheduling and restart behavior
+
+Scheduling runs on the MCP host while `serve` is running, independently of whether a browser or Raycast window is open. It never writes RouterOS `/system scheduler`. A fresh installation or an empty/disabled test list generates no test traffic. Previously enabled saved jobs continue even when the dashboard UI is disabled; pause them before disabling the UI if that is not desired.
+
+At most **two** tests are active globally per shared bandwidth database. Manual and scheduled runs share durable leases on both routers; a router cannot be source of one test and destination of another at the same time. Device aliases resolve to canonical keys, and configurations with the same management host share a lease. Distinct hostnames or management addresses for the same physical router cannot reliably be identified as one device: configure each physical router once. Different MCP hosts/databases do not coordinate locks.
+
+The next due time is persisted before dispatch. Missed intervals coalesce into one due execution rather than a catch-up burst. Busy jobs stay due without adding an unbounded queue; disabled/removed jobs stop future dispatches. Deleting a definition preserves history and does not cancel an already active test. Access policy and read-only mode are checked again at execution.
+
+Shutdown stops new dispatches and gives current work up to ten seconds to settle. Router commands retain their finite duration. If the host stops before a completion is recorded, the durable lease is held for up to five minutes, then the run is marked **interrupted / outcome unknown** rather than retried or presented as success. Do not assume an interrupted run generated no traffic.
+
+## Results and comparisons
+
+Successful runs store source TX/RX total-average throughput in bits/s and reported packet loss. The dashboard and Raycast display Mbps, time-series charts, result tables and comparisons of selected tests. Failures, interrupted tests and absent directions remain missing values, not zero. Genuine zero throughput remains zero. Statistics count only successful numeric observations. Settings are snapshotted per run so later edits do not rewrite historical evidence.
+
+The normal history response includes the newest 2,000 runs. Saved history and the completion feed remain in SQLite until the operator removes that database; there is no automatic destructive retention policy. Keep the database on persistent storage and include it in host backups.
+
+## Native Raycast result notifications
+
+Enable **Monitor Bandwidth Results** background refresh in Raycast. Its `no-view` command polls the completion feed approximately **once per minute**. Manual and scheduled completions, including failed/interrupted outcomes, produce native macOS Notification Center dispatches through the existing installed `raycast-notifier` integration and bundled binaries. This is not a Raycast toast or HUD. The [Raycast background refresh lifecycle](https://developers.raycast.com/information/lifecycle/background-refresh) controls when background commands run.
+
+Completion sequence numbers are allocated when results finish, so a slow test cannot hide a newer fast completion. Raycast saves a cursor per dashboard and database identity only after successful dispatch, processes up to 50 results per pass, and drains retained backlog on later passes. Access-filtered results advance the feed cursor without exposing their contents. A replaced database starts a new cursor. Notification dispatch failure keeps the failed event pending.
+
+Delivery is eventual and at-least-once: a crash between OS dispatch and cursor persistence may retry the same result, using a stable OS notification group. Raycast must be running, background refresh enabled, the dashboard reachable and macOS notifications permitted. OS acceptance does not prove a banner was displayed or read. While Raycast is disabled there is no delivery; retained results are eligible for catch-up when polling resumes. Native notifications are macOS-only.
+
+## Offline validation
+
+The feature tests use fabricated RouterOS output and temporary SQLite databases. They cover command escaping and supported arguments, final-summary parsing, missing/error results, source/destination/route preflight, access and acknowledgement gates, concurrency across SQLite connections, restart persistence, notification ordering/deduplication/retry and UI comparison calculations. They never contact or modify a real router. Live route behavior and OS notification delivery require a separate explicitly authorized check.

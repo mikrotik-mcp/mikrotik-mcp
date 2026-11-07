@@ -83,6 +83,7 @@ import { InvestigationsView } from "./investigations";
 import { ServiceContractsView } from "./service-contracts";
 import { ServiceRoutingView } from "./service-routing";
 import { IpIntelligenceView } from "./ip-intelligence";
+import { BandwidthView } from "./bandwidth";
 import { FlightRecorderView } from "./flight-recorder";
 import { RecoveryLabView } from "./recovery-lab";
 import { RoundTripView } from "./round-trip";
@@ -210,6 +211,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Preparation stays local; explicit confirmation is required before transmitting a subset to the runner.",
       "Unsupported scopes, secrets, scripts, Wi-Fi/ASIC behavior and binary backups are not rehearsed.",
       "Unknown submission outcomes require polling the same run, not resubmission. Cleanup must be confirmed.",
+    ],
+  },
+  bandwidth: {
+    what: "Save bounded router-to-router bandwidth tests and compare source TX/RX history.",
+    tips: [
+      "New tests default to disabled. Running or scheduling traffic requires explicit acknowledgement.",
+      "Expected source interface and IPv4 describe a route, not a binding. Policy routing and firewalls may affect the path.",
+      "History polling reads local storage; live addresses and readiness load only on request. Runtime credentials are used; server and firewall settings stay unchanged.",
     ],
   },
   "flight-recorder": {
@@ -782,6 +791,7 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M3 6h7l4 6h7M3 18h7l4-6M18 9l3 3-3 3" />
       </>
     ),
+    bandwidth: <path d="M3 17h18M5 13l4-5 4 3 6-7M15 4h4v4" />,
     "flight-recorder": (
       <>
         <rect x="3" y="4" width="18" height="16" rx="3" />
@@ -1791,6 +1801,7 @@ function App(): ReactNode {
               {view === "service-contracts" && <ServiceContractsView />}
               {view === "service-routing" && <ServiceRoutingView />}
               {view === "ip-intelligence" && <IpIntelligenceView />}
+              {view === "bandwidth" && <BandwidthView />}
               {view === "flight-recorder" && <FlightRecorderView />}
               {view === "recovery-lab" && <RecoveryLabView />}
               {view === "round-trip" && <RoundTripView />}

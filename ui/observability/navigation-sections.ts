@@ -47,6 +47,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
       "investigations",
       "ip-intelligence",
       "client-checks",
+      "bandwidth",
       "round-trip",
       "simulator",
       "packets",
@@ -82,6 +83,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
 
 /** Common operator vocabulary for pages whose product names are less obvious. */
 export const PAGE_SEARCH_TERMS: Partial<Record<ViewId, string>> = {
+  bandwidth: "tunnel speed throughput bandwidth test tcp udp transmit receive",
   "ip-intelligence":
     "ip lookup ipquery ipkit geo asn organization isp location vpn proxy tor reputation",
   capsman: "wifi wireless access points roaming",

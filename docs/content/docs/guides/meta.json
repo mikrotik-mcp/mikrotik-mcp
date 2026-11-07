@@ -52,6 +52,7 @@
     "attack-detection",
     "port-scan-detection",
     "scheduled-audits",
+    "bandwidth-tests",
     "---Change & recover---",
     "safe-mode",
     "change-plan",
