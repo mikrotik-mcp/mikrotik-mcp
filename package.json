@@ -86,20 +86,21 @@
     "test:coverage:combined": "bun run test:coverage && bun run test:bun:coverage && bun scripts/report-combined-coverage.ts --check",
     "test:coverage:check": "bun run test:coverage --coverage.thresholds.lines=90.01 --coverage.thresholds.statements=90.01 --coverage.thresholds.functions=90.01 --coverage.thresholds.branches=90.01",
     "release": "release-it",
-    "test:types": "tsc --noEmit && tsc --project scripts/docker-publish/tsconfig.json",
+    "test:types": "tsc --noEmit && tsc --project scripts/docker-publish/tsconfig.json && bun run test:types:ui",
     "check": "vp check",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix",
     "format": "vp fmt --check",
     "format:fix": "vp fmt --write",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "test:types:ui": "tsc --noEmit --project ui/tsconfig.json"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.4.0",
     "@modelcontextprotocol/core": "^2.4.0",
     "@modelcontextprotocol/ext-apps": "^2.0.4",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@tikoci/centrs": "^0.1.8",
+    "@tikoci/centrs": "^0.1.10",
     "figlet": "^1.12.0",
     "gradient-string": "^3.0.0",
     "ipaddr.js": "^2.5.0",
@@ -183,5 +184,8 @@
     }
   },
   "logo": "https://raw.githubusercontent.com/mikrotik-mcp/mikrotik-mcp/master/assets/logo.svg",
-  "logoIcon": "https://raw.githubusercontent.com/mikrotik-mcp/mikrotik-mcp/master/assets/logo-icon.svg"
+  "logoIcon": "https://raw.githubusercontent.com/mikrotik-mcp/mikrotik-mcp/master/assets/logo-icon.svg",
+  "patchedDependencies": {
+    "@tikoci/centrs@0.1.10": "patches/@tikoci%2Fcentrs@0.1.10.patch"
+  }
 }

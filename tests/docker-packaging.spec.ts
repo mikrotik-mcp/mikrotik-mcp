@@ -26,6 +26,11 @@ describe("Docker production packaging", () => {
     expect(dockerfile).toContain("FROM oven/bun:${BUN_VERSION}-alpine AS runtime");
     expect(dockerfile).toContain("COPY package.json bun.lock bunfig.toml ./");
     expect(dockerfile).toContain("bun install --frozen-lockfile --ignore-scripts");
+    expect(dockerfile.indexOf("COPY patches/ ./patches/")).toBeGreaterThan(-1);
+    expect(dockerfile.indexOf("COPY patches/ ./patches/")).toBeLessThan(
+      dockerfile.indexOf("bun install --frozen-lockfile"),
+    );
+    expect(read(".dockerignore")).toContain("!patches/*.patch");
   });
 
   test("ships only assembled runtime files and runs without auto-install as non-root", () => {

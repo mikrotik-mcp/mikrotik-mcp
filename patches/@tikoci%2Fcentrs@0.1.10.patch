@@ -1,0 +1,13 @@
+diff --git a/src/protocols/adapter.ts b/src/protocols/adapter.ts
+index bc2f850a8b372cdeca192ebcdf0ef2f885f9955d..fa08da451bcf61d2f10e640d09ca63ab21e529de 100644
+--- a/src/protocols/adapter.ts
++++ b/src/protocols/adapter.ts
+@@ -378,7 +378,7 @@ class RestAdapter implements ProtocolAdapter {
+ 				target,
+ 				{
+ 					method: "POST",
+-					body: byteStringBytes(JSON.stringify(request.attributes ?? {})),
++					body: new Uint8Array(byteStringBytes(JSON.stringify(request.attributes ?? {}))),
+ 					headers: { "Content-Type": "application/json" },
+ 				},
+ 				true,

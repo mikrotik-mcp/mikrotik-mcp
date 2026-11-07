@@ -7,6 +7,8 @@
 !.dockerignore
 !package.json
 !bun.lock
+!patches/
+!patches/*.patch
 !bunfig.toml
 !bunup.config.ts
 !tsconfig.json

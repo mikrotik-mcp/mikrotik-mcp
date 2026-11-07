@@ -13,6 +13,7 @@ COPY --chmod=0600 docker/devices.example.json /state/.mikrotik-mcp/devices.json
 FROM build-base AS dependencies
 # Keep Bun's catalog/peer settings and lockfile together. No Node, Git or hooks.
 COPY package.json bun.lock bunfig.toml ./
+COPY patches/ ./patches/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile --ignore-scripts
 
