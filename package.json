@@ -25,14 +25,18 @@
     "url": "https://github.com/mikrotik-mcp/mikrotik-mcp.git"
   },
   "bin": {
-    "mikrotik-mcp": "dist/cli.js"
+    "mikrotik-mcp": "dist/cli.js",
+    "mikrotik-mcp-service": "scripts/service.ts",
+    "mikrotik-mcp-upgrade": "scripts/upgrade.ts"
   },
   "workspaces": [],
   "files": [
     "dist",
     "policies",
     "prompts",
-    "schemas"
+    "schemas",
+    "scripts/service.ts",
+    "scripts/upgrade.ts"
   ],
   "type": "module",
   "main": "dist/index.js",
@@ -86,7 +90,7 @@
     "test:coverage:combined": "bun run test:coverage && bun run test:bun:coverage && bun scripts/report-combined-coverage.ts --check",
     "test:coverage:check": "bun run test:coverage --coverage.thresholds.lines=90.01 --coverage.thresholds.statements=90.01 --coverage.thresholds.functions=90.01 --coverage.thresholds.branches=90.01",
     "release": "release-it",
-    "test:types": "tsc --noEmit && tsc --project scripts/docker-publish/tsconfig.json && bun run test:types:ui",
+    "test:types": "tsc --noEmit && tsc --project scripts/docker-publish/tsconfig.json && tsc --project scripts/tsconfig.service.json && bun run test:types:ui",
     "test:types:ui": "tsc --noEmit --project ui/tsconfig.json",
     "check": "vp check",
     "lint": "vp lint",
