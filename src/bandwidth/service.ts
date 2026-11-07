@@ -72,7 +72,7 @@ export async function bandwidthAddresses(
 ): Promise<{ interface: string; address: string }[]> {
   assertDeviceAccess([device], "bandwidth_test", "READ");
   const out = await executeMikrotikJson(
-    new Cmd("/ip address print").flag("detail", true).build(),
+    new Cmd("/ip address print").raw("detail").build(),
     createContext(undefined, device),
     { maxMs: 20_000 },
   );
@@ -109,7 +109,7 @@ export async function preflightBandwidth(job: BandwidthJob): Promise<BandwidthPr
       "Expected source address must be assigned and enabled on the selected interface.",
     );
     const interfaces = await executeMikrotikJson(
-      new Cmd("/interface print").flag("detail", true).build(),
+      new Cmd("/interface print").raw("detail").build(),
       createContext(undefined, job.source),
       { maxMs: 20_000 },
     );
@@ -132,7 +132,7 @@ export async function preflightBandwidth(job: BandwidthJob): Promise<BandwidthPr
       "Explicit destination IP must belong to the selected destination router.",
     );
     const routes = await executeMikrotikJson(
-      new Cmd("/ip route print").flag("detail", true).build(),
+      new Cmd("/ip route print").raw("detail").build(),
       createContext(undefined, job.source),
       { maxMs: 20_000 },
     );

@@ -45,3 +45,9 @@ export interface BandwidthState {
   devices: string[];
   concurrency: number;
 }
+
+/** Read-only selector inventory; interfaces without usable addresses remain visible. */
+export interface BandwidthInventory {
+  interfaces: { name: string; running: boolean; disabled: boolean }[];
+  addresses: { interface: string; address: string }[];
+}

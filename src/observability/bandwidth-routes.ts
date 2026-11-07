@@ -1,9 +1,9 @@
+import { bandwidthInventory } from "../bandwidth/inventory";
 import { z } from "zod";
 import { readOperationBody, DashboardInputError } from "./bounded-request";
 import {
   BandwidthError,
   bandwidthAccess,
-  bandwidthAddresses,
   bandwidthDevices,
   bandwidthStore,
   canReadBandwidth,
@@ -53,7 +53,7 @@ export async function bandwidthRoutes(
       const device = url.searchParams.get("device");
       if (!device || !bandwidthDevices().includes(device))
         return json({ error: "Select an allowed router" }, 400);
-      return json({ addresses: await bandwidthAddresses(device) });
+      return json(await bandwidthInventory(device));
     }
     if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
     const body = JSON.parse(await readOperationBody(req));
