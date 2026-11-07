@@ -33,7 +33,8 @@ export const bandwidthServerTools: ToolModule = [
     description:
       "Configures the bandwidth-test server (`/tool bandwidth-server set`) — " +
       "enables or disables the server, toggles client authentication, caps concurrent " +
-      "sessions, and sets the UDP port allocation base. " +
+      "sessions, sets the UDP port allocation base and restricts client IP prefixes. " +
+      "An empty allowlist allows all clients; retain authentication and firewall restrictions. " +
       "To inspect current values before changing them use `get_bandwidth_server`. " +
       "Returns the updated settings block after applying changes.\n\n" +
       "Arguments:\n" +
@@ -46,6 +47,8 @@ export const bandwidthServerTools: ToolModule = [
       authenticate: z.boolean().optional(),
       max_sessions: z.number().int().min(1).optional(),
       allocate_udp_ports_from: z.number().int().optional(),
+      allowed_addresses4: z.array(z.union([z.ipv4(), z.cidrv4()])).optional(),
+      allowed_addresses6: z.array(z.union([z.ipv6(), z.cidrv6()])).optional(),
     },
     async handler(a, ctx) {
       ctx.info("Updating bandwidth-server settings");
@@ -54,6 +57,10 @@ export const bandwidthServerTools: ToolModule = [
         .bool("authenticate", a.authenticate)
         .opt("max-sessions", a.max_sessions)
         .opt("allocate-udp-ports-from", a.allocate_udp_ports_from);
+      if (a.allowed_addresses4 !== undefined)
+        cmd.set("allowed-addresses4", a.allowed_addresses4.join(","));
+      if (a.allowed_addresses6 !== undefined)
+        cmd.set("allowed-addresses6", a.allowed_addresses6.join(","));
 
       const built = cmd.build();
       if (built === "/tool bandwidth-server set") return "No updates specified.";

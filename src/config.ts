@@ -142,6 +142,10 @@ export const DeviceConfigSchema = z
       .optional(),
     username: z.string().default("admin"),
     password: z.string().default(""),
+    /** Dedicated bandwidth-test credentials; never changes SSH authentication. */
+    bandwidthAuth: z
+      .object({ username: z.string().min(1), password: z.string().min(1).max(32) })
+      .optional(),
     port: z.coerce.number().int().positive().default(22),
     keyFilename: z.string().optional(),
     /** Optional inline private key (PEM). Takes precedence over keyFilename. */

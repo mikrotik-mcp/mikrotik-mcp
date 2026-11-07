@@ -151,14 +151,16 @@ export async function preflightBandwidth(job: BandwidthJob): Promise<BandwidthPr
       typeof raw === "string" && !looksLikeError(raw) && ["yes", "true"].includes(server.enabled),
       "Destination bandwidth server must already be enabled. No server or firewall settings will be changed.",
     );
-    const credentials = getDevice(job.destination);
+    const destinationConfig = getDevice(job.destination);
+    const credentials = destinationConfig.bandwidthAuth ?? destinationConfig;
     check(
       "authentication",
       ["no", "false"].includes(server.authenticate) ||
         (["yes", "true"].includes(server.authenticate) &&
           !!credentials.username &&
-          !!credentials.password),
-      "Authenticated tests use destination credentials from server configuration at execution time. SSH keys cannot authenticate bandwidth-test; no password is collected or persisted here.",
+          !!credentials.password &&
+          credentials.password.length <= 32),
+      "Authenticated tests use destination credentials from server configuration at execution time. SSH keys cannot authenticate bandwidth-test; the password must be 1–32 characters. No password is collected or persisted here.",
     );
   } catch {
     check(
@@ -185,8 +187,9 @@ const liveExecutor: BandwidthExecutor = {
     if (dc.mac || dc.api || safe.isActive || safe.requiresRecovery)
       throw new BandwidthError("Source transport changed; rerun preflight.");
     const destination = getDevice(job.destination);
-    const credentials = destination.password
-      ? { username: destination.username, password: destination.password }
+    const auth = destination.bandwidthAuth ?? destination;
+    const credentials = auth.password
+      ? { username: auth.username, password: auth.password }
       : undefined;
     // The connector's progress logger includes the command. Suppress it for this credential-bearing call.
     const ctx = { device: job.source, info: () => {}, error: () => {} };

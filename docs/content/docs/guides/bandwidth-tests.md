@@ -17,6 +17,23 @@ Preflight reads source addresses, running interfaces, active IPv4 routes, destin
 
 The destination bandwidth server must already be enabled. Its credentials must already be available in the server's destination device configuration when authentication is required. SSH keys cannot authenticate a bandwidth test. No password inputs are shown, credentials are never copied into test definitions, results or notification state, and raw command/output/error text is not persisted. The existing `get_bandwidth_server` read tool is reused. Tests never enable the server, change authentication, open firewall ports or create routes.
 
+## Dedicated test authentication
+
+For SSH-key-only management, add `bandwidthAuth` to the destination device in the MCP configuration:
+
+```json
+{
+  "bandwidthAuth": {
+    "username": "bandwidth-only",
+    "password": "replace-with-a-random-secret"
+  }
+}
+```
+
+This overrides only bandwidth-test credentials; SSH authentication stays unchanged. RouterOS accepts bandwidth-test passwords up to 32 characters. Use a dedicated RouterOS user with `test` and `winbox` policies. Treat the configuration file as a secret and restrict its filesystem permissions. Passwords are redacted from dashboard configuration responses.
+
+Restrict the destination server with `allowed-addresses4` / `allowed-addresses6` on supported RouterOS versions and input firewall rules for the intended tunnel interface and source address. A user's address restriction alone is not a substitute for the server allowlist. Keep authentication enabled. The `update_bandwidth_server` tool supports these allowlists; an empty array explicitly clears that family's restriction. Creating or changing server access is a separate operation, never part of running a dashboard test.
+
 ## Controls and direction
 
 - **Transmit:** source sends to destination. **Receive:** source receives from destination. **Both:** simultaneous bidirectional traffic. All TX/RX figures are from the source router's perspective.

@@ -28414,7 +28414,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Configures the bandwidth-test server (`/tool bandwidth-server set`) — enables or disables the server, toggles client authentication, caps concurrent sessions, and sets the UDP port allocation base. To inspect current values before changing them use `get_bandwidth_server`. Returns the updated settings block after applying changes.\n\nArguments:\n    `enabled`: accept incoming bandwidth-test sessions.\n    `authenticate`: require valid device credentials from test clients.\n    `max_sessions`: cap concurrent test sessions.\n    `allocate_udp_ports_from`: first UDP port used for test streams.",
+      "description": "Configures the bandwidth-test server (`/tool bandwidth-server set`) — enables or disables the server, toggles client authentication, caps concurrent sessions, sets the UDP port allocation base and restricts client IP prefixes. An empty allowlist allows all clients; retain authentication and firewall restrictions. To inspect current values before changing them use `get_bandwidth_server`. Returns the updated settings block after applying changes.\n\nArguments:\n    `enabled`: accept incoming bandwidth-test sessions.\n    `authenticate`: require valid device credentials from test clients.\n    `max_sessions`: cap concurrent test sessions.\n    `allocate_udp_ports_from`: first UDP port used for test streams.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -28434,6 +28434,40 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "allowed_addresses4": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "ipv4",
+                  "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                },
+                {
+                  "type": "string",
+                  "format": "cidrv4",
+                  "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                }
+              ]
+            }
+          },
+          "allowed_addresses6": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "ipv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                },
+                {
+                  "type": "string",
+                  "format": "cidrv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                }
+              ]
+            }
           }
         },
         "additionalProperties": false

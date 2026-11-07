@@ -139,6 +139,22 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
         "default": "",
         "type": "string"
       },
+      "bandwidthAuth": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        },
+        "required": ["username", "password"],
+        "additionalProperties": false
+      },
       "port": {
         "default": 22,
         "type": "integer",

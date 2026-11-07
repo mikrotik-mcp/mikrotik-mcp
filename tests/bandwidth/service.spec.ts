@@ -70,6 +70,17 @@ test("server truth values support both SSH and REST formatter output", async () 
   vi.mocked(executeMikrotikCommand).mockResolvedValue("enabled: no\nauthenticate: yes");
   expect((await preflightBandwidth(input)).ready).toBe(false);
 });
+test("dedicated bandwidth authentication supports SSH-key-only management without exposing secrets", async () => {
+  const cfg = config();
+  cfg.devices.b.password = "";
+  cfg.devices.b.bandwidthAuth = { username: "bandwidth-only", password: "dedicated-secret" };
+  setConfig(cfg);
+  const result = await preflightBandwidth(input);
+  expect(result.ready).toBe(true);
+  expect(JSON.stringify(result)).not.toContain("dedicated-secret");
+  expect(cfg.devices.b.username).toBe("test");
+  expect(cfg.devices.b.password).toBe("");
+});
 test("disabled/missing/passwordless and transport states fail closed", async () => {
   const cfg = config();
   cfg.devices.b.password = "";
@@ -98,4 +109,14 @@ test("canonical identities, unknown routers, invalid source and read-only author
   setConfig(cfg);
   expect(() => bandwidthAccess(input, true)).toThrow();
   expect(() => bandwidthAccess(input, false)).not.toThrow();
+});
+
+test("preflight rejects overlong fallback passwords without exposing them", async () => {
+  const cfg = config();
+  cfg.devices.b.password = "x".repeat(33);
+  setConfig(cfg);
+  const result = await preflightBandwidth(input);
+  expect(result.ready).toBe(false);
+  expect(result.checks.find((c) => c.name === "authentication")?.ok).toBe(false);
+  expect(JSON.stringify(result)).not.toContain(cfg.devices.b.password);
 });
