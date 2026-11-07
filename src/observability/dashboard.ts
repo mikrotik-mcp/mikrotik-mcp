@@ -77,6 +77,7 @@ import { siteActivityRoutes } from "./site-activity-routes";
 import { getFlowCollector } from "../flows/collector";
 import { flowStore } from "../tools/traffic-flow";
 import { ipIntelligenceRoutes } from "./ip-intelligence-routes";
+import { bandwidthRoutes } from "./bandwidth-routes";
 import { roundTripRoutes } from "./round-trip-routes";
 import {
   allowDevice,
@@ -1732,6 +1733,9 @@ export async function runDashboard(
 
     const ipIntelligenceResp = await ipIntelligenceRoutes(req, url);
     if (ipIntelligenceResp) return ipIntelligenceResp;
+
+    const bandwidthResp = await bandwidthRoutes(req, url);
+    if (bandwidthResp) return bandwidthResp;
 
     const roundTripResp = await roundTripRoutes(req, url);
     if (roundTripResp) return roundTripResp;

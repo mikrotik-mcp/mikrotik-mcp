@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   flightStop: vi.fn(),
   poolClose: vi.fn(),
   memoryClose: vi.fn(),
+  bandwidthStart: vi.fn(),
+  bandwidthStop: vi.fn(),
   schedulerStart: vi.fn(),
   schedulerStop: vi.fn(),
   attackStart: vi.fn(),
@@ -61,6 +63,10 @@ vi.mock("../src/flight-recorder/service", () => ({
 }));
 vi.mock("../src/core/connection-pool", () => ({ closeAll: mocks.poolClose }));
 vi.mock("../src/memory/accessor", () => ({ closeMemoryStore: mocks.memoryClose }));
+vi.mock("../src/bandwidth/service", () => ({
+  startBandwidthScheduler: mocks.bandwidthStart,
+  stopBandwidthScheduler: mocks.bandwidthStop,
+}));
 vi.mock("../src/schedule/session", () => ({
   startScheduler: mocks.schedulerStart,
   stopScheduler: mocks.schedulerStop,
@@ -134,6 +140,8 @@ beforeEach(() => {
   mocks.http.mockResolvedValue(undefined);
   mocks.dashboard.mockResolvedValue(undefined);
   mocks.schedulerStart.mockResolvedValue(undefined);
+  mocks.bandwidthStart.mockResolvedValue(undefined);
+  mocks.bandwidthStop.mockResolvedValue(undefined);
   mocks.parseRules.mockReturnValue(["rule"]);
   mocks.exists.mockReturnValue(false);
   vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
@@ -236,6 +244,8 @@ test("default serve initializes stdio before dashboard and installs shutdown cle
   expect(mocks.info).toHaveBeenCalledWith(expect.stringContaining("ssh-pool=on"));
   expect(process.listenerCount("SIGINT")).toBeGreaterThan(0);
   process.emit("SIGINT");
+  await Promise.resolve();
+  expect(mocks.bandwidthStop).toHaveBeenCalledTimes(1);
   expect(mocks.poolClose).toHaveBeenCalledTimes(1);
   expect(mocks.memoryClose).toHaveBeenCalledTimes(1);
   expect(mocks.routingStop).toHaveBeenCalledTimes(1);

@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { startBandwidthScheduler, stopBandwidthScheduler } from "./bandwidth/service";
 /**
  * Command-line entry point for the MikroTik MCP server.
  *
@@ -240,6 +241,9 @@ async function main(): Promise<void> {
   // Scheduled audits: opt-in via the `schedules` config block. The first tick
   // only arms each job, so starting the server never fires a nightly audit at
   // boot — a restart loop must not become an audit loop against the fleet.
+  void startBandwidthScheduler().catch(() =>
+    logger.error("Bandwidth scheduler unavailable; check local storage."),
+  );
   void startScheduler().catch((e: unknown) => {
     logger.error(`Scheduled audits disabled: ${e instanceof Error ? e.message : String(e)}`);
   });
@@ -255,10 +259,11 @@ async function main(): Promise<void> {
   // Close pooled SSH connections on shutdown so the device sees a clean
   // disconnect (vs. a TCP RST that RouterOS logs as a broken session).
   let shuttingDown = false;
-  const shutdown = (signal: string): void => {
+  const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info(`Received ${signal}, shutting down…`);
+    await stopBandwidthScheduler();
     closeConnectionPool();
     closeMemoryStore();
     stopAlertSampler();
