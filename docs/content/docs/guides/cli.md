@@ -71,6 +71,10 @@ OBSERVABILITY DASHBOARD  (optional; real-time feed + analytics of every tool cal
 
 ## Shared service
 
-Keep one Bun process running and connect clients to its HTTP endpoint. Use absolute paths for Bun, the entry point, the configuration and key files. See [Shared service deployment](/docs/guides/shared-service).
+Run `mikrotik-mcp-service install` once, then use `mikrotik-mcp-upgrade` to install
+`latest` and restart the shared server. `mikrotik-mcp-service status`, `restart`
+and `uninstall` manage the registration. The commands support Windows, macOS and
+Linux with systemd. See [Shared service deployment](/docs/guides/shared-service)
+for installation, source-checkout usage before publication and lifecycle details.
 
 Keep credentials in a protected config file or secret-managed environment, rather than shell history. `--dashboard-host 127.0.0.1` restricts the dashboard to this computer; the default bind address also accepts LAN traffic.

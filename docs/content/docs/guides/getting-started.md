@@ -29,6 +29,20 @@ mikrotik-mcp --version      # prints the version, e.g. 1.0.0
 mikrotik-mcp --help         # usage and all flags
 ```
 
+### Run as a shared background service
+
+After installing a package that includes the service commands:
+
+```sh
+mikrotik-mcp-service install
+```
+
+Open `http://127.0.0.1:9090` to add routers, then connect your AI clients to
+`http://127.0.0.1:8000/mcp`. Update and restart later with `mikrotik-mcp-upgrade`.
+The same commands support Windows, macOS and Linux with systemd. See
+[Shared service deployment](/docs/guides/shared-service) for the source-checkout
+setup before publication, startup behavior and troubleshooting.
+
 ### From source
 
 ```bash

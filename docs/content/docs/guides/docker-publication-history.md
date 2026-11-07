@@ -187,3 +187,14 @@ description: "Archived verification records from previous Docker releases."
   local release and temporary BuildKit images, and 94 MiB OCI archive/fixtures.
   Unrelated caches, images, services and data volumes were preserved.
 - No running MCP service was upgraded or restarted; no router settings changed.
+
+## 6.11.0 publication record — November 7, 2026
+
+- Source: committed release `0c370a5`, built from a Git archive; the subsequent local upgrade helper is not part of this image.
+- Published `alimaster/mikrotik-mcp:6.11.0` and promoted `latest` after native smoke verification.
+- Both tags were read back with index digest `sha256:091caa54e990fda9c2448c37a29b1f588329f9f613cfefdedc9a67fa55e6942a` and `linux/amd64` + `linux/arm64` manifests.
+- Native ARM64 smoke passed with networking disabled and synthetic configuration: Bun 1.4.4, MCP 6.11.0, non-root UID 1000, 983 unique tools, HTTP health, dashboard and writable JSON.
+- Native AMD64 execution was not tested. Cross-building is not a runtime test.
+- Release gate: 4,897 tests, typecheck and lint passed. The separate macOS upgrade helper adds seven tests; the subsequent gate passed 4,904 tests.
+- Removed the isolated release builder/cache, smoke container and locally pulled release image. No unrelated Docker volumes were pruned.
+- Separately, the user-authorized macOS upgrade helper upgraded and restarted the existing Bun LaunchAgent from 6.10.0 to 6.11.0; MCP initialization verified the running version. No router configuration was changed.
