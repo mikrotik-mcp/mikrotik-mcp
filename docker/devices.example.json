@@ -1,4 +1,5 @@
 {
+  "$schema": "https://www.schemastore.org/mikrotik-mcp.json",
   "defaultDevice": "default",
   "devices": {},
   "mcp": {

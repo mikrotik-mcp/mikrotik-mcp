@@ -18,8 +18,15 @@ or an inline env var.
 
 ### A config file (`--config` / `MIKROTIK_CONFIG_FILE`)
 
+Use the [SchemaStore schema](https://www.schemastore.org/mikrotik-mcp.json) for
+editor completion and validation. Editors that use the SchemaStore catalog can
+automatically associate it with `mikrotik-mcp.json`, `mikrotik-mcp.config.json`,
+and `.mikrotik-mcp/config.json`. For a generic name such as `devices.json`, add
+`$schema` to the top-level object alongside `devices` as shown below.
+
 ```json
 {
+  "$schema": "https://www.schemastore.org/mikrotik-mcp.json",
   "defaultDevice": "site-a",
   "devices": {
     "site-a": {
@@ -56,6 +63,8 @@ Each device accepts the same fields as the single-device config: `host`,
 `timeoutMs`, plus an optional `description` — and the SSH jump-host fields
 `jumpVia` / `jumpHost` (see below). A bare `{ "name": { … } }` map (no
 `defaultDevice`) is also accepted — the first key becomes the default.
+To use an explicit `$schema` with a bare map, wrap its entries in `devices`
+first.
 
 You can also combine: the legacy `MIKROTIK_*` vars contribute a `default` device
 alongside the named ones from the file/env.
