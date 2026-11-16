@@ -5,6 +5,7 @@
  * traffic egressing that interface). Entries are fixed (one per interface), so
  * this scope is list/get plus assigning the queue type.
  */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
@@ -84,6 +85,7 @@ export const queueInterfaceTools: ToolModule = [
       "if the id begins with '*' it is matched by .id, otherwise by interface name. " +
       "Returns the updated entry detail on success.",
     inputSchema: {
+      unset: unsetProperties,
       interface_id: z.string().describe("Interface name (e.g. 'ether1') or RouterOS '.id'"),
       queue: z.string().describe("Queue-type name to apply to the interface"),
     },
@@ -92,7 +94,10 @@ export const queueInterfaceTools: ToolModule = [
       const selector = a.interface_id.startsWith("*")
         ? `.id="${a.interface_id}"`
         : `interface="${a.interface_id}"`;
-      const cmd = new Cmd(`/queue interface set [find ${selector}]`).set("queue", a.queue).build();
+      const cmd = new Cmd(`/queue interface set [find ${selector}]`)
+        .set("queue", a.queue)
+        .unset(a.unset)
+        .build();
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update queue interface: ${result}`;

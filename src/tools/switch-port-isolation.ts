@@ -1,4 +1,5 @@
 /** Switch port isolation — `/interface ethernet switch port-isolation`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -123,6 +124,7 @@ export const switchPortIsolationTools: ToolModule = [
       "(the port field itself), use remove_switch_port_isolation then add_switch_port_isolation.\n\n" +
       "Returns the entry's updated detail block.",
     inputSchema: {
+      unset: unsetProperties,
       isolation_id: z.string().describe("Source port name or RouterOS '.id'"),
       forwarding_override_ports: z
         .string()
@@ -137,7 +139,7 @@ export const switchPortIsolationTools: ToolModule = [
       const cmd = new Cmd(base).opt("forwarding-override-ports", a.forwarding_override_ports);
       if (a.comment !== undefined) cmd.raw(`comment=${quoteValue(a.comment)}`);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

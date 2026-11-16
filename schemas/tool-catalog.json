@@ -2785,6 +2785,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Current name of the VLAN interface to update"
@@ -3193,6 +3201,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Current name of the bridge to update"
@@ -4194,6 +4210,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string"
           },
@@ -4797,6 +4821,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "switch_id": {
             "type": "string",
             "description": "Switch name (e.g. 'switch1') or RouterOS '.id'"
@@ -4896,6 +4928,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "port_id": {
             "type": "string",
             "description": "Port name (e.g. 'ether1') or RouterOS '.id'"
@@ -5008,6 +5048,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "isolation_id": {
             "type": "string",
             "description": "Source port name or RouterOS '.id'"
@@ -5227,6 +5275,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string"
           },
@@ -5600,6 +5656,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string"
           },
@@ -5865,6 +5929,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "route_id": {
             "type": "string",
             "description": "\"*N\" or \"N\" from list output e.g. \"*3\""
@@ -6038,7 +6110,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Resolves which nexthop RouterOS would use for a given IPv4 destination — answers \"which gateway will this packet take?\" without sending any traffic. Version-aware: uses `/ip route check` on v6, falls back to `/ip route print where <dest> in dst-address active=yes` on v7+ where the check command was removed. Optionally scoped by `routing_table` (v7) / `routing_mark` (v6) for policy-routing table lookups. For listing all known routes use list_routes; for a named-table view use get_routing_table. Returns the resolved nexthop and interface detail.",
+      "description": "Resolves which nexthop RouterOS would use for a given IPv4 destination — answers \"which gateway will this packet take?\" without sending any traffic. Version-aware: uses `/ip route check` only on a device known to run v6; on v7+ (and when the version is unknown) it uses `/ip route print where <dest> in dst-address active=yes` and never sends the check command. Optionally scoped by `routing_table` (v7) / `routing_mark` (v6) for policy-routing table lookups. For listing all known routes use list_routes; for a named-table view use get_routing_table. Returns the resolved nexthop and interface detail.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -7113,6 +7185,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "entry_id": {
             "type": "string"
           },
@@ -8617,6 +8697,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string"
           },
@@ -9175,6 +9263,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string"
           },
@@ -9755,6 +9851,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string"
           },
@@ -10233,6 +10337,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string"
           },
@@ -10717,6 +10829,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "nd_id": {
             "type": "string",
             "description": "Interface name (e.g. 'all', 'ether1') or '.id'"
@@ -11090,6 +11210,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string"
           },
@@ -11558,6 +11686,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Existing Router-ID instance name"
@@ -11770,6 +11906,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Existing routing table name"
@@ -11962,6 +12106,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string",
             "description": "Rule id, e.g. \"*3\""
@@ -12168,6 +12320,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string",
             "description": "Rule id, e.g. \"*3\""
@@ -12411,6 +12571,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "config_id": {
             "type": "string",
             "description": "Configuration id, e.g. \"*1\""
@@ -12792,6 +12960,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Existing BGP connection name"
@@ -13240,6 +13416,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Existing OSPF instance name"
@@ -13764,6 +13948,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Existing RIP instance name"
@@ -14439,6 +14631,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "interface": {
             "type": "string",
             "description": "Existing IGMP-proxy interface name"
@@ -14665,6 +14865,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "session_id": {
             "type": "string",
             "description": "Session id, e.g. \"*1\""
@@ -15056,6 +15264,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string"
           },
@@ -15819,6 +16035,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string"
           },
@@ -16463,6 +16687,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "rule_id": {
             "type": "string"
           },
@@ -20001,6 +20233,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "server_id": {
             "type": "string",
             "description": "Interface name or RouterOS '.id'"
@@ -20183,6 +20423,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "client_id": {
             "type": "string",
             "description": "Interface name or RouterOS '.id'"
@@ -20367,6 +20615,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string"
           },
@@ -20619,6 +20875,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "peer_id": {
             "type": "string",
             "description": "\"*N\" or \"N\" from list output e.g. \"*2\""
@@ -21106,6 +21370,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Current name of the IPsec profile to update"
@@ -21283,6 +21555,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Current name of the IPsec peer to update"
@@ -21567,6 +21847,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Current name of the IPsec proposal to update"
@@ -21992,6 +22280,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Current name of the PPP profile to update"
@@ -22250,6 +22546,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Current username of the secret to update"
@@ -23437,6 +23741,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Existing OpenVPN server instance name"
@@ -24490,6 +24802,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "radius_id": {
             "type": "string",
             "description": "RADIUS entry internal .id, e.g. '*1'"
@@ -24858,6 +25178,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string",
             "description": "Current name of the user to update"
@@ -25742,6 +26070,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string"
           },
@@ -25999,6 +26335,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string"
           },
@@ -26264,6 +26608,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string"
           },
@@ -26514,6 +26866,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "interface_id": {
             "type": "string",
             "description": "Interface name (e.g. 'ether1') or RouterOS '.id'"
@@ -29891,6 +30251,14 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
           "name": {
             "type": "string"
           },
@@ -33466,7 +33834,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Set per-device MCP Safe Mode command deadlines before or during a session. Applies only to subsequent commands. Increase for slow exports, decrease for faster failure detection. Does not change RouterOS rollback timing, MCP client deadlines, or unblock an uncertain session. Settings are in-memory and reset on MCP restart. Defaults: command 120000ms, idle 15000ms.",
+      "description": "Set per-device MCP Safe Mode command deadlines before or during a session. Applies only to subsequent commands. Increase for slow exports, decrease for faster failure detection. Does not change RouterOS rollback timing or MCP client deadlines. Settings are in-memory and reset on MCP restart. Defaults: command 120000ms, idle 15000ms.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -33497,7 +33865,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Queries the Safe Mode SSH session state for the targeted device — reports whether a Safe Mode window is currently open (active) or closed. Safe Mode (RouterOS Ctrl+X) stages all configuration changes in memory for automatic revert on disconnect; this tool does not modify any state. Returns a status string indicating whether Safe Mode is currently active. Use enable_safe_mode to open a session, commit_safe_mode to persist staged changes, or rollback_safe_mode to discard them.",
+      "description": "Queries the Safe Mode SSH session state for the targeted device — reports whether a Safe Mode window is currently open (active) or closed, and why the last session was closed automatically, if it was. Safe Mode (RouterOS Ctrl+X) stages all configuration changes in memory for automatic revert on disconnect; this tool does not modify any state. Returns a status string indicating whether Safe Mode is currently active. Use enable_safe_mode to open a session, commit_safe_mode to persist staged changes, or rollback_safe_mode to discard them.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -33545,7 +33913,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Closes the targeted Safe Mode SSH session to request RouterOS automatic rollback. Completion is unverified and may be delayed; compare live configuration against a backup before retrying writes. Use this when staged changes are incorrect or need to be abandoned without saving. To persist staged changes instead, use commit_safe_mode. Check current Safe Mode state with safe_mode_status.",
+      "description": "Closes the targeted Safe Mode SSH session to request RouterOS automatic rollback. Completion is unverified and may be delayed; compare live configuration against a backup before retrying writes. A session that times out or loses its prompt is closed automatically, so this tool is never required to recover. Use this when staged changes are incorrect or need to be abandoned without saving. To persist staged changes instead, use commit_safe_mode. Check current Safe Mode state with safe_mode_status.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -34286,13 +34654,13 @@
     },
     {
       "name": "apply_plan",
-      "title": "Apply RouterOS Change Plan in Safe Mode",
+      "title": "Apply RouterOS Change Plan",
       "risk": "dangerous",
       "annotations": {
         "destructiveHint": true,
         "openWorldHint": false
       },
-      "description": "Executes intended RouterOS commands inside RouterOS Safe Mode (activated by Ctrl+X over an interactive SSH shell) and reports the exact unified diff of what changed, computed from `/export terse` snapshots captured before and after execution. With confirm=false (default) it applies all steps, captures the diff, then rolls everything back — a true dry-run that shows precisely what would change without persisting anything. With confirm=true it commits permanently, but ONLY after verifying the device still responds to `/system identity print` — a change that would lock you out auto-reverts instead of sticking. Steps execute in the same safe order that plan_changes computes (additive before destructive); if any step returns a RouterOS error the entire plan rolls back immediately. Safe Mode requires SSH — not available on MAC-Telnet devices. For a no-device preview use plan_changes instead. ALWAYS call capture_config_snapshot BEFORE this tool to record a restore point — it stores a local `/export` on the MCP host (~/.mikrotik-mcp/snapshots.db), adding no load to the device's disk and leaving nothing to remove on the router; after the change, diff_config_snapshots (from=latest, to=live) confirms what changed. Returns the plan summary, per-step execution log, unified diff, and commit/rollback outcome.",
+      "description": "Executes intended RouterOS commands and reports the exact unified diff of what changed, computed from `/export terse` captured before and after on a separate connection. Default (use_safe_mode=true): the steps run inside RouterOS Safe Mode (Ctrl+X over an interactive SSH shell). With confirm=false (default) it applies all steps, captures the diff, then rolls everything back — a true dry-run. With confirm=true it commits, but ONLY after a fresh connection to the device still works — a change that would lock you out reverts instead of sticking. If any step fails, or the Safe Mode session times out, the session is closed (RouterOS reverts uncommitted changes), the real device state is read back and compared with the pre-change export, and the result is reported; this tool never leaves a Safe Mode session open and needs no follow-up tool to recover. use_safe_mode=false (only when the user explicitly asks to write without Safe Mode): stores a restore-point snapshot on the MCP host, runs the steps directly (each one is permanent at once, there is no automatic rollback and no dry-run, confirm=true is required), stops at the first error, then reads back and diffs. This mode also works on MAC-Telnet devices; Safe Mode requires SSH. Steps execute in the same safe order that plan_changes computes (additive before destructive). For a no-device preview use plan_changes. Returns the plan summary, per-step log, unified diff, and the outcome.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -34310,9 +34678,14 @@
             "default": false,
             "description": "false = apply, show diff, roll back (dry-run). true = commit if still reachable.",
             "type": "boolean"
+          },
+          "use_safe_mode": {
+            "default": true,
+            "description": "false = write directly without Safe Mode (snapshot first, read-back diff after, no automatic rollback). Use only when the user explicitly asks for it.",
+            "type": "boolean"
           }
         },
-        "required": ["confirm"],
+        "required": ["confirm", "use_safe_mode"],
         "additionalProperties": false
       }
     },

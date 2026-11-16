@@ -85,35 +85,36 @@ Fetches full detail of a single hardware switch ACL/redirect rule (`/interface e
 
 Modifies an existing hardware switch ACL/redirect rule (`/interface ethernet switch rule set`) by `.id`. Use this to change match criteria (ports, addresses, VLAN, protocol) or actions (redirect target ports, mirror, rate limit, disabled state). Pass an empty string ("") for any optional field to clear it. `rule_id` takes the `.id` from list_switch_rules. Returns the updated rule's full detail. For software firewall rule edits use update_filter_rule; to only toggle the enabled state use enable_switch_rule or disable_switch_rule.
 
-| Parameter           | Required | Definition                                                 |
-| ------------------- | -------- | ---------------------------------------------------------- |
-| `rule_id`           | Yes      | `{"type":"string"}`                                        |
-| `switch`            | No       | `{"type":"string"}`                                        |
-| `ports`             | No       | `{"type":"string"}`                                        |
-| `src_address`       | No       | `{"type":"string"}`                                        |
-| `dst_address`       | No       | `{"type":"string"}`                                        |
-| `src_address6`      | No       | `{"type":"string"}`                                        |
-| `dst_address6`      | No       | `{"type":"string"}`                                        |
-| `src_mac_address`   | No       | `{"type":"string"}`                                        |
-| `dst_mac_address`   | No       | `{"type":"string"}`                                        |
-| `src_port`          | No       | `{"type":"string"}`                                        |
-| `dst_port`          | No       | `{"type":"string"}`                                        |
-| `protocol`          | No       | `{"type":"string"}`                                        |
-| `mac_protocol`      | No       | `{"type":"string"}`                                        |
-| `vlan_header`       | No       | `{"type":"string","enum":["any","not-present","present"]}` |
-| `vlan_id`           | No       | `{"type":"string"}`                                        |
-| `vlan_priority`     | No       | `{"type":"string"}`                                        |
-| `dscp`              | No       | `{"type":"string"}`                                        |
-| `flow_label`        | No       | `{"type":"string"}`                                        |
-| `new_dst_ports`     | No       | `{"type":"string"}`                                        |
-| `new_vlan_id`       | No       | `{"type":"string"}`                                        |
-| `new_vlan_priority` | No       | `{"type":"string"}`                                        |
-| `redirect_to_cpu`   | No       | `{"type":"boolean"}`                                       |
-| `copy_to_cpu`       | No       | `{"type":"boolean"}`                                       |
-| `mirror`            | No       | `{"type":"boolean"}`                                       |
-| `rate`              | No       | `{"type":"string"}`                                        |
-| `comment`           | No       | `{"type":"string"}`                                        |
-| `disabled`          | No       | `{"type":"boolean"}`                                       |
+| Parameter           | Required | Definition                                                                                                                                                                                                                                                   |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`             | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `rule_id`           | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `switch`            | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `ports`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_address`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address6`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_address6`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_mac_address`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_mac_address`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_port`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_port`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `protocol`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `mac_protocol`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `vlan_header`       | No       | `{"type":"string","enum":["any","not-present","present"]}`                                                                                                                                                                                                   |
+| `vlan_id`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `vlan_priority`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dscp`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `flow_label`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `new_dst_ports`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `new_vlan_id`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `new_vlan_priority` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `redirect_to_cpu`   | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `copy_to_cpu`       | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `mirror`            | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `rate`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`          | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_switch_rule
 

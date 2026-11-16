@@ -1,9 +1,17 @@
 /** Switch chip ACL/redirect rules — `/interface ethernet switch rule`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  quoteValue,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  unsetFragments,
+} from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { executeRuleCreate, readCreatedRule } from "./_create-rule";
 
@@ -38,12 +46,12 @@ interface SwitchRuleArgs {
 }
 
 async function updateSwitchRule(
-  a: SwitchRuleArgs & { rule_id: string },
+  a: SwitchRuleArgs & { rule_id: string; unset?: string[] },
   ctx: ToolContext,
 ): Promise<string> {
   ctx.info(`Updating switch rule: rule_id=${a.rule_id}`);
 
-  const updates: string[] = [];
+  const updates: string[] = unsetFragments(a.unset);
   const put = (key: string, val: string | undefined): void => {
     if (val === undefined) return;
     updates.push(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
@@ -263,6 +271,7 @@ export const switchRuleTools: ToolModule = [
       "For software firewall rule edits use update_filter_rule; " +
       "to only toggle the enabled state use enable_switch_rule or disable_switch_rule.",
     inputSchema: {
+      unset: unsetProperties,
       rule_id: z.string(),
       switch: z.string().optional(),
       ports: z.string().optional(),

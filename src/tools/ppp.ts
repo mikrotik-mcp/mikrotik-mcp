@@ -1,4 +1,5 @@
 /** PPP profiles, secrets, and active sessions — `/ppp`. The shared backend for L2TP/PPTP/SSTP/OpenVPN. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -148,6 +149,7 @@ export const pppTools: ToolModule = [
       "For updating VPN user credentials use update_ppp_secret instead. " +
       "Returns the profile's updated detail after the change.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Current name of the PPP profile to update"),
       new_name: z.string().optional(),
       local_address: z.string().optional(),
@@ -201,9 +203,10 @@ export const pppTools: ToolModule = [
         .opt("on-up", a.on_up)
         .opt("on-down", a.on_down)
         .opt("comment", a.comment)
+        .unset(a.unset)
         .build();
 
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update PPP profile: ${result}`;
@@ -358,6 +361,7 @@ export const pppTools: ToolModule = [
       "For updating connection templates (rate-limit, encryption, DNS) use update_ppp_profile instead. " +
       "Password is redacted in the returned output. Returns the account's updated detail after the change.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Current username of the secret to update"),
       new_name: z.string().optional(),
       password: z.string().optional(),
@@ -387,9 +391,10 @@ export const pppTools: ToolModule = [
         .opt("limit-bytes-out", a.limit_bytes_out)
         .opt("comment", a.comment)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
 
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update PPP secret: ${redactSecrets(result)}`;

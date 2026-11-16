@@ -43,17 +43,18 @@ Creates a BFD timer-profile entry (`/routing bfd configuration add`) that binds 
 
 Updates an existing BFD timer-profile entry (`/routing bfd configuration set`) by its `.id` (obtain from `list_bfd_configurations`). Adjusts `interfaces`, `vrf`, `min_rx`/`min_tx` intervals (e.g. "200ms"), `multiplier`, `comment`, or `disabled` state. To toggle enabled state only use `set_bfd_configuration_enabled`. Returns the updated entry's full detail.
 
-| Parameter    | Required | Definition                                                                  |
-| ------------ | -------- | --------------------------------------------------------------------------- |
-| `config_id`  | Yes      | Configuration id, e.g. "*1" `{"type":"string"}`                             |
-| `interfaces` | No       | `{"type":"string"}`                                                         |
-| `vrf`        | No       | `{"type":"string"}`                                                         |
-| `min_rx`     | No       | `{"type":"string"}`                                                         |
-| `min_tx`     | No       | `{"type":"string"}`                                                         |
-| `multiplier` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `forbid_bfd` | No       | `{"type":"boolean"}`                                                        |
-| `comment`    | No       | `{"type":"string"}`                                                         |
-| `disabled`   | No       | `{"type":"boolean"}`                                                        |
+| Parameter    | Required | Definition                                                                                                                                                                                                                                                   |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`      | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `config_id`  | Yes      | Configuration id, e.g. "*1" `{"type":"string"}`                                                                                                                                                                                                              |
+| `interfaces` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `vrf`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `min_rx`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `min_tx`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `multiplier` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `forbid_bfd` | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `comment`    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`   | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_bfd_configuration
 

@@ -50,17 +50,18 @@ Create a RIP process instance (`/routing rip instance add`) — the top-level RI
 
 Modify an existing RIP process instance (`/routing rip instance set`) identified by its name. Use to change redistribution policy, filter chains, router-id, or enabled/disabled state without recreating the instance. Obtain the name from list_rip_instances. For creating a new instance use add_rip_instance; for removing one use remove_rip_instance. Returns the updated instance's detail. Requires RouterOS v7 with the routing package.
 
-| Parameter           | Required | Definition                                               |
-| ------------------- | -------- | -------------------------------------------------------- |
-| `name`              | Yes      | Existing RIP instance name `{"type":"string"}`           |
-| `router_id`         | No       | `{"type":"string"}`                                      |
-| `routing_table`     | No       | Routing table to install routes into `{"type":"string"}` |
-| `redistribute`      | No       | `{"type":"string"}`                                      |
-| `in_filter_chain`   | No       | `{"type":"string"}`                                      |
-| `out_filter_chain`  | No       | `{"type":"string"}`                                      |
-| `originate_default` | No       | `{"type":"string"}`                                      |
-| `comment`           | No       | `{"type":"string"}`                                      |
-| `disabled`          | No       | `{"type":"boolean"}`                                     |
+| Parameter           | Required | Definition                                                                                                                                                                                                                                                   |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`             | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`              | Yes      | Existing RIP instance name `{"type":"string"}`                                                                                                                                                                                                               |
+| `router_id`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `routing_table`     | No       | Routing table to install routes into `{"type":"string"}`                                                                                                                                                                                                     |
+| `redistribute`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `in_filter_chain`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `out_filter_chain`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `originate_default` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`          | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_rip_instance
 

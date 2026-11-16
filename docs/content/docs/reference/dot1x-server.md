@@ -67,20 +67,21 @@ Retrieves full detail of a single 802.1X authenticator entry (`/interface dot1x 
 
 Modifies an existing 802.1X authenticator entry (`/interface dot1x server set`) identified by interface name or RouterOS `.id`. Pass `server_id` as a `.id` string (starts with `*`, e.g. `*1` — obtain from `list_dot1x_servers`) or as the interface name (e.g. `ether2`). Omit any optional field to leave it unchanged; pass `comment=""` to clear the comment. For creating a new entry use `add_dot1x_server`; for deletion use `remove_dot1x_server`. Returns the updated entry's full detail after the change.
 
-| Parameter             | Required | Definition                                                                    |
-| --------------------- | -------- | ----------------------------------------------------------------------------- |
-| `server_id`           | Yes      | Interface name or RouterOS '.id' `{"type":"string"}`                          |
-| `auth_types`          | No       | `{"type":"string","enum":["dot1x","mac-auth","dot1x,mac-auth"]}`              |
-| `accounting`          | No       | `{"type":"boolean"}`                                                          |
-| `interim_update`      | No       | `{"type":"string"}`                                                           |
-| `mac_auth_mode`       | No       | `{"type":"string","enum":["mac-as-username","mac-as-username-and-password"]}` |
-| `guest_vlan_id`       | No       | `{"type":"string"}`                                                           |
-| `reject_vlan_id`      | No       | `{"type":"string"}`                                                           |
-| `server_fail_vlan_id` | No       | `{"type":"string"}`                                                           |
-| `reauth_timeout`      | No       | `{"type":"string"}`                                                           |
-| `reauth_period`       | No       | RouterOS 7.25+ re-authentication period `{"type":"string"}`                   |
-| `comment`             | No       | `{"type":"string"}`                                                           |
-| `disabled`            | No       | `{"type":"boolean"}`                                                          |
+| Parameter             | Required | Definition                                                                                                                                                                                                                                                   |
+| --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`               | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `server_id`           | Yes      | Interface name or RouterOS '.id' `{"type":"string"}`                                                                                                                                                                                                         |
+| `auth_types`          | No       | `{"type":"string","enum":["dot1x","mac-auth","dot1x,mac-auth"]}`                                                                                                                                                                                             |
+| `accounting`          | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `interim_update`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `mac_auth_mode`       | No       | `{"type":"string","enum":["mac-as-username","mac-as-username-and-password"]}`                                                                                                                                                                                |
+| `guest_vlan_id`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `reject_vlan_id`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `server_fail_vlan_id` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `reauth_timeout`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `reauth_period`       | No       | RouterOS 7.25+ re-authentication period `{"type":"string"}`                                                                                                                                                                                                  |
+| `comment`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`            | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_dot1x_server
 

@@ -1,5 +1,7 @@
 /** IP routing table — `/ip route`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
+import { getCapabilities } from "../core/capability-cache";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -260,6 +262,7 @@ export const routeTools: ToolModule = [
       "For toggling active state without editing attributes use enable_route / disable_route. " +
       "Returns the updated route detail.",
     inputSchema: {
+      unset: unsetProperties,
       route_id: z.string().describe('"*N" or "N" from list output e.g. "*3"'),
       dst_address: z.string().optional().describe('CIDR e.g. "192.168.1.0/24"'),
       gateway: z.string().optional(),
@@ -321,7 +324,7 @@ export const routeTools: ToolModule = [
         cmd.bool("suppress-hw-offload", a.suppress_hw_offload);
       if (a.type !== undefined) cmd.raw(routeTypeArg(a.type, true));
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);
@@ -436,9 +439,10 @@ export const routeTools: ToolModule = [
     description:
       "Resolves which nexthop RouterOS would use for a given IPv4 destination " +
       '— answers "which gateway will this packet take?" without sending any traffic. ' +
-      "Version-aware: uses `/ip route check` on v6, falls back to " +
-      "`/ip route print where <dest> in dst-address active=yes` on v7+ where the check " +
-      "command was removed. Optionally scoped by `routing_table` (v7) / `routing_mark` (v6) " +
+      "Version-aware: uses `/ip route check` only on a device known to run v6; on v7+ (and " +
+      "when the version is unknown) it uses " +
+      "`/ip route print where <dest> in dst-address active=yes` and never sends the check " +
+      "command. Optionally scoped by `routing_table` (v7) / `routing_mark` (v6) " +
       "for policy-routing table lookups. " +
       "For listing all known routes use list_routes; for a named-table view use get_routing_table. " +
       "Returns the resolved nexthop and interface detail.",
@@ -453,14 +457,22 @@ export const routeTools: ToolModule = [
       ctx.info(`Checking route path to: ${a.destination}`);
       const table = a.routing_table;
 
-      // v6: `/ip route check <dest>` — simple, no src-address parameter.
-      const v6Cmd = new Cmd(`/ip route check ${a.destination}`).opt("routing-mark", table).build();
-      const v6Result = await executeMikrotikCommand(v6Cmd, ctx);
-      if (!commandUnsupported(v6Result) && !looksLikeError(v6Result) && !isEmpty(v6Result)) {
-        return `ROUTE PATH TO ${a.destination}:\n\n${v6Result}`;
+      // `/ip route check` exists only on RouterOS v6. On v7 the console does not
+      // reject it: it starts a live view that streams until the hard timeout.
+      // So send it ONLY to a device known to run v6; v7 and unknown versions use
+      // the print query below, which works on both.
+      const major = (await getCapabilities(ctx.device).catch(() => undefined))?.version?.major;
+      if (major !== undefined && major < 7) {
+        const v6Cmd = new Cmd(`/ip route check ${a.destination}`)
+          .opt("routing-mark", table)
+          .build();
+        const v6Result = await executeMikrotikCommand(v6Cmd, ctx);
+        if (!commandUnsupported(v6Result) && !looksLikeError(v6Result) && !isEmpty(v6Result)) {
+          return `ROUTE PATH TO ${a.destination}:\n\n${v6Result}`;
+        }
       }
 
-      // v7+: `/ip route check` was removed — query active routes instead.
+      // v7+ (or v6 fallback): query active routes instead.
       // `<dest> in dst-address` finds routes whose prefix COVERS the target
       // (e.g. 0.0.0.0/0 covers 8.8.8.8).  The old `dst-address in <dest>`
       // was backwards — it checked if the route prefix was a SUBSET of the

@@ -1,6 +1,6 @@
 /** OpenVPN (OVPN) — `/interface ovpn-server` + `/interface ovpn-client`. RouterOS 7 supports UDP + TCP. */
 import { z } from "zod";
-import { interfaceName } from "../core/schema";
+import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -248,6 +248,7 @@ export const openvpnTools: ToolModule = [
       " To create a server use add_ovpn_server; to remove one use remove_ovpn_server. For the legacy" +
       " single-server menu use set_ovpn_server. Returns the updated server's detail.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Existing OpenVPN server instance name"),
       port: z.number().int().optional(),
       protocol: z.enum(["tcp", "udp"]).optional(),
@@ -280,6 +281,7 @@ export const openvpnTools: ToolModule = [
         .opt("default-profile", a.default_profile)
         .bool("require-client-certificate", a.require_client_certificate)
         .opt("comment", a.comment)
+        .unset(a.unset)
         .build();
 
       if (cmd === base) return "No updates specified.";

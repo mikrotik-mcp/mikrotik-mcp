@@ -1,4 +1,5 @@
 /** IGMP Proxy — `/routing igmp-proxy` (settings, interface, mfc) — RouterOS v7. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -141,6 +142,7 @@ export const routingIgmpProxyTools: ToolModule = [
       "`add_igmp_proxy_interface`; to toggle only the enabled state use `set_igmp_proxy_interface_enabled`. " +
       "Returns updated interface detail on success.",
     inputSchema: {
+      unset: unsetProperties,
       interface: z.string().describe("Existing IGMP-proxy interface name"),
       upstream: z.boolean().optional(),
       alternative_subnets: z.string().optional(),
@@ -158,7 +160,7 @@ export const routingIgmpProxyTools: ToolModule = [
       if (a.comment !== undefined) cmd.set("comment", a.comment);
       if (a.disabled !== undefined) cmd.bool("disabled", a.disabled);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

@@ -1,4 +1,5 @@
 /** IP address pools — `/ip pool`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -7,6 +8,7 @@ import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/r
 
 interface UpdatePoolArgs {
   name: string;
+  unset?: string[];
   new_name?: string;
   ranges?: string;
   next_pool?: string;
@@ -28,7 +30,7 @@ async function updatePool(
   }
   if (a.comment !== undefined) cmd.raw(`comment=${quoteValue(a.comment)}`);
 
-  const built = cmd.build();
+  const built = cmd.unset(a.unset).build();
   if (built === base) return "No updates specified.";
 
   const result = await executeMikrotikCommand(built, ctx);
@@ -194,6 +196,7 @@ export const ipPoolTools: ToolModule = [
       " ranges comma-separated: `10.0.0.1-10.0.0.50,10.0.0.100-10.0.0.120`. To append ranges" +
       " without knowing the current set use `expand_ip_pool`. Returns the updated pool detail.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string(),
       new_name: z.string().optional(),
       ranges: z

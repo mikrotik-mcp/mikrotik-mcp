@@ -110,6 +110,22 @@ export function splitHostPort(value: string): { host: string; port?: number } {
 }
 
 /**
+ * `!prop` fragments that UNSET RouterOS properties (`set <item> !dst-address`).
+ * Accepts snake_case or kebab-case names. Each name must be a bare property
+ * name — this is the injection boundary, so anything else throws instead of
+ * reaching the device.
+ */
+export function unsetFragments(keys: string[] | undefined | null): string[] {
+  return (keys ?? []).map((key) => {
+    const name = key.trim().replace(/^!/, "").replaceAll("_", "-");
+    if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+      throw new Error(`Invalid property name to unset: ${JSON.stringify(key)}`);
+    }
+    return `!${name}`;
+  });
+}
+
+/**
  * Fluent builder for RouterOS `add` / `set` style commands.
  *
  * ```ts
@@ -154,6 +170,12 @@ export class Cmd {
     if (value !== undefined && value !== null) {
       this.parts.push(`${key}=${yesno(value)}`);
     }
+    return this;
+  }
+
+  /** Append `!key` for each property to unset (RouterOS "no value"). */
+  unset(keys: string[] | undefined | null): this {
+    this.parts.push(...unsetFragments(keys));
     return this;
   }
 

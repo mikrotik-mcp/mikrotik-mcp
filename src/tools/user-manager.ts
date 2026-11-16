@@ -6,6 +6,7 @@
  * `user-manager` package may not be installed; read tools detect that via
  * `commandUnsupported` and return a friendly message instead of a raw error.
  */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import {
@@ -204,6 +205,7 @@ const userManagerToolsDefs: ToolModule = [
       " list_user_manager_users or get_user_manager_user). Returns the updated record with" +
       " secrets redacted. To permanently delete the user use remove_user_manager_user.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Current name of the user to update"),
       new_name: z.string().optional(),
       password: z.string().optional(),
@@ -227,8 +229,9 @@ const userManagerToolsDefs: ToolModule = [
         .opt("otp-secret", a.otp_secret)
         .opt("comment", a.comment)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (commandUnsupported(result)) return NOT_AVAILABLE;

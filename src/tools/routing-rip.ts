@@ -1,4 +1,5 @@
 /** RIP — `/routing rip` (instance, interface-template, static-neighbor, neighbor) — RouterOS v7. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -89,6 +90,7 @@ export const routingRipTools: ToolModule = [
       "removing one use remove_rip_instance. Returns the updated instance's detail. Requires RouterOS v7 with " +
       "the routing package.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Existing RIP instance name"),
       router_id: z.string().optional(),
       routing_table: z.string().optional().describe("Routing table to install routes into"),
@@ -112,7 +114,7 @@ export const routingRipTools: ToolModule = [
       if (a.comment !== undefined) cmd.set("comment", a.comment);
       if (a.disabled !== undefined) cmd.bool("disabled", a.disabled);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

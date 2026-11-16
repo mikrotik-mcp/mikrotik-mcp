@@ -6,7 +6,7 @@
  * touches the device.
  */
 import { z } from "zod";
-import { interfaceName } from "../core/schema";
+import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -175,6 +175,7 @@ export const wireguardTools: ToolModule = [
       " For updating remote peers use update_wireguard_peer." +
       " Returns the updated interface's detail.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string(),
       new_name: interfaceName().optional().describe("Rename the interface to this (no spaces)."),
       listen_port: z.number().int().optional(),
@@ -193,6 +194,7 @@ export const wireguardTools: ToolModule = [
         .opt("mtu", a.mtu)
         .raw(a.comment !== undefined ? `comment=${quoteValue(a.comment)}` : null)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
 
       if (cmd === base) return "No updates specified.";
@@ -487,6 +489,7 @@ export const wireguardTools: ToolModule = [
       '  persistent_keepalive: seconds as string e.g. "25"\n' +
       '  Pass "" for endpoint_address or preshared_key to clear them.',
     inputSchema: {
+      unset: unsetProperties,
       peer_id: z.string().describe('"*N" or "N" from list output e.g. "*2"'),
       public_key: z
         .string()
@@ -598,6 +601,7 @@ export const wireguardTools: ToolModule = [
         .opt("client-mtu", a.client_mtu)
         .raw(a.comment !== undefined ? `comment=${quoteValue(a.comment)}` : null)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
 
       if (cmd === base) return "No updates specified.";

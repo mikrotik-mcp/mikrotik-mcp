@@ -164,7 +164,7 @@ describe("Safe Mode is never served over REST", () => {
     mgr.execute = async () => "SAFE-MODE-SENTINEL";
 
     try {
-      expect(await executeMikrotikCommand("/ip address print", createContext())).toBe(
+      expect(await executeMikrotikCommand("/ip address set 0 comment=x", createContext())).toBe(
         "SAFE-MODE-SENTINEL",
       );
     } finally {

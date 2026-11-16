@@ -1,4 +1,5 @@
 /** BGP — `/routing bgp` (connections, templates, sessions, advertisements) — RouterOS v7. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -271,6 +272,7 @@ export const routingBgpTools: ToolModule = [
       "without touching other settings use `set_bgp_connection_enabled`. To delete a connection use " +
       "`remove_bgp_connection`. Returns the full updated connection detail on success.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Existing BGP connection name"),
       remote_address: z.string().optional(),
       remote_as: z.number().int().optional(),
@@ -345,7 +347,7 @@ export const routingBgpTools: ToolModule = [
       if (a.comment !== undefined) cmd.set("comment", a.comment);
       if (a.disabled !== undefined) cmd.bool("disabled", a.disabled);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

@@ -66,16 +66,17 @@ Fetches the full detail of one traffic-monitor entry by name (`/tool traffic-mon
 
 Modifies an existing traffic-monitor entry by name (`/tool traffic-monitor set [find name=...]`) — for changing the watched interface, traffic direction (`received`/`transmitted`), trigger condition (`above`/`below`/`always`), threshold (bits/second), or on-event script without removing and re-adding. Supply only the fields to change; omitted fields are left unchanged. Pass `comment=""` to clear the comment. Returns the updated entry's full detail. To create a new entry use `add_traffic_monitor`.
 
-| Parameter   | Required | Definition                                                                  |
-| ----------- | -------- | --------------------------------------------------------------------------- |
-| `name`      | Yes      | `{"type":"string"}`                                                         |
-| `interface` | No       | `{"type":"string"}`                                                         |
-| `traffic`   | No       | `{"type":"string","enum":["received","transmitted"]}`                       |
-| `trigger`   | No       | `{"type":"string","enum":["above","below","always"]}`                       |
-| `threshold` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `on_event`  | No       | `{"type":"string"}`                                                         |
-| `comment`   | No       | `{"type":"string"}`                                                         |
-| `disabled`  | No       | `{"type":"boolean"}`                                                        |
+| Parameter   | Required | Definition                                                                                                                                                                                                                                                   |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`     | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`      | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `interface` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `traffic`   | No       | `{"type":"string","enum":["received","transmitted"]}`                                                                                                                                                                                                        |
+| `trigger`   | No       | `{"type":"string","enum":["above","below","always"]}`                                                                                                                                                                                                        |
+| `threshold` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `on_event`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`  | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_traffic_monitor
 

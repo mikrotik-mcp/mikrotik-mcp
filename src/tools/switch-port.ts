@@ -1,4 +1,5 @@
 /** Switch chip ports — `/interface ethernet switch port`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
@@ -89,6 +90,7 @@ export const switchPortTools: ToolModule = [
       "        'always-strip', or 'add-if-missing'.\n" +
       "    default_vlan_id: PVID for untagged ingress ('auto', 'none', or a number).",
     inputSchema: {
+      unset: unsetProperties,
       port_id: z.string().describe("Port name (e.g. 'ether1') or RouterOS '.id'"),
       default_vlan_id: z.string().optional().describe("PVID: 'auto', 'none', or a VLAN id number"),
       vlan_mode: VlanMode.optional(),
@@ -105,7 +107,7 @@ export const switchPortTools: ToolModule = [
         .opt("vlan-header", a.vlan_header)
         .bool("force-vlan-id", a.force_vlan_id);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

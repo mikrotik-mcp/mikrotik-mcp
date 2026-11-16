@@ -100,9 +100,50 @@ describe("connector transport lifecycle", () => {
       mocks.safe[flag] = true;
       mocks.safe.execute.mockResolvedValue("safe result");
       const ctx = createContext();
-      expect(await executeMikrotikCommand("/system identity print", ctx)).toBe("safe result");
+      expect(await executeMikrotikCommand("/system identity set name=r1", ctx)).toBe("safe result");
       expect(ctx.transport).toBe("ssh");
-      expect(mocks.safe.execute).toHaveBeenCalledWith("/system identity print");
+      expect(mocks.safe.execute).toHaveBeenCalledWith("/system identity set name=r1");
+      expect(mocks.createDeviceClient).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
+    ["a READ tool, whatever the command", "/system identity set name=r1", "READ"],
+    [
+      "an internal caller (no risk) running a plain print",
+      "/queue simple print stats detail",
+      undefined,
+    ],
+    ["an internal caller (no risk) running an export", "/export terse", undefined],
+  ] as const)(
+    "while Safe Mode is open, %s uses a separate connection",
+    async (_label, cmd, risk) => {
+      mocks.safe.isActive = true;
+      mocks.safe.requiresRecovery = true;
+      const ctx = createContext();
+      ctx.risk = risk;
+      expect(await executeMikrotikCommand(cmd, ctx)).toBe("# ADDRESS\n0 192.0.2.1");
+      expect(mocks.safe.execute).not.toHaveBeenCalled();
+      expect(mocks.createDeviceClient).toHaveBeenCalledOnce();
+    },
+  );
+
+  test.each([
+    ["a write tool, even for a print (its own session view)", "/ip address print", "WRITE"],
+    ["an internal caller running a write", "/ip address remove 0", undefined],
+    [
+      "an internal caller running script syntax",
+      "/ip address remove [find comment=x]; :put print",
+      undefined,
+    ],
+  ] as const)(
+    "while Safe Mode is open, %s stays in the Safe Mode shell",
+    async (_label, cmd, risk) => {
+      mocks.safe.isActive = true;
+      mocks.safe.execute.mockResolvedValue("safe result");
+      const ctx = createContext();
+      ctx.risk = risk;
+      expect(await executeMikrotikCommand(cmd, ctx)).toBe("safe result");
       expect(mocks.createDeviceClient).not.toHaveBeenCalled();
     },
   );

@@ -1,4 +1,5 @@
 /** RADIUS client — `/radius`. The router authenticates against external RADIUS servers. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -145,6 +146,7 @@ export const radiusTools: ToolModule = [
       " redacted. To create a new entry use `add_radius_server`; to toggle enabled state only" +
       " use `enable_radius_server` or `disable_radius_server`.",
     inputSchema: {
+      unset: unsetProperties,
       radius_id: z.string().describe("RADIUS entry internal .id, e.g. '*1'"),
       address: z.string().optional(),
       secret: z.string().optional(),
@@ -189,10 +191,11 @@ export const radiusTools: ToolModule = [
         .bool("accounting-backup", a.accounting_backup)
         .opt("comment", a.comment)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
 
       // No updates supplied -> the command would just be the `set <id>` stem.
-      if (!cmd.includes("=")) return "No updates specified.";
+      if (!/[=!]/.test(cmd)) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update RADIUS server: ${result}`;

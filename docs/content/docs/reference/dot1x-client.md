@@ -56,16 +56,17 @@ Fetches full detail for a single 802.1X supplicant client entry (`/interface dot
 
 Modifies an existing 802.1X supplicant client entry (`/interface dot1x client set`) identified by interface name or RouterOS `.id` from list_dot1x_clients. `client_id` accepts an interface name (e.g. `'ether3'`) or a `.id` string starting with `'*'`. Only supplied fields are changed; pass `comment=""` to clear the comment. Returns the updated entry's full detail after the change. To add a new supplicant entry use add_dot1x_client; to delete one use remove_dot1x_client.
 
-| Parameter            | Required | Definition                                           |
-| -------------------- | -------- | ---------------------------------------------------- |
-| `client_id`          | Yes      | Interface name or RouterOS '.id' `{"type":"string"}` |
-| `eap_methods`        | No       | `{"type":"string"}`                                  |
-| `identity`           | No       | `{"type":"string"}`                                  |
-| `anonymous_identity` | No       | `{"type":"string"}`                                  |
-| `certificate`        | No       | `{"type":"string"}`                                  |
-| `password`           | No       | `{"type":"string"}`                                  |
-| `comment`            | No       | `{"type":"string"}`                                  |
-| `disabled`           | No       | `{"type":"boolean"}`                                 |
+| Parameter            | Required | Definition                                                                                                                                                                                                                                                   |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`              | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `client_id`          | Yes      | Interface name or RouterOS '.id' `{"type":"string"}`                                                                                                                                                                                                         |
+| `eap_methods`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `identity`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `anonymous_identity` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `certificate`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `password`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`            | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`           | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_dot1x_client
 

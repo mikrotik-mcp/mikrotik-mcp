@@ -43,13 +43,14 @@ Pass mirror_source / mirror_target / mirror_egress='none' to disable mirroring.
 
 Returns updated switch details on success.
 
-| Parameter              | Required | Definition                                                                                 |
-| ---------------------- | -------- | ------------------------------------------------------------------------------------------ |
-| `switch_id`            | Yes      | Switch name (e.g. 'switch1') or RouterOS '.id' `{"type":"string"}`                         |
-| `name`                 | No       | Rename the switch `{"type":"string"}`                                                      |
-| `cpu_flow_control`     | No       | `{"type":"boolean"}`                                                                       |
-| `mirror_source`        | No       | Source port to mirror, or 'none' `{"type":"string"}`                                       |
-| `mirror_target`        | No       | Monitor port, 'cpu', or 'none' `{"type":"string"}`                                         |
-| `mirror_egress`        | No       | Egress mirror source port (newer chips), or 'none' `{"type":"string"}`                     |
-| `mirror_egress_target` | No       | Egress mirror target port (88E6393X/88E6191X/88E6190 chips), or 'none' `{"type":"string"}` |
-| `switch_all_ports`     | No       | Switch all ports together (RB450G/RB435G/RB850Gx2 only) `{"type":"boolean"}`               |
+| Parameter              | Required | Definition                                                                                                                                                                                                                                                   |
+| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`                | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `switch_id`            | Yes      | Switch name (e.g. 'switch1') or RouterOS '.id' `{"type":"string"}`                                                                                                                                                                                           |
+| `name`                 | No       | Rename the switch `{"type":"string"}`                                                                                                                                                                                                                        |
+| `cpu_flow_control`     | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `mirror_source`        | No       | Source port to mirror, or 'none' `{"type":"string"}`                                                                                                                                                                                                         |
+| `mirror_target`        | No       | Monitor port, 'cpu', or 'none' `{"type":"string"}`                                                                                                                                                                                                           |
+| `mirror_egress`        | No       | Egress mirror source port (newer chips), or 'none' `{"type":"string"}`                                                                                                                                                                                       |
+| `mirror_egress_target` | No       | Egress mirror target port (88E6393X/88E6191X/88E6190 chips), or 'none' `{"type":"string"}`                                                                                                                                                                   |
+| `switch_all_ports`     | No       | Switch all ports together (RB450G/RB435G/RB850Gx2 only) `{"type":"boolean"}`                                                                                                                                                                                 |

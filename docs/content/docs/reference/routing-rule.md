@@ -58,18 +58,19 @@ Add a policy routing rule (`/routing rule add`) to steer matched packets into a 
 
 Modify an existing policy routing rule (`/routing rule set`) by its `.id` (obtain from `list_routing_rules`). Pass `""` for `src_address`, `dst_address`, `routing_mark`, `interface`, or `table` to clear that field. Requires RouterOS v7 with the routing package. For updating static routes use `update_route`. Returns the rule's updated detail after applying changes.
 
-| Parameter      | Required | Definition                                                                        |
-| -------------- | -------- | --------------------------------------------------------------------------------- |
-| `rule_id`      | Yes      | Rule id, e.g. "*3" `{"type":"string"}`                                            |
-| `action`       | No       | `{"type":"string","enum":["lookup","lookup-only-in-table","drop","unreachable"]}` |
-| `table`        | No       | `{"type":"string"}`                                                               |
-| `src_address`  | No       | `{"type":"string"}`                                                               |
-| `dst_address`  | No       | `{"type":"string"}`                                                               |
-| `routing_mark` | No       | `{"type":"string"}`                                                               |
-| `interface`    | No       | `{"type":"string"}`                                                               |
-| `min_prefix`   | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`       |
-| `comment`      | No       | `{"type":"string"}`                                                               |
-| `disabled`     | No       | `{"type":"boolean"}`                                                              |
+| Parameter      | Required | Definition                                                                                                                                                                                                                                                   |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`        | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `rule_id`      | Yes      | Rule id, e.g. "*3" `{"type":"string"}`                                                                                                                                                                                                                       |
+| `action`       | No       | `{"type":"string","enum":["lookup","lookup-only-in-table","drop","unreachable"]}`                                                                                                                                                                            |
+| `table`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_address`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `routing_mark` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `interface`    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `min_prefix`   | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `comment`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`     | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_routing_rule
 

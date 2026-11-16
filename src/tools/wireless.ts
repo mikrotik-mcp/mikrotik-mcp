@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 import { runWifiSurvey } from "../core/wifi-survey";
-import { interfaceName } from "../core/schema";
+import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -755,6 +755,7 @@ For legacy systems:
       "to create a new interface use create_wireless_interface; to delete one use remove_wireless_interface. " +
       "Returns the updated interface's full detail print.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string(),
       new_name: interfaceName().optional().describe("Rename the interface to this (no spaces)."),
       ssid: z.string().optional(),
@@ -867,10 +868,11 @@ For legacy systems:
         .opt("distance", a.distance)
         .opt("disconnect-timeout", a.disconnect_timeout)
         .opt("security-profile", a.security_profile)
+        .unset(a.unset)
         .build();
 
       // No updates were supplied -> the command would just be the `set [find ...]` stem.
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update wireless interface: ${result}`;

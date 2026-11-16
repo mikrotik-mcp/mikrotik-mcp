@@ -1,4 +1,5 @@
 /** 802.1X authenticator — `/interface dot1x server`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -144,6 +145,7 @@ export const dot1xServerTools: ToolModule = [
       "For creating a new entry use `add_dot1x_server`; for deletion use `remove_dot1x_server`. " +
       "Returns the updated entry's full detail after the change.",
     inputSchema: {
+      unset: unsetProperties,
       server_id: z.string().describe("Interface name or RouterOS '.id'"),
       auth_types: AuthTypes.optional(),
       accounting: z.boolean().optional(),
@@ -178,7 +180,7 @@ export const dot1xServerTools: ToolModule = [
       if (a.comment !== undefined) cmd.raw(`comment=${quoteValue(a.comment)}`);
       if (a.disabled !== undefined) cmd.raw(`disabled=${yesno(a.disabled)}`);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

@@ -62,22 +62,23 @@ Returns full detail for a single named VLAN interface (`/interface vlan print de
 
 Modifies properties of an existing VLAN sub-interface (`/interface vlan set [find name="..."]`). Accepts any subset of the create parameters; omit fields to leave them unchanged. Supply the current `name` from `list_vlan_interfaces` or `get_vlan_interface`; use `new_name` to rename the interface. For creating a new VLAN interface use `create_vlan_interface`; to permanently delete use `remove_vlan_interface`. Returns the updated interface's full detail after applying the change. ARP mode accepts: enabled, disabled, proxy-arp, reply-only.
 
-| Parameter                    | Required | Definition                                                                               |
-| ---------------------------- | -------- | ---------------------------------------------------------------------------------------- |
-| `name`                       | Yes      | Current name of the VLAN interface to update `{"type":"string"}`                         |
-| `new_name`                   | No       | Rename the interface to this (no spaces). `{"type":"string","pattern":"^\\S+$"}`         |
-| `vlan_id`                    | No       | `{"type":"integer","minimum":1,"maximum":4094}`                                          |
-| `interface`                  | No       | `{"type":"string"}`                                                                      |
-| `comment`                    | No       | `{"type":"string"}`                                                                      |
-| `disabled`                   | No       | `{"type":"boolean"}`                                                                     |
-| `mtu`                        | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`              |
-| `forced_mac_address`         | No       | RouterOS 7.25+ forced VLAN interface MAC address `{"type":"string"}`                     |
-| `use_service_tag`            | No       | `{"type":"boolean"}`                                                                     |
-| `arp`                        | No       | `{"type":"string","enum":["enabled","disabled","proxy-arp","reply-only"]}`               |
-| `arp_timeout`                | No       | `{"type":"string"}`                                                                      |
-| `loop_protect`               | No       | Loop protection: default, on, off `{"type":"string","enum":["default","on","off"]}`      |
-| `loop_protect_disable_time`  | No       | Time to disable interface on loop detection, e.g. '5m' (0 = forever) `{"type":"string"}` |
-| `loop_protect_send_interval` | No       | Interval between loop-protect probe packets, e.g. '5s' `{"type":"string"}`               |
+| Parameter                    | Required | Definition                                                                                                                                                                                                                                                   |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`                      | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`                       | Yes      | Current name of the VLAN interface to update `{"type":"string"}`                                                                                                                                                                                             |
+| `new_name`                   | No       | Rename the interface to this (no spaces). `{"type":"string","pattern":"^\\S+$"}`                                                                                                                                                                             |
+| `vlan_id`                    | No       | `{"type":"integer","minimum":1,"maximum":4094}`                                                                                                                                                                                                              |
+| `interface`                  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`                    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`                   | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `mtu`                        | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `forced_mac_address`         | No       | RouterOS 7.25+ forced VLAN interface MAC address `{"type":"string"}`                                                                                                                                                                                         |
+| `use_service_tag`            | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `arp`                        | No       | `{"type":"string","enum":["enabled","disabled","proxy-arp","reply-only"]}`                                                                                                                                                                                   |
+| `arp_timeout`                | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `loop_protect`               | No       | Loop protection: default, on, off `{"type":"string","enum":["default","on","off"]}`                                                                                                                                                                          |
+| `loop_protect_disable_time`  | No       | Time to disable interface on loop detection, e.g. '5m' (0 = forever) `{"type":"string"}`                                                                                                                                                                     |
+| `loop_protect_send_interval` | No       | Interval between loop-protect probe packets, e.g. '5s' `{"type":"string"}`                                                                                                                                                                                   |
 
 ## remove_vlan_interface
 

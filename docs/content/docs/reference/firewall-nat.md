@@ -114,66 +114,67 @@ Fetches full detail for a single IPv4 NAT rule (`/ip firewall nat print detail w
 
 Modifies fields of an existing IPv4 NAT rule (`/ip firewall nat set`) without recreating it. rule_id takes the `.id` from list_nat_rules e.g. "*1" or "0"; returns the updated rule's full detail. For IPv6 NAT use update_ipv6_nat_rule; to toggle enabled state only use enable_nat_rule or disable_nat_rule. to_addresses: single IP or range e.g. "10.0.0.1" or "10.0.0.1-10.0.0.10". to_ports: single port or range e.g. "8080" or "8080-8090". Pass "" to clear an optional field.
 
-| Parameter                   | Required | Definition                              |
-| --------------------------- | -------- | --------------------------------------- |
-| `rule_id`                   | Yes      | `{"type":"string"}`                     |
-| `chain`                     | No       | `{"type":"string"}`                     |
-| `action`                    | No       | `{"type":"string"}`                     |
-| `src_address`               | No       | `{"type":"string"}`                     |
-| `dst_address`               | No       | `{"type":"string"}`                     |
-| `src_port`                  | No       | `{"type":"string"}`                     |
-| `dst_port`                  | No       | `{"type":"string"}`                     |
-| `protocol`                  | No       | `{"type":"string"}`                     |
-| `in_interface`              | No       | `{"type":"string"}`                     |
-| `out_interface`             | No       | `{"type":"string"}`                     |
-| `in_interface_list`         | No       | `{"type":"string"}`                     |
-| `out_interface_list`        | No       | `{"type":"string"}`                     |
-| `src_address_list`          | No       | Negate with "!name" `{"type":"string"}` |
-| `dst_address_list`          | No       | Negate with "!name" `{"type":"string"}` |
-| `connection_mark`           | No       | `{"type":"string"}`                     |
-| `connection_nat_state`      | No       | `{"type":"string"}`                     |
-| `connection_state`          | No       | `{"type":"string"}`                     |
-| `connection_type`           | No       | `{"type":"string"}`                     |
-| `connection_bytes`          | No       | `{"type":"string"}`                     |
-| `connection_limit`          | No       | `{"type":"string"}`                     |
-| `connection_rate`           | No       | `{"type":"string"}`                     |
-| `port`                      | No       | `{"type":"string"}`                     |
-| `src_mac_address`           | No       | `{"type":"string"}`                     |
-| `packet_mark`               | No       | `{"type":"string"}`                     |
-| `routing_mark`              | No       | `{"type":"string"}`                     |
-| `src_address_type`          | No       | `{"type":"string"}`                     |
-| `dst_address_type`          | No       | `{"type":"string"}`                     |
-| `in_bridge_port`            | No       | `{"type":"string"}`                     |
-| `out_bridge_port`           | No       | `{"type":"string"}`                     |
-| `in_bridge_port_list`       | No       | `{"type":"string"}`                     |
-| `out_bridge_port_list`      | No       | `{"type":"string"}`                     |
-| `icmp_options`              | No       | `{"type":"string"}`                     |
-| `ipsec_policy`              | No       | `{"type":"string"}`                     |
-| `layer7_protocol`           | No       | `{"type":"string"}`                     |
-| `content`                   | No       | `{"type":"string"}`                     |
-| `dscp`                      | No       | `{"type":"string"}`                     |
-| `priority`                  | No       | `{"type":"string"}`                     |
-| `tcp_flags`                 | No       | `{"type":"string"}`                     |
-| `tcp_mss`                   | No       | `{"type":"string"}`                     |
-| `packet_size`               | No       | `{"type":"string"}`                     |
-| `limit`                     | No       | `{"type":"string"}`                     |
-| `nth`                       | No       | `{"type":"string"}`                     |
-| `psd`                       | No       | `{"type":"string"}`                     |
-| `random`                    | No       | `{"type":"string"}`                     |
-| `per_connection_classifier` | No       | `{"type":"string"}`                     |
-| `time`                      | No       | `{"type":"string"}`                     |
-| `ttl`                       | No       | `{"type":"string"}`                     |
-| `hotspot`                   | No       | `{"type":"string"}`                     |
-| `jump_target`               | No       | `{"type":"string"}`                     |
-| `address_list`              | No       | `{"type":"string"}`                     |
-| `address_list_timeout`      | No       | `{"type":"string"}`                     |
-| `fragment`                  | No       | `{"type":"boolean"}`                    |
-| `to_addresses`              | No       | `{"type":"string"}`                     |
-| `to_ports`                  | No       | `{"type":"string"}`                     |
-| `comment`                   | No       | `{"type":"string"}`                     |
-| `disabled`                  | No       | `{"type":"boolean"}`                    |
-| `log`                       | No       | `{"type":"boolean"}`                    |
-| `log_prefix`                | No       | `{"type":"string"}`                     |
+| Parameter                   | Required | Definition                                                                                                                                                                                                                                                   |
+| --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`                     | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `rule_id`                   | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `chain`                     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `action`                    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address`               | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_address`               | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_port`                  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_port`                  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `protocol`                  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `in_interface`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `out_interface`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `in_interface_list`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `out_interface_list`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address_list`          | No       | Negate with "!name" `{"type":"string"}`                                                                                                                                                                                                                      |
+| `dst_address_list`          | No       | Negate with "!name" `{"type":"string"}`                                                                                                                                                                                                                      |
+| `connection_mark`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `connection_nat_state`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `connection_state`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `connection_type`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `connection_bytes`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `connection_limit`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `connection_rate`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `port`                      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_mac_address`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `packet_mark`               | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `routing_mark`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address_type`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_address_type`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `in_bridge_port`            | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `out_bridge_port`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `in_bridge_port_list`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `out_bridge_port_list`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `icmp_options`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `ipsec_policy`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `layer7_protocol`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `content`                   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dscp`                      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `priority`                  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `tcp_flags`                 | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `tcp_mss`                   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `packet_size`               | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `limit`                     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `nth`                       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `psd`                       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `random`                    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `per_connection_classifier` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `time`                      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `ttl`                       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `hotspot`                   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `jump_target`               | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `address_list`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `address_list_timeout`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `fragment`                  | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `to_addresses`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `to_ports`                  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`                   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`                  | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `log`                       | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `log_prefix`                | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
 
 ## remove_nat_rule
 

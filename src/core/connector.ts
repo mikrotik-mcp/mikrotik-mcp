@@ -126,7 +126,7 @@ async function runOnce(
  * connection. Deliberately narrow: anything it does not recognise keeps the old
  * routing, so a write can never skip an open Safe Mode session by mistake.
  */
-const READ_COMMAND_RE = /^\/[^;[\]{}]*\s(?:print|export)(?:\s[^;[\]{}]*)?$/;
+const READ_COMMAND_RE = /^\/(?:[^;[\]{}]*\s)?(?:print|export)(?:\s[^;[\]{}]*)?$/;
 
 /**
  * True when this command must NOT enter the device's Safe Mode shell.

@@ -69,11 +69,12 @@ isolation_id accepts either the source port name (e.g. 'ether1') or the RouterOS
 
 Returns the entry's updated detail block.
 
-| Parameter                   | Required | Definition                                                    |
-| --------------------------- | -------- | ------------------------------------------------------------- |
-| `isolation_id`              | Yes      | Source port name or RouterOS '.id' `{"type":"string"}`        |
-| `forwarding_override_ports` | No       | Comma-separated allowed destination ports `{"type":"string"}` |
-| `comment`                   | No       | `{"type":"string"}`                                           |
+| Parameter                   | Required | Definition                                                                                                                                                                                                                                                   |
+| --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`                     | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `isolation_id`              | Yes      | Source port name or RouterOS '.id' `{"type":"string"}`                                                                                                                                                                                                       |
+| `forwarding_override_ports` | No       | Comma-separated allowed destination ports `{"type":"string"}`                                                                                                                                                                                                |
+| `comment`                   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
 
 ## remove_switch_port_isolation
 

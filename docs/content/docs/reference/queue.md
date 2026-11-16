@@ -100,34 +100,35 @@ Retrieves full detail for a single queue discipline (`/queue type print detail w
 
 Modifies an existing queue discipline (`/queue type set [find name=...]`). Supports renaming (`new_name`) and changing CAKE- or PCQ-specific parameters (cake_flowmode, cake_nat, cake_overhead, pcq_rate, pcq_classifier, etc.). Does not change the queue `kind` — to switch algorithm, remove and recreate the type with `remove_queue_type` then `create_queue_type`. Returns updated detail; if no parameters are provided returns 'No updates specified.' Use `get_queue_type` to confirm current values first.
 
-| Parameter               | Required | Definition                                                                  |
-| ----------------------- | -------- | --------------------------------------------------------------------------- |
-| `name`                  | Yes      | `{"type":"string"}`                                                         |
-| `new_name`              | No       | `{"type":"string"}`                                                         |
-| `cake_flowmode`         | No       | `{"type":"string"}`                                                         |
-| `cake_nat`              | No       | `{"type":"boolean"}`                                                        |
-| `cake_overhead`         | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `cake_mpu`              | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `cake_diffserv`         | No       | `{"type":"string"}`                                                         |
-| `cake_ack_filter`       | No       | `{"type":"string"}`                                                         |
-| `cake_rtt`              | No       | `{"type":"string"}`                                                         |
-| `cake_wash`             | No       | `{"type":"boolean"}`                                                        |
-| `cake_overhead_scheme`  | No       | `{"type":"string"}`                                                         |
-| `cake_bandwidth`        | No       | `{"type":"string"}`                                                         |
-| `cake_atm`              | No       | `{"type":"string"}`                                                         |
-| `cake_autorate_ingress` | No       | `{"type":"boolean"}`                                                        |
-| `cake_memlimit`         | No       | `{"type":"string"}`                                                         |
-| `pcq_rate`              | No       | `{"type":"string"}`                                                         |
-| `pcq_limit`             | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `pcq_classifier`        | No       | `{"type":"string"}`                                                         |
-| `pcq_total_limit`       | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `pcq_burst_rate`        | No       | `{"type":"string"}`                                                         |
-| `pcq_burst_threshold`   | No       | `{"type":"string"}`                                                         |
-| `pcq_burst_time`        | No       | `{"type":"string"}`                                                         |
-| `pcq_src_address_mask`  | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `pcq_dst_address_mask`  | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `pcq_src_address6_mask` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `pcq_dst_address6_mask` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
+| Parameter               | Required | Definition                                                                                                                                                                                                                                                   |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`                 | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`                  | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `new_name`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cake_flowmode`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cake_nat`              | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `cake_overhead`         | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `cake_mpu`              | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `cake_diffserv`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cake_ack_filter`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cake_rtt`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cake_wash`             | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `cake_overhead_scheme`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cake_bandwidth`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cake_atm`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cake_autorate_ingress` | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `cake_memlimit`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `pcq_rate`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `pcq_limit`             | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `pcq_classifier`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `pcq_total_limit`       | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `pcq_burst_rate`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `pcq_burst_threshold`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `pcq_burst_time`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `pcq_src_address_mask`  | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `pcq_dst_address_mask`  | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `pcq_src_address6_mask` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `pcq_dst_address6_mask` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
 
 ## remove_queue_type
 
@@ -190,22 +191,23 @@ Retrieves full detail for a single queue tree node (`/queue tree print detail wh
 
 Modifies an existing queue tree node (`/queue tree set [find name=...]`). Accepts `new_name`, `parent`, `queue` (qdisc reference from `create_queue_type`), `packet_mark`, bandwidth params (`max_limit`, `limit_at`, `burst_limit`, `burst_threshold` as RouterOS rate strings e.g. '10M', '512k', '1G'; `burst_time` e.g. '8s'), `priority` (1 highest – 8 lowest), `comment`, and `disabled`. Returns updated detail; if no parameters are specified returns 'No updates specified.' Use `get_queue_tree` to confirm current state before updating. For simple per-target queues use `update_simple_queue`.
 
-| Parameter         | Required | Definition                                                                                           |
-| ----------------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| `name`            | Yes      | `{"type":"string"}`                                                                                  |
-| `new_name`        | No       | `{"type":"string"}`                                                                                  |
-| `parent`          | No       | `{"type":"string"}`                                                                                  |
-| `queue`           | No       | `{"type":"string"}`                                                                                  |
-| `packet_mark`     | No       | `{"type":"string"}`                                                                                  |
-| `max_limit`       | No       | Bandwidth e.g. "10M", "512k" `{"type":"string"}`                                                     |
-| `limit_at`        | No       | Bandwidth e.g. "10M", "512k" `{"type":"string"}`                                                     |
-| `burst_limit`     | No       | Bandwidth e.g. "10M", "512k" `{"type":"string"}`                                                     |
-| `burst_threshold` | No       | Bandwidth e.g. "10M", "512k" `{"type":"string"}`                                                     |
-| `burst_time`      | No       | Duration e.g. "8s" `{"type":"string"}`                                                               |
-| `bucket_size`     | No       | `{"type":"string"}`                                                                                  |
-| `priority`        | No       | 1 (highest) – 8 (lowest) `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `comment`         | No       | `{"type":"string"}`                                                                                  |
-| `disabled`        | No       | `{"type":"boolean"}`                                                                                 |
+| Parameter         | Required | Definition                                                                                                                                                                                                                                                   |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`           | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`            | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `new_name`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `parent`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `queue`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `packet_mark`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `max_limit`       | No       | Bandwidth e.g. "10M", "512k" `{"type":"string"}`                                                                                                                                                                                                             |
+| `limit_at`        | No       | Bandwidth e.g. "10M", "512k" `{"type":"string"}`                                                                                                                                                                                                             |
+| `burst_limit`     | No       | Bandwidth e.g. "10M", "512k" `{"type":"string"}`                                                                                                                                                                                                             |
+| `burst_threshold` | No       | Bandwidth e.g. "10M", "512k" `{"type":"string"}`                                                                                                                                                                                                             |
+| `burst_time`      | No       | Duration e.g. "8s" `{"type":"string"}`                                                                                                                                                                                                                       |
+| `bucket_size`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `priority`        | No       | 1 (highest) – 8 (lowest) `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                         |
+| `comment`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`        | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_queue_tree
 
@@ -291,25 +293,26 @@ Retrieves full detail for a single simple queue entry (`/queue simple print deta
 
 Modifies an existing per-target rate-limiting entry (`/queue simple set [find name=...]`). Accepts `new_name`, `target` (IP/CIDR or interface e.g. '192.168.1.0/24', 'ether1'), `dst`, bandwidth params (`max_limit`, `limit_at`, `burst_limit`, `burst_threshold` as 'UL/DL' or single value e.g. '10M/10M', '5M'; `burst_time` e.g. '8s'), `queue` (qdisc reference), `parent`, `priority` (1 highest – 8 lowest), `packet_marks`, `comment`, and `disabled`. Returns updated detail; if no parameters are provided returns 'No updates specified.' Use `get_simple_queue` to confirm current state first. For hierarchical queue nodes use `update_queue_tree`.
 
-| Parameter         | Required | Definition                                                                                          |
-| ----------------- | -------- | --------------------------------------------------------------------------------------------------- |
-| `name`            | Yes      | `{"type":"string"}`                                                                                 |
-| `new_name`        | No       | `{"type":"string"}`                                                                                 |
-| `target`          | No       | IP/CIDR or interface e.g. "192.168.1.0/24" or "ether1" `{"type":"string"}`                          |
-| `dst`             | No       | `{"type":"string"}`                                                                                 |
-| `max_limit`       | No       | Upload/download bandwidth as "UL/DL" e.g. "10M/10M", or single value e.g. "10M" `{"type":"string"}` |
-| `limit_at`        | No       | Upload/download bandwidth as "UL/DL" e.g. "10M/10M", or single value e.g. "10M" `{"type":"string"}` |
-| `burst_limit`     | No       | Upload/download bandwidth as "UL/DL" e.g. "10M/10M", or single value e.g. "10M" `{"type":"string"}` |
-| `burst_threshold` | No       | Upload/download bandwidth as "UL/DL" e.g. "10M/10M", or single value e.g. "10M" `{"type":"string"}` |
-| `burst_time`      | No       | Duration e.g. "8s" `{"type":"string"}`                                                              |
-| `bucket_size`     | No       | `{"type":"string"}`                                                                                 |
-| `queue`           | No       | `{"type":"string"}`                                                                                 |
-| `parent`          | No       | `{"type":"string"}`                                                                                 |
-| `priority`        | No       | 1 (highest) – 8 (lowest) `{"type":"string"}`                                                        |
-| `packet_marks`    | No       | `{"type":"string"}`                                                                                 |
-| `time`            | No       | Active time/days e.g. "0s-1d,sun,mon,tue,wed,thu,fri,sat" `{"type":"string"}`                       |
-| `comment`         | No       | `{"type":"string"}`                                                                                 |
-| `disabled`        | No       | `{"type":"boolean"}`                                                                                |
+| Parameter         | Required | Definition                                                                                                                                                                                                                                                   |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`           | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`            | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `new_name`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `target`          | No       | IP/CIDR or interface e.g. "192.168.1.0/24" or "ether1" `{"type":"string"}`                                                                                                                                                                                   |
+| `dst`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `max_limit`       | No       | Upload/download bandwidth as "UL/DL" e.g. "10M/10M", or single value e.g. "10M" `{"type":"string"}`                                                                                                                                                          |
+| `limit_at`        | No       | Upload/download bandwidth as "UL/DL" e.g. "10M/10M", or single value e.g. "10M" `{"type":"string"}`                                                                                                                                                          |
+| `burst_limit`     | No       | Upload/download bandwidth as "UL/DL" e.g. "10M/10M", or single value e.g. "10M" `{"type":"string"}`                                                                                                                                                          |
+| `burst_threshold` | No       | Upload/download bandwidth as "UL/DL" e.g. "10M/10M", or single value e.g. "10M" `{"type":"string"}`                                                                                                                                                          |
+| `burst_time`      | No       | Duration e.g. "8s" `{"type":"string"}`                                                                                                                                                                                                                       |
+| `bucket_size`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `queue`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `parent`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `priority`        | No       | 1 (highest) – 8 (lowest) `{"type":"string"}`                                                                                                                                                                                                                 |
+| `packet_marks`    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `time`            | No       | Active time/days e.g. "0s-1d,sun,mon,tue,wed,thu,fri,sat" `{"type":"string"}`                                                                                                                                                                                |
+| `comment`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`        | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_simple_queue
 

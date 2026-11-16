@@ -62,13 +62,14 @@ Lists actively delegated prefixes from IPv6 pools (`/ipv6 pool used print`) — 
 
 Updates an existing IPv6 prefix pool (`/ipv6 pool set`) — modifies the pool's name, prefix block, delegation size, or comment. Use `list_ipv6_pools` to find the current pool `name` before updating. Pass comment="" to clear the comment. Returns the updated pool's full detail after the change.
 
-| Parameter       | Required | Definition                                     |
-| --------------- | -------- | ---------------------------------------------- |
-| `name`          | Yes      | `{"type":"string"}`                            |
-| `new_name`      | No       | `{"type":"string"}`                            |
-| `prefix`        | No       | `{"type":"string"}`                            |
-| `prefix_length` | No       | `{"type":"integer","minimum":1,"maximum":128}` |
-| `comment`       | No       | `{"type":"string"}`                            |
+| Parameter       | Required | Definition                                                                                                                                                                                                                                                   |
+| --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`         | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`          | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `new_name`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `prefix`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `prefix_length` | No       | `{"type":"integer","minimum":1,"maximum":128}`                                                                                                                                                                                                               |
+| `comment`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
 
 ## remove_ipv6_pool
 

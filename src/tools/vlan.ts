@@ -7,7 +7,7 @@
  * `Cmd` and runs it through `executeMikrotikCommand`.
  */
 import { z } from "zod";
-import { interfaceName } from "../core/schema";
+import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -150,6 +150,7 @@ export const vlanTools: ToolModule = [
       " Returns the updated interface's full detail after applying the change." +
       " ARP mode accepts: enabled, disabled, proxy-arp, reply-only.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Current name of the VLAN interface to update"),
       new_name: interfaceName().optional().describe("Rename the interface to this (no spaces)."),
       vlan_id: z.number().int().min(1).max(4094).optional(),
@@ -190,10 +191,11 @@ export const vlanTools: ToolModule = [
         .opt("loop-protect", a.loop_protect)
         .opt("loop-protect-disable-time", a.loop_protect_disable_time)
         .opt("loop-protect-send-interval", a.loop_protect_send_interval)
+        .unset(a.unset)
         .build();
 
       // No updates were supplied -> the command would just be the `set [find ...]` stem.
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update VLAN interface: ${result}`;

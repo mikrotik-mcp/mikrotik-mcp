@@ -1,4 +1,5 @@
 /** Firewall filter rules — `/ip firewall filter`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import {
@@ -18,6 +19,7 @@ import {
   placeBeforeError,
   interfaceValueError,
   Cmd,
+  unsetFragments,
 } from "../core/routeros";
 import { filterDetailBlocks } from "../core/routeros-parse";
 import type { ToolContext } from "../core/context";
@@ -58,6 +60,7 @@ function interfaceFieldMisuse(
 async function updateFilterRule(
   a: {
     rule_id: string;
+    unset?: string[];
     chain?: string;
     action?: string;
     src_address?: string;
@@ -119,7 +122,7 @@ async function updateFilterRule(
   ]);
   if (misuse) return `Failed to update firewall filter rule: ${misuse}`;
 
-  const updates: string[] = [];
+  const updates: string[] = unsetFragments(a.unset);
   // Clearable string fields: undefined -> skip, "" -> `!field`, else `field=value`.
   const put = (key: string, val: string | undefined): void => {
     if (val === undefined) return;
@@ -539,6 +542,7 @@ export const firewallFilterTools: ToolModule = [
       'tcp_flags: RouterOS flag expression e.g. "syn,!ack". ' +
       'Pass "" to clear an optional field (e.g. src_address="").',
     inputSchema: {
+      unset: unsetProperties,
       rule_id: z.string(),
       chain: z.string().optional(),
       action: z.string().optional(),

@@ -1,4 +1,5 @@
 /** IPv6 Neighbor Discovery / Router Advertisements — `/ipv6 nd` and `/ipv6 nd prefix`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -152,6 +153,7 @@ export const ipv6NdTools: ToolModule = [
       "For changes to advertised prefixes use add_ipv6_nd_prefix or remove_ipv6_nd_prefix. " +
       "Returns the updated entry's full detail.",
     inputSchema: {
+      unset: unsetProperties,
       nd_id: z.string().describe("Interface name (e.g. 'all', 'ether1') or '.id'"),
       ra_interval: z.string().optional(),
       ra_delay: z.string().optional(),
@@ -193,7 +195,7 @@ export const ipv6NdTools: ToolModule = [
       if (a.comment !== undefined) cmd.raw(`comment=${quoteValue(a.comment)}`);
       if (a.disabled !== undefined) cmd.raw(`disabled=${yesno(a.disabled)}`);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

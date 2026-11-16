@@ -3,6 +3,14 @@
   "title": "update_ipv6_pool",
   "type": "object",
   "properties": {
+    "unset": {
+      "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      }
+    },
     "name": {
       "type": "string"
     },

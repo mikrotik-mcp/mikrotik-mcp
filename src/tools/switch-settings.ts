@@ -1,4 +1,5 @@
 /** Switch chip settings — `/interface ethernet switch`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
@@ -79,6 +80,7 @@ export const switchSettingsTools: ToolModule = [
       "Pass mirror_source / mirror_target / mirror_egress='none' to disable mirroring.\n\n" +
       "Returns updated switch details on success.",
     inputSchema: {
+      unset: unsetProperties,
       switch_id: z.string().describe("Switch name (e.g. 'switch1') or RouterOS '.id'"),
       name: z.string().optional().describe("Rename the switch"),
       cpu_flow_control: z.boolean().optional(),
@@ -112,7 +114,7 @@ export const switchSettingsTools: ToolModule = [
         .opt("mirror-egress-target", a.mirror_egress_target)
         .bool("switch-all-ports", a.switch_all_ports);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

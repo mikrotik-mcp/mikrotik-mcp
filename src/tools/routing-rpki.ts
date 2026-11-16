@@ -1,4 +1,5 @@
 /** RPKI — `/routing rpki` (BGP origin-validation sessions) — RouterOS v7. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -99,6 +100,7 @@ export const routingRpkiTools: ToolModule = [
       "`disabled`. To toggle enabled/disabled only, prefer `set_rpki_session_enabled`. Returns the updated session " +
       "detail.",
     inputSchema: {
+      unset: unsetProperties,
       session_id: z.string().describe('Session id, e.g. "*1"'),
       address: z.string().optional(),
       port: z.number().int().optional(),
@@ -120,7 +122,7 @@ export const routingRpkiTools: ToolModule = [
       if (a.comment !== undefined) cmd.set("comment", a.comment);
       if (a.disabled !== undefined) cmd.bool("disabled", a.disabled);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

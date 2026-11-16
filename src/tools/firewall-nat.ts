@@ -1,4 +1,5 @@
 /** Firewall NAT rules — `/ip firewall nat`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -10,6 +11,7 @@ import {
   isEmpty,
   placeBeforeError,
   Cmd,
+  unsetFragments,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
@@ -21,6 +23,7 @@ const resolveNatRuleId = ruleResolver("/ip firewall nat");
 async function updateNatRule(
   a: {
     rule_id: string;
+    unset?: string[];
     chain?: string;
     action?: string;
     src_address?: string;
@@ -83,7 +86,7 @@ async function updateNatRule(
 ): Promise<string> {
   ctx.info(`Updating NAT rule: rule_id=${a.rule_id}`);
 
-  const updates: string[] = [];
+  const updates: string[] = unsetFragments(a.unset);
   // Clearable string fields: undefined -> skip, "" -> `!field`, else `field=value`.
   const put = (key: string, val: string | undefined): void => {
     if (val === undefined) return;
@@ -456,6 +459,7 @@ export const firewallNatTools: ToolModule = [
       'to_ports: single port or range e.g. "8080" or "8080-8090". ' +
       'Pass "" to clear an optional field.',
     inputSchema: {
+      unset: unsetProperties,
       rule_id: z.string(),
       chain: z.string().optional(),
       action: z.string().optional(),

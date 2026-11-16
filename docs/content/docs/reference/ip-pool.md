@@ -54,13 +54,14 @@ Fetches full detail for a single named IPv4 pool (`/ip pool print detail`) inclu
 
 Modifies an existing IPv4 pool (`/ip pool set`) — rename it, replace its full ranges string, update the next-pool chain reference, or set a comment. Omit a field to leave it unchanged; pass `""` (empty string) for `next_pool` to clear the chained-pool reference. Ranges use hyphen notation e.g. `192.168.1.1-192.168.1.100`, multiple ranges comma-separated: `10.0.0.1-10.0.0.50,10.0.0.100-10.0.0.120`. To append ranges without knowing the current set use `expand_ip_pool`. Returns the updated pool detail.
 
-| Parameter   | Required | Definition                                                                                                                                                  |
-| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`      | Yes      | `{"type":"string"}`                                                                                                                                         |
-| `new_name`  | No       | `{"type":"string"}`                                                                                                                                         |
-| `ranges`    | No       | Hyphen-separated range(s) e.g. "192.168.1.1-192.168.1.100". Multiple ranges comma-separated: "10.0.0.1-10.0.0.50,10.0.0.100-10.0.0.120" `{"type":"string"}` |
-| `next_pool` | No       | `{"type":"string"}`                                                                                                                                         |
-| `comment`   | No       | `{"type":"string"}`                                                                                                                                         |
+| Parameter   | Required | Definition                                                                                                                                                                                                                                                   |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`     | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`      | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `new_name`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `ranges`    | No       | Hyphen-separated range(s) e.g. "192.168.1.1-192.168.1.100". Multiple ranges comma-separated: "10.0.0.1-10.0.0.50,10.0.0.100-10.0.0.120" `{"type":"string"}`                                                                                                  |
+| `next_pool` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
 
 ## remove_ip_pool
 

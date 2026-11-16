@@ -1,4 +1,5 @@
 /** Routing Router-ID — `/routing id` (RouterOS v7). */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -120,6 +121,7 @@ export const routingIdTools: ToolModule = [
       "For updating IPv4 routes use `update_route`; for policy routing rules use `update_routing_rule`. " +
       "Returns the updated instance's full detail.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Existing Router-ID instance name"),
       id: z.string().optional().describe('IPv4 router-id, or "" to clear'),
       select_dynamic_id: z.string().optional().describe('Interface/loopback name, or "" to clear'),
@@ -141,7 +143,7 @@ export const routingIdTools: ToolModule = [
       if (a.comment !== undefined) cmd.set("comment", a.comment);
       if (a.disabled !== undefined) cmd.bool("disabled", a.disabled);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

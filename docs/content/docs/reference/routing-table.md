@@ -51,12 +51,13 @@ Creates a named routing table (`/routing table add`) on RouterOS v7 — establis
 
 Modifies an existing routing table (`/routing table set [find name=…]`) — changes its `fib` flag, `comment`, or `disabled` state. To create a new table use `add_routing_table`; to toggle only the enabled/disabled state use `set_routing_table_enabled`. No-ops safely if no optional arguments are provided. Returns the updated table's full detail record on success.
 
-| Parameter  | Required | Definition                                       |
-| ---------- | -------- | ------------------------------------------------ |
-| `name`     | Yes      | Existing routing table name `{"type":"string"}`  |
-| `fib`      | No       | Install routes into the FIB `{"type":"boolean"}` |
-| `comment`  | No       | `{"type":"string"}`                              |
-| `disabled` | No       | `{"type":"boolean"}`                             |
+| Parameter  | Required | Definition                                                                                                                                                                                                                                                   |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`    | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`     | Yes      | Existing routing table name `{"type":"string"}`                                                                                                                                                                                                              |
+| `fib`      | No       | Install routes into the FIB `{"type":"boolean"}`                                                                                                                                                                                                             |
+| `comment`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled` | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_routing_table
 

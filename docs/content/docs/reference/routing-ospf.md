@@ -59,21 +59,22 @@ Create an OSPF instance (`/routing ospf instance add`) — the top-level OSPF pr
 
 Update an existing OSPF instance (`/routing ospf instance set`) by name — change router-id, redistribution list, import/export filter chains, originate-default policy, comment, or disabled state. Only supplied fields are modified; omitting a field leaves it unchanged. `name` identifies the target instance (use list_ospf_instances to find names). Returns the updated instance detail. To remove an instance entirely use remove_ospf_instance.
 
-| Parameter           | Required | Definition                                                                                                        |
-| ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| `name`              | Yes      | Existing OSPF instance name `{"type":"string"}`                                                                   |
-| `router_id`         | No       | `{"type":"string"}`                                                                                               |
-| `redistribute`      | No       | `{"type":"string"}`                                                                                               |
-| `in_filter_chain`   | No       | `{"type":"string"}`                                                                                               |
-| `out_filter_chain`  | No       | `{"type":"string"}`                                                                                               |
-| `originate_default` | No       | `{"type":"string"}`                                                                                               |
-| `domain_id`         | No       | OSPF domain ID (MPLS VPN PE-CE OSPF) `{"type":"string"}`                                                          |
-| `domain_tag`        | No       | OSPF domain tag (MPLS VPN PE-CE OSPF) `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `use_dn`            | No       | Use/ignore DN bit on OSPF routes (MPLS VPN) `{"type":"boolean"}`                                                  |
-| `mpls_te_area`      | No       | Area used for MPLS traffic engineering `{"type":"string"}`                                                        |
-| `mpls_te_address`   | No       | Router address advertised for MPLS TE `{"type":"string"}`                                                         |
-| `comment`           | No       | `{"type":"string"}`                                                                                               |
-| `disabled`          | No       | `{"type":"boolean"}`                                                                                              |
+| Parameter           | Required | Definition                                                                                                                                                                                                                                                   |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`             | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`              | Yes      | Existing OSPF instance name `{"type":"string"}`                                                                                                                                                                                                              |
+| `router_id`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `redistribute`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `in_filter_chain`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `out_filter_chain`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `originate_default` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `domain_id`         | No       | OSPF domain ID (MPLS VPN PE-CE OSPF) `{"type":"string"}`                                                                                                                                                                                                     |
+| `domain_tag`        | No       | OSPF domain tag (MPLS VPN PE-CE OSPF) `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                            |
+| `use_dn`            | No       | Use/ignore DN bit on OSPF routes (MPLS VPN) `{"type":"boolean"}`                                                                                                                                                                                             |
+| `mpls_te_area`      | No       | Area used for MPLS traffic engineering `{"type":"string"}`                                                                                                                                                                                                   |
+| `mpls_te_address`   | No       | Router address advertised for MPLS TE `{"type":"string"}`                                                                                                                                                                                                    |
+| `comment`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`          | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_ospf_instance
 

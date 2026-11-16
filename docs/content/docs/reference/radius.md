@@ -67,24 +67,25 @@ Retrieves full detail of a single RADIUS server entry (`/radius print detail whe
 
 Updates one or more fields on an existing RADIUS server entry (`/radius set <id>`) — use to change the address, shared secret, services, ports, timeout, realm, or enabled state without recreating the entry. The `radius_id` is the `.id` returned by `list_radius_servers`. Returns the updated entry's full detail with the shared secret redacted. To create a new entry use `add_radius_server`; to toggle enabled state only use `enable_radius_server` or `disable_radius_server`.
 
-| Parameter             | Required | Definition                                                                                            |
-| --------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
-| `radius_id`           | Yes      | RADIUS entry internal .id, e.g. '*1' `{"type":"string"}`                                              |
-| `address`             | No       | `{"type":"string"}`                                                                                   |
-| `secret`              | No       | `{"type":"string"}`                                                                                   |
-| `service`             | No       | `{"type":"string"}`                                                                                   |
-| `authentication_port` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                           |
-| `accounting_port`     | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                           |
-| `timeout`             | No       | `{"type":"string"}`                                                                                   |
-| `src_address`         | No       | `{"type":"string"}`                                                                                   |
-| `realm`               | No       | `{"type":"string"}`                                                                                   |
-| `called_id`           | No       | `{"type":"string"}`                                                                                   |
-| `domain`              | No       | `{"type":"string"}`                                                                                   |
-| `protocol`            | No       | Transport protocol used to reach the server (default udp) `{"type":"string","enum":["udp","radsec"]}` |
-| `certificate`         | No       | Certificate name to present when protocol is radsec `{"type":"string"}`                               |
-| `accounting_backup`   | No       | Mark this entry as a backup accounting server `{"type":"boolean"}`                                    |
-| `comment`             | No       | `{"type":"string"}`                                                                                   |
-| `disabled`            | No       | `{"type":"boolean"}`                                                                                  |
+| Parameter             | Required | Definition                                                                                                                                                                                                                                                   |
+| --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`               | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `radius_id`           | Yes      | RADIUS entry internal .id, e.g. '*1' `{"type":"string"}`                                                                                                                                                                                                     |
+| `address`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `secret`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `service`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `authentication_port` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `accounting_port`     | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `timeout`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `realm`               | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `called_id`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `domain`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `protocol`            | No       | Transport protocol used to reach the server (default udp) `{"type":"string","enum":["udp","radsec"]}`                                                                                                                                                        |
+| `certificate`         | No       | Certificate name to present when protocol is radsec `{"type":"string"}`                                                                                                                                                                                      |
+| `accounting_backup`   | No       | Mark this entry as a backup accounting server `{"type":"boolean"}`                                                                                                                                                                                           |
+| `comment`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`            | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_radius_server
 

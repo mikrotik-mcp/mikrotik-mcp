@@ -6,7 +6,7 @@ description: "Terraform-style dry-run: preview intended commands (risk, lock-out
 ## Tools
 
 - [Plan RouterOS Changes (Dry-Run Preview)](#plan_changes)
-- [Apply RouterOS Change Plan in Safe Mode](#apply_plan)
+- [Apply RouterOS Change Plan](#apply_plan)
 
 ## plan_changes
 
@@ -21,12 +21,13 @@ Parses a set of intended RouterOS CLI commands locally — without contacting th
 
 ## apply_plan
 
-**Apply RouterOS Change Plan in Safe Mode** · Risk: **dangerous**
+**Apply RouterOS Change Plan** · Risk: **dangerous**
 
-Executes intended RouterOS commands inside RouterOS Safe Mode (activated by Ctrl+X over an interactive SSH shell) and reports the exact unified diff of what changed, computed from `/export terse` snapshots captured before and after execution. With confirm=false (default) it applies all steps, captures the diff, then rolls everything back — a true dry-run that shows precisely what would change without persisting anything. With confirm=true it commits permanently, but ONLY after verifying the device still responds to `/system identity print` — a change that would lock you out auto-reverts instead of sticking. Steps execute in the same safe order that plan_changes computes (additive before destructive); if any step returns a RouterOS error the entire plan rolls back immediately. Safe Mode requires SSH — not available on MAC-Telnet devices. For a no-device preview use plan_changes instead. ALWAYS call capture_config_snapshot BEFORE this tool to record a restore point — it stores a local `/export` on the MCP host (~/.mikrotik-mcp/snapshots.db), adding no load to the device's disk and leaving nothing to remove on the router; after the change, diff_config_snapshots (from=latest, to=live) confirms what changed. Returns the plan summary, per-step execution log, unified diff, and commit/rollback outcome.
+Executes intended RouterOS commands and reports the exact unified diff of what changed, computed from `/export terse` captured before and after on a separate connection. Default (use_safe_mode=true): the steps run inside RouterOS Safe Mode (Ctrl+X over an interactive SSH shell). With confirm=false (default) it applies all steps, captures the diff, then rolls everything back — a true dry-run. With confirm=true it commits, but ONLY after a fresh connection to the device still works — a change that would lock you out reverts instead of sticking. If any step fails, or the Safe Mode session times out, the session is closed (RouterOS reverts uncommitted changes), the real device state is read back and compared with the pre-change export, and the result is reported; this tool never leaves a Safe Mode session open and needs no follow-up tool to recover. use_safe_mode=false (only when the user explicitly asks to write without Safe Mode): stores a restore-point snapshot on the MCP host, runs the steps directly (each one is permanent at once, there is no automatic rollback and no dry-run, confirm=true is required), stops at the first error, then reads back and diffs. This mode also works on MAC-Telnet devices; Safe Mode requires SSH. Steps execute in the same safe order that plan_changes computes (additive before destructive). For a no-device preview use plan_changes. Returns the plan summary, per-step log, unified diff, and the outcome.
 
-| Parameter  | Required | Definition                                                                                                            |
-| ---------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
-| `commands` | No       | `{"type":"array","items":{"type":"string"}}`                                                                          |
-| `script`   | No       | `{"type":"string"}`                                                                                                   |
-| `confirm`  | Yes      | false = apply, show diff, roll back (dry-run). true = commit if still reachable. `{"default":false,"type":"boolean"}` |
+| Parameter       | Required | Definition                                                                                                                                                                                 |
+| --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `commands`      | No       | `{"type":"array","items":{"type":"string"}}`                                                                                                                                               |
+| `script`        | No       | `{"type":"string"}`                                                                                                                                                                        |
+| `confirm`       | Yes      | false = apply, show diff, roll back (dry-run). true = commit if still reachable. `{"default":false,"type":"boolean"}`                                                                      |
+| `use_safe_mode` | Yes      | false = write directly without Safe Mode (snapshot first, read-back diff after, no automatic rollback). Use only when the user explicitly asks for it. `{"default":true,"type":"boolean"}` |

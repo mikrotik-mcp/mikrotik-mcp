@@ -84,37 +84,38 @@ Fetches full detail of a single IPv6 raw rule (`/ipv6 firewall raw print detail`
 
 Modifies fields of an existing IPv6 raw rule (`/ipv6 firewall raw set`) without deleting and recreating it. Use to change chain, action, match criteria (src/dst address, port, protocol, interface, address list), comment, log settings, or enabled state. To reorder a rule use move_ipv6_raw_rule; to toggle only the enabled state use enable_ipv6_raw_rule or disable_ipv6_raw_rule. rule_id takes the .id from list_ipv6_raw_rules. Pass "" for any optional string field to clear it. Returns the updated rule's full details.
 
-| Parameter            | Required | Definition           |
-| -------------------- | -------- | -------------------- |
-| `rule_id`            | Yes      | `{"type":"string"}`  |
-| `chain`              | No       | `{"type":"string"}`  |
-| `action`             | No       | `{"type":"string"}`  |
-| `src_address`        | No       | `{"type":"string"}`  |
-| `dst_address`        | No       | `{"type":"string"}`  |
-| `src_port`           | No       | `{"type":"string"}`  |
-| `dst_port`           | No       | `{"type":"string"}`  |
-| `port`               | No       | `{"type":"string"}`  |
-| `protocol`           | No       | `{"type":"string"}`  |
-| `in_interface`       | No       | `{"type":"string"}`  |
-| `out_interface`      | No       | `{"type":"string"}`  |
-| `in_interface_list`  | No       | `{"type":"string"}`  |
-| `out_interface_list` | No       | `{"type":"string"}`  |
-| `src_address_list`   | No       | `{"type":"string"}`  |
-| `dst_address_list`   | No       | `{"type":"string"}`  |
-| `src_address_type`   | No       | `{"type":"string"}`  |
-| `dst_address_type`   | No       | `{"type":"string"}`  |
-| `src_mac_address`    | No       | `{"type":"string"}`  |
-| `hop_limit`          | No       | `{"type":"string"}`  |
-| `tcp_flags`          | No       | `{"type":"string"}`  |
-| `tcp_mss`            | No       | `{"type":"string"}`  |
-| `packet_size`        | No       | `{"type":"string"}`  |
-| `dscp`               | No       | `{"type":"string"}`  |
-| `ipsec_policy`       | No       | `{"type":"string"}`  |
-| `limit`              | No       | `{"type":"string"}`  |
-| `comment`            | No       | `{"type":"string"}`  |
-| `disabled`           | No       | `{"type":"boolean"}` |
-| `log`                | No       | `{"type":"boolean"}` |
-| `log_prefix`         | No       | `{"type":"string"}`  |
+| Parameter            | Required | Definition                                                                                                                                                                                                                                                   |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`              | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `rule_id`            | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `chain`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `action`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_address`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_port`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_port`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `port`               | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `protocol`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `in_interface`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `out_interface`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `in_interface_list`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `out_interface_list` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address_list`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_address_list`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_address_type`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dst_address_type`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `src_mac_address`    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `hop_limit`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `tcp_flags`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `tcp_mss`            | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `packet_size`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dscp`               | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `ipsec_policy`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `limit`              | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`            | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`           | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `log`                | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `log_prefix`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
 
 ## remove_ipv6_raw_rule
 

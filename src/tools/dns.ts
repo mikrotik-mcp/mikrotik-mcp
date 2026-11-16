@@ -1,11 +1,20 @@
 /** DNS server, static records, cache, and regexp — `/ip dns`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { dnsResolveCommand } from "../core/dns-resolve";
 import type { ToolContext } from "../core/context";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  yesno,
+  whereClause,
+  quoteValue,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  unsetFragments,
+} from "../core/routeros";
 
 interface AddDnsStaticArgs {
   name: string;
@@ -31,6 +40,7 @@ interface AddDnsStaticArgs {
 
 interface UpdateDnsStaticArgs {
   entry_id: string;
+  unset?: string[];
   name?: string;
   type?: string;
   address?: string;
@@ -112,7 +122,7 @@ async function addDnsStatic(a: AddDnsStaticArgs, ctx: ToolContext): Promise<stri
 async function updateDnsStatic(a: UpdateDnsStaticArgs, ctx: ToolContext): Promise<string> {
   ctx.info(`Updating static DNS entry: entry_id=${a.entry_id}`);
 
-  const updates: string[] = [];
+  const updates: string[] = unsetFragments(a.unset);
   if (a.name) updates.push(`name=${quoteValue(a.name)}`);
   if (a.type !== undefined) updates.push(a.type === "" ? "!type" : `type=${quoteValue(a.type)}`);
   if (a.address !== undefined)
@@ -376,6 +386,7 @@ export const dnsTools: ToolModule = [
       "disable_dns_static. " +
       "Returns the updated entry's full detail.",
     inputSchema: {
+      unset: unsetProperties,
       entry_id: z.string(),
       name: z.string().optional(),
       type: z

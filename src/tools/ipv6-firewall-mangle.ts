@@ -1,9 +1,17 @@
 /** IPv6 firewall mangle rules — `/ipv6 firewall mangle`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  quoteValue,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  unsetFragments,
+} from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
 import { executeRuleCreate, readCreatedRule } from "./_create-rule";
@@ -13,6 +21,7 @@ const resolveRuleId = ruleResolver("/ipv6 firewall mangle");
 async function updateMangleRule(
   a: {
     rule_id: string;
+    unset?: string[];
     chain?: string;
     action?: string;
     src_address?: string;
@@ -75,7 +84,7 @@ async function updateMangleRule(
 ): Promise<string> {
   ctx.info(`Updating IPv6 firewall mangle rule: rule_id=${a.rule_id}`);
 
-  const updates: string[] = [];
+  const updates: string[] = unsetFragments(a.unset);
   const put = (key: string, val: string | undefined): void => {
     if (val === undefined) return;
     updates.push(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
@@ -409,6 +418,7 @@ export const ipv6FirewallMangleTools: ToolModule = [
       'Pass "" (empty string) for an optional field to clear it. ' +
       "Returns the updated rule's full detail.",
     inputSchema: {
+      unset: unsetProperties,
       rule_id: z.string(),
       chain: z.string().optional(),
       action: z.string().optional(),

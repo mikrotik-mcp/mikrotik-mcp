@@ -86,17 +86,21 @@ describe("Safe Mode interactive round trips", () => {
     return { manager, channel };
   }
 
-  test("lost Safe Mode protection fences subsequent writes and commit", async () => {
+  test("lost Safe Mode protection closes the session and leaves no sticky block", async () => {
     const writes: string[] = [];
     const { manager } = session((input, emit) => {
       writes.push(input);
       emit(`${input}\r\n[admin@Home] > `);
     });
     await expect(manager.execute("/test")).rejects.toThrow("protection was lost");
-    await expect(manager.execute("/second")).rejects.toThrow("uncertain");
-    expect((await manager.commit()).ok).toBe(false);
+    // Closed by itself: nothing to recover, and nothing more reaches that shell.
+    expect(manager.isActive).toBe(false);
+    expect(manager.requiresRecovery).toBe(false);
+    await expect(manager.execute("/second")).rejects.toThrow("NOT sent");
     expect(writes).toHaveLength(1);
-    expect(await manager.rollback()).toContain("unverified");
+    expect(manager.status()).toContain("closed automatically");
+    expect((await manager.commit()).message).toContain("closed automatically");
+    expect(await manager.rollback()).toContain("Nothing to roll back");
   });
 
   test("custom timeout validates bounds and enforces the absolute deadline", async () => {
@@ -152,8 +156,8 @@ describe("Safe Mode interactive round trips", () => {
     });
     expect((await manager.commit()).ok).toBe(false);
     expect(writes).not.toContain("\x18");
-    await expect(manager.execute("/test")).rejects.toThrow("uncertain");
-    await manager.rollback();
+    expect(manager.isActive).toBe(false);
+    await expect(manager.execute("/test")).rejects.toThrow("NOT sent");
   });
 
   test("completes read-only commands with the real CR-redrawn Safe Mode prompt", async () => {
@@ -233,7 +237,8 @@ describe("Safe Mode interactive round trips", () => {
       const result = manager.commit();
       await vi.advanceTimersByTimeAsync(8_000);
       expect((await result).ok).toBe(false);
-      expect(manager.isActive).toBe(true);
+      // No answer to the probe: close (RouterOS reverts) instead of staying stuck.
+      expect(manager.isActive).toBe(false);
       expect(writes).not.toContain("\x18");
     } finally {
       await manager.rollback();
@@ -256,8 +261,10 @@ describe("Safe Mode interactive round trips", () => {
     try {
       const result = manager.commit();
       await vi.advanceTimersByTimeAsync(8_000);
-      expect((await result).ok).toBe(false);
-      expect(manager.isActive).toBe(true);
+      const outcome = await result;
+      expect(outcome.ok).toBe(false);
+      expect(outcome.message).toContain("either saved or reverted");
+      expect(manager.isActive).toBe(false);
     } finally {
       await manager.rollback();
       vi.useRealTimers();
@@ -306,7 +313,7 @@ describe("Safe Mode interactive round trips", () => {
     }
   });
 
-  test("an ambiguous timeout fences queued commands and commit until rollback", async () => {
+  test("an ambiguous timeout closes the session; queued commands are not sent", async () => {
     vi.useFakeTimers();
     const writes: string[] = [];
     const { manager, channel } = session((input, emit) => {
@@ -318,14 +325,12 @@ describe("Safe Mode interactive round trips", () => {
       const queued = manager.execute("/tool sniffer stop").catch(String);
       await vi.advanceTimersByTimeAsync(30_000);
       expect(await first).toMatch(/Execution may have occurred/);
-      expect(await queued).toMatch(/uncertain|unverified/i);
+      expect(await first).toMatch(/closed automatically/);
+      expect(await queued).toMatch(/NOT sent/);
       expect(writes).toEqual(["/tool sniffer start\r"]);
-      expect(manager.isActive).toBe(true); // must not fall back to one-shot SSH
-      expect(manager.status()).toMatch(/uncertain|unverified/i);
-      const committed = manager.commit();
-      await vi.advanceTimersByTimeAsync(8_000);
-      expect((await committed).ok).toBe(false);
-      expect(writes).toEqual(["/tool sniffer start\r"]);
+      expect(manager.isActive).toBe(false);
+      expect(manager.requiresRecovery).toBe(false);
+      expect(manager.status()).toMatch(/closed automatically/);
       expect(channel.listenerCount("data")).toBe(0);
     } finally {
       await manager.rollback();
@@ -410,6 +415,12 @@ describe("unexpected session drop — no false success", () => {
     (mgr as unknown as { handleUnexpectedDrop: () => void }).handleUnexpectedDrop();
     return mgr;
   }
+
+  test("a drop is reported to the next write once, then writes are unblocked", async () => {
+    const mgr = droppedManager();
+    await expect(mgr.execute("/ip address remove 0")).rejects.toThrow("NOT sent");
+    expect(mgr.requiresRecovery).toBe(false);
+  });
 
   test("a drop clears active and records the revert", () => {
     const mgr = droppedManager();

@@ -25,3 +25,16 @@ export function interfaceName(description?: string): z.ZodString {
   const s = z.string().regex(NO_WHITESPACE, INTERFACE_NAME_MESSAGE);
   return description ? s.describe(description) : s;
 }
+
+/**
+ * `unset` input for `update_*` tools: properties to clear (RouterOS `!prop`),
+ * as opposed to setting them to a value. Names are validated here and again by
+ * `unsetFragments`, which builds the command fragment.
+ */
+export const unsetProperties = z
+  .array(z.string().regex(/^[a-z][a-z0-9_-]*$/, "Use a bare property name, e.g. 'dst-address'."))
+  .optional()
+  .describe(
+    "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] " +
+      "removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+  );

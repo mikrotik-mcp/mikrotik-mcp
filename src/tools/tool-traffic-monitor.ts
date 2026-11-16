@@ -1,4 +1,5 @@
 /** Traffic monitor — `/tool traffic-monitor` (threshold-triggered scripts). */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -129,6 +130,7 @@ export const trafficMonitorTools: ToolModule = [
       "Returns the updated entry's full detail. " +
       "To create a new entry use `add_traffic_monitor`.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string(),
       interface: z.string().optional(),
       traffic: Traffic.optional(),
@@ -150,7 +152,7 @@ export const trafficMonitorTools: ToolModule = [
       if (a.comment !== undefined) cmd.raw(`comment=${quoteValue(a.comment)}`);
       if (a.disabled !== undefined) cmd.raw(`disabled=${yesno(a.disabled)}`);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

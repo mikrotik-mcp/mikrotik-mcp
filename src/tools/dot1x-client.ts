@@ -1,4 +1,5 @@
 /** 802.1X supplicant — `/interface dot1x client`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -136,6 +137,7 @@ export const dot1xClientTools: ToolModule = [
       "Returns the updated entry's full detail after the change. To add a new supplicant entry use add_dot1x_client; " +
       "to delete one use remove_dot1x_client.",
     inputSchema: {
+      unset: unsetProperties,
       client_id: z.string().describe("Interface name or RouterOS '.id'"),
       eap_methods: z.string().optional(),
       identity: z.string().optional(),
@@ -160,7 +162,7 @@ export const dot1xClientTools: ToolModule = [
       if (a.comment !== undefined) cmd.raw(`comment=${quoteValue(a.comment)}`);
       if (a.disabled !== undefined) cmd.raw(`disabled=${yesno(a.disabled)}`);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

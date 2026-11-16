@@ -1,4 +1,5 @@
 /** OSPF — `/routing ospf` (instance, area, area-range, interface-template, neighbor, lsa) — RouterOS v7. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -100,6 +101,7 @@ export const routingOspfTools: ToolModule = [
       "`name` identifies the target instance (use list_ospf_instances to find names). " +
       "Returns the updated instance detail. To remove an instance entirely use remove_ospf_instance.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Existing OSPF instance name"),
       router_id: z.string().optional(),
       redistribute: z.string().optional(),
@@ -131,7 +133,7 @@ export const routingOspfTools: ToolModule = [
       if (a.comment !== undefined) cmd.set("comment", a.comment);
       if (a.disabled !== undefined) cmd.bool("disabled", a.disabled);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

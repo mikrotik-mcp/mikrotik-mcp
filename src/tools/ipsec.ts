@@ -5,6 +5,7 @@
  * (auth), proposals (phase 2), and policies, each with CRUD, plus monitoring
  * (active-peers, installed-sa, flush, statistics).
  */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -123,6 +124,7 @@ export const ipsecTools: ToolModule = [
       " update_ipsec_peer. Supply only the fields to change; unchanged fields are left as-is." +
       " Returns the updated profile detail on success.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Current name of the IPsec profile to update"),
       new_name: z.string().optional(),
       dh_group: z.string().optional(),
@@ -147,6 +149,7 @@ export const ipsecTools: ToolModule = [
         .bool("nat-traversal", a.nat_traversal)
         .opt("dpd-interval", a.dpd_interval)
         .opt("dpd-maximum-failures", a.dpd_maximum_failures)
+        .unset(a.unset)
         .build();
 
       if (cmd === base) return "No updates specified.";
@@ -315,6 +318,7 @@ export const ipsecTools: ToolModule = [
       " Supply only the fields to change; unchanged fields are left as-is." +
       " Returns the updated peer detail on success.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Current name of the IPsec peer to update"),
       new_name: z.string().optional(),
       address: z.string().optional(),
@@ -339,6 +343,7 @@ export const ipsecTools: ToolModule = [
         .bool("passive", a.passive)
         .opt("comment", a.comment)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
 
       if (cmd === base) return "No updates specified.";
@@ -635,6 +640,7 @@ export const ipsecTools: ToolModule = [
       " Supply only the fields to change; unchanged fields are left as-is." +
       " Returns the updated proposal detail on success.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Current name of the IPsec proposal to update"),
       new_name: z.string().optional(),
       auth_algorithms: z.string().optional(),
@@ -653,6 +659,7 @@ export const ipsecTools: ToolModule = [
         .opt("pfs-group", a.pfs_group)
         .opt("lifetime", a.lifetime)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
 
       if (cmd === base) return "No updates specified.";

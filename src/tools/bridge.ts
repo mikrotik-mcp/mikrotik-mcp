@@ -7,7 +7,7 @@
  * tool-module pattern from `vlan.ts`.
  */
 import { z } from "zod";
-import { interfaceName } from "../core/schema";
+import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
@@ -210,6 +210,7 @@ export const bridgeTools: ToolModule = [
       "for VLAN table entries use `add_bridge_vlan`. " +
       "Identified by the current bridge `name`; supply only the fields you want to change.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string().describe("Current name of the bridge to update"),
       new_name: interfaceName().optional().describe("Rename the bridge to this (no spaces)."),
       comment: z.string().optional(),
@@ -306,10 +307,11 @@ export const bridgeTools: ToolModule = [
         .opt("forward-delay", a.forward_delay)
         .opt("max-message-age", a.max_message_age)
         .opt("transmit-hold-count", a.transmit_hold_count)
+        .unset(a.unset)
         .build();
 
       // No updates were supplied -> the command would just be the `set [find ...]` stem.
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update bridge: ${result}`;

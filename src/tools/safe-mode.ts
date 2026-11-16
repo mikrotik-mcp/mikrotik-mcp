@@ -17,7 +17,7 @@ export const safeModeTools: ToolModule = [
     title: "Set Safe Mode Command Timeouts",
     annotations: WRITE,
     description:
-      "Set per-device MCP Safe Mode command deadlines before or during a session. Applies only to subsequent commands. Increase for slow exports, decrease for faster failure detection. Does not change RouterOS rollback timing, MCP client deadlines, or unblock an uncertain session. Settings are in-memory and reset on MCP restart. Defaults: command 120000ms, idle 15000ms.",
+      "Set per-device MCP Safe Mode command deadlines before or during a session. Applies only to subsequent commands. Increase for slow exports, decrease for faster failure detection. Does not change RouterOS rollback timing or MCP client deadlines. Settings are in-memory and reset on MCP restart. Defaults: command 120000ms, idle 15000ms.",
     inputSchema: {
       commandTimeoutMs: z
         .number()
@@ -44,7 +44,7 @@ export const safeModeTools: ToolModule = [
     title: "Get Safe Mode Session Status",
     annotations: READ,
     description:
-      "Queries the Safe Mode SSH session state for the targeted device — reports whether a Safe Mode window is currently open (active) or closed." +
+      "Queries the Safe Mode SSH session state for the targeted device — reports whether a Safe Mode window is currently open (active) or closed, and why the last session was closed automatically, if it was." +
       " Safe Mode (RouterOS Ctrl+X) stages all configuration changes in memory for automatic revert on disconnect; this tool does not modify any state." +
       " Returns a status string indicating whether Safe Mode is currently active." +
       " Use enable_safe_mode to open a session, commit_safe_mode to persist staged changes, or rollback_safe_mode to discard them.",
@@ -67,7 +67,10 @@ export const safeModeTools: ToolModule = [
     async handler(_a, ctx) {
       const device = resolveDeviceName(ctx.device);
       ctx.info(`[${device}] Enabling MikroTik safe mode`);
-      return getSafeModeManager(device).enable();
+      const result = await getSafeModeManager(device).enable();
+      // A failed enable is a tool error, not a success that carries error text.
+      if (result.startsWith("Error")) throw new Error(result.replace(/^Error:\s*/, ""));
+      return result;
     },
   }),
 
@@ -83,7 +86,10 @@ export const safeModeTools: ToolModule = [
     async handler(_a, ctx) {
       const device = resolveDeviceName(ctx.device);
       ctx.info(`[${device}] Committing safe mode changes`);
-      return (await getSafeModeManager(device).commit()).message;
+      const result = await getSafeModeManager(device).commit();
+      // Nothing was saved: report it as a tool error so it cannot read as success.
+      if (!result.ok) throw new Error(result.message);
+      return result.message;
     },
   }),
 
@@ -92,7 +98,7 @@ export const safeModeTools: ToolModule = [
     title: "Roll Back Safe Mode Changes",
     annotations: WRITE,
     description:
-      "Closes the targeted Safe Mode SSH session to request RouterOS automatic rollback. Completion is unverified and may be delayed; compare live configuration against a backup before retrying writes." +
+      "Closes the targeted Safe Mode SSH session to request RouterOS automatic rollback. Completion is unverified and may be delayed; compare live configuration against a backup before retrying writes. A session that times out or loses its prompt is closed automatically, so this tool is never required to recover." +
       " Use this when staged changes are incorrect or need to be abandoned without saving." +
       " To persist staged changes instead, use commit_safe_mode." +
       " Check current Safe Mode state with safe_mode_status.",

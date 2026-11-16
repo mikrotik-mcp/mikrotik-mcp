@@ -330,7 +330,10 @@ export class SafeModeManager {
         };
       }
       if (!this.active || !this.channel) {
-        return { ok: true, message: "Safe mode is not active. Nothing to commit." };
+        const last = this.lastClosure
+          ? ` The last session was closed automatically (${this.lastClosure}).`
+          : "";
+        return { ok: true, message: `Safe mode is not active. Nothing to commit.${last}` };
       }
 
       // PROBE FIRST with a sentinel round-trip. A previous commit may have

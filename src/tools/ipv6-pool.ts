@@ -1,4 +1,5 @@
 /** IPv6 address/prefix pools — `/ipv6 pool`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -140,6 +141,7 @@ export const ipv6PoolTools: ToolModule = [
       'Pass comment="" to clear the comment. ' +
       "Returns the updated pool's full detail after the change.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string(),
       new_name: z.string().optional(),
       prefix: z.string().optional(),
@@ -155,7 +157,7 @@ export const ipv6PoolTools: ToolModule = [
       if (a.prefix_length !== undefined) cmd.set("prefix-length", a.prefix_length);
       if (a.comment !== undefined) cmd.raw(`comment=${quoteValue(a.comment)}`);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

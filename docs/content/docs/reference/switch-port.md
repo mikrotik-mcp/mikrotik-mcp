@@ -43,10 +43,11 @@ vlan_header: how the egress VLAN tag is handled — 'leave-as-is',
 'always-strip', or 'add-if-missing'.
 default_vlan_id: PVID for untagged ingress ('auto', 'none', or a number).
 
-| Parameter         | Required | Definition                                                                 |
-| ----------------- | -------- | -------------------------------------------------------------------------- |
-| `port_id`         | Yes      | Port name (e.g. 'ether1') or RouterOS '.id' `{"type":"string"}`            |
-| `default_vlan_id` | No       | PVID: 'auto', 'none', or a VLAN id number `{"type":"string"}`              |
-| `vlan_mode`       | No       | `{"type":"string","enum":["disabled","optional","enabled","secure"]}`      |
-| `vlan_header`     | No       | `{"type":"string","enum":["leave-as-is","always-strip","add-if-missing"]}` |
-| `force_vlan_id`   | No       | `{"type":"boolean"}`                                                       |
+| Parameter         | Required | Definition                                                                                                                                                                                                                                                   |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`           | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `port_id`         | Yes      | Port name (e.g. 'ether1') or RouterOS '.id' `{"type":"string"}`                                                                                                                                                                                              |
+| `default_vlan_id` | No       | PVID: 'auto', 'none', or a VLAN id number `{"type":"string"}`                                                                                                                                                                                                |
+| `vlan_mode`       | No       | `{"type":"string","enum":["disabled","optional","enabled","secure"]}`                                                                                                                                                                                        |
+| `vlan_header`     | No       | `{"type":"string","enum":["leave-as-is","always-strip","add-if-missing"]}`                                                                                                                                                                                   |
+| `force_vlan_id`   | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |

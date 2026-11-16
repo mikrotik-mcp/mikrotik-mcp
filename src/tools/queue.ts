@@ -5,6 +5,7 @@
  * rate-limit queues, each with the full create/list/get/update/remove lifecycle
  * (trees and simple queues additionally expose enable/disable).
  */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import type { ToolContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
@@ -245,6 +246,7 @@ export const queueTools: ToolModule = [
     description:
       "Modifies an existing queue discipline (`/queue type set [find name=...]`). Supports renaming (`new_name`) and changing CAKE- or PCQ-specific parameters (cake_flowmode, cake_nat, cake_overhead, pcq_rate, pcq_classifier, etc.). Does not change the queue `kind` — to switch algorithm, remove and recreate the type with `remove_queue_type` then `create_queue_type`. Returns updated detail; if no parameters are provided returns 'No updates specified.' Use `get_queue_type` to confirm current values first.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string(),
       new_name: z.string().optional(),
       cake_flowmode: z.string().optional(),
@@ -300,9 +302,10 @@ export const queueTools: ToolModule = [
         .opt("pcq-dst-address-mask", a.pcq_dst_address_mask)
         .opt("pcq-src-address6-mask", a.pcq_src_address6_mask)
         .opt("pcq-dst-address6-mask", a.pcq_dst_address6_mask)
+        .unset(a.unset)
         .build();
 
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update queue type: ${result}`;
@@ -435,6 +438,7 @@ export const queueTools: ToolModule = [
     description:
       "Modifies an existing queue tree node (`/queue tree set [find name=...]`). Accepts `new_name`, `parent`, `queue` (qdisc reference from `create_queue_type`), `packet_mark`, bandwidth params (`max_limit`, `limit_at`, `burst_limit`, `burst_threshold` as RouterOS rate strings e.g. '10M', '512k', '1G'; `burst_time` e.g. '8s'), `priority` (1 highest – 8 lowest), `comment`, and `disabled`. Returns updated detail; if no parameters are specified returns 'No updates specified.' Use `get_queue_tree` to confirm current state before updating. For simple per-target queues use `update_simple_queue`.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string(),
       new_name: z.string().optional(),
       parent: z.string().optional(),
@@ -466,9 +470,10 @@ export const queueTools: ToolModule = [
         .opt("priority", a.priority)
         .opt("comment", a.comment)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
 
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update queue tree: ${result}`;
@@ -676,6 +681,7 @@ export const queueTools: ToolModule = [
     description:
       "Modifies an existing per-target rate-limiting entry (`/queue simple set [find name=...]`). Accepts `new_name`, `target` (IP/CIDR or interface e.g. '192.168.1.0/24', 'ether1'), `dst`, bandwidth params (`max_limit`, `limit_at`, `burst_limit`, `burst_threshold` as 'UL/DL' or single value e.g. '10M/10M', '5M'; `burst_time` e.g. '8s'), `queue` (qdisc reference), `parent`, `priority` (1 highest – 8 lowest), `packet_marks`, `comment`, and `disabled`. Returns updated detail; if no parameters are provided returns 'No updates specified.' Use `get_simple_queue` to confirm current state first. For hierarchical queue nodes use `update_queue_tree`.",
     inputSchema: {
+      unset: unsetProperties,
       name: z.string(),
       new_name: z.string().optional(),
       target: z
@@ -739,9 +745,10 @@ export const queueTools: ToolModule = [
         .opt("time", a.time)
         .opt("comment", a.comment)
         .bool("disabled", a.disabled)
+        .unset(a.unset)
         .build();
 
-      if (!cmd.includes("=", cmd.indexOf("]"))) return "No updates specified.";
+      if (!/[=!]/.test(cmd.slice(cmd.indexOf("]")))) return "No updates specified.";
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update simple queue: ${result}`;

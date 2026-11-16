@@ -45,16 +45,17 @@ Adds an RPKI RTR session (`/routing rpki add`) connecting to a validator cache f
 
 Modifies an existing RPKI RTR session (`/routing rpki set`) by its `.id`. Use `list_rpki_sessions` to obtain the `session_id` (e.g. "*1"). Updatable fields include `address`, `port`, interval timings (`refresh_interval`, `expire_interval`, `retry_interval`, e.g. "10m", "30s", "2h"), `comment`, and `disabled`. To toggle enabled/disabled only, prefer `set_rpki_session_enabled`. Returns the updated session detail.
 
-| Parameter          | Required | Definition                                                                  |
-| ------------------ | -------- | --------------------------------------------------------------------------- |
-| `session_id`       | Yes      | Session id, e.g. "*1" `{"type":"string"}`                                   |
-| `address`          | No       | `{"type":"string"}`                                                         |
-| `port`             | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `refresh_interval` | No       | `{"type":"string"}`                                                         |
-| `expire_interval`  | No       | `{"type":"string"}`                                                         |
-| `retry_interval`   | No       | `{"type":"string"}`                                                         |
-| `comment`          | No       | `{"type":"string"}`                                                         |
-| `disabled`         | No       | `{"type":"boolean"}`                                                        |
+| Parameter          | Required | Definition                                                                                                                                                                                                                                                   |
+| ------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`            | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `session_id`       | Yes      | Session id, e.g. "*1" `{"type":"string"}`                                                                                                                                                                                                                    |
+| `address`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `port`             | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `refresh_interval` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `expire_interval`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `retry_interval`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`         | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_rpki_session
 

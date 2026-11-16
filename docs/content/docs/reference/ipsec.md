@@ -75,18 +75,19 @@ Fetches full detail for a single IPsec phase-1 profile (`/ip ipsec profile print
 
 Updates an existing IPsec phase-1 profile (`/ip ipsec profile set`) by name — changes IKE algorithm, lifetime, NAT-T, or DPD settings without recreating the profile. For phase-2 algorithm changes use update_ipsec_proposal; for peer endpoint changes use update_ipsec_peer. Supply only the fields to change; unchanged fields are left as-is. Returns the updated profile detail on success.
 
-| Parameter              | Required | Definition                                                                  |
-| ---------------------- | -------- | --------------------------------------------------------------------------- |
-| `name`                 | Yes      | Current name of the IPsec profile to update `{"type":"string"}`             |
-| `new_name`             | No       | `{"type":"string"}`                                                         |
-| `dh_group`             | No       | `{"type":"string"}`                                                         |
-| `enc_algorithm`        | No       | `{"type":"string"}`                                                         |
-| `hash_algorithm`       | No       | `{"type":"string"}`                                                         |
-| `prf_algorithm`        | No       | `{"type":"string"}`                                                         |
-| `lifetime`             | No       | `{"type":"string"}`                                                         |
-| `nat_traversal`        | No       | `{"type":"boolean"}`                                                        |
-| `dpd_interval`         | No       | `{"type":"string"}`                                                         |
-| `dpd_maximum_failures` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
+| Parameter              | Required | Definition                                                                                                                                                                                                                                                   |
+| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`                | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`                 | Yes      | Current name of the IPsec profile to update `{"type":"string"}`                                                                                                                                                                                              |
+| `new_name`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dh_group`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `enc_algorithm`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `hash_algorithm`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `prf_algorithm`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `lifetime`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `nat_traversal`        | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `dpd_interval`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `dpd_maximum_failures` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
 
 ## remove_ipsec_profile
 
@@ -143,18 +144,19 @@ Fetches full detail for a single configured IPsec peer (`/ip ipsec peer print de
 
 Updates an existing IPsec peer entry (`/ip ipsec peer set`) by name — changes remote address, exchange mode, profile, local address, or passive flag without removing and recreating the peer. For IKE algorithm changes use update_ipsec_profile; for auth credential changes use create_ipsec_identity or remove_ipsec_identity (identities have no update tool). Supply only the fields to change; unchanged fields are left as-is. Returns the updated peer detail on success.
 
-| Parameter       | Required | Definition                                                                  |
-| --------------- | -------- | --------------------------------------------------------------------------- |
-| `name`          | Yes      | Current name of the IPsec peer to update `{"type":"string"}`                |
-| `new_name`      | No       | `{"type":"string"}`                                                         |
-| `address`       | No       | `{"type":"string"}`                                                         |
-| `profile`       | No       | `{"type":"string"}`                                                         |
-| `exchange_mode` | No       | `{"type":"string","enum":["main","aggressive","ike2"]}`                     |
-| `local_address` | No       | `{"type":"string"}`                                                         |
-| `port`          | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `passive`       | No       | `{"type":"boolean"}`                                                        |
-| `comment`       | No       | `{"type":"string"}`                                                         |
-| `disabled`      | No       | `{"type":"boolean"}`                                                        |
+| Parameter       | Required | Definition                                                                                                                                                                                                                                                   |
+| --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`         | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`          | Yes      | Current name of the IPsec peer to update `{"type":"string"}`                                                                                                                                                                                                 |
+| `new_name`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `address`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `profile`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `exchange_mode` | No       | `{"type":"string","enum":["main","aggressive","ike2"]}`                                                                                                                                                                                                      |
+| `local_address` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `port`          | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `passive`       | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `comment`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`      | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_ipsec_peer
 
@@ -251,15 +253,16 @@ Fetches full detail for a single IPsec phase-2 proposal (`/ip ipsec proposal pri
 
 Updates an existing IPsec phase-2 proposal (`/ip ipsec proposal set`) by name — changes ESP/AH auth algorithms, encryption algorithms, PFS group, or SA lifetime without recreating the proposal. For IKE/phase-1 algorithm changes use update_ipsec_profile. Supply only the fields to change; unchanged fields are left as-is. Returns the updated proposal detail on success.
 
-| Parameter         | Required | Definition                                                       |
-| ----------------- | -------- | ---------------------------------------------------------------- |
-| `name`            | Yes      | Current name of the IPsec proposal to update `{"type":"string"}` |
-| `new_name`        | No       | `{"type":"string"}`                                              |
-| `auth_algorithms` | No       | `{"type":"string"}`                                              |
-| `enc_algorithms`  | No       | `{"type":"string"}`                                              |
-| `pfs_group`       | No       | `{"type":"string"}`                                              |
-| `lifetime`        | No       | `{"type":"string"}`                                              |
-| `disabled`        | No       | `{"type":"boolean"}`                                             |
+| Parameter         | Required | Definition                                                                                                                                                                                                                                                   |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`           | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`            | Yes      | Current name of the IPsec proposal to update `{"type":"string"}`                                                                                                                                                                                             |
+| `new_name`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `auth_algorithms` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `enc_algorithms`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `pfs_group`       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `lifetime`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`        | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_ipsec_proposal
 

@@ -92,18 +92,19 @@ Returns full detail for a single User Manager RADIUS user (`/user-manager user p
 
 Modifies an existing User Manager RADIUS user (`/user-manager user set [find name=...]`) — change name, password, group, shared-users limit, RADIUS attributes, comment, or enabled/disabled state. Locate the user by its current `name` (from list_user_manager_users or get_user_manager_user). Returns the updated record with secrets redacted. To permanently delete the user use remove_user_manager_user.
 
-| Parameter      | Required | Definition                                                                  |
-| -------------- | -------- | --------------------------------------------------------------------------- |
-| `name`         | Yes      | Current name of the user to update `{"type":"string"}`                      |
-| `new_name`     | No       | `{"type":"string"}`                                                         |
-| `password`     | No       | `{"type":"string"}`                                                         |
-| `group`        | No       | `{"type":"string"}`                                                         |
-| `shared_users` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `attributes`   | No       | `{"type":"string"}`                                                         |
-| `caller_id`    | No       | Caller ID the user is restricted to (e.g. MAC) `{"type":"string"}`          |
-| `otp_secret`   | No       | Base32 OTP shared secret for two-factor auth `{"type":"string"}`            |
-| `comment`      | No       | `{"type":"string"}`                                                         |
-| `disabled`     | No       | `{"type":"boolean"}`                                                        |
+| Parameter      | Required | Definition                                                                                                                                                                                                                                                   |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`        | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`         | Yes      | Current name of the user to update `{"type":"string"}`                                                                                                                                                                                                       |
+| `new_name`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `password`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `group`        | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `shared_users` | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `attributes`   | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `caller_id`    | No       | Caller ID the user is restricted to (e.g. MAC) `{"type":"string"}`                                                                                                                                                                                           |
+| `otp_secret`   | No       | Base32 OTP shared secret for two-factor auth `{"type":"string"}`                                                                                                                                                                                             |
+| `comment`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`     | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_user_manager_user
 

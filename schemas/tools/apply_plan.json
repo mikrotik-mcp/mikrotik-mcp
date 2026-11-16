@@ -16,8 +16,13 @@
       "default": false,
       "description": "false = apply, show diff, roll back (dry-run). true = commit if still reachable.",
       "type": "boolean"
+    },
+    "use_safe_mode": {
+      "default": true,
+      "description": "false = write directly without Safe Mode (snapshot first, read-back diff after, no automatic rollback). Use only when the user explicitly asks for it.",
+      "type": "boolean"
     }
   },
-  "required": ["confirm"],
+  "required": ["confirm", "use_safe_mode"],
   "additionalProperties": false
 }

@@ -1,9 +1,17 @@
 /** IPv6 firewall raw rules — `/ipv6 firewall raw`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  quoteValue,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  unsetFragments,
+} from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
 import { executeRuleCreate, readCreatedRule } from "./_create-rule";
@@ -13,6 +21,7 @@ const resolveRuleId = ruleResolver("/ipv6 firewall raw");
 async function updateRawRule(
   a: {
     rule_id: string;
+    unset?: string[];
     chain?: string;
     action?: string;
     src_address?: string;
@@ -46,7 +55,7 @@ async function updateRawRule(
 ): Promise<string> {
   ctx.info(`Updating IPv6 firewall raw rule: rule_id=${a.rule_id}`);
 
-  const updates: string[] = [];
+  const updates: string[] = unsetFragments(a.unset);
   const put = (key: string, val: string | undefined): void => {
     if (val === undefined) return;
     updates.push(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
@@ -284,6 +293,7 @@ export const ipv6FirewallRawTools: ToolModule = [
       'rule_id takes the .id from list_ipv6_raw_rules. Pass "" for any optional string field to clear it. ' +
       "Returns the updated rule's full details.",
     inputSchema: {
+      unset: unsetProperties,
       rule_id: z.string(),
       chain: z.string().optional(),
       action: z.string().optional(),

@@ -1,9 +1,17 @@
 /** IPv6 firewall filter rules — `/ipv6 firewall filter`. */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  quoteValue,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  unsetFragments,
+} from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { listItemIds, ruleResolver } from "./_resolve-rule-id";
 import { executeRuleCreate, readCreatedRule } from "./_create-rule";
@@ -14,6 +22,7 @@ const resolveRuleId = ruleResolver("/ipv6 firewall filter");
 async function updateFilterRule(
   a: {
     rule_id: string;
+    unset?: string[];
     chain?: string;
     action?: string;
     src_address?: string;
@@ -70,7 +79,7 @@ async function updateFilterRule(
 ): Promise<string> {
   ctx.info(`Updating IPv6 firewall filter rule: rule_id=${a.rule_id}`);
 
-  const updates: string[] = [];
+  const updates: string[] = unsetFragments(a.unset);
   // Clearable string fields: undefined -> skip, "" -> `!field`, else `field=value`.
   const put = (key: string, val: string | undefined): void => {
     if (val === undefined) return;
@@ -420,6 +429,7 @@ export const ipv6FirewallFilterTools: ToolModule = [
       "For the IPv4 equivalent use update_filter_rule. " +
       'rule_id takes the `.id` from list_ipv6_filter_rules e.g. "*1" or "0".',
     inputSchema: {
+      unset: unsetProperties,
       rule_id: z.string(),
       chain: z.string().optional(),
       action: z.string().optional(),

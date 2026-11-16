@@ -112,28 +112,29 @@ Retrieves full detail of a single static DNS record (`/ip dns static print detai
 
 Modifies fields on an existing static DNS record (`/ip dns static set`) — can update the hostname (name), record-type data (address, cname, mx_preference, mx_exchange, text, srv fields), ttl, comment, disabled state, or regexp pattern. Pass an empty string for a field to clear it (e.g. address="" removes the address field). The `entry_id` is the `.id` from list_dns_static. To activate or deactivate without touching other fields use enable_dns_static or disable_dns_static. Returns the updated entry's full detail.
 
-| Parameter         | Required | Definition                                                                                  |
-| ----------------- | -------- | ------------------------------------------------------------------------------------------- |
-| `entry_id`        | Yes      | `{"type":"string"}`                                                                         |
-| `name`            | No       | `{"type":"string"}`                                                                         |
-| `type`            | No       | Record type, e.g. "A", "AAAA", "CNAME", "NS", "FWD", "MX", "SRV", "TXT" `{"type":"string"}` |
-| `address`         | No       | `{"type":"string"}`                                                                         |
-| `cname`           | No       | `{"type":"string"}`                                                                         |
-| `ns`              | No       | Name server FQDN for an NS-type record `{"type":"string"}`                                  |
-| `forward_to`      | No       | DNS server to forward to for a FWD-type record `{"type":"string"}`                          |
-| `match_subdomain` | No       | Also match all subdomains of name/regexp `{"type":"boolean"}`                               |
-| `address_list`    | No       | Add resolved addresses to this firewall address-list `{"type":"string"}`                    |
-| `mx_preference`   | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                 |
-| `mx_exchange`     | No       | `{"type":"string"}`                                                                         |
-| `text`            | No       | `{"type":"string"}`                                                                         |
-| `srv_priority`    | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                 |
-| `srv_weight`      | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                 |
-| `srv_port`        | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                 |
-| `srv_target`      | No       | `{"type":"string"}`                                                                         |
-| `ttl`             | No       | `{"type":"string"}`                                                                         |
-| `comment`         | No       | `{"type":"string"}`                                                                         |
-| `disabled`        | No       | `{"type":"boolean"}`                                                                        |
-| `regexp`          | No       | `{"type":"string"}`                                                                         |
+| Parameter         | Required | Definition                                                                                                                                                                                                                                                   |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`           | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `entry_id`        | Yes      | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `name`            | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `type`            | No       | Record type, e.g. "A", "AAAA", "CNAME", "NS", "FWD", "MX", "SRV", "TXT" `{"type":"string"}`                                                                                                                                                                  |
+| `address`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cname`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `ns`              | No       | Name server FQDN for an NS-type record `{"type":"string"}`                                                                                                                                                                                                   |
+| `forward_to`      | No       | DNS server to forward to for a FWD-type record `{"type":"string"}`                                                                                                                                                                                           |
+| `match_subdomain` | No       | Also match all subdomains of name/regexp `{"type":"boolean"}`                                                                                                                                                                                                |
+| `address_list`    | No       | Add resolved addresses to this firewall address-list `{"type":"string"}`                                                                                                                                                                                     |
+| `mx_preference`   | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `mx_exchange`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `text`            | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `srv_priority`    | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `srv_weight`      | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `srv_port`        | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `srv_target`      | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `ttl`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`         | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`        | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `regexp`          | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
 
 ## remove_dns_static
 

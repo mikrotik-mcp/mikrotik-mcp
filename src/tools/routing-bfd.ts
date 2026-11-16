@@ -1,4 +1,5 @@
 /** Bidirectional Forwarding Detection — `/routing bfd` (RouterOS v7). */
+import { unsetProperties } from "../core/schema";
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
@@ -87,6 +88,7 @@ export const routingBfdTools: ToolModule = [
       '(e.g. "200ms"), `multiplier`, `comment`, or `disabled` state. To toggle enabled state only use ' +
       "`set_bfd_configuration_enabled`. Returns the updated entry's full detail.",
     inputSchema: {
+      unset: unsetProperties,
       config_id: z.string().describe('Configuration id, e.g. "*1"'),
       interfaces: z.string().optional(),
       vrf: z.string().optional(),
@@ -110,7 +112,7 @@ export const routingBfdTools: ToolModule = [
       if (a.comment !== undefined) cmd.set("comment", a.comment);
       if (a.disabled !== undefined) cmd.bool("disabled", a.disabled);
 
-      const built = cmd.build();
+      const built = cmd.unset(a.unset).build();
       if (built === base) return "No updates specified.";
 
       const result = await executeMikrotikCommand(built, ctx);

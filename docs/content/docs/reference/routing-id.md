@@ -52,13 +52,14 @@ Creates a new Router-ID instance (`/routing id add`) that assigns a stable 32-bi
 
 Modifies an existing Router-ID instance (`/routing id set [find name=...]`). Supply any combination of fields to change; omitted fields are left untouched. Pass `""` for `id` to clear the fixed router-id (RouterOS unsets it with `!id`); pass `""` for `select_dynamic_id` to clear dynamic interface selection (`!select-dynamic-id`). Use `add_routing_id` to create a new instance; use `set_routing_id_enabled` to toggle enabled state without changing other properties. For updating IPv4 routes use `update_route`; for policy routing rules use `update_routing_rule`. Returns the updated instance's full detail.
 
-| Parameter           | Required | Definition                                                  |
-| ------------------- | -------- | ----------------------------------------------------------- |
-| `name`              | Yes      | Existing Router-ID instance name `{"type":"string"}`        |
-| `id`                | No       | IPv4 router-id, or "" to clear `{"type":"string"}`          |
-| `select_dynamic_id` | No       | Interface/loopback name, or "" to clear `{"type":"string"}` |
-| `comment`           | No       | `{"type":"string"}`                                         |
-| `disabled`          | No       | `{"type":"boolean"}`                                        |
+| Parameter           | Required | Definition                                                                                                                                                                                                                                                   |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`             | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`              | Yes      | Existing Router-ID instance name `{"type":"string"}`                                                                                                                                                                                                         |
+| `id`                | No       | IPv4 router-id, or "" to clear `{"type":"string"}`                                                                                                                                                                                                           |
+| `select_dynamic_id` | No       | Interface/loopback name, or "" to clear `{"type":"string"}`                                                                                                                                                                                                  |
+| `comment`           | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`          | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_routing_id
 

@@ -45,13 +45,14 @@ Adds a routing filter rule to a named chain (`/routing filter rule add`) — def
 
 Updates an existing routing filter rule's chain, script expression, comment, or enabled state (`/routing filter rule set`) on RouterOS v7. `rule_id` takes the `.id` from list_routing_filter_rules (e.g. `"*3"`). Returns the updated rule's full detail. To toggle only enabled/disabled state use set_routing_filter_rule_enabled.
 
-| Parameter  | Required | Definition                             |
-| ---------- | -------- | -------------------------------------- |
-| `rule_id`  | Yes      | Rule id, e.g. "*3" `{"type":"string"}` |
-| `chain`    | No       | `{"type":"string"}`                    |
-| `rule`     | No       | `{"type":"string"}`                    |
-| `comment`  | No       | `{"type":"string"}`                    |
-| `disabled` | No       | `{"type":"boolean"}`                   |
+| Parameter  | Required | Definition                                                                                                                                                                                                                                                   |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`    | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `rule_id`  | Yes      | Rule id, e.g. "*3" `{"type":"string"}`                                                                                                                                                                                                                       |
+| `chain`    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `rule`     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `comment`  | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled` | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_routing_filter_rule
 

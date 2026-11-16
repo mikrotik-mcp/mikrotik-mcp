@@ -110,22 +110,23 @@ Add a named inbound OpenVPN server instance (`/interface ovpn-server server add`
 
 Modify a named OpenVPN server instance (`/interface ovpn-server server set [find name=...]`) on the RouterOS 7.17+ multi-server model — change port, protocol, mode, certificate, auth/cipher, netmask, max_mtu, default_profile, mac_address, comment or require_client_certificate without recreating it. To toggle only the enabled state use enable_ovpn_server / disable_ovpn_server. To create a server use add_ovpn_server; to remove one use remove_ovpn_server. For the legacy single-server menu use set_ovpn_server. Returns the updated server's detail.
 
-| Parameter                    | Required | Definition                                                                  |
-| ---------------------------- | -------- | --------------------------------------------------------------------------- |
-| `name`                       | Yes      | Existing OpenVPN server instance name `{"type":"string"}`                   |
-| `port`                       | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `protocol`                   | No       | `{"type":"string","enum":["tcp","udp"]}`                                    |
-| `mode`                       | No       | `{"type":"string","enum":["ip","ethernet"]}`                                |
-| `netmask`                    | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `mac_address`                | No       | `{"type":"string"}`                                                         |
-| `certificate`                | No       | `{"type":"string"}`                                                         |
-| `auth`                       | No       | `{"type":"string"}`                                                         |
-| `cipher`                     | No       | `{"type":"string"}`                                                         |
-| `tls_version`                | No       | Accepted TLS version `{"type":"string","enum":["any","only-1.2"]}`          |
-| `max_mtu`                    | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `default_profile`            | No       | `{"type":"string"}`                                                         |
-| `require_client_certificate` | No       | `{"type":"boolean"}`                                                        |
-| `comment`                    | No       | `{"type":"string"}`                                                         |
+| Parameter                    | Required | Definition                                                                                                                                                                                                                                                   |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`                      | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `name`                       | Yes      | Existing OpenVPN server instance name `{"type":"string"}`                                                                                                                                                                                                    |
+| `port`                       | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `protocol`                   | No       | `{"type":"string","enum":["tcp","udp"]}`                                                                                                                                                                                                                     |
+| `mode`                       | No       | `{"type":"string","enum":["ip","ethernet"]}`                                                                                                                                                                                                                 |
+| `netmask`                    | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `mac_address`                | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `certificate`                | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `auth`                       | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `cipher`                     | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `tls_version`                | No       | Accepted TLS version `{"type":"string","enum":["any","only-1.2"]}`                                                                                                                                                                                           |
+| `max_mtu`                    | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `default_profile`            | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `require_client_certificate` | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `comment`                    | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
 
 ## remove_ovpn_server
 

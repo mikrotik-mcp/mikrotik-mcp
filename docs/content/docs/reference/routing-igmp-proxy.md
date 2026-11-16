@@ -63,14 +63,15 @@ Add an interface to the IGMP proxy configuration (`/routing igmp-proxy interface
 
 Update an existing IGMP proxy interface entry by name (`/routing igmp-proxy interface set [find interface=...]`). Modifies the upstream/downstream role, alternative subnets, TTL threshold, comment, or disabled state of the named interface. For adding a new interface use `add_igmp_proxy_interface`; to toggle only the enabled state use `set_igmp_proxy_interface_enabled`. Returns updated interface detail on success.
 
-| Parameter             | Required | Definition                                                                  |
-| --------------------- | -------- | --------------------------------------------------------------------------- |
-| `interface`           | Yes      | Existing IGMP-proxy interface name `{"type":"string"}`                      |
-| `upstream`            | No       | `{"type":"boolean"}`                                                        |
-| `alternative_subnets` | No       | `{"type":"string"}`                                                         |
-| `threshold`           | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `comment`             | No       | `{"type":"string"}`                                                         |
-| `disabled`            | No       | `{"type":"boolean"}`                                                        |
+| Parameter             | Required | Definition                                                                                                                                                                                                                                                   |
+| --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unset`               | No       | Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value. `{"type":"array","items":{"type":"string","pattern":"^[a-z][a-z0-9_-]*$"}}` |
+| `interface`           | Yes      | Existing IGMP-proxy interface name `{"type":"string"}`                                                                                                                                                                                                       |
+| `upstream`            | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
+| `alternative_subnets` | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `threshold`           | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                                                                                  |
+| `comment`             | No       | `{"type":"string"}`                                                                                                                                                                                                                                          |
+| `disabled`            | No       | `{"type":"boolean"}`                                                                                                                                                                                                                                         |
 
 ## remove_igmp_proxy_interface
 
