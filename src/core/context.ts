@@ -40,6 +40,12 @@ export interface ToolContext {
    * simply never being enabled.
    */
   restFallback?: string;
+  /**
+   * Risk preset of the tool that owns this call (set by the registry). The
+   * connector uses it to keep READ tools out of an open Safe Mode shell.
+   * Unset for internal callers (samplers, dashboard routes).
+   */
+  risk?: "READ" | "WRITE" | "WRITE_IDEMPOTENT" | "DESTRUCTIVE" | "DANGEROUS";
 }
 
 /** How a device command was actually carried. */

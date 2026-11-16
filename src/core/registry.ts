@@ -617,6 +617,7 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           device,
           id,
         );
+        ctx.risk = risk;
         let result: CallToolResult;
         try {
           result = await execute(args, ctx);

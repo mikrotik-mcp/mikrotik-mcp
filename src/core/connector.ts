@@ -93,9 +93,9 @@ async function runOnce(
   const name = resolveDeviceName(deviceName);
   const dc = getDevice(deviceName);
 
-  // REST first when the device opts in. Reached only outside Safe Mode: an
-  // active Safe Mode session is routed by executeMikrotikCommand before this
-  // function is called, which is what keeps Safe Mode SSH-only.
+  // REST first when the device opts in. Writes never reach this while Safe Mode
+  // is open: executeMikrotikCommand routes them to the Safe Mode shell first,
+  // which is what keeps Safe Mode SSH-only. Reads may run here in parallel.
   if (isRestDevice(dc)) {
     const out = await tryRest(command, dc, name, ctx);
     if (out !== null) return out;
@@ -122,6 +122,28 @@ async function runOnce(
 }
 
 /**
+ * A plain `print` / `export` with no script syntax — safe to run on a separate
+ * connection. Deliberately narrow: anything it does not recognise keeps the old
+ * routing, so a write can never skip an open Safe Mode session by mistake.
+ */
+const READ_COMMAND_RE = /^\/[^;[\]{}]*\s(?:print|export)(?:\s[^;[\]{}]*)?$/;
+
+/**
+ * True when this command must NOT enter the device's Safe Mode shell.
+ *
+ * That shell is one serialized interactive channel that holds uncommitted
+ * changes. A read placed on it (a READ tool, or a background sampler) can stall
+ * it and make the session fail, which then rolls back a write it has nothing to
+ * do with. Safe Mode changes are live in the running config, so a read on a
+ * separate connection sees the same state.
+ */
+export function bypassesSafeMode(command: string, ctx: Pick<ToolContext, "risk">): boolean {
+  if (ctx.risk === "READ") return true;
+  // Internal callers carry no risk: go by the command itself.
+  return ctx.risk === undefined && READ_COMMAND_RE.test(command.trim());
+}
+
+/**
  * Execute a RouterOS command and return its raw text output.
  *
  * The target device is taken from `ctx.device` (set by the registry from the
@@ -145,7 +167,7 @@ export async function executeMikrotikCommand(
   // which turns them into a proper `isError` tool result. Device-reported
   // command errors (syntax/failure) come back as normal output and are handled
   // by each tool via looksLikeError().
-  if (safe.isActive || safe.requiresRecovery) {
+  if ((safe.isActive || safe.requiresRecovery) && !bypassesSafeMode(command, ctx)) {
     ctx.info(`[${deviceName}] Executing (safe mode): ${containerCommandForLog(command)}`);
     // Safe Mode holds a persistent interactive SSH session — never REST.
     ctx.transport = "ssh";
@@ -183,7 +205,8 @@ export async function executeMikrotikJson(
   const safe = getSafeModeManager(deviceName);
 
   // Safe Mode and non-REST devices have no JSON to offer — parse the text.
-  if (!safe.isActive && !safe.requiresRecovery && isRestDevice(dc)) {
+  const viaSafeMode = (safe.isActive || safe.requiresRecovery) && !bypassesSafeMode(command, ctx);
+  if (!viaSafeMode && isRestDevice(dc)) {
     const req = toRequest(command);
     if (req) {
       const json = await tryRestJson(command, dc, deviceName, ctx);
