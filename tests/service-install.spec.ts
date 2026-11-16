@@ -1,6 +1,7 @@
 import {
   linuxUnit,
   main,
+  removeCommandWrappers,
   psQuote,
   serviceOptions,
   validatePorts,
@@ -9,11 +10,18 @@ import {
 } from "../scripts/service.ts";
 import type { ServiceState } from "../scripts/service.ts";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstatSync, symlinkSync, writeFileSync } from "node:fs";
+import { lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const mock = vi.hoisted(() => ({ home: "", commands: [] as string[][], failEnable: false }));
+const mock = vi.hoisted(() => ({
+  home: "",
+  commands: [] as string[][],
+  failEnable: false,
+  /** Called for `bun add`, before it "exits"; return a non-zero exit code to fail it. */
+  onAdd: undefined as undefined | (() => number),
+}));
 vi.mock("node:os", async (original) => ({
   ...(await original<typeof import("node:os")>()),
   homedir: () => mock.home,
@@ -29,7 +37,13 @@ vi.mock("bun", () => ({
         : "";
     return {
       stdout: new Response(text).body,
-      exited: Promise.resolve(mock.failEnable && args.includes("enable") ? 1 : 0),
+      exited: Promise.resolve(
+        args.includes("add") && mock.onAdd
+          ? mock.onAdd()
+          : mock.failEnable && args.includes("enable")
+            ? 1
+            : 0,
+      ),
     };
   },
 }));
@@ -56,6 +70,7 @@ afterEach(async () => {
   mock.home = "";
   mock.commands = [];
   mock.failEnable = false;
+  mock.onAdd = undefined;
 });
 
 async function setup(): Promise<void> {
@@ -210,5 +225,149 @@ describe("service install orchestration", () => {
       "Config file not found",
     );
     expect(mock.commands.some((args) => args.includes("enable"))).toBe(false);
+  });
+});
+
+describe("upgrade does not collide with Bun's own command links", () => {
+  const COMMANDS = ["mikrotik-mcp-service", "mikrotik-mcp-upgrade"];
+  const binOf = (name: string) => join(mock.home, ".bun/bin", name);
+  const kind = (name: string) => {
+    try {
+      const info = lstatSync(binOf(name));
+      return info.isSymbolicLink() ? "symlink" : info.isFile() ? "file" : "other";
+    } catch {
+      return "missing";
+    }
+  };
+
+  it("removes its wrapper files before `bun add` and keeps the links Bun creates", async () => {
+    await setup();
+    await main(["install", "--mcp-port", "28011", "--dashboard-port", "28012"]);
+    // The state that broke `mikrotik-mcp-upgrade`: regular files where Bun links bins.
+    expect(COMMANDS.map(kind)).toEqual(["file", "file"]);
+
+    const packaged = join(
+      mock.home,
+      ".bun/install/global/node_modules/@usex/mikrotik-mcp/scripts/service.ts",
+    );
+    await mkdir(join(packaged, ".."), { recursive: true });
+    const seenByBun: string[] = [];
+    mock.onAdd = () => {
+      seenByBun.push(...COMMANDS.map(kind));
+      // What `bun add --global` does: link each package bin. A regular file in
+      // the way is the EEXIST failure.
+      if (seenByBun.includes("file")) return 1;
+      for (const name of COMMANDS) symlinkSync(join(mock.home, "package", name), binOf(name));
+      writeFileSync(packaged, "// service.ts from the new package");
+      return 0;
+    };
+    await main(["upgrade"]);
+    // The manager copy that out-of-bin wrappers run now matches the new package.
+    expect(await readFile(join(mock.home, ".mikrotik-mcp/service/manager.ts"), "utf8")).toBe(
+      "// service.ts from the new package",
+    );
+
+    expect(seenByBun).toEqual(["missing", "missing"]);
+    expect(COMMANDS.map(kind)).toEqual(["symlink", "symlink"]);
+    expect(mock.commands.some((args) => args.includes("restart"))).toBe(true);
+
+    // A second upgrade and a repeat install leave Bun's links alone.
+    seenByBun.length = 0;
+    mock.onAdd = () => {
+      seenByBun.push(...COMMANDS.map(kind));
+      return 0;
+    };
+    await main(["upgrade"]);
+    await main(["install"]);
+    expect(seenByBun).toEqual(["symlink", "symlink"]);
+    expect(COMMANDS.map(kind)).toEqual(["symlink", "symlink"]);
+  });
+
+  it("puts the wrappers back when `bun add` fails, and does not restart", async () => {
+    await setup();
+    await main(["install", "--mcp-port", "28013", "--dashboard-port", "28014"]);
+    mock.commands.length = 0;
+    mock.onAdd = () => 1;
+    await expect(main(["upgrade"])).rejects.toThrow("Command failed");
+    expect(COMMANDS.map(kind)).toEqual(["file", "file"]);
+    expect(await readFile(binOf("mikrotik-mcp-upgrade"), "utf8")).toContain('upgrade "$@"');
+    expect(mock.commands.some((args) => args.includes("restart"))).toBe(false);
+  });
+
+  it("removes only its own wrappers: never a link or someone else's file", async () => {
+    await setup();
+    const bin = join(mock.home, ".bun/bin");
+    await mkdir(bin, { recursive: true });
+    await writeFile(binOf("mikrotik-mcp-service"), "#!/bin/sh\necho custom user script\n");
+    await symlink(join(mock.home, "package", "upgrade.ts"), binOf("mikrotik-mcp-upgrade"));
+    await removeCommandWrappers(bin);
+    expect(COMMANDS.map(kind)).toEqual(["file", "symlink"]);
+
+    await writeFile(
+      binOf("mikrotik-mcp-service"),
+      "#!/bin/sh\nexec '/usr/bin/bun' '/home/a/.mikrotik-mcp/service/manager.ts'  \"$@\"\n",
+    );
+    await removeCommandWrappers(bin);
+    expect(kind("mikrotik-mcp-service")).toBe("missing");
+    expect((await lstat(binOf("mikrotik-mcp-upgrade"))).isSymbolicLink()).toBe(true);
+    await removeCommandWrappers(join(mock.home, "no-such-directory")); // no throw
+  });
+});
+
+describe("status and upgrade screens", () => {
+  /** Everything written to stderr through console.warn, as one string. */
+  function capture(): () => string {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    return () => spy.mock.calls.map((call) => String(call[0])).join("\n");
+  }
+
+  it("status prints the banner and what it could find out, and changes nothing", async () => {
+    await setup();
+    await main(["install", "--mcp-port", "28021", "--dashboard-port", "28022"]);
+    mock.commands.length = 0;
+    const printed = capture();
+    await main(["status"]);
+    const out = printed();
+    expect(out).toContain("|_|  |_|_|_\\_\\_|");
+    expect(out).toContain("Shared service · status");
+    expect(out).toContain("6.11.0 running and installed");
+    expect(out).toContain("http://127.0.0.1:28021/mcp");
+    expect(out).toContain("http://127.0.0.1:28022");
+    expect(out).toContain("1 device, 0 enabled");
+    // Read-only: no install, restart, enable or removal was issued.
+    expect(
+      mock.commands.some((args) =>
+        ["add", "restart", "enable", "disable", "kickstart", "bootout"].some((word) =>
+          args.includes(word),
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it("upgrade narrates each step and ends with a summary", async () => {
+    await setup();
+    await main(["install", "--mcp-port", "28023", "--dashboard-port", "28024"]);
+    const printed = capture();
+    await main(["upgrade"]);
+    const out = printed();
+    expect(out).toContain("Shared service · upgrade");
+    const order = ["Running now", "Installing", "✓ Installed     6.11.0", "✓ Restarted", "✓ Ready"];
+    const positions = order.map((text) => out.indexOf(text));
+    expect(positions.every((at) => at >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(out).toContain("Already current · reinstalled");
+    expect(out).toContain("Client URLs and config are unchanged.");
+  });
+
+  it("a failed install says the old version keeps running", async () => {
+    await setup();
+    await main(["install", "--mcp-port", "28025", "--dashboard-port", "28026"]);
+    const printed = capture();
+    mock.onAdd = () => 1;
+    await expect(main(["upgrade"])).rejects.toThrow("Command failed");
+    expect(printed()).toContain(
+      "Upgrade stopped during install. The service was not restarted; 6.11.0 keeps running.",
+    );
+    expect(printed()).not.toContain("✓ Installed");
   });
 });
