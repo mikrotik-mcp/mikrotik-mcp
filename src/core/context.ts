@@ -6,6 +6,7 @@
  * transport reserves for JSON-RPC) and, when the MCP client has opted into
  * logging notifications, forwarded over the protocol too.
  */
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { formatLogMessage, logger } from "../logger";
 import { redactAuditText } from "../observability/event";
 
@@ -46,6 +47,38 @@ export interface ToolContext {
    * Unset for internal callers (samplers, dashboard routes).
    */
   risk?: "READ" | "WRITE" | "WRITE_IDEMPOTENT" | "DESTRUCTIVE" | "DANGEROUS";
+  /**
+   * The tools bound to the MCP server this call arrived on (set by the
+   * registry). The tool gateway uses it to run, describe and point at other
+   * tools without a second code path. Unset for internal callers.
+   */
+  tools?: ToolAccess;
+  /** Set by the registry when this call returned another tool's finished result. */
+  delegated?: boolean;
+  /** Set by the registry when the handler opted out of the reachability hint line. */
+  noHint?: boolean;
+}
+
+/** Access to the other tools of the same MCP server, for the tool gateway. */
+export interface ToolAccess {
+  /**
+   * Run a tool through the SAME pipeline as a direct `tools/call`: device and
+   * `reason` handling, access policy, guards, audit record. `undefined` when
+   * the tool is not available on this server (unknown, read-only mode,
+   * filtered out).
+   */
+  run(name: string, args: Record<string, unknown>): Promise<CallToolResult> | undefined;
+  /** The Zod shape a direct call is validated against (with `device` / `reason`). */
+  shape(name: string): Record<string, unknown> | undefined;
+  /** The JSON Schema exactly as `tools/list` publishes it for this tool. */
+  schema(name: string): Record<string, unknown> | undefined;
+  /**
+   * True when a hint may tell the client to call the tool by name. In `core`
+   * surface mode that is every listed tool. In `full` mode only the pinned
+   * core set: the rest is listed too, but a host with a large catalog may not
+   * have loaded it, so hints must give an `invoke_tool` call for those.
+   */
+  direct(name: string): boolean;
 }
 
 /** How a device command was actually carried. */

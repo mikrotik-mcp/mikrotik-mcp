@@ -37,7 +37,7 @@ describe("moduleSurface", () => {
         .filter((m) => m.enabled)
         .map((m) => m.slug)
         .sort(),
-    ).toEqual(["dns", "memory", "routes", "server-pulse", "tool-gateway"]);
+    ).toEqual(["access", "dns", "memory", "routes", "safe-mode", "server-pulse", "tool-gateway"]);
   });
 });
 

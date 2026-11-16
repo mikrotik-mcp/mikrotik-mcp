@@ -88,22 +88,11 @@ describe("describe_tool", () => {
   });
 });
 
+// invoke_tool needs the tools bound to a server, so it is tested end to end in
+// tests/tool-exposure.spec.ts.
 describe("invoke_tool", () => {
-  test("unknown name returns closest matches, never executes", async () => {
-    const out = await run("invoke_tool", { name: "totally_made_up_tool", arguments: {} });
-    expect(out).toMatch(/No tool named "totally_made_up_tool"/);
-  });
-
-  test("refuses to invoke a gateway meta-tool", async () => {
-    const out = await run("invoke_tool", { name: "find_tools", arguments: { query: "x" } });
-    expect(out).toMatch(/meta-tool/);
-  });
-
-  test("invalid arguments fail validation before any device call", async () => {
-    // create_filter_rule requires a chain; an empty argument object must be
-    // rejected by the schema (so no SSH connection is ever attempted here).
-    const out = await run("invoke_tool", { name: "create_filter_rule", arguments: {} });
-    expect(out).toMatch(/Invalid arguments for "create_filter_rule"/);
-    expect(out).toMatch(/Expected parameters:/);
+  test("refuses to run outside a server instead of calling a handler unguarded", async () => {
+    const out = await run("invoke_tool", { name: "list_ip_addresses", arguments: {} });
+    expect(out).toMatch(/only available on a running MCP server/);
   });
 });

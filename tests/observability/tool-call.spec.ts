@@ -32,6 +32,16 @@ function register(tool: RegisterableTool) {
   );
   return (args: Record<string, unknown> = {}) => callback(args);
 }
+/** Several tools on ONE server, as in production: the gateway reaches its siblings. */
+function registerTogether(...tools: RegisterableTool[]) {
+  const callbacks = new Map<string, (args: Record<string, unknown>) => Promise<CallToolResult>>();
+  const server = {
+    registerTool: (name: string, _config: unknown, cb: (a: Record<string, unknown>) => never) =>
+      callbacks.set(name, cb),
+  } as never;
+  for (const tool of tools) tool.register(server, { deviceNames: ["lab", "edge"] });
+  return (name: string, args: Record<string, unknown> = {}) => callbacks.get(name)!(args);
+}
 const text = (result: CallToolResult) =>
   result.content
     .filter((c) => c.type === "text")
@@ -253,8 +263,13 @@ test("reading a historical parser failure succeeds, including through invoke_too
   const result = await lookup()({ call_id: idOf(failed) });
   expect(result.isError).toBeFalsy();
   expect(result.structuredContent?.outcome).toBe("error");
-  const gateway = register(toolGatewayTools.find((t) => t.name === "invoke_tool")!);
-  const delegated = await gateway({ name: "get_tool_call", arguments: { call_id: idOf(failed) } });
+  const call = registerTogether(
+    ...toolGatewayTools.filter((t) => ["invoke_tool", "get_tool_call"].includes(t.name)),
+  );
+  const delegated = await call("invoke_tool", {
+    name: "get_tool_call",
+    arguments: { call_id: idOf(failed) },
+  });
   expect(delegated.isError).toBeFalsy();
   expect(delegated.structuredContent?.outcome).toBe("error");
   for (const inspected of [result, delegated]) {

@@ -1706,7 +1706,7 @@
       "label": "Access Scope",
       "group": "Discovery & Meta",
       "description": "Caller-scoped access control: inspect the risk/device/tool boundary enforced on this session, review denied calls, and voluntarily narrow the scope (one-way).",
-      "alwaysOn": false,
+      "alwaysOn": true,
       "tools": ["get_access_scope", "narrow_access_scope"]
     },
     {
@@ -2111,7 +2111,7 @@
       "label": "Safe Mode",
       "group": "System & Ops",
       "description": "Transactional config window with auto-revert (Ctrl+X session).",
-      "alwaysOn": false,
+      "alwaysOn": true,
       "tools": [
         "set_safe_mode_timeout",
         "safe_mode_status",

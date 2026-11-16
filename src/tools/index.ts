@@ -1448,7 +1448,14 @@ export const allToolModules: ToolModule[] = moduleCatalog.map((m) => m.tools);
  * — is always present even in a tightly scoped deployment. An explicit
  * `disabledModules`/`disabledGroups` opt-out still removes them.
  */
-export const ALWAYS_ON_MODULES = new Set(["tool-gateway", "memory", "server-pulse"]);
+export const ALWAYS_ON_MODULES = new Set([
+  "tool-gateway",
+  "memory",
+  "server-pulse",
+  // Home of the pinned core tools (see PINNED_TOOLS in core/registry.ts).
+  "safe-mode",
+  "access",
+]);
 
 /** Shape of the tool-surface filter (mirrors `ToolFilter` in config.ts). */
 export interface ToolModuleFilter {

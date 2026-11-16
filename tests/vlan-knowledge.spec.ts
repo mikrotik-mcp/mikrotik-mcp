@@ -83,10 +83,11 @@ describe("VLAN knowledge delivery (offline real MCP protocol)", () => {
             arguments: {},
           });
           expect(read.isError).toBeFalsy();
-          expect(read.content).toEqual([
-            { type: "text", text: getVlanSegmentationGuide() },
-            { type: "text", text: expect.stringContaining("Tool call ID:") },
-          ]);
+          // The guide text is untouched; a hint for tools it names that the
+          // client may not have loaded can follow, then the call ID.
+          const blocks = read.content as { type: string; text: string }[];
+          expect(blocks[0]).toEqual({ type: "text", text: getVlanSegmentationGuide() });
+          expect(blocks.at(-1)?.text).toContain("Tool call ID:");
           const invalid = await client.callTool({
             name: "get_vlan_segmentation_guide",
             arguments: { topic: "unknown" },

@@ -83,6 +83,19 @@ export const McpServerSettingsSchema = z.object({
    */
   toolPageSize: z.coerce.number().int().min(0).default(0),
   /**
+   * Which tools `tools/list` contains.
+   *
+   * - `full` (default) — every tool.
+   * - `core` — only the pinned core set (the tool gateway, Safe Mode control,
+   *   access scope, call history) plus `coreTools`. Every other tool still
+   *   exists and runs through `invoke_tool` with the same validation, checks
+   *   and audit record. Use it for hosts that load only part of a large tool
+   *   list, where a tool can be listed by the server and still be unreachable.
+   */
+  toolSurface: z.enum(["full", "core"]).default("full"),
+  /** Comma-separated extra tool names to list in `core` surface mode. */
+  coreTools: z.string().default(""),
+  /**
    * Emit MCP App view metadata (`_meta.ui`) on tools. Default false. Set true
    * to enable interactive table/detail widgets on read tools. When enabled,
    * every `list_*`/`get_*` read tool carries the auto-records view which adds
@@ -913,6 +926,8 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     allowedOrigins: pick("mcp-allowed-origins", "MIKROTIK_MCP__ALLOWED_ORIGINS"),
     corsOrigins: pick("mcp-cors-origins", "MIKROTIK_MCP__CORS_ORIGINS"),
     toolPageSize: pick("tool-page-size", "MIKROTIK_MCP__TOOL_PAGE_SIZE"),
+    toolSurface: pick("tool-surface", "MIKROTIK_MCP__TOOL_SURFACE"),
+    coreTools: pick("core-tools", "MIKROTIK_MCP__CORE_TOOLS"),
     // `--app-views=false` / MIKROTIK_MCP__APP_VIEWS=false disables App-view metadata.
     appViews: appViewsEnv,
     capabilityGating: pick("capability-gating", "MIKROTIK_MCP__CAPABILITY_GATING"),

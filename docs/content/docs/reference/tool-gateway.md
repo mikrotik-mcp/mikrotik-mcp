@@ -26,9 +26,9 @@ Retrieve a saved MCP invocation by its exact Tool call ID from a result or Dashb
 
 🔍 START HERE — this is the PRIMARY entry point for ANY MikroTik / RouterOS task. ALWAYS call this tool FIRST before attempting any other tool. This server has several hundred dedicated tools with full validation and structured output, but the host only surfaces a small subset — this tool searches the FULL catalog and finds the best match for your intent.
 
-Describe what you want to do in natural language or keywords, e.g. 'block a LAN client by MAC', 'add an IPv4 firewall filter rule', 'import a TLS certificate', 'list DHCP leases', 'create a WireGuard peer'. Returns each match's exact tool name, description, and parameters — then call it directly if available, or via `invoke_tool`.
+Describe what you want to do in natural language or keywords, e.g. 'block a LAN client by MAC', 'add an IPv4 firewall filter rule', 'import a TLS certificate', 'list DHCP leases', 'create a WireGuard peer'. Returns each match's exact tool name, description, parameters and a ready-to-run `invoke_tool` call.
 
-Workflow: find_tools → (optional) describe_tool → invoke_tool. Only fall back to run_routeros_command if this search returns zero results. For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate. For authorized changes that must be coordinated across multiple routers, search 'begin_transaction' BEFORE individual write tools (VPN tunnels, peering, routes or fleet ACLs). Discovery does not authorize verify_transaction or commit_transaction.
+Workflow: find_tools → (optional) describe_tool → invoke_tool. Only if this search returns zero results, run a raw command with `invoke_tool {"name":"run_routeros_command","arguments":{"command":"…"}}`. For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate. For authorized changes that must be coordinated across multiple routers, search 'begin_transaction' BEFORE individual write tools (VPN tunnels, peering, routes or fleet ACLs). Discovery does not authorize verify_transaction or commit_transaction.
 
 | Parameter | Required | Definition                                                                                                         |
 | --------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -49,7 +49,7 @@ Return the exact input schema, parameters (name · required · description), ris
 
 **Invoke a Tool by Name** · Risk: **write**
 
-Execute ANY tool in the catalog by its exact name with the given arguments — the precise way to run a tool you found via find_tools but the host hasn't surfaced for a direct call. The arguments are validated against that tool's real schema and run through its real handler, so this is exactly as safe/accurate as calling the tool directly (unlike raw CLI). To target a specific device in a multi-device setup, set the top-level `device` parameter on THIS call — not inside `arguments`. If validation fails you get the expected parameters back; fix and retry. For a one-off raw command with no dedicated tool, prefer run_routeros_command.
+Execute ANY tool in the catalog by its exact name with the given arguments — the way to run a tool you found via find_tools when it is not in your tool list. The call goes through the same pipeline as a direct call: the same schema validation, access and risk checks, safety guards and audit record (saved under the target tool's own name and Tool call ID). Put the target's arguments in `arguments`, exactly as describe_tool lists them — including `reason` when the target requires it. To choose a device, set `device` on THIS call or inside `arguments`. Unknown argument names are rejected, not ignored. If validation fails you get the expected parameters back; fix and retry.
 
 | Parameter   | Required | Definition                                                                                                                                       |
 | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -26,18 +26,19 @@
  * The catalog is imported lazily (dynamic `import("./index")`) because the
  * catalog imports this module — the index is built once on first use and cached.
  */
+import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
 import { z } from "zod";
-import { WRITE, READ, defineTool } from "../core/registry";
+import type { ToolContext } from "../core/context";
+import { WRITE, READ, defineTool, invokeCall } from "../core/registry";
 import type { RegisterableTool, ToolModule } from "../core/registry";
 import { buildToolIndex, searchToolIndex } from "../core/tool-search";
 import type { ToolForIndex, ToolSearchIndex } from "../core/tool-search";
-import { getConfig, tryResolveDeviceName } from "../core/runtime";
-import { looksLikeError } from "../core/routeros";
+import { tryResolveDeviceName } from "../core/runtime";
 import { evaluateAccess, getAccessPolicy } from "../core/access";
 import { getEventStore } from "../observability/recorder";
 import { redactAuditText } from "../observability/event";
 
-/** Meta-tool names — excluded from search results and from being invoked. */
+/** Meta-tool names — excluded from search results (they are how you search). */
 const META_NAMES = new Set(["find_tools", "describe_tool", "invoke_tool"]);
 
 interface GatewayState {
@@ -78,6 +79,16 @@ async function gateway(): Promise<GatewayState> {
 /** Reset the memoised index — used by tests; harmless in production. */
 export function resetToolGatewayCache(): void {
   cache = null;
+}
+
+/**
+ * How to run `name` from here. "Call directly" is said only for tools the
+ * client is sure to have ({@link ToolContext.tools}.direct); the `invoke_tool`
+ * form is always given.
+ */
+export function howToRun(name: string, ctx: Pick<ToolContext, "tools">): string {
+  const call = invokeCall(name, ctx.tools?.schema(name));
+  return ctx.tools?.direct(name) ? `call ${name} directly, or ${call}` : call;
 }
 
 /** Whether a field in a Zod raw shape is optional (parses `undefined`). */
@@ -204,10 +215,11 @@ export const toolGatewayTools: ToolModule = [
       "subset — this tool searches the FULL catalog and finds the best match for your intent.\n\n" +
       "Describe what you want to do in natural language or keywords, e.g. 'block a LAN client by MAC', " +
       "'add an IPv4 firewall filter rule', 'import a TLS certificate', 'list DHCP leases', " +
-      "'create a WireGuard peer'. Returns each match's exact tool name, description, and parameters — " +
-      "then call it directly if available, or via `invoke_tool`.\n\n" +
+      "'create a WireGuard peer'. Returns each match's exact tool name, description, parameters and " +
+      "a ready-to-run `invoke_tool` call.\n\n" +
       "Workflow: find_tools → (optional) describe_tool → invoke_tool. " +
-      "Only fall back to run_routeros_command if this search returns zero results. " +
+      "Only if this search returns zero results, run a raw command with " +
+      '`invoke_tool {"name":"run_routeros_command","arguments":{"command":"…"}}`. ' +
       "For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate. " +
       "For authorized changes that must be coordinated across multiple routers, search " +
       "'begin_transaction' BEFORE individual write tools (VPN tunnels, peering, routes or fleet ACLs). " +
@@ -227,22 +239,28 @@ export const toolGatewayTools: ToolModule = [
         .optional()
         .describe("Max results to return (default 8)."),
     },
-    async handler(a) {
+    async handler(a, ctx) {
       const { index } = await gateway();
-      const hits = searchToolIndex(index, a.query, a.limit ?? 8);
+      const limit = a.limit ?? 8;
+      // Only tools this server can run (read-only mode and module filters drop
+      // some); over-fetch so the filter does not shorten the result.
+      const hits = searchToolIndex(index, a.query, limit + 25)
+        .filter((h) => !ctx.tools || ctx.tools.shape(h.name) !== undefined)
+        .slice(0, limit);
       if (hits.length === 0) {
         return (
           `No tools matched "${a.query}". Try different keywords (a RouterOS scope like ` +
-          "'firewall', 'dhcp', 'wireguard', 'certificate'), or use run_routeros_command for a raw CLI command."
+          "'firewall', 'dhcp', 'wireguard', 'certificate'). For a raw CLI command: " +
+          `${howToRun("run_routeros_command", ctx)}.`
         );
       }
       const lines = hits.map((h, i) => {
         const params = h.params.length ? ` · params: ${h.params.join(", ")}` : " · params: none";
         const desc = h.description.replace(/\s+/g, " ").slice(0, 200);
-        return `${i + 1}. ${h.name}  [${h.module}]\n   ${h.title} — ${desc}${params}`;
+        return `${i + 1}. ${h.name}  [${h.module}]\n   ${h.title} — ${desc}${params}\n   Run: ${howToRun(h.name, ctx)}`;
       });
       const plural = hits.length === 1 ? "" : "s";
-      return `Found ${hits.length} tool${plural} for "${a.query}" (best first). Call one directly if available, or via invoke_tool:\n\n${lines.join("\n\n")}`;
+      return `Found ${hits.length} tool${plural} for "${a.query}" (best first). Each has a ready-to-run call:\n\n${lines.join("\n\n")}`;
     },
   }),
 
@@ -258,19 +276,26 @@ export const toolGatewayTools: ToolModule = [
     inputSchema: {
       name: z.string().min(1).describe("Exact tool name, e.g. 'add_dhcp_lease'."),
     },
-    async handler(a) {
+    async handler(a, ctx) {
       const { index, byName } = await gateway();
-      const tool = byName.get(a.name.trim());
+      const tool = byName.get(a.name.trim()) ?? metaTool(a.name.trim());
       if (!tool) {
         const near = searchToolIndex(index, a.name, 5)
           .map((h) => h.name)
           .join(", ");
         return `No tool named "${a.name}".${near ? ` Did you mean: ${near}?` : ""} Use find_tools to search.`;
       }
-      const params = describeParams(tool.inputSchema as Record<string, z.ZodTypeAny> | undefined);
-      const schema = z.toJSONSchema(z.object((tool.inputSchema ?? {}) as z.ZodRawShape), {
-        target: "draft-2020-12",
-      });
+      // The schema and parameters a direct call uses on this server: the same
+      // object `tools/list` publishes, including `device` and `reason`.
+      const schema = ctx.tools?.schema(tool.name) ?? listedSchema(tool.inputSchema);
+      const params = describeParams(
+        (ctx.tools?.shape(tool.name) ?? tool.inputSchema) as
+          | Record<string, z.ZodTypeAny>
+          | undefined,
+      );
+      if (ctx.tools && ctx.tools.shape(tool.name) === undefined) {
+        return `"${tool.name}" exists in the catalog but is not available on this server (read-only mode or a module filter).`;
+      }
       const risk = tool.annotations.readOnlyHint
         ? "READ (no changes)"
         : tool.annotations.destructiveHint
@@ -292,7 +317,7 @@ export const toolGatewayTools: ToolModule = [
         `${tool.description}\n\n` +
         `Parameters:\n${paramLines}\n\n` +
         `JSON schema:\n${JSON.stringify(schema, null, 2)}\n\n` +
-        `Run it with invoke_tool: { "name": "${tool.name}", "arguments": { … } }`
+        `Run it: ${howToRun(tool.name, ctx)}`
       );
     },
   }),
@@ -301,14 +326,16 @@ export const toolGatewayTools: ToolModule = [
     name: "invoke_tool",
     title: "Invoke a Tool by Name",
     annotations: WRITE,
+    dispatcher: true,
     description:
-      "Execute ANY tool in the catalog by its exact name with the given arguments — the precise way " +
-      "to run a tool you found via find_tools but the host hasn't surfaced for a direct call. The " +
-      "arguments are validated against that tool's real schema and run through its real handler, so " +
-      "this is exactly as safe/accurate as calling the tool directly (unlike raw CLI). " +
-      "To target a specific device in a multi-device setup, set the top-level `device` parameter on " +
-      "THIS call — not inside `arguments`. If validation fails you get the expected parameters back; " +
-      "fix and retry. For a one-off raw command with no dedicated tool, prefer run_routeros_command.",
+      "Execute ANY tool in the catalog by its exact name with the given arguments — the way to run " +
+      "a tool you found via find_tools when it is not in your tool list. The call goes through the " +
+      "same pipeline as a direct call: the same schema validation, access and risk checks, safety " +
+      "guards and audit record (saved under the target tool's own name and Tool call ID). " +
+      "Put the target's arguments in `arguments`, exactly as describe_tool lists them — including " +
+      "`reason` when the target requires it. To choose a device, set `device` on THIS call or " +
+      "inside `arguments`. Unknown argument names are rejected, not ignored. If validation fails " +
+      "you get the expected parameters back; fix and retry.",
     inputSchema: {
       name: z.string().min(1).describe("Exact tool name to run, e.g. 'create_filter_rule'."),
       arguments: z
@@ -319,28 +346,36 @@ export const toolGatewayTools: ToolModule = [
     async handler(a, ctx) {
       const { index, byName } = await gateway();
       const name = a.name.trim();
-      if (META_NAMES.has(name)) {
-        return `"${name}" is a gateway meta-tool and cannot be invoked through invoke_tool.`;
-      }
-      const tool = byName.get(name);
-      if (!tool) {
+      // These failures name the tool the caller is already invoking, or near
+      // matches of a wrong name; a hint line would only repeat them.
+      const fail = (text: string) => ({ text, isError: true, hint: false as const });
+      if (name === "invoke_tool") return fail("invoke_tool cannot invoke itself.");
+      if (!ctx.tools) return fail("invoke_tool is only available on a running MCP server.");
+
+      const shape = ctx.tools.shape(name) as z.ZodRawShape | undefined;
+      if (!shape) {
+        if (byName.has(name)) {
+          return fail(
+            `Refused: "${name}" is not available on this server (read-only mode or a module filter).`,
+          );
+        }
         const near = searchToolIndex(index, name, 5)
           .map((h) => h.name)
           .join(", ");
-        return `No tool named "${name}".${near ? ` Closest matches: ${near}.` : ""} Use find_tools to search the catalog.`;
+        return fail(
+          `No tool named "${name}".${near ? ` Closest matches: ${near}.` : ""} Use find_tools to search the catalog.`,
+        );
       }
 
-      // Safety: never let the dispatcher run a write tool when the server is in
-      // read-only mode (invoke_tool is itself withheld in that mode, but enforce
-      // here too so a config change can't open a hole).
-      if (getConfig().readOnly && tool.annotations.readOnlyHint !== true) {
-        return `Refused: the server is in read-only mode and "${name}" is a write/destructive tool.`;
+      const args: Record<string, unknown> = { ...a.arguments };
+      // `device` set on invoke_tool itself targets the delegated tool.
+      if (ctx.device !== undefined && args.device === undefined && "device" in shape) {
+        args.device = ctx.device;
       }
-
-      // Validate the arguments against the target tool's own schema — the same
-      // check the MCP server applies, so invocation precision is identical.
-      const shape = (tool.inputSchema ?? {}) as z.ZodRawShape;
-      const parsed = z.object(shape).safeParse(a.arguments ?? {});
+      // The schema a direct call is validated against. Strict on purpose: a
+      // misspelled or unsupported argument must fail, not be dropped silently
+      // (a dropped `use_safe_mode: false` would change what the call does).
+      const parsed = z.object(shape).strict().safeParse(args);
       if (!parsed.success) {
         const params = describeParams(shape as Record<string, z.ZodTypeAny>)
           .map((p) => `${p.name}${p.required ? " (required)" : ""}`)
@@ -348,18 +383,33 @@ export const toolGatewayTools: ToolModule = [
         const issues = parsed.error.issues
           .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
           .join("; ");
-        return (
+        return fail(
           `Invalid arguments for "${name}": ${issues}. ` +
-          `Expected parameters: ${params || "(none)"}. Use describe_tool("${name}") for the full schema.`
+            `Expected parameters: ${params || "(none)"}. For the full schema: ${howToRun("describe_tool", ctx)}.`,
         );
       }
 
       ctx.info(`invoke_tool → ${name}`);
-      const raw = await tool.handler(parsed.data, ctx);
-      if (typeof raw !== "string" && raw.isError !== undefined) return raw;
-      const text = typeof raw === "string" ? raw : raw.text;
-      if (looksLikeError(text)) return `Tool "${name}" reported an error: ${text}`;
-      return text.trim() ? text : `(${name} completed with no output)`;
+      // The delegated tool's own direct-call pipeline: guards, access policy for
+      // ITS risk and device, audit record, Tool call ID. Returned untouched.
+      const result = await ctx.tools.run(name, parsed.data as Record<string, unknown>);
+      if (!result) return fail(`"${name}" is not available on this server.`);
+      return { text: "", passthrough: result };
     },
   }),
 ];
+
+/** The gateway's own tools, which the search index leaves out. */
+function metaTool(name: string): RegisterableTool | undefined {
+  return META_NAMES.has(name) ? toolGatewayTools.find((tool) => tool.name === name) : undefined;
+}
+
+/** Fallback schema when no server is attached (unit tests of the raw handler). */
+function listedSchema(shape: z.ZodRawShape | undefined): Record<string, unknown> {
+  return shape
+    ? (toJsonSchemaCompat(z.object(shape) as never, {
+        strictUnions: true,
+        pipeStrategy: "input",
+      }) as Record<string, unknown>)
+    : { type: "object", properties: {} };
+}

@@ -3,9 +3,10 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
 import type { ZodRawShape } from "zod";
 import { z } from "zod";
-import type { SendLog, ToolContext } from "./context";
+import type { SendLog, ToolAccess, ToolContext } from "./context";
 import { createContext } from "./context";
 import { containsRawParserError, indicatesFailure } from "./routeros";
 import { buildRecordsView } from "./routeros-parse";
@@ -68,8 +69,130 @@ export function effectiveUi(def: { name: string; annotations: ToolAnnotations; u
   return { ui: undefined, auto: false };
 }
 
+/**
+ * The pinned core set: always in `tools/list`, first, in this order, whatever
+ * the module filter or surface mode. These are the tools a client needs to reach
+ * everything else (the gateway) and to get out of trouble (Safe Mode, history).
+ */
+export const PINNED_TOOLS: readonly string[] = [
+  "find_tools",
+  "describe_tool",
+  "invoke_tool",
+  "get_access_scope",
+  "safe_mode_status",
+  "rollback_safe_mode",
+  "enable_safe_mode",
+  "commit_safe_mode",
+  "get_tool_call",
+];
+const PINNED = new Set(PINNED_TOOLS);
+
+/** One tool as bound to one MCP server: what a direct call validates and runs. */
+interface BoundTool {
+  shape: ZodRawShape | undefined;
+  callback: (args: Record<string, unknown>) => Promise<CallToolResult>;
+  /** False in `core` surface mode for tools reachable only through `invoke_tool`. */
+  listed: boolean;
+  schema?: Record<string, unknown>;
+}
+
+/** Per-server tool table. A process may hold several servers (one per HTTP session). */
+const boundTools = new WeakMap<McpServer, Map<string, BoundTool>>();
+
+function boundOf(server: McpServer): Map<string, BoundTool> {
+  let map = boundTools.get(server);
+  if (!map) {
+    map = new Map();
+    boundTools.set(server, map);
+  }
+  return map;
+}
+
+/** What `tools/list` publishes when a tool takes no input (mirrors the SDK). */
+const EMPTY_INPUT_SCHEMA = { type: "object", properties: {} };
+
+/**
+ * The gateway's view of a server's tools. Schema and execution come from the
+ * same bound entry a direct call uses, so they cannot drift apart.
+ */
+function toolAccess(server: McpServer, surface: "full" | "core"): ToolAccess {
+  const bound = boundOf(server);
+  return {
+    run: (name, args) => bound.get(name)?.callback(args),
+    shape: (name) => {
+      const tool = bound.get(name);
+      return tool ? (tool.shape ?? {}) : undefined;
+    },
+    schema: (name) => {
+      const tool = bound.get(name);
+      if (!tool) return undefined;
+      // Same converter and options as the SDK's `tools/list` handler.
+      tool.schema ??= tool.shape
+        ? (toJsonSchemaCompat(z.object(tool.shape) as never, {
+            strictUnions: true,
+            pipeStrategy: "input",
+          }) as Record<string, unknown>)
+        : EMPTY_INPUT_SCHEMA;
+      return tool.schema;
+    },
+    direct: (name) => (surface === "core" ? bound.get(name)?.listed === true : PINNED.has(name)),
+  };
+}
+
+/**
+ * A ready-to-run `invoke_tool` call for a tool, with a placeholder for each
+ * required argument. This form works whatever the host has loaded, so every
+ * hint and error message gives it.
+ */
+export function invokeCall(name: string, schema?: Record<string, unknown>): string {
+  const required = Array.isArray(schema?.required) ? (schema.required as string[]) : [];
+  const args = Object.fromEntries(required.map((key) => [key, `<${key}>`]));
+  return `invoke_tool ${JSON.stringify({ name, arguments: args })}`;
+}
+
+/**
+ * snake_case words. One-word tool names (`ping`, `traceroute`) are left out on
+ * purpose: they are ordinary words in router output and would match constantly.
+ */
+const TOOL_NAME_TOKEN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g;
+const MAX_HINTED_TOOLS = 4;
+
+/**
+ * Tool output and error text often name another tool ("call X next"). When the
+ * client may not have X in its tool list, that is a dead end. This returns one
+ * line with a ready-to-run `invoke_tool` call for each such tool, or undefined
+ * when every tool named is directly callable. Applied to every result in one
+ * place, so no handler can produce an unreachable hint.
+ */
+export function unreachableToolHint(
+  text: string,
+  tools: ToolAccess,
+  self: string,
+): string | undefined {
+  const named = [...new Set(text.match(TOOL_NAME_TOKEN) ?? [])].filter(
+    (name) =>
+      name !== self &&
+      tools.shape(name) !== undefined &&
+      !tools.direct(name) &&
+      !text.includes(`"name":"${name}"`), // already given as an invoke_tool call
+  );
+  if (named.length === 0) return undefined;
+  const calls = named
+    .slice(0, MAX_HINTED_TOOLS)
+    .map((name) => invokeCall(name, tools.schema(name)));
+  return `↳ Not in your tool list? Same checks and audit through: ${calls.join(" · ")}`;
+}
+
 /** Options threaded into every tool registration. */
 export interface RegisterOptions {
+  /**
+   * `full` (default) lists every tool. `core` lists only {@link PINNED_TOOLS}
+   * plus `coreTools`; every other tool stays bound and runs through
+   * `invoke_tool`. Use `core` for hosts that load only part of a large list.
+   */
+  surface?: "full" | "core";
+  /** Extra tool names to list in `core` surface mode. */
+  coreTools?: string[];
   sendLog?: SendLog;
   /** Configured device KEYS; when more than one, a `device` selector is injected. */
   deviceNames?: string[];
@@ -183,6 +306,17 @@ export interface ToolResult {
   structuredContent?: Record<string, unknown>;
   /** Explicit outcome for evidence readers whose successful output can quote historical errors. */
   isError?: boolean;
+  /**
+   * A finished result of ANOTHER tool's direct-call pipeline, returned as is.
+   * Only the tool gateway sets it: that call was already guarded, recorded and
+   * given its own Tool call ID, so this call must not record or stamp it again.
+   */
+  passthrough?: CallToolResult;
+  /**
+   * `false` = do not append the "not in your tool list" hint line. For a
+   * result whose text already says how to run every tool it names.
+   */
+  hint?: false;
 }
 
 export type HandlerOutput = string | ToolResult;
@@ -220,6 +354,13 @@ export interface ToolDef<Shape extends ZodRawShape> {
    * returns a clear reason instead of a RouterOS parser error.
    */
   requires?: ToolRequires;
+  /**
+   * True for `invoke_tool` only. The access policy is then evaluated for the
+   * delegated tool (its own risk and device) instead of for the dispatcher,
+   * so a read-only scope can still read through the gateway and a write is
+   * still judged as the write it is.
+   */
+  dispatcher?: boolean;
   /** Handler returning the result shown to the model (text, or text + structured data). */
   handler: (args: any, ctx: ToolContext) => Promise<HandlerOutput> | HandlerOutput;
 }
@@ -236,6 +377,8 @@ export interface RegisterableTool {
   ui?: UiLink;
   /** Device requirements, if the tool declared any. */
   requires?: ToolRequires;
+  /** True for `invoke_tool`: guards apply to the delegated tool. */
+  dispatcher?: boolean;
   /**
    * The raw handler (pre-`device`-injection, pre-validation). Exposed so the
    * tool-gateway dispatcher (`invoke_tool`) can run any tool by name through its
@@ -335,9 +478,13 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
     noDevice: def.noDevice,
     ui: def.ui,
     requires: def.requires,
+    dispatcher: def.dispatcher,
     handler: def.handler,
     register(server: McpServer, opts: RegisterOptions = {}) {
       const { sendLog, deviceNames, deviceAliases, deviceDirectory, appViews } = opts;
+      const surface = opts.surface ?? "full";
+      const listed =
+        surface === "full" || PINNED.has(def.name) || (opts.coreTools ?? []).includes(def.name);
       // The single-vs-multi decision is keyed on the device COUNT, never the
       // enum size — a lone device that happens to have a label must not gain a
       // selector. Tools that opt out via `noDevice` never get the selector.
@@ -444,7 +591,7 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
         // device is RESOLVED first so an alias cannot slip past a device
         // allow-list that names config keys.
         const policy = getAccessPolicy();
-        if (policy.enabled) {
+        if (policy.enabled && !def.dispatcher) {
           const resolvedDevice = def.noDevice ? undefined : resolveDeviceName(deviceName);
           const decision = evaluateAccess(policy, {
             tool: def.name,
@@ -484,6 +631,8 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
         const startedAt = Date.now();
         let isErr = false;
         let errMsg: string | undefined;
+        // Set when the gateway hands back another tool's finished result.
+        let delegated = false;
         try {
           // Capability guard. Runs regardless of `capabilityGating` — listing
           // behaviour is UX, this is the safety net that turns "bad command
@@ -500,9 +649,15 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             }
           }
           const raw = await def.handler(rest, ctx);
+          if (typeof raw !== "string" && raw.passthrough) {
+            delegated = true;
+            ctx.delegated = true;
+            return raw.passthrough;
+          }
           // Normalize: a plain string is just text; an object may also carry
           // `structuredContent` for an MCP App view.
           const out = typeof raw === "string" ? { text: raw } : raw;
+          if (out.hint === false) ctx.noHint = true;
           // Backstop: if a handler returned a raw RouterOS parser error or a
           // flattened "Failed to …:" device-error string, surface it as a real
           // error instead of a success-looking result — so the host and the
@@ -569,24 +724,27 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             isError: true,
           };
         } finally {
-          recordToolToMemory({
-            tool: def.name,
-            device: deviceName,
-            isError: isErr,
-            durationMs: Date.now() - startedAt,
-          });
+          // A delegated call was already recorded by the tool that ran.
+          if (!delegated)
+            recordToolToMemory({
+              tool: def.name,
+              device: deviceName,
+              isError: isErr,
+              durationMs: Date.now() - startedAt,
+            });
           // Emitted unconditionally, NOT from inside recordToolCall: that one
           // early-returns unless the dashboard is enabled, and alerting must not
           // silently depend on `--dashboard`. A no-op when no engine is
           // installed, and synchronous by contract so it cannot delay the call.
-          emitAlertEvent({
-            kind: "tool_call",
-            risk,
-            device: deviceName,
-            tool: def.name,
-            isError: isErr,
-            detail: isErr ? errMsg : undefined,
-          });
+          if (!delegated)
+            emitAlertEvent({
+              kind: "tool_call",
+              risk,
+              device: deviceName,
+              tool: def.name,
+              isError: isErr,
+              detail: isErr ? errMsg : undefined,
+            });
         }
       };
 
@@ -618,6 +776,7 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           id,
         );
         ctx.risk = risk;
+        ctx.tools = toolAccess(server, surface);
         let result: CallToolResult;
         try {
           result = await execute(args, ctx);
@@ -633,6 +792,8 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             isError: true,
           };
         }
+        // The delegated tool's own callback recorded the call and added its ID.
+        if (ctx.delegated) return result;
         const output = result.content
           .filter((c) => c.type === "text")
           .map((c) => c.text)
@@ -659,6 +820,10 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           },
           id,
         );
+        if (ctx.tools && !ctx.noHint) {
+          const hint = unreachableToolHint(output, ctx.tools, def.name);
+          if (hint) result.content.push({ type: "text", text: hint });
+        }
         result.content.push({
           type: "text",
           text: `Tool call ID: ${id}${recorded ? "" : " (history not saved; recording is disabled or unavailable)"}`,
@@ -671,6 +836,8 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
         return result;
       };
 
+      boundOf(server).set(def.name, { shape: inputSchema, callback, listed });
+      if (!listed) return; // bound for invoke_tool, but not in tools/list
       server.registerTool(
         def.name,
         {
@@ -716,19 +883,26 @@ export function registerTools(
   modules: ToolModule[],
   opts: RegisterOptions = {},
 ): number {
-  let count = 0;
+  const all = modules.flat();
   const seen = new Set<string>();
-  for (const mod of modules) {
-    for (const tool of mod) {
-      if (seen.has(tool.name)) {
-        throw new Error(`Duplicate tool name registered: ${tool.name}`);
-      }
-      seen.add(tool.name);
-      // In read-only mode, withhold anything that isn't explicitly read-only.
-      if (opts.readOnly && tool.annotations.readOnlyHint !== true) continue;
-      tool.register(server, opts);
-      count++;
-    }
+  for (const tool of all) {
+    if (seen.has(tool.name)) throw new Error(`Duplicate tool name registered: ${tool.name}`);
+    seen.add(tool.name);
+  }
+  // Pinned tools first, in their fixed order, so they lead `tools/list` (and its
+  // first page). The sort is stable: every other tool keeps catalog order.
+  const rank = (name: string): number => {
+    const i = PINNED_TOOLS.indexOf(name);
+    return i === -1 ? PINNED_TOOLS.length : i;
+  };
+  const ordered = [...all].sort((a, b) => rank(a.name) - rank(b.name));
+  let count = 0;
+  for (const tool of ordered) {
+    // In read-only mode, withhold anything that isn't explicitly read-only. The
+    // dispatcher stays: with no write tool bound, it can only reach reads.
+    if (opts.readOnly && tool.annotations.readOnlyHint !== true && !tool.dispatcher) continue;
+    tool.register(server, opts);
+    count++;
   }
   return count;
 }

@@ -69,6 +69,8 @@ TRANSPORT OPTIONS
   --transport          stdio | sse | streamable-http   (MIKROTIK_MCP__TRANSPORT)
   --mcp-host           HTTP bind host                   (MIKROTIK_MCP__HOST)
   --mcp-port           HTTP bind port                   (MIKROTIK_MCP__PORT)
+  --tool-surface       full | core tool list            (MIKROTIK_MCP__TOOL_SURFACE)
+  --core-tools         Extra tools listed in core mode  (MIKROTIK_MCP__CORE_TOOLS)
   --mcp-allowed-hosts  Host heaxder allow-list (DNS-rebinding protection)
 
 SSH CONNECTION POOLING  (persistent connections, on by default)

@@ -282,6 +282,8 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "allowedOrigins": "",
     "corsOrigins": "",
     "toolPageSize": 0,
+    "toolSurface": "full",
+    "coreTools": "",
     "appViews": false,
     "capabilityGating": "annotate"
   },
@@ -320,6 +322,15 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
       "minimum": 0,
       "maximum": 9007199254740991
     },
+    "toolSurface": {
+      "default": "full",
+      "type": "string",
+      "enum": ["full", "core"]
+    },
+    "coreTools": {
+      "default": "",
+      "type": "string"
+    },
     "appViews": {
       "default": false,
       "type": "boolean"
@@ -338,6 +349,8 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "allowedOrigins",
     "corsOrigins",
     "toolPageSize",
+    "toolSurface",
+    "coreTools",
     "appViews",
     "capabilityGating"
   ],
