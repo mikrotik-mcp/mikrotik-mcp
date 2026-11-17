@@ -22,8 +22,8 @@ export interface LayoutNode {
 /** Sentinel id for the hub; a leading space cannot collide with a RouterOS identity. */
 export const HUB_ID = " hub";
 
-export const W = 900;
-export const H = 620;
+export const W = 760;
+export const H = 580;
 export const CX = W / 2;
 export const CY = H / 2;
 
@@ -44,8 +44,8 @@ export function layout(
   const ang = new Map<string, number>();
   pos.set(HUB_ID, { x: CX, y: CY });
 
-  const rInner = devices.length <= 1 ? 110 : Math.min(170, 96 + devices.length * 7);
-  const rOuter = rInner + (devices.length <= 1 ? 190 : 155);
+  const rInner = devices.length <= 1 ? 110 : Math.min(150, 112 + devices.length * 7);
+  const rOuter = rInner + (devices.length <= 1 ? 140 : 110);
 
   devices.forEach((d, i) => {
     // A lone device would otherwise land on the hub, so it takes 12 o'clock.
@@ -63,7 +63,7 @@ export function layout(
     const base = ang.get(p) ?? -Math.PI / 2;
     const k = seen.get(p) ?? 0;
     seen.set(p, k + 1);
-    angles.set(nb.id, base + Math.ceil(k / 2) * (k % 2 === 0 ? 1 : -1) * 0.34);
+    angles.set(nb.id, base + Math.ceil(k / 2) * (k % 2 === 0 ? 1 : -1) * 0.49);
   }
 
   const REPEL = 2600;

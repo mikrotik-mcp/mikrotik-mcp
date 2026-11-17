@@ -157,6 +157,33 @@ the tokens; do not invent colors, sizes or radii, and never hard-code hex in TSX
 (`tests/observability-ui.spec.ts` fails on it). Check both themes and a 375px
 width in the browser preview before you call a UI change done.
 
+### Design first, then code that matches the board exactly
+
+1. **Design before code.** Any new page or redesign starts as artboards in a
+   claude.ai Design canvas (the Design artifact type) built on the "MikroTik
+   MCP" design system: one artboard per page or state, both themes, and a phone
+   width. Stop and ask for approval. Write no UI code until the user approves.
+2. **The approved board is the spec.** Implement it element by element: same
+   order, same copy, same components, and the same font size, weight, line
+   height, colour token, padding, gap, border, radius and shadow. Take values
+   from the artboard's source (`.dc.html` plus its shared CSS), not from a
+   screenshot. Do not add, drop, rename, reorder or restyle anything the board
+   shows, and do not add sections or controls the board does not show.
+3. **Compare, detail by detail, before calling it done.** Render the artboard
+   and the real page side by side at the same width, theme and data (use the
+   board's sample data through a `fetch` stub in your own browser tab, never in
+   code). Walk every element, top to bottom, and check text, spacing, size,
+   weight, colour, radius, border, alignment, icons and states (hover, focus,
+   selected, empty, loading, error). Read computed styles with the browser
+   tools; eyeballing is not enough. Write the differences down, fix them, and
+   compare again until the list is empty. Do this for dark, light and 375px.
+4. **No silent deviations.** If the real data or an existing behaviour cannot
+   support something on the board, do not improvise. Stop, tell the user what
+   differs and why, and either update the board first (and get it approved) or
+   get an explicit OK for the difference.
+5. **Report the comparison.** When you finish, list what you compared, per page
+   and per theme, and any difference the user approved.
+
 ## Adding or changing a tool module
 
 1. Create `src/tools/<scope>.ts` exporting a `ToolModule`. **Mirror the closest

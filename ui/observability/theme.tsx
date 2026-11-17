@@ -31,6 +31,17 @@ export function useTheme(): [Theme, (t: Theme) => void] {
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
+  // Several toggles can be mounted (header, search palette). Follow the class
+  // on <html> so one switch updates every other control's label and icon.
+  useEffect(() => {
+    const root = document.documentElement;
+    const watch = new MutationObserver(() =>
+      setThemeState(root.classList.contains("dark") ? "dark" : "light"),
+    );
+    watch.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => watch.disconnect();
+  }, []);
+
   const setTheme = useCallback((t: Theme): void => {
     setThemeState(t);
     try {
@@ -44,11 +55,14 @@ export function useTheme(): [Theme, (t: Theme) => void] {
 }
 
 /** A single icon button that flips between light and dark. */
-export function ThemeToggle(): ReactNode {
+export function ThemeToggle({ className }: { className?: string } = {}): ReactNode {
   return (
     <BeuiThemeToggle
       variant="circle"
-      className="size-9 rounded-md hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+      className={
+        className ??
+        "size-9 rounded-md hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+      }
       iconClassName="size-4"
     />
   );

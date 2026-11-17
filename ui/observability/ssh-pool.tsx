@@ -1,17 +1,31 @@
 import type { ReactNode } from "react";
-import { Activity, Cable, ChevronDown, Clock3, Radio, Server } from "lucide-react";
-import { ms, num } from "./format";
+import { MonitorPanel, StatusBadge, StatusDot, formatMs } from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
 import type { DeviceInfo, SSHPoolPayload } from "./types";
 
-function poolState(pool: DeviceInfo["pool"]): { state: string; label: string } {
-  if (!pool) return { state: "unknown", label: "Not reported" };
-  if (pool.dead) return { state: "offline", label: "Reconnecting" };
-  if (!pool.pooled) return { state: "unknown", label: "No connection" };
-  if (pool.inflight > 0) return { state: "busy", label: `${pool.inflight} active channels` };
-  return { state: "online", label: "Ready · idle" };
+/** "30 s", "5 min": pool timings the way the board writes them. */
+function duration(ms: number): string {
+  return ms >= 60_000 && ms % 60_000 === 0 ? `${ms / 60_000} min` : formatMs(ms);
 }
 
-/** Fleet-wide management connections, not a router reachability or capacity meter. */
+export function poolState(pool: DeviceInfo["pool"]): { tone: Tone; label: string } {
+  if (!pool) return { tone: "default", label: "Not reported" };
+  if (pool.dead) return { tone: "warn", label: "Reconnecting" };
+  if (!pool.pooled) return { tone: "default", label: "No connection" };
+  if (pool.inflight > 0)
+    return {
+      tone: "brand",
+      label: `Busy · ${pool.inflight} call${pool.inflight === 1 ? "" : "s"} running`,
+    };
+  return { tone: "good", label: "Ready · idle" };
+}
+
+const COLS = "minmax(160px,1fr) 120px 120px minmax(140px,1fr)";
+
+/**
+ * Open SSH sessions MCP keeps to reuse, per router. An open session shows MCP
+ * can reach a router; it does not show the router is healthy.
+ */
 export function SSHPoolPanel({
   devices,
   poolPayload,
@@ -19,102 +33,70 @@ export function SSHPoolPanel({
   devices: DeviceInfo[];
   poolPayload?: SSHPoolPayload | null;
 }): ReactNode {
-  const agg = poolPayload?.aggregate;
   const cfg = poolPayload?.config;
-  const sshDevices = devices.filter((d) => !d.mac);
+  const ssh = devices.filter((d) => !d.mac);
+  const timing = cfg
+    ? `Keepalive every ${duration(cfg.keepAliveInterval)}, idle sessions close after ${duration(cfg.idleTimeout)}.`
+    : "Connection timing not reported.";
+  const badge = !poolPayload ? (
+    <StatusBadge>Status unavailable</StatusBadge>
+  ) : poolPayload.enabled ? (
+    <StatusBadge tone="good">Pooling on</StatusBadge>
+  ) : (
+    <StatusBadge>Pooling off</StatusBadge>
+  );
   return (
-    <details className="device-pool" open>
-      <summary>
-        <span className="device-pool__icon">
-          <Cable size={19} />
-        </span>
-        <span>
-          <strong>SSH Connection Pool</strong>
-          <small>Persistent management channels · entire fleet</small>
-        </span>
-        <span className="device-pool__state">
-          {poolPayload
-            ? poolPayload.enabled
-              ? "Pooling enabled"
-              : "Pooling disabled"
-            : "Status unavailable"}
-        </span>
-        <ChevronDown size={16} />
-      </summary>
-      <div className="device-pool__body">
-        {poolPayload?.enabled === false ? (
-          <p className="devices-caption">
-            Persistent pooling is disabled. Enable <code>--ssh-keep-alive true</code> or{" "}
-            <code>MIKROTIK_SSH__KEEP_ALIVE=true</code> in the server configuration to reuse SSH
-            connections.
-          </p>
-        ) : (
-          <>
-            <div className="device-pool__metrics">
-              <div className="device-pool__total">
-                <Server size={18} />
-                <strong>{agg ? num(agg.totalConnections) : "—"}</strong>
-                <span>open connections</span>
+    <MonitorPanel
+      className="dv-pool"
+      title="SSH connection pool"
+      description={`Open sessions MCP keeps to reuse. ${timing}`}
+      extra={badge}
+      flush
+    >
+      {poolPayload?.enabled === false ? (
+        <div className="monitor-foot">
+          Pooling is off. Set --ssh-keep-alive true or MIKROTIK_SSH__KEEP_ALIVE=true in the server
+          settings to reuse SSH sessions.
+        </div>
+      ) : (
+        <>
+          <div className="monitor-thead max-sm:hidden" style={{ gridTemplateColumns: COLS }}>
+            <span>Router</span>
+            <span className="text-right">Busy channels</span>
+            <span className="text-right">Idle</span>
+            <span>State</span>
+          </div>
+          {ssh.map((d) => {
+            const info = poolState(d.pool);
+            const open = !!d.pool?.pooled && !d.pool.dead;
+            return (
+              <div key={d.name} className="monitor-row dv-pool-row" data-state={info.label}>
+                <span className="truncate font-mono text-[13px]">{d.name}</span>
+                <span className="text-fg-secondary text-right tabular-nums max-sm:hidden">
+                  {d.pool ? (open ? d.pool.inflight : 0) : "—"}
+                </span>
+                <span className="text-fg-secondary text-right tabular-nums max-sm:hidden">
+                  {d.pool ? (open && d.pool.inflight === 0 ? 1 : 0) : "—"}
+                </span>
+                <span className="text-fg-secondary flex items-center gap-2 max-sm:text-[12px]">
+                  <StatusDot tone={info.tone} />
+                  {info.label}
+                </span>
               </div>
-              <dl>
-                <div>
-                  <dt>
-                    <Activity size={13} /> In-flight channels
-                  </dt>
-                  <dd>{agg ? num(agg.totalInflight) : "—"}</dd>
-                </div>
-                <div>
-                  <dt>
-                    <Radio size={13} /> Busy connections
-                  </dt>
-                  <dd>{agg ? num(agg.totalBusy) : "—"}</dd>
-                </div>
-                <div>
-                  <dt>
-                    <Clock3 size={13} /> Idle connections
-                  </dt>
-                  <dd>{agg ? num(agg.totalIdle) : "—"}</dd>
-                </div>
-              </dl>
-            </div>
-            <div className="device-pool__connections">
-              {sshDevices.map((d) => {
-                const info = poolState(d.pool);
-                return (
-                  <div key={d.name} data-state={info.state}>
-                    <span className="device-pool__socket">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    <strong>{d.name}</strong>
-                    <span>{info.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {!poolPayload && (
-              <p className="devices-caption">
-                Pool totals have not loaded. Unreported connections are not assumed to be
-                disconnected.
-              </p>
-            )}
-          </>
-        )}
-        <footer>
-          <span>
-            {cfg ? (
-              <>
-                Keepalive <b>{ms(cfg.keepAliveInterval)}</b> <i /> Idle timeout{" "}
-                <b>{ms(cfg.idleTimeout)}</b>
-              </>
-            ) : (
-              "Connection timing not reported"
-            )}
-          </span>
-          <span>Pool state does not prove router health.</span>
-        </footer>
-      </div>
-    </details>
+            );
+          })}
+          <div className="monitor-row text-muted-foreground text-[12px]">
+            <span className="max-sm:hidden">
+              An open session shows MCP can reach the router. It doesn't show the router is healthy.
+            </span>
+            <span className="sm:hidden">
+              {cfg
+                ? `Keepalive ${duration(cfg.keepAliveInterval)} · idle sessions close after ${duration(cfg.idleTimeout)}.`
+                : "Connection timing not reported."}
+            </span>
+          </div>
+        </>
+      )}
+    </MonitorPanel>
   );
 }

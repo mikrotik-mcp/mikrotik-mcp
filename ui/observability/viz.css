@@ -156,83 +156,6 @@
   animation: jump-lock 2.2s linear infinite;
 }
 
-/* ── topology radar ───────────────────────────────────────────────────────── */
-
-/*
- * Slow sweep of the radar beam around the hub.
- *
- * NO `transform-box: fill-box` here, unlike the rings/halo/pulse below. The
- * wedge's pivot is its apex (the hub), not its bounding-box centre, so it keeps
- * the default `view-box` box and `topology.tsx` supplies `transform-origin` in
- * user units. With fill-box the beam orbits a point off to its right.
- */
-.topo-sweep {
-  animation: topo-sweep 8s linear infinite;
-}
-
-/* Concentric guide rings drift in the opposite direction, very slowly. */
-.topo-ring {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: topo-ring 90s linear infinite reverse;
-}
-
-/* Dash offset marching along a link, so traffic reads as flowing hub→device. */
-.topo-flow {
-  animation: topo-flow 1.4s linear infinite;
-}
-
-/* An un-onboarded neighbour breathes, inviting the click that adopts it. */
-.topo-pulse {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: topo-pulse 2.6s ease-in-out infinite;
-}
-
-/* The halo behind a selected node. */
-.topo-halo {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: topo-halo 2.2s ease-out infinite;
-}
-
-@keyframes topo-sweep {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes topo-ring {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes topo-flow {
-  to {
-    stroke-dashoffset: -16;
-  }
-}
-@keyframes topo-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.12);
-  }
-}
-@keyframes topo-halo {
-  0% {
-    opacity: 0.5;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.9);
-  }
-}
-
 @keyframes conn-sonar {
   0% {
     r: 30px;
@@ -290,8 +213,7 @@
 
 /* The original hid the sonar sweep and froze the packet/lock motion here. */
 @media (prefers-reduced-motion: reduce) {
-  .conn-sonar,
-  .topo-sweep {
+  .conn-sonar {
     display: none;
   }
   .conn-flow,
@@ -299,11 +221,7 @@
   .conn-node-halo,
   .conn-tunnel,
   .jump-route__wire,
-  .jump-route__lock,
-  .topo-ring,
-  .topo-flow,
-  .topo-pulse,
-  .topo-halo {
+  .jump-route__lock {
     animation: none;
   }
   .conn-packet animateMotion,

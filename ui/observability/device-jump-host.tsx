@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Network, Router } from "lucide-react";
 import {
   Combobox,
   ComboboxContent,
@@ -8,8 +7,8 @@ import {
   ComboboxList,
   ComboboxTrigger,
 } from "@/components/beui/registry/components/motion/combobox";
-import { Input } from "@/components/beui/registry/components/motion/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import { setDraftField } from "../../src/config-device-draft";
 
 type Draft = Record<string, unknown>;
@@ -100,36 +99,35 @@ export function DeviceJumpHost({
   const field = (key: string, label: string, fallback = "", secret = false) => {
     const stored = host[key] === "«redacted»";
     return (
-      <Input
-        key={key}
-        label={label}
-        id={`jump_${key}`}
-        readOnly={!manual}
-        type={secret ? "password" : key === "port" ? "number" : "text"}
-        value={stored || (!manual && secret) ? "" : text(host[key] ?? fallback)}
-        placeholder={
-          stored || (!manual && secret && host[key])
-            ? "Stored securely · reused automatically"
-            : secret
-              ? "Optional"
-              : "Not set"
-        }
-        autoComplete={secret ? "new-password" : "off"}
-        onChange={(next) => update(key, next)}
-        classNames={{ field: "rounded-xl", input: "text-sm font-mono" }}
-      />
+      <label key={key} className="monitor-fl">
+        <span className="monitor-label">{label}</span>
+        <input
+          id={`jump_${key}`}
+          className={cn("monitor-input", !secret && "font-mono")}
+          readOnly={!manual}
+          type={secret ? "password" : key === "port" ? "number" : "text"}
+          value={stored || (!manual && secret) ? "" : text(host[key] ?? fallback)}
+          placeholder={
+            stored || (!manual && secret && host[key])
+              ? "Stored securely · reused automatically"
+              : secret
+                ? "Optional"
+                : "Not set"
+          }
+          autoComplete={secret ? "new-password" : "off"}
+          onChange={(e) => update(key, e.target.value)}
+        />
+      </label>
     );
   };
+  const summary = selected
+    ? `${text(selected.host)}${selected.mac ? " · MAC-Telnet" : " · SSH"}`
+    : manual
+      ? `port ${text(host.port ?? 22)} · custom bastion`
+      : "";
   return (
-    <section className="device-jump-host" aria-label="SSH jump host">
-      <div className="device-editor__section-heading">
-        <span>
-          <Network size={17} /> SSH jump host
-        </span>
-      </div>
-      <p className="device-editor__caption">
-        Choose a router to reuse its connection, or enter a custom bastion address.
-      </p>
+    <div className="monitor-fl" aria-label="SSH jump host" role="group">
+      <span className="monitor-label">Jump host</span>
       <Combobox
         value={value}
         query={query}
@@ -138,16 +136,25 @@ export function DeviceJumpHost({
         disabled={disabled}
         filter={filterOptions}
       >
-        <ComboboxTrigger className="min-w-0">
-          <ComboboxInput
-            aria-label="Jump via device or address"
-            placeholder="Search routers or type an IP / hostname…"
-          />
+        <ComboboxTrigger className="dv-combo">
+          <span className="flex min-w-0 items-center gap-2">
+            <ComboboxInput
+              aria-label="Jump via device or address"
+              placeholder="Direct, or search routers and addresses"
+              wrapperClassName="dv-combo-input flex-none"
+              className={cn("h-9 font-mono text-[12px]", value !== "direct" && "dv-fit")}
+            />
+            {summary && (
+              <span className="text-muted-foreground truncate text-[12px] leading-[21px]">
+                {summary}
+              </span>
+            )}
+          </span>
         </ComboboxTrigger>
         <ComboboxContent className="device-jump-menu">
           <ScrollArea
-            className="device-jump-menu__scroll"
-            viewportProps={{ className: "device-editor__viewport" }}
+            className="h-[min(260px,var(--combobox-available-height))]"
+            viewportProps={{ className: "[&>div]:!block" }}
           >
             <ComboboxList ariaLabel="Jump hosts" className="max-h-none overflow-visible">
               <ComboboxItem value="direct" textValue="Direct connection · no jump host">
@@ -165,10 +172,9 @@ export function DeviceJumpHost({
                       disabled={!!reason}
                       keywords={[key, text(router.host)]}
                     >
-                      <Router size={16} className="shrink-0" />
                       <span className="min-w-0">
-                        <strong className="block truncate font-medium">{key}</strong>
-                        <small className="block truncate text-muted-foreground">
+                        <strong className="block truncate font-mono font-medium">{key}</strong>
+                        <small className="text-muted-foreground block truncate">
                           {reason ||
                             `${text(router.host)}:${text(router.port ?? 22)} · ${text(router.username ?? "admin")}`}
                         </small>
@@ -189,45 +195,30 @@ export function DeviceJumpHost({
           </ScrollArea>
         </ComboboxContent>
       </Combobox>
-      {issue && (
-        <p role="alert" className="text-destructive text-xs">
+      {issue ? (
+        <span role="alert" className="monitor-err">
           {issue}
-        </p>
-      )}
-      {(manual || selected) && (
-        <div className="device-jump-host__details">
-          <p className="device-editor__caption col-span-full">
-            {manual
-              ? "Custom bastion · enter its own SSH credentials below."
-              : `Linked to ${via}. Fields are filled automatically; credentials stay on the server. Edit that router to change them.`}
-          </p>
-          {field("host", "Jump host address")}
-          {field("port", "Jump host port", "22")}
-          {field("username", "Jump host user", "admin")}
-          {field("password", "Jump host password", "", true)}
-          {field("keyFilename", "Jump host key file")}
-          {manual && field("keyPassphrase", "Jump host key passphrase", "", true)}
-          {!manual && (
-            <Input
-              label="Authentication"
-              value={
-                host.privateKey
-                  ? "Stored private key"
-                  : host.keyFilename
-                    ? "SSH key file"
-                    : host.password
-                      ? "Stored password"
-                      : "No credentials configured"
-              }
-              readOnly
-            />
-          )}
-          <p className="device-editor__caption col-span-full">
-            SSH TCP forwarding must already be enabled on the bastion. This form does not change its
-            RouterOS settings.
-          </p>
+        </span>
+      ) : via ? (
+        <span className="monitor-hint">
+          MCP connects to {via} first, then opens a tunnel to this router.
+        </span>
+      ) : manual ? (
+        <span className="monitor-hint">
+          MCP connects to the bastion first, then opens a tunnel to this router. SSH TCP forwarding
+          must already be on there.
+        </span>
+      ) : null}
+      {manual && (
+        <div className="mt-2 grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+          {field("host", "Bastion address")}
+          {field("port", "Bastion port", "22")}
+          {field("username", "Bastion user", "admin")}
+          {field("password", "Bastion password", "", true)}
+          {field("keyFilename", "Bastion key file")}
+          {field("keyPassphrase", "Bastion key passphrase", "", true)}
         </div>
       )}
-    </section>
+    </div>
   );
 }

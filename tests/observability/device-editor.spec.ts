@@ -104,6 +104,18 @@ const click = async (label: string) => {
   expect(button(label)).toBeTruthy();
   await act(async () => button(label).click());
 };
+/** A public key row in the key list (a listbox option, not a button). */
+const option = (label: string) =>
+  document.querySelector<HTMLElement>(`[role="option"][aria-label="${label}"]`)!;
+const pick = async (label: string) => {
+  expect(option(label)).toBeTruthy();
+  await act(async () => option(label).click());
+};
+/** Test connection and Connect & save sit on the review step, as the board draws them. */
+const toReview = async () => {
+  await click("Continue");
+  await click("Continue");
+};
 const input = async (id: string, value: string) => {
   const el = document.querySelector<HTMLInputElement>(`#${id}`)!;
   expect(el).toBeTruthy();
@@ -168,6 +180,7 @@ test("multiple addresses choose Primary atomically and are included in both test
   await click("Make 203.0.113.8 primary");
   expect(document.querySelector<HTMLInputElement>("#f_host")?.value).toBe("203.0.113.8");
   expect(document.querySelector<HTMLInputElement>("#f_fallback_1")?.value).toBe("192.0.2.1");
+  await toReview();
   await click("Test connection");
   const body = calls.find((c) => c.path.includes("test-device"))!.body;
   expect(body.config).toMatchObject({ host: "203.0.113.8", fallbackHosts: ["192.0.2.1"] });
@@ -182,16 +195,16 @@ test("multiple addresses choose Primary atomically and are included in both test
 test("empty and duplicate addresses prevent connection tests; removing Primary promotes the next address", async () => {
   await render();
   await click("Add address");
-  await click("Test connection");
+  await click("Continue");
   expect(document.body.textContent).toContain("Enter every management address");
   await input("f_fallback_1", "192.0.2.1");
-  await click("Test connection");
+  await click("Continue");
   expect(document.body.textContent).toContain("Each management address must be unique");
   expect(calls.some((c) => c.path.includes("test-device"))).toBe(false);
   await input("f_fallback_1", "10.0.0.2");
-  await click("Remove address 1");
+  await click("Remove 192.0.2.1");
   expect(document.querySelector<HTMLInputElement>("#f_host")?.value).toBe("10.0.0.2");
-  expect(button("Remove address 1").disabled).toBe(true);
+  expect(button("Remove 10.0.0.2").disabled).toBe(true);
 });
 
 test("tag keyboard entry handles Enter, comma, Backspace and IME without advancing the form", async () => {
@@ -240,14 +253,12 @@ test("jump picker auto-fills a linked router without copying credentials and tes
     },
   } as typeof cfg);
   await click("branch192.0.2.2:2222 · ops");
-  expect(document.querySelector<HTMLInputElement>("#jump_host")?.value).toBe("192.0.2.2");
-  expect(document.querySelector<HTMLInputElement>("#jump_port")?.value).toBe("2222");
-  expect(document.querySelector<HTMLInputElement>("#jump_username")?.value).toBe("ops");
-  expect(document.querySelector<HTMLInputElement>("#jump_keyFilename")?.value).toBe(
-    "/keys/bastion",
-  );
-  expect(document.querySelector<HTMLInputElement>("#jump_password")?.value).toBe("");
-  expect(document.querySelector<HTMLInputElement>("#jump_host")?.readOnly).toBe(true);
+  // A linked router shows its address and the tunnel; its credentials stay out of the form.
+  expect(document.body.textContent).toContain("192.0.2.2 · SSH");
+  expect(document.body.textContent).toContain("MCP connects to branch first");
+  expect(document.querySelector("#jump_host")).toBeNull();
+  expect(document.querySelector("#jump_password")).toBeNull();
+  await toReview();
   await click("Test connection");
   const body = calls.find((c) => c.path.includes("test-device"))!.body;
   expect(body.config.jumpVia).toBe("branch");
@@ -278,6 +289,7 @@ test("manual address, configured router and direct modes are exclusive; switchin
   expect(document.querySelector<HTMLInputElement>("#jump_keyFilename")?.value).toBe("");
   await act(async () => combo.click());
   await click("Direct connection · no jump host");
+  await toReview();
   await click("Test connection");
   const body = calls.find((c) => c.path.includes("test-device"))!.body;
   expect(body.config.jumpVia).toBeUndefined();
@@ -297,7 +309,7 @@ test("jump-host guards reject missing, MAC, disabled and cyclic routers before p
     ...cfg,
     devices: { ...cfg.devices, edge: { ...redacted, jumpVia: "edge" } },
   } as typeof cfg);
-  await click("Connect & Save");
+  await click("Continue");
   expect(document.body.textContent).toContain("jump-host cycle");
   expect(calls).toHaveLength(0);
   expect(saved).not.toHaveBeenCalled();
@@ -322,26 +334,22 @@ test("keyboard navigation scrolls the shared jump-host viewport, not its non-scr
   expect(list.scrollTop).toBe(0);
 });
 
-test("shared scroll areas wrap the form, navigation and key list; step changes reset the form viewport", async () => {
+test("step changes scroll the dialog body back to the top", async () => {
   await render();
-  const viewport = document.querySelector<HTMLDivElement>(
-    '[data-slot="scroll-area-viewport"][aria-label="Device setup form"]',
-  )!;
-  expect(viewport).toBeTruthy();
-  expect(document.querySelectorAll('[data-slot="scroll-area"]')).toHaveLength(5);
-  const scroll = vi.spyOn(viewport, "scrollTo");
+  const viewport = document.querySelector<HTMLDivElement>(".dv-ed")!.parentElement!;
+  const scroll = vi.fn();
+  viewport.scrollTo = scroll as never;
   await click("Continue");
   expect(scroll).toHaveBeenCalledWith({ top: 0 });
-  expect(document.querySelectorAll('[data-slot="scroll-area"]')).toHaveLength(3);
-  const keys = document.querySelector('[aria-label="Available public keys"]')!;
-  expect(keys.getAttribute("data-slot")).toBe("scroll-area-viewport");
-  expect(keys.contains(button("Use key id_ed25519"))).toBe(true);
+  const keys = document.querySelector('[role="listbox"][aria-label="Available public keys"]')!;
+  expect(keys.contains(option("Use key id_ed25519"))).toBe(true);
   await click("Back");
   expect(scroll).toHaveBeenCalledTimes(2);
 });
 
-test("Test connection is available immediately and never applies or saves the draft", async () => {
+test("Test connection never applies or saves the draft", async () => {
   await render();
+  await toReview();
   await click("Test connection");
   expect(document.body.textContent).toContain("Connection verified");
   expect(calls.filter((c) => c.path.includes("test-device"))).toHaveLength(1);
@@ -353,8 +361,9 @@ test("Connect & Save validates and freshly tests the current draft before saving
   await render();
   await input("dev_name", "edge-renamed");
   await input("f_host", "192.0.2.9");
+  await toReview();
   await click("Test connection");
-  await click("Connect & Save");
+  await click("Connect & save");
   expect(saved).toHaveBeenCalledOnce();
   expect(calls.filter((c) => c.path.includes("test-device"))).toHaveLength(2);
   expect(calls.at(-2)?.path).toBe("/api/config/validate?scope=devices");
@@ -377,33 +386,36 @@ test.each([
   { ok: false, error: "Permission denied" },
 ])("Connect & Save never saves an unsuccessful or unproven connection: %j", async (failure) => {
   await render();
+  await toReview();
   vi.mocked(fetch)
     .mockResolvedValueOnce(Response.json({ ok: true }))
     .mockResolvedValueOnce(Response.json(failure));
-  await click("Connect & Save");
+  await click("Connect & save");
   expect(saved).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain("Connection could not be verified");
-  expect(button("Connect & Save").disabled).toBe(false);
+  expect(button("Connect & save").disabled).toBe(false);
 });
 
 test("failed validation stops Connect & Save before probing, and a failed save retains the form", async () => {
   await render();
+  await toReview();
   vi.mocked(fetch).mockResolvedValueOnce(
     Response.json({ ok: false, error: "Invalid device settings" }),
   );
-  await click("Connect & Save");
+  await click("Connect & save");
   expect(calls.some((c) => c.path.includes("test-device"))).toBe(false);
   expect(saved).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain("Invalid device settings");
   saved.mockResolvedValue(false);
-  await click("Connect & Save");
+  await click("Connect & save");
   expect(saved).toHaveBeenCalledOnce();
-  expect(document.body.textContent).toContain("saving was not confirmed");
+  expect(document.body.textContent).toContain("save was not confirmed");
   expect(cancelled).not.toHaveBeenCalled();
 });
 
 test("a pending connect-and-save locks editing and coalesces repeated actions", async () => {
   await render();
+  await toReview();
   let finish!: (value: Response) => void;
   vi.mocked(fetch)
     .mockResolvedValueOnce(Response.json({ ok: true }))
@@ -413,14 +425,18 @@ test("a pending connect-and-save locks editing and coalesces repeated actions", 
           finish = resolve;
         }),
     );
-  const action = button("Connect & Save");
+  const action = button("Connect & save");
   await act(async () => {
     action.click();
     action.click();
   });
   expect(button("Test connection").disabled).toBe(true);
-  expect(button("Connect & Save").disabled).toBe(true);
-  expect(button("Close device editor").disabled).toBe(true);
+  expect(button("Saving…").disabled).toBe(true);
+  expect(button("Cancel").disabled).toBe(true);
+  // Closing is ignored while a save runs.
+  await click("Close");
+  expect(cancelled).not.toHaveBeenCalled();
+  expect(document.body.textContent).not.toContain("Discard the changes");
   expect(document.querySelector("fieldset")?.disabled).toBe(true);
   expect(saved).not.toHaveBeenCalled();
   await act(async () => finish(Response.json({ ok: true, status: { reachable: true } })));
@@ -457,8 +473,10 @@ test("rename stays local until accepted and preserves redacted credentials throu
 test("quick selection uses companion path, clears higher-priority inline key and old passphrase, never installs a key", async () => {
   await render();
   await click("Continue");
-  expect(button("Use key public-only").disabled).toBe(true);
-  await click("Use key id_ed25519");
+  expect(option("Use key public-only").getAttribute("aria-disabled")).toBe("true");
+  await pick("Use key public-only");
+  expect(option("Use key public-only").getAttribute("aria-selected")).toBe("false");
+  await pick("Use key id_ed25519");
   expect(document.querySelector<HTMLInputElement>("#f_keyFilename")?.value).toBe(
     "/keys/id_ed25519",
   );
@@ -549,17 +567,19 @@ test("invalid names, ports and .pub paths cannot advance; cancellation never acc
   await render();
   await input("dev_name", "branch");
   await click("Continue");
-  expect(document.body.textContent).toContain("A router with this name already exists.");
+  expect(document.body.textContent).toContain(
+    "A router named branch already exists. Pick another name.",
+  );
   await input("dev_name", "unique");
   await input("f_port", "65536");
   await click("Continue");
   expect(document.body.textContent).toContain("Use a port from 1 to 65535.");
   await input("f_port", "22");
   await click("Continue");
-  await click("Use key id_ed25519");
+  await pick("Use key id_ed25519");
   await input("f_keyFilename", "/keys/id_ed25519.pub");
   await click("Continue");
-  expect(document.body.textContent).toContain("Use the private-key path, not the .pub file.");
+  expect(document.body.textContent).toContain("Use the private key path, not the .pub file.");
   await click("Cancel");
   expect(cancelled).not.toHaveBeenCalled();
   await click("Discard form");
@@ -574,7 +594,7 @@ test("password mode removes key precedence; MAC mode validates a real MAC instea
   expect(document.body.textContent).toContain("Enter a MAC address such as");
   await click("SSH");
   await click("Continue");
-  await click("Password authentication");
+  await click("Password");
   await click("Continue");
   await click("Update draft");
   const device = accepted().devices.edge;
@@ -590,7 +610,7 @@ test("validation failure retains the form and typed settings, and key loading ca
   await click("Continue");
   expect(document.body.textContent).toContain("Could not load public keys");
   await click("Refresh public keys");
-  expect(button("Use key id_ed25519")).toBeTruthy();
+  expect(option("Use key id_ed25519")).toBeTruthy();
   await click("Continue");
   vi.mocked(fetch).mockResolvedValueOnce(
     Response.json(

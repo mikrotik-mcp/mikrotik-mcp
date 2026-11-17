@@ -1,0 +1,39 @@
+/*
+ * Interfaces, after the "Interfaces" board (Interfaces.dc.html).
+ * Unlayered on purpose: these rules refine the shared monitor-* classes.
+ */
+
+/* The board's status line is 13px muted text with the state in bold. */
+.ifaces .monitor-status {
+  flex-wrap: wrap;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 400;
+  margin-top: 0;
+}
+.ifaces .monitor-status b {
+  color: var(--foreground);
+  font-weight: 510;
+}
+
+/* When the counters drop under the chart, they take the full width. */
+.ifaces-sel {
+  container-type: inline-size;
+}
+@container (max-width: 879px) {
+  .ifaces-side {
+    max-width: none;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .ifaces .ifaces-chart {
+    height: auto;
+  }
+  /* The interface name gets its own line; the legend wraps under it. */
+  .ifaces-sel .monitor-panel-head > div:first-child {
+    flex-basis: 100%;
+  }
+}

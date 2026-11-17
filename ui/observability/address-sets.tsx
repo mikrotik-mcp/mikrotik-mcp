@@ -1,13 +1,59 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { AlertTriangle, Search } from "lucide-react";
 import type { AddressSetRevision, SetReference } from "../../src/address-sets/model";
 import type { RouterRoutingSnapshot } from "../../src/service-routing/inventory";
 import { api, postJson } from "./api";
-import { Badge, Button, Input, Select } from "./geist";
-import { Panel } from "./atoms";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
+import { MonitorButton, MonitorEmpty, MonitorPanel, StatusBadge } from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
+import { CheckRow, FieldSelect, hhmm } from "./service-routing-ui";
 
 const endpoint = "/api/address-sets";
+
+const STATE: Record<AddressSetRevision["state"], { label: string; tone: Tone }> = {
+  draft: { label: "Draft", tone: "brand" },
+  published: { label: "Published", tone: "good" },
+  "rolled-back": { label: "Rolled back", tone: "default" },
+  uncertain: { label: "Uncertain", tone: "warn" },
+};
+
+/** "1,792": a big decimal string, grouped. */
+function grouped(value: string): string {
+  try {
+    return BigInt(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+/** How many addresses one CIDR covers. */
+function prefixSize(cidr: string): string {
+  const [ip, len] = cidr.split("/");
+  const bits = ip.includes(":") ? 128 : 32;
+  const n = Number(len ?? bits);
+  if (!Number.isInteger(n) || n < 0 || n > bits) return "—";
+  return (1n << BigInt(bits - n)).toLocaleString();
+}
+function short(sum: string): string {
+  return sum.length > 14 ? `${sum.slice(0, 8)}…${sum.slice(-4)}` : sum;
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: ReactNode;
+  hint?: ReactNode;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <label className="monitor-fl">
+      <span className="monitor-label">{label}</span>
+      {children}
+      {hint != null && <span className="monitor-hint">{hint}</span>}
+    </label>
+  );
+}
 
 export function AddressSets({
   device,
@@ -144,91 +190,134 @@ export function AddressSets({
                     id: row[".id"],
                     field,
                     expected: row[field],
+                    chain: row.chain,
                     label: row.comment || `${row.chain} · ${row.action}`,
                   })),
               )
             : [];
         })
       : [];
+  const left = Math.max(0, Math.floor(((revision?.plan?.expiresAt ?? 0) - now) / 1000));
+  const shownPrefixes = revision?.prefixes.filter((p) => p.includes(search.trim())) ?? [];
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Compose exact IPv4 or IPv6 sets. Save immutable revisions, then review a state-bound
-        publication. Nothing changes on the router until you confirm.
-      </p>
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
       {error && (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 p-3 text-sm text-destructive"
-        >
-          {error}
-        </p>
+        <div className="monitor-note" data-tone="bad" role="alert">
+          <AlertTriangle aria-hidden="true" className="text-destructive" />
+          <span className="flex-1 text-fg-secondary">{error}</span>
+        </div>
       )}
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <Panel title="Compose a revision" extra={<Badge type="secondary">Local draft</Badge>}>
-          <fieldset disabled={busy} className="min-w-0 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-xs">
-                Set name
-                <Input
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(460px,100%),1fr))] items-start gap-6">
+        <MonitorPanel
+          title="Compose a revision"
+          description="Combine two lists of CIDRs into one compact set. Nothing reaches the router until you publish."
+          extra={<span className="monitor-badge">Local draft</span>}
+        >
+          <fieldset disabled={busy} className="m-0 grid min-w-0 gap-4 border-0 p-0">
+            <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-3 max-sm:grid-cols-1">
+              <Field label="Set name">
+                <input
+                  className="monitor-input"
                   value={form.name}
                   placeholder="trusted-services"
                   onChange={(e) => update("name", e.target.value)}
                 />
-              </label>
-              <label className="space-y-1 text-xs">
-                IP family
-                <Select
+              </Field>
+              <div className="monitor-fl">
+                <span className="monitor-label">IP family</span>
+                <FieldSelect
+                  secondary
+                  label="IP family"
                   value={form.family}
-                  onValueChange={(v) => update("family", v)}
+                  onChange={(v) => update("family", v)}
                   options={[
                     { value: "ipv4", label: "IPv4" },
                     { value: "ipv6", label: "IPv6" },
                   ]}
                 />
-              </label>
+              </div>
             </div>
-            <label className="block space-y-1 text-xs">
-              Provenance
-              <Input
-                value={form.source}
-                placeholder="Source, retrieval date or approval reference"
-                onChange={(e) => update("source", e.target.value)}
-              />
-            </label>
-            <label className="block space-y-1 text-xs">
-              Operation
-              <Select
-                value={form.operation}
-                onValueChange={(v) => update("operation", v)}
-                options={[
-                  { value: "union", label: "A ∪ B · combine" },
-                  { value: "difference", label: "A − B · exclude" },
-                  { value: "intersection", label: "A ∩ B · overlap only" },
-                ]}
-              />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(["left", "right"] as const).map((key, index) => (
-                <label key={key} className="space-y-1 text-xs">
-                  {index ? "Set B (optional)" : "Set A"}
-                  <Textarea
-                    className="min-h-36 font-mono text-xs"
-                    value={form[key]}
-                    onChange={(e) => update(key, e.target.value)}
-                    placeholder={index ? "10.0.0.128/25" : "10.0.0.0/24"}
-                  />
-                </label>
-              ))}
+            <div className="grid grid-cols-[minmax(0,1fr)_180px] gap-3 max-sm:grid-cols-1">
+              <Field
+                label="Source"
+                hint="Where these addresses came from. Saved with the revision."
+              >
+                <input
+                  className="monitor-input"
+                  value={form.source}
+                  placeholder="Vendor list, Nov 2026"
+                  onChange={(e) => update("source", e.target.value)}
+                />
+              </Field>
+              <div className="monitor-fl">
+                <span className="monitor-label">Operation</span>
+                <FieldSelect
+                  secondary
+                  label="Operation"
+                  value={form.operation}
+                  onChange={(v) => update("operation", v)}
+                  options={[
+                    { value: "union", label: "Union (A + B)" },
+                    { value: "difference", label: "Difference (A − B)" },
+                    { value: "intersection", label: "Intersection (A ∩ B)" },
+                  ]}
+                />
+                <span className="monitor-hint">Or difference, intersection</span>
+              </div>
             </div>
+            {(["left", "right"] as const).map((key, index) => (
+              <Field
+                key={key}
+                label={
+                  index ? (
+                    <>
+                      Set B <span className="font-normal text-muted-foreground">· optional</span>
+                    </>
+                  ) : (
+                    "Set A"
+                  )
+                }
+              >
+                <textarea
+                  className="monitor-input font-mono"
+                  rows={4}
+                  value={form[key]}
+                  onChange={(e) => update(key, e.target.value)}
+                  placeholder={index ? "10.0.0.128/25" : "10.0.0.0/24"}
+                />
+              </Field>
+            ))}
             {form.parent && (
-              <p className="text-xs text-muted-foreground">
-                New revision of {form.parent.slice(0, 8)}; the parent is preserved.
+              <p className="text-[12px] text-muted-foreground">
+                New revision of{" "}
+                <span className="font-mono text-fg-secondary">{form.parent.slice(0, 8)}</span>
               </p>
             )}
+            {composition && (
+              <div className="flex flex-col gap-2 rounded-lg bg-overlay-02 px-3.5 py-3 shadow-[inset_0_0_0_1px_var(--border)]">
+                <span className="text-[13px] text-foreground">
+                  <b className="font-[590]">
+                    {composition.prefixes.length}{" "}
+                    {composition.prefixes.length === 1 ? "prefix" : "prefixes"}
+                  </b>{" "}
+                  · {grouped(composition.addresses)} addresses
+                </span>
+                <div
+                  className="flex max-h-[120px] flex-wrap gap-1.5 overflow-y-auto"
+                  tabIndex={0}
+                  aria-label="Composed prefixes"
+                >
+                  {composition.prefixes.map((p) => (
+                    <span key={p} className="monitor-chip font-mono">
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="secondary"
+              <MonitorButton
+                size="sm"
                 disabled={busy || !device}
                 onClick={() =>
                   void action<typeof composition>("/compose", payload()).then(
@@ -237,81 +326,64 @@ export function AddressSets({
                 }
               >
                 Preview composition
-              </Button>
-              <Button disabled={busy || !device} onClick={() => void save()}>
+              </MonitorButton>
+              <MonitorButton
+                size="sm"
+                variant="inverse"
+                disabled={busy || !device}
+                onClick={() => void save()}
+              >
                 Save revision
-              </Button>
+              </MonitorButton>
             </div>
-            {composition && (
-              <div className="rounded-md border border-border p-3">
-                <p className="text-sm">
-                  {composition.prefixes.length} compact prefixes · {composition.addresses} addresses
-                </p>
-                <ScrollArea
-                  className="mt-2 h-32"
-                  viewportProps={{ tabIndex: 0, "aria-label": "Composed prefixes" }}
-                >
-                  <div className="space-y-1 font-mono text-xs">
-                    {composition.prefixes.map((p) => (
-                      <div key={p}>{p}</div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
           </fieldset>
-        </Panel>
-        <Panel
+        </MonitorPanel>
+
+        <MonitorPanel
           title="Revision library"
+          description={`Every saved revision for ${device}, newest first.`}
           extra={
-            <Button size="sm" type="secondary" disabled={busy} onClick={() => void refresh()}>
+            <MonitorButton size="sm" variant="ghost" disabled={busy} onClick={() => void refresh()}>
               Refresh
-            </Button>
+            </MonitorButton>
           }
+          bodyClassName="flex flex-col gap-4"
         >
-          <Select
-            aria-label="Saved revision"
+          <FieldSelect
+            secondary
+            label="Saved revision"
             value={selected}
-            onValueChange={(id) => {
+            disabled={busy}
+            placeholder={revisions.length ? "Pick a saved revision" : "No saved revisions yet"}
+            onChange={(id) => {
               setSelected(id);
               setRefs([]);
               setConsent(false);
               setAllowLargeChange(false);
               setSearch("");
             }}
-            disabled={busy}
-            placeholder="Select a saved revision"
             options={revisions.map((r) => ({
               value: r.id,
-              label: `${r.input.name} · ${r.id.slice(0, 8)} · ${r.state}`,
+              label: `${r.input.name} · ${r.id.slice(0, 8)} · ${STATE[r.state].label.toLowerCase()}`,
             }))}
           />
           {!revision ? (
-            <p className="py-8 text-sm text-muted-foreground">
-              Save a composition or select a revision to inspect its contents and publish it.
-            </p>
+            <MonitorEmpty compact title="No revision picked">
+              Save a composition or pick a revision to see its prefixes and publish it.
+            </MonitorEmpty>
           ) : (
-            <div className="mt-4 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <Badge
-                    type={
-                      revision.state === "published"
-                        ? "success"
-                        : revision.state === "uncertain"
-                          ? "warning"
-                          : "secondary"
-                    }
-                  >
-                    {revision.state}
-                  </Badge>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {revision.input.source} · {new Date(revision.createdAt).toLocaleString()}
-                  </p>
-                </div>
-                <Button
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge tone={STATE[revision.state].tone}>
+                  {STATE[revision.state].label}
+                </StatusBadge>
+                <span className="text-[12px] text-muted-foreground">
+                  {revision.input.source} · saved {hhmm(revision.createdAt)}
+                </span>
+                <span className="flex-1" />
+                <MonitorButton
                   size="sm"
-                  type="secondary"
+                  variant="ghost"
                   disabled={busy}
                   onClick={() => {
                     setForm({
@@ -324,218 +396,264 @@ export function AddressSets({
                   }}
                 >
                   New revision
-                </Button>
+                </MonitorButton>
               </div>
-              <dl className="grid grid-cols-2 gap-3 border-y border-border py-3 text-xs">
-                <div>
-                  <dt className="text-muted-foreground">Canonical prefixes</dt>
-                  <dd className="mt-1 font-mono text-lg">{revision.prefixes.length}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Address coverage</dt>
-                  <dd className="mt-1 break-all font-mono">{revision.addresses}</dd>
-                </div>
+
+              <dl className="monitor-facts">
+                <dt>Prefixes</dt>
+                <dd className="tabular-nums">{revision.prefixes.length}</dd>
+                <dt>Addresses</dt>
+                <dd className="tabular-nums">{grouped(revision.addresses)}</dd>
+                <dt>SHA-256</dt>
+                <dd className="font-mono text-[12px]" title={revision.checksum}>
+                  {short(revision.checksum)}
+                </dd>
+                <dt>Router list</dt>
+                <dd className="font-mono text-[12px] break-all">{revision.list}</dd>
               </dl>
-              <p
-                className="break-all font-mono text-xs text-muted-foreground"
-                title={revision.checksum}
-              >
-                SHA-256 · {revision.checksum.slice(0, 20)}…
-              </p>
-              <Input
-                aria-label="Search prefixes"
-                placeholder="Find a prefix…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <ScrollArea
-                className="h-36 rounded-md border border-border p-3"
-                viewportProps={{ tabIndex: 0, "aria-label": "Revision prefixes" }}
-              >
-                <div className="grid gap-1 font-mono text-xs sm:grid-cols-2">
-                  {revision.prefixes
-                    .filter((p) => p.includes(search.trim()))
-                    .map((p) => (
-                      <span key={p}>{p}</span>
-                    ))}
-                </div>
-              </ScrollArea>
-              {revision.error && (
-                <p role="alert" className="text-sm text-destructive">
-                  {revision.error} Inspect the router and backup; do not replay an uncertain write.
-                </p>
-              )}
+
               {revision.delta && (
-                <div className="rounded-md border border-border p-3 text-xs">
-                  <p>
-                    Compared with parent: +{revision.delta.addedAddresses} / −
-                    {revision.delta.removedAddresses} addresses
-                  </p>
-                  <ScrollArea
-                    className="mt-2 h-24"
-                    viewportProps={{ tabIndex: 0, "aria-label": "Coverage changes" }}
+                <div className="flex flex-col gap-2">
+                  <span className="monitor-label">
+                    Change from{" "}
+                    <span className="font-mono">
+                      {(revision.input.parent ?? "parent").slice(0, 8)}
+                    </span>
+                  </span>
+                  <div className="flex gap-4 text-[13px] tabular-nums">
+                    <span className="text-success">
+                      + {grouped(revision.delta.addedAddresses)} addresses
+                    </span>
+                    <span className="text-destructive">
+                      − {grouped(revision.delta.removedAddresses)} addresses
+                    </span>
+                  </div>
+                  <div
+                    className="flex max-h-[120px] flex-col gap-1 overflow-y-auto font-mono text-[12px]"
+                    tabIndex={0}
+                    aria-label="Coverage changes"
                   >
-                    <div className="space-y-1 font-mono">
-                      {revision.delta.added.map((p) => (
-                        <div key={`+${p}`} className="text-emerald-500">
-                          + {p}
-                        </div>
-                      ))}
-                      {revision.delta.removed.map((p) => (
-                        <div key={`-${p}`} className="text-amber-500">
-                          − {p}
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                    {revision.delta.added.map((p) => (
+                      <span key={`+${p}`} className="text-success">
+                        + {p}
+                      </span>
+                    ))}
+                    {revision.delta.removed.map((p) => (
+                      <span key={`-${p}`} className="text-destructive">
+                        − {p}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
-              {revision.state === "draft" && (
-                <fieldset disabled={busy} className="space-y-2">
-                  {(revision.delta?.large || revision.prefixes.some((p) => p.endsWith("/0"))) && (
-                    <label className="flex gap-2 rounded-md border border-amber-500/30 p-3 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={allowLargeChange}
-                        onChange={(e) => {
-                          setAllowLargeChange(e.target.checked);
-                          setConsent(false);
-                        }}
-                      />
-                      I acknowledge this changes more than 50% of parent coverage or includes all
-                      addresses (/0).
-                    </label>
-                  )}
-                  <legend className="mb-2 text-sm font-medium">
-                    Replace only selected rule references
-                  </legend>
-                  <p className="text-xs text-muted-foreground">
-                    Live state is checked again during preview. Up to 64 compacted prefixes and 8
-                    references per Safe Mode transaction.
-                  </p>
-                  <ScrollArea
-                    className="h-40"
-                    viewportProps={{ tabIndex: 0, "aria-label": "Rule references" }}
-                  >
-                    <div className="space-y-2">
-                      {candidates.map((ref) => {
-                        const checked = refs.some(
-                          (r) => r.table === ref.table && r.id === ref.id && r.field === ref.field,
-                        );
-                        return (
-                          <label
-                            key={`${ref.table}/${ref.id}/${ref.field}`}
-                            className="flex items-start gap-2 rounded-md border border-border p-2 text-xs"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={!checked && refs.length >= 8}
-                              onChange={(e) => {
-                                setRefs((old) =>
-                                  e.target.checked
-                                    ? [
-                                        ...old,
-                                        {
-                                          table: ref.table,
-                                          id: ref.id,
-                                          field: ref.field,
-                                          expected: ref.expected,
-                                        },
-                                      ]
-                                    : old.filter(
-                                        (r) =>
-                                          !(
-                                            r.table === ref.table &&
-                                            r.id === ref.id &&
-                                            r.field === ref.field
-                                          ),
-                                      ),
-                                );
-                                setConsent(false);
-                                setRevisions((old) =>
-                                  old.map((r) =>
-                                    r.id === selected ? { ...r, plan: undefined } : r,
-                                  ),
-                                );
-                              }}
-                            />
-                            <span>
-                              <span className="block">{ref.label}</span>
-                              <span className="font-mono text-muted-foreground">
-                                {ref.table} {ref.id} · {ref.field} = {ref.expected}
-                              </span>
-                            </span>
-                          </label>
-                        );
-                      })}
-                      {!candidates.length && (
-                        <p className="text-xs text-muted-foreground">
-                          No eligible references loaded. Refresh router configuration; rules must
-                          already reference an address list.
-                        </p>
-                      )}
+
+              <div className="flex flex-col gap-2">
+                <label className="monitor-field">
+                  <Search aria-hidden="true" />
+                  <input
+                    type="search"
+                    aria-label="Search prefixes"
+                    placeholder="Find a prefix"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+                <div
+                  className="flex max-h-[216px] flex-col overflow-y-auto rounded-md shadow-[inset_0_0_0_1px_var(--border)]"
+                  tabIndex={0}
+                  aria-label="Revision prefixes"
+                >
+                  {shownPrefixes.map((p, i) => (
+                    <div
+                      key={p}
+                      className={
+                        i
+                          ? "flex justify-between gap-3 border-t border-border px-3 py-1.5 text-[12px]"
+                          : "flex justify-between gap-3 px-3 py-1.5 text-[12px]"
+                      }
+                    >
+                      <span className="truncate font-mono text-fg-secondary">{p}</span>
+                      <span className="text-muted-foreground tabular-nums">{prefixSize(p)}</span>
                     </div>
-                  </ScrollArea>
-                  <Button
-                    disabled={busy || !refs.length || revision.prefixes.length > 64}
-                    onClick={() => void preview()}
-                  >
-                    Preview publication
-                  </Button>
+                  ))}
+                  {!shownPrefixes.length && (
+                    <p className="px-3 py-1.5 text-[12px] text-muted-foreground">
+                      No prefix matches.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {revision.error && (
+                <div className="monitor-note" data-tone="bad" role="alert">
+                  <AlertTriangle aria-hidden="true" className="text-destructive" />
+                  <span className="flex-1 text-fg-secondary">
+                    {revision.error} Check the router and the backup. Don't repeat an uncertain
+                    write.
+                  </span>
+                </div>
+              )}
+
+              {revision.state === "draft" && (
+                <fieldset
+                  disabled={busy}
+                  aria-label="Before you publish"
+                  className="m-0 flex min-w-0 flex-col gap-2.5 border-0 border-t border-solid border-border p-0 pt-4"
+                >
+                  <span className="monitor-label">Before you publish</span>
+                  {(revision.delta?.large || revision.prefixes.some((p) => p.endsWith("/0"))) && (
+                    <CheckRow
+                      checked={allowLargeChange}
+                      onChange={(v) => {
+                        setAllowLargeChange(v);
+                        setConsent(false);
+                      }}
+                    >
+                      This changes more than half of the parent's addresses, or covers every address
+                      (/0). I checked the list.
+                    </CheckRow>
+                  )}
+                  <span className="monitor-label mt-1">Replace only these rule references</span>
+                  {candidates.map((ref) => {
+                    const checked = refs.some(
+                      (r) => r.table === ref.table && r.id === ref.id && r.field === ref.field,
+                    );
+                    return (
+                      <CheckRow
+                        key={`${ref.table}/${ref.id}/${ref.field}`}
+                        checked={checked}
+                        disabled={!checked && refs.length >= 8}
+                        onChange={(on) => {
+                          setRefs((old) =>
+                            on
+                              ? [
+                                  ...old,
+                                  {
+                                    table: ref.table,
+                                    id: ref.id,
+                                    field: ref.field,
+                                    expected: ref.expected,
+                                  },
+                                ]
+                              : old.filter(
+                                  (r) =>
+                                    !(
+                                      r.table === ref.table &&
+                                      r.id === ref.id &&
+                                      r.field === ref.field
+                                    ),
+                                ),
+                          );
+                          setConsent(false);
+                          setRevisions((old) =>
+                            old.map((r) => (r.id === selected ? { ...r, plan: undefined } : r)),
+                          );
+                        }}
+                      >
+                        <span className="font-mono text-[12px] text-foreground">
+                          {ref.table} {ref.id}
+                          {ref.chain ? ` · ${ref.chain}` : ""}
+                        </span>
+                        <span className="text-[12px] text-muted-foreground">
+                          {ref.label} · {ref.field}={ref.expected}
+                        </span>
+                      </CheckRow>
+                    );
+                  })}
+                  {!candidates.length && (
+                    <span className="monitor-hint">
+                      No rule uses an address list yet, or the router configuration isn't loaded.
+                      Read the router again from Router configuration.
+                    </span>
+                  )}
+                  <span className="monitor-hint">
+                    The router state is checked again at preview. Up to 64 prefixes and 8 rule
+                    references per change.
+                  </span>
+                  <div>
+                    <MonitorButton
+                      size="sm"
+                      disabled={busy || !refs.length || revision.prefixes.length > 64}
+                      onClick={() => void preview()}
+                    >
+                      Preview publication
+                    </MonitorButton>
+                  </div>
                 </fieldset>
               )}
               {revision.state === "published" && (
-                <Button type="secondary" disabled={busy} onClick={() => void preview(true)}>
-                  Preview rollback
-                </Button>
-              )}
-              {revision.plan && (
-                <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-                  <h4 className="text-sm font-medium">
-                    {revision.plan.rollback ? "Rollback" : "Publication"} review · {device}
-                  </h4>
-                  <p className="text-xs text-muted-foreground">
-                    Expires {new Date(revision.plan.expiresAt).toLocaleTimeString()}. A backup is
-                    required automatically. Old lists are never removed.
-                  </p>
-                  <ScrollArea
-                    className="h-40"
-                    viewportProps={{ tabIndex: 0, "aria-label": "Planned commands" }}
-                  >
-                    <ol className="space-y-2 font-mono text-xs">
-                      {revision.plan.commands.map((cmd, i) => (
-                        <li key={i} className="break-all">
-                          {cmd}
-                        </li>
-                      ))}
-                    </ol>
-                  </ScrollArea>
-                  <label className="flex gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={consent}
-                      disabled={busy}
-                      onChange={(e) => setConsent(e.target.checked)}
-                    />
-                    I reviewed these exact commands and authorize this change on {device}.
-                  </label>
-                  <Button
-                    disabled={busy || !consent || revision.plan.expiresAt < now}
-                    onClick={() => void apply()}
-                  >
-                    {busy
-                      ? "Working…"
-                      : revision.plan.rollback
-                        ? "Restore references"
-                        : "Publish revision"}
-                  </Button>
+                <div>
+                  <MonitorButton size="sm" disabled={busy} onClick={() => void preview(true)}>
+                    Preview rollback
+                  </MonitorButton>
                 </div>
               )}
-            </div>
+            </>
           )}
-        </Panel>
+        </MonitorPanel>
       </div>
+
+      {revision?.plan && (
+        <section
+          className="monitor-panel"
+          style={{
+            boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--chart-1) 35%, transparent)",
+          }}
+        >
+          <header className="monitor-panel-head">
+            <div className="min-w-0 flex-1">
+              <h2 className="monitor-panel-title">
+                {revision.plan.rollback ? "Rollback review" : "Publication review"}
+              </h2>
+              <p className="monitor-panel-desc">
+                These commands run on {device} in this order.{" "}
+                {left > 0 ? (
+                  <>
+                    The plan expires in{" "}
+                    <span className="text-foreground tabular-nums">
+                      {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
+                    </span>
+                    ; preview again after that.
+                  </>
+                ) : (
+                  "The plan expired. Preview again."
+                )}
+              </p>
+            </div>
+          </header>
+          <div className="monitor-panel-body flex flex-col gap-4">
+            <pre className="monitor-pre max-h-[320px] overflow-auto">
+              {revision.plan.commands.map((cmd, i) => `${i + 1}  ${cmd}`).join("\n")}
+            </pre>
+            <CheckRow checked={consent} disabled={busy} onChange={setConsent}>
+              <span>
+                I reviewed these commands and want to{" "}
+                {revision.plan.rollback ? "roll back" : "publish"} revision{" "}
+                <span className="font-mono text-[12px]">{revision.id.slice(0, 8)}</span>.
+              </span>
+            </CheckRow>
+            <div className="flex gap-2">
+              <MonitorButton
+                size="sm"
+                variant="inverse"
+                disabled={busy || !consent || revision.plan.expiresAt < now}
+                onClick={() => void apply()}
+              >
+                {busy
+                  ? "Working…"
+                  : revision.plan.rollback
+                    ? "Restore references"
+                    : "Publish revision"}
+              </MonitorButton>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <p className="text-[12px] text-muted-foreground">
+        A published revision can be rolled back from the library: pick it and choose Preview
+        rollback.
+      </p>
     </div>
   );
 }

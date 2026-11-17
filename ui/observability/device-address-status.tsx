@@ -1,120 +1,104 @@
-import { Clock3, Radio, Star } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNow } from "./use-now";
-import { IpNetwork } from "./ip-network";
+import { cn } from "@/lib/utils";
 import type { DeviceEndpoints } from "../../src/core/device-endpoints";
-import "./device-addresses.css";
 
-/** Connection evidence and short-lived preference are deliberately separate. */
-export function DeviceAddressStatus({ endpoints }: { endpoints: DeviceEndpoints }) {
+type State = "connected" | "verified" | "failed" | "untested";
+
+const STATE_TEXT: Record<State, string> = {
+  connected: "Connected",
+  verified: "Last success",
+  failed: "Failed",
+  untested: "Untested",
+};
+const STATE_CLASS: Record<State, string> = {
+  connected: "text-success",
+  verified: "text-fg-secondary",
+  failed: "text-destructive",
+  untested: "text-muted-foreground",
+};
+
+/**
+ * Management addresses of one router, primary first: which one holds the open
+ * session, which worked or failed last time, and which were never tried.
+ * `compact` is the phone board: the state word only, no footnote.
+ */
+export function DeviceAddressStatus({
+  endpoints,
+  compact = false,
+}: {
+  endpoints: DeviceEndpoints;
+  compact?: boolean;
+}) {
   const now = useNow();
   const remembered = (endpoints.remembered ?? []).filter((c) => c.expiresAt > now);
   const live = endpoints.connected;
   return (
-    <section className="device-address-status" aria-label="Management address status">
-      <header>
-        <span>
-          <Radio size={14} /> Management addresses
-        </span>
-        <small>{live.length ? "Live connection" : "No open session"}</small>
-      </header>
-      {remembered.length > 0 && (
-        <div className="device-address-status__memory">
-          <Clock3 size={15} aria-hidden="true" />
-          <div>
-            <strong>Fast reconnect</strong>
-            <small>Recent successful IPs are tried first. Primary stays unchanged.</small>
-          </div>
-          <span>5 min memory</span>
-        </div>
-      )}
-      <ScrollArea
-        className="device-address-status__scroll"
-        viewportProps={{
-          "aria-label": "Address connection results",
-          className: "device-addresses__viewport",
-        }}
-      >
-        {endpoints.hosts.map((host) => {
-          const connections = live.filter((c) => c.host === host);
-          const observations = endpoints.observations
-            .filter((o) => o.host === host)
-            .sort((a, b) => b.checkedAt - a.checkedAt);
-          const last = observations[0];
-          const preferred = remembered.filter((c) => c.host === host);
-          const status = connections.length
-            ? "connected"
-            : !last
-              ? "untested"
-              : last.error
-                ? "failed"
-                : "verified";
-          return (
-            <div className="device-address-status__row" key={host} data-state={status}>
-              <i aria-hidden="true" />
-              <div>
-                <code>{host}</code>
-                <IpNetwork address={host} />
-                <small>
-                  {connections.length
-                    ? connections.map((c) => `${c.transport.toUpperCase()} :${c.port}`).join(" · ")
-                    : last
-                      ? "No open session"
-                      : "Not tested yet"}
-                </small>
-                {observations.map((o) => (
-                  <small
-                    key={`${o.transport}:${o.port}`}
-                    className={o.error ? "device-address-status__error" : undefined}
-                  >
-                    {o.transport.toUpperCase()} :{o.port} ·{" "}
-                    {o.error ? "Last attempt failed" : "Last success"} ·{" "}
-                    <time
-                      dateTime={new Date(o.checkedAt).toISOString()}
-                      title={new Date(o.checkedAt).toLocaleString()}
-                    >
-                      {new Date(o.checkedAt).toLocaleTimeString()}
-                    </time>
-                    {o.error && <span className="device-address-status__reason">{o.error}</span>}
-                  </small>
-                ))}
-                {preferred.map((c) => {
-                  const seconds = Math.ceil((c.expiresAt - now) / 1000);
-                  return (
-                    <small
-                      className="device-address-status__preferred"
-                      key={`${c.transport}:${c.port}`}
-                    >
-                      <Clock3 size={11} aria-hidden="true" /> Remembered ·{" "}
-                      {c.transport.toUpperCase()} :{c.port} · {Math.floor(seconds / 60)}m{" "}
-                      {String(seconds % 60).padStart(2, "0")}s left
-                    </small>
-                  );
-                })}
-              </div>
-              <div className="device-address-status__badges">
-                <strong>
-                  {status === "connected"
-                    ? "Connected"
-                    : status === "verified"
-                      ? "Last success"
-                      : status === "failed"
-                        ? "Failed"
-                        : "Untested"}
-                </strong>
-                {host === endpoints.primary && (
-                  <span>
-                    <Star size={11} aria-hidden="true" /> Primary
-                  </span>
-                )}
-              </div>
+    <div className="flex flex-col gap-2" aria-label="Management addresses">
+      <span className="monitor-label">Management addresses</span>
+      {endpoints.hosts.map((host) => {
+        const connections = live.filter((c) => c.host === host);
+        const observations = endpoints.observations
+          .filter((o) => o.host === host)
+          .sort((a, b) => b.checkedAt - a.checkedAt);
+        const last = observations[0];
+        const preferred = remembered.filter((c) => c.host === host);
+        const state: State = connections.length
+          ? "connected"
+          : !last
+            ? "untested"
+            : last.error
+              ? "failed"
+              : "verified";
+        const via = (connections.length ? connections : last ? [last] : [])
+          .map((c) => `${c.transport.toUpperCase()} :${c.port}`)
+          .join(", ");
+        const failures = observations.filter((o) => o.error);
+        return (
+          <div key={host} className="flex flex-col" data-state={state}>
+            <div className="flex items-center gap-2 text-[13px]">
+              <span className="text-fg-secondary min-w-0 truncate font-mono text-[12px]" dir="ltr">
+                {host}
+              </span>
+              {host === endpoints.primary && <span className="monitor-chip">Primary</span>}
+              <span className="flex-1" />
+              <span
+                className={cn("text-[12px] whitespace-nowrap", STATE_CLASS[state])}
+                title={last?.error}
+              >
+                {STATE_TEXT[state]}
+                {!compact && state !== "untested" && via ? ` · ${via}` : ""}
+              </span>
             </div>
-          );
-        })}
-      </ScrollArea>
-      <p className="device-address-status__note">
-        Updates automatically from connection attempts; unused IPs are not continuously probed.
-      </p>
-    </section>
+            {failures.map((o) => (
+              <span
+                key={`${o.transport}:${o.port}`}
+                className="text-muted-foreground truncate text-[12px]"
+                title={o.error}
+              >
+                {o.transport.toUpperCase()} :{o.port} · Last attempt failed ·{" "}
+                <span className="text-destructive">{o.error}</span>
+              </span>
+            ))}
+            {preferred.map((c) => {
+              const seconds = Math.ceil((c.expiresAt - now) / 1000);
+              return (
+                <span
+                  key={`${c.transport}:${c.port}`}
+                  className="text-muted-foreground text-[12px]"
+                >
+                  Fast reconnect · Remembered · {c.transport.toUpperCase()} :{c.port} ·{" "}
+                  {Math.floor(seconds / 60)}m {String(seconds % 60).padStart(2, "0")}s left
+                </span>
+              );
+            })}
+          </div>
+        );
+      })}
+      {!compact && (
+        <span className="text-muted-foreground text-[12px]">
+          Fallback addresses are tried only when the primary fails.
+        </span>
+      )}
+    </div>
   );
 }

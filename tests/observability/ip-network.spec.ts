@@ -3,7 +3,6 @@ import { act, createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { IpNetwork, networkIp } from "../../ui/observability/ip-network";
-import { DeviceAddressesEditor } from "../../ui/observability/device-addresses";
 import { api } from "../../ui/observability/api";
 
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn() }));
@@ -107,20 +106,4 @@ test("shows private and unavailable states without inventing an organization", a
   await act(async () => vi.advanceTimersByTimeAsync(400));
   expect(host.textContent).toBe("");
   expect(api).toHaveBeenCalledTimes(2);
-});
-
-test("annotates both primary and fallback device inputs without changing the draft", async () => {
-  const onChange = vi.fn();
-  await act(async () =>
-    root.render(
-      h(DeviceAddressesEditor, {
-        host: "8.8.8.8",
-        fallbackHosts: ["1.1.1.1"],
-        onChange,
-      }),
-    ),
-  );
-  await act(async () => vi.advanceTimersByTimeAsync(400));
-  expect(host.textContent?.match(/Example Network/g)).toHaveLength(2);
-  expect(onChange).not.toHaveBeenCalled();
 });

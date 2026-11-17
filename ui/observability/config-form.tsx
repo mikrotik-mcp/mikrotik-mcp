@@ -7,21 +7,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Copy,
-  GripVertical,
-  ArrowUp,
-  ArrowDown,
-  PlugZap,
-  LoaderCircle,
-  Router,
-  ShieldCheck,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, GripVertical, Plus } from "lucide-react";
 import { Reorder, useDragControls, useReducedMotion } from "motion/react";
 import {
   addDevice as createDeviceDraft,
@@ -34,10 +20,16 @@ import { api } from "./api";
 import { Badge, Button, Card, Input, Note, Select } from "./geist";
 import { Sheet } from "./sheet";
 import { DeviceEditor } from "./device-editor";
-import { RouterAddressList } from "./router-address-list";
 import { ServiceProbesEditor } from "./service-probes-editor";
 import { CONFIG_SECTIONS, DEVICE_FIELDS } from "./config-spec";
 import type { CfgField, CfgSection } from "./config-spec";
+import {
+  MonitorButton,
+  MonitorEmpty,
+  MonitorSelect,
+  MonitorSwitch,
+  StatusDot,
+} from "./monitoring-ui";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -362,61 +354,81 @@ function SortableDevice({
   index: number;
   total: number;
   onMove: (offset: number) => void;
-  children: ReactNode;
+  children: (handle: ReactNode) => ReactNode;
 }) {
   const controls = useDragControls();
   const reduced = useReducedMotion();
+  const handle = (
+    <span className="text-faint flex items-center gap-0.5">
+      <button
+        type="button"
+        aria-label={`Drag to reorder ${name}`}
+        title="Drag, or use the up and down arrow keys"
+        onPointerDown={(event) => controls.start(event)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+            event.preventDefault();
+            onMove(event.key === "ArrowUp" ? -1 : 1);
+          }
+        }}
+        className="dv-grip"
+      >
+        <GripVertical aria-hidden="true" />
+      </button>
+      <span className="flex flex-col">
+        <MonitorButton
+          size="sm"
+          variant="ghost"
+          className="dv-move"
+          aria-label={`Move ${name} up`}
+          disabled={index === 0}
+          onClick={() => onMove(-1)}
+          icon={<ChevronUp aria-hidden="true" />}
+        />
+        <MonitorButton
+          size="sm"
+          variant="ghost"
+          className="dv-move"
+          aria-label={`Move ${name} down`}
+          disabled={index === total - 1}
+          onClick={() => onMove(1)}
+          icon={<ChevronDown aria-hidden="true" />}
+        />
+      </span>
+    </span>
+  );
   return (
     <Reorder.Item
-      as="div"
+      as="li"
       value={name}
       dragListener={false}
       dragControls={controls}
       transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 35 }}
       whileDrag={{ zIndex: 10, scale: reduced ? 1 : 1.01 }}
-      className="relative flex min-w-0 gap-3 rounded-xl border border-border bg-card p-3 sm:p-4"
+      className="dv-entry"
     >
-      <div className="flex shrink-0 flex-col items-center gap-1 border-r border-border pr-2">
-        <span className="text-[10px] font-mono text-muted-foreground">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-        <button
-          type="button"
-          aria-label={`Drag to reorder ${name}`}
-          title="Drag, or use ↑ / ↓ keys"
-          onPointerDown={(event) => controls.start(event)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-              event.preventDefault();
-              onMove(event.key === "ArrowUp" ? -1 : 1);
-            }
-          }}
-          className="touch-none cursor-grab rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing"
-        >
-          <GripVertical className="size-4" />
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${name} up`}
-          disabled={index === 0}
-          onClick={() => onMove(-1)}
-          className="rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-25 focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          <ArrowUp className="size-3" />
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${name} down`}
-          disabled={index === total - 1}
-          onClick={() => onMove(1)}
-          className="rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-25 focus-visible:outline-2 focus-visible:outline-ring"
-        >
-          <ArrowDown className="size-3" />
-        </button>
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">{children}</div>
+      {children(handle)}
     </Reorder.Item>
   );
+}
+
+/** "admin · SSH key", "admin · password". */
+function loginLine(d: Cfg): string {
+  const user = str(d.username) || "admin";
+  if (d.mac) return `${user} · password`;
+  return `${user} · ${d.keyFilename || d.privateKey ? "SSH key" : "password"}`;
+}
+
+/** "SSH :22", "SSH :22 via core-router-01", "MAC-Telnet", "REST :443, SSH fallback". */
+function transportText(d: Cfg): string {
+  if (d.mac) return "MAC-Telnet";
+  const jump = d.jumpVia
+    ? str(d.jumpVia)
+    : d.jumpHost
+      ? str(asObj(d.jumpHost).host) || "a bastion"
+      : "";
+  const ssh = `SSH :${str(d.port) || "22"}${jump ? ` via ${jump}` : ""}`;
+  return d.api ? `REST :${str(d.apiPort) || "443"}, ${ssh.replace("SSH", "SSH fallback")}` : ssh;
 }
 
 export function DevicesForm({
@@ -444,7 +456,7 @@ export function DevicesForm({
   const defaultDevice = str(cfg.defaultDevice);
   const reorder = (order: string[]) => {
     onChange(reorderDevices(cfg, order));
-    setAnnouncement(`Device order: ${order.join(", ")}. Save to apply.`);
+    setAnnouncement(`Router order: ${order.join(", ")}. Save to apply.`);
   };
   const move = (name: string, offset: number) => {
     const index = names.indexOf(name);
@@ -517,221 +529,234 @@ export function DevicesForm({
   );
   if (onCancelStandalone) return editor;
 
+  const available = names.filter((n) => asObj(devices[n]).disabled !== true).length;
   return (
-    <section className="router-manager" aria-label="Router configuration draft">
-      <div className="router-manager__heading">
-        <div>
-          <span className="devices-eyebrow">
-            <Router size={14} /> ROUTER INVENTORY
-          </span>
-          <h3>Your routers, in order.</h3>
-          <p>
-            {names.length} configured ·{" "}
-            {names.filter((n) => asObj(devices[n]).disabled !== true).length} enabled in MCP
+    <div className="border-border border-t" aria-label="Router configuration draft" role="group">
+      <div className="flex flex-wrap items-end gap-3 px-5 py-4">
+        <div className="min-w-0 flex-[1_1_260px]">
+          <h3 className="text-[14px] font-[590]">Routers, in order</h3>
+          <p className="text-muted-foreground text-[12px]">
+            {names.length} configured · {available} available to MCP. Draft only, nothing on the
+            routers changes.
           </p>
         </div>
-        <div className="router-manager__controls">
-          <label className="inline-flex items-center gap-1.5">
-            <span className="text-muted-foreground text-[11px]">Default router</span>
-            <Select
-              aria-label="Default router"
+        <label className="flex items-center gap-2">
+          <span className="monitor-label">Default router</span>
+          <span className="dv-mono-select">
+            <MonitorSelect
+              label="Default router"
               value={defaultDevice}
-              onValueChange={(v) => onChange({ ...cfg, defaultDevice: v })}
+              onChange={(v) => onChange({ ...cfg, defaultDevice: v })}
               options={names.map((n) => ({ value: n, label: n }))}
             />
-          </label>
-          <Button size="sm" onClick={addDevice} icon={<Plus className="size-4" />}>
-            Add device
-          </Button>
-        </div>
+          </span>
+        </label>
+        <MonitorButton size="sm" onClick={addDevice} icon={<Plus aria-hidden="true" />}>
+          Add device
+        </MonitorButton>
       </div>
 
-      <p className="router-manager__hint">
-        <ShieldCheck size={15} /> Draft only. Review and save to apply; router configuration is not
-        changed.
-      </p>
       <span role="status" className="sr-only">
         {announcement}
       </span>
-      <Reorder.Group
-        as="div"
-        axis="y"
-        values={names}
-        onReorder={reorder}
-        className="router-manager__list"
-      >
-        {names.map((n, index) => {
-          const d = asObj(devices[n]);
-          const test = tests[n]?.fingerprint === JSON.stringify(d) ? tests[n] : undefined;
-          const off = d.disabled === true;
-          const hosts = uniq(
-            [d.host, ...arr(d.fallbackHosts)]
-              .filter((host): host is string => typeof host === "string" && !!host.trim())
-              .map((host) => host.trim()),
-          );
-          return (
-            <SortableDevice
-              key={n}
-              name={n}
-              index={index}
-              total={names.length}
-              onMove={(offset) => move(n, offset)}
-            >
-              <div className="router-entry__identity">
-                <span className="router-entry__icon" aria-hidden="true">
-                  <Router size={21} strokeWidth={1.5} />
-                </span>
-                <strong className="break-all font-mono text-sm font-medium">{n}</strong>
-                {defaultDevice === n && <Badge type="accent">default</Badge>}
-                <Badge type={off ? "secondary" : "default"}>
-                  {off ? "Disabled in MCP" : "Enabled in MCP"}
-                </Badge>
-                {!d.mac && (
-                  <Badge type="accent">
-                    <span aria-label={`${n}: ${hosts.length} configured management addresses`}>
-                      {hosts.length} address{hosts.length === 1 ? "" : "es"}
-                    </span>
-                  </Badge>
+      {names.length === 0 ? (
+        <MonitorEmpty compact title="No routers yet">
+          Choose Add device to set up your first router.
+        </MonitorEmpty>
+      ) : (
+        <Reorder.Group
+          as="ol"
+          axis="y"
+          values={names}
+          onReorder={reorder}
+          aria-label="Routers, drag to reorder"
+          className="m-0 list-none p-0"
+        >
+          {names.map((n, index) => {
+            const d = asObj(devices[n]);
+            const test = tests[n]?.fingerprint === JSON.stringify(d) ? tests[n] : undefined;
+            const off = d.disabled === true;
+            const hosts = uniq(
+              [d.host, ...arr(d.fallbackHosts)]
+                .filter((host): host is string => typeof host === "string" && !!host.trim())
+                .map((host) => host.trim()),
+            );
+            const primary = str(d.host).trim();
+            return (
+              <SortableDevice
+                key={n}
+                name={n}
+                index={index}
+                total={names.length}
+                onMove={(offset) => move(n, offset)}
+              >
+                {(handle) => (
+                  <>
+                    <div className="flex items-start gap-3">
+                      {handle}
+                      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-foreground font-mono text-[13px] break-all">
+                            {n}
+                          </span>
+                          {defaultDevice === n && <span className="monitor-chip">Default</span>}
+                          <span className="monitor-chip">
+                            {off ? "Off for MCP" : "Available to MCP"}
+                          </span>
+                          {!d.mac && hosts.length !== 1 && (
+                            <span
+                              className="monitor-chip"
+                              aria-label={`${n}: ${hosts.length} configured management addresses`}
+                            >
+                              {hosts.length} address{hosts.length === 1 ? "" : "es"}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 text-[12px]">
+                          <span>
+                            <span className="text-faint">Addresses </span>
+                            <span
+                              className="text-fg-secondary font-mono"
+                              dir="ltr"
+                              aria-label={`${n} management addresses`}
+                            >
+                              {d.mac
+                                ? str(d.mac)
+                                : hosts.length
+                                  ? hosts
+                                      .map((h) =>
+                                        h === primary && hosts.length > 1 ? `${h} (primary)` : h,
+                                      )
+                                      .join(", ")
+                                  : "No addresses configured"}
+                            </span>
+                          </span>
+                          <span>
+                            <span className="text-faint">Transport </span>
+                            <span className="text-fg-secondary">{transportText(d)}</span>
+                          </span>
+                          <span>
+                            <span className="text-faint">Login </span>
+                            <span className="text-fg-secondary">{loginLine(d)}</span>
+                          </span>
+                          {d.description ? (
+                            <span className="text-fg-secondary break-words">
+                              {str(d.description)}
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 flex">
+                        <MonitorSwitch
+                          checked={!off}
+                          label={`Available to MCP: ${n}`}
+                          onChange={(c) => toggleDisabled(n, !c)}
+                        />
+                      </span>
+                    </div>
+                    <div className="dv-indent flex flex-wrap items-center gap-1.5">
+                      {confirmDel === n ? (
+                        <span className="dv-confirm" role="group" aria-label={`Remove ${n}?`}>
+                          Remove {n}?
+                          <MonitorButton
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setConfirmDel(null)}
+                          >
+                            Cancel
+                          </MonitorButton>
+                          <MonitorButton
+                            size="sm"
+                            variant="danger"
+                            aria-label={`Confirm removing ${n}`}
+                            onClick={() => removeDevice(n)}
+                          >
+                            Remove
+                          </MonitorButton>
+                        </span>
+                      ) : (
+                        <>
+                          <MonitorButton
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Edit settings for ${n}`}
+                            onClick={() => setSheet({ name: n, isNew: false })}
+                          >
+                            Edit settings
+                          </MonitorButton>
+                          <MonitorButton
+                            size="sm"
+                            variant="ghost"
+                            disabled={!!tests[n]?.pending}
+                            aria-label={`Test connection to ${n}`}
+                            onClick={() => onTest(n)}
+                          >
+                            {tests[n]?.pending ? "Testing…" : "Test connection"}
+                          </MonitorButton>
+                          <MonitorButton
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Copy ${n}`}
+                            onClick={() => duplicate(n)}
+                          >
+                            Copy
+                          </MonitorButton>
+                          <MonitorButton
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive"
+                            disabled={names.length === 1}
+                            title={
+                              names.length === 1
+                                ? "Keep at least one router"
+                                : "Remove from MCP. The router itself does not change."
+                            }
+                            aria-label={`Remove ${n}`}
+                            onClick={() => setConfirmDel(n)}
+                          >
+                            Remove
+                          </MonitorButton>
+                        </>
+                      )}
+                    </div>
+                    {test && (
+                      <div
+                        role="status"
+                        className="dv-test"
+                        data-tone={test.pending ? undefined : test.ok ? "good" : "bad"}
+                      >
+                        <StatusDot tone={test.pending ? "default" : test.ok ? "good" : "bad"} />
+                        <span
+                          className={cn(
+                            "font-[510]",
+                            test.pending
+                              ? "text-muted-foreground"
+                              : test.ok
+                                ? "text-success"
+                                : "text-destructive",
+                          )}
+                        >
+                          {test.pending ? "Testing" : test.ok ? "Connected" : "Connection failed"}
+                        </span>
+                        <span className="text-fg-secondary min-w-0 break-words">{test.label}</span>
+                        <span className="flex-1" />
+                        {test.ok && (
+                          <span className="text-muted-foreground">
+                            Session and one read, not an ICMP ping
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
-                <span className="flex-1" />
-                <Switch
-                  checked={!off}
-                  onCheckedChange={(c) => toggleDisabled(n, !c)}
-                  aria-label={`${off ? "Enable" : "Disable"} ${n}`}
-                />
-              </div>
-              <div className="router-entry__facts">
-                <div className="content-start">
-                  <span>{d.mac ? "Management address" : "Management addresses"}</span>
-                  {d.mac ? (
-                    <code>{str(d.mac)}</code>
-                  ) : (
-                    <RouterAddressList
-                      name={n}
-                      hosts={hosts}
-                      primary={str(d.host).trim()}
-                      port={str(d.port) || "22"}
-                    />
-                  )}
-                </div>
-                <div className="content-start">
-                  <span>Transport</span>
-                  <strong>
-                    {d.mac ? "MAC-Telnet" : d.transport === "rest" ? "REST / SSH fallback" : "SSH"}
-                  </strong>
-                </div>
-                <div className="content-start">
-                  <span>Login</span>
-                  <strong>{str(d.username) || "admin"}</strong>
-                </div>
-              </div>
-              {d.description ? (
-                <div className="text-muted-foreground font-mono text-[11px] break-words">
-                  {str(d.description)}
-                </div>
-              ) : null}
-              <div className="router-entry__actions">
-                <Button
-                  size="sm"
-                  ghost
-                  aria-label={`Edit ${n}`}
-                  icon={<Pencil className="size-3.5" />}
-                  onClick={() => setSheet({ name: n, isNew: false })}
-                >
-                  Edit settings
-                </Button>
-                <Button
-                  size="sm"
-                  ghost
-                  disabled={!!tests[n]?.pending}
-                  aria-label={`Test connection to ${n}`}
-                  onClick={() => onTest(n)}
-                  icon={
-                    tests[n]?.pending ? (
-                      <LoaderCircle className="size-3.5 animate-spin" />
-                    ) : (
-                      <PlugZap className="size-3.5" />
-                    )
-                  }
-                >
-                  {tests[n]?.pending ? "Testing…" : "Test connection"}
-                </Button>
-                <Button
-                  size="sm"
-                  ghost
-                  aria-label={`Copy ${n}`}
-                  onClick={() => duplicate(n)}
-                  icon={<Copy className="size-3.5" />}
-                >
-                  Copy
-                </Button>
-                {confirmDel === n ? (
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <Button size="sm" type="error" onClick={() => removeDevice(n)}>
-                      Remove {n}?
-                    </Button>
-                    <Button size="sm" ghost onClick={() => setConfirmDel(null)}>
-                      Cancel
-                    </Button>
-                  </span>
-                ) : (
-                  <Button
-                    size="sm"
-                    ghost
-                    type="error"
-                    disabled={names.length === 1}
-                    title={
-                      names.length === 1
-                        ? "Keep at least one configured router"
-                        : "Remove from MCP; the router itself is not changed"
-                    }
-                    aria-label={`Remove ${n}`}
-                    icon={<Trash2 className="size-3.5" />}
-                    onClick={() => setConfirmDel(n)}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </div>
-              {test && (
-                <div
-                  role="status"
-                  className={cn(
-                    "rounded-lg border px-3 py-2 text-xs break-words",
-                    test.pending
-                      ? "border-border text-muted-foreground"
-                      : test.ok
-                        ? "border-success/30 bg-success/5 text-success"
-                        : "border-destructive/30 bg-destructive/5 text-destructive",
-                  )}
-                >
-                  <strong>
-                    {test.pending ? "Testing" : test.ok ? "Connected" : "Connection failed"}
-                  </strong>{" "}
-                  · {test.label}
-                  {test.ok && (
-                    <span className="mt-1 block text-[10px] opacity-80">
-                      Connection + read check, not ICMP ping. Tested with this draft.
-                    </span>
-                  )}
-                </div>
-              )}
-            </SortableDevice>
-          );
-        })}
-        {names.length === 0 && (
-          <Note type="secondary" label={false}>
-            No devices yet. Click <b>Add device</b> to configure your first router.
-          </Note>
-        )}
-      </Reorder.Group>
-      <p className="devices-caption">
-        Drag a handle or use its arrow keys to reorder. Copy includes settings and stored
-        credentials, never live router data.
-      </p>
+              </SortableDevice>
+            );
+          })}
+        </Reorder.Group>
+      )}
 
       {editor}
-    </section>
+    </div>
   );
 }
 

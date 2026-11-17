@@ -1,0 +1,212 @@
+/* Schedules page, after the approved Schedules board. Layout only; colours come from tailwind.css tokens. */
+
+.sched-page {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 24px;
+  line-height: 21px;
+}
+
+.sched-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+.sched-jobs {
+  flex: 1 1 360px;
+}
+.sched-chart {
+  flex: 2 1 520px;
+}
+.sched-regressions {
+  flex: 2 1 480px;
+}
+.sched-calendar {
+  flex: 1 1 320px;
+}
+
+.sched-meta {
+  display: block;
+  overflow: hidden;
+  padding-left: 15px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Jobs ──────────────────────────────────────────────────────────────────── */
+.sched-job-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.sched-job-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  cursor: pointer;
+}
+/* The board marks the picked job with the brand indigo edge. */
+.monitor-row.sched-job-row[data-selected] {
+  box-shadow: inset 2px 0 0 var(--chart-1);
+}
+.sched-job-main:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ── Posture chart ─────────────────────────────────────────────────────────── */
+.sched-legend {
+  display: flex;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.sched-legend > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sched-bar[data-sev="critical"] {
+  fill: var(--destructive);
+}
+.sched-bar[data-sev="high"] {
+  fill: var(--warning);
+}
+.sched-bar[data-sev="medium"] {
+  fill: var(--chart-1);
+  opacity: 0.7;
+}
+.sched-bar[data-sev="low"] {
+  fill: var(--muted-foreground);
+  opacity: 0.6;
+}
+.sched-bar[data-sev="info"] {
+  fill: var(--text-faint);
+  opacity: 0.6;
+}
+/* Inline, as on the board: the chart sits on a text line, which adds the descender gap. */
+.sched-posture-svg {
+  display: inline;
+  vertical-align: baseline;
+}
+.sched-summary {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-wrap: pretty;
+}
+.sched-summary-chart {
+  margin-top: 8px;
+}
+
+/* ── Regressions ───────────────────────────────────────────────────────────── */
+.sched-reg-row {
+  grid-template-columns: 16px 88px minmax(0, 1fr) auto;
+}
+.sched-reg-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+  transition: transform 150ms ease;
+}
+.sched-reg[data-open] .sched-reg-chevron {
+  transform: rotate(90deg);
+}
+.sched-reg-sev {
+  justify-self: start;
+}
+.sched-reg-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 20px 12px 48px;
+  font-size: 13px;
+}
+
+/* ── Day grid ──────────────────────────────────────────────────────────────── */
+.sched-calendar-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sched-calendar-body .sched-legend {
+  flex-wrap: wrap;
+}
+.sched-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.sched-day {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.sched-day[data-state="clean"] {
+  background: color-mix(in srgb, var(--success) 55%, transparent);
+}
+.sched-day[data-state="more"] {
+  background: color-mix(in srgb, var(--warning) 60%, transparent);
+}
+.sched-day[data-state="failed"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--destructive);
+}
+.sched-day-key {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+/* ── Run history ───────────────────────────────────────────────────────────── */
+.sched-run-row {
+  grid-template-columns:
+    minmax(0, 1.2fr) minmax(0, 0.8fr) 112px 56px
+    minmax(0, 1.6fr);
+}
+
+/* ── Empty state: the tools a job can run ──────────────────────────────────── */
+.sched-tools {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  text-align: left;
+}
+.sched-tools li {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Run history is not on the board; on phones it stacks into two lines. */
+@media (max-width: 639px) {
+  .monitor-thead.sched-run-row {
+    display: none;
+  }
+  .sched-run-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 2px;
+  }
+  .sched-run-device {
+    grid-column: 1;
+    grid-row: 2;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .sched-run-at {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 12px;
+  }
+  .sched-run-took {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .sched-run-result {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+}

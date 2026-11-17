@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
-import { act, createElement as h, createRef } from "react";
+import { act, createElement as h, createRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
@@ -25,11 +25,8 @@ import { OperationsIsland } from "../../ui/observability/operations-island";
 import { DashboardRefresh } from "../../ui/observability/dashboard-refresh";
 import { FeedActions } from "../../ui/observability/feed-actions";
 import { DashboardSidebar } from "../../ui/observability/dashboard-shell";
+import type { ViewId } from "../../ui/observability/navigation";
 import { NewFeatureBadge } from "../../ui/observability/new-feature-badge";
-import {
-  AnimatedSidebarProvider,
-  AnimatedSidebarTrigger,
-} from "../../ui/observability/components/beui/registry/components/motion/animated-sidebar";
 import { PullToRefresh } from "../../ui/observability/components/beui/registry/components/motion/pull-to-refresh";
 
 // Happy DOM's partial WAAPI rejects cancelled animations. Exercise Motion's JS
@@ -299,7 +296,7 @@ test("tabs do not mount inactive operational panels and support arrow navigation
   expect(host.querySelector('[role="tabpanel"]')?.textContent).toBe("Remote panel");
 });
 
-test("Operations Island expands, switches views and closes without issuing requests", async () => {
+test("the Live capsule opens the operations panel, switches views and closes without requests", async () => {
   const fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);
   await render(
@@ -320,21 +317,32 @@ test("Operations Island expands, switches views and closes without issuing reque
       onEvent: vi.fn(),
     }),
   );
-  const trigger = host.querySelector<HTMLButtonElement>('[aria-label^="Open Operations Island"]')!;
-  expect(host.querySelector('[data-anchor="bottom"]')?.className).toContain("items-end");
-  expect(trigger.textContent).toContain("Stream offline");
+  const capsule = () =>
+    host.querySelector<HTMLButtonElement>('[aria-label^="Open operations panel"]')!;
+  const trigger = capsule();
+  expect(trigger.className).toContain("cap");
+  expect(trigger.getAttribute("aria-label")).toContain("Stream offline");
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(trigger.textContent).toContain("Offline");
   await click(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
   expect(host.querySelector("#operations-island-panel")).not.toBeNull();
   const routers = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
     (tab) => tab.textContent === "Routers",
   )!;
   await click(routers);
+  expect(routers.getAttribute("aria-selected")).toBe("true");
   expect(host.textContent).toContain("No healthy state is assumed");
-  await key(routers, "Escape");
-  expect(document.activeElement?.getAttribute("aria-label")).toContain("Open Operations Island");
-  await click(host.querySelector<HTMLButtonElement>('[aria-label^="Open Operations Island"]')!);
-  await click(host.querySelector<HTMLButtonElement>('[aria-label="Collapse Operations Island"]')!);
-  expect(document.activeElement?.getAttribute("aria-label")).toContain("Open Operations Island");
+  await key(routers, "ArrowRight");
+  const selected = () => host.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')!;
+  expect(selected().textContent).toBe("Activity");
+  await key(selected(), "Escape");
+  expect(host.querySelector("#operations-island-panel")).toBeNull();
+  expect(document.activeElement).toBe(capsule());
+  await click(capsule());
+  await click(capsule());
+  expect(host.querySelector("#operations-island-panel")).toBeNull();
+  expect(document.activeElement).toBe(capsule());
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -442,45 +450,89 @@ test("expandable feed actions never delete on reveal, and disabled selection sta
   expect(document.activeElement).toBe(enabled);
 });
 
-test("animated sidebar retains navigation, pins and modified-link behavior when collapsed", async () => {
-  const navigate = vi.fn();
-  await render(
-    h(AnimatedSidebarProvider, {
-      children: [
-        h(AnimatedSidebarTrigger, { key: "toggle", "aria-label": "Toggle navigation" }),
-        h(DashboardSidebar, {
-          key: "sidebar",
-          view: "feed",
-          onNavigate: navigate,
-          renderIcon: () => h("span", null, "•"),
-          onMobileOpenChange: vi.fn(),
-          liveMode: "off",
-          feedCount: 0,
-          firingCount: 0,
-          releaseAvailable: false,
-          controls: null,
-        }),
-      ],
+/** The sidebar with its own collapse state, wired the way main.tsx does it. */
+function SidebarHarness(props: {
+  view: ViewId;
+  version?: string;
+  onNavigate?: (view: ViewId) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  return [
+    h("button", {
+      key: "toggle",
+      type: "button",
+      "aria-label": "Toggle navigation",
+      onClick: () => setCollapsed(!collapsed),
     }),
-  );
+    h(DashboardSidebar, {
+      key: "sidebar",
+      view: props.view,
+      version: props.version,
+      onNavigate: props.onNavigate ?? vi.fn(),
+      renderIcon: () => h("span", null, "•"),
+      onMobileOpenChange: vi.fn(),
+      liveMode: "off",
+      feedCount: 0,
+      firingCount: 0,
+      releaseAvailable: false,
+      controls: null,
+      collapsed,
+      onToggleCollapsed: () => setCollapsed(!collapsed),
+    }),
+  ];
+}
+// Reduced motion: the rail replaces the open sidebar at once, not after a fade.
+const reducedMotion = () =>
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query.includes("reduce"),
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent: () => false,
+  }));
+const sidebarState = () =>
+  host.querySelector('nav[aria-label="Dashboard navigation"]')?.getAttribute("data-state");
+
+test("the rail keeps navigation, flyouts, pins and modified-link behavior", async () => {
+  reducedMotion();
+  const navigate = vi.fn();
+  await render(h(SidebarHarness, { view: "feed", onNavigate: navigate }));
   await click(host.querySelector<HTMLButtonElement>('[aria-label="Toggle navigation"]')!);
-  expect(host.querySelector('[data-slot="sidebar"]')?.getAttribute("data-state")).toBe("collapsed");
-  const link = host.querySelector<HTMLAnchorElement>('a[href="#devices"]')!;
-  expect(link.getAttribute("aria-label")).toBe("Devices");
-  expect(link.title).toBe("Devices");
-  expect(link.querySelector('[data-slot="sidebar-menu-label"]')?.getAttribute("aria-hidden")).toBe(
-    "true",
-  );
+  expect(sidebarState()).toBe("collapsed");
+  // One icon per group; the active group is marked.
+  expect(host.querySelectorAll(".rail-group")).toHaveLength(8);
+  const network = host.querySelector<HTMLButtonElement>(
+    '.rail-group button[aria-label="Network"]',
+  )!;
+  expect(network.getAttribute("aria-expanded")).toBe("false");
+  expect(
+    host.querySelector('.rail-group button[aria-label="Monitoring"]')?.getAttribute("data-active"),
+  ).toBe("true");
+  // Focus shows the flyout; Escape from a page link returns to the group icon.
+  await act(async () => network.focus());
+  expect(network.getAttribute("aria-expanded")).toBe("true");
+  const fly = document.getElementById(network.getAttribute("aria-controls")!)!;
+  expect(fly.querySelector(".fly-h")?.textContent).toContain("Network");
+  const link = fly.querySelector<HTMLAnchorElement>('a[href="#devices"]')!;
+  expect(link.textContent).toContain("Devices");
   await act(async () =>
     link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true })),
   );
   expect(navigate).not.toHaveBeenCalled();
-  await click(link);
+  await act(async () => link.focus());
+  await key(link, "Escape");
+  expect(document.activeElement).toBe(network);
+  expect(host.querySelector(".fly")).toBeNull();
+  await act(async () => network.blur());
+  await act(async () => network.focus());
+  await click(host.querySelector<HTMLAnchorElement>('.fly a[href="#devices"]')!);
   expect(navigate).toHaveBeenCalledWith("devices");
   await click(host.querySelector<HTMLButtonElement>('[aria-label="Toggle navigation"]')!);
-  expect(link.querySelector('[data-slot="sidebar-menu-label"]')?.getAttribute("aria-hidden")).toBe(
-    "false",
-  );
+  expect(sidebarState()).toBe("expanded");
+  expect(host.querySelector('a[href="#devices"] .lbl')?.textContent).toBe("Devices");
   expect(
     host.querySelector('[aria-label="Pin Devices"], [aria-label="Unpin Devices"]'),
   ).not.toBeNull();
@@ -502,25 +554,9 @@ test("release badges survive remounts and disappear on upgrade in menu and page 
 });
 
 test("navigation promotes new pages in categories, pins and accessible collapsed icons", async () => {
-  const sidebar = (version: string) =>
-    h(AnimatedSidebarProvider, {
-      children: [
-        h(AnimatedSidebarTrigger, { key: "toggle", "aria-label": "Toggle navigation" }),
-        h(DashboardSidebar, {
-          key: "sidebar",
-          view: "home-internet",
-          version,
-          onNavigate: vi.fn(),
-          renderIcon: () => h("span", null, "•"),
-          onMobileOpenChange: vi.fn(),
-          liveMode: "off",
-          feedCount: 0,
-          firingCount: 0,
-          releaseAvailable: false,
-          controls: null,
-        }),
-      ],
-    });
+  reducedMotion();
+  window.localStorage.clear();
+  const sidebar = (version: string) => h(SidebarHarness, { view: "home-internet", version });
   await render(sidebar("5.12.0"));
   const links = () => [...host.querySelectorAll<HTMLAnchorElement>('a[href="#home-internet"]')];
   expect(links()).toHaveLength(1);
@@ -529,12 +565,21 @@ test("navigation promotes new pages in categories, pins and accessible collapsed
   expect(links()).toHaveLength(2);
   for (const link of links()) expect(link.querySelector(".feature-new-menu")).not.toBeNull();
   await click(host.querySelector<HTMLButtonElement>('[aria-label="Toggle navigation"]')!);
-  for (const link of links()) {
-    expect(link.querySelector(".feature-new-dot")).not.toBeNull();
-    expect(link.getAttribute("aria-label")).toBe("Home Internet · New in v5.12.0");
-    expect(link.title).toBe("Home Internet · New in v5.12.0");
-  }
+  // Collapsed: the pinned icon carries a dot and the release in its name.
+  const pinned = links();
+  expect(pinned).toHaveLength(1);
+  expect(pinned[0]!.querySelector(".feature-new-dot")).not.toBeNull();
+  expect(pinned[0]!.getAttribute("aria-label")).toBe("Home Internet · New in v5.12.0 (pinned)");
+  expect(pinned[0]!.title).toBe("Home Internet · New in v5.12.0");
+  // The group flyout keeps the row badge and the release in the link name.
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('.rail-group button[aria-label="Monitoring"]')!.focus(),
+  );
+  const inFlyout = host.querySelector<HTMLAnchorElement>('.fly a[href="#home-internet"]')!;
+  expect(inFlyout.querySelector(".feature-new-menu")).not.toBeNull();
+  expect(inFlyout.getAttribute("aria-label")).toBe("Home Internet · New in v5.12.0");
   await render(sidebar("5.13.0"));
   expect(host.querySelector("[data-feature-release]")).toBeNull();
-  expect(links()[0]!.getAttribute("aria-label")).toBe("Home Internet");
+  expect(links()[0]!.getAttribute("aria-label")).toBe("Home Internet (pinned)");
+  window.localStorage.clear();
 });

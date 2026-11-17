@@ -23,8 +23,8 @@
 /* SVG geometry, filters and @keyframes that utilities cannot express. */
 @import "./viz.css";
 @import "./dashboard-shell.css";
-@import "./navigation-sections.css";
 @import "./devices.css";
+@import "./monitoring.css";
 
 /* shadcn's dark variant keys off a `.dark` class on <html>, set by main.tsx. */
 @custom-variant dark (&:is(.dark *));
@@ -71,6 +71,9 @@
   --overlay-03: rgba(8, 9, 10, 0.03);
   --overlay-08: rgba(8, 9, 10, 0.08);
   --text-faint: #8a8f98;
+  --text-emphasis: #000000;
+  --chart-grid: #e5e5e6;
+  --text-secondary: #3e3e44;
   --on-accent: #08090a;
   --shadow-button:
     inset 0 0 0 1px rgba(8, 9, 10, 0.08), 0 1px 1px 0 rgba(0, 0, 0, 0.07),
@@ -141,6 +144,9 @@
   --overlay-03: rgba(255, 255, 255, 0.03);
   --overlay-08: rgba(255, 255, 255, 0.08);
   --text-faint: #62666d;
+  --text-emphasis: #ffffff;
+  --chart-grid: #3e3e44;
+  --text-secondary: #d0d6e0;
   --on-accent: #08090a;
   --shadow-button:
     inset 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
@@ -188,6 +194,8 @@
   --color-overlay-03: var(--overlay-03);
   --color-overlay-08: var(--overlay-08);
   --color-faint: var(--text-faint);
+  --color-emphasis: var(--text-emphasis);
+  --color-fg-secondary: var(--text-secondary);
   --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);

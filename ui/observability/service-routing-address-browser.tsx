@@ -1,31 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import {
-  Check,
-  CheckCheck,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  ListFilter,
-  LoaderCircle,
-  RefreshCw,
-  Search,
-  X,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { api } from "./api";
 import { IpNetwork } from "./ip-network";
 import { createAddressIndexCache, searchAddressEntries } from "./routing-address-search";
 import type { AddressFamily, AddressIndex } from "./routing-address-search";
-import "./service-routing-address-browser.css";
+import { MonitorButton, MonitorEmpty, MonitorSelect, Segmented } from "./monitoring-ui";
+import { hhmm } from "./service-routing-ui";
+import { cn } from "@/lib/utils";
 
 export const routingAddressCache = createAddressIndexCache((device, family, offset, signal) =>
   api(
@@ -34,6 +15,7 @@ export const routingAddressCache = createAddressIndexCache((device, family, offs
   ),
 );
 const idle: AddressIndex = { rows: [], status: "idle" };
+const PAGE = 40;
 function useAddressIndex(device: string, family: AddressFamily, enabled: boolean) {
   const subscribe = useCallback(
     (listener: () => void) =>
@@ -61,7 +43,9 @@ export function RoutingAddressBrowser({
   references?: string[];
   referenceFamily?: AddressFamily;
 }) {
-  const [scope, setScope] = useState(references?.length ? "referenced" : "all");
+  const [scope, setScope] = useState<"referenced" | "all">(
+    references?.length ? "referenced" : "all",
+  );
   const [family, setFamily] = useState<AddressFamily | "all">(
     references?.length ? referenceFamily : "all",
   );
@@ -106,14 +90,14 @@ export function RoutingAddressBrowser({
       ),
     [entries, list, query],
   );
-  const pages = Math.max(1, Math.ceil(matches.length / 40));
+  const pages = Math.max(1, Math.ceil(matches.length / PAGE));
   const currentPage = Math.min(page, pages - 1);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(""), 2000);
     return () => clearTimeout(timer);
   }, [copied]);
-  const changeScope = (next: string) => {
+  const changeScope = (next: "referenced" | "all") => {
     setScope(next);
     setList("");
     setPage(0);
@@ -125,27 +109,20 @@ export function RoutingAddressBrowser({
       setCopied(key);
       setCopyError("");
     } catch {
-      setCopyError("Clipboard unavailable. Select and copy the address text instead.");
+      setCopyError("The clipboard is not available. Select the address and copy it instead.");
     }
   };
+  const referenced = [...new Set(references ?? [])];
   return (
     <section
-      className="address-browser"
+      className="flex min-w-0 flex-col gap-3"
       aria-label={references?.length ? "Referenced address lists" : "Search all address lists"}
     >
-      <header className="address-browser__header">
-        <div>
-          <span className="address-browser__icon">
-            <ListFilter size={17} />
-          </span>
-          <div>
-            <h4>{scope === "referenced" ? "Referenced address lists" : "All address lists"}</h4>
-            <p>
-              {device} <span>·</span> Read-only address explorer
-            </p>
-          </div>
-        </div>
-        <Button
+      <div className="flex items-center">
+        <span className="monitor-label flex-1">
+          {references?.length ? "Address lists this rule uses" : "All address lists"}
+        </span>
+        <MonitorButton
           size="sm"
           variant="ghost"
           aria-label="Refresh address search"
@@ -155,270 +132,241 @@ export function RoutingAddressBrowser({
             if (family !== "ipv4") void routingAddressCache.read(device, "ipv6", true);
           }}
         >
-          <RefreshCw size={14} /> Refresh
-        </Button>
-      </header>
+          Refresh
+        </MonitorButton>
+      </div>
       {references?.length ? (
-        <div className="address-browser__scope" aria-label="Address search scope">
+        <Segmented
+          label="Scope"
+          className="self-start"
+          value={scope}
+          onChange={changeScope}
+          options={[
+            { value: "referenced", label: `This rule's lists (${referenced.length})` },
+            { value: "all", label: "All lists" },
+          ]}
+        />
+      ) : null}
+      <label className="monitor-field">
+        <Search aria-hidden="true" />
+        <input
+          type="search"
+          aria-label="Search IP, comment or address list"
+          placeholder="Search an IP, comment or list"
+          value={query}
+          maxLength={160}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setPage(0);
+          }}
+        />
+        {query && (
           <button
             type="button"
-            aria-pressed={scope === "referenced"}
-            onClick={() => changeScope("referenced")}
-          >
-            This rule’s lists <span>{new Set(references).size}</span>
-          </button>
-          <button type="button" aria-pressed={scope === "all"} onClick={() => changeScope("all")}>
-            All router lists <span>IPv4 + IPv6</span>
-          </button>
-        </div>
-      ) : null}
-      <div className="address-browser__controls">
-        <div className="address-browser__search">
-          <Search size={16} />
-          <Input
-            aria-label="Search IP, comment or address list"
-            placeholder="Search IP, comment or list…"
-            value={query}
-            maxLength={160}
-            onChange={(event) => {
-              setQuery(event.target.value);
+            aria-label="Clear address search"
+            className="grid size-5 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setQuery("");
               setPage(0);
             }}
-          />
-          {query && (
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Clear address search"
+          >
+            <X className="size-4" />
+          </button>
+        )}
+      </label>
+      {scope === "referenced" ? (
+        <div className="flex flex-wrap gap-1.5">
+          {referenced.map((name) => (
+            <button
+              type="button"
+              key={name}
+              aria-pressed={list === name}
+              className={cn(
+                "monitor-chip cursor-pointer",
+                list === name && "text-foreground shadow-[inset_0_0_0_1px_var(--chart-1)]",
+              )}
               onClick={() => {
-                setQuery("");
+                setList(list === name ? "" : name);
                 setPage(0);
               }}
             >
-              <X size={14} />
-            </Button>
-          )}
+              {name} · {entries.filter((entry) => entry.row.list === name).length}
+              {!complete ? "+" : ""}
+            </button>
+          ))}
         </div>
-        {scope === "all" && (
-          <Select
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <MonitorSelect
+            label="Address search IP family"
             value={family}
-            onValueChange={(value) => {
+            onChange={(value) => {
               setFamily(value as AddressFamily | "all");
               setPage(0);
               setList("");
             }}
-          >
-            <SelectTrigger aria-label="Address search IP family">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">IPv4 + IPv6</SelectItem>
-              <SelectItem value="ipv4">IPv4</SelectItem>
-              <SelectItem value="ipv6">IPv6</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-      <div className="address-browser__filters">
-        <Select
-          value={list ? `name:${list}` : "all"}
-          onValueChange={(value) => {
-            setList(value === "all" ? "" : value.slice(5));
-            setPage(0);
-          }}
-        >
-          <SelectTrigger aria-label="Filter address list">
-            <SelectValue placeholder="All lists" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">
-              All {scope === "referenced" ? "referenced " : ""}lists
-            </SelectItem>
-            {names.map((name) => (
-              <SelectItem key={name} value={`name:${name}`}>
-                {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span>
-          Fuzzy search <span aria-hidden="true">·</span> exact matches first
-        </span>
-      </div>
-      {scope === "referenced" && (
-        <ScrollArea className="address-browser__chips">
-          <div>
-            {[...new Set(references)].map((name) => (
-              <button
-                type="button"
-                key={name}
-                aria-pressed={list === name}
-                onClick={() => {
-                  setList(list === name ? "" : name);
-                  setPage(0);
-                }}
-              >
-                {name}
-                <span>
-                  {entries.filter((entry) => entry.row.list === name).length}
-                  {!complete ? "+" : ""}
-                </span>
-              </button>
-            ))}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+            options={[
+              { value: "all", label: "IPv4 + IPv6" },
+              { value: "ipv4", label: "IPv4" },
+              { value: "ipv6", label: "IPv6" },
+            ]}
+          />
+          <MonitorSelect
+            label="Filter address list"
+            value={list}
+            onChange={(value) => {
+              setList(value);
+              setPage(0);
+            }}
+            options={[
+              { value: "", label: "All lists" },
+              ...names.map((name) => ({ value: name, label: name })),
+            ]}
+          />
+        </div>
       )}
-      <div
-        className="address-browser__coverage"
-        data-complete={complete}
-        role="status"
-        aria-live="polite"
-      >
-        {complete ? (
-          <CheckCheck size={14} />
-        ) : loading ? (
-          <LoaderCircle size={14} className="address-browser__spinner" />
-        ) : (
-          <ListFilter size={14} />
-        )}
-        <span>
-          {complete
-            ? `${loaded.toLocaleString()} entries indexed`
-            : `${loaded.toLocaleString()} / ${total?.toLocaleString() ?? "…"} entries read`}
-          <small>
-            {complete
-              ? `Snapshot · ${new Date(observedAt).toLocaleTimeString()}`
-              : loading
-                ? "Reading every page · results still incomplete"
-                : "Incomplete snapshot · refresh to retry"}
-          </small>
-        </span>
-        <strong>
-          {matches.length.toLocaleString()} {complete ? "matches" : "so far"}
-        </strong>
-      </div>
+      <p className="text-[12px] text-muted-foreground" role="status" aria-live="polite">
+        {complete
+          ? `${loaded.toLocaleString()} entries searched · read ${hhmm(observedAt)} · ${matches.length.toLocaleString()} ${matches.length === 1 ? "match" : "matches"} · exact matches first`
+          : `${loaded.toLocaleString()} of ${total?.toLocaleString() ?? "…"} entries read · ${loading ? "still reading" : "incomplete, refresh to retry"} · ${matches.length.toLocaleString()} so far`}
+      </p>
       {indexes
         .filter((index) => index.error)
         .map((index, i) => (
-          <p className="address-browser__error" role="alert" key={i}>
+          <p className="monitor-err" role="alert" key={i}>
             {index.error}
           </p>
         ))}
       {copyError && (
-        <p className="address-browser__error" role="alert">
+        <p className="monitor-err" role="alert">
           {copyError}
         </p>
       )}
-      <ScrollArea className="address-browser__results">
-        <ul aria-label="Address search results">
-          {matches.slice(currentPage * 40, (currentPage + 1) * 40).map((entry) => {
-            const { row } = entry;
-            const key = `${entry.family}:${row[".id"]}`;
-            return (
-              <li key={key} className="address-browser__row" data-disabled={row.disabled === "yes"}>
-                <div className="address-browser__row-top">
-                  <code>{row.address}</code>
-                  <div>
-                    <span className="address-browser__family">
-                      {entry.family === "ipv4" ? "v4" : "v6"}
-                    </span>
-                    {query && entry.match === "fuzzy" && (
-                      <span className="address-browser__approx">Approximate</span>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Copy ${row.address}`}
-                      onClick={() => void copy(row.address, key)}
-                    >
-                      {copied === key ? <Check size={13} /> : <Copy size={13} />}
-                    </Button>
-                  </div>
-                </div>
-                <IpNetwork address={row.address} />
-                <div className="address-browser__row-meta">
-                  <span title={row.list}>{row.list}</span>
-                  {row.disabled === "yes" ? (
-                    <small>Disabled</small>
-                  ) : row.dynamic === "yes" ? (
-                    <small>Dynamic</small>
-                  ) : null}
-                </div>
-                {row.comment && (
-                  <p className="address-browser__comment" title={row.comment}>
-                    {row.comment}
-                  </p>
+      <ul
+        aria-label="Address search results"
+        className="m-0 flex list-none flex-col border-t border-border p-0"
+      >
+        {matches.slice(currentPage * PAGE, (currentPage + 1) * PAGE).map((entry) => {
+          const { row } = entry;
+          const key = `${entry.family}:${row[".id"]}`;
+          return (
+            <li
+              key={key}
+              className={cn(
+                "flex min-w-0 flex-col gap-0.5 border-b border-border py-2.5",
+                row.disabled === "yes" && "opacity-60",
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="min-w-0 truncate font-mono text-[13px] text-foreground" dir="ltr">
+                  {row.address}
+                </span>
+                <span className="monitor-chip">{entry.family === "ipv4" ? "v4" : "v6"}</span>
+                {query && entry.match === "fuzzy" && (
+                  <span className="monitor-chip text-warning">Approximate</span>
                 )}
-                <details className="address-browser__entry-details">
-                  <summary aria-label={`Details for ${row.address}`}>
-                    <ChevronRight size={13} />
-                    <span className="sr-only">Entry details</span>
-                  </summary>
-                  <dl>
-                    {Object.entries(row).map(([field, value]) => (
-                      <div key={field}>
-                        <dt>{field}</dt>
-                        <dd>{value || "(empty)"}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </details>
-              </li>
-            );
-          })}
-        </ul>
-        {!matches.length && (
-          <div className="address-browser__empty">
-            <Search size={23} />
-            <strong>
-              {loading
-                ? "Looking through the remaining entries…"
-                : complete
-                  ? "No matching addresses"
-                  : "Search coverage is incomplete"}
-            </strong>
-            <p>
-              {complete
-                ? "Try part of an IP, a comment, or switch to all router lists."
-                : "An incomplete read is not an empty address list."}
-            </p>
-          </div>
-        )}
-      </ScrollArea>
-      <footer className="address-browser__footer">
-        <span>
+                {row.disabled === "yes" ? (
+                  <span className="monitor-chip">Disabled</span>
+                ) : row.dynamic === "yes" ? (
+                  <span className="monitor-chip">Dynamic</span>
+                ) : null}
+                <span className="flex-1" />
+                <MonitorButton
+                  size="sm"
+                  variant="ghost"
+                  className="px-1.5"
+                  aria-label={`Copy ${row.address}`}
+                  onClick={() => void copy(row.address, key)}
+                >
+                  {copied === key ? "Copied" : "Copy"}
+                </MonitorButton>
+              </div>
+              <span className="sr-net min-w-0">
+                <IpNetwork address={row.address} />
+              </span>
+              <span
+                className="min-w-0 truncate text-[12px] text-muted-foreground"
+                title={row.comment}
+              >
+                <span className="font-mono">{row.list}</span>
+                {row.comment ? ` · ${row.comment}` : ""}
+              </span>
+              <details className="group text-[12px]">
+                <summary
+                  aria-label={`Details for ${row.address}`}
+                  className="flex cursor-pointer list-none items-center gap-1 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden"
+                >
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-3.5 transition-transform group-open:rotate-90"
+                  />
+                  Fields
+                </summary>
+                <dl className="monitor-facts mt-1.5 grid-cols-[100px_minmax(0,1fr)] text-[12px]">
+                  {Object.entries(row).map(([field, value]) => (
+                    <div key={field} className="contents">
+                      <dt className="truncate font-mono">{field}</dt>
+                      <dd className="font-mono break-all">{value || "(empty)"}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            </li>
+          );
+        })}
+      </ul>
+      {!matches.length && (
+        <MonitorEmpty
+          compact
+          icon={<Search />}
+          title={
+            loading
+              ? "Looking through the rest of the entries…"
+              : complete
+                ? "No matching addresses"
+                : "Search coverage is incomplete"
+          }
+        >
+          {complete
+            ? "Try part of an IP or a comment, or search all lists."
+            : "A partial read is not an empty address list."}
+        </MonitorEmpty>
+      )}
+      <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+        <span className="flex-1 tabular-nums">
           {matches.length
-            ? `${currentPage * 40 + 1}–${Math.min((currentPage + 1) * 40, matches.length)} of ${matches.length}`
+            ? `${currentPage * PAGE + 1}–${Math.min((currentPage + 1) * PAGE, matches.length)} of ${matches.length}`
             : "0 shown"}
         </span>
-        <div>
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label="Previous address results"
-            disabled={currentPage === 0}
-            onClick={() => setPage(currentPage - 1)}
-          >
-            <ChevronLeft size={16} />
-          </Button>
-          <span>
-            {currentPage + 1} / {pages}
-          </span>
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label="Next address results"
-            disabled={currentPage + 1 >= pages}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            <ChevronRight size={16} />
-          </Button>
-        </div>
-      </footer>
-      <p className="address-browser__note">
-        Read over multiple pages, not an atomic router snapshot. Refresh after router changes.
-      </p>
+        {pages > 1 && (
+          <>
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              className="px-1.5"
+              aria-label="Previous address results"
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
+              icon={<ChevronLeft />}
+            />
+            <span className="tabular-nums">
+              {currentPage + 1} / {pages}
+            </span>
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              className="px-1.5"
+              aria-label="Next address results"
+              disabled={currentPage + 1 >= pages}
+              onClick={() => setPage(currentPage + 1)}
+              icon={<ChevronRight />}
+            />
+          </>
+        )}
+        <span className="rounded px-[5px] py-px font-mono text-[11px] text-muted-foreground shadow-[inset_0_0_0_1px_var(--input)]">
+          40 per page
+        </span>
+      </div>
     </section>
   );
 }

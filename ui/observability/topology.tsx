@@ -1,55 +1,165 @@
 /**
- * Layer-2 topology, drawn as a radar.
+ * Network → Topology: the layer-2 neighbours each router reports, drawn as one
+ * radial map.
  *
- * The MCP server sits at the hub, because it is the thing that actually polls
- * every device — `topo.server` was already in the payload and unused by the old
- * map, which left devices orbiting an empty centre. Configured devices orbit the
- * hub on an inner ring as gauge orbs (outer arc = CPU, inner arc = memory).
- * Neighbours discovered over MNDP/CDP/LLDP settle outside them, tethered to the
- * device that saw them by a dashed link — "seen, but not yet wired to the hub",
- * which is precisely what onboarding fixes. An onboardable neighbour breathes.
+ * The MCP server sits at the hub, because it polls every router. Managed routers
+ * sit on the inner ring as gauge nodes (outer ring = CPU, inner ring = memory).
+ * Neighbours found over MNDP/CDP/LLDP sit on the outer ring, linked to the
+ * router that saw them. A neighbour MCP could manage has a dashed outline and a
+ * plus.
  *
- * Positions come from a tiny deterministic relaxation (no `Math.random`, so the
- * map is stable across renders): neighbours repel one another and spring back
- * toward their parent's bearing, which unpicks the overlaps a fixed arc always
- * produced once a device reported more than a handful of neighbours.
- *
+ * Positions come from `topology-layout.ts` (deterministic, no randomness).
  * Interaction: wheel to zoom about the cursor, drag to pan, hover to focus a
- * node's immediate neighbourhood (everything else dims), click to inspect,
- * search to dim non-matching nodes. Motion lives in `viz.css` (`.topo-*`) and is
- * disabled under `prefers-reduced-motion`.
+ * node's links (everything else dims), click to inspect, search to dim
+ * non-matching nodes.
  */
-import { Fragment, useCallback, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode, WheelEvent } from "react";
-import { Crosshair, Minus, Plus, Radar, Search, ServerCog, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+  WheelEvent,
+} from "react";
+import { Minus, Plus, Radar, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CopyButton } from "./atoms";
-import { Button, Input } from "./geist";
-import { arcDash, CX, CY, H, HUB_ID, layout, sweepPath, W } from "./topology-layout";
+import { LoadingState } from "./loading-state";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorEmpty,
+  MonitorSearch,
+  PageIntro,
+  StatusBadge,
+  StatusDot,
+} from "./monitoring-ui";
+import { toast } from "./toast-action";
+import { CX, CY, H, HUB_ID, layout, W } from "./topology-layout";
 import type { TopoNode, TopologyPayload } from "./types";
 
-/** Colour a 0–100 metric: calm → warm → hot. */
+type Onboard = (name: string, body: Record<string, unknown>) => void;
+
+/** Colour a 0–100 metric the way the board does: ok, then warn, then bad. */
 function metricColor(v: number | undefined): string {
-  if (v == null) return "var(--muted-foreground)";
+  if (v == null) return "var(--success)";
   if (v >= 85) return "var(--destructive)";
   if (v >= 60) return "var(--warning)";
-  return "var(--chart-2)";
+  return "var(--success)";
 }
 
 function statusColor(n: TopoNode): string {
-  if (n.reachable === true) return "var(--chart-2)";
+  if (n.reachable === true) return "var(--success)";
   if (n.reachable === false) return "var(--destructive)";
-  return n.kind === "device" ? "var(--muted-foreground)" : "var(--border)";
+  return "var(--muted-foreground)";
 }
 
+/** Dash pattern that paints `pct` of a circle of radius `r` (board: `on full`). */
+function ringDash(r: number, pct: number | undefined): string {
+  const full = 2 * Math.PI * r;
+  return `${(Math.min(100, Math.max(0, pct ?? 0)) / 100) * full} ${full}`;
+}
+
+/** A quadratic link from `a` to `b`, bowed sideways by `bow` of its length. */
+function curve(a: { x: number; y: number }, b: { x: number; y: number }, bow: number): string {
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return `M${a.x} ${a.y} Q${(mx - dy * bow).toFixed(1)} ${(my + dx * bow).toFixed(1)} ${b.x} ${b.y}`;
+}
+
+const clock = (ms: number): string =>
+  new Date(ms).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+/** Text halo so labels stay readable over links. */
+const HALO = {
+  stroke: "var(--card)",
+  strokeWidth: 4,
+  paintOrder: "stroke",
+  strokeLinejoin: "round",
+} as const;
+
+/** The whole page: header, KPI strip and the map panel. */
+export function TopologyView({
+  topo,
+  loading,
+  onOnboard,
+}: {
+  topo: TopologyPayload | null;
+  loading: boolean;
+  onOnboard?: Onboard;
+}): ReactNode {
+  const hasMap = topo != null && topo.nodes.length > 0;
+  const offline = topo?.nodes.filter((n) => n.kind === "device" && n.reachable === false) ?? [];
+
+  return (
+    <section className="grid min-w-0 content-start gap-6">
+      <PageIntro
+        tone={topo ? "good" : undefined}
+        live={topo != null}
+        title={
+          topo ? (
+            <span className="text-muted-foreground text-[13px] font-normal">
+              <b className="text-foreground font-[510]">
+                {topo.stats.devices} managed · {topo.stats.neighbors} discovered
+              </b>{" "}
+              · {topo.stats.onboardable} waiting to be added · updated {clock(topo.generatedAt)}
+            </span>
+          ) : undefined
+        }
+      >
+        The layer-2 neighbours each router sees over MNDP, CDP and LLDP, drawn as one map.
+      </PageIntro>
+
+      {!topo && loading ? (
+        <LoadingState label="Discovering network topology" layout="cards" />
+      ) : hasMap ? (
+        <>
+          <MetricStrip label="Topology counts" minCell={200}>
+            <Metric label="Managed" value={topo.stats.devices} hint="routers in your config" />
+            <Metric label="Discovered" value={topo.stats.neighbors} hint="neighbours they report" />
+            <Metric
+              label="Waiting to be added"
+              tone="brand"
+              value={topo.stats.onboardable}
+              hint="MikroTik, reachable by address or MAC"
+            />
+            <Metric
+              label="Offline"
+              tone={offline.length > 0 ? "bad" : "default"}
+              value={offline.length}
+              hint={
+                offline.length > 0
+                  ? offline.map((n) => n.label || n.id).join(", ")
+                  : "every router answers"
+              }
+            />
+          </MetricStrip>
+          <TopologyMap topo={topo} onOnboard={onOnboard} />
+        </>
+      ) : (
+        <div className="monitor-panel">
+          <MonitorEmpty icon={<Radar />} title="No neighbours discovered yet">
+            Layer-2 neighbours (MNDP, CDP, LLDP) show up here when a router reports them.
+          </MonitorEmpty>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The map panel: toolbar, map, legend, and the inspector on the right. */
 export function TopologyMap({
   topo,
   onOnboard,
 }: {
   topo: TopologyPayload;
-  onOnboard?: (name: string, body: Record<string, unknown>) => void;
+  onOnboard?: Onboard;
 }): ReactNode {
   const [picked, setPicked] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
@@ -78,7 +188,7 @@ export function TopologyMap({
   const byId = useMemo(() => new Map(topo.nodes.map((n) => [n.id, n])), [topo.nodes]);
   const pickedNode = picked ? byId.get(picked) : null;
 
-  /** Ids adjacent to each node (including itself) — drives hover focus. */
+  /** Ids next to each node (including itself): drives hover focus. */
   const adjacency = useMemo(() => {
     const m = new Map<string, Set<string>>();
     const add = (a: string, b: string): void => {
@@ -108,7 +218,7 @@ export function TopologyMap({
     [q, onlyNew],
   );
 
-  /** Hovering focuses a neighbourhood; otherwise the search result set. */
+  /** Hover focuses a node's links; otherwise the search decides. */
   const focus = hover ? adjacency.get(hover) : null;
   const dimmed = (id: string): boolean => {
     if (focus) return !focus.has(id);
@@ -153,429 +263,524 @@ export function TopologyMap({
       return { k, x: CX - (CX - v.x) * s, y: CY - (CY - v.y) * s };
     });
 
-  /** Spokes from the hub to each managed device — not in `topo.edges`. */
-  const hubEdges = devices.map((d) => ({ from: HUB_ID, to: d.id, interface: undefined }));
+  const hub = { x: CX, y: CY };
+  const pickedEdge = picked ? topo.edges.find((e) => e.to === picked) : undefined;
 
   return (
-    <div className="flex min-w-0 flex-col gap-3">
+    <section className="monitor-panel @container" aria-label="Topology map">
       {/* ── toolbar ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
-          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
-          <Input
-            className="pl-8"
-            type="search"
-            placeholder="Filter by name, identity, IP, MAC or board…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+      <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+        <MonitorSearch
+          className="flex-[1_1_280px]"
+          label="Filter the map"
+          placeholder="Filter by name, identity, IP, MAC or board"
+          value={query}
+          onChange={setQuery}
+        />
+        <MonitorButton
+          size="sm"
+          className="aria-pressed:bg-accent aria-pressed:text-brand aria-pressed:shadow-[inset_0_0_0_1px_var(--chart-1)]"
+          aria-pressed={onlyNew}
+          icon={<Plus />}
+          onClick={() => setOnlyNew((v) => !v)}
+        >
+          Can be added ({topo.stats.onboardable})
+        </MonitorButton>
+        <span aria-hidden="true" className="bg-input mx-1 h-5 w-px" />
+        <div className="inline-flex items-center gap-0.5">
+          <MonitorButton
+            size="sm"
+            variant="ghost"
+            aria-label="Zoom out"
+            icon={<Minus />}
+            onClick={() => zoom(1 / 1.25)}
+          />
+          <span className="text-fg-secondary w-10 text-center text-[12px] tabular-nums">
+            {Math.round(view.k * 100)}%
+          </span>
+          <MonitorButton
+            size="sm"
+            variant="ghost"
+            aria-label="Zoom in"
+            icon={<Plus />}
+            onClick={() => zoom(1.25)}
           />
         </div>
-        <Button
-          size="sm"
-          ghost
-          type={onlyNew ? "accent" : "default"}
-          onClick={() => setOnlyNew((v) => !v)}
-          title="Dim everything except neighbours that can be onboarded"
-          icon={<Radar />}
-        >
-          Onboardable{topo.stats.onboardable > 0 ? ` (${topo.stats.onboardable})` : ""}
-        </Button>
-        <Separator orientation="vertical" className="h-6" />
-        <Button
-          size="sm"
-          ghost
-          onClick={() => zoom(1 / 1.25)}
-          aria-label="Zoom out"
-          icon={<Minus />}
-        />
-        <span className="text-muted-foreground w-11 text-center font-mono text-[11px] tabular-nums">
-          {Math.round(view.k * 100)}%
-        </span>
-        <Button size="sm" ghost onClick={() => zoom(1.25)} aria-label="Zoom in" icon={<Plus />} />
-        <Button
-          size="sm"
-          ghost
-          onClick={() => setView({ x: 0, y: 0, k: 1 })}
-          title="Reset view"
-          icon={<Crosshair />}
-        >
-          Reset
-        </Button>
+        <MonitorButton size="sm" variant="ghost" onClick={() => setView({ x: 0, y: 0, k: 1 })}>
+          Reset view
+        </MonitorButton>
       </div>
 
-      {/* ── radar canvas ────────────────────────────────────────────────── */}
-      <div className="bg-card relative overflow-hidden rounded-xl border">
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${W} ${H}`}
-          width="100%"
-          height={Math.min(H, 560)}
-          preserveAspectRatio="xMidYMid meet"
-          className={cn(
-            "block w-full touch-none select-none",
-            panning ? "cursor-grabbing" : "cursor-grab",
-          )}
-          onWheel={onWheel}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerLeave={endDrag}
-          onClick={() => setPicked(null)}
-          style={{
-            background:
-              "radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--brand) 7%, transparent), transparent 62%)",
-          }}
-        >
-          <defs>
-            {/* The sweep wedge, fading to nothing; `.topo-sweep` rotates it. */}
-            <linearGradient id="topo-beam" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="var(--brand)" stopOpacity="0.3" />
-              <stop offset="1" stopColor="var(--brand)" stopOpacity="0" />
-            </linearGradient>
-            <radialGradient id="topo-hub" cx="0.5" cy="0.35" r="0.75">
-              <stop offset="0" stopColor="var(--foreground)" />
-              <stop offset="1" stopColor="var(--muted-foreground)" />
-            </radialGradient>
-          </defs>
-
-          <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-            {/* range rings */}
-            <g className="topo-ring">
-              {[rInner, rOuter, rOuter + 62].map((r) => (
+      <div className="border-border flex flex-wrap border-t">
+        <div className="flex min-w-0 flex-[999_1_560px] flex-col">
+          {/* ── map ─────────────────────────────────────────────────────── */}
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${W} ${H}`}
+            width="100%"
+            role="img"
+            aria-label={`Map of ${devices.length} managed routers and the ${neighbors.length} neighbours they report`}
+            className={cn(
+              "block aspect-[760/580] max-h-[580px] w-full touch-none select-none",
+              panning ? "cursor-grabbing" : "cursor-grab",
+            )}
+            onWheel={onWheel}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerLeave={endDrag}
+            onClick={() => setPicked(null)}
+            style={{
+              background:
+                "radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--chart-1) 7%, transparent), transparent 60%)",
+            }}
+          >
+            <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+              {[rInner, rOuter].map((r) => (
                 <circle
                   key={r}
                   cx={CX}
                   cy={CY}
                   r={r}
                   fill="none"
-                  className="stroke-border/70"
-                  strokeDasharray="2 8"
+                  stroke="var(--chart-grid)"
+                  strokeDasharray="2 6"
                 />
               ))}
-            </g>
 
-            {/*
-              The beam pivots on its apex — the hub — so the origin is given in user
-              units, and `.topo-sweep` must NOT set `transform-box: fill-box`, which
-              would pivot on the wedge's bounding-box centre instead.
-            */}
-            <g className="topo-sweep" style={{ transformOrigin: `${CX}px ${CY}px` }}>
-              <path d={sweepPath(rOuter + 62)} fill="url(#topo-beam)" />
-            </g>
+              {/* links: hub → router, then router → neighbour */}
+              {devices.map((d) => {
+                const b = pos.get(d.id);
+                if (!b) return null;
+                const down = d.reachable === false;
+                return (
+                  <path
+                    key={`h-${d.id}`}
+                    d={curve(hub, b, 0.08)}
+                    fill="none"
+                    stroke={down ? "var(--destructive)" : "var(--success)"}
+                    strokeWidth={1.25}
+                    strokeDasharray="4 4"
+                    opacity={dimmed(d.id) ? 0.12 : down ? 0.8 : 0.6}
+                    className="transition-opacity"
+                  >
+                    <title>
+                      {topo.server} → {d.label || d.id}
+                    </title>
+                  </path>
+                );
+              })}
+              {topo.edges.map((e, i) => {
+                const a = pos.get(e.from);
+                const b = pos.get(e.to);
+                if (!a || !b) return null;
+                const down = byId.get(e.from)?.reachable === false;
+                const faded = dimmed(e.from) || dimmed(e.to);
+                return (
+                  <path
+                    key={`e-${i}`}
+                    d={curve(a, b, 0.06)}
+                    fill="none"
+                    stroke={down ? "var(--destructive)" : "var(--chart-1)"}
+                    strokeWidth={1.25}
+                    strokeDasharray="3 4"
+                    opacity={faded ? 0.12 : 0.55}
+                    className="transition-opacity"
+                  >
+                    <title>
+                      {e.from} → {e.to}
+                      {e.interface ? ` (${e.interface})` : ""}
+                    </title>
+                  </path>
+                );
+              })}
 
-            {/* links */}
-            {[...hubEdges, ...topo.edges].map((e, i) => {
-              const a = pos.get(e.from);
-              const b = pos.get(e.to);
-              if (!a || !b) return null;
-              const toNeighbor = byId.get(e.to)?.kind === "neighbor";
-              const faded = dimmed(e.from) || dimmed(e.to);
-              // Bow each link slightly, so parallel spokes separate visually.
-              const nx = -(b.y - a.y);
-              const ny = b.x - a.x;
-              const nl = Math.hypot(nx, ny) || 1;
-              const bow = toNeighbor ? 16 : 8;
-              const qx = (a.x + b.x) / 2 + (nx / nl) * bow;
-              const qy = (a.y + b.y) / 2 + (ny / nl) * bow;
-              return (
-                <path
-                  key={`e-${i}`}
-                  d={`M ${a.x} ${a.y} Q ${qx} ${qy} ${b.x} ${b.y}`}
-                  fill="none"
-                  strokeWidth={toNeighbor ? 1.2 : 1.6}
-                  strokeDasharray={toNeighbor ? "4 4" : "6 10"}
-                  className={cn(
-                    "transition-opacity",
-                    toNeighbor ? "stroke-brand/55" : "topo-flow stroke-chart-2/70",
-                    faded && "opacity-15",
-                  )}
-                >
-                  <title>
-                    {e.from === HUB_ID ? topo.server : e.from} → {e.to}
-                    {e.interface ? ` (${e.interface})` : ""}
-                  </title>
-                </path>
-              );
-            })}
-
-            {/* hub — the MCP server every managed device is polled from */}
-            <g
-              className={cn("transition-opacity", focus && !focus.has(HUB_ID) && "opacity-15")}
-              onMouseEnter={() => setHover(HUB_ID)}
-              onMouseLeave={() => setHover(null)}
-            >
-              <circle cx={CX} cy={CY} r={40} className="fill-brand/15" />
-              <circle cx={CX} cy={CY} r={27} fill="url(#topo-hub)" className="stroke-border" />
-              <ServerCog
-                x={CX - 9}
-                y={CY - 15}
-                width={18}
-                height={18}
-                className="stroke-background pointer-events-none"
-              />
-              <text
-                x={CX}
-                y={CY + 16}
-                textAnchor="middle"
-                className="fill-background pointer-events-none font-mono text-[8px] font-bold"
+              {/* hub: the MCP server every managed router is polled from */}
+              <g
+                className={cn("transition-opacity", focus && !focus.has(HUB_ID) && "opacity-15")}
+                onMouseEnter={() => setHover(HUB_ID)}
+                onMouseLeave={() => setHover(null)}
               >
-                MCP
-              </text>
-              <text
-                x={CX}
-                y={CY + 58}
-                textAnchor="middle"
-                className="fill-muted-foreground pointer-events-none font-mono text-[10px]"
-              >
-                {topo.server}
-              </text>
-            </g>
-
-            {/* nodes */}
-            {topo.nodes.map((n) => {
-              const p = pos.get(n.id);
-              if (!p) return null;
-              const isDev = n.kind === "device";
-              const sel = picked === n.id;
-              const faded = dimmed(n.id);
-              const stroke = statusColor(n);
-              const r = isDev ? 26 : 15;
-
-              return (
-                <g
-                  key={n.id}
-                  transform={`translate(${p.x},${p.y})`}
-                  className={cn("cursor-pointer transition-opacity", faded && "opacity-15")}
-                  onMouseEnter={() => setHover(n.id)}
-                  onMouseLeave={() => setHover(null)}
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    setPicked((cur) => (cur === n.id ? null : n.id));
-                  }}
+                <circle
+                  cx={CX}
+                  cy={CY}
+                  r={30}
+                  fill="color-mix(in srgb, var(--chart-1) 16%, var(--card))"
+                  stroke="var(--chart-1)"
+                  strokeWidth={1.25}
+                />
+                <text
+                  x={CX}
+                  y={CY + 4}
+                  textAnchor="middle"
+                  fontSize={12}
+                  fontWeight={590}
+                  fill="var(--foreground)"
+                  className="pointer-events-none"
                 >
-                  {sel && (
-                    <circle
-                      r={r + 8}
-                      className="topo-halo stroke-brand fill-none"
-                      strokeWidth={2}
-                    />
-                  )}
+                  MCP
+                </text>
+                <text
+                  x={CX}
+                  y={CY + 48}
+                  textAnchor="middle"
+                  fontSize={11}
+                  fill="var(--muted-foreground)"
+                  className="pointer-events-none font-mono"
+                  {...HALO}
+                >
+                  {topo.server}
+                </text>
+              </g>
 
-                  {isDev ? (
-                    <>
-                      {/* outer arc = CPU, inner arc = memory */}
-                      <circle r={r + 7} className="stroke-border/60 fill-none" strokeWidth={3} />
-                      <circle
-                        r={r + 7}
-                        fill="none"
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        transform="rotate(-90)"
-                        style={{ stroke: metricColor(n.cpuLoad) }}
-                        strokeDasharray={arcDash(r + 7, n.cpuLoad)}
-                      />
-                      <circle r={r + 2} className="stroke-border/40 fill-none" strokeWidth={2} />
-                      <circle
-                        r={r + 2}
-                        fill="none"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        transform="rotate(-90)"
-                        style={{ stroke: metricColor(n.memUsedPct) }}
-                        strokeDasharray={arcDash(r + 2, n.memUsedPct)}
-                      />
-                      <circle
-                        r={r - 4}
-                        className="fill-muted"
-                        style={{ stroke }}
-                        strokeWidth={1.6}
-                      />
-                      <text
-                        textAnchor="middle"
-                        y={3}
-                        className="fill-foreground pointer-events-none font-mono text-[9px] font-bold"
-                      >
-                        {(n.label || n.id).slice(0, 4).toUpperCase()}
-                      </text>
-                    </>
-                  ) : (
-                    <>
-                      {n.onboardable && <circle r={r + 5} className="topo-pulse fill-brand/25" />}
-                      {/* a diamond, so an unmanaged neighbour never reads as a device */}
-                      <rect
-                        x={-r * 0.72}
-                        y={-r * 0.72}
-                        width={r * 1.44}
-                        height={r * 1.44}
-                        rx={3}
-                        transform="rotate(45)"
-                        className="fill-card"
-                        style={{ stroke }}
-                        strokeWidth={1.4}
-                        strokeDasharray={n.onboardable ? "3 2" : undefined}
-                      />
-                      {n.onboardable && (
-                        <Plus
-                          x={-5}
-                          y={-5}
-                          width={10}
-                          height={10}
-                          className="stroke-brand pointer-events-none"
+              {/* nodes */}
+              {topo.nodes.map((n) => {
+                const p = pos.get(n.id);
+                if (!p) return null;
+                const sel = picked === n.id;
+                const name = n.label || n.id;
+                const select = (ev: { stopPropagation: () => void }): void => {
+                  ev.stopPropagation();
+                  setPicked((cur) => (cur === n.id ? null : n.id));
+                };
+                const common = {
+                  transform: `translate(${p.x},${p.y})`,
+                  className: cn("cursor-pointer transition-opacity", dimmed(n.id) && "opacity-15"),
+                  onMouseEnter: () => setHover(n.id),
+                  onMouseLeave: () => setHover(null),
+                  onClick: select,
+                };
+
+                if (n.kind === "device") {
+                  const down = n.reachable === false;
+                  return (
+                    <g key={n.id} {...common}>
+                      {sel && (
+                        <circle
+                          r={40}
+                          fill="color-mix(in srgb, var(--chart-1) 18%, transparent)"
+                          stroke="var(--chart-1)"
+                          strokeWidth={1}
                         />
                       )}
-                    </>
-                  )}
+                      <circle r={33} fill="none" stroke="var(--overlay-08)" strokeWidth={3} />
+                      <circle
+                        r={33}
+                        fill="none"
+                        stroke={metricColor(n.cpuLoad)}
+                        strokeWidth={3}
+                        strokeDasharray={ringDash(33, n.cpuLoad)}
+                        transform="rotate(-90)"
+                      />
+                      <circle r={28} fill="none" stroke="var(--overlay-08)" strokeWidth={3} />
+                      <circle
+                        r={28}
+                        fill="none"
+                        stroke={metricColor(n.memUsedPct)}
+                        strokeWidth={3}
+                        strokeDasharray={ringDash(28, n.memUsedPct)}
+                        transform="rotate(-90)"
+                      />
+                      <circle
+                        r={22}
+                        fill="var(--muted)"
+                        stroke={statusColor(n)}
+                        strokeWidth={1.5}
+                      />
+                      <text
+                        y={4}
+                        textAnchor="middle"
+                        fontSize={10}
+                        fontWeight={590}
+                        fill="var(--foreground)"
+                        className="pointer-events-none font-mono"
+                      >
+                        {name.split("-")[0].slice(0, 4).toUpperCase()}
+                      </text>
+                      <text
+                        y={52}
+                        textAnchor="middle"
+                        fontSize={12}
+                        fill="var(--foreground)"
+                        className="pointer-events-none font-mono"
+                        {...HALO}
+                      >
+                        {name.slice(0, 22)}
+                      </text>
+                      <text
+                        y={66}
+                        textAnchor="middle"
+                        fontSize={11}
+                        fill={down ? "var(--destructive)" : "var(--muted-foreground)"}
+                        className="pointer-events-none"
+                        {...HALO}
+                      >
+                        {down ? "offline" : n.ip || n.board || ""}
+                      </text>
+                    </g>
+                  );
+                }
 
-                  <text
-                    textAnchor="middle"
-                    y={r + (isDev ? 22 : 18)}
-                    className="fill-foreground pointer-events-none font-mono text-[10px]"
-                  >
-                    {(n.label || n.id).slice(0, 18)}
-                  </text>
-                  {isDev && (
+                const parentDown = byId.get(parentOf.get(n.id) ?? "")?.reachable === false;
+                const below = p.y > CY + 1;
+                return (
+                  <g key={n.id} {...common}>
+                    {sel && (
+                      <circle
+                        r={22}
+                        fill="color-mix(in srgb, var(--chart-1) 18%, transparent)"
+                        stroke="var(--chart-1)"
+                        strokeWidth={1}
+                      />
+                    )}
+                    {/* a diamond, so a neighbour never reads as a managed router */}
+                    <rect
+                      x={-9}
+                      y={-9}
+                      width={18}
+                      height={18}
+                      rx={3}
+                      fill="var(--muted)"
+                      stroke={
+                        n.onboardable
+                          ? "var(--chart-1)"
+                          : parentDown
+                            ? "var(--destructive)"
+                            : "var(--muted-foreground)"
+                      }
+                      strokeWidth={1.25}
+                      strokeDasharray={n.onboardable ? "3 2" : undefined}
+                      transform="rotate(45)"
+                    />
+                    {n.onboardable && (
+                      <text
+                        y={5}
+                        textAnchor="middle"
+                        fontSize={13}
+                        fontWeight={590}
+                        fill="var(--brand)"
+                        className="pointer-events-none"
+                      >
+                        +
+                      </text>
+                    )}
                     <text
+                      y={below ? 30 : -18}
                       textAnchor="middle"
-                      y={r + 34}
-                      className="fill-muted-foreground pointer-events-none font-mono text-[9px]"
+                      fontSize={11}
+                      fill="var(--text-secondary)"
+                      className="pointer-events-none font-mono"
+                      {...HALO}
                     >
-                      {n.ip || n.board || ""}
+                      {name.slice(0, 22)}
                     </text>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
 
-        {/* HUD, floating over the canvas */}
-        <div className="text-muted-foreground pointer-events-none absolute top-3 left-3 flex flex-col gap-1 font-mono text-[10px]">
-          <span className="text-foreground text-[11px] font-semibold">Layer-2 fabric</span>
-          <span>
-            {topo.stats.devices} managed · {topo.stats.neighbors} discovered
-          </span>
-          {topo.stats.onboardable > 0 && (
-            <span className="text-brand">{topo.stats.onboardable} awaiting onboard</span>
-          )}
+          {/* ── legend ──────────────────────────────────────────────────── */}
+          <div className="border-border text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-2 border-t px-5 py-3 text-[12px]">
+            <span className="inline-flex items-center gap-1.5">
+              <StatusDot tone="good" />
+              Online
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <StatusDot tone="bad" />
+              Offline
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className="size-[9px] rotate-45 rounded-[2px] shadow-[inset_0_0_0_1.25px_var(--muted-foreground)]"
+              />
+              Neighbour
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className="border-chart-1 size-[9px] rotate-45 rounded-[2px] border-[1.25px] border-dashed"
+              />
+              Can be added
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              Outer ring CPU · inner ring memory
+            </span>
+            <span className="flex-1" />
+            <span>Drag to move · scroll to zoom · hover a node to see its links</span>
+          </div>
         </div>
 
-        <div className="text-muted-foreground pointer-events-none absolute right-3 bottom-3 flex flex-col items-end gap-1 font-mono text-[10px]">
-          <span className="inline-flex items-center gap-1.5">
-            <i className="bg-chart-2 inline-block size-2 rounded-full" /> online
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <i className="bg-destructive inline-block size-2 rounded-full" /> offline
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <i className="border-border inline-block size-2 rotate-45 border" /> neighbour
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <i className="bg-brand/40 inline-block size-2 rounded-full" /> onboardable
-          </span>
-        </div>
+        {/* ── inspector ───────────────────────────────────────────────────── */}
+        {pickedNode && (
+          <Inspector
+            node={pickedNode}
+            seenBy={pickedEdge?.from}
+            via={pickedEdge?.interface}
+            onClose={() => setPicked(null)}
+            onOnboard={onOnboard}
+          />
+        )}
       </div>
-
-      {/* ── inspector ───────────────────────────────────────────────────── */}
-      {pickedNode && (
-        <Inspector node={pickedNode} onClose={() => setPicked(null)} onOnboard={onOnboard} />
-      )}
-    </div>
+    </section>
   );
 }
 
-/** Details for the selected node, plus its onboarding stub when it has one. */
+/** Details for the selected node, plus its config stub when MCP could manage it. */
 function Inspector({
   node,
+  seenBy,
+  via,
   onClose,
   onOnboard,
 }: {
   node: TopoNode;
+  seenBy?: string;
+  via?: string;
   onClose: () => void;
-  onOnboard?: (name: string, body: Record<string, unknown>) => void;
+  onOnboard?: Onboard;
 }): ReactNode {
+  const name = node.label || node.id;
+  const isDev = node.kind === "device";
   const stub = node.suggestedConfig
     ? JSON.stringify({ [node.suggestedConfig.name]: stubBody(node.suggestedConfig) }, null, 2)
     : null;
 
-  const facts: [string, string | undefined][] = [
-    ["identity", node.identity],
-    ["address", node.ip],
-    ["mac", node.mac],
-    ["board", node.board],
-    ["platform", node.platform],
-    ["version", node.version],
-    ["uptime", node.uptime],
+  const facts: [string, string | undefined, boolean?][] = [
+    ["Identity", node.identity],
+    ["Address", node.ip, true],
+    ["MAC", node.mac, true],
+    ["Board", node.board],
+    ["Platform", node.platform],
+    ["Version", node.version],
+    ["Uptime", node.uptime],
   ];
-  const known = facts.filter((f): f is [string, string] => Boolean(f[1]));
+  if (isDev) {
+    facts.push(["CPU", node.cpuLoad != null ? `${node.cpuLoad}%` : undefined]);
+    facts.push(["Memory", node.memUsedPct != null ? `${node.memUsedPct}%` : undefined]);
+  }
+  const known = facts.filter((f) => Boolean(f[1]));
+
+  const subtitle = isDev
+    ? node.reachable === false
+      ? "Managed router, not answering"
+      : "Managed router"
+    : seenBy
+      ? `Seen by ${seenBy}${via ? ` on ${via}` : ""}`
+      : null;
 
   return (
-    <div className="bg-card rounded-xl border p-4">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <strong className="font-mono text-sm">{node.label || node.id}</strong>
-        <Badge variant={node.kind === "device" ? "secondary" : "outline"}>{node.kind}</Badge>
-        {node.onboardable && <Badge className="bg-brand text-brand-foreground">onboardable</Badge>}
-        {node.reachable === false && <Badge variant="destructive">offline</Badge>}
-        <span className="flex-1" />
-        <Button ghost size="sm" icon={<X />} onClick={onClose} aria-label="Close" />
+    <aside
+      className="monitor-side flex flex-col @max-[900px]:max-w-none @max-[900px]:flex-[1_1_100%] @max-[900px]:border-t @max-[900px]:border-l-0"
+      aria-label={`${isDev ? "Router" : "Neighbour"} details: ${name}`}
+    >
+      <div className="border-border flex flex-col gap-2 border-b px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span className="monitor-badge">{isDev ? "Managed" : "Neighbour"}</span>
+          {node.onboardable && (
+            <span className="monitor-badge text-brand">
+              <StatusDot tone="brand" />
+              Can be added
+            </span>
+          )}
+          {node.reachable === false && <StatusBadge tone="bad">Offline</StatusBadge>}
+          {isDev && node.reachable === true && <StatusBadge tone="good">Online</StatusBadge>}
+          <span className="flex-1" />
+          <MonitorButton
+            size="sm"
+            variant="ghost"
+            aria-label={`Close ${isDev ? "router" : "neighbour"} details`}
+            icon={<X />}
+            onClick={onClose}
+          />
+        </div>
+        <h3 className="text-emphasis font-mono text-[15px] font-medium break-all">{name}</h3>
+        {subtitle && <p className="text-muted-foreground text-[12px]">{subtitle}</p>}
       </div>
-
-      <div className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-[11px]">
+      <div className="flex flex-col gap-4 px-5 pt-4 pb-5">
         {known.length === 0 ? (
-          <span>no details advertised</span>
+          <p className="text-muted-foreground text-[13px]">No details advertised.</p>
         ) : (
-          known.map(([k, v]) => (
-            <Fragment key={k}>
-              <span>{k}</span>
-              <span className="text-foreground break-all">{v}</span>
-            </Fragment>
-          ))
+          <dl
+            className="monitor-facts"
+            style={{ gridTemplateColumns: "88px minmax(0,1fr)" } as CSSProperties}
+          >
+            {known.map(([k, v, mono]) => (
+              <div key={k} className="contents">
+                <dt>{k}</dt>
+                <dd className={cn("break-all", mono && "font-mono text-[12px]")}>{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {stub && node.suggestedConfig && (
+          <>
+            <div className="flex flex-col gap-2">
+              <span className="monitor-label">Not managed yet</span>
+              <p className="text-fg-secondary text-[13px]">
+                Add this entry to your device config to manage it from MCP.
+              </p>
+              <pre className="monitor-pre">{stub}</pre>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <CopyStub text={stub} />
+              {onOnboard && (
+                <MonitorButton
+                  size="sm"
+                  variant="inverse"
+                  onClick={() =>
+                    onOnboard(node.suggestedConfig!.name, stubBody(node.suggestedConfig!))
+                  }
+                >
+                  Add to Devices
+                </MonitorButton>
+              )}
+            </div>
+            {onOnboard && (
+              <span className="text-muted-foreground text-[12px]">
+                Add to Devices opens the router form with these values. Nothing is saved until you
+                save it there.
+              </span>
+            )}
+          </>
         )}
       </div>
-
-      {node.kind === "device" && (node.cpuLoad != null || node.memUsedPct != null) && (
-        <div className="mt-3 flex gap-4 font-mono text-[11px]">
-          {node.cpuLoad != null && (
-            <span style={{ color: metricColor(node.cpuLoad) }}>cpu {node.cpuLoad}%</span>
-          )}
-          {node.memUsedPct != null && (
-            <span style={{ color: metricColor(node.memUsedPct) }}>mem {node.memUsedPct}%</span>
-          )}
-        </div>
-      )}
-
-      {stub && node.suggestedConfig && (
-        <>
-          <Separator className="my-3" />
-          <p className="text-muted-foreground mb-1.5 text-[11px]">
-            Not managed yet — add this to your device config to onboard it:
-          </p>
-          <pre className="bg-background text-foreground m-0 mb-2 overflow-x-auto rounded-md border px-2.5 py-2 font-mono text-[11px]/[1.5] whitespace-pre">
-            {stub}
-          </pre>
-          <div className="flex flex-wrap gap-2">
-            <CopyButton title="Copy config stub" label="Copy config stub" text={stub} />
-            {onOnboard && (
-              <Button
-                type="accent"
-                size="sm"
-                onClick={() =>
-                  onOnboard(node.suggestedConfig!.name, stubBody(node.suggestedConfig!))
-                }
-              >
-                Add to Devices →
-              </Button>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+    </aside>
   );
 }
 
-/** The body half of an onboarding config stub (drops the `name` key). */
+function CopyStub({ text }: { text: string }): ReactNode {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  const copy = (): void => {
+    if (!navigator.clipboard) {
+      toast.error("Clipboard unavailable. Select the text and copy it manually.");
+      return;
+    }
+    void navigator.clipboard.writeText(text).then(
+      () => {
+        setCopied(true);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setCopied(false), 1400);
+      },
+      () => toast.error("Couldn't copy. Select the text and copy it manually."),
+    );
+  };
+  return (
+    <MonitorButton size="sm" onClick={copy}>
+      {copied ? "Copied" : "Copy config stub"}
+    </MonitorButton>
+  );
+}
+
+/** The body half of a config stub (drops the `name` key). */
 function stubBody(c: NonNullable<TopoNode["suggestedConfig"]>): Record<string, unknown> {
-  const body: Record<string, unknown> = { port: c.port, username: c.username };
+  const body: Record<string, unknown> = {};
   if (c.host) body.host = c.host;
   if (c.mac) body.mac = c.mac;
+  body.port = c.port;
+  body.username = c.username;
   return body;
 }

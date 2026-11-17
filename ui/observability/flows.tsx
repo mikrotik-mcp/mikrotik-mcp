@@ -1,35 +1,31 @@
 /**
- * Flows view — continuous traffic analytics from collected NetFlow/IPFIX.
+ * Flows view: traffic analytics from collected NetFlow/IPFIX.
  *
- * The page is built around the question people actually arrive with ("who is
- * using my bandwidth"), so the ranking comes first and the pretty parts follow:
- *
- *   • **Collector health strip** — packets, decode errors and *templates
- *     pending*, which is the number that explains an empty page. It sits at the
- *     top precisely because an empty flow page and an idle link look identical.
- *   • **Top talkers** — ranked bars, switchable by source / destination /
- *     conversation / application, with a window selector.
- *   • **Conversation chords** — src → dst arcs, thickness by bytes. Laid out
- *     with plain trigonometry (the same approach `topology.tsx` takes) rather
- *     than pulling in a chart dependency for one view.
- *   • **Timeline** — stacked bytes per bucket, top-N series plus "other".
- *   • **Protocol & application mix** — with the long tail already folded into
- *     "other" by the server, so this is never a 200-slice donut.
+ * People arrive asking "who is using my bandwidth", so the ranking comes
+ * first. The collector numbers sit in the same strip as the traffic numbers
+ * because an empty flow page and an idle link look the same; templates
+ * pending is the number that tells them apart.
  */
 import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, Radio } from "lucide-react";
 import { api } from "./api";
-import { Panel, StatCard } from "./atoms";
-import { Badge, Button, Dot } from "./geist";
-import type {
-  FlowConversation,
-  FlowHealth,
-  FlowTimelinePayload,
-  FlowTopEntry,
-  FlowTopPayload,
-} from "./types";
-import { cn } from "@/lib/utils";
+import {
+  Metric,
+  MetricStrip,
+  MonitorEmpty,
+  MonitorPanel,
+  PageIntro,
+  Segmented,
+  StatusDot,
+  Ticker,
+  useLineDraw,
+  useStaggerIn,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
+import type { FlowConversation, FlowHealth, FlowTimelinePayload, FlowTopPayload } from "./types";
+import "./flows.css";
 
 const WINDOWS = ["5m", "15m", "1h", "6h", "24h"] as const;
 type Window = (typeof WINDOWS)[number];
@@ -42,6 +38,23 @@ const DIMENSIONS = [
 ] as const;
 type Dimension = (typeof DIMENSIONS)[number]["id"];
 
+/** Protocol colours, in share order: bar segment and legend dot. The rest are grey. */
+const PROTOCOL_TONES: { bar: string; dot: Tone }[] = [
+  { bar: "var(--chart-1)", dot: "brand" },
+  { bar: "var(--success)", dot: "good" },
+  { bar: "var(--warning)", dot: "warn" },
+];
+const PROTOCOL_REST = { bar: "var(--muted-foreground)", dot: "default" as Tone };
+
+/** "last hour" for the KPI hint and panel descriptions. */
+const WINDOW_PHRASE: Record<Window, string> = {
+  "5m": "last 5 minutes",
+  "15m": "last 15 minutes",
+  "1h": "last hour",
+  "6h": "last 6 hours",
+  "24h": "last 24 hours",
+};
+
 function humanBytes(n: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = n;
@@ -53,281 +66,105 @@ function humanBytes(n: number): string {
   return `${value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
-/** Stable colour per series key so a talker keeps its colour across renders. */
-function hueFor(key: string): number {
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) % 360;
-  return hash;
+const compactFormat = new Intl.NumberFormat(undefined, {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+// The boards write thousands as "96.2k"; millions stay "21.7M".
+const compact = (n: number): string => compactFormat.format(Math.round(n)).replace(/K$/, "k");
+const num = (n: number): string => Math.round(n).toLocaleString();
+const pct = (share: number): string => `${Math.round(share * 100)}%`;
+const hhmm = (ts: number): string =>
+  new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+
+function ago(ts: number, now: number): string {
+  const s = Math.max(0, Math.round((now - ts) / 1000));
+  if (s < 60) return `${s} s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
 }
 
-function seriesColor(key: string): string {
-  return key === "other" ? "var(--muted-foreground)" : `hsl(${hueFor(key)} 65% 55%)`;
+function interval(ms: number): string {
+  const unit = (n: number, one: string): string => `${n} ${n === 1 ? one : `${one}s`}`;
+  if (ms >= 3_600_000) return unit(+(ms / 3_600_000).toFixed(1), "hour");
+  if (ms >= 60_000) return unit(+(ms / 60_000).toFixed(1), "minute");
+  return unit(Math.round(ms / 1000), "second");
 }
 
-// ── Collector health ────────────────────────────────────────────────────────
+const protocolName = (version: number): string =>
+  version === 10 ? "IPFIX" : `NetFlow v${version}`;
 
-function HealthStrip({ health }: { health: FlowHealth | null }): ReactNode {
-  if (!health) return null;
-  const c = health.collector;
-  const exporters = Object.entries(c.exporters);
+// ── Bytes over time ────────────────────────────────────────────────────────
 
-  return (
-    <Panel
-      title="Collector"
-      extra={
-        <Badge type={c.running ? "success" : "secondary"}>
-          {c.running ? `listening · UDP ${c.port}` : "stopped"}
-        </Badge>
-      }
-    >
-      {!c.running && (
-        <p className="mb-3 text-sm text-muted-foreground">
-          Nothing is being collected. Start it with{" "}
-          <span className="font-mono">start_flow_collector</span>, then point the router at this
-          host with <span className="font-mono">add_traffic_flow_target</span>.
-        </p>
-      )}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <StatCard k="Packets" v={c.packets.toLocaleString()} sub="received" />
-        <StatCard k="Flows" v={c.flows.toLocaleString()} sub="decoded" />
-        <StatCard
-          k="Templates"
-          v={String(c.templates)}
-          sub={c.templatesPending > 0 ? `${c.templatesPending} pending` : "all resolved"}
-          cls={c.templatesPending > 0 ? "text-amber-500" : undefined}
-        />
-        <StatCard
-          k="Decode errors"
-          v={String(c.decodeErrors)}
-          cls={c.decodeErrors > 0 ? "text-red-500" : undefined}
-          sub={c.templatesDropped > 0 ? `${c.templatesDropped} dropped` : undefined}
-        />
-        <StatCard
-          k="Stored"
-          v={health.store ? health.store.rawRows.toLocaleString() : "—"}
-          sub={health.store ? `${health.store.rollupRows.toLocaleString()} rollups` : "no store"}
-        />
-      </div>
+const CHART_W = 1100;
+const CHART_H = 160;
+const CHART_TOP = 20;
+const CHART_BASE = 140;
 
-      {c.templatesPending > 0 && (
-        <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
-          {c.templatesPending} data set(s) are waiting for their template. v9/IPFIX exporters
-          describe their field layout only every few minutes — flows appear right after the next
-          refresh.
-        </p>
-      )}
-      {c.lastError && (
-        <p className="mt-2 font-mono text-xs text-muted-foreground">last: {c.lastError}</p>
-      )}
-      {exporters.length > 0 && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Exporters:{" "}
-          {exporters.map(([addr, n]) => `${addr} (${n.toLocaleString()} pkt)`).join(" · ")}
-        </p>
-      )}
-      {!!c.storageDropped && (
-        <p
-          role="alert"
-          className="mt-3 rounded-md border border-red-500/30 p-3 text-sm text-red-500"
-        >
-          {c.storageDropped.toLocaleString()} decoded records could not be saved. Check available
-          disk space and server logs; totals are incomplete.
-        </p>
-      )}
-      {!!c.exporterHealth?.length && (
-        <div className="mt-5 border-t border-border pt-4">
-          <h3 className="text-sm font-semibold">Exporter signals</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Silence is not proof of an outage. Sequence gaps can include delayed packets; IPFIX loss
-            is not inferred.
-          </p>
-          <ul className="mt-3 divide-y divide-border">
-            {c.exporterHealth.map((source) => (
-              <li
-                key={`${source.exporter}/${source.version}/${source.domain}`}
-                className="flex flex-wrap items-center justify-between gap-3 py-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm break-all">{source.exporter}</span>
-                    <Badge type={!c.running ? "secondary" : source.stale ? "warning" : "success"}>
-                      {!c.running ? "Stopped" : source.stale ? "Silent >5m" : "Receiving"}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {source.version === 10 ? "IPFIX" : `NetFlow v${source.version}`} · domain{" "}
-                    {source.domain} · last received {new Date(source.lastSeen).toLocaleTimeString()}
-                  </p>
-                </div>
-                <dl className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
-                  {[
-                    ["Records", source.records.toLocaleString()],
-                    [
-                      "Sequence gaps",
-                      source.version === 9 ? source.sequenceGaps.toLocaleString() : "Not measured",
-                    ],
-                    ["Reordered / reset", source.reordered.toLocaleString()],
-                    ["Template changes", source.templateChanges.toLocaleString()],
-                    ["Pending sets", source.pending.toLocaleString()],
-                    ["Decode errors", source.errors.toLocaleString()],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <dt className="text-muted-foreground">{label}</dt>
-                      <dd className="mt-1 font-mono tabular-nums">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-// ── Ranked bars ─────────────────────────────────────────────────────────────
-
-function TalkerBars({ rows }: { rows: FlowTopEntry[] }): ReactNode {
-  if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">No flows in this window.</p>;
-  }
-  const max = Math.max(...rows.map((r) => r.bytes), 1);
-  return (
-    <ul className="space-y-2">
-      {rows.map((r) => (
-        <li key={r.key} className="grid grid-cols-[minmax(0,14rem)_1fr_auto] items-center gap-3">
-          <span className="truncate font-mono text-sm" title={r.key}>
-            {r.key}
-          </span>
-          <span className="h-3 overflow-hidden rounded-sm bg-muted/40">
-            <span
-              className="block h-full rounded-sm"
-              style={{ width: `${(r.bytes / max) * 100}%`, background: seriesColor(r.key) }}
-            />
-          </span>
-          <span className="whitespace-nowrap text-sm tabular-nums">
-            {humanBytes(r.bytes)}
-            <span className="ml-2 text-xs text-muted-foreground">
-              {(r.share * 100).toFixed(1)}%
-            </span>
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// ── Conversation chords ─────────────────────────────────────────────────────
-
-/**
- * Endpoints on a circle, one arc per conversation, stroke width by bytes. Plain
- * SVG + trigonometry — a chord diagram is a few lines of maths and does not
- * justify a charting dependency.
- */
-function Chords({ rows }: { rows: FlowConversation[] }): ReactNode {
-  if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">No conversations in this window.</p>;
-  }
-  const nodes = [...new Set(rows.flatMap((r) => [r.src, r.dst]))];
-  const size = 460;
-  const radius = size / 2 - 70;
-  const centre = size / 2;
-  const angle = (i: number): number => (i / nodes.length) * Math.PI * 2 - Math.PI / 2;
-  const point = (i: number): { x: number; y: number } => ({
-    x: centre + radius * Math.cos(angle(i)),
-    y: centre + radius * Math.sin(angle(i)),
-  });
-  const maxBytes = Math.max(...rows.map((r) => r.bytes), 1);
-
-  return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto h-auto w-full max-w-[460px]">
-        {rows.map((r) => {
-          const a = point(nodes.indexOf(r.src));
-          const b = point(nodes.indexOf(r.dst));
-          // Quadratic through the centre: the arc bows inward, which is what
-          // makes a busy diagram readable instead of a ball of straight lines.
-          const width = 1 + (r.bytes / maxBytes) * 10;
-          return (
-            <path
-              key={`${r.src}-${r.dst}`}
-              d={`M ${a.x} ${a.y} Q ${centre} ${centre} ${b.x} ${b.y}`}
-              fill="none"
-              stroke={seriesColor(r.src)}
-              strokeOpacity={0.45}
-              strokeWidth={width}
-            >
-              <title>{`${r.src} ↔ ${r.dst} — ${humanBytes(r.bytes)} (${r.applications.slice(0, 3).join(", ")})`}</title>
-            </path>
-          );
-        })}
-        {nodes.map((node, i) => {
-          const p = point(i);
-          const isRight = Math.cos(angle(i)) >= 0;
-          return (
-            <g key={node}>
-              <circle cx={p.x} cy={p.y} r={4} fill={seriesColor(node)} />
-              <text
-                x={p.x + (isRight ? 8 : -8)}
-                y={p.y + 4}
-                textAnchor={isRight ? "start" : "end"}
-                className="fill-muted-foreground text-[10px]"
-              >
-                {node}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
-// ── Timeline ────────────────────────────────────────────────────────────────
-
-function Timeline({ data }: { data: FlowTimelinePayload | null }): ReactNode {
-  if (!data || data.buckets.length === 0) {
-    return <p className="text-sm text-muted-foreground">No traffic in this window.</p>;
-  }
+function BytesChart({
+  data,
+  drawKey,
+  now,
+}: {
+  data: FlowTimelinePayload;
+  drawKey: string;
+  now: number;
+}): ReactNode {
+  const ref = useRef<HTMLDivElement>(null);
+  useLineDraw(ref, drawKey);
   const keys = [...data.keys, "other"];
-  const totals = data.buckets.map((b) => keys.reduce((n, k) => n + (b.series[k] ?? 0), 0));
-  const max = Math.max(...totals, 1);
+  const totals = data.buckets.map((b) => ({
+    ts: b.ts,
+    bytes: keys.reduce((n, k) => n + (b.series[k] ?? 0), 0),
+  }));
+  const peak = totals.reduce((a, b) => (b.bytes > a.bytes ? b : a), totals[0]);
+  const max = Math.max(peak.bytes, 1);
+  const step = totals.length > 1 ? CHART_W / (totals.length - 1) : CHART_W;
+  const points = (totals.length > 1 ? totals : [totals[0], totals[0]]).map((t, i) => [
+    +(i * step).toFixed(1),
+    +(CHART_BASE - (t.bytes / max) * (CHART_BASE - CHART_TOP)).toFixed(1),
+  ]);
+  const line = `M${points.map((p) => p.join(" ")).join(" L")}`;
+  const area = `${line} L${CHART_W} ${CHART_BASE} L0 ${CHART_BASE} Z`;
+  const mid = data.window.from + (data.window.to - data.window.from) / 2;
+  const endsNow = now - data.window.to < 60_000;
 
   return (
-    <div>
-      <div className="flex h-40 items-end gap-px">
-        {data.buckets.map((bucket) => (
-          <div
-            key={bucket.ts}
-            className="flex flex-1 flex-col-reverse"
-            title={`${new Date(bucket.ts).toLocaleTimeString()} — ${humanBytes(
-              keys.reduce((n, k) => n + (bucket.series[k] ?? 0), 0),
-            )}`}
+    <div ref={ref}>
+      <svg
+        viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+        width="100%"
+        height={CHART_H}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Bytes per ${interval(data.bucketMs)}, peaking at ${humanBytes(
+          peak.bytes,
+        )} at ${hhmm(peak.ts)}`}
+        className="flows-chart"
+      >
+        <line x1="0" y1={CHART_TOP} x2={CHART_W} y2={CHART_TOP} className="flows-chart-peak" />
+        <line x1="0" y1={CHART_BASE} x2={CHART_W} y2={CHART_BASE} className="flows-chart-base" />
+        <path d={area} className="flows-chart-area" />
+        <path d={line} className="flows-chart-line" data-draw="" />
+        {totals.map((t, i) => (
+          <rect
+            key={t.ts}
+            x={Math.max(0, i * step - step / 2)}
+            y="0"
+            width={Math.min(CHART_W, i * step + step / 2) - Math.max(0, i * step - step / 2)}
+            height={CHART_H}
+            className="flows-chart-hit"
           >
-            {keys.map((key) => {
-              const value = bucket.series[key] ?? 0;
-              if (value === 0) return null;
-              return (
-                <span
-                  key={key}
-                  style={{ height: `${(value / max) * 100}%`, background: seriesColor(key) }}
-                />
-              );
-            })}
-          </div>
+            <title>{`${hhmm(t.ts)} · ${humanBytes(t.bytes)}`}</title>
+          </rect>
         ))}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-        {keys.map((key) => (
-          <span key={key} className="flex items-center gap-1">
-            <span
-              className="inline-block size-2 rounded-full"
-              style={{ background: seriesColor(key) }}
-            />
-            {key}
-          </span>
-        ))}
+      </svg>
+      <div className="flows-chart-axis">
+        <span>{hhmm(data.window.from)}</span>
+        <span>{hhmm(mid)}</span>
+        <span>{endsNow ? "now" : hhmm(data.window.to)}</span>
       </div>
     </div>
   );
@@ -343,6 +180,11 @@ export function FlowsView(): ReactNode {
   const [line, setLine] = useState<FlowTimelinePayload | null>(null);
   const [health, setHealth] = useState<FlowHealth | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The window and grouping the loaded data belongs to. Motion keys off this,
+  // so a poll does not replay it but a new query does.
+  const [loadedKey, setLoadedKey] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const talkersRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
     return Promise.all([
@@ -357,6 +199,8 @@ export function FlowsView(): ReactNode {
         setLine(lineRes);
         setHealth(healthRes);
         setError(topRes.error ?? null);
+        setLoadedKey(`${window}:${dimension}`);
+        setNow(Date.now());
       })
       .catch((e) => {
         setError(e instanceof Error ? e.message : String(e));
@@ -371,104 +215,397 @@ export function FlowsView(): ReactNode {
     return () => clearInterval(id);
   }, [load]);
 
-  const totals = top?.totals;
+  useStaggerIn(talkersRef, ".monitor-row", loadedKey);
 
   if (!top && !error) return <LoadingState label="Loading network activity" layout="chart" />;
+
+  const totals = top?.totals;
+  const c = health?.collector;
+  const running = !!c?.running;
+  const exporterHealth = c?.exporterHealth ?? [];
+  const exporterNames = exporterHealth.length
+    ? [...new Set(exporterHealth.map((e) => e.exporter))]
+    : Object.keys(c?.exporters ?? {});
+  const dimLabel = DIMENSIONS.find((d) => d.id === dimension)?.label ?? "Source";
+  const rows = top?.top ?? [];
+  const maxBytes = Math.max(...rows.map((r) => r.bytes), 1);
+  const protocols = top?.protocols ?? [];
+  const lineTotals = line?.buckets.length ? line : null;
+  const peak = lineTotals?.buckets
+    .map((b) => ({
+      ts: b.ts,
+      bytes: [...lineTotals.keys, "other"].reduce((n, k) => n + (b.series[k] ?? 0), 0),
+    }))
+    .reduce((a, b) => (b.bytes > a.bytes ? b : a));
+  const hasTraffic = !!totals && totals.flows > 0;
+
+  const windowControl = (
+    <Segmented
+      label="Time window"
+      value={window}
+      onChange={setWindow}
+      options={WINDOWS.map((w) => ({ value: w, label: w }))}
+    />
+  );
+
   return (
-    <div className="space-y-4">
-      <HealthStrip health={health} />
-
-      {error && (
-        <Panel title="Flows">
-          <p className="text-sm text-red-500">{error}</p>
-        </Panel>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard k="Traffic" v={totals ? humanBytes(totals.bytes) : "—"} sub={`last ${window}`} />
-        <StatCard k="Flows" v={totals ? totals.flows.toLocaleString() : "—"} sub="records" />
-        <StatCard k="Sources" v={totals ? String(totals.sources) : "—"} sub="talking" />
-        <StatCard k="Destinations" v={totals ? String(totals.destinations) : "—"} sub="talked to" />
-      </div>
-
-      <Panel
-        title="Top talkers"
-        extra={
-          <div className="flex flex-wrap items-center gap-1">
-            {DIMENSIONS.map((d) => (
-              <Button
-                key={d.id}
-                size="sm"
-                type={d.id === dimension ? "default" : "secondary"}
-                onClick={() => setDimension(d.id)}
-              >
-                {d.label}
-              </Button>
-            ))}
-            <span className="mx-2 h-4 w-px bg-border" />
-            {WINDOWS.map((w) => (
-              <Button
-                key={w}
-                size="sm"
-                type={w === window ? "default" : "secondary"}
-                onClick={() => setWindow(w)}
-              >
-                {w}
-              </Button>
-            ))}
-          </div>
-        }
-      >
-        <TalkerBars rows={top?.top ?? []} />
-      </Panel>
-
-      <Panel title={`Bytes over time · ${window}`}>
-        <Timeline data={line} />
-      </Panel>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Conversations">
-          <Chords rows={talks.slice(0, 12)} />
-        </Panel>
-
-        <Panel title="Applications & protocols">
-          <TalkerBars rows={top?.applications ?? []} />
-          {top && top.protocols.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {top.protocols.map((p) => (
-                <span key={p.protocol} className="flex items-center gap-1 text-sm">
-                  <Dot type="default" />
-                  <span className="font-mono">{p.protocol}</span>
-                  <span className="text-muted-foreground">{(p.share * 100).toFixed(0)}%</span>
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-6">
+      {running ? (
+        <PageIntro
+          small
+          tone="good"
+          live
+          title={`Listening on UDP ${c?.port}`}
+          controls={windowControl}
+        >
+          {exporterNames.length ? (
+            <>
+              {exporterNames.length === 1 ? "1 exporter: " : `${exporterNames.length} exporters: `}
+              {exporterNames.map((name, i) => (
+                <span key={name}>
+                  {i > 0 && ", "}
+                  <span className="flows-mono align-top text-fg-secondary">{name}</span>
                 </span>
               ))}
-            </div>
+            </>
+          ) : (
+            <>
+              No exporters yet. Point a router at this host with{" "}
+              <code className="font-mono">add_traffic_flow_target</code>.
+            </>
           )}
-        </Panel>
-      </div>
+        </PageIntro>
+      ) : (
+        <PageIntro
+          tone={health ? "default" : undefined}
+          title={health ? "Collector stopped" : "Collector status unknown"}
+          controls={windowControl}
+        >
+          {health ? "Nothing new is being collected." : "Could not read the collector."}
+        </PageIntro>
+      )}
 
-      <Panel title="Busiest conversations">
-        {talks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing recorded in this window.</p>
-        ) : (
-          <ul className="divide-y divide-border text-sm">
-            {talks.map((c) => (
-              <li
-                key={`${c.src}-${c.dst}`}
-                className={cn("flex items-center gap-3 py-2", "font-mono")}
-              >
-                <span className="flex-1 truncate">
-                  {c.src} ↔ {c.dst}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {c.applications.slice(0, 3).join(", ")}
-                </span>
-                <span className="whitespace-nowrap tabular-nums">{humanBytes(c.bytes)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
-    </div>
+      {error && (
+        <p role="alert" className="monitor-note text-destructive" data-tone="bad">
+          {error}
+        </p>
+      )}
+
+      {health && !running && (
+        <section className="monitor-panel">
+          <MonitorEmpty icon={<Radio />} title="The flow collector is not running">
+            Start it with <code>start_flow_collector</code>, then point the router at this host with{" "}
+            <code>add_traffic_flow_target</code>.
+          </MonitorEmpty>
+        </section>
+      )}
+
+      {(running || hasTraffic) && (
+        <>
+          <MetricStrip label="Flow metrics" minCell={130}>
+            <Metric
+              label="Traffic"
+              primary
+              value={totals ? <Ticker value={totals.bytes} format={humanBytes} /> : "—"}
+              hint={WINDOW_PHRASE[window]}
+            />
+            <Metric
+              label="Flows"
+              value={totals ? <Ticker value={totals.flows} format={compact} /> : "—"}
+              hint="records"
+            />
+            <Metric
+              label="Sources"
+              value={totals ? <Ticker value={totals.sources} format={num} /> : "—"}
+              hint="talking"
+            />
+            <Metric
+              label="Destinations"
+              value={totals ? <Ticker value={totals.destinations} format={num} /> : "—"}
+              hint="reached"
+            />
+            <Metric
+              label="Packets"
+              value={c ? <Ticker value={c.packets} format={compact} /> : "—"}
+              hint="received"
+            />
+            <Metric
+              label="Templates"
+              tone={c && c.templatesPending > 0 ? "warn" : "default"}
+              value={c ? num(c.templates) : "—"}
+              hint={
+                !c
+                  ? undefined
+                  : c.templatesPending > 0
+                    ? `${num(c.templatesPending)} pending`
+                    : "all known"
+              }
+            />
+            <Metric
+              label="Decode errors"
+              tone={c && c.decodeErrors > 0 ? "bad" : "default"}
+              value={c ? num(c.decodeErrors) : "—"}
+              hint={
+                !c
+                  ? undefined
+                  : c.templatesDropped > 0
+                    ? `${num(c.templatesDropped)} templates dropped`
+                    : c.decodeErrors > 0
+                      ? "since start"
+                      : "none"
+              }
+            />
+            <Metric
+              label="Stored"
+              value={health?.store ? compact(health.store.rawRows) : "—"}
+              hint={health?.store ? `${compact(health.store.rollupRows)} rollups` : "no store"}
+            />
+          </MetricStrip>
+
+          {!!c?.storageDropped && (
+            <p role="alert" className="monitor-note text-destructive" data-tone="bad">
+              {num(c.storageDropped)} decoded records could not be saved. Check free disk space and
+              the server logs; totals are incomplete.
+            </p>
+          )}
+          {!!c && c.templatesPending > 0 && (
+            <p className="monitor-note" data-tone="warn">
+              {num(c.templatesPending)} data sets are waiting for their template. v9 and IPFIX
+              exporters send their field layout every few minutes, so these flows appear after the
+              next refresh.
+            </p>
+          )}
+          {c?.lastError && (
+            <p className="monitor-note text-muted-foreground">
+              Last collector error: <code className="font-mono">{c.lastError}</code>
+            </p>
+          )}
+
+          <div className="flows-columns">
+            <MonitorPanel
+              title="Top talkers"
+              description={`By ${dimLabel.toLowerCase()}, ${WINDOW_PHRASE[window]}, share of bytes`}
+              className="flows-talkers"
+              extra={
+                <Segmented
+                  label="Group by"
+                  value={dimension}
+                  onChange={setDimension}
+                  options={DIMENSIONS.map((d) => ({ value: d.id, label: d.label }))}
+                />
+              }
+              flush
+            >
+              <div ref={talkersRef}>
+                {rows.length === 0 ? (
+                  <MonitorEmpty compact title="No flows in this window">
+                    Try a longer window, or check that an exporter is sending.
+                  </MonitorEmpty>
+                ) : (
+                  rows.map((r, i) => (
+                    <div key={r.key} className="monitor-row flows-talker-grid">
+                      <span className="text-[12px] text-muted-foreground tabular-nums">
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flows-mono block truncate text-foreground" title={r.key}>
+                          {r.key}
+                        </span>
+                        <span className="block truncate text-[12px] text-muted-foreground">
+                          {num(r.flows)} flows · {compact(r.packets)} packets
+                        </span>
+                      </span>
+                      <span className="monitor-bar">
+                        <span style={{ width: `${(r.bytes / maxBytes) * 100}%` }} />
+                      </span>
+                      <span className="text-right text-fg-secondary tabular-nums">
+                        {humanBytes(r.bytes)}
+                      </span>
+                      <span className="text-right text-[12px] text-muted-foreground tabular-nums">
+                        {pct(r.share)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </MonitorPanel>
+
+            <MonitorPanel
+              title="Protocols"
+              description="Share of bytes"
+              className="flows-side"
+              flush
+            >
+              <div className="flows-protocols">
+                {protocols.length === 0 ? (
+                  <p className="text-[13px] text-muted-foreground">No traffic in this window.</p>
+                ) : (
+                  <>
+                    <div className="flows-share" aria-hidden="true">
+                      {protocols.map((p, i) => (
+                        <span
+                          key={p.protocol}
+                          style={{
+                            width: `${p.share * 100}%`,
+                            background: (PROTOCOL_TONES[i] ?? PROTOCOL_REST).bar,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <ul className="flows-legend">
+                      {protocols.map((p, i) => (
+                        <li key={p.protocol}>
+                          <StatusDot tone={(PROTOCOL_TONES[i] ?? PROTOCOL_REST).dot} />
+                          <span className="uppercase">{p.protocol}</span>
+                          <span className="flex-1" />
+                          <span className="text-fg-secondary tabular-nums">
+                            {humanBytes(p.bytes)}
+                          </span>
+                          <span className="w-10 text-right text-muted-foreground tabular-nums">
+                            {pct(p.share)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+
+              <header className="monitor-panel-head flows-subhead">
+                <div className="min-w-0 flex-1">
+                  <h2 className="monitor-panel-title">Exporters</h2>
+                  <p className="monitor-panel-desc">Routers sending flow records</p>
+                </div>
+              </header>
+              {exporterHealth.length ? (
+                exporterHealth.map((e, i) => {
+                  const tone: Tone = !running ? "default" : e.stale ? "warn" : "good";
+                  return (
+                    <div
+                      key={`${e.exporter}/${e.version}/${e.domain}`}
+                      className="monitor-row flows-exporter"
+                    >
+                      <span className="flows-exporter-name">
+                        <StatusDot tone={tone} />
+                        <span className="flows-mono truncate">{e.exporter}</span>
+                      </span>
+                      <span
+                        className={
+                          tone === "warn"
+                            ? "text-[12px] font-[510] text-warning"
+                            : "text-[12px] text-muted-foreground"
+                        }
+                      >
+                        {!running ? "Stopped · " : e.stale ? "Silent over 5 min · " : ""}
+                        {protocolName(e.version)} · {i === 0 ? "last packet " : ""}
+                        {ago(e.lastSeen, now)}
+                      </span>
+                      <span className="flows-exporter-stats">
+                        {[
+                          `Domain ${e.domain}`,
+                          `${compact(e.records)} records`,
+                          e.version === 9
+                            ? `${num(e.sequenceGaps)} sequence gaps`
+                            : "gaps not measured",
+                          ...(e.reordered ? [`${num(e.reordered)} reordered or reset`] : []),
+                          ...(e.templateChanges
+                            ? [`${num(e.templateChanges)} template changes`]
+                            : []),
+                          ...(e.pending ? [`${num(e.pending)} pending`] : []),
+                          ...(e.errors ? [`${num(e.errors)} errors`] : []),
+                        ].join(" · ")}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : Object.keys(c?.exporters ?? {}).length ? (
+                Object.entries(c?.exporters ?? {}).map(([addr, packets]) => (
+                  <div key={addr} className="monitor-row flows-exporter">
+                    <span className="flows-exporter-name">
+                      <StatusDot tone={running ? "good" : "default"} />
+                      <span className="flows-mono truncate">{addr}</span>
+                    </span>
+                    <span className="text-[12px] text-muted-foreground">
+                      {num(packets)} packets
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <MonitorEmpty compact title="No exporters yet">
+                  Point a router at this host with <code>add_traffic_flow_target</code>.
+                </MonitorEmpty>
+              )}
+              {exporterHealth.length > 0 && (
+                <p className="monitor-foot">
+                  Silence does not prove an outage. Sequence gaps can include late packets; IPFIX
+                  loss is not inferred.
+                </p>
+              )}
+            </MonitorPanel>
+          </div>
+
+          <MonitorPanel
+            title="Bytes over time"
+            description={
+              lineTotals && peak
+                ? `Per ${interval(lineTotals.bucketMs)} · peak ${humanBytes(peak.bytes)} at ${hhmm(
+                    peak.ts,
+                  )}`
+                : `${WINDOW_PHRASE[window][0].toUpperCase()}${WINDOW_PHRASE[window].slice(1)}`
+            }
+          >
+            {lineTotals ? (
+              <BytesChart data={lineTotals} drawKey={loadedKey} now={now} />
+            ) : (
+              <MonitorEmpty compact title="No traffic in this window" />
+            )}
+          </MonitorPanel>
+
+          <MonitorPanel
+            title="Busiest conversations"
+            description="Source to destination pairs"
+            flush
+          >
+            {talks.length === 0 ? (
+              <MonitorEmpty compact title="Nothing recorded in this window" />
+            ) : (
+              <>
+                <div className="monitor-thead flows-conv-grid">
+                  <span>Source</span>
+                  <span />
+                  <span>Destination</span>
+                  <span>Port</span>
+                  <span className="text-right">Bytes</span>
+                </div>
+                {talks.map((t) => (
+                  <div key={`${t.src}-${t.dst}`} className="monitor-row flows-conv-grid">
+                    <span className="flows-mono truncate" title={t.src}>
+                      {t.src}
+                    </span>
+                    <ArrowRight
+                      className="flows-arrow text-muted-foreground"
+                      strokeWidth={1.5}
+                      aria-label="to"
+                    />
+                    <span className="flows-mono truncate" title={t.dst}>
+                      {t.dst}
+                    </span>
+                    <span
+                      className="flows-mono truncate text-muted-foreground"
+                      title={t.applications.join(", ")}
+                    >
+                      {t.applications[0] ?? "—"}
+                    </span>
+                    <span className="text-right text-fg-secondary tabular-nums">
+                      {humanBytes(t.bytes)}
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
+          </MonitorPanel>
+        </>
+      )}
+    </section>
   );
 }

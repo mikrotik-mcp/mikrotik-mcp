@@ -1,26 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Activity,
-  ArrowUpRight,
-  Bell,
-  Check,
-  ChevronUp,
-  CircleAlert,
-  Clock3,
-  Gauge,
-  Pause,
-  Radio,
-  Router,
-  Unplug,
-  X,
-} from "lucide-react";
-import {
-  DynamicIsland,
-  DynamicIslandView,
-} from "./components/beui/registry/components/motion/dynamic-island";
-import { DigitSwap } from "./components/beui/digit-swap";
-import { Button } from "./components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { animate, createScope, svg } from "animejs";
 import {
   islandAge,
   islandCompletedAt,
@@ -32,6 +13,7 @@ import {
 import { ms, num } from "./format";
 import type { DevicesPayload, LiveMode, SSHPoolPayload, Stats, ToolEvent } from "./types";
 import type { ViewId } from "./navigation";
+import { REDUCE_MOTION } from "./dashboard-shell";
 import "./operations-island.css";
 
 interface OperationsIslandProps {
@@ -49,22 +31,42 @@ interface OperationsIslandProps {
   alertsAt: number | null;
   onNavigate: (page: ViewId) => void;
   onEvent: (event: ToolEvent) => void;
+  /** Phone header: dot and "Live" only. */
+  compact?: boolean;
 }
 
-const SIGNAL_ICONS = {
-  offline: Unplug,
-  paused: Pause,
-  error: CircleAlert,
-  alerts: Bell,
-  busy: Activity,
-  completed: Check,
-  listening: Radio,
+type Tab = "pulse" | "fleet" | "activity";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "pulse", label: "Pulse" },
+  { id: "fleet", label: "Routers" },
+  { id: "activity", label: "Activity" },
+];
+
+const TONE: Record<ReturnType<typeof islandSignal>["kind"], string> = {
+  offline: "off",
+  paused: "warn",
+  error: "bad",
+  alerts: "warn",
+  busy: "ok",
+  completed: "ok",
+  listening: "ok",
 };
 
-/** A display-only companion to the existing dashboard stream and cached polls. */
-export function OperationsIsland(props: OperationsIslandProps) {
+function hhmm(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/**
+ * The header's Live capsule and the Operations panel it opens. Display only: it
+ * reads the existing stream and cached polls and never sends a request.
+ */
+export function OperationsIsland(props: OperationsIslandProps): ReactNode {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState("pulse");
+  const [tab, setTab] = useState<Tab>("pulse");
   const [tick, setNow] = useState(Date.now);
   // Receipt times are local, not device clocks. A poll may arrive between ticks.
   const now = Math.max(
@@ -74,10 +76,11 @@ export function OperationsIsland(props: OperationsIslandProps) {
     props.alertsAt ?? 0,
     props.liveEventAt ?? 0,
   );
-  const rootRef = useRef<HTMLElement>(null);
-  const compactRef = useRef<HTMLButtonElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const capsuleRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const returnFocus = useRef(false);
+
   useEffect(() => {
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") setNow(Date.now());
@@ -89,13 +92,16 @@ export function OperationsIsland(props: OperationsIslandProps) {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, []);
+
   useEffect(() => {
     if (!open) {
-      if (returnFocus.current) compactRef.current?.focus({ preventScroll: true });
+      if (returnFocus.current) capsuleRef.current?.focus({ preventScroll: true });
       returnFocus.current = false;
       return;
     }
-    closeRef.current?.focus({ preventScroll: true });
+    panelRef.current
+      ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      ?.focus({ preventScroll: true });
     const outside = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -104,11 +110,8 @@ export function OperationsIsland(props: OperationsIslandProps) {
   }, [open]);
 
   const signal = islandSignal({ ...props, now });
-  const SignalIcon = SIGNAL_ICONS[signal.kind];
   const connected = props.mode !== "off" && !props.paused;
   const statsFresh = connected && isFreshSample(props.statsAt, now);
-  const poolFresh = connected && isFreshSample(props.poolAt, now);
-  const alertsFresh = connected && isFreshSample(props.alertsAt, now, 45_000);
   const events = useMemo(() => islandRecentEvents(props.events, now), [props.events, now]);
   const devices = props.devices?.devices ?? [];
   const reachable = devices.filter(
@@ -125,6 +128,51 @@ export function OperationsIsland(props: OperationsIslandProps) {
       )
       .slice(-18) ?? [];
   const ceiling = Math.max(1, ...series.map((bucket) => bucket.ok + bucket.error));
+  const total = series.reduce((sum, bucket) => sum + bucket.ok + bucket.error, 0);
+  const failed = series.reduce((sum, bucket) => sum + bucket.error, 0);
+  const bucketMs = series.length > 1 ? series[1].t - series[0].t : 0;
+  const minutes = bucketMs > 0 ? Math.round((bucketMs * series.length) / 60_000) : null;
+  const perMinute =
+    props.stats && Number.isFinite(props.stats.callsPerMin)
+      ? `${num(Math.round(props.stats.callsPerMin))} calls/min`
+      : "— calls/min";
+  const sparkKey = series.map((bucket) => bucket.ok + bucket.error).join(",");
+
+  // The capsule dot breathes and its sparkline draws in when data changes.
+  useEffect(() => {
+    const scope = createScope({ root: rootRef, mediaQueries: { reduceMotion: REDUCE_MOTION } }).add(
+      (self) => {
+        if (self?.matches.reduceMotion) return;
+        animate('.cap .shell-dot[data-tone="ok"]', {
+          opacity: [1, 0.45, 1],
+          duration: 2400,
+          loop: true,
+          ease: "inOutSine",
+        });
+        const line = rootRef.current?.querySelector<SVGPolylineElement>(".cap .sp polyline");
+        if (line)
+          animate(svg.createDrawable(line), {
+            draw: ["0 0", "0 1"],
+            duration: 600,
+            ease: "outQuart",
+          });
+      },
+    );
+    return () => scope.revert();
+  }, [sparkKey, signal.kind, props.compact]);
+
+  // The panel grows out of the capsule.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const scope = createScope({ root: rootRef, mediaQueries: { reduceMotion: REDUCE_MOTION } }).add(
+      (self) => {
+        if (self?.matches.reduceMotion) return;
+        animate(".pop", { opacity: [0, 1], scale: [0.96, 1], duration: 180, ease: "outQuart" });
+      },
+    );
+    return () => scope.revert();
+  }, [open]);
+
   const close = () => {
     returnFocus.current = true;
     setOpen(false);
@@ -133,17 +181,64 @@ export function OperationsIsland(props: OperationsIslandProps) {
     setOpen(false);
     props.onNavigate(page);
   };
-  const windowLabel = props.stats
-    ? `${Math.round(props.stats.windowMs / 60_000)} min window`
-    : "Waiting for analytics";
-  const knownNumber = (value: number | undefined, formatter = num) =>
-    value != null && Number.isFinite(value) ? formatter(value) : "—";
+  const onTabKey = (event: ReactKeyboardEvent): void => {
+    const index = TABS.findIndex((item) => item.id === tab);
+    let next = index;
+    if (event.key === "ArrowRight") next = (index + 1) % TABS.length;
+    else if (event.key === "ArrowLeft") next = (index - 1 + TABS.length) % TABS.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = TABS.length - 1;
+    else return;
+    event.preventDefault();
+    setTab(TABS[next].id);
+    requestAnimationFrame(() =>
+      panelRef.current?.querySelector<HTMLElement>(`#ops-tab-${TABS[next].id}`)?.focus(),
+    );
+  };
+
+  const spark = (() => {
+    if (series.length < 2) return null;
+    const w = 44;
+    const h = 14;
+    const step = w / (series.length - 1);
+    const points = series
+      .map((bucket, index) => {
+        const value = (bucket.ok + bucket.error) / ceiling;
+        return `${(index * step).toFixed(1)},${(h - 1 - value * (h - 2)).toFixed(1)}`;
+      })
+      .join(" ");
+    return (
+      <svg className="sp" viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+        <polyline points={points} />
+      </svg>
+    );
+  })();
+
+  const latest = (count: number) =>
+    events.slice(0, count).map((event) => (
+      <button
+        key={event.id}
+        type="button"
+        className="isl-row"
+        onClick={() => {
+          setOpen(false);
+          props.onEvent(event);
+        }}
+      >
+        <span className="shell-dot" data-tone={event.isError ? "bad" : "ok"} aria-hidden="true" />
+        <span className="isl-tool">{event.tool}</span>
+        <span className="sr-only">{event.isError ? "failed" : "completed"}</span>
+        <span className="r">
+          {event.device ?? "Server"} · {hhmm(islandCompletedAt(event))}
+        </span>
+      </button>
+    ));
 
   return (
-    <aside
+    <div
       ref={rootRef}
-      className="operations-island-anchor"
-      aria-label="Operations Island"
+      className="isl"
+      data-signal={signal.kind}
       onKeyDown={(event) => {
         if (event.key === "Escape" && open) {
           event.preventDefault();
@@ -151,290 +246,208 @@ export function OperationsIsland(props: OperationsIslandProps) {
           close();
         }
       }}
-      data-signal={signal.kind}
     >
       <span className="sr-only" role="status" aria-live="polite">
         {signal.label}
       </span>
-      <DynamicIsland
-        announce={false}
-        anchor="bottom"
-        view={open ? "operations" : null}
-        className="operations-island"
-        compact={
-          <Button
-            ref={compactRef}
-            variant="ghost"
-            className="island-compact"
-            aria-label={`Open Operations Island: ${signal.label}`}
-            aria-expanded={open}
-            aria-controls="operations-island-panel"
-            onClick={() => setOpen(true)}
-          >
-            <span className="island-signal-icon">
-              <SignalIcon size={17} />
-            </span>
-            <span className="island-compact-copy">
-              <strong>{signal.label}</strong>
-              <span>{signal.detail}</span>
-            </span>
-            {signal.count != null ? (
-              <span className="island-count">
-                <DigitSwap value={signal.count} />
-              </span>
-            ) : (
-              <span
-                className="island-equalizer"
-                data-moving={signal.kind === "busy"}
-                aria-hidden="true"
-              >
-                <i />
-                <i />
-                <i />
-                <i />
-              </span>
-            )}
-            <ChevronUp size={14} className="island-chevron" />
-          </Button>
-        }
+      <button
+        ref={capsuleRef}
+        type="button"
+        className={open ? "cap open" : "cap"}
+        data-compact={props.compact || undefined}
+        aria-label={`Open operations panel: ${signal.label}`}
+        aria-expanded={open}
+        aria-controls="operations-island-panel"
+        onClick={() => (open ? close() : setOpen(true))}
       >
-        <DynamicIslandView id="operations" className="island-expanded-slot">
-          <section
-            id="operations-island-panel"
-            className="island-panel"
-            aria-label="Operations summary"
-          >
-            <header className="island-header">
-              <span className="island-signal-icon">
-                <SignalIcon size={20} />
-              </span>
-              <div>
-                <p>OPERATIONS PULSE</p>
-                <h2>{signal.label}</h2>
-              </div>
-              <Button
-                ref={closeRef}
-                size="icon-sm"
-                variant="ghost"
-                className="island-close"
-                aria-label="Collapse Operations Island"
-                onClick={close}
+        <span className="shell-dot" data-tone={TONE[signal.kind]} aria-hidden="true" />
+        <b>{props.mode === "off" ? "Offline" : props.paused ? "Paused" : "Live"}</b>
+        {!props.compact && (
+          <>
+            {props.mode !== "off" && <span className="mut">{props.mode.toUpperCase()}</span>}
+            {spark}
+            <span className="num mut">{perMinute}</span>
+            {open ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+          </>
+        )}
+      </button>
+      {open && (
+        <div
+          ref={panelRef}
+          id="operations-island-panel"
+          className="pop"
+          role="dialog"
+          aria-label="Operations pulse"
+        >
+          <div className="isl-head">
+            <span className="shell-dot" data-tone={TONE[signal.kind]} aria-hidden="true" />
+            <b>{signal.label}</b>
+            <span className="mut">
+              · {signal.count != null ? `${num(signal.count)} · ` : ""}
+              {signal.detail}
+            </span>
+          </div>
+          <div className="seg isl-tabs" role="tablist" aria-label="Operations views">
+            {TABS.map((item) => (
+              <button
+                key={item.id}
+                id={`ops-tab-${item.id}`}
+                type="button"
+                role="tab"
+                className={tab === item.id ? "on" : undefined}
+                aria-selected={tab === item.id}
+                aria-controls={`isl-panel-${item.id}`}
+                tabIndex={tab === item.id ? 0 : -1}
+                onClick={() => setTab(item.id)}
+                onKeyDown={onTabKey}
               >
-                <X size={16} />
-              </Button>
-            </header>
-            <div className="island-connection">
-              <span className={connected ? "island-dot is-connected" : "island-dot"} />
-              <span>
-                {props.mode === "off"
-                  ? "Disconnected · last-known data only"
-                  : props.paused
-                    ? "Stream connected · dashboard updates paused"
-                    : `${props.mode.toUpperCase()} connected · no extra router probes`}
-              </span>
-            </div>
-            <Tabs value={tab} onValueChange={setTab} className="island-tabs">
-              <TabsList aria-label="Operations views" className="island-tab-list">
-                <TabsTrigger value="pulse">
-                  <Activity size={13} />
-                  Pulse
-                </TabsTrigger>
-                <TabsTrigger value="fleet">
-                  <Router size={13} />
-                  Routers
-                </TabsTrigger>
-                <TabsTrigger value="activity">
-                  <Clock3 size={13} />
-                  Activity
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="pulse" className="island-tab-panel">
-                <div className="island-chart-heading">
-                  <span>TOOL CALL VOLUME</span>
-                  <span>{windowLabel}</span>
-                </div>
-                <div className="island-volume" aria-hidden="true" data-stale={!statsFresh}>
-                  {series.some((bucket) => bucket.ok + bucket.error > 0) ? (
-                    series.map((bucket) => (
-                      <div key={bucket.t} className="island-bar-track">
-                        <span
-                          className="island-bar-ok"
-                          style={{ height: `${(bucket.ok / ceiling) * 100}%` }}
-                        />
-                        <span
-                          className="island-bar-error"
-                          style={{ height: `${(bucket.error / ceiling) * 100}%` }}
-                        />
-                      </div>
-                    ))
-                  ) : (
-                    <span className="island-empty-chart">
-                      {props.stats ? "No calls in this window" : "Waiting for recorded activity"}
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div
+            id={`isl-panel-${tab}`}
+            role="tabpanel"
+            aria-labelledby={`ops-tab-${tab}`}
+            className="isl-panel"
+          >
+            {tab === "pulse" && (
+              <>
+                <div className="isl-chart" data-stale={!statsFresh}>
+                  <div className="isl-total">
+                    <span className="num">{props.stats ? num(total) : "—"}</span>
+                    <span className="mut">
+                      {minutes != null
+                        ? `calls in the last ${minutes} minutes · ${num(failed)} failed`
+                        : props.stats
+                          ? `calls · ${num(failed)} failed`
+                          : "Waiting for recorded activity"}
                     </span>
-                  )}
-                </div>
-                <div className="island-chart-caption">
-                  <span>
-                    <i />
-                    Successful <i className="is-error" />
-                    Failed
-                  </span>
-                  <span>
-                    {statsFresh ? "Updated" : "Snapshot"} · {islandAge(props.statsAt, now)}
-                  </span>
-                </div>
-                <div className="island-metrics">
-                  <div>
-                    <span>Calls / min</span>
-                    <strong>
-                      {knownNumber(props.stats?.callsPerMin, (value) => value.toFixed(1))}
-                    </strong>
                   </div>
-                  <div>
-                    <span>Tool p95</span>
-                    <strong>
-                      {knownNumber(
-                        props.stats && props.stats.total > 0 ? props.stats.latency.p95 : undefined,
-                        ms,
-                      )}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Failed calls</span>
-                    <strong className={props.stats?.errors ? "island-error-text" : ""}>
-                      {knownNumber(props.stats?.errors)}
-                    </strong>
-                  </div>
-                </div>
-                <div className="island-insights">
-                  <span>
-                    <Gauge size={13} />
-                    {poolFresh && props.pool
-                      ? props.pool.enabled
-                        ? `${props.pool.aggregate.totalInflight} SSH channels in flight`
-                        : "SSH pooling disabled"
-                      : "SSH pool status unavailable"}
-                  </span>
-                  <span>
-                    <Bell size={13} />
-                    {alertsFresh && props.alerts != null
-                      ? `${props.alerts} active alert rules`
-                      : "Alert status unavailable"}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  className="island-link"
-                  onClick={() => navigate("overview")}
-                >
-                  Open analytics
-                  <ArrowUpRight size={14} />
-                </Button>
-              </TabsContent>
-              <TabsContent value="fleet" className="island-tab-panel">
-                <div className="island-chart-heading">
-                  <span>LAST ROUTER CHECKS</span>
-                  <span>
-                    {props.devices
-                      ? `${reachable} / ${devices.filter((device) => !device.disabled).length} reachable`
-                      : "Not loaded"}
-                  </span>
-                </div>
-                <div className="island-scroll-list">
-                  {devices.length ? (
-                    devices.map((device) => {
-                      const state = islandDeviceState(device, now, connected);
-                      return (
-                        <div key={device.name} className="island-device" data-state={state}>
-                          <span className="island-router-icon">
-                            <Router size={18} />
-                          </span>
-                          <div className="island-row-copy">
-                            <strong>{device.name}</strong>
-                            <span>
-                              {state === "unknown" ? "Unknown / stale" : state} ·{" "}
-                              {islandAge(device.status.checkedAt, now)}
-                            </span>
-                          </div>
-                          <span className="island-device-latency">
-                            {state === "reachable" && device.status.latencyMs != null
-                              ? ms(device.status.latencyMs)
-                              : "—"}
-                          </span>
-                        </div>
-                      );
-                    })
+                  {total > 0 ? (
+                    <svg
+                      viewBox="0 0 340 72"
+                      width="100%"
+                      height="72"
+                      role="img"
+                      aria-label={`Calls per bucket${minutes != null ? `, last ${minutes} minutes` : ""}`}
+                    >
+                      {series.map((bucket, index) => {
+                        const height = Math.round(((bucket.ok + bucket.error) / ceiling) * 64);
+                        const x = index * 19;
+                        return (
+                          <g key={bucket.t}>
+                            <rect
+                              className="isl-bar"
+                              x={x}
+                              y={72 - height}
+                              width="13"
+                              height={height}
+                              rx="2"
+                            />
+                            {bucket.error > 0 && (
+                              <rect
+                                className="isl-fail"
+                                x={x}
+                                y={72 - height - 8}
+                                width="13"
+                                height="6"
+                                rx="2"
+                              />
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
                   ) : (
-                    <p className="island-empty">
-                      Router status has not loaded. No healthy state is assumed.
+                    <p className="isl-empty">
+                      {props.stats ? "No calls in this window" : "Waiting for recorded activity"}
                     </p>
                   )}
                 </div>
-                <p className="island-footnote">
-                  Management reachability is not proof of client or VPN health.
-                </p>
-                <Button variant="ghost" className="island-link" onClick={() => navigate("devices")}>
-                  Open devices
-                  <ArrowUpRight size={14} />
-                </Button>
-              </TabsContent>
-              <TabsContent value="activity" className="island-tab-panel">
-                <div className="island-chart-heading">
-                  <span>RECORDED COMPLETIONS</span>
-                  <span>Latest {events.length}</span>
-                </div>
-                <div className="island-scroll-list">
+                <div className="isl-list">
+                  <span className="label">Latest calls</span>
                   {events.length ? (
-                    events.map((event) => (
-                      <Button
-                        key={event.id}
-                        variant="ghost"
-                        className="island-event"
-                        onClick={() => {
-                          setOpen(false);
-                          props.onEvent(event);
-                        }}
-                      >
-                        <span
-                          className={event.isError ? "island-error-text" : "island-success-text"}
-                        >
-                          {event.isError ? <CircleAlert size={16} /> : <Check size={16} />}
-                        </span>
-                        <span className="island-row-copy">
-                          <strong>{event.tool}</strong>
-                          <span>
-                            {event.device ?? "Server"} · {islandAge(islandCompletedAt(event), now)}
-                          </span>
-                        </span>
-                        <span className="island-event-duration">
-                          {ms(event.durationMs)}
-                          <ArrowUpRight size={12} />
-                        </span>
-                      </Button>
-                    ))
+                    latest(3)
                   ) : (
-                    <p className="island-empty">
+                    <p className="isl-empty">
                       No recorded calls yet. Activity appears when MCP tools complete.
                     </p>
                   )}
                 </div>
-                <p className="island-footnote">
-                  Completed tool calls, not a live packet trace. Open a call for its evidence.
+              </>
+            )}
+            {tab === "fleet" && (
+              <div className="isl-list" data-first>
+                <span className="label">
+                  Last router checks ·{" "}
+                  {props.devices
+                    ? `${reachable} / ${devices.filter((device) => !device.disabled).length} reachable`
+                    : "Not loaded"}
+                </span>
+                {devices.length ? (
+                  devices.map((device) => {
+                    const state = islandDeviceState(device, now, connected);
+                    return (
+                      <div key={device.name} className="isl-row" data-state={state}>
+                        <span
+                          className="shell-dot"
+                          data-tone={
+                            state === "reachable" ? "ok" : state === "unreachable" ? "bad" : "off"
+                          }
+                          aria-hidden="true"
+                        />
+                        <span className="isl-tool">{device.name}</span>
+                        <span className="r">
+                          {state === "unknown" ? "Unknown / stale" : state} ·{" "}
+                          {islandAge(device.status.checkedAt, now)}
+                          {state === "reachable" && device.status.latencyMs != null
+                            ? ` · ${ms(device.status.latencyMs)}`
+                            : ""}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="isl-empty">
+                    Router status has not loaded. No healthy state is assumed.
+                  </p>
+                )}
+                <p className="isl-note">
+                  Management reachability is not proof of client or VPN health.
                 </p>
-                <Button variant="ghost" className="island-link" onClick={() => navigate("feed")}>
-                  Open Live Feed
-                  <ArrowUpRight size={14} />
-                </Button>
-              </TabsContent>
-            </Tabs>
-            <footer className="island-footer">
-              <Radio size={11} />
-              <span>OBSERVE ONLY</span>
-              <span>No configuration changes</span>
-            </footer>
-          </section>
-        </DynamicIslandView>
-      </DynamicIsland>
-    </aside>
+              </div>
+            )}
+            {tab === "activity" && (
+              <div className="isl-list" data-first>
+                <span className="label">Recorded completions · latest {events.length}</span>
+                {events.length ? (
+                  latest(4)
+                ) : (
+                  <p className="isl-empty">
+                    No recorded calls yet. Activity appears when MCP tools complete.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="isl-foot">
+            <button type="button" className="shell-link" onClick={() => navigate("feed")}>
+              Open Live Feed
+            </button>
+            <span className="shell-header-spacer" />
+            {tab === "fleet" ? (
+              <button type="button" className="shell-link" onClick={() => navigate("devices")}>
+                Devices
+              </button>
+            ) : (
+              <button type="button" className="shell-link" onClick={() => navigate("overview")}>
+                Overview
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

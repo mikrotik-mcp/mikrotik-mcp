@@ -1,0 +1,151 @@
+/* Alerts page, after the approved Alerts board. Layout only; colours come from tailwind.css tokens. */
+
+.alerts-page {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 24px;
+  line-height: 21px;
+}
+
+/* Second line under a row's name: 12px, muted, one line. */
+.alerts-meta {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alerts-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warning);
+  font-size: 12px;
+}
+.alerts-warning svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+/* ── Firing band ───────────────────────────────────────────────────────────── */
+.alerts-firing.monitor-panel {
+  overflow: hidden;
+  border: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 40%, transparent);
+}
+.alerts-firing > .monitor-panel-head {
+  gap: 10px;
+  padding: 14px 20px;
+}
+.alerts-firing .monitor-panel-title {
+  line-height: 21px;
+}
+.alerts-firing-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.alerts-firing-title .monitor-dot {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 25%, transparent);
+}
+.alerts-firing-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+/* "Nothing firing": the firing band's header, calm. */
+.alerts-calm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 14px 20px;
+}
+.alerts-calm-title {
+  font-size: 14px;
+  font-weight: 590;
+}
+
+/* ── Rules ─────────────────────────────────────────────────────────────────── */
+.monitor-row.alerts-rule-row {
+  grid-template-columns: 4px minmax(0, 1.4fr) minmax(0, 1.6fr) auto auto;
+  grid-template-areas: "rail name when status actions";
+  padding-left: 16px;
+}
+.alerts-rail {
+  grid-area: rail;
+  width: 3px;
+  height: 32px;
+  border-radius: 9999px;
+  background: var(--text-faint);
+}
+.alerts-rail[data-tone="bad"] {
+  background: var(--destructive);
+}
+.alerts-rail[data-tone="warn"] {
+  background: var(--warning);
+}
+.alerts-rail[data-tone="brand"] {
+  background: var(--chart-1);
+}
+.alerts-rule-name {
+  grid-area: name;
+}
+.alerts-rule-when {
+  grid-area: when;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alerts-rule-status {
+  grid-area: status;
+}
+.alerts-rule-actions {
+  display: flex;
+  grid-area: actions;
+  gap: 4px;
+}
+
+/* ── Channels and delivery history ─────────────────────────────────────────── */
+.alerts-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.alerts-channels {
+  flex: 1 1 340px;
+}
+.alerts-history {
+  flex: 2 1 480px;
+}
+.alerts-channel-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.alerts-history-row {
+  grid-template-columns: 48px minmax(0, 1fr) 90px auto;
+  grid-template-areas: "time rule channel result";
+}
+.alerts-history-time {
+  grid-area: time;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.alerts-history-rule {
+  grid-area: rule;
+  min-width: 0;
+}
+.alerts-history-channel {
+  grid-area: channel;
+}
+.alerts-history-result {
+  grid-area: result;
+}

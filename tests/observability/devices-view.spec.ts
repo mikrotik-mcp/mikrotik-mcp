@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, test, vi } from "vite-plus/test";
 import { DevicesView } from "../../ui/observability/devices-view";
-import { DeviceHealthCard } from "../../ui/observability/health";
+import { DeviceResources } from "../../ui/observability/health";
 import { DeviceAddressStatus } from "../../ui/observability/device-address-status";
 import { ConfigEditor } from "../../ui/observability/config-editor";
 import type { DeviceInfo, DevicesPayload, SSHPoolPayload } from "../../ui/observability/types";
@@ -12,11 +12,10 @@ import type { DeviceInfo, DevicesPayload, SSHPoolPayload } from "../../ui/observ
 vi.hoisted(() => {
   Reflect.deleteProperty(Element.prototype, "animate");
 });
-// The SVG radar is unchanged. Isolate its geometry/RAF from directory interactions.
+// Isolate the management-path drawing from table interactions.
 vi.mock("../../ui/observability/connectivity", () => ({
-  ConnectivityGraph: ({ payload }: { payload: DevicesPayload }) =>
-    h("div", { "data-testid": "radar" }, payload.devices.map((d) => d.name).join(",")),
-  deviceColor: () => "var(--primary)",
+  ManagementPaths: ({ devices }: { devices: DeviceInfo[] }) =>
+    h("div", { "data-testid": "paths" }, devices.map((d) => d.name).join(",")),
 }));
 let host: HTMLDivElement;
 let root: Root;
@@ -107,11 +106,16 @@ const acceptDeviceForm = async () => {
 };
 const filter = async (name: string) =>
   click(
-    [...host.querySelectorAll<HTMLButtonElement>(".device-filters button")].find((b) =>
+    [...host.querySelectorAll<HTMLButtonElement>('[aria-label="Show"] button')].find((b) =>
       b.textContent?.startsWith(name),
     )!,
   );
-const names = () => [...host.querySelectorAll(".device-dossier h3")].map((el) => el.textContent);
+const rows = () => [...host.querySelectorAll<HTMLButtonElement>(".dv-routers button.dv-cols")];
+const names = () => rows().map((el) => el.querySelector(".dv-name")?.textContent);
+const select = async (name: string) =>
+  click(rows().find((r) => r.querySelector(".dv-name")?.textContent === name)!);
+const details = (name: string) =>
+  host.querySelector<HTMLElement>(`[role="region"][aria-label="Router details: ${name}"]`);
 
 test("address status separates active fallback, historical success, failures and untested addresses", async () => {
   await act(async () =>
@@ -130,15 +134,11 @@ test("address status separates active fallback, historical success, failures and
     ),
   );
   expect(
-    [...host.querySelectorAll(".device-address-status__row")].map((r) =>
-      r.getAttribute("data-state"),
-    ),
+    [...host.querySelectorAll("[data-state]")].map((r) => r.getAttribute("data-state")),
   ).toEqual(["failed", "connected", "verified", "untested"]);
   expect(host.textContent).toContain("Primary");
   expect(host.textContent).toContain("Last success");
-  expect(
-    host.querySelector('[aria-label="Address connection results"]')?.getAttribute("data-slot"),
-  ).toBe("scroll-area-viewport");
+  expect(host.textContent).toContain("timed out");
 });
 
 test("address status refresh shows preference separately from live sessions, clears expired preference and exposes transport failures", async () => {
@@ -174,7 +174,7 @@ test("address status refresh shows preference separately from live sessions, cle
       vi.advanceTimersByTime(1000);
     });
     expect(host.querySelector('[data-state="connected"]')).toBeNull();
-    expect(host.textContent).toContain("No open session");
+    expect(host.textContent).toContain("Last success");
     expect(host.textContent).toContain("4m 00s left");
     clock.mockReturnValue(301000);
     // Expiry must update even without a new endpoints payload or parent render.
@@ -269,7 +269,7 @@ test("Devices owns the draft, per-router tests, ordering and safe apply; Config 
   expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeTruthy();
   await click(button("Test connection to branch"));
   expect(calls.find((c) => c.path.includes("test-device"))?.body.name).toBe("branch");
-  expect(host.textContent).toContain("12ms · lab");
+  expect(host.textContent).toContain("12 ms · lab");
   await click(button("Move branch up"));
   await click(button("Preview diff"));
   expect(
@@ -303,10 +303,11 @@ test("copy, edit and remove stay in the Devices draft until saved", async () => 
   await click(button("Manage routers"));
   await click(button("Copy branch"));
   await acceptDeviceForm();
-  expect(button("Edit branch-copy")).toBeTruthy();
+  expect(button("Edit settings for branch-copy")).toBeTruthy();
   await click(button("Remove branch-copy"));
-  await click(button("Remove branch-copy?"));
-  expect(button("Edit branch-copy")).toBeUndefined();
+  expect(host.textContent).toContain("Remove branch-copy?");
+  await click(button("Confirm removing branch-copy"));
+  expect(button("Edit settings for branch-copy")).toBeUndefined();
   expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
 });
 
@@ -329,28 +330,22 @@ test("router inventory lists and counts draft addresses with a stable primary, n
   );
   const count = (name: string) =>
     host.querySelector(`[aria-label^="${name}: "][aria-label$="configured management addresses"]`);
+  // The board marks a router's address count only when it is not exactly one.
   expect(count("edge")?.textContent).toBe("3 addresses");
-  expect(count("branch")?.textContent).toBe("1 address");
+  expect(count("branch")).toBeNull();
   expect(count("layer2")).toBeNull();
   expect(count("unfinished")?.textContent).toBe("0 addresses");
-  expect(count("duplicate")?.textContent).toBe("1 address");
-  const list = (name: string) => host.querySelector(`[aria-label="${name} management addresses"]`);
-  const addresses = (name: string) =>
-    [...(list(name)?.querySelectorAll("li code") ?? [])].map((el) => el.textContent);
-  expect(addresses("edge")).toEqual(["192.0.2.1:2222", "10.0.0.1:2222", "[2001:db8::1]:2222"]);
-  const primary = list("edge")?.querySelector('[data-primary="true"]');
-  expect(primary?.querySelector("code")?.textContent).toBe("192.0.2.1:2222");
-  expect(primary?.textContent).toContain("Primary");
-  expect(primary?.querySelector('[aria-label^="Network for 192.0.2.1:"]')).not.toBeNull();
-  expect(list("edge")?.querySelectorAll('[data-primary="false"]')).toHaveLength(2);
-  expect(list("edge")?.closest('[data-slot="scroll-area-viewport"]')).not.toBeNull();
-  expect(addresses("branch")).toEqual(["192.0.2.2:22"]);
-  expect(addresses("duplicate")).toEqual(["192.0.2.5:22"]);
-  expect(list("layer2")).toBeNull();
-  expect(host.textContent).toContain("02:00:00:00:00:01");
-  expect(host.textContent).toContain("No addresses configured");
+  expect(count("duplicate")).toBeNull();
+  const list = (name: string) =>
+    host.querySelector(`[aria-label="${name} management addresses"]`)?.textContent;
+  expect(list("edge")).toBe("192.0.2.1 (primary), 10.0.0.1, 2001:db8::1");
+  expect(list("branch")).toBe("192.0.2.2");
+  expect(list("duplicate")).toBe("192.0.2.5");
+  expect(list("layer2")).toBe("02:00:00:00:00:01");
+  expect(list("unfinished")).toBe("No addresses configured");
+  expect(host.textContent).toContain("SSH :2222");
 
-  await click(button("Edit edge"));
+  await click(button("Edit settings for edge"));
   const dialogButton = (label: string) =>
     [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
       (b) => b.textContent?.trim() === label,
@@ -368,13 +363,8 @@ test("router inventory lists and counts draft addresses with a stable primary, n
   await click(dialogButton("Continue"));
   await click(dialogButton("Update draft"));
   expect(count("edge")?.textContent).toBe("4 addresses");
-  expect(addresses("edge")).toEqual([
-    "192.0.2.1:2222",
-    "10.0.0.1:2222",
-    "[2001:db8::1]:2222",
-    "203.0.113.5:2222",
-  ]);
-  await click(button("Edit edge"));
+  expect(list("edge")).toBe("192.0.2.1 (primary), 10.0.0.1, 2001:db8::1, 203.0.113.5");
+  await click(button("Edit settings for edge"));
   const makePrimary = document.querySelector<HTMLButtonElement>(
     '[aria-label="Make 2001:db8::1 primary"]',
   );
@@ -384,9 +374,7 @@ test("router inventory lists and counts draft addresses with a stable primary, n
   await click(dialogButton("Continue"));
   await click(dialogButton("Update draft"));
   expect(count("edge")?.textContent).toBe("4 addresses");
-  const updatedPrimary = list("edge")?.querySelector('[data-primary="true"]');
-  expect(updatedPrimary?.querySelector("code")?.textContent).toBe("[2001:db8::1]:2222");
-  expect(updatedPrimary?.textContent).toContain("Primary");
+  expect(list("edge")).toBe("2001:db8::1 (primary), 192.0.2.1, 10.0.0.1, 203.0.113.5");
   expect(initial.devices.edge.fallbackHosts).toHaveLength(2);
   expect(
     calls.some((c) => c.path.includes("test-device") || c.path === "/api/config?scope=devices"),
@@ -406,7 +394,7 @@ test("an unavailable settings API displays a retry, not an empty configuration",
   expect(host.querySelector('[aria-label="Router configuration draft"]')).toBeTruthy();
 });
 
-test.each(["Add device", "Edit settings for edge"])(
+test.each(["Add device", "Edit edge"])(
   "%s opens only the modal and cancellation leaves management closed",
   async (action) => {
     const calls = mockConfigApi();
@@ -475,9 +463,12 @@ test("the add modal tests without saving, then Connect & Save uses safe apply wi
     );
     name.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  // Test and Connect & save sit on the review step, as the board draws them.
+  await click(modalButton("Continue"));
+  await click(modalButton("Continue"));
   await click(modalButton("Test connection"));
   expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
-  await click(modalButton("Connect & Save"));
+  await click(modalButton("Connect & save"));
   expect(calls.filter((c) => c.path.includes("test-device"))).toHaveLength(2);
   const saves = calls.filter((c) => c.path === "/api/config?scope=devices");
   expect(saves).toHaveLength(1);
@@ -533,13 +524,18 @@ test("reverting an applied draft restores the previous router order", async () =
   expect(button("Close").disabled).toBe(false);
 });
 
-test("renders the actual BeUI controls without contacting or mutating devices", async () => {
+test("renders the routers table without contacting or mutating devices", async () => {
   await render();
   expect(names()).toEqual(["edge", "branch", "pending", "disabled"]);
-  expect(host.querySelector('[data-slot="button"]')).toBeTruthy();
+  // The first router's details are open until the user picks another or closes them.
+  expect(details("edge")).not.toBeNull();
   expect(host.querySelector("select")).toBeNull();
   expect(fetch).not.toHaveBeenCalled();
   for (const action of Object.values(actions)) expect(action).not.toHaveBeenCalled();
+  await click(button("Close router details"));
+  expect(details("edge")).toBeNull();
+  await select("branch");
+  expect(details("branch")).not.toBeNull();
 });
 test("filters distinguish offline, unobserved, and disabled devices", async () => {
   await render();
@@ -563,49 +559,48 @@ test("search matches names, addresses and hardware, and can reset an empty resul
   expect(names()).toHaveLength(4);
   await search("missing");
   expect(names()).toHaveLength(0);
-  expect(host.textContent).toContain("No devices match");
+  expect(host.textContent).toContain("No routers match");
   await click(button("Clear filters"));
   expect(names()).toHaveLength(4);
 });
-test("directory filters do not filter the radar or fleet-wide pool statistics", async () => {
+test("table filters do not filter the management paths or fleet-wide pool statistics", async () => {
   await render();
   await filter("Offline");
-  expect(host.querySelector('[data-testid="radar"]')?.textContent).toBe(
+  expect(host.querySelector('[data-testid="paths"]')?.textContent).toBe(
     "edge,branch,pending,disabled",
   );
-  expect(host.querySelector(".device-pool__total strong")?.textContent).toBe("2");
-  expect(host.querySelectorAll(".device-pool__connections > div")).toHaveLength(4);
+  expect(host.textContent).toContain("2 open");
+  expect(host.querySelectorAll(".dv-pool-row")).toHaveLength(4);
 });
 test("unknown resources are not meters at zero, but a real zero is retained", async () => {
   await render();
-  const cards = host.querySelectorAll(".device-dossier");
-  expect(cards[0].querySelector('[role="meter"]')?.getAttribute("aria-valuenow")).toBe("0");
-  expect(cards[1].querySelectorAll('[role="meter"]')).toHaveLength(0);
-  expect(cards[1].textContent).toContain("Awaiting readings");
-  expect(cards[0].querySelector(".device-activity dd")?.textContent).toBe("<1ms");
+  const [edge, branch] = rows();
+  expect(edge.querySelector('[role="meter"]')?.getAttribute("aria-valuenow")).toBe("0");
+  expect(branch.querySelectorAll('[role="meter"]')).toHaveLength(0);
+  expect(edge.textContent).toContain("<1 ms");
+  await select("branch");
+  expect(details("branch")?.textContent).toContain("awaiting readings");
 });
 test("retained readings on an offline or disabled device are explicitly historical", async () => {
   payload.devices[1].status.cpuLoad = 15;
   payload.devices[3].status.cpuLoad = 5;
   await render();
-  expect(host.querySelectorAll(".device-dossier")[1].textContent).toContain(
-    "Last known · not live",
-  );
-  expect(host.querySelectorAll(".device-dossier")[3].textContent).toContain(
-    "Last known · not live",
-  );
+  await select("branch");
+  expect(details("branch")?.textContent).toContain("last known, not live");
+  await select("disabled");
+  expect(details("disabled")?.textContent).toContain("last known, not live");
 });
 test("distinguishes not loaded, empty fleet, and unavailable pool", async () => {
   await render(null);
   expect(host.textContent).toContain("Waiting for device data");
-  expect(host.textContent).not.toContain("Your fleet starts here");
+  expect(host.textContent).not.toContain("No routers yet");
   await render({ ...payload, devices: [] });
-  expect(host.textContent).toContain("Your fleet starts here");
+  expect(host.textContent).toContain("No routers yet");
   pool = null;
   await render();
-  expect(host.querySelector(".device-pool")?.textContent).toContain("Status unavailable");
-  expect(host.querySelector(".device-pool__total strong")?.textContent).toBe("—");
-  expect(host.querySelector(".device-pool")?.textContent).not.toContain("Pooling disabled");
+  expect(host.querySelector(".dv-pool")?.textContent).toContain("Status unavailable");
+  expect(host.querySelector(".dv-pool")?.textContent).not.toContain("Pooling off");
+  expect(host.textContent).toContain("not reported");
 });
 test("test and reconnect target only the requested device and remain locked while busy", async () => {
   let complete!: () => void;
@@ -616,6 +611,7 @@ test("test and reconnect target only the requested device and remain locked whil
       }),
   );
   await render();
+  await select("branch");
   await click(button("Test branch"));
   expect(actions.onTest).toHaveBeenCalledExactlyOnceWith("branch");
   expect(button("Reconnect branch").disabled).toBe(true);
@@ -634,7 +630,7 @@ test("a rejected action displays an error and unlocks retry", async () => {
 });
 test("capability probing and enable changes remain explicit and named", async () => {
   await render();
-  const card = host.querySelector(".device-dossier")!;
+  const card = details("edge")!;
   await click(
     [...card.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Probe")!,
   );
@@ -646,11 +642,14 @@ test("capability probing and enable changes remain explicit and named", async ()
 test("disabled devices cannot trigger probes and MAC-Telnet has no SSH reconnect action", async () => {
   payload.devices.push(device("layer2", null, { mac: "02:00:00:00:00:01" }));
   await render();
+  await select("disabled");
   expect(button("Test disabled").disabled).toBe(true);
   expect(button("Reconnect disabled").disabled).toBe(true);
-  expect(button("Reconnect layer2")).toBeUndefined();
   await click(button("Test disabled"));
   expect(actions.onTest).not.toHaveBeenCalled();
+  await select("layer2");
+  expect(button("Test layer2")).toBeTruthy();
+  expect(button("Reconnect layer2")).toBeUndefined();
 });
 test("pool states distinguish unreported, unpooled, recovering, busy and ready", async () => {
   payload.devices = [
@@ -668,23 +667,24 @@ test("pool states distinguish unreported, unpooled, recovering, busy and ready",
     ),
   ];
   await render();
-  const poolText = host.querySelector(".device-pool__connections")?.textContent;
+  const poolText = host.querySelector(".dv-pool")?.textContent;
   for (const label of [
     "Not reported",
     "No connection",
     "Reconnecting",
-    "2 active channels",
+    "Busy · 2 calls running",
     "Ready · idle",
   ])
     expect(poolText).toContain(label);
-  expect(host.querySelectorAll('.device-pool [role="meter"]')).toHaveLength(0);
+  expect(host.querySelectorAll('.dv-pool [role="meter"]')).toHaveLength(0);
 });
-test("zero free memory and disk space are retained in hardware details", async () => {
+test("zero free memory and disk space are retained in the resource details", async () => {
   const d = device("full", true);
   d.status.totalMemory = 1024;
   d.status.freeMemory = 0;
   d.status.freeHdd = 0;
-  await act(async () => root.render(h(DeviceHealthCard, { d, historyOnly: true })));
-  expect(host.textContent).toContain("1.0 KiB / 1.0 KiB");
-  expect(host.textContent).toContain("0 B / —");
+  await act(async () => root.render(h(DeviceResources, { d })));
+  const titles = [...host.querySelectorAll("[title]")].map((el) => el.getAttribute("title"));
+  expect(titles).toContain("1.0 KiB / 1.0 KiB used");
+  expect(titles).toContain("0 B / — free");
 });

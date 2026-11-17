@@ -1,38 +1,21 @@
-import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ArrowRight,
-  ChevronRight,
-  Search,
-  Network,
-  Route,
-  ShieldCheck,
-  AlertTriangle,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import type { CSSProperties, ReactNode } from "react";
+import { AlertTriangle, ChevronRight, Network, Route, X } from "lucide-react";
 import type { RoutingInventory, RoutingSectionKey } from "../../src/service-routing/inventory";
 import type { Row, RoutingPolicy } from "../../src/service-routing/model";
 import { api } from "./api";
-import { WorkspaceError } from "./operations-ui";
 import { RoutingAddressBrowser } from "./service-routing-address-browser";
 import { RoutingGateway } from "./routing-gateway";
-import "./service-routing-inventory.css";
+import {
+  MonitorButton,
+  MonitorEmpty,
+  MonitorSearch,
+  MonitorSelect,
+  MonitorTabs,
+  StatusDot,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
+import { cn } from "@/lib/utils";
 
 export function useRoutingInventory(device: string, paused: boolean) {
   const [data, setData] = useState<RoutingInventory>();
@@ -120,9 +103,7 @@ export function policyBlockers(
   const filters = data.sections[policy.family === "ipv6" ? "filters6" : "filters4"];
   const reasons: string[] = [];
   if (mangle.state !== "ready" || filters.state !== "ready")
-    reasons.push(
-      "Conflict checks are incomplete. Refresh the router inventory before planning a change.",
-    );
+    reasons.push("Conflict checks are incomplete. Read the router again before you plan a change.");
   const conflicts = mangle.rows.filter(
     (r) =>
       r.disabled !== "yes" &&
@@ -131,43 +112,54 @@ export function policyBlockers(
   );
   if (conflicts.length && policy.precedence !== "before-existing")
     reasons.push(
-      `${conflicts.length} existing routing marks or jumps need a conflict review. MCP will not override them. Inspect Mangle in Router configuration first.`,
+      `${conflicts.length} existing routing marks or jumps need a review first. MCP won't override them. Check Mangle in Router configuration.`,
     );
   if (filters.rows.some((r) => r.disabled !== "yes" && r.action === "fasttrack-connection"))
     reasons.push(
-      "FastTrack is enabled and may bypass these policies. An administrator must review exclusions before apply.",
+      "FastTrack is on and may skip these policies. An administrator must review the exclusions before you apply.",
     );
   return reasons;
 }
+
 const groups = {
   routes: {
     label: "Routes",
     keys: ["routes4", "routes6"],
-    help: "All route entries, including connected, dynamic, disabled and inactive routes. Active means selected by RouterOS, not verified internet access.",
+    help: "Every route, including connected, dynamic, disabled and inactive ones. Active means RouterOS picked it, not that the internet works through it.",
+    head: ["Destination", "Gateway", "Table"],
   },
   mangle: {
     label: "Mangle",
     keys: ["mangle4", "mangle6"],
-    help: "Original router order is preserved. Marks and jumps steer traffic; other actions remain visible. Inspect a rule to see all match conditions and referenced address lists.",
+    help: "Mangle rules mark packets so a routing rule can send them to another table. Shown in the order the router runs them.",
+    head: ["Match", "Action", "Chain"],
   },
   rules: {
     label: "Routing rules",
     keys: ["rules"],
-    help: "Policy lookups in router order. Rules with no IP-family-specific selector apply to both families. Mangle can take precedence; this is configuration, not a packet trace.",
+    help: "Routing rules pick a table for matching traffic, in router order. Mangle marks can win over them. This is configuration, not a packet trace.",
+    head: ["Match", "Action", "Table"],
   },
   addresses: {
     label: "Address lists",
     keys: ["addresses4", "addresses6"],
-    help: "Static addresses, hostnames and DNS-resolved members. A shared CDN address can belong to more than one service.",
+    help: "Static entries, host names and members learned from DNS. One CDN address can belong to more than one service.",
+    head: ["Address", "List", "List"],
   },
   tables: {
-    label: "Tables & VRFs",
+    label: "Tables and VRFs",
     keys: ["tables", "vrfs"],
-    help: "FIB tables select forwarding routes. A routing table is not necessarily a VRF: per-exit HTTPS tests require a matching VRF.",
+    help: "A routing table is not always a VRF. Exit checks over HTTPS need a VRF with the same name.",
+    head: ["Name", "Type", "Table"],
   },
-} satisfies Record<string, { label: string; keys: RoutingSectionKey[]; help: string }>;
+} satisfies Record<
+  string,
+  { label: string; keys: RoutingSectionKey[]; help: string; head: [string, string, string] }
+>;
 type Group = keyof typeof groups;
 type Entry = { row: Row; section: RoutingSectionKey; family: string };
+const COLS = "grid-cols-[56px_minmax(190px,1fr)_210px_88px_76px_60px]";
+
 const familyOf = (key: RoutingSectionKey, row: Row) =>
   key.endsWith("4")
     ? "IPv4"
@@ -176,40 +168,123 @@ const familyOf = (key: RoutingSectionKey, row: Row) =>
       : key === "rules" && (row["src-address"] || row["dst-address"])
         ? `${(row["src-address"] || row["dst-address"]).includes(":") ? "IPv6" : "IPv4"}`
         : "Both";
-function summary(entry: Entry) {
+
+function mangleMatch(r: Row): string {
+  const proto = r.protocol
+    ? `${r.protocol}${r["dst-port"] ? ` dst-port ${r["dst-port"]}` : ""}`
+    : "";
+  return (
+    [
+      r["in-interface"] && `in ${r["in-interface"]}`,
+      r["in-interface-list"] && `in-list ${r["in-interface-list"]}`,
+      r["src-address"] && `src ${r["src-address"]}`,
+      r["src-address-list"] && `src-list ${r["src-address-list"]}`,
+      r["dst-address"] && `dst ${r["dst-address"]}`,
+      r["dst-address-list"] && `dst-list ${r["dst-address-list"]}`,
+      proto,
+      r["connection-mark"] && `connection-mark ${r["connection-mark"]}`,
+      r["connection-state"] && `state ${r["connection-state"]}`,
+    ]
+      .filter(Boolean)
+      .join(", ") || "Any packet"
+  );
+}
+
+/** The two lines of a row: what it matches, and where it sends traffic. */
+function summary(entry: Entry): { match: string; target: string } {
   const r = entry.row;
   if (entry.section.startsWith("routes"))
-    return [
-      r["dst-address"] || "Unknown destination",
-      r["immediate-gw"] ||
+    return {
+      match: r["dst-address"] || "Unknown destination",
+      target:
+        r["immediate-gw"] ||
         r.gateway ||
         (r.blackhole === "yes" ? "Blackhole" : "No gateway reported"),
-    ];
+    };
   if (entry.section.startsWith("mangle"))
-    return [
-      r.comment || r.chain || "Mangle rule",
-      r["new-routing-mark"] ||
+    return {
+      match: mangleMatch(r),
+      target:
+        r["new-routing-mark"] ||
         r["jump-target"] ||
         r["new-connection-mark"] ||
         r["route-dst"] ||
-        r.action ||
-        "Unknown action",
-    ];
+        r["new-packet-mark"] ||
+        r["new-dscp"] ||
+        "",
+    };
   if (entry.section === "rules")
-    return [
-      r["src-address"] || r["dst-address"] || r.interface || "Any matching traffic",
-      r.table || r.action || "Unknown action",
-    ];
+    return {
+      match:
+        [
+          r["src-address"] && `src ${r["src-address"]}`,
+          r["dst-address"] && `dst ${r["dst-address"]}`,
+          r.interface && `in ${r.interface}`,
+          r["routing-mark"] && `mark ${r["routing-mark"]}`,
+        ]
+          .filter(Boolean)
+          .join(", ") || "Any traffic",
+      target: r.table || "",
+    };
   if (entry.section.startsWith("addresses"))
-    return [r.list || "Unnamed list", r.address || "Unknown address"];
-  return [
-    r.name || "Unnamed table",
+    return { match: r.address || "Unknown address", target: r.list || "" };
+  return {
+    match: r.name || "Unnamed table",
+    target: entry.section === "vrfs" ? r.interfaces || "" : "",
+  };
+}
+
+function stateOf(entry: Entry): { label: string; tone: Tone } {
+  const r = entry.row;
+  if (r.disabled === "yes") return { label: "Disabled", tone: "default" };
+  if (r.invalid === "yes") return { label: "Invalid", tone: "bad" };
+  if (entry.section.startsWith("routes"))
+    return r.active === "yes"
+      ? { label: "Active", tone: "good" }
+      : { label: "Inactive", tone: "default" };
+  return { label: "Enabled", tone: "good" };
+}
+
+const KIND: Partial<Record<RoutingSectionKey, string>> = {
+  routes4: "route",
+  routes6: "route",
+  tables: "table",
+  vrfs: "VRF",
+};
+
+function ActionCell({ entry, target }: { entry: Entry; target: string }): ReactNode {
+  const r = entry.row;
+  if (entry.section.startsWith("routes"))
+    return (
+      <span className="sr-gw flex min-w-0 flex-col gap-0.5">
+        <RoutingGateway value={target} />
+        {r.distance && (
+          <span className="text-[12px] text-muted-foreground">Distance {r.distance}</span>
+        )}
+      </span>
+    );
+  const type =
     entry.section === "vrfs"
-      ? r.interfaces || "No interfaces"
-      : r.fib === "yes"
-        ? "Forwarding table (FIB)"
-        : "RIB only",
-  ];
+      ? "VRF"
+      : entry.section === "tables"
+        ? r.fib === "yes"
+          ? "FIB"
+          : "RIB only"
+        : r.action || "unknown";
+  return (
+    <span className="flex min-w-0 flex-wrap gap-1">
+      <span className="monitor-chip font-mono">{type}</span>
+      {target && (
+        <span className="monitor-chip max-w-full truncate font-mono text-brand">→ {target}</span>
+      )}
+      {r.passthrough && (
+        <span className="w-full text-[12px] text-muted-foreground">
+          passthrough{" "}
+          {r.passthrough === "yes" ? "on" : r.passthrough === "no" ? "off" : r.passthrough}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function RouterRoutingInventory({
@@ -229,6 +304,7 @@ export function RouterRoutingInventory({
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Entry>();
+  const [fieldsOpen, setFieldsOpen] = useState(false);
   const data = incoming;
   const retry = () => {
     setSelected(undefined);
@@ -238,27 +314,33 @@ export function RouterRoutingInventory({
     setPage(0);
     setSelected(undefined);
   };
-  if (!data && loading && !error) return <LoadingState label="Reading router configuration" />;
   if (!data)
     return (
-      <section className="routing-inventory">
-        <WorkspaceError message={error} />
-        <div className="ops-empty" role="status">
-          <Network size={30} />
-          <h3>
-            {loading ? "Reading this router’s configuration…" : "Router inventory is unavailable"}
-          </h3>
-          <p>
-            Routes, policy rules and address lists are read independently. Nothing on the router is
-            changed.
-          </p>
-          {!loading && (
-            <Button variant="outline" onClick={retry}>
-              Retry router read
-            </Button>
-          )}
-        </div>
-      </section>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+        {error && (
+          <div className="monitor-note" data-tone="bad" role="alert">
+            <AlertTriangle aria-hidden="true" className="text-destructive" />
+            <span className="flex-1 text-fg-secondary">{error}</span>
+          </div>
+        )}
+        <section className="monitor-panel" role="status">
+          <MonitorEmpty
+            icon={<Network />}
+            title={
+              loading ? "Reading this router's configuration…" : "Router configuration unavailable"
+            }
+            action={
+              !loading && (
+                <MonitorButton size="sm" onClick={retry}>
+                  Read the router again
+                </MonitorButton>
+              )
+            }
+          >
+            Routes, rules and address lists are read one by one. Nothing on the router changes.
+          </MonitorEmpty>
+        </section>
+      </div>
     );
   const allEntries: Entry[] = Object.values(groups)
     .flatMap((g) => g.keys)
@@ -274,6 +356,9 @@ export function RouterRoutingInventory({
     });
   const keys: readonly RoutingSectionKey[] = groups[group].keys;
   const failed = Object.values(data.sections).filter((s) => s.state !== "ready");
+  // One cause for every failed section (an unreachable router): say it once.
+  const sameError = (list: typeof failed): boolean =>
+    list.length > 1 && list.every((s) => s.error === list[0].error);
   const filtered = allEntries.filter(
     (e) =>
       keys.includes(e.section) &&
@@ -289,10 +374,26 @@ export function RouterRoutingInventory({
   );
   const pages = Math.max(1, Math.ceil(filtered.length / 40));
   const currentPage = Math.min(page, pages - 1);
+  const ready = (k: RoutingSectionKey) => data.sections[k].state === "ready";
+  const size = (k: RoutingSectionKey) => data.sections[k].total ?? data.sections[k].rows.length;
   const count = (sections: readonly RoutingSectionKey[]) =>
-    sections.some((k) => data.sections[k].state !== "ready")
-      ? "—"
-      : sections.reduce((n, k) => n + (data.sections[k].total ?? data.sections[k].rows.length), 0);
+    sections.some((k) => !ready(k)) ? "—" : sections.reduce((n, k) => n + size(k), 0);
+  const split = (a: RoutingSectionKey, b: RoutingSectionKey, what = "") =>
+    !ready(a) && !ready(b)
+      ? "Not read"
+      : !ready(a)
+        ? `IPv4 ${what}not read`
+        : !ready(b)
+          ? `IPv6 ${what}not read`
+          : `${size(a)} IPv4 · ${size(b)} IPv6`;
+  const hints: Record<Exclude<Group, "addresses">, string> = {
+    routes: split("routes4", "routes6"),
+    mangle: split("mangle4", "mangle6", "mangle "),
+    rules: ready("rules")
+      ? `${data.sections.rules.rows.filter((r) => r.disabled !== "yes").length} enabled`
+      : "Not read",
+    tables: `${ready("tables") ? `${size("tables")} tables` : "Tables not read"} · ${ready("vrfs") ? `${size("vrfs")} VRFs` : "VRFs not read"}`,
+  };
   const tableNames = [
     ...new Set(
       [
@@ -304,331 +405,374 @@ export function RouterRoutingInventory({
     ),
   ];
   const linkedLists = selected
-    ? ["src-address-list", "dst-address-list"]
-        .map((field) => selected.row[field]?.replace(/^!/, ""))
-        .filter(Boolean)
+    ? [
+        ...new Set(
+          ["src-address-list", "dst-address-list"]
+            .map((field) => selected.row[field]?.replace(/^!/, ""))
+            .filter(Boolean),
+        ),
+      ]
     : [];
+  const pick = (g: Group) => {
+    resetPage();
+    setGroup(g);
+    setTable("all");
+    if (g !== group) {
+      setQuery("");
+      setFamily("all");
+    }
+  };
+  const inspect = (entry: Entry) => {
+    setSelected(entry);
+    setFieldsOpen(!["src-address-list", "dst-address-list"].some((field) => entry.row[field]));
+  };
+  const head = groups[group].head;
+  const selectedSummary = selected ? summary(selected) : undefined;
   return (
-    <section className="routing-inventory" aria-label="Router routing inventory">
-      <div className="routing-status">
-        <span>
-          <ShieldCheck size={15} /> Read-only router snapshot
-        </span>
-        <span role="status">
-          {loading
-            ? "Refreshing…"
-            : error || failed.length
-              ? "Partial or last-known data"
-              : "Configuration loaded"}{" "}
-          · {new Date(data.observedAt).toLocaleTimeString()} · 20s cache / 30s refresh
-        </span>
-      </div>
-      <WorkspaceError message={error} />
-      {failed.length > 0 && (
-        <div className="routing-warning" role="alert">
-          <AlertTriangle size={16} />
-          <div>
-            <strong>{failed.length} sections could not be read</strong>
-            <p>Missing data is not an empty routing table. Other sections remain available.</p>
-            <details>
-              <summary>Show read errors</summary>
-              {failed.map((s) => (
-                <p key={s.path}>
-                  <code>{s.path}</code> — {s.error}
-                </p>
-              ))}
-            </details>
-            <Button variant="link" onClick={retry} disabled={loading}>
-              Retry unavailable sections
-            </Button>
-          </div>
+    <div
+      className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6"
+      aria-label="Router routing inventory"
+    >
+      {error && (
+        <div className="monitor-note" data-tone="bad" role="alert">
+          <AlertTriangle aria-hidden="true" className="text-destructive" />
+          <span className="flex-1 text-fg-secondary">
+            {error} The data below is from the last read.
+          </span>
         </div>
       )}
-      <div className="routing-counts">
+      {failed.length > 0 && (
+        <div className="monitor-note" data-tone="warn" role="alert">
+          <AlertTriangle aria-hidden="true" className="text-warning" />
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="font-[510] text-foreground">
+              {failed.length === Object.keys(data.sections).length
+                ? "No section could be read"
+                : `${failed.length} ${failed.length === 1 ? "section" : "sections"} could not be read`}
+            </span>
+            <span className="font-mono text-[12px] break-words text-muted-foreground">
+              {sameError(failed)
+                ? `${failed.map((s) => s.path).join(" · ")} — ${failed[0].error ?? "not read"}`
+                : failed.map((s) => `${s.path} — ${s.error ?? "not read"}`).join(" · ")}
+            </span>
+            <span className="text-[12px] text-muted-foreground">
+              {failed.length === Object.keys(data.sections).length
+                ? "Nothing on the router changed. Retry once the router is reachable."
+                : "Counts for these sections show “—”. Everything else is current."}
+            </span>
+          </div>
+          <MonitorButton size="sm" onClick={retry} disabled={loading}>
+            Retry these sections
+          </MonitorButton>
+        </div>
+      )}
+
+      <section
+        className="monitor-strip"
+        style={{ "--strip-min": "200px" } as CSSProperties}
+        aria-label="Sections"
+      >
         {(["routes", "mangle", "rules", "tables"] as const).map((g) => (
           <button
             key={g}
-            onClick={() => {
-              resetPage();
-              setGroup(g);
-              setQuery("");
-              setTable("all");
-              setFamily("all");
-            }}
+            type="button"
             aria-pressed={group === g}
+            onClick={() => pick(g)}
+            className={cn(
+              "monitor-metric cursor-pointer text-left transition-colors hover:bg-overlay-03",
+              group === g &&
+                "bg-overlay-03 shadow-[-1px_0_0_var(--border),0_-1px_0_var(--border),inset_0_-2px_0_var(--chart-1)]",
+            )}
           >
-            <span>{groups[g].label}</span>
-            <strong>{count(groups[g].keys)}</strong>
-            <ChevronRight size={16} />
+            <span className="monitor-metric-label">{groups[g].label}</span>
+            <span className="monitor-metric-value text-emphasis">{count(groups[g].keys)}</span>
+            <span className="monitor-metric-hint">{hints[g]}</span>
           </button>
         ))}
-      </div>
-      {group !== "addresses" && (
-        <div className="routing-controls">
-          <label className="routing-search">
-            <Search size={16} />
-            <Input
-              aria-label="Search router routing"
+      </section>
+
+      <section className="monitor-panel overflow-hidden">
+        <MonitorTabs<Group>
+          label="Section"
+          value={group}
+          onChange={pick}
+          tabs={(Object.keys(groups) as Group[]).map((g) => ({
+            value: g,
+            label: groups[g].label,
+            count: count(groups[g].keys),
+          }))}
+        />
+        {group !== "addresses" && (
+          <div className="flex flex-wrap items-center gap-2 px-5 pt-4 pb-2">
+            <MonitorSearch
+              className="flex-[1_1_320px]"
+              label="Search router routing"
+              placeholder="Find an address, list, comment or gateway"
               value={query}
-              onChange={(e) => {
+              onChange={(v) => {
                 resetPage();
-                setQuery(e.target.value);
+                setQuery(v);
               }}
-              placeholder="Find an address, list, comment or gateway…"
             />
-          </label>
-          <Select
-            value={family}
-            onValueChange={(value) => {
-              resetPage();
-              setFamily(value);
-            }}
-          >
-            <SelectTrigger aria-label="Inventory IP family">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">IPv4 + IPv6</SelectItem>
-              <SelectItem value="IPv4">IPv4</SelectItem>
-              <SelectItem value="IPv6">IPv6</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={table}
-            onValueChange={(value) => {
-              resetPage();
-              setTable(value);
-            }}
-          >
-            <SelectTrigger aria-label="Filter routing table">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All routing tables</SelectItem>
-              {tableNames.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-      <nav className="routing-tabs" aria-label="Router configuration sections">
-        {(Object.keys(groups) as Group[]).map((g) => (
-          <Button
-            key={g}
-            variant={group === g ? "secondary" : "ghost"}
-            aria-pressed={group === g}
-            onClick={() => {
-              resetPage();
-              setGroup(g);
-              setTable("all");
-            }}
-          >
-            {groups[g].label}
-            <span>{count(groups[g].keys)}</span>
-          </Button>
-        ))}
-      </nav>
-      <p className="routing-help">
-        {groups[group].help}
-        {table !== "all" &&
-          " Table filtering shows direct references only, not indirect jumps or bypass rules."}
-      </p>
-      {group === "addresses" ? (
-        <RoutingAddressBrowser key={data.device} device={data.device} />
-      ) : (
-        <>
-          <ScrollArea className="routing-table-scroll">
-            <table className="routing-table">
-              <thead>
-                <tr>
-                  <th>Order / family</th>
-                  <th>{group === "routes" ? "Destination" : "Match / name"}</th>
-                  <th>{group === "routes" ? "Gateway / interface" : "Action / target"}</th>
-                  <th>Table / chain</th>
-                  <th>State</th>
-                  <th>
+            <MonitorSelect
+              label="Inventory IP family"
+              value={family}
+              onChange={(v) => {
+                resetPage();
+                setFamily(v);
+              }}
+              options={[
+                { value: "all", label: "IPv4 + IPv6" },
+                { value: "IPv4", label: "IPv4" },
+                { value: "IPv6", label: "IPv6" },
+              ]}
+            />
+            <MonitorSelect
+              label="Filter routing table"
+              value={table}
+              onChange={(v) => {
+                resetPage();
+                setTable(v);
+              }}
+              options={[
+                { value: "all", label: "All routing tables" },
+                ...tableNames.map((name) => ({ value: name, label: name })),
+              ]}
+            />
+          </div>
+        )}
+        <p
+          className={cn(
+            "px-5 pb-3.5 text-[12px] text-muted-foreground",
+            group === "addresses" && "pt-4",
+          )}
+        >
+          {groups[group].help}
+          {table !== "all" &&
+            group !== "addresses" &&
+            " Filtering by table shows direct references only, not jumps or bypass rules."}
+        </p>
+
+        {group === "addresses" ? (
+          <div className="border-t border-border px-5 py-4">
+            <RoutingAddressBrowser key={data.device} device={data.device} />
+          </div>
+        ) : (
+          <div className="flex flex-wrap border-t border-border">
+            <div className="flex min-w-0 flex-[999_1_560px] flex-col">
+              <div className="overflow-x-auto" role="table" aria-label={groups[group].label}>
+                <div className={cn("monitor-thead min-w-[660px] border-t-0", COLS)} role="row">
+                  <span role="columnheader">Order</span>
+                  {head.map((label) => (
+                    <span role="columnheader" key={label}>
+                      {label}
+                    </span>
+                  ))}
+                  <span role="columnheader">State</span>
+                  <span role="columnheader">
                     <span className="sr-only">Details</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </span>
+                </div>
                 {filtered.slice(currentPage * 40, (currentPage + 1) * 40).map((entry) => {
                   const r = entry.row,
-                    [from, to] = summary(entry);
-                  const state =
-                    r.disabled === "yes"
-                      ? "Disabled"
-                      : r.invalid === "yes"
-                        ? "Invalid"
-                        : entry.section.startsWith("routes")
-                          ? r.active === "yes"
-                            ? "Active"
-                            : "Inactive"
-                          : "Enabled";
+                    { match, target } = summary(entry),
+                    state = stateOf(entry);
+                  const comment =
+                    r.comment || (entry.section.startsWith("mangle") ? "No comment" : "");
+                  const isSelected =
+                    selected?.section === entry.section &&
+                    (selected.row === entry.row ||
+                      (!!r[".id"] && selected.row[".id"] === r[".id"]));
                   return (
-                    <tr key={`${entry.section}-${r[".id"] || r["#"]}`}>
-                      <td>
-                        <span className="routing-order">#{r["#"]}</span>
-                        <small>
-                          {entry.family} ·{" "}
-                          {entry.section === "vrfs"
-                            ? "VRF"
-                            : r.dynamic === "yes"
-                              ? "Dynamic"
-                              : "Configured"}
-                        </small>
-                      </td>
-                      <td>
-                        <strong>{from}</strong>
-                        {r.comment && !entry.section.startsWith("mangle") && (
-                          <small>{r.comment}</small>
-                        )}
-                        {entry.section.startsWith("mangle") && (
-                          <small>
-                            {[
-                              r["src-address"] || r["src-address-list"],
-                              r["dst-address"] || r["dst-address-list"],
-                              r["in-interface"] || r["in-interface-list"],
-                            ]
-                              .filter(Boolean)
-                              .join(" · ") || "Inspect all match conditions"}
-                          </small>
-                        )}
-                      </td>
-                      <td>
-                        <span className="routing-target">
-                          <ArrowRight size={14} />
-                          {entry.section.startsWith("routes") ? (
-                            <RoutingGateway value={to} />
-                          ) : (
-                            <code>{to}</code>
-                          )}
+                    <div
+                      key={`${entry.section}-${r[".id"] || r["#"]}`}
+                      role="row"
+                      className={cn("monitor-row min-w-[660px] items-start", COLS)}
+                      data-selected={isSelected || undefined}
+                      data-failed={state.tone === "bad" || undefined}
+                    >
+                      <span role="cell" className="flex flex-col">
+                        <span className="font-mono text-[12px] text-fg-secondary">#{r["#"]}</span>
+                        <span className="text-[12px] text-muted-foreground">{entry.family}</span>
+                      </span>
+                      <span role="cell" className="flex min-w-0 flex-col">
+                        <span
+                          className="truncate font-mono text-[12px] text-foreground"
+                          title={match}
+                        >
+                          {match}
                         </span>
-                        {r.action && (
-                          <small>
-                            {r.action}
-                            {r.passthrough ? ` · passthrough ${r.passthrough}` : ""}
-                          </small>
+                        {(comment || r.dynamic === "yes") && (
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            {comment && (
+                              <span className="truncate text-[12px] text-muted-foreground">
+                                {comment}
+                              </span>
+                            )}
+                            {r.dynamic === "yes" && <span className="monitor-chip">Dynamic</span>}
+                          </span>
                         )}
-                      </td>
-                      <td>
-                        <code>{r["routing-table"] || r.table || r.chain || "—"}</code>
-                        {r.distance && <small>Distance {r.distance}</small>}
-                      </td>
-                      <td>
-                        <span className="routing-state" data-state={state}>
-                          {state}
-                        </span>
-                      </td>
-                      <td>
-                        <Button
+                      </span>
+                      <span role="cell" className="min-w-0">
+                        <ActionCell
+                          entry={entry}
+                          target={entry.section.startsWith("rules") ? "" : target}
+                        />
+                      </span>
+                      <span
+                        role="cell"
+                        className="truncate font-mono text-[12px] text-fg-secondary"
+                      >
+                        {entry.section.startsWith("routes")
+                          ? r["routing-table"] || "main"
+                          : entry.section.startsWith("mangle")
+                            ? r.chain || "—"
+                            : entry.section === "rules"
+                              ? r.table || "—"
+                              : "—"}
+                      </span>
+                      <span
+                        role="cell"
+                        className="flex items-center gap-1.5 text-[12px] text-fg-secondary"
+                      >
+                        <StatusDot tone={state.tone} />
+                        {state.label}
+                      </span>
+                      <span role="cell" className="text-right">
+                        <MonitorButton
                           size="sm"
                           variant="ghost"
-                          aria-label={`Inspect ${from}`}
-                          onClick={() => setSelected(entry)}
+                          className="px-1.5"
+                          aria-label={`Inspect ${match}`}
+                          aria-expanded={isSelected}
+                          onClick={() => (isSelected ? setSelected(undefined) : inspect(entry))}
                         >
-                          Inspect <ChevronRight size={14} />
-                        </Button>
-                      </td>
-                    </tr>
+                          Inspect
+                        </MonitorButton>
+                      </span>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-          {!filtered.length && (
-            <div className="ops-empty">
-              <Route size={28} />
-              <h3>
-                {keys.some((k) => data.sections[k].state === "error")
-                  ? "This section is incomplete"
-                  : query || table !== "all" || family !== "all"
-                    ? "No matching entries"
-                    : "No entries in this section"}
-              </h3>
-              <p>
-                {query || table !== "all" || family !== "all"
-                  ? "Clear the search or filters to see the rest of the router configuration."
-                  : "MCP saved policies are separate from these router entries."}
-              </p>
+              </div>
+              {!filtered.length && (
+                <MonitorEmpty
+                  compact
+                  icon={<Route />}
+                  title={
+                    keys.some((k) => data.sections[k].state === "error")
+                      ? "This section could not be read"
+                      : query || table !== "all" || family !== "all"
+                        ? "No matching entries"
+                        : "No entries in this section"
+                  }
+                >
+                  {query || table !== "all" || family !== "all"
+                    ? "Clear the search or filters to see the rest."
+                    : "MCP policies are kept apart from these router entries."}
+                </MonitorEmpty>
+              )}
+              <div className="monitor-row mt-auto grid-cols-[1fr_auto] text-[12px] text-muted-foreground hover:bg-transparent">
+                <span>
+                  {filtered.length} {filtered.length === 1 ? "entry" : "entries"} · router order
+                  kept
+                </span>
+                <span className="flex items-center gap-2">
+                  <MonitorButton
+                    size="sm"
+                    variant="ghost"
+                    disabled={currentPage === 0}
+                    onClick={() => setPage(currentPage - 1)}
+                  >
+                    Previous
+                  </MonitorButton>
+                  <span className="tabular-nums">
+                    {currentPage + 1} / {pages}
+                  </span>
+                  <MonitorButton
+                    size="sm"
+                    variant="ghost"
+                    disabled={currentPage + 1 >= pages}
+                    onClick={() => setPage(currentPage + 1)}
+                  >
+                    Next
+                  </MonitorButton>
+                </span>
+              </div>
             </div>
-          )}
-          <footer className="routing-pagination">
-            <span>{filtered.length} matching entries · router order preserved</span>
-            <div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage === 0}
-                onClick={() => setPage(currentPage - 1)}
+
+            {selected && selectedSummary && (
+              <aside
+                className="sr-inspect flex max-w-[360px] min-w-0 flex-[1_1_300px] flex-col border-l border-border"
+                aria-label={`Inspect ${KIND[selected.section] ?? "rule"} ${selected.row["#"]}`}
               >
-                Previous
-              </Button>
-              <span>
-                {currentPage + 1} / {pages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage + 1 >= pages}
-                onClick={() => setPage(currentPage + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </footer>
-        </>
-      )}
-      <Dialog
-        open={!!selected}
-        onOpenChange={(open) => {
-          if (!open) setSelected(undefined);
-        }}
-      >
-        <DialogContent className={linkedLists.length ? "sm:max-w-3xl" : "sm:max-w-2xl"}>
-          <DialogHeader>
-            <DialogTitle>{selected ? summary(selected)[0] : "Routing entry"}</DialogTitle>
-            <DialogDescription>
-              {selected && data.sections[selected.section].path} · {data.device}. Read-only details;
-              existing rules are not automatically adopted by MCP.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea
-            className={
-              linkedLists.length
-                ? "routing-inspector-scroll h-[min(78vh,760px)] overflow-hidden"
-                : "routing-inspector-scroll h-[min(65vh,650px)] overflow-hidden"
-            }
-          >
-            {selected && linkedLists.length > 0 && (
-              <RoutingAddressBrowser
-                key={`${data.device}:${selected.section}:${selected.row[".id"]}`}
-                device={data.device}
-                references={[...new Set(linkedLists)]}
-                referenceFamily={selected.family === "IPv6" ? "ipv6" : "ipv4"}
-              />
+                <div className="flex flex-col gap-1.5 border-b border-border px-5 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="monitor-label flex-1">
+                      Inspect · {KIND[selected.section] ?? "rule"} #{selected.row["#"]}
+                    </span>
+                    <MonitorButton
+                      size="sm"
+                      variant="ghost"
+                      aria-label="Close"
+                      icon={<X />}
+                      onClick={() => setSelected(undefined)}
+                    />
+                  </div>
+                  <h3 className="font-mono text-[14px] font-medium break-words text-emphasis">
+                    {selectedSummary.match}
+                    {selectedSummary.target && ` → ${selectedSummary.target}`}
+                  </h3>
+                  <p className="text-[12px] text-muted-foreground">
+                    <span className="font-mono">{data.sections[selected.section].path}</span> ·{" "}
+                    {data.device} · read-only
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3 px-5 py-4">
+                  {linkedLists.length > 0 && (
+                    <RoutingAddressBrowser
+                      key={`${data.device}:${selected.section}:${selected.row[".id"]}`}
+                      device={data.device}
+                      references={linkedLists}
+                      referenceFamily={selected.family === "IPv6" ? "ipv6" : "ipv4"}
+                    />
+                  )}
+                  <div
+                    className={cn(
+                      "flex flex-col gap-2",
+                      linkedLists.length > 0 && "border-t border-border pt-3",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-expanded={fieldsOpen}
+                      onClick={() => setFieldsOpen((v) => !v)}
+                      className="flex cursor-pointer items-center gap-1.5 text-[13px] font-[510] text-foreground"
+                    >
+                      <ChevronRight
+                        aria-hidden="true"
+                        className={cn("size-4 transition-transform", fieldsOpen && "rotate-90")}
+                      />
+                      Router fields · {Object.keys(selected.row).length}
+                    </button>
+                    {fieldsOpen && (
+                      <dl className="monitor-facts grid-cols-[minmax(0,120px)_minmax(0,1fr)]">
+                        {Object.entries(selected.row).map(([key, value]) => (
+                          <div key={key} className="contents">
+                            <dt className="truncate font-mono text-[12px]">{key}</dt>
+                            <dd className="font-mono text-[12px] break-all">
+                              {value || "(empty)"}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </div>
+                </div>
+              </aside>
             )}
-            <details className="routing-entry-properties" open={!linkedLists.length}>
-              <summary>
-                Router fields · {selected ? Object.keys(selected.row).length : 0} properties
-              </summary>
-              <dl className="routing-detail">
-                {selected &&
-                  Object.entries(selected.row).map(([key, value]) => (
-                    <div key={key}>
-                      <dt>{key}</dt>
-                      <dd>{value || "(empty)"}</dd>
-                    </div>
-                  ))}
-              </dl>
-            </details>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-    </section>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

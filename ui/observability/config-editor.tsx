@@ -7,8 +7,8 @@ import { UnifiedDiff } from "./diff-view";
  * same `cfg`, so switching modes is lossless and the JSON always reflects the form.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
-import { Braces, LayoutGrid, X } from "lucide-react";
+import type { MutableRefObject, ReactNode } from "react";
+import { Braces, Clock, LayoutGrid, X } from "lucide-react";
 import { api, postJson } from "./api";
 import { ConfigForm, DevicesForm } from "./config-form";
 import { selectConfigScope, scopeConfigDraft } from "../../src/config-device-draft";
@@ -20,10 +20,20 @@ import { toast } from "./toast-action";
 import { testDeviceConnection } from "./config-connection";
 import { cn } from "@/lib/utils";
 import { ServiceProbesEditor } from "./service-probes-editor";
+import { MonitorButton, MonitorSelect, Segmented, StatusBadge } from "./monitoring-ui";
+import { diffKind } from "../shared/diff";
 
 type Cfg = Record<string, unknown>;
 const asObj = (v: unknown): Cfg =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Cfg) : {};
+
+/** The Devices board writes the revert window as "Revert in 60 s". */
+const REVERT_OPTIONS = [
+  { value: "30000", label: "Revert in 30 s" },
+  { value: "60000", label: "Revert in 60 s" },
+  { value: "120000", label: "Revert in 2 min" },
+  { value: "0", label: "No auto-revert" },
+];
 
 export type DeviceTest = { ok: boolean; pending: boolean; label: string; fingerprint: string };
 
@@ -34,6 +44,7 @@ export function ConfigEditor({
   scope = "server",
   initialSelection,
   original = initial,
+  closeRef,
 }: {
   initial: unknown;
   onClose: () => void;
@@ -41,6 +52,11 @@ export function ConfigEditor({
   scope?: ConfigScope;
   initialSelection?: { name: string; isNew: boolean };
   original?: unknown;
+  /**
+   * Set to the editor's guarded close (it asks before dropping a draft and
+   * refuses while a save is pending), so a host can put Close in its header.
+   */
+  closeRef?: MutableRefObject<(() => void) | null>;
 }): ReactNode {
   const [cfg, setCfg] = useState<Cfg>(() => asObj(initial));
   const [mode, setMode] = useState<"form" | "json">("form");
@@ -265,27 +281,394 @@ export function ConfigEditor({
       }}
       saveNotice={
         rollbackMs > 0
-          ? `Saves all pending device changes. Choose Keep changes within ${rollbackMs / 1000}s after saving, or they auto-revert.`
-          : "Saves all pending device changes without an auto-revert window."
+          ? `Connect & save tests again, then saves with a ${rollbackMs / 1000} s undo window.`
+          : "Connect & save tests again, then saves without an undo window."
       }
       initialSelection={selection}
       onCancelStandalone={selection ? onClose : undefined}
     />
   );
 
+  // Hand the host a guarded close: ask before dropping a draft, wait out a save.
+  useEffect(() => {
+    if (!closeRef) return;
+    closeRef.current = () => {
+      if (busy || pending) return;
+      if (dirty || jsonErr) setDiscard(true);
+      else onClose();
+    };
+  });
+
   // Quick add/edit needs the safe-apply state, not the inventory panel behind it.
   // Reveal the manager only after accepting a draft or a save needing confirmation.
   if (scope === "devices" && selection) return deviceForm;
 
+  if (scope === "devices") {
+    const locked = busy || !!pending;
+    const lines = (preview?.unified || "No differences.").replace(/\r\n/g, "\n").split("\n");
+    return (
+      <section className="monitor-panel dv-manage" aria-label="Manage routers">
+        <header className="monitor-panel-head">
+          <div className="min-w-0 flex-[1_1_260px]">
+            <h2 className="monitor-panel-title">Manage routers</h2>
+            <p className="monitor-panel-desc">
+              Edit the router list as a draft. Saving applies it, and it reverts unless you keep it.
+            </p>
+          </div>
+          <MonitorButton
+            size="sm"
+            variant="ghost"
+            disabled={locked}
+            onClick={() => (dirty || jsonErr ? setDiscard(true) : onClose())}
+          >
+            Close
+          </MonitorButton>
+        </header>
+
+        <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
+          <fieldset disabled={locked} className="contents">
+            <Segmented
+              label="Editor mode"
+              value={mode}
+              options={[
+                { value: "form", label: "Form" },
+                { value: "json", label: "JSON" },
+              ]}
+              onChange={(next) => {
+                if (next === "form") setJsonErr(null);
+                else setSelection(undefined);
+                setMode(next);
+              }}
+            />
+          </fieldset>
+          <StatusBadge tone={valid ? "good" : "bad"}>
+            {jsonErr
+              ? "Invalid JSON"
+              : errors.length
+                ? `${errors.length} schema issue${errors.length === 1 ? "" : "s"}`
+                : "Valid"}
+          </StatusBadge>
+          <span className="flex-1" />
+          <fieldset disabled={locked} className="contents">
+            <MonitorButton size="sm" disabled={testingAll} onClick={() => void testDevices()}>
+              {testingAll ? "Testing devices…" : "Test devices"}
+            </MonitorButton>
+            <MonitorButton size="sm" disabled={!valid} onClick={() => void doPreview()}>
+              Preview diff
+            </MonitorButton>
+            <MonitorSelect
+              label="Auto-revert window"
+              value={String(rollbackMs)}
+              onChange={(v) => setRollbackMs(Number(v))}
+              options={REVERT_OPTIONS}
+            />
+            <MonitorButton
+              size="sm"
+              variant="inverse"
+              disabled={!valid || testingAll}
+              onClick={() => void doSave()}
+            >
+              {busy ? "Working…" : "Save devices"}
+            </MonitorButton>
+          </fieldset>
+        </div>
+
+        {(discard || pending || msg) && (
+          <div className="flex flex-col gap-2 px-5 pb-4">
+            {discard && (
+              <div className="monitor-note items-center" data-tone="warn" role="alert">
+                <span className="flex-1">
+                  <b className="text-foreground font-[510]">Discard this unsaved draft?</b> No saved
+                  settings change.
+                </span>
+                <MonitorButton size="sm" variant="ghost" onClick={() => setDiscard(false)}>
+                  Continue editing
+                </MonitorButton>
+                <MonitorButton size="sm" variant="danger" onClick={onClose}>
+                  Discard draft
+                </MonitorButton>
+              </div>
+            )}
+            {pending && (
+              <div className="monitor-note items-center" data-tone="warn" role="status">
+                <Clock aria-hidden="true" className="text-warning" />
+                <span className="flex-1">
+                  <b className="text-foreground font-[510]">
+                    {(pending.rollbackMs ?? 0) > 0
+                      ? `Applied. Reverting in ${countdown} s unless you keep it.`
+                      : "Applied without an auto-revert window."}
+                  </b>
+                  {pending.devicesChanged &&
+                    " The router list changed, so reconnect your MCP client to see the new device names."}
+                </span>
+                <MonitorButton
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => void doRollback()}
+                >
+                  Revert now
+                </MonitorButton>
+                <MonitorButton
+                  size="sm"
+                  variant="inverse"
+                  disabled={busy}
+                  onClick={() => void doKeep()}
+                >
+                  Keep changes
+                </MonitorButton>
+              </div>
+            )}
+            {msg && (
+              <p role="status" className="text-muted-foreground text-[12px]">
+                {msg}
+              </p>
+            )}
+          </div>
+        )}
+
+        {(jsonErr || errors.length > 0) && (
+          <div className="flex flex-col gap-1 px-5 pb-4" role="alert">
+            {jsonErr ? (
+              <p className="monitor-err">JSON: {jsonErr}</p>
+            ) : (
+              errors.slice(0, 12).map((e, i) => (
+                <p className="monitor-err" key={i}>
+                  <code className="font-mono">{e.path}</code> · {e.message}
+                </p>
+              ))
+            )}
+          </div>
+        )}
+
+        <fieldset disabled={locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-70">
+          {mode === "form" ? (
+            deviceForm
+          ) : (
+            <div className="border-border flex flex-col gap-3 border-t px-5 py-4">
+              {Object.keys(tests).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(tests)
+                    .filter(
+                      ([name, r]) => r.fingerprint === JSON.stringify(asObj(cfg.devices)[name]),
+                    )
+                    .map(([name, r]) => (
+                      <StatusBadge key={name} tone={r.pending ? "default" : r.ok ? "good" : "bad"}>
+                        {name}: {r.label}
+                      </StatusBadge>
+                    ))}
+                </div>
+              )}
+              <JsonEditor
+                value={selectConfigScope(cfg, scope)}
+                onChange={(o) => change(asObj(scopeConfigDraft(o, cfg, scope)))}
+                onJsonError={setJsonErr}
+              />
+            </div>
+          )}
+        </fieldset>
+
+        {preview && (
+          <div className="border-border flex flex-col gap-2 border-t px-5 pt-4 pb-5">
+            <div className="flex items-center gap-2">
+              <span className="monitor-label flex-1">Diff against the saved config</span>
+              {preview.summary?.changed ? (
+                <>
+                  <span className="text-success font-mono text-[12px]">
+                    +{preview.summary.added}
+                  </span>
+                  <span className="text-destructive font-mono text-[12px]">
+                    −{preview.summary.removed}
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground text-[12px]">No changes</span>
+              )}
+              <MonitorButton
+                size="sm"
+                variant="ghost"
+                aria-label="Close preview"
+                icon={<X aria-hidden="true" />}
+                onClick={() => setPreview(null)}
+              />
+            </div>
+            <pre className="monitor-pre dv-diff" tabIndex={0} aria-label="Configuration diff">
+              {lines.map((line, i) => (
+                <span key={i} data-kind={diffKind(line)}>
+                  {line || " "}
+                </span>
+              ))}
+            </pre>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (scope === "serviceProbes") {
+    const locked = busy || !!pending;
+    const lines = (preview?.unified || "No differences.").replace(/\r\n/g, "\n").split("\n");
+    return (
+      <div className="flex flex-col">
+        <div className="border-border flex flex-wrap items-center gap-2 border-b px-6 py-3">
+          <fieldset disabled={locked} className="contents">
+            <Segmented
+              label="Editor"
+              value={mode}
+              options={[
+                { value: "form", label: "Form" },
+                { value: "json", label: "JSON" },
+              ]}
+              onChange={(next) => {
+                if (next === "form") setJsonErr(null);
+                else setSelection(undefined);
+                setMode(next);
+              }}
+            />
+          </fieldset>
+          <StatusBadge tone={valid ? "good" : "bad"}>
+            {jsonErr
+              ? "Invalid JSON"
+              : errors.length
+                ? `${errors.length} schema issue${errors.length === 1 ? "" : "s"}`
+                : "Valid"}
+          </StatusBadge>
+          <span className="flex-1" />
+          <fieldset disabled={locked} className="contents">
+            <MonitorButton size="sm" disabled={!valid} onClick={() => void doPreview()}>
+              Preview diff
+            </MonitorButton>
+            <MonitorSelect
+              label="Auto-revert window"
+              value={String(rollbackMs)}
+              onChange={(v) => setRollbackMs(Number(v))}
+              options={REVERT_OPTIONS}
+            />
+            <MonitorButton
+              size="sm"
+              variant="inverse"
+              disabled={!valid || testingAll}
+              onClick={() => void doSave()}
+            >
+              {busy ? "Working…" : "Save probes"}
+            </MonitorButton>
+          </fieldset>
+        </div>
+
+        <div className="monitor-dialog-body flex flex-col gap-4">
+          {discard && (
+            <div className="monitor-note items-center" data-tone="warn" role="alert">
+              <span className="flex-1">
+                <b className="text-foreground font-[510]">Discard this unsaved draft?</b> No saved
+                settings change.
+              </span>
+              <MonitorButton size="sm" variant="ghost" onClick={() => setDiscard(false)}>
+                Continue editing
+              </MonitorButton>
+              <MonitorButton size="sm" variant="danger" onClick={onClose}>
+                Discard draft
+              </MonitorButton>
+            </div>
+          )}
+          {pending && (
+            <div className="monitor-note items-center" data-tone="warn" role="status">
+              <Clock aria-hidden="true" className="text-warning" />
+              <span className="flex-1">
+                <b className="text-foreground font-[510]">
+                  {(pending.rollbackMs ?? 0) > 0
+                    ? `Applied. Reverting in ${countdown} s unless you keep it.`
+                    : "Applied without an auto-revert window."}
+                </b>
+              </span>
+              <MonitorButton
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void doRollback()}
+              >
+                Revert now
+              </MonitorButton>
+              <MonitorButton
+                size="sm"
+                variant="inverse"
+                disabled={busy}
+                onClick={() => void doKeep()}
+              >
+                Keep changes
+              </MonitorButton>
+            </div>
+          )}
+          {msg && (
+            <p role="status" className="text-muted-foreground text-[12px]">
+              {msg}
+            </p>
+          )}
+          {(jsonErr || errors.length > 0) && (
+            <div className="flex flex-col gap-1" role="alert">
+              {jsonErr ? (
+                <p className="monitor-err">JSON: {jsonErr}</p>
+              ) : (
+                errors.slice(0, 12).map((e, i) => (
+                  <p className="monitor-err" key={i}>
+                    <code className="font-mono">{e.path}</code> · {e.message}
+                  </p>
+                ))
+              )}
+            </div>
+          )}
+
+          <fieldset disabled={locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-70">
+            {mode === "form" ? (
+              <ServiceProbesEditor cfg={cfg} onChange={change} />
+            ) : (
+              <JsonEditor
+                value={selectConfigScope(cfg, scope)}
+                onChange={(o) => change(asObj(scopeConfigDraft(o, cfg, scope)))}
+                onJsonError={setJsonErr}
+              />
+            )}
+          </fieldset>
+
+          {preview && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="monitor-label flex-1">Diff against the saved config</span>
+                {preview.summary?.changed ? (
+                  <>
+                    <span className="text-success font-mono text-[12px]">
+                      +{preview.summary.added}
+                    </span>
+                    <span className="text-destructive font-mono text-[12px]">
+                      −{preview.summary.removed}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground text-[12px]">No changes</span>
+                )}
+                <MonitorButton
+                  size="sm"
+                  variant="ghost"
+                  aria-label="Close preview"
+                  icon={<X aria-hidden="true" />}
+                  onClick={() => setPreview(null)}
+                />
+              </div>
+              <pre className="monitor-pre dv-diff" tabIndex={0} aria-label="Configuration diff">
+                {lines.map((line, i) => (
+                  <span key={i} data-kind={diffKind(line)}>
+                    {line || " "}
+                  </span>
+                ))}
+              </pre>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3.5",
-        scope === "devices" && "device-config-editor devices-management",
-      )}
-      role={scope === "devices" ? "region" : undefined}
-      aria-label={scope === "devices" ? "Manage routers" : undefined}
-    >
+    <div className="flex flex-col gap-3.5">
       {scope === "server" && (
         <p className="text-xs text-muted-foreground">
           Router connections are managed on the{" "}
@@ -339,16 +722,6 @@ export function ConfigEditor({
               : "valid ✓"}
         </span>
         <span className="flex-1" />
-        {scope === "devices" && (
-          <Button
-            size="sm"
-            ghost
-            disabled={testingAll || busy || !!pending}
-            onClick={() => void testDevices()}
-          >
-            {testingAll ? "Testing devices…" : "Test devices"}
-          </Button>
-        )}
         <Button
           size="sm"
           ghost
@@ -371,13 +744,7 @@ export function ConfigEditor({
           onClick={() => void doSave()}
           disabled={!valid || !!pending || busy || testingAll}
         >
-          {busy
-            ? "Working…"
-            : scope === "devices"
-              ? "Save devices"
-              : scope === "serviceProbes"
-                ? "Save probes"
-                : "Save"}
+          {busy ? "Working…" : "Save"}
         </Button>
         <Button
           size="sm"
@@ -431,38 +798,12 @@ export function ConfigEditor({
         </div>
       )}
 
-      {mode === "json" && Object.keys(tests).length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {Object.entries(tests)
-            .filter(([name, r]) => r.fingerprint === JSON.stringify(asObj(cfg.devices)[name]))
-            .map(([name, r]) => (
-              <span
-                key={name}
-                className={cn(
-                  "rounded-full border px-2.5 py-1 font-mono text-[11px]",
-                  r.ok
-                    ? "border-success/40 text-success"
-                    : "border-destructive/40 text-destructive",
-                )}
-              >
-                {r.ok ? "●" : "○"} {name}: {r.label}
-              </span>
-            ))}
-        </div>
-      )}
-
       <fieldset
         disabled={busy || !!pending}
         className="min-w-0 border-0 p-0 m-0 disabled:opacity-70"
       >
         {mode === "form" ? (
-          scope === "devices" ? (
-            deviceForm
-          ) : scope === "serviceProbes" ? (
-            <ServiceProbesEditor cfg={cfg} onChange={change} />
-          ) : (
-            <ConfigForm cfg={cfg} onChange={change} />
-          )
+          <ConfigForm cfg={cfg} onChange={change} />
         ) : (
           <JsonEditor
             value={selectConfigScope(cfg, scope)}

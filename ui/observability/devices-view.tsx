@@ -1,32 +1,39 @@
-import { LoadingState } from "./loading-state";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  Activity,
-  ArrowDown,
-  CircleHelp,
-  Network,
-  Search,
-  Server,
-  WifiOff,
-  Plus,
-  Settings2,
-  LoaderCircle,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ConnectivityGraph } from "./connectivity";
-import { DeviceCard } from "./device-card";
-import type { DeviceActions } from "./device-card";
+import { Plus, Search, Server } from "lucide-react";
+import { LoadingState } from "./loading-state";
+import { ManagementPaths } from "./connectivity";
+import { PhoneRouterRow, RouterDetails, RouterRow, clockTime, deviceState } from "./device-card";
+import type { DeviceActions, DeviceBusy } from "./device-card";
 import { SSHPoolPanel } from "./ssh-pool";
 import { ConfigEditor } from "./config-editor";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorEmpty,
+  MonitorPanel,
+  MonitorSearch,
+  PageIntro,
+  Segmented,
+  formatMs,
+  useStaggerIn,
+} from "./monitoring-ui";
 import { api } from "./api";
+import { num } from "./format";
 import { addDevice } from "../../src/config-device-draft";
 import type { CapabilitiesJson, DevicesPayload, SSHPoolPayload } from "./types";
 
 type DeviceFilter = "all" | "online" | "offline" | "pending" | "disabled";
 
-/** A cached fleet overview. Only the explicit per-device actions contact a router. */
+/** "edge-02 is offline", "edge-02 and lab-chr are offline", "3 routers are offline". */
+function offlineLine(names: string[]): string {
+  if (names.length === 1) return `${names[0]} is offline`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are offline`;
+  return `${names.length} routers are offline`;
+}
+
+/** The router fleet: management paths, the Routers table with details, and the SSH pool. */
 export function DevicesView({
   payload,
   pulses,
@@ -47,6 +54,10 @@ export function DevicesView({
 }): ReactNode {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<DeviceFilter>("all");
+  // undefined: nothing chosen yet, so the first router is open; null: closed.
+  const [picked, setPicked] = useState<string | null | undefined>(undefined);
+  const [busy, setBusy] = useState<Record<string, DeviceBusy>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   type Request = { name?: string; add?: boolean; seed?: NonNullable<typeof seed> };
   const [request, setRequest] = useState<Request | null>(() => (seed ? { seed } : null));
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +96,7 @@ export function DevicesView({
           selection = { name: added.name, isNew: true };
         } else if (request.name) {
           if (!Object.hasOwn(devices, request.name))
-            throw new Error("This router is no longer configured. Refresh the device directory.");
+            throw new Error("This router is no longer configured. Refresh the router list.");
           selection = { name: request.name, isNew: false };
         }
         setEditor({ initial, original, selection });
@@ -96,53 +107,11 @@ export function DevicesView({
       });
     return () => controller.abort();
   }, [request]);
-  const management = (
-    <>
-      {error && (
-        <div className="devices-management-error" role="alert">
-          <span>{error}</span>
-          <Button variant="outline" size="sm" onClick={() => openManager({ ...request })}>
-            Retry settings
-          </Button>
-        </div>
-      )}
-      {editor && (
-        <ConfigEditor
-          scope="devices"
-          initial={editor.initial}
-          original={editor.original}
-          initialSelection={editor.selection}
-          onClose={() => {
-            setEditor(null);
-            setRequest(null);
-            onSeedConsumed?.();
-          }}
-          onReload={() => onReload?.()}
-        />
-      )}
-    </>
-  );
-  const controls = (
-    <div className="fleet-brief__actions">
-      <Button size="sm" disabled={loading || !!editor} onClick={() => openManager({ add: true })}>
-        <Plus size={15} />
-        Add device
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={loading || !!editor}
-        onClick={() => openManager({})}
-      >
-        {loading ? <LoaderCircle size={15} className="animate-spin" /> : <Settings2 size={15} />}{" "}
-        {loading ? "Loading settings…" : "Manage routers"}
-      </Button>
-    </div>
-  );
+
   const list = payload?.devices ?? [];
   const counts = {
     all: list.length,
-    online: list.filter((d) => d.status.reachable === true).length,
+    online: list.filter((d) => deviceState(d) === "online").length,
     offline: list.filter((d) => d.status.reachable === false).length,
     pending: list.filter((d) => d.status.reachable == null).length,
     disabled: list.filter((d) => d.disabled).length,
@@ -172,202 +141,330 @@ export function DevicesView({
     setQuery("");
     setFilter("all");
   };
+  const selectedName = picked === undefined ? (list[0]?.name ?? null) : picked;
+  const selected = shown.find((d) => d.name === selectedName) ?? null;
+  const rowsRef = useRef<HTMLDivElement>(null);
+  useStaggerIn(rowsRef, ".monitor-row", `${filter}|${query.trim()}|${list.length > 0}`);
 
-  if (!payload)
-    return (
-      <section className="devices-workspace">
-        <LoadingState label="Loading router fleet" layout="cards" />
-        <section className="devices-empty" role="status">
-          <Server aria-hidden="true" />
-          <h2>Waiting for device data</h2>
-          <p>The fleet has not loaded yet. Use Refresh data above to retry.</p>
-          {controls}
-        </section>
-        {management}
-      </section>
-    );
-  if (!list.length)
-    return (
-      <section className="devices-workspace">
-        <section className="devices-empty">
-          <Network aria-hidden="true" />
-          <h2>Your fleet starts here</h2>
-          <p>
-            Add your first router here to see its connection, system resources and tool activity.
-          </p>
-          {controls}
-        </section>
-        {management}
-      </section>
-    );
+  const runAction = async (name: string, kind: DeviceBusy) => {
+    if (busy[name]) return;
+    const action =
+      kind === "test"
+        ? actions.onTest
+        : kind === "reconnect"
+          ? actions.onReconnect
+          : actions.onProbeCapabilities;
+    if (!action) return;
+    setBusy((b) => ({ ...b, [name]: kind }));
+    setErrors(({ [name]: _old, ...rest }) => rest);
+    try {
+      await action(name);
+    } catch {
+      setErrors((e) => ({
+        ...e,
+        [name]: `Could not ${kind === "capabilities" ? "probe capabilities on" : kind} ${name}. Try again.`,
+      }));
+    } finally {
+      setBusy(({ [name]: _done, ...rest }) => rest);
+    }
+  };
 
-  return (
-    <section className="devices-workspace">
-      <header className="fleet-brief">
-        <div className="fleet-brief__intro">
-          <span className="devices-eyebrow">
-            <Network size={13} /> FLEET AT A GLANCE
-          </span>
-          <h2>
-            Every router.
-            <br />
-            <span>One clear picture.</span>
-          </h2>
-          <p>
-            Last known reachability, resources and connections.
-            <br />
-            Test a device when you need a fresh reading.
-          </p>
-          {controls}
-          <a
-            className="fleet-brief__link"
-            href="#device-inventory"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById("device-inventory")?.scrollIntoView({ block: "start" });
-            }}
-          >
-            Explore {counts.all} devices <ArrowDown size={14} />
-          </a>
-        </div>
-        <div className="fleet-brief__readings">
-          <div className="fleet-brief__headline">
-            <strong>
-              {counts.online}
-              <span> / {counts.all}</span>
-            </strong>
-            <span>
-              routers reachable
-              <br />
-              at their last check
-            </span>
-          </div>
-          <div
-            className="fleet-availability"
-            aria-label={`${counts.online} online, ${counts.offline} offline, ${counts.pending} awaiting a check`}
-          >
-            {(["online", "offline", "pending"] as const).map(
-              (state) =>
-                counts[state] > 0 && (
-                  <span key={state} data-state={state} style={{ flex: counts[state] }} />
-                ),
-            )}
-          </div>
-          <div className="fleet-brief__counts">
-            <span data-state="online">
-              <Activity size={14} />
-              <b>{counts.online}</b> Online
-            </span>
-            <span data-state="offline">
-              <WifiOff size={14} />
-              <b>{counts.offline}</b> Offline
-            </span>
-            <span>
-              <CircleHelp size={14} />
-              <b>{counts.pending}</b> Unchecked
-            </span>
-          </div>
-          <p>
-            {counts.disabled > 0
-              ? `${counts.disabled} disabled in MCP · saved check results are retained.`
-              : "Management reachability is separate from client internet access."}
-          </p>
-        </div>
-      </header>
-      {management}
+  const offline = list.filter((d) => d.status.reachable === false && !d.disabled);
+  const checked = list.map((d) => d.status.checkedAt ?? 0).filter((t) => t > 0);
+  const lastCheck = checked.length ? Math.max(...checked) : null;
+  const calls = list.reduce((n, d) => n + d.activity.calls, 0);
+  const failed = list.reduce((n, d) => n + d.activity.errors, 0);
+  const avg = calls
+    ? list.reduce((n, d) => n + d.activity.avgMs * d.activity.calls, 0) / calls
+    : null;
+  const agg = pool?.aggregate;
 
-      {/* Preserve the existing radar, its dimensions and its fleet-wide input. */}
-      <details className="bg-card reveal rounded-lg border p-4" open={counts.all <= 8}>
-        <summary className="cursor-pointer text-sm font-medium">
-          Connectivity radar
-          <span className="text-muted-foreground text-[11px]">
-            {" "}
-            · {counts.online} online · {counts.offline} offline · {counts.all} total
-          </span>
-        </summary>
-        <ConnectivityGraph payload={payload} pulses={pulses} />
-      </details>
-
-      <section
-        className="device-inventory"
-        id="device-inventory"
-        aria-labelledby="device-inventory-title"
+  const controls = (
+    <>
+      <MonitorButton
+        size="sm"
+        disabled={loading || !!editor}
+        aria-pressed={!!editor && !editor.selection ? true : undefined}
+        onClick={() => openManager({})}
       >
-        <header className="device-inventory__heading">
-          <div>
-            <span className="devices-eyebrow">YOUR INFRASTRUCTURE</span>
-            <h2 id="device-inventory-title">
-              Device directory <span>{counts.all}</span>
-            </h2>
-          </div>
-          <span className="devices-caption">Connection → resources → actions</span>
-        </header>
-        <div className="device-inventory__toolbar">
-          <Input
-            type="search"
-            aria-label="Search devices"
-            placeholder="Search name, address or hardware…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div className="device-filters" role="group" aria-label="Filter devices by status">
-            {(
-              [
-                ["all", "All"],
-                ["online", "Online"],
-                ["offline", "Offline"],
-                ["pending", "Unchecked"],
-                ["disabled", "Disabled"],
-              ] as const
-            ).map(([value, label]) => (
-              <Button
-                key={value}
-                size="sm"
-                variant="ghost"
-                aria-pressed={filter === value}
-                onClick={() => setFilter(value)}
-              >
-                {label}
-                <span>{counts[value]}</span>
-              </Button>
-            ))}
-          </div>
+        {loading && !request?.add && !request?.seed ? "Loading settings…" : "Manage routers"}
+      </MonitorButton>
+      <MonitorButton
+        size="sm"
+        variant="inverse"
+        icon={<Plus aria-hidden="true" />}
+        disabled={loading || !!editor}
+        onClick={() => openManager({ add: true })}
+      >
+        Add device
+      </MonitorButton>
+    </>
+  );
+  const intro = (
+    <PageIntro
+      tone={!list.length ? undefined : offline.length ? "warn" : counts.online ? "good" : "default"}
+      title={
+        list.length ? (
+          <span>
+            <b>
+              {counts.online} of {counts.all} routers reachable
+            </b>
+            {offline.length > 0 && (
+              <span className="max-sm:hidden"> · {offlineLine(offline.map((d) => d.name))}</span>
+            )}
+          </span>
+        ) : undefined
+      }
+      controls={controls}
+    >
+      <span className={offline.length ? "max-sm:hidden" : undefined}>
+        Your routers, how MCP reaches them, and what each one reported at its last check.
+      </span>
+      {offline.length > 0 && (
+        <span className="sm:hidden">{offlineLine(offline.map((d) => d.name))}.</span>
+      )}
+    </PageIntro>
+  );
+  const management = (
+    <>
+      {error && (
+        <div className="monitor-note items-center" data-tone="bad" role="alert">
+          <span className="flex-1">{error}</span>
+          <MonitorButton size="sm" onClick={() => openManager({ ...request })}>
+            Retry settings
+          </MonitorButton>
         </div>
-        <div className="device-inventory__count" role="status">
-          {shown.length} of {counts.all} devices
-          {(query || filter !== "all") && (
-            <Button variant="ghost" size="xs" onClick={clear}>
-              Clear filters
-            </Button>
-          )}
-        </div>
-        {shown.length ? (
-          <div className="device-directory">
-            {shown.map((d) => (
-              <DeviceCard
-                key={d.name}
-                d={d}
-                allNames={list.map((x) => x.name)}
-                capabilities={capabilities[d.name] ?? null}
-                {...actions}
-                onManage={editor || loading ? undefined : (name) => openManager({ name })}
-              />
-            ))}
-          </div>
+      )}
+      {editor && (
+        <ConfigEditor
+          scope="devices"
+          initial={editor.initial}
+          original={editor.original}
+          initialSelection={editor.selection}
+          onClose={() => {
+            setEditor(null);
+            setRequest(null);
+            onSeedConsumed?.();
+          }}
+          onReload={() => onReload?.()}
+        />
+      )}
+    </>
+  );
+
+  if (!payload || !list.length)
+    return (
+      <section className="dv grid content-start gap-6">
+        {intro}
+        {management}
+        {!payload ? (
+          <>
+            <LoadingState label="Loading router list" layout="cards" />
+            <MonitorEmpty icon={<Server />} title="Waiting for device data">
+              The router list has not loaded yet. It refreshes every few seconds.
+            </MonitorEmpty>
+          </>
         ) : (
-          <div className="devices-empty">
-            <Search aria-hidden="true" />
-            <h3>No devices match</h3>
-            <p>Try another name, address or status.</p>
-            <Button variant="outline" size="sm" onClick={clear}>
-              Clear filters
-            </Button>
-          </div>
+          <MonitorEmpty icon={<Server />} title="No routers yet">
+            Add your first router to see its connection, resources and tool activity.
+          </MonitorEmpty>
         )}
       </section>
+    );
 
-      {/* Pool totals always describe the whole fleet, not the filtered directory. */}
-      <SSHPoolPanel devices={list} poolPayload={pool} />
+  const details = (phone: boolean) =>
+    selected && (
+      <RouterDetails
+        d={selected}
+        phone={phone}
+        capabilities={capabilities[selected.name] ?? null}
+        busy={busy[selected.name] ?? null}
+        error={errors[selected.name] ?? null}
+        onClose={() => setPicked(null)}
+        onAction={(kind) => void runAction(selected.name, kind)}
+        onToggle={actions.onToggle}
+        onManage={editor || loading ? undefined : (name) => openManager({ name })}
+        canTest={!!actions.onTest}
+        canReconnect={!!actions.onReconnect}
+        canProbe={!!actions.onProbeCapabilities}
+      />
+    );
+  const filters: { value: DeviceFilter; label: string }[] = [
+    { value: "all", label: `All ${counts.all}` },
+    { value: "online", label: `Online ${counts.online}` },
+    { value: "offline", label: `Offline ${counts.offline}` },
+    { value: "pending", label: `Unchecked ${counts.pending}` },
+    { value: "disabled", label: `Disabled ${counts.disabled}` },
+  ];
+
+  return (
+    <section className="dv grid content-start gap-6">
+      {intro}
+      {management}
+      <div className="dv-overview contents">
+        <MetricStrip label="Router metrics" minCell={170} className="dv-strip">
+          <Metric
+            label="Reachable"
+            primary
+            value={
+              <>
+                {counts.online}
+                <span className="dv-of text-muted-foreground"> / {counts.all}</span>
+              </>
+            }
+            hint="at the last check"
+          />
+          <Metric
+            label="Offline"
+            tone={offline.length ? "bad" : "default"}
+            value={offline.length}
+            hint={
+              offline.length === 1 ? (
+                <>
+                  {offline[0].name}
+                  {offline[0].status.error && (
+                    <span className="max-sm:hidden"> · {offline[0].status.error}</span>
+                  )}
+                </>
+              ) : offline.length ? (
+                "routers not reachable"
+              ) : (
+                "none"
+              )
+            }
+          />
+          <Metric
+            label="Recent tool calls"
+            value={num(calls)}
+            hint={failed ? `${num(failed)} failed` : "no failures"}
+          />
+          <div className="dv-avg contents">
+            <Metric
+              label="Average call"
+              value={avg != null ? formatMs(avg) : "—"}
+              hint="across all routers"
+            />
+          </div>
+          <Metric
+            label="SSH pool"
+            value={agg ? `${num(agg.totalConnections)} open` : "—"}
+            hint={
+              agg
+                ? `${num(agg.totalBusy)} busy · ${num(agg.totalIdle)} idle`
+                : pool?.enabled === false
+                  ? "pooling off"
+                  : "not reported"
+            }
+          />
+        </MetricStrip>
+
+        <MonitorPanel
+          className="dv-paths-panel"
+          title="How MCP reaches each router"
+          description="Management path only, not your clients' traffic. A line lights up while a call runs."
+          extra={
+            <div className="text-muted-foreground flex flex-wrap gap-4 text-[12px]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="bg-chart-1 h-0.5 w-4" />
+                Direct SSH
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="border-chart-1 w-4 border-t-2 border-dashed" />
+                Through a jump host
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="dv-legend-dot w-4 border-t-2 border-dotted" />
+                MAC-Telnet (layer 2)
+              </span>
+            </div>
+          }
+        >
+          <ManagementPaths devices={list} pulses={pulses} />
+        </MonitorPanel>
+
+        <section className="monitor-panel dv-routers" aria-labelledby="dv-routers-title">
+          <div className="dv-toolbar">
+            <h2 id="dv-routers-title" className="mr-2 text-[14px] font-[590]">
+              Routers
+            </h2>
+            <MonitorSearch
+              className="dv-search"
+              value={query}
+              onChange={setQuery}
+              label="Search devices"
+              placeholder="Search name, address or hardware"
+            />
+            <Segmented
+              className="dv-seg"
+              label="Show"
+              value={filter}
+              options={filters}
+              onChange={setFilter}
+            />
+          </div>
+          <div ref={rowsRef} className="border-border border-t">
+            {shown.length ? (
+              <>
+                <div className="min-w-0 overflow-x-auto max-sm:hidden">
+                  <div className="monitor-thead dv-cols border-t-0">
+                    <span>Router</span>
+                    <span>Address</span>
+                    <span>CPU</span>
+                    <span>Memory</span>
+                    <span className="text-right">Latency</span>
+                    <span className="text-right">Calls</span>
+                  </div>
+                  {shown.map((d) => (
+                    <RouterRow
+                      key={d.name}
+                      d={d}
+                      capabilities={capabilities[d.name] ?? null}
+                      selected={selected?.name === d.name}
+                      onSelect={() => setPicked(d.name)}
+                    />
+                  ))}
+                  <div className="monitor-row text-muted-foreground grid-cols-[1fr_auto] text-[12px]">
+                    <span>
+                      {lastCheck ? `Last check ${clockTime(lastCheck)} · ` : ""}checks run every 30
+                      s
+                    </span>
+                  </div>
+                </div>
+                <div className="sm:hidden">
+                  {shown.map((d) => (
+                    <PhoneRouterRow
+                      key={d.name}
+                      d={d}
+                      capabilities={capabilities[d.name] ?? null}
+                      selected={selected?.name === d.name}
+                      onSelect={() => setPicked(d.name)}
+                    />
+                  ))}
+                </div>
+                <div className="max-sm:hidden">{details(false)}</div>
+              </>
+            ) : (
+              <MonitorEmpty
+                compact
+                icon={<Search />}
+                title="No routers match"
+                action={
+                  <MonitorButton size="sm" onClick={clear}>
+                    Clear filters
+                  </MonitorButton>
+                }
+              >
+                Try another name, address or status.
+              </MonitorEmpty>
+            )}
+          </div>
+        </section>
+
+        {shown.length > 0 && <div className="min-w-0 sm:hidden">{details(true)}</div>}
+
+        {/* Pool totals always describe the whole fleet, not the filtered table. */}
+        <SSHPoolPanel devices={list} poolPayload={pool} />
+      </div>
     </section>
   );
 }

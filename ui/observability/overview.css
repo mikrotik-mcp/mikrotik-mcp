@@ -1,0 +1,136 @@
+/*
+ * Overview on a phone, from the "Overview · phone" board (Overview-Phone.dc.html).
+ * Unlayered on purpose: these phone-only rules must win over the desktop
+ * utility classes on the same elements.
+ */
+.overview-risk-strip,
+.overview-legend-phone {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .overview {
+    gap: 16px;
+  }
+  .overview .monitor-status {
+    margin-top: 0;
+    font-weight: 590;
+  }
+  .overview .monitor-lead {
+    font-size: 13px;
+  }
+
+  /* Time window: one full-width bar of 36px buttons. */
+  .overview .monitor-head-controls,
+  .overview .monitor-seg {
+    display: flex;
+    width: 100%;
+  }
+  .overview .monitor-seg-item {
+    height: 36px;
+    flex: 1;
+  }
+
+  /* KPI strip: two columns, tighter cells. */
+  .overview .monitor-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .overview .monitor-metric {
+    padding: 12px 14px;
+  }
+  .overview .monitor-metric-value {
+    font-size: 20px;
+  }
+  .overview .monitor-metric[data-primary] .monitor-metric-value {
+    font-size: 24px;
+    line-height: 30px;
+  }
+
+  /* Order from the phone board: chart, failures, tools, risk mix. */
+  .overview-row {
+    display: contents;
+  }
+  .overview-calls {
+    order: 1;
+  }
+  .overview-failures {
+    order: 2;
+  }
+  .overview-tools {
+    order: 3;
+  }
+  .overview-risk {
+    order: 4;
+  }
+  .overview-devices {
+    display: none;
+  }
+  .overview .monitor-panel-head {
+    padding: 14px 16px 10px;
+  }
+  .overview .monitor-panel-body {
+    padding: 0 16px 16px;
+  }
+
+  /* Calls over time: shorter chart, legend under it. */
+  .overview-calls .monitor-panel-extra {
+    display: none;
+  }
+  .overview-calls svg {
+    height: 150px;
+  }
+  .overview-legend-phone {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+
+  /* Recent failures: taller touch rows. */
+  .overview-failures .monitor-row {
+    min-height: 56px;
+    grid-template-columns: 44px minmax(0, 1fr);
+    padding: 12px 16px;
+  }
+  .overview-failures .monitor-foot {
+    display: none;
+  }
+
+  /* Top tools: name over its bar, count on the right. */
+  .overview-tools .monitor-thead,
+  .overview-tool-p95 {
+    display: none;
+  }
+  .overview-tool-row {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 6px;
+    padding: 10px 16px;
+  }
+  .overview-tool-name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .overview-tool-bar {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .overview-tool-count {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  /* Risk mix: stacked bar and a 2x2 legend instead of the donut. */
+  .overview-donut,
+  .overview-live-split {
+    display: none;
+  }
+  .overview-risk-strip {
+    display: flex;
+  }
+  .overview-tools .monitor-panel-extra,
+  .overview-failures .monitor-panel-desc,
+  .overview-risk .monitor-panel-desc {
+    display: none;
+  }
+}

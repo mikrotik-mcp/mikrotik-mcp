@@ -1,0 +1,69 @@
+/* Service Routing page. Tokens only; layout lives in Tailwind utilities. */
+@layer theme, base, components, utilities;
+
+@layer components {
+  /* Gateway chips in the Routes table. The markup stays plain (tests pin it). */
+  .routing-gateway {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .routing-gateway__member,
+  .sr-gw > code {
+    align-self: flex-start;
+    display: inline-flex;
+    max-width: 100%;
+    height: 20px;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--accent);
+    padding: 0 6px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 510;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .routing-gateway__interface {
+    color: var(--muted-foreground);
+  }
+}
+
+/*
+ * Unlayered: these refine shared pieces this page does not own.
+ * IpNetwork (ip-network.tsx) draws an icon and an 11px label; the boards show
+ * the network name as plain 12px secondary text.
+ */
+.sr-net [aria-label^="Network for"] svg {
+  display: none;
+}
+.sr-net [aria-label^="Network for"],
+.sr-net [aria-label^="Network for"] span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.monitor-chip.sr-net [aria-label^="Network for"],
+.monitor-chip.sr-net [aria-label^="Network for"] span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/* Phones: the policy list and the inspector stack above and below the content. */
+@media (max-width: 639px) {
+  .service-routing .sr-policy-list {
+    max-width: none;
+    flex-basis: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .service-routing .sr-inspect {
+    max-width: none;
+    flex-basis: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}

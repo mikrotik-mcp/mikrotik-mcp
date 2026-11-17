@@ -1,99 +1,79 @@
-import { Globe2, Plus, Star, Trash2 } from "lucide-react";
-import { Input } from "@/components/beui/registry/components/motion/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "./geist";
-import { IpNetwork } from "./ip-network";
-import "./device-addresses.css";
+import { Plus, X } from "lucide-react";
+import { MonitorButton } from "./monitoring-ui";
 
-/** Preserve host as the canonical Primary; the rest are ordered fallbacks. */
+/** Keep host as the canonical primary; the rest are fallbacks, tried in order. */
 export function DeviceAddressesEditor({
   host,
   fallbackHosts,
   onChange,
+  invalid = false,
 }: {
   host: string;
   fallbackHosts: string[];
   onChange: (host: string, fallbackHosts: string[]) => void;
+  invalid?: boolean;
 }) {
   const hosts = [host, ...fallbackHosts];
   const change = (next: string[]) => onChange(next[0], next.slice(1));
   return (
-    <section className="device-addresses" aria-label="Management addresses">
-      <header>
-        <div>
-          <Globe2 size={18} />
-          <strong>One router. Multiple ways in.</strong>
-        </div>
-        <span className="device-addresses__auto">Automatic failover</span>
-      </header>
-      <p>
-        Add internal, VPN or public static IPs belonging to this same router. A successful IP is
-        remembered for 5 minutes; otherwise Primary is tried first, then alternatives.
-      </p>
-      <ScrollArea
-        className="device-addresses__scroll"
-        viewportProps={{
-          "aria-label": "Management address list",
-          className: "device-addresses__viewport",
-        }}
-      >
-        <div className="device-addresses__list">
-          {hosts.map((value, index) => (
-            <div className="device-addresses__row" data-primary={index === 0} key={index}>
-              <span className="device-addresses__order">{String(index + 1).padStart(2, "0")}</span>
-              <div className="grid min-w-0 gap-1">
-                <Input
-                  id={index === 0 ? "f_host" : `f_fallback_${index}`}
-                  aria-label={index === 0 ? "Host / IP" : `Alternate IP ${index}`}
-                  value={value}
-                  placeholder={index === 0 ? "192.168.88.1" : "203.0.113.10 or IPv6"}
-                  onChange={(v) => change(hosts.map((h, i) => (i === index ? v.trim() : h)))}
-                  autoComplete="off"
-                  spellCheck={false}
-                  classNames={{ field: "rounded-lg", input: "font-mono text-sm" }}
-                />
-                <IpNetwork address={value} />
-              </div>
-              <button
-                type="button"
-                className="device-addresses__primary"
-                aria-label={
-                  index === 0
-                    ? "Primary address"
-                    : `Make ${value || `address ${index + 1}`} primary`
-                }
-                aria-pressed={index === 0}
+    <>
+      <div className="dv-addr-box" role="group" aria-label="Management addresses">
+        {hosts.map((value, index) => (
+          <div className="dv-addr-row" data-primary={index === 0} key={index}>
+            <span className="text-muted-foreground w-4 flex-none font-mono text-[11px]">
+              {index + 1}
+            </span>
+            <input
+              id={index === 0 ? "f_host" : `f_fallback_${index}`}
+              className="monitor-input h-8 flex-1 font-mono"
+              aria-label={index === 0 ? "Host / IP" : `Alternate IP ${index}`}
+              aria-invalid={invalid && !value.trim() ? true : undefined}
+              value={value}
+              placeholder={index === 0 ? "192.168.88.1" : "203.0.113.10 or IPv6"}
+              onChange={(e) =>
+                change(hosts.map((h, i) => (i === index ? e.target.value.trim() : h)))
+              }
+              autoComplete="off"
+              spellCheck={false}
+              dir="ltr"
+            />
+            {index === 0 ? (
+              <span className="monitor-chip">Primary</span>
+            ) : (
+              <MonitorButton
+                size="sm"
+                variant="ghost"
+                aria-label={`Make ${value || `address ${index + 1}`} primary`}
                 disabled={!value.trim()}
                 onClick={() => change([value, ...hosts.filter((_, i) => i !== index)])}
               >
-                <Star size={14} fill={index === 0 ? "currentColor" : "none"} />
-                <span>{index === 0 ? "Primary" : "Set primary"}</span>
-              </button>
-              <button
-                type="button"
-                className="device-addresses__remove"
-                aria-label={`Remove address ${index + 1}`}
-                disabled={hosts.length === 1}
-                onClick={() => change(hosts.filter((_, i) => i !== index))}
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
-      <footer>
-        <Button
+                Set primary
+              </MonitorButton>
+            )}
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              aria-label={`Remove ${value || `address ${index + 1}`}`}
+              disabled={hosts.length === 1}
+              icon={<X aria-hidden="true" />}
+              onClick={() => change(hosts.filter((_, i) => i !== index))}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <MonitorButton
           size="sm"
-          ghost
+          variant="ghost"
+          className="pl-0"
           disabled={hosts.length >= 8}
+          icon={<Plus aria-hidden="true" />}
           onClick={() => change([...hosts, ""])}
-          icon={<Plus size={14} />}
         >
           Add address
-        </Button>
-        <span>{hosts.length} / 8 addresses · shared credentials & ports</span>
-      </footer>
-    </section>
+        </MonitorButton>
+        <span className="monitor-hint flex-1 text-right">Up to 8. MCP tries them in order.</span>
+      </div>
+    </>
   );
 }

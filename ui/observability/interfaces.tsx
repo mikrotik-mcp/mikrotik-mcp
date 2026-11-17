@@ -1,120 +1,221 @@
+import "./interfaces.css";
 import { LoadingState } from "./loading-state";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { AlertTriangle, Loader2, Pause, Play, RefreshCw, Server } from "lucide-react";
 import {
-  Activity,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Cable,
-  Network,
-  Pause,
-  Play,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-} from "lucide-react";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { useReducedMotion } from "motion/react";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./components/ui/chart";
-import { AnimatedBadge } from "./components/beui/registry/components/motion/animated-badge";
-import { Badge, Button, Card, Input, Note, Select, Spinner } from "./geist";
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorEmpty,
+  MonitorSearch,
+  MonitorSelect,
+  PageIntro,
+  RouterPicker,
+  StatusBadge,
+  StatusDot,
+  formatBytes,
+  useStaggerIn,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
 import { api, withToken } from "./api";
-import { bytes, clock } from "./format";
+import { clock } from "./format";
 import type { DevicesPayload } from "./types";
 import type { InterfaceSample, InterfaceStats } from "../../src/observability/interface-stats";
 
 type Point = { ts: number; rx: number | null; tx: number | null };
-const SERIES = {
-  rx: { label: "RX · received", color: "var(--chart-2)" },
-  tx: { label: "TX · sent", color: "var(--chart-1)" },
-};
-const rate = (value: number | null) => {
-  if (value == null) return "—";
-  const scale = value >= 1e9 ? 1e9 : value >= 1e6 ? 1e6 : value >= 1e3 ? 1e3 : 1;
-  return `${(value / scale).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${scale === 1e9 ? "Gbps" : scale === 1e6 ? "Mbps" : scale === 1e3 ? "kbps" : "bps"}`;
-};
-const count = (value: number | null) =>
-  value == null ? "—" : value.toLocaleString(undefined, { maximumFractionDigits: 0 });
-const total = (value: number | null) => (value == null ? "—" : bytes(value));
-const stateLabel = (row: InterfaceStats) =>
-  row.disabled ? "Disabled" : row.running ? "Running" : "Link down";
 
-function TrafficGraph({ points, small = false }: { points: Point[]; small?: boolean }) {
+const PAGE = 24;
+const LEAD =
+  "Every port, bridge and tunnel on one router, with live traffic and counters. Read-only.";
+/** The table's columns, from the board. */
+const COLS = "grid-cols-[minmax(200px,1.6fr)_88px_96px_96px_128px_64px]";
+
+/** Bits per second the way the board writes them: "386 Mbps", "42.7 Mbps", "1.20 Gbps". */
+const rate = (b: number | null): string => {
+  if (b == null) return "—";
+  if (b >= 1e9) return `${(b / 1e9).toFixed(2)} Gbps`;
+  if (b >= 1e6) return `${b >= 1e8 ? Math.round(b / 1e6) : (b / 1e6).toFixed(1)} Mbps`;
+  if (b >= 1e3) return `${Math.round(b / 1e3)} kbps`;
+  return `${Math.round(b)} bps`;
+};
+const count = (value: number | null): string =>
+  value == null ? "—" : value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+/** Large packet counts: "1.31 B", "402 M". */
+const compact = (value: number | null): string => {
+  if (value == null) return "—";
+  if (value >= 1e9) return `${(value / 1e9).toPrecision(3)} B`;
+  if (value >= 1e6) return `${(value / 1e6).toPrecision(3)} M`;
+  return count(value);
+};
+const pair = (a: string, b: string): string => (a === "—" && b === "—" ? "—" : `${a} · ${b}`);
+/** Byte totals to three figures: "1.84 TB", "212 GB". */
+const total = (value: number | null): string => {
+  if (value == null) return "—";
+  if (value < 1000) return formatBytes(value);
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  const i = Math.min(units.length - 1, Math.floor(Math.log10(value) / 3));
+  return `${Number((value / 1000 ** i).toPrecision(3))} ${units[i]}`;
+};
+const stateLabel = (row: InterfaceStats): string =>
+  row.disabled ? "Disabled" : row.running ? "Running" : "Link down";
+const stateTone = (row: InterfaceStats): Tone =>
+  row.disabled ? "default" : row.running ? "good" : "warn";
+
+/** Axis label: "0", "100M", "2.5G". */
+const axis = (v: number): string => {
+  if (v === 0) return "0";
+  if (v >= 1e9) return `${+(v / 1e9).toFixed(1)}G`;
+  if (v >= 1e6) return `${+(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${+(v / 1e3).toFixed(1)}k`;
+  return String(Math.round(v));
+};
+/** A round top for five grid steps: 1, 2 or 5 × 10^n per step. */
+const niceMax = (v: number): number => {
+  if (!(v > 0)) return 5;
+  const step = v / 5;
+  const p = 10 ** Math.floor(Math.log10(step));
+  const m = step / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p * 5;
+};
+
+// The board's chart box: 760×228, plot from x 64 to 756 and y 12 to 196.
+const X0 = 64;
+const X1 = 756;
+const Y0 = 12;
+const Y1 = 196;
+
+/** Line segments (split at gaps) for one series. */
+function segments(values: (number | null)[], x: (i: number) => number, y: (v: number) => number) {
+  const out: { line: string; area: string }[] = [];
+  let run: [number, number][] = [];
+  const flush = () => {
+    if (run.length) {
+      const line = run.map(([px, py], i) => `${i ? "L" : "M"}${px.toFixed(1)} ${py.toFixed(1)}`);
+      const first = run[0][0].toFixed(1);
+      const last = run[run.length - 1][0].toFixed(1);
+      out.push({
+        line: line.join(" "),
+        area: `${line.join(" ")} L${last} ${Y1} L${first} ${Y1} Z`,
+      });
+    }
+    run = [];
+  };
+  values.forEach((v, i) => {
+    if (v == null) flush();
+    else run.push([x(i), y(v)]);
+  });
+  flush();
+  return out;
+}
+
+function TrafficChart({ points, name }: { points: Point[]; name: string }): ReactNode {
   const id = useId().replace(/:/g, "");
-  const reducedMotion = useReducedMotion();
+  const n = points.length;
+  const top = niceMax(Math.max(0, ...points.flatMap((p) => [p.rx ?? 0, p.tx ?? 0])));
+  const x = (i: number) => (n > 1 ? X0 + (i / (n - 1)) * (X1 - X0) : X0);
+  const y = (v: number) => Y1 - (v / top) * (Y1 - Y0);
+  const grid = [0, 1, 2, 3, 4, 5].map((k) => (top / 5) * k);
+  const ticks = n ? [...new Set([0, 1, 2, 3, 4].map((k) => Math.round((k * (n - 1)) / 4)))] : [];
+  const series = [
+    { key: "rx" as const, color: "var(--success)" },
+    { key: "tx" as const, color: "var(--chart-1)" },
+  ];
   return (
-    <ChartContainer
-      config={SERIES}
-      className={small ? "h-16 w-full aspect-auto" : "h-64 sm:h-72 w-full aspect-auto"}
-      aria-label="Interface receive and transmit rates in bits per second"
+    <svg
+      className="ifaces-chart"
+      viewBox="0 0 760 228"
+      width="100%"
+      height="228"
+      role="img"
+      aria-label={`Receive and transmit rate on ${name} over the last 2 minutes`}
     >
-      <AreaChart
-        data={points}
-        margin={{ top: 12, right: 10, bottom: 0, left: small ? 0 : 5 }}
-        accessibilityLayer={!small}
-      >
-        <defs>
-          {(["rx", "tx"] as const).map((key) => (
-            <linearGradient key={key} id={`${id}-${key}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={SERIES[key].color} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={SERIES[key].color} stopOpacity={0.015} />
-            </linearGradient>
-          ))}
-        </defs>
-        {!small && <CartesianGrid vertical={false} strokeDasharray="2 6" />}
-        {!small && (
-          <XAxis
-            dataKey="ts"
-            type="number"
-            domain={["dataMin", "dataMax"]}
-            tickFormatter={clock}
-            minTickGap={60}
-            axisLine={false}
-            tickLine={false}
-          />
-        )}
-        {!small && (
-          <YAxis
-            tickFormatter={(v: number) => rate(v)}
-            width={80}
-            axisLine={false}
-            tickLine={false}
-          />
-        )}
-        {!small && (
-          <ChartTooltip
-            content={
-              <ChartTooltipContent
-                labelFormatter={(value) => clock(Number(value))}
-                formatter={(value, name) => (
-                  <span className="font-mono">
-                    {name === "rx" ? "RX" : "TX"} {rate(Number(value))}
-                  </span>
-                )}
-              />
-            }
-          />
-        )}
-        {(["rx", "tx"] as const).map((key) => (
-          <Area
-            key={key}
-            type="linear"
-            dataKey={key}
-            stroke={SERIES[key].color}
-            fill={`url(#${id}-${key})`}
-            strokeWidth={small ? 1.5 : 2}
-            connectNulls={false}
-            dot={false}
-            activeDot={small ? false : { r: 4 }}
-            isAnimationActive={!small && !reducedMotion}
-            animationDuration={300}
-          />
+      <defs>
+        {series.map((s) => (
+          <linearGradient key={s.key} id={`${id}-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={s.color} stopOpacity={0.28} />
+            <stop offset="1" stopColor={s.color} stopOpacity={0} />
+          </linearGradient>
         ))}
-      </AreaChart>
-    </ChartContainer>
+      </defs>
+      {grid.map((v) => (
+        <g key={v}>
+          <line
+            x1={64}
+            x2={756}
+            y1={y(v)}
+            y2={y(v)}
+            stroke="var(--chart-grid)"
+            strokeDasharray="2 4"
+          />
+          <text
+            x={56}
+            y={y(v) + 4}
+            textAnchor="end"
+            fontSize={11}
+            fill="var(--muted-foreground)"
+            className="font-mono"
+          >
+            {axis(v)}
+          </text>
+        </g>
+      ))}
+      {series.map((s) =>
+        segments(
+          points.map((p) => p[s.key]),
+          x,
+          y,
+        ).map((seg, i) => (
+          <g key={`${s.key}-${i}`}>
+            <path d={seg.area} fill={`url(#${id}-${s.key})`} />
+            <path d={seg.line} fill="none" stroke={s.color} strokeWidth={1.5} />
+          </g>
+        )),
+      )}
+      {ticks.map((i, k) => (
+        <text
+          key={i}
+          x={x(i)}
+          y={222}
+          textAnchor={k === 0 ? "start" : i === n - 1 ? "end" : "middle"}
+          fontSize={11}
+          fill="var(--muted-foreground)"
+          className="font-mono"
+        >
+          {clock(points[i].ts)}
+        </text>
+      ))}
+    </svg>
   );
 }
 
-function InterfaceMonitor({ device }: { device: string }) {
+/** The table's 120×24 sparkline: the last 24 RX readings against the busiest row. */
+function Spark({ points, max, muted }: { points: Point[]; max: number; muted: boolean }) {
+  const last = points.slice(-24);
+  let d = "";
+  let pen = false;
+  last.forEach((p, i) => {
+    if (p.rx == null) {
+      pen = false;
+      return;
+    }
+    const y = muted || p.rx <= 0 || max <= 0 ? 22 : 20 - (p.rx / max) * 18;
+    d += `${pen ? "L" : "M"}${(i * 5.2).toFixed(1)} ${y.toFixed(1)} `;
+    pen = true;
+  });
+  return (
+    <svg viewBox="0 0 120 24" width="120" height="24" aria-hidden="true">
+      <path
+        d={d.trim() || "M0 22 L119.6 22"}
+        fill="none"
+        stroke={muted ? "var(--text-faint)" : "var(--success)"}
+        strokeWidth={1.25}
+      />
+    </svg>
+  );
+}
+
+function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNode }): ReactNode {
   const [sample, setSample] = useState<InterfaceSample | null>(null);
   const [history, setHistory] = useState<Record<string, Point[]>>(() => Object.create(null));
   const [selected, setSelected] = useState("");
@@ -126,7 +227,9 @@ function InterfaceMonitor({ device }: { device: string }) {
   const [connectionError, setConnectionError] = useState(false);
   const [retry, setRetry] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const [limit, setLimit] = useState(24);
+  const [limit, setLimit] = useState(PAGE);
+  const tableRef = useRef<HTMLDivElement>(null);
+  useStaggerIn(tableRef, ".ifaces-row", `${query}|${filter}|${kind}|${!!sample}`);
 
   useEffect(() => {
     const visibility = () => setVisible(!document.hidden);
@@ -183,6 +286,7 @@ function InterfaceMonitor({ device }: { device: string }) {
   }, [device, paused, visible, retry]);
 
   const rows = sample?.interfaces ?? [];
+  const ready = !!sample && !sample.error;
   const stale = !paused && visible && !!sample && now - sample.ts > 10_000;
   const unavailable = connectionError || !!sample?.error || stale;
   const active =
@@ -202,293 +306,365 @@ function InterfaceMonitor({ device }: { device: string }) {
             ? row.disabled
             : !row.running && !row.disabled)),
   );
-  const liveLabel = paused
-    ? "Paused"
-    : !visible
-      ? "Background · paused"
-      : unavailable
-        ? "Reconnecting"
-        : sample
-          ? "Live · 2s sampling"
-          : "Connecting";
+  const shown = matching.slice(0, limit);
   const currentRate = (value: number | null) => (unavailable ? "—" : rate(value));
+  const sparkMax = Math.max(
+    0,
+    ...shown.flatMap((row) => (history[row.name] ?? []).slice(-24).map((p) => p.rx ?? 0)),
+  );
+
+  const running = rows.filter((r) => r.running && !r.disabled);
+  const down = rows.filter((r) => !r.running && !r.disabled);
+  const disabled = rows.filter((r) => r.disabled);
+  const sum = (key: "rxRate" | "txRate") => {
+    const values = rows.map((r) => r[key]).filter((v): v is number => v != null);
+    return values.length && !unavailable ? rate(values.reduce((a, b) => a + b, 0)) : "—";
+  };
+
+  const status: { tone: Tone; live: boolean; text: string } = paused
+    ? { tone: "default", live: false, text: "Paused" }
+    : !visible
+      ? { tone: "default", live: false, text: "Background · paused" }
+      : unavailable
+        ? { tone: "warn", live: false, text: "Reconnecting" }
+        : sample
+          ? { tone: "good", live: true, text: "Live · 2 s sampling" }
+          : { tone: "default", live: false, text: "Connecting" };
+
+  const resetPage =
+    <T,>(set: (v: T) => void) =>
+    (v: T) => {
+      set(v);
+      setLimit(PAGE);
+    };
 
   return (
-    <div className="grid gap-5">
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-5 py-4">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl border border-chart-2/30 bg-chart-2/10 text-chart-2">
-              <Activity className="size-5" />
+    <section className="ifaces grid min-w-0 content-start gap-6">
+      <PageIntro
+        tone={status.tone}
+        live={status.live}
+        title={
+          <>
+            <b>{status.text}</b>
+            <span>
+              · {device}
+              {ready ? ` · ${rows.length} interfaces` : ""}
             </span>
-            <div>
-              <h2 className="font-semibold">Interface activity</h2>
-              <p className="text-xs text-muted-foreground">
-                Ports, bridges & tunnels · one live view
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <AnimatedBadge
-              size="sm"
-              status={unavailable ? "warning" : paused ? "neutral" : sample ? "success" : "loading"}
-              pulse={!paused && !unavailable && !!sample}
-            >
-              {liveLabel}
-            </AnimatedBadge>
-            <Button
-              ghost
+          </>
+        }
+        controls={
+          <>
+            {picker}
+            <MonitorButton
               size="sm"
               aria-label={paused ? "Resume interface monitoring" : "Pause interface monitoring"}
+              icon={paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
               onClick={() => setPaused(!paused)}
-              icon={paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
             >
               {paused ? "Resume" : "Pause"}
-            </Button>
-            <Button
-              ghost
-              size="sm"
-              aria-label="Reconnect interface stream"
-              onClick={() => {
-                setPaused(false);
-                setRetry(retry + 1);
-              }}
-              icon={<RefreshCw className="size-3.5" />}
-            >
-              Reconnect
-            </Button>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border bg-muted/20">
-          {[
-            ["Interfaces", rows.length],
-            ["Running", rows.filter((r) => r.running && !r.disabled).length],
-            ["Link down", rows.filter((r) => !r.running && !r.disabled).length],
-            ["Disabled", rows.filter((r) => r.disabled).length],
-          ].map(([label, value]) => (
-            <div key={label} className="px-5 py-4">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
-              <p className="mt-1 font-mono text-2xl tabular-nums">
-                {sample && !sample.error ? value : "—"}
-              </p>
-            </div>
-          ))}
-        </div>
-      </Card>
+            </MonitorButton>
+          </>
+        }
+      >
+        {LEAD}
+      </PageIntro>
+
+      <MetricStrip label="Interface totals" minCell={150}>
+        <Metric
+          label="Interfaces"
+          value={ready ? rows.length : "—"}
+          hint="ports, bridges, tunnels"
+        />
+        <Metric
+          label="Running"
+          tone={ready && running.length ? "good" : "default"}
+          value={ready ? running.length : "—"}
+          hint="link up"
+        />
+        <Metric
+          label="Link down"
+          tone={ready && down.length ? "warn" : "default"}
+          value={ready ? down.length : "—"}
+          hint={!ready ? "—" : down.length ? down.map((r) => r.name).join(", ") : "none"}
+        />
+        <Metric
+          label="Disabled"
+          value={ready ? disabled.length : "—"}
+          hint="turned off on the router"
+        />
+        <Metric label="Receiving now" value={sum("rxRate")} hint="all interfaces" />
+        <Metric label="Sending now" value={sum("txRate")} hint="all interfaces" />
+      </MetricStrip>
 
       {unavailable && (
-        <Note type="warning" label="Live readings unavailable">
-          {sample?.error || "The stream is delayed or disconnected."}{" "}
-          {paused ? "Resume monitoring to retry." : "Retrying automatically."} Any retained chart
-          points are historical, not current measurements.
-        </Note>
+        <div className="monitor-note" data-tone="warn" role="status">
+          <AlertTriangle aria-hidden="true" className="text-warning" />
+          <span className="min-w-0 flex-1">
+            <span className="font-[590]">Live readings unavailable.</span>{" "}
+            <span className="text-muted-foreground">
+              {sample?.error || "The stream is delayed or disconnected."}{" "}
+              {paused ? "Resume monitoring to retry." : "Retrying automatically."} Any chart points
+              left on screen are history, not current readings.
+            </span>
+          </span>
+          <MonitorButton
+            size="sm"
+            variant="ghost"
+            aria-label="Reconnect interface stream"
+            icon={<RefreshCw aria-hidden="true" />}
+            onClick={() => {
+              setPaused(false);
+              setRetry(retry + 1);
+            }}
+          >
+            Reconnect
+          </MonitorButton>
+        </div>
       )}
+
       {!sample && !unavailable && (
-        <div
-          role="status"
-          className="flex items-center justify-center gap-3 rounded-xl border border-dashed p-12 text-muted-foreground"
-        >
-          <Spinner /> Reading interfaces from {device}…
+        <div role="status" className="monitor-panel">
+          <MonitorEmpty
+            icon={<Loader2 className="animate-spin" />}
+            title={`Reading interfaces from ${device}`}
+          >
+            The first sample takes a couple of seconds.
+          </MonitorEmpty>
         </div>
       )}
 
       {active && (
-        <Card className="overflow-hidden">
-          <div className="grid lg:grid-cols-[minmax(0,1fr)_250px]">
-            <div
-              className="min-w-0 p-5"
-              style={{
-                backgroundImage: "radial-gradient(var(--border) 0.7px, transparent 0.7px)",
-                backgroundSize: "18px 18px",
-              }}
-            >
-              <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="mb-1 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-                    Selected interface
-                  </p>
-                  <h3 className="break-all font-mono text-xl font-semibold">{active.name}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {active.comment || `${active.type} interface on ${device}`}
-                  </p>
-                </div>
-                <Badge
-                  type={active.disabled ? "secondary" : active.running ? "success" : "warning"}
-                >
-                  {stateLabel(active)}
-                </Badge>
-              </div>
-              <div className="mb-3 flex flex-wrap gap-x-8 gap-y-3">
-                <div>
-                  <span className="flex items-center gap-1 text-xs text-chart-2">
-                    <ArrowDownLeft className="size-3.5" /> RX · received
-                  </span>
-                  <p className="mt-1 font-mono text-2xl tracking-tight">
-                    {currentRate(active.rxRate)}
+        <section
+          className="monitor-panel ifaces-sel"
+          aria-label={`Selected interface ${active.name}`}
+        >
+          <div className="flex flex-wrap">
+            <div className="min-w-0 flex-[999_1_560px]">
+              <div className="monitor-panel-head">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate font-mono text-[15px] leading-5 font-medium text-foreground">
+                      {active.name}
+                    </h2>
+                    <StatusBadge tone={stateTone(active)}>{stateLabel(active)}</StatusBadge>
+                  </div>
+                  <p className="monitor-panel-desc">
+                    {active.comment ? `${active.comment} · ` : ""}
+                    {active.type} · {paused ? "frozen at" : "last sample"}{" "}
+                    {sample ? clock(sample.ts) : "—"}
                   </p>
                 </div>
-                <div>
-                  <span className="flex items-center gap-1 text-xs text-chart-1">
-                    <ArrowUpRight className="size-3.5" /> TX · sent
+                <div className="flex flex-wrap gap-4 text-[12px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="size-2.5 rounded-[2px] bg-success" />
+                    RX · received
                   </span>
-                  <p className="mt-1 font-mono text-2xl tracking-tight">
-                    {currentRate(active.txRate)}
-                  </p>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="size-2.5 rounded-[2px] bg-chart-1" />
+                    TX · sent
+                  </span>
                 </div>
               </div>
-              <TrafficGraph points={history[active.name] ?? []} />
-              <div className="mt-2 flex flex-wrap justify-between gap-2 text-[11px] text-muted-foreground">
-                <span>
+              <div className="flex flex-col gap-3 px-5 pb-5">
+                <div className="flex flex-wrap gap-8">
+                  {(
+                    [
+                      ["RX · received", active.rxRate],
+                      ["TX · sent", active.txRate],
+                    ] as const
+                  ).map(([label, value]) => (
+                    <div key={label} className="flex flex-col">
+                      <span className="monitor-label">{label}</span>
+                      <span className="text-[28px] leading-[34px] font-[590] tracking-[-0.02em] text-emphasis tabular-nums">
+                        {currentRate(value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <TrafficChart points={history[active.name] ?? []} name={active.name} />
+                <span className="text-[12px] text-muted-foreground">
                   {active.rxRate == null && active.txRate == null
                     ? "Collecting a baseline · rates need two valid samples"
-                    : "Last 60 samples · rates averaged between reads"}
-                </span>
-                <span>
-                  {paused ? "Frozen at " : "Last sample "}
-                  {sample ? clock(sample.ts) : "—"}
+                    : "Last 60 samples · each rate is averaged between two reads"}
                 </span>
               </div>
             </div>
-            <div className="border-t lg:border-t-0 lg:border-l border-border bg-muted/20 p-5">
-              <p className="mb-4 flex items-center gap-2 text-xs font-semibold">
-                <Cable className="size-4 text-primary" /> Interface counters
-              </p>
-              <dl className="grid grid-cols-2 lg:grid-cols-1 gap-3 text-xs">
-                {[
-                  ["RX total", total(active.rxBytes)],
-                  ["TX total", total(active.txBytes)],
+            <aside
+              className="monitor-side ifaces-side flex flex-col gap-3 px-5 pt-4 pb-5"
+              aria-label={`Counters for ${active.name}`}
+            >
+              <span className="monitor-label">Counters</span>
+              <dl className="monitor-facts my-[13px] grid-cols-[128px_minmax(0,1fr)]">
+                {(
                   [
-                    "Packets/s · RX / TX",
-                    unavailable ? "—" : `${count(active.rxPps)} / ${count(active.txPps)}`,
-                  ],
-                  ["Packets · RX / TX", `${count(active.rxPackets)} / ${count(active.txPackets)}`],
-                  ["Errors · RX / TX", `${count(active.rxErrors)} / ${count(active.txErrors)}`],
-                  ["Drops · RX / TX", `${count(active.rxDrops)} / ${count(active.txDrops)}`],
-                  ["TX queue drops", count(active.queueDrops)],
-                  ["Link downs", count(active.linkDowns)],
-                  ["MTU", count(active.mtu)],
-                  ["MAC address", active.mac || "Not reported"],
-                ].map(([label, value]) => (
-                  <div key={label} className="min-w-0">
-                    <dt className="text-[11px] text-muted-foreground">{label}</dt>
-                    <dd className="mt-0.5 break-all font-mono tabular-nums">{value}</dd>
+                    ["RX total", total(active.rxBytes)],
+                    ["TX total", total(active.txBytes)],
+                    [
+                      "Packets/s RX · TX",
+                      unavailable ? "—" : pair(count(active.rxPps), count(active.txPps)),
+                    ],
+                    ["Packets RX · TX", pair(compact(active.rxPackets), compact(active.txPackets))],
+                    ["Errors RX · TX", pair(count(active.rxErrors), count(active.txErrors))],
+                    ["Drops RX · TX", pair(count(active.rxDrops), count(active.txDrops))],
+                    ["TX queue drops", count(active.queueDrops)],
+                    ["Link downs", count(active.linkDowns)],
+                    ["MTU", active.mtu == null ? "—" : String(active.mtu)],
+                    ["MAC address", active.mac || "Not reported"],
+                  ] as const
+                ).map(([label, value]) => (
+                  <div key={label} className="contents">
+                    <dt>{label}</dt>
+                    <dd
+                      className={`break-all tabular-nums ${
+                        label.startsWith("Drops") && (active.rxDrops || active.txDrops)
+                          ? "text-warning"
+                          : ""
+                      }`}
+                    >
+                      {value}
+                    </dd>
                   </div>
                 ))}
               </dl>
-            </div>
+              <span className="border-t border-border pt-3 text-[12px] text-muted-foreground">
+                Totals count since the router last reset its counters.
+              </span>
+            </aside>
           </div>
-        </Card>
+        </section>
       )}
 
-      <section aria-label="All interfaces" className="grid gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h3 className="mr-auto flex items-center gap-2 text-sm font-semibold">
-            <Network className="size-4 text-primary" /> All interfaces{" "}
-            <span className="text-xs font-normal text-muted-foreground">
+      {sample && (
+        <section className="monitor-panel" aria-label="All interfaces">
+          <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+            <h2 className="mr-2 text-[14px] font-[590]">All interfaces</h2>
+            <MonitorSearch
+              className="flex-[1_1_260px]"
+              label="Search interfaces"
+              placeholder="Name, type, MAC or comment"
+              value={query}
+              onChange={resetPage(setQuery)}
+            />
+            <MonitorSelect
+              label="Filter interface status"
+              value={filter}
+              onChange={resetPage(setFilter)}
+              options={[
+                { value: "all", label: "All states" },
+                { value: "running", label: "Running" },
+                { value: "down", label: "Link down" },
+                { value: "disabled", label: "Disabled" },
+              ]}
+            />
+            <MonitorSelect
+              label="Filter interface type"
+              value={kind}
+              onChange={resetPage(setKind)}
+              options={[
+                { value: "all", label: "All types" },
+                ...[...new Set(rows.map((row) => row.type))]
+                  .sort()
+                  .map((type) => ({ value: type, label: type })),
+              ]}
+            />
+            <span className="ml-1 text-[12px] text-muted-foreground tabular-nums">
               {matching.length} / {rows.length}
             </span>
-          </h3>
-          <div className="relative w-full sm:w-60">
-            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search interfaces"
-              placeholder="Name, type, MAC or comment…"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setLimit(24);
-              }}
-              className="pl-9"
-            />
           </div>
-          <Select
-            aria-label="Filter interface status"
-            value={filter}
-            onValueChange={(value) => {
-              setFilter(value);
-              setLimit(24);
-            }}
-            options={[
-              { value: "all", label: "All states" },
-              { value: "running", label: "Running" },
-              { value: "down", label: "Link down" },
-              { value: "disabled", label: "Disabled" },
-            ]}
-          />
-          <Select
-            aria-label="Filter interface type"
-            value={kind}
-            onValueChange={(value) => {
-              setKind(value);
-              setLimit(24);
-            }}
-            options={[
-              { value: "all", label: "All types" },
-              ...[...new Set(rows.map((row) => row.type))]
-                .sort()
-                .map((type) => ({ value: type, label: type })),
-            ]}
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {matching.slice(0, limit).map((row) => (
-            <button
-              type="button"
-              key={row.name}
-              aria-pressed={active?.name === row.name}
-              onClick={() => setSelected(row.name)}
-              className={`min-w-0 rounded-xl border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${active?.name === row.name ? "border-primary/70 bg-primary/5 shadow-sm" : "border-border bg-card hover:border-primary/40 hover:bg-accent/40"}`}
-            >
-              <div className="mb-1 flex items-start justify-between gap-2">
-                <span className="break-all font-mono text-sm font-semibold">{row.name}</span>
-                <span
-                  className={`mt-1 size-2 shrink-0 rounded-full ${row.disabled ? "bg-muted-foreground" : row.running ? "bg-chart-2" : "bg-warning"}`}
-                  aria-label={stateLabel(row)}
-                />
+          {matching.length ? (
+            <div ref={tableRef} className="overflow-x-auto">
+              <div className={`monitor-thead min-w-[760px] ${COLS}`}>
+                <span>Interface</span>
+                <span>Type</span>
+                <span className="text-right">RX</span>
+                <span className="text-right">TX</span>
+                <span>Last 2 min</span>
+                <span className="text-right">Errors</span>
               </div>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {row.type} · {stateLabel(row)}
-                {row.dynamic ? " · dynamic" : ""}
-              </p>
-              <div aria-hidden="true" className="my-2 pointer-events-none">
-                <TrafficGraph points={history[row.name] ?? []} small />
-              </div>
-              <div className="flex flex-wrap justify-between gap-2 font-mono text-xs tabular-nums">
-                <span className="text-chart-2">↓ RX {currentRate(row.rxRate)}</span>
-                <span className="text-chart-1">↑ TX {currentRate(row.txRate)}</span>
-              </div>
-              {row.comment && (
-                <p className="mt-2 truncate text-[11px] text-muted-foreground" title={row.comment}>
-                  {row.comment}
-                </p>
-              )}
-            </button>
-          ))}
-        </div>
-        {sample && !sample.error && !matching.length && (
-          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            {rows.length
-              ? "No interfaces match these filters. Try a different name or state."
-              : "This router returned no interfaces."}
+              {shown.map((row) => {
+                const off = row.disabled;
+                const isDown = !row.running && !row.disabled;
+                const quiet = off || isDown;
+                const errors =
+                  row.rxErrors == null && row.txErrors == null
+                    ? null
+                    : (row.rxErrors ?? 0) + (row.txErrors ?? 0);
+                const sub = isDown
+                  ? ["Link down", row.comment].filter(Boolean).join(" · ")
+                  : off
+                    ? ["Disabled", row.comment].filter(Boolean).join(" · ")
+                    : row.comment || `${row.type} interface`;
+                return (
+                  <button
+                    type="button"
+                    key={row.name}
+                    className={`monitor-row ifaces-row min-w-[760px] ${COLS}`}
+                    data-selected={active?.name === row.name || undefined}
+                    aria-pressed={active?.name === row.name}
+                    onClick={() => setSelected(row.name)}
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <StatusDot tone={stateTone(row)} />
+                      <span className="flex min-w-0 flex-col">
+                        <span
+                          className={`truncate font-mono text-[13px] ${off ? "text-muted-foreground" : "text-foreground"}`}
+                        >
+                          {row.name}
+                        </span>
+                        <span
+                          className={`truncate text-[12px] ${isDown ? "text-warning" : "text-muted-foreground"}`}
+                        >
+                          {sub}
+                          {row.dynamic ? " · dynamic" : ""}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="truncate font-mono text-[12px] text-muted-foreground">
+                      {row.type}
+                    </span>
+                    <span className="text-right text-fg-secondary tabular-nums">
+                      {quiet ? "—" : currentRate(row.rxRate)}
+                    </span>
+                    <span className="text-right text-fg-secondary tabular-nums">
+                      {quiet ? "—" : currentRate(row.txRate)}
+                    </span>
+                    <Spark points={history[row.name] ?? []} max={sparkMax} muted={quiet} />
+                    <span
+                      className={`text-right tabular-nums ${errors ? "text-warning" : "text-muted-foreground"}`}
+                    >
+                      {off ? "—" : count(errors)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="border-t border-border">
+              <MonitorEmpty compact title={rows.length ? "No interfaces match" : "No interfaces"}>
+                {rows.length
+                  ? "Try a different name, state or type."
+                  : "This router returned no interfaces."}
+              </MonitorEmpty>
+            </div>
+          )}
+          <div className="monitor-row grid-cols-[1fr_auto] text-[12px] text-muted-foreground">
+            <span>
+              RX is traffic entering the interface, TX is traffic leaving it. "—" means the router
+              hasn't reported it yet, or the rate needs a second sample.
+            </span>
+            {matching.length > limit && (
+              <MonitorButton size="sm" onClick={() => setLimit(limit + PAGE)}>
+                Show {Math.min(PAGE, matching.length - limit)} more
+              </MonitorButton>
+            )}
           </div>
-        )}
-        {matching.length > limit && (
-          <Button ghost onClick={() => setLimit(limit + 24)}>
-            Show more interfaces ({matching.length - limit} remaining)
-          </Button>
-        )}
-      </section>
-      <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-        Read-only monitoring. RX enters the interface; TX leaves it. Bridge, tunnel and
-        physical-port counters can overlap and are not added together. Totals are router counters,
-        not session usage. “—” means not reported or awaiting a baseline.
-      </p>
-    </div>
+        </section>
+      )}
+    </section>
   );
 }
 
-export function InterfacesView() {
+export function InterfacesView(): ReactNode {
   const [devices, setDevices] = useState<DevicesPayload | null>(null);
   const [device, setDevice] = useState("");
   const [error, setError] = useState("");
@@ -512,47 +688,44 @@ export function InterfacesView() {
     return () => abort.abort();
   }, [retry]);
   if (!devices && !error) return <LoadingState label="Loading interfaces" />;
+
+  const routers = (devices?.devices ?? []).filter((d) => !d.disabled).map((d) => d.name);
+  const picker = (
+    <>
+      <span className="monitor-label">Router</span>
+      <RouterPicker
+        label="Select router for interfaces"
+        value={device}
+        onChange={setDevice}
+        routers={routers}
+        defaultRouter={devices?.defaultDevice}
+        disabled={!devices}
+      />
+    </>
+  );
+
+  if (device && !error) return <InterfaceMonitor key={device} device={device} picker={picker} />;
+
   return (
-    <section className="grid min-w-0 gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-chart-2">
-            Interface observatory
-          </p>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight">Every link. In view.</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Inspect traffic and counters without changing your network.
-          </p>
-        </div>
-        <div className="grid min-w-48 gap-1.5">
-          <span className="text-[11px] text-muted-foreground">Router</span>
-          <Select
-            aria-label="Select router for interfaces"
-            value={device}
-            onValueChange={setDevice}
-            disabled={!devices}
-            placeholder="Choose a router"
-            options={(devices?.devices ?? [])
-              .filter((d) => !d.disabled)
-              .map((d) => ({ value: d.name, label: d.name }))}
-          />
-        </div>
-      </div>
+    <section className="ifaces grid min-w-0 content-start gap-6">
+      <PageIntro controls={devices ? picker : undefined}>{LEAD}</PageIntro>
       {error ? (
-        <Note type="error" label="Could not load routers">
-          {error}{" "}
-          <Button ghost size="sm" onClick={() => setRetry(retry + 1)}>
+        <div className="monitor-note" data-tone="bad" role="alert">
+          <AlertTriangle aria-hidden="true" className="text-destructive" />
+          <span className="min-w-0 flex-1">
+            <span className="font-[590]">Could not load routers.</span>{" "}
+            <span className="text-muted-foreground">{error}</span>
+          </span>
+          <MonitorButton size="sm" variant="ghost" onClick={() => setRetry(retry + 1)}>
             Try again
-          </Button>
-        </Note>
-      ) : device ? (
-        <InterfaceMonitor key={device} device={device} />
+          </MonitorButton>
+        </div>
       ) : (
-        <p role="status" className="py-8 text-center text-sm text-muted-foreground">
-          {devices
-            ? "No enabled routers. Add or enable one on the Devices page."
-            : "Loading configured routers…"}
-        </p>
+        <div className="monitor-panel">
+          <MonitorEmpty icon={<Server />} title="No enabled routers">
+            Add or enable one on the Devices page.
+          </MonitorEmpty>
+        </div>
       )}
     </section>
   );

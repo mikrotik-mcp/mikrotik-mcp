@@ -1,31 +1,13 @@
-import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
-import { ArrowRight, Network, Plus, Play, ShieldCheck, Pause, Route, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Checkbox } from "@/components/ui/checkbox";
+import type { ReactNode } from "react";
+import { AlertTriangle, ArrowRight, Plus, RefreshCw, Route } from "lucide-react";
 import { ServiceProbesSettings } from "./service-probes-settings";
 import { AddressSets } from "./address-sets";
 import { ServiceProbePicker } from "./service-probe-picker";
 import { RoutingDomainFields } from "./service-routing-domain-fields";
 import { RoutingTrafficPanel } from "./service-routing-traffic";
 import { IpNetwork } from "./ip-network";
+import { api } from "./api";
 import { routingDomain, isWildcard } from "../../src/service-routing/domain";
 import type { RoutingPolicy } from "../../src/service-routing/model";
 import {
@@ -34,13 +16,67 @@ import {
   routeAvailable,
   policyBlockers,
 } from "./service-routing-inventory";
+import { useOperations } from "./operations-ui";
 import {
-  useOperations,
-  WorkspaceHeader,
-  WorkspaceError,
-  WorkspaceSafety,
-  EvidenceState,
-} from "./operations-ui";
+  MonitorButton,
+  MonitorDialog,
+  MonitorEmpty,
+  MonitorPanel,
+  PageIntro,
+  RouterPicker,
+  Segmented,
+  StatusBadge,
+  StatusDot,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
+import { CheckRow, FieldSelect, StatusLine, hhmm } from "./service-routing-ui";
+import { cn } from "@/lib/utils";
+import "./service-routing.css";
+
+type Mode = "router" | "policies" | "sets";
+
+const POLICY_STATE: Record<RoutingPolicy["state"], { label: string; tone: Tone }> = {
+  active: { label: "Active", tone: "good" },
+  draft: { label: "Draft", tone: "default" },
+  removed: { label: "Removed", tone: "default" },
+  uncertain: { label: "Uncertain", tone: "warn" },
+};
+const SAMPLE_STATE: Record<string, { label: string; tone: Tone }> = {
+  pass: { label: "Pass", tone: "good" },
+  fail: { label: "Fail", tone: "bad" },
+  unknown: { label: "Unknown", tone: "warn" },
+  untested: { label: "Untested", tone: "default" },
+};
+
+const LEAD: Record<Mode, string> = {
+  router:
+    "See where traffic leaves this router: routes, mangle marks and routing rules, in router order.",
+  policies:
+    "Send one service's traffic out a chosen exit, check that exit works, and switch only when you allow it.",
+  sets: "Routes, policy rules and the address lists they use, plus the service exits MCP manages.",
+};
+
+/** The boards' `.note`: an icon, a message, and an optional action. */
+function Note({
+  tone,
+  children,
+  action,
+}: {
+  tone?: "warn" | "bad";
+  children: ReactNode;
+  action?: ReactNode;
+}): ReactNode {
+  return (
+    <div className="monitor-note" data-tone={tone} role={tone === "bad" ? "alert" : "status"}>
+      <AlertTriangle
+        aria-hidden="true"
+        className={tone === "bad" ? "text-destructive" : tone === "warn" ? "text-warning" : ""}
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-fg-secondary">{children}</div>
+      {action}
+    </div>
+  );
+}
 
 export function ServiceRoutingView() {
   const w = useOperations<{ policies: RoutingPolicy[] }>("/api/service-routing");
@@ -50,9 +86,10 @@ export function ServiceRoutingView() {
   const [consent, setConsent] = useState(false);
   const [review, setReview] = useState(false);
   const [arming, setArming] = useState(false);
-  const [view, setView] = useState<"router" | "policies" | "sets">("router");
+  const [view, setView] = useState<Mode>("router");
   const [addressBusy, setAddressBusy] = useState(false);
   const [inventoryRevision, setInventoryRevision] = useState(0);
+  const [defaultRouter, setDefaultRouter] = useState<string | null>(null);
   const routing = useRoutingInventory(
     w.device,
     w.busy || creating || review || arming || addressBusy,
@@ -71,6 +108,7 @@ export function ServiceRoutingView() {
   const policies = w.data?.policies ?? [],
     policy = policies.find((p) => p.id === selected) ?? policies[0];
   const blockers = policy && inventory ? policyBlockers(inventory, policy) : [];
+  const busyAny = w.busy || creating || review || arming || addressBusy;
   const changeDevice = (next: string) => {
     if (addressBusy) return;
     w.setDevice(next);
@@ -81,6 +119,17 @@ export function ServiceRoutingView() {
     setView("router");
   };
   const { busy, refresh } = w;
+  useEffect(() => {
+    let stopped = false;
+    void api<{ defaultDevice?: string }>("/api/devices")
+      .then((r) => {
+        if (!stopped) setDefaultRouter(r?.defaultDevice ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      stopped = true;
+    };
+  }, []);
   useEffect(() => {
     const timer = setInterval(() => {
       if (
@@ -135,60 +184,134 @@ export function ServiceRoutingView() {
     }
   }
   const latest = (table: string) => policy?.samples.filter((s) => s.table === table).at(-1);
+  const armed = (p: RoutingPolicy) => (p.armedUntil ?? 0) > w.observedAt;
+
+  // ── Header status line, per mode ────────────────────────────────────────
+  let tone: Tone = "default";
+  let status: ReactNode;
+  if (view === "policies") {
+    const count = (s: RoutingPolicy["state"]) => policies.filter((p) => p.state === s).length;
+    const uncertain = count("uncertain");
+    if (w.loading && !w.data) status = <StatusLine lead="Loading MCP policies" />;
+    else {
+      tone = uncertain ? "warn" : count("active") ? "good" : "default";
+      status = (
+        <StatusLine
+          lead={`${policies.length} MCP ${policies.length === 1 ? "policy" : "policies"}`}
+          rest={`${count("active")} active, ${count("draft")} draft${uncertain ? `, ${uncertain} uncertain` : ""} · automatic failover ${policies.some(armed) ? "on" : "off"}`}
+        />
+      );
+    }
+  } else if (!inventory) {
+    tone = inventoryError ? "bad" : "default";
+    status = (
+      <StatusLine
+        lead={inventoryError ? "Router configuration unavailable" : "Reading router configuration"}
+        rest={inventoryError ? "nothing on the router changed" : undefined}
+      />
+    );
+  } else if (view === "sets") {
+    tone = "good";
+    status = (
+      <StatusLine
+        lead="Configuration loaded"
+        rest={`read ${hhmm(inventory.observedAt)} from ${inventory.device}`}
+      />
+    );
+  } else {
+    // The board keeps "Read-only snapshot" when some sections failed; the note below says which.
+    // When none could be read there is no snapshot to speak of.
+    const sections = Object.values(inventory.sections);
+    const noneRead = sections.length > 0 && sections.every((s) => s.state !== "ready");
+    tone = noneRead ? "bad" : inventoryError ? "warn" : "good";
+    status = (
+      <StatusLine
+        lead={
+          noneRead
+            ? "Could not read the router"
+            : inventoryError
+              ? "Last read snapshot"
+              : "Read-only snapshot"
+        }
+        rest={
+          routing.loading
+            ? "reading again now"
+            : `read ${hhmm(inventory.observedAt)} · refreshes every 30 s`
+        }
+      />
+    );
+  }
+
   return (
-    <section className="ops-workspace">
-      <WorkspaceHeader
-        eyebrow="Service routing / router configuration"
-        title="See where your traffic goes."
-        description="Inspect existing routes and routing rules on this router. Use MCP policies separately to plan a service-specific change."
-        device={w.device}
-        devices={w.devices}
-        onDevice={changeDevice}
-        busy={w.busy || creating || review || arming || addressBusy}
-        onRefresh={() => {
-          setInventoryRevision((n) => n + 1);
-          void w.refresh();
-          void routing.refresh();
-        }}
+    <section className="service-routing grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-6">
+      <PageIntro
+        tone={tone}
+        title={status}
+        controls={
+          <>
+            <RouterPicker
+              value={w.device}
+              routers={w.devices}
+              defaultRouter={defaultRouter}
+              disabled={busyAny || !w.devices.length}
+              onChange={changeDevice}
+            />
+            <MonitorButton
+              size="sm"
+              aria-label="Refresh"
+              disabled={busyAny}
+              icon={<RefreshCw />}
+              onClick={() => {
+                setInventoryRevision((n) => n + 1);
+                void w.refresh();
+                void routing.refresh();
+              }}
+            />
+            <MonitorButton size="sm" disabled={w.busy} onClick={() => setManagingProbes(true)}>
+              Service probes
+            </MonitorButton>
+            <MonitorButton
+              size="sm"
+              variant="inverse"
+              icon={<Plus />}
+              disabled={!w.device || w.busy}
+              onClick={openCreate}
+            >
+              New policy
+            </MonitorButton>
+          </>
+        }
       >
-        <Button variant="outline" disabled={w.busy} onClick={() => setManagingProbes(true)}>
-          <ShieldCheck size={16} />
-          Service probes
-        </Button>
-        <Button disabled={!w.device || w.busy} onClick={openCreate}>
-          <Plus size={16} />
-          New MCP policy
-        </Button>
-      </WorkspaceHeader>
-      <WorkspaceError message={w.error} />
-      <nav className="routing-mode" aria-label="Service routing workspace">
-        <Button
-          variant={view === "router" ? "secondary" : "ghost"}
-          disabled={addressBusy}
-          aria-pressed={view === "router"}
-          onClick={() => setView("router")}
-        >
-          <Network size={16} />
-          Router configuration
-        </Button>
-        <Button
-          variant={view === "policies" ? "secondary" : "ghost"}
-          disabled={addressBusy}
-          aria-pressed={view === "policies"}
-          onClick={() => setView("policies")}
-        >
-          <Route size={16} />
-          MCP policies ({policies.length})
-        </Button>
-        <Button
-          variant={view === "sets" ? "secondary" : "ghost"}
-          disabled={addressBusy}
-          aria-pressed={view === "sets"}
-          onClick={() => setView("sets")}
-        >
-          Address sets
-        </Button>
-      </nav>
+        {LEAD[view]}
+      </PageIntro>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <Segmented<Mode>
+          label="Mode"
+          value={view}
+          onChange={(next) => {
+            if (!addressBusy) setView(next);
+          }}
+          options={[
+            { value: "router", label: "Router configuration" },
+            { value: "policies", label: `MCP policies (${policies.length})` },
+            { value: "sets", label: "Address sets" },
+          ]}
+        />
+        {view === "policies" && (
+          <p className="text-[12px] text-muted-foreground">
+            Only policies MCP created show here. A draft never changes the router until you review
+            and apply it.
+          </p>
+        )}
+      </div>
+
+      {w.error && !creating && !review && !arming && (
+        <Note tone="bad">
+          <span>{w.error}</span>
+        </Note>
+      )}
+
       {view === "sets" ? (
         <AddressSets
           key={w.device}
@@ -204,376 +327,302 @@ export function ServiceRoutingView() {
           error={inventoryError}
           onRetry={() => void routing.refresh()}
         />
+      ) : w.loading && !w.data ? (
+        <section className="monitor-panel">
+          <MonitorEmpty icon={<Route />} title="Loading MCP policies" />
+        </section>
+      ) : !policies.length ? (
+        <section className="monitor-panel">
+          <MonitorEmpty
+            icon={<Route />}
+            title="No MCP policies for this router"
+            action={
+              <span className="flex flex-wrap justify-center gap-2">
+                <MonitorButton
+                  size="sm"
+                  variant="inverse"
+                  icon={<Plus />}
+                  disabled={!w.device}
+                  onClick={openCreate}
+                >
+                  New policy
+                </MonitorButton>
+                <MonitorButton size="sm" onClick={() => setManagingProbes(true)}>
+                  Service probes
+                </MonitorButton>
+              </span>
+            }
+          >
+            Your router can still have routes: see Router configuration. A policy reuses exits that
+            already exist. It never creates a WAN, VPN or NAT.
+          </MonitorEmpty>
+        </section>
       ) : (
-        <>
-          <WorkspaceSafety>
-            Only policies created in MCP appear here. Existing router rules remain in Router
-            configuration. Drafts never change a router; apply requires a preview, backup and Safe
-            Mode.
-          </WorkspaceSafety>
-          {w.loading && !w.data ? (
-            <LoadingState label="Loading routing policies" />
-          ) : !policies.length ? (
-            <div className="ops-empty">
-              <Network size={38} />
-              <h3>No MCP policies saved for this router</h3>
-              <p>
-                This does not mean your router has no routes. Inspect Router configuration for
-                existing rules.
-                <br />
-                Existing exits are reused; no WAN, VPN or NAT is created.
-              </p>
-              <Button disabled={!w.device} onClick={openCreate}>
-                Create your first policy
-              </Button>
-              <Button variant="outline" onClick={() => setManagingProbes(true)}>
-                Manage service probes
-              </Button>
-            </div>
-          ) : (
-            <div className="ops-split">
-              <nav aria-label="Service policies" className="ops-list">
-                {policies.map((p) => (
-                  <button
-                    key={p.id}
-                    className="ops-list-item"
-                    aria-pressed={policy?.id === p.id}
-                    onClick={() => {
-                      setSelected(p.id);
-                      setReview(false);
-                      setArming(false);
-                    }}
-                    disabled={w.busy}
-                  >
-                    <strong>{p.name}</strong>
-                    <small>
-                      {p.host} · {p.family.toUpperCase()}
-                    </small>
-                    <EvidenceState state={p.state} />
-                  </button>
-                ))}
+        policy && (
+          <>
+            <section className="monitor-panel flex-row flex-wrap overflow-hidden">
+              <nav
+                aria-label="Policies"
+                className="sr-policy-list flex max-w-[300px] flex-[1_1_260px] flex-col border-r border-border"
+              >
+                <p className="monitor-label px-5 pt-4 pb-2">Policies</p>
+                {policies.map((p) => {
+                  const on = policy.id === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      aria-current={on || undefined}
+                      disabled={w.busy}
+                      onClick={() => {
+                        setSelected(p.id);
+                        setReview(false);
+                        setArming(false);
+                      }}
+                      className={cn(
+                        "flex w-full flex-col gap-1 border-t border-border px-5 py-3 text-left transition-colors hover:bg-overlay-03 disabled:cursor-not-allowed",
+                        on && "bg-accent shadow-[inset_2px_0_0_var(--chart-1)] hover:bg-accent",
+                      )}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-foreground">
+                          {p.name}
+                        </span>
+                        <StatusBadge tone={POLICY_STATE[p.state].tone}>
+                          {POLICY_STATE[p.state].label}
+                        </StatusBadge>
+                      </span>
+                      <span className="truncate text-[12px] text-muted-foreground">
+                        {p.host} · {p.family === "ipv6" ? "IPv6" : "IPv4"}
+                      </span>
+                    </button>
+                  );
+                })}
               </nav>
-              {policy && (
-                <div className="grid gap-5">
-                  <section className="ops-panel">
-                    <div className="flex flex-wrap justify-between gap-3">
-                      <div>
-                        <h3>{policy.name}</h3>
-                        <p className="ops-meta mt-2">
-                          {policy.host} · {policy.family.toUpperCase()} ·{" "}
-                          {policy.sources.join(", ")}
-                        </p>
-                      </div>
-                      <EvidenceState state={policy.state} />
+
+              <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
+                <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+                  <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h2 className="min-w-0 truncate font-mono text-[16px] font-medium text-emphasis">
+                        {policy.name}
+                      </h2>
+                      <StatusBadge tone={POLICY_STATE[policy.state].tone}>
+                        {POLICY_STATE[policy.state].label}
+                      </StatusBadge>
                     </div>
-                    {blockers.length > 0 && (
-                      <div className="routing-warning">
-                        <ShieldCheck size={16} />
-                        <div>
-                          <strong>Review required before applying</strong>
-                          {blockers.map((reason) => (
-                            <p key={reason}>{reason}</p>
-                          ))}
-                          <Button variant="link" onClick={() => setView("router")}>
-                            Inspect router configuration
-                          </Button>
+                    <p className="text-[13px] break-words text-muted-foreground">
+                      <span className="font-mono text-[12px] text-fg-secondary">{policy.host}</span>{" "}
+                      · {policy.family === "ipv6" ? "IPv6" : "IPv4"} · from{" "}
+                      {policy.sources.map((s, i) => (
+                        <span key={s}>
+                          {i > 0 && ", "}
+                          <span className="font-mono text-[12px] text-fg-secondary">{s}</span>
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <MonitorButton
+                      size="sm"
+                      disabled={w.busy || !policy.target}
+                      onClick={() => void w.action("/probe", { id: policy.id })}
+                    >
+                      Check exits
+                    </MonitorButton>
+                    {armed(policy) ? (
+                      <MonitorButton
+                        size="sm"
+                        disabled={w.busy}
+                        onClick={() =>
+                          void w.action("/arm", { id: policy.id, minutes: 0, confirm: true })
+                        }
+                      >
+                        Pause automation
+                      </MonitorButton>
+                    ) : (
+                      <MonitorButton
+                        size="sm"
+                        disabled={w.busy || policy.state !== "active" || !policy.target}
+                        onClick={() => {
+                          setArming(true);
+                          setConsent(false);
+                        }}
+                      >
+                        Authorize failover
+                      </MonitorButton>
+                    )}
+                    {policy.state === "active" && (
+                      <MonitorButton
+                        size="sm"
+                        variant="danger"
+                        disabled={w.busy}
+                        onClick={() => void preview(policy.activeTable!, true)}
+                      >
+                        Remove policy…
+                      </MonitorButton>
+                    )}
+                  </div>
+                </div>
+
+                {blockers.length > 0 && (
+                  <Note
+                    tone="warn"
+                    action={
+                      <MonitorButton size="sm" onClick={() => setView("router")}>
+                        Open router configuration
+                      </MonitorButton>
+                    }
+                  >
+                    <span className="font-[510] text-foreground">
+                      Review needed before you apply
+                    </span>
+                    {blockers.map((reason) => (
+                      <span key={reason} className="text-[12px] text-muted-foreground">
+                        {reason}
+                      </span>
+                    ))}
+                  </Note>
+                )}
+                {policy.error && (
+                  <Note tone="bad">
+                    <span>{policy.error}</span>
+                  </Note>
+                )}
+
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-3">
+                  {policy.tables.map((table) => {
+                    const sample = latest(table);
+                    const ev = SAMPLE_STATE[sample?.state ?? "untested"];
+                    const current = policy.activeTable === table;
+                    return (
+                      <div
+                        key={table}
+                        className="flex min-w-0 flex-col gap-2.5 rounded-lg bg-overlay-02 p-4"
+                        style={{
+                          boxShadow: `inset 0 0 0 1px var(${current ? "--input" : "--border"})`,
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="flex-1 text-[12px] font-[510] text-muted-foreground">
+                            {table === policy.primary ? "Primary exit" : "Approved fallback"}
+                            {current ? " · Current" : ""}
+                          </span>
+                          <StatusBadge tone={ev.tone}>{ev.label}</StatusBadge>
+                        </div>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2 text-[13px] text-fg-secondary">
+                          <span className="font-mono text-[12px]">{w.device}</span>
+                          <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
+                          <span>Client traffic</span>
+                          <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
+                          <span className="font-mono text-[12px] text-foreground">{table}</span>
+                        </div>
+                        <p className="text-[12px] text-fg-secondary">
+                          {sample?.detail ??
+                            (policy.target
+                              ? "Not checked yet. Use Check exits to test it before you allow failover."
+                              : "Manual route with no service probe. It doesn't need one.")}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="flex-1 text-[12px] text-muted-foreground">
+                            Last read {sample ? hhmm(sample.at) : "—"}
+                          </span>
+                          <MonitorButton
+                            size="sm"
+                            disabled={w.busy || policy.state === "uncertain" || blockers.length > 0}
+                            onClick={() => void preview(table)}
+                          >
+                            {current ? "Preview current route" : `Preview route via ${table}`}
+                          </MonitorButton>
                         </div>
                       </div>
-                    )}
-                    <div className="ops-lanes">
-                      {policy.tables.map((table) => {
-                        const sample = latest(table);
-                        return (
-                          <div
-                            className="ops-lane"
-                            key={table}
-                            data-active={policy.activeTable === table}
-                          >
-                            <div className="ops-lane-name">
-                              <span>{w.device}</span>
-                              <small className="ops-meta">Client traffic</small>
-                            </div>
-                            <ArrowRight size={20} />
-                            <div className="ops-lane-name">
-                              <strong>{table}</strong>
-                              <span className="ops-meta">
-                                {table === policy.primary ? "Primary exit" : "Approved fallback"}
-                                {policy.activeTable === table ? " · Current" : ""}
-                              </span>
-                            </div>
-                            <EvidenceState state={sample?.state ?? "untested"} />
-                            <p className="ops-lane-detail">
-                              {sample?.detail ??
-                                (policy.target
-                                  ? "Run path checks to collect evidence. Only a matching VRF can prove an HTTPS exit."
-                                  : "Manual domain route. No active health probe configured; the route does not need one.")}
-                              {sample && ` Last read ${new Date(sample.at).toLocaleTimeString()}.`}
-                            </p>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="col-span-full justify-self-end"
-                              disabled={
-                                w.busy || policy.state === "uncertain" || blockers.length > 0
-                              }
-                              onClick={() => void preview(table)}
-                            >
-                              <Route size={14} />
-                              Preview{" "}
-                              {policy.activeTable === table
-                                ? "current route"
-                                : `route via ${table}`}
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="ops-actions">
-                      <Button
-                        variant="outline"
-                        disabled={w.busy || !policy.target}
-                        onClick={() => void w.action("/probe", { id: policy.id })}
-                      >
-                        <Play size={15} />
-                        Check exits
-                      </Button>
-                      {(policy.armedUntil ?? 0) > w.observedAt ? (
-                        <Button
-                          variant="outline"
-                          disabled={w.busy}
-                          onClick={() =>
-                            void w.action("/arm", { id: policy.id, minutes: 0, confirm: true })
-                          }
-                        >
-                          <Pause size={15} />
-                          Pause automation
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          disabled={w.busy || policy.state !== "active" || !policy.target}
-                          onClick={() => {
-                            setArming(true);
-                            setConsent(false);
-                          }}
-                        >
-                          <ShieldCheck size={15} />
-                          Authorize failover
-                        </Button>
-                      )}
-                      {policy.state === "active" && (
-                        <Button
-                          variant="ghost"
-                          disabled={w.busy}
-                          onClick={() => void preview(policy.activeTable!, true)}
-                        >
-                          <Trash2 size={15} />
-                          Remove policy…
-                        </Button>
-                      )}
-                    </div>
-                    <p className="ops-meta">
-                      {(policy.armedUntil ?? 0) > w.observedAt
-                        ? `Automatic failover authorized until ${new Date(policy.armedUntil!).toLocaleTimeString()}`
-                        : "Automatic failover paused"}{" "}
-                      · {policy.failuresBeforeSwitch} consecutive failures ·{" "}
-                      {policy.cooldownSeconds}s cooldown
-                    </p>
-                    {policy.error && <WorkspaceError message={policy.error} />}
-                    <p className="ops-meta">
-                      DNS lists follow router DNS answers. Shared CDN addresses can route other
-                      services too. DoH and client-path differences are not covered by this check.
-                    </p>
-                  </section>
-                  <RoutingTrafficPanel
-                    key={`${policy.device}:${policy.id}:${policy.state}:${policy.activeTable}:${policy.lastSwitchAt}`}
-                    policy={policy}
-                    paused={w.busy || creating || review || arming || managingProbes}
-                  />
-                  <section className="ops-panel">
-                    <h3>Decision history</h3>
-                    <ScrollArea className="max-h-64">
-                      <ol className="ops-history">
-                        {policy.history.map((h, i) => (
-                          <li key={`${h.at}-${i}`}>
-                            <time>{new Date(h.at).toLocaleString()}</time>
-                            {h.message}
-                          </li>
-                        ))}
-                      </ol>
-                    </ScrollArea>
-                  </section>
+                    );
+                  })}
                 </div>
-              )}
+
+                <div className="flex flex-col gap-1.5 border-t border-border pt-4 text-[13px] text-fg-secondary">
+                  <span className="flex items-center gap-2">
+                    <StatusDot tone={armed(policy) ? "good" : "default"} />
+                    {armed(policy)
+                      ? `Automatic failover on until ${hhmm(policy.armedUntil)}`
+                      : "Automatic failover off"}{" "}
+                    · switches after {policy.failuresBeforeSwitch} failures ·{" "}
+                    {policy.cooldownSeconds} s cooldown
+                  </span>
+                  <span className="text-[12px] text-muted-foreground">
+                    Domains resolve on the router. CDNs change addresses often, so a few connections
+                    may still leave through the main table.
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <div className="flex flex-wrap gap-6">
+              <RoutingTrafficPanel
+                key={`${policy.device}:${policy.id}:${policy.state}:${policy.activeTable}:${policy.lastSwitchAt}`}
+                policy={policy}
+                paused={w.busy || creating || review || arming || managingProbes}
+              />
+              <MonitorPanel
+                className="flex-[1_1_300px]"
+                title="Decision history"
+                description="What MCP did with this policy, newest first."
+                flush
+              >
+                {policy.history.length ? (
+                  <ol className="max-h-[360px] overflow-y-auto">
+                    {[...policy.history]
+                      .sort((a, b) => b.at - a.at)
+                      .map((h, i) => (
+                        <li
+                          key={`${h.at}-${i}`}
+                          className="monitor-row grid-cols-[44px_minmax(0,1fr)] items-start hover:bg-transparent"
+                        >
+                          <time
+                            className="font-mono text-[12px] text-muted-foreground"
+                            dateTime={new Date(h.at).toISOString()}
+                            title={new Date(h.at).toLocaleString()}
+                          >
+                            {hhmm(h.at)}
+                          </time>
+                          <span className="text-fg-secondary">{h.message}</span>
+                        </li>
+                      ))}
+                  </ol>
+                ) : (
+                  <MonitorEmpty compact title="Nothing decided yet" />
+                )}
+              </MonitorPanel>
             </div>
-          )}
-        </>
+          </>
+        )
       )}
-      <Dialog
+
+      <MonitorDialog
         open={creating && !managingProbes}
         onOpenChange={(v) => {
           if (!w.busy) setCreating(v);
         }}
-      >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Define a service route</DialogTitle>
-            <DialogDescription>
-              Save a draft first. Choose approved exits and an explicit client scope.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="ops-form">
-              <label className="ops-field">
-                Policy name
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Google · household IPv4"
-                />
-              </label>
-              <div className="ops-field">
-                <span>IP family</span>
-                <Select
-                  value={family}
-                  onValueChange={(next) => {
-                    setFamily(next);
-                    setTables([]);
-                    setPrimary("");
-                  }}
-                >
-                  <SelectTrigger aria-label="IP family">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ipv4">IPv4</SelectItem>
-                    <SelectItem value="ipv6">IPv6</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <RoutingDomainFields
-                domain={domain}
-                onDomain={(value) => {
-                  setDomain(value);
-                  setDnsConfirmed(false);
-                }}
-                dnsConfirmed={dnsConfirmed}
-                onDnsConfirmed={setDnsConfirmed}
-                primary={primary}
-              />
-              <ServiceProbePicker
-                device={w.device}
-                value={target}
-                onChange={setTarget}
-                onManage={() => setManagingProbes(true)}
-                optional
-              />
-              <label className="ops-field ops-field--wide">
-                Client subnets
-                <Input
-                  value={sources}
-                  onChange={(e) => setSources(e.target.value)}
-                  placeholder={family === "ipv4" ? "10.10.10.0/24" : "fd00:10::/64"}
-                />
-                {/* Keep the preview within the policy schema's eight-source limit. */}
-                {[...new Set(sources.split(/[\s,]+/).filter(Boolean))]
-                  .slice(0, 8)
-                  .map((address) => (
-                    <span key={address} className="grid min-w-0 gap-1">
-                      <code className="text-xs text-muted-foreground">{address}</code>
-                      <IpNetwork address={address} />
-                    </span>
-                  ))}
-                <small>
-                  Comma-separated CIDRs. Default routes are not allowed. The other IP family is
-                  unchanged.
-                </small>
-              </label>
-              <label className="ops-check ops-field--wide">
-                <Checkbox
-                  checked={beforeExisting}
-                  onCheckedChange={(v) => setBeforeExisting(v === true)}
-                />
-                <span>
-                  Place this scoped route before existing routing rules.
-                  <small className="block ops-meta">
-                    Choose only after inspecting existing rules. The exact preview requires another
-                    confirmation; FastTrack remains blocked.
-                  </small>
-                </span>
-              </label>
-              <fieldset className="ops-field ops-field--wide">
-                <legend className="mb-3">Allowed exits · up to three</legend>
-                {!inventory && (
-                  <p>
-                    {routing.loading
-                      ? "Reading router exits…"
-                      : "Router exits are unavailable. Close this dialog and retry the router read."}
-                  </p>
-                )}
-                {inventory?.sections.tables.state === "error" && (
-                  <WorkspaceError
-                    message={inventory.sections.tables.error ?? "Routing tables could not be read."}
-                  />
-                )}
-                {inventory &&
-                  inventory.sections.tables.state === "ready" &&
-                  !inventory.tables.length && (
-                    <p>No enabled FIB tables were reported by this router.</p>
-                  )}
-                {inventory?.tables.map((t) => (
-                  <label className="ops-check" key={t}>
-                    <Checkbox
-                      checked={tables.includes(t)}
-                      disabled={
-                        !routeAvailable(inventory, t, family) ||
-                        (!tables.includes(t) && tables.length >= 3)
-                      }
-                      onCheckedChange={(checked) => {
-                        const next = checked ? [...tables, t] : tables.filter((v) => v !== t);
-                        setTables(next);
-                        if (!next.includes(primary)) setPrimary(next[0] ?? "");
-                      }}
-                    />
-                    {t}
-                    <small>
-                      {!routeAvailable(inventory, t, family)
-                        ? inventory.sections[family === "ipv6" ? "routes6" : "routes4"].state ===
-                          "error"
-                          ? "Route availability unknown"
-                          : `No active ${family.toUpperCase()} default route`
-                        : inventory.sections.vrfs.rows.some(
-                              (v) => v.name === t && v.disabled !== "yes",
-                            )
-                          ? "Active default · VRF probe supported"
-                          : "Active default · manual routing only; HTTPS probe needs a VRF"}
-                    </small>
-                  </label>
-                ))}
-              </fieldset>
-              <div className="ops-field ops-field--wide">
-                <span>Primary exit</span>
-                <Select value={primary} onValueChange={setPrimary}>
-                  <SelectTrigger aria-label="Primary exit">
-                    <SelectValue placeholder="Choose an allowed exit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tables.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <WorkspaceError message={inventoryError || w.error} />
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" disabled={w.busy} onClick={() => setCreating(false)}>
+        dismissible={false}
+        width={680}
+        title="New service route"
+        description={`For ${w.device}. Saved as a draft: nothing changes until you review and apply it.`}
+        footer={
+          <>
+            <span className="flex-1 text-[12px] text-muted-foreground">
+              Draft only · not applied
+            </span>
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              disabled={w.busy}
+              onClick={() => setCreating(false)}
+            >
               Cancel
-            </Button>
-            <Button
+            </MonitorButton>
+            <MonitorButton
+              size="sm"
+              variant="inverse"
               disabled={
                 w.busy ||
                 !name.trim() ||
@@ -588,10 +637,165 @@ export function ServiceRoutingView() {
               onClick={() => void create()}
             >
               {w.busy ? "Saving…" : "Save draft"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </MonitorButton>
+          </>
+        }
+      >
+        <div className="monitor-dialog-body grid gap-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_160px] gap-3 max-sm:grid-cols-1">
+            <label className="monitor-fl">
+              <span className="monitor-label">Policy name</span>
+              <input
+                className="monitor-input font-mono"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="stream-via-vpn"
+              />
+            </label>
+            <div className="monitor-fl">
+              <span className="monitor-label">IP family</span>
+              <FieldSelect
+                label="IP family"
+                value={family}
+                onChange={(next) => {
+                  setFamily(next);
+                  setTables([]);
+                  setPrimary("");
+                }}
+                options={[
+                  { value: "ipv4", label: "IPv4" },
+                  { value: "ipv6", label: "IPv6" },
+                ]}
+              />
+            </div>
+          </div>
+          <RoutingDomainFields
+            domain={domain}
+            onDomain={(value) => {
+              setDomain(value);
+              setDnsConfirmed(false);
+            }}
+            dnsConfirmed={dnsConfirmed}
+            onDnsConfirmed={setDnsConfirmed}
+            primary={primary}
+          />
+          <ServiceProbePicker
+            device={w.device}
+            value={target}
+            onChange={setTarget}
+            onManage={() => setManagingProbes(true)}
+            optional
+          />
+          <div className="monitor-fl">
+            <label className="monitor-label" htmlFor="sr-client-subnets">
+              Client subnets
+            </label>
+            <input
+              id="sr-client-subnets"
+              className="monitor-input font-mono text-fg-secondary"
+              value={sources}
+              onChange={(e) => setSources(e.target.value)}
+              placeholder={family === "ipv4" ? "192.168.88.0/24, 10.10.0.0/24" : "fd00:10::/64"}
+            />
+            {sources.trim() !== "" && (
+              <div className="flex flex-wrap gap-1.5">
+                {/* Keep the preview within the policy schema's eight-source limit. */}
+                {[...new Set(sources.split(/[\s,]+/).filter(Boolean))]
+                  .slice(0, 8)
+                  .map((address) => (
+                    <span key={address} className="monitor-chip sr-net max-w-full">
+                      <span className="font-mono text-[12px] text-fg-secondary">{address}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <IpNetwork address={address} />
+                    </span>
+                  ))}
+              </div>
+            )}
+            <span className="monitor-hint">
+              Separate with commas. Up to 8 subnets. No default routes; the other IP family stays as
+              it is.
+            </span>
+          </div>
+          <CheckRow checked={beforeExisting} onChange={setBeforeExisting}>
+            <span>Place this route before existing routing rules</span>
+            <span className="text-[12px] text-muted-foreground">
+              Use it when an older rule would catch this traffic first. FastTrack stays blocked.
+            </span>
+          </CheckRow>
+          <fieldset className="monitor-fl m-0 min-w-0 border-0 p-0">
+            <legend className="monitor-label mb-1.5 p-0">
+              Allowed exits <span className="font-normal">· pick up to 3</span>
+            </legend>
+            {!inventory ? (
+              <span className="monitor-hint">
+                {routing.loading
+                  ? "Reading router exits…"
+                  : "Router exits are unavailable. Close this dialog and read the router again."}
+              </span>
+            ) : inventory.sections.tables.state === "error" ? (
+              <span className="monitor-err" role="alert">
+                {inventory.sections.tables.error ?? "Routing tables could not be read."}
+              </span>
+            ) : !inventory.tables.length ? (
+              <span className="monitor-hint">This router reported no enabled FIB tables.</span>
+            ) : (
+              <div className="flex flex-col overflow-hidden rounded-lg shadow-[inset_0_0_0_1px_var(--input)]">
+                {inventory.tables.map((t, i) => {
+                  const available = routeAvailable(inventory, t, family);
+                  const disabled = !available || (!tables.includes(t) && tables.length >= 3);
+                  return (
+                    <CheckRow
+                      key={t}
+                      className={cn("flex px-3 py-2.5", i > 0 && "border-t border-border")}
+                      checked={tables.includes(t)}
+                      disabled={disabled}
+                      onChange={(checked) => {
+                        const next = checked ? [...tables, t] : tables.filter((v) => v !== t);
+                        setTables(next);
+                        if (!next.includes(primary)) setPrimary(next[0] ?? "");
+                      }}
+                    >
+                      <span className="font-mono text-[12px] text-foreground">{t}</span>
+                      <span className="text-[12px] text-muted-foreground">
+                        {!available
+                          ? inventory.sections[family === "ipv6" ? "routes6" : "routes4"].state ===
+                            "error"
+                            ? "Route state unknown: the routes could not be read"
+                            : `No active ${family === "ipv6" ? "IPv6" : "IPv4"} default route`
+                          : inventory.sections.vrfs.rows.some(
+                                (v) => v.name === t && v.disabled !== "yes",
+                              )
+                            ? "Active default route · exit checks supported"
+                            : "Active default route · manual only, exit checks need a VRF"}
+                      </span>
+                    </CheckRow>
+                  );
+                })}
+              </div>
+            )}
+          </fieldset>
+          <div className="monitor-fl max-w-[320px]">
+            <span className="monitor-label">Primary exit</span>
+            <FieldSelect
+              label="Primary exit"
+              mono
+              value={primary}
+              onChange={setPrimary}
+              placeholder="Choose an allowed exit"
+              options={tables.map((t) => ({ value: t, label: t }))}
+            />
+            <span className="monitor-hint">
+              The other checked exit becomes the approved fallback.
+            </span>
+          </div>
+          {(inventoryError || w.error) && (
+            <Note tone="bad">
+              <span>{inventoryError || w.error}</span>
+            </Note>
+          )}
+        </div>
+      </MonitorDialog>
+
       {managingProbes && (
         <ServiceProbesSettings
           onClose={() => {
@@ -600,41 +804,31 @@ export function ServiceRoutingView() {
           onReload={() => {}}
         />
       )}
-      <Dialog
+
+      <MonitorDialog
         open={review && !!policy?.plan}
         onOpenChange={(v) => {
           if (!w.busy) setReview(v);
         }}
-      >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {policy?.plan?.remove ? "Review policy removal" : "Review routing change"}
-            </DialogTitle>
-            <DialogDescription>
-              Only this router and the listed client scope are targeted. Existing connections may be
-              interrupted.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[45vh]">
-            {policy?.plan?.warnings?.map((warning) => (
-              <p key={warning} className="routing-warning">
-                {warning}
-              </p>
-            ))}
-            <pre className="ops-code">{policy?.plan?.commands.join("\n")}</pre>
-          </ScrollArea>
-          <label className="ops-check">
-            <Checkbox checked={consent} onCheckedChange={(v) => setConsent(v === true)} />I reviewed
-            the scope, shared-IP risk and commands. Apply this exact preview with backup and Safe
-            Mode.
-          </label>
-          <WorkspaceError message={w.error} />
-          <DialogFooter>
-            <Button variant="outline" disabled={w.busy} onClick={() => setReview(false)}>
+        width={680}
+        title={policy?.plan?.remove ? "Review policy removal" : "Review routing change"}
+        description="Only this router and the listed client subnets change. Open connections may drop."
+        footer={
+          <>
+            <span className="flex-1 text-[12px] text-muted-foreground">
+              {policy?.plan ? `Plan expires ${hhmm(policy.plan.expiresAt)}` : ""}
+            </span>
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              disabled={w.busy}
+              onClick={() => setReview(false)}
+            >
               Cancel
-            </Button>
-            <Button
+            </MonitorButton>
+            <MonitorButton
+              size="sm"
+              variant={policy?.plan?.remove ? "danger" : "inverse"}
               disabled={w.busy || !consent}
               onClick={() => {
                 if (policy?.plan)
@@ -645,35 +839,53 @@ export function ServiceRoutingView() {
                     });
               }}
             >
-              {w.busy ? "Applying & verifying…" : "Apply reviewed change"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog
+              {w.busy ? "Applying and checking…" : "Apply reviewed change"}
+            </MonitorButton>
+          </>
+        }
+      >
+        <div className="monitor-dialog-body grid gap-4">
+          {policy?.plan?.warnings?.map((warning) => (
+            <Note key={warning} tone="warn">
+              <span>{warning}</span>
+            </Note>
+          ))}
+          <pre className="monitor-pre max-h-[45vh] overflow-auto">
+            {policy?.plan?.commands.join("\n")}
+          </pre>
+          <CheckRow checked={consent} onChange={setConsent}>
+            I reviewed the scope, the shared-IP risk and these commands. Apply this exact preview
+            with a backup and Safe Mode.
+          </CheckRow>
+          {w.error && (
+            <Note tone="bad">
+              <span>{w.error}</span>
+            </Note>
+          )}
+        </div>
+      </MonitorDialog>
+
+      <MonitorDialog
         open={arming}
         onOpenChange={(v) => {
           if (!w.busy) setArming(v);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Authorize failover for 30 minutes?</DialogTitle>
-            <DialogDescription>
-              Only the saved exits may be selected after repeated confirmed failures. UNKNOWN never
-              triggers a switch. Expiry stops automation; it does not remove the current route.
-            </DialogDescription>
-          </DialogHeader>
-          <label className="ops-check">
-            <Checkbox checked={consent} onCheckedChange={(v) => setConsent(v === true)} />I
-            authorize these automatic router changes for this policy.
-          </label>
-          <WorkspaceError message={w.error} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setArming(false)} disabled={w.busy}>
+        title="Authorize failover for 30 minutes?"
+        description="MCP may switch to a saved exit only after repeated confirmed failures."
+        footer={
+          <>
+            <span className="flex-1" />
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              disabled={w.busy}
+              onClick={() => setArming(false)}
+            >
               Cancel
-            </Button>
-            <Button
+            </MonitorButton>
+            <MonitorButton
+              size="sm"
+              variant="inverse"
               disabled={!consent || w.busy}
               onClick={() => {
                 if (policy)
@@ -683,10 +895,25 @@ export function ServiceRoutingView() {
               }}
             >
               Authorize for 30 minutes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </MonitorButton>
+          </>
+        }
+      >
+        <div className="monitor-dialog-body grid gap-4">
+          <p className="text-[13px] text-fg-secondary">
+            An unknown result never triggers a switch. When the 30 minutes run out, automation stops
+            and the current route stays.
+          </p>
+          <CheckRow checked={consent} onChange={setConsent}>
+            I allow these automatic router changes for this policy.
+          </CheckRow>
+          {w.error && (
+            <Note tone="bad">
+              <span>{w.error}</span>
+            </Note>
+          )}
+        </div>
+      </MonitorDialog>
     </section>
   );
 }

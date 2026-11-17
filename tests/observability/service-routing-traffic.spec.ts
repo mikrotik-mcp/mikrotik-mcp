@@ -48,15 +48,15 @@ test("shows exact counters and live rate, then a gap rather than fake zeros on f
     .mockResolvedValueOnce({ ...sample, at: sample.at + 5000, bytes: "6024", packets: "20" })
     .mockRejectedValue(new Error("Disconnected"));
   await act(async () => root.render(h(RoutingTrafficPanel, { policy: p })));
-  expect(host.textContent).toContain("1.0 KiB");
+  expect(host.textContent).toContain("1 KB");
   expect(host.textContent).toContain("Waiting for two live samples");
   await act(async () => vi.advanceTimersByTimeAsync(5000));
   expect(host.textContent).toContain("8.0 kbps");
-  expect(host.textContent).toContain("5.9 KiB");
+  expect(host.textContent).toContain("6 KB");
   await act(async () => vi.advanceTimersByTimeAsync(5000));
   expect(host.textContent).toContain("temporarily unavailable");
   expect([...host.querySelectorAll("dd")].map((e) => e.textContent)).toEqual(["—", "—", "—"]);
-  expect(host.textContent).toContain("Return/download traffic is excluded");
+  expect(host.textContent).toContain("not the replies");
 });
 test("drafts and paused panels do not query; an unmounted in-flight read is aborted", async () => {
   await act(async () => root.render(h(RoutingTrafficPanel, { policy: { ...p, state: "draft" } })));
@@ -83,9 +83,12 @@ test("wildcard field explains apex exclusion and DNS consent without enabling it
       }),
     ),
   );
+  expect(host.textContent).toContain("*.example.com → warp");
+  expect(host.textContent).toContain("learn addresses from DNS");
   expect(host.textContent).toContain("not example.com itself");
+  expect(host.textContent).toContain("RouterOS 7.17");
   expect(host.textContent).toContain("adlist bypass");
-  expect(host.querySelector('[role="checkbox"]')?.getAttribute("aria-checked")).toBe("false");
-  await act(async () => (host.querySelector('[role="checkbox"]') as HTMLButtonElement).click());
+  expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(false);
+  await act(async () => host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
   expect(onDnsConfirmed).toHaveBeenCalledExactlyOnceWith(true);
 });

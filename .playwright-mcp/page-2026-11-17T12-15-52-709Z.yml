@@ -1,0 +1,112 @@
+- generic [ref=f2e3]:
+    - banner [ref=f2e4]:
+        - generic [ref=f2e5]:
+            - paragraph [ref=f2e6]: Network
+            - heading "Topology" [level=1] [ref=f2e7]
+            - paragraph [ref=f2e8]:
+                - generic [ref=f2e10]: 4 managed · 9 discovered
+                - text: · 3 waiting to be added · updated 14:02:04
+            - paragraph [ref=f2e11]: The layer-2 neighbours each router sees over MNDP, CDP and LLDP, drawn as one map.
+        - button "About this page" [ref=f2e12]
+    - generic [ref=f2e16]:
+        - generic [ref=f2e17]:
+            - generic [ref=f2e18]: Managed
+            - generic [ref=f2e19]: "4"
+            - generic [ref=f2e20]: routers in your config
+        - generic [ref=f2e21]:
+            - generic [ref=f2e22]: Discovered
+            - generic [ref=f2e23]: "9"
+            - generic [ref=f2e24]: neighbours they report
+        - generic [ref=f2e25]:
+            - generic [ref=f2e26]: Waiting to be added
+            - generic [ref=f2e27]: "3"
+            - generic [ref=f2e28]: MikroTik, reachable by address or MAC
+        - generic [ref=f2e29]:
+            - generic [ref=f2e30]: Offline
+            - generic [ref=f2e31]: "1"
+            - generic [ref=f2e32]: edge-02 · last seen 13:40
+    - generic [ref=f2e33]:
+        - generic [ref=f2e34]:
+            - generic [ref=f2e35]: Filter by name, identity, IP, MAC or board
+            - button "Can be added (3)" [ref=f2e40] [cursor=pointer]
+            - generic [ref=f2e44]:
+                - button "Zoom out" [ref=f2e45] [cursor=pointer]
+                - generic [ref=f2e47]: 100%
+                - button "Zoom in" [ref=f2e48] [cursor=pointer]
+            - button "Reset view" [ref=f2e51] [cursor=pointer]
+        - generic [ref=f2e52]:
+            - generic [ref=f2e53]:
+                - img "Map of 4 managed routers and the 9 neighbours they report" [ref=f2e54]:
+                    - generic [ref=f2e70]:
+                        - generic [ref=f2e72]: MCP
+                        - generic [ref=f2e73]: mcp-office
+                    - generic [ref=f2e74]:
+                        - generic [ref=f2e80]: CORE
+                        - generic [ref=f2e81]: core-router-01
+                        - generic [ref=f2e82]: 192.168.88.1
+                    - generic [ref=f2e83]:
+                        - generic [ref=f2e89]: LAB-
+                        - generic [ref=f2e90]: lab-chr
+                        - generic [ref=f2e91]: 203.0.113.20
+                    - generic [ref=f2e92]:
+                        - generic [ref=f2e98]: EDGE
+                        - generic [ref=f2e99]: edge-02
+                        - generic [ref=f2e100]: offline since 13:40
+                    - generic [ref=f2e101]:
+                        - generic [ref=f2e107]: AP-L
+                        - generic [ref=f2e108]: ap-lobby
+                        - generic [ref=f2e109]: cAP ax
+                    - generic [ref=f2e110]: sw-office
+                    - generic [ref=f2e113]:
+                        - generic [ref=f2e115]: +
+                        - generic [ref=f2e116]: hap-garage
+                    - generic [ref=f2e117]: ubnt-cam
+                    - generic [ref=f2e120]:
+                        - generic [ref=f2e122]: +
+                        - generic [ref=f2e123]: chr-backup
+                    - generic [ref=f2e124]: lab-switch
+                    - generic [ref=f2e127]: isp-modem
+                    - generic [ref=f2e130]:
+                        - generic [ref=f2e133]: +
+                        - generic [ref=f2e134]: cap-floor2
+                    - generic [ref=f2e135]: cap-floor3
+                    - generic [ref=f2e138]: printer-2f
+                - generic [ref=f2e141]:
+                    - generic [ref=f2e142]: Online
+                    - generic [ref=f2e144]: Offline
+                    - generic [ref=f2e146]: Neighbour
+                    - generic [ref=f2e148]: Can be added
+                    - generic [ref=f2e150]: Outer ring CPU · inner ring memory
+                    - generic [ref=f2e151]: Drag to move · scroll to zoom · hover a node to see its links
+            - 'complementary "Neighbour details: cap-floor2" [ref=f2e152]':
+                - generic [ref=f2e153]:
+                    - generic [ref=f2e154]:
+                        - generic [ref=f2e155]: Neighbour
+                        - generic [ref=f2e156]: Can be added
+                        - button "Close neighbour details" [ref=f2e158] [cursor=pointer]
+                    - heading "cap-floor2" [level=3] [ref=f2e161]
+                    - paragraph [ref=f2e162]: Seen by ap-lobby on ether1 over MNDP
+                - generic [ref=f2e163]:
+                    - generic [ref=f2e164]:
+                        - term [ref=f2e165]: Identity
+                        - definition [ref=f2e166]: cap-floor2
+                        - term [ref=f2e167]: Address
+                        - definition [ref=f2e168]: 192.168.88.42
+                        - term [ref=f2e169]: MAC
+                        - definition [ref=f2e170]: 48:A9:8A:3B:7C:10
+                        - term [ref=f2e171]: Board
+                        - definition [ref=f2e172]: cAP ax
+                        - term [ref=f2e173]: Platform
+                        - definition [ref=f2e174]: MikroTik
+                        - term [ref=f2e175]: Version
+                        - definition [ref=f2e176]: 7.16.1 (stable)
+                        - term [ref=f2e177]: Uptime
+                        - definition [ref=f2e178]: 3d 2h 41m
+                    - generic [ref=f2e179]:
+                        - generic [ref=f2e180]: Not managed yet
+                        - paragraph [ref=f2e181]: Add this entry to your device config to manage it from MCP.
+                        - generic [ref=f2e182]: '{ "cap-floor2": { "host": "192.168.88.42", "port": 22, "username": "admin" } }'
+                    - generic [ref=f2e183]:
+                        - button "Copy config stub" [ref=f2e184] [cursor=pointer]
+                        - button "Add to Devices" [ref=f2e185] [cursor=pointer]
+                    - generic [ref=f2e186]: Add to Devices opens the router form with these values. Nothing is saved until you save it there.

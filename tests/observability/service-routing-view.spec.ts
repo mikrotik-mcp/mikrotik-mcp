@@ -106,8 +106,8 @@ test("shows the primary and unknown evidence without probing on mount", async ()
   await mount();
   await policiesTab();
   expect(host.textContent).toContain("Primary exit");
-  expect(host.textContent).toContain("untested");
-  expect(host.textContent).toContain("Automatic failover paused");
+  expect(host.textContent).toContain("Untested");
+  expect(host.textContent).toContain("Automatic failover off");
   expect(postJson).not.toHaveBeenCalled();
 });
 
@@ -120,9 +120,9 @@ test("shows network organizations while entering public IPv4 and IPv6 client sco
   );
   await mount();
   await act(async () =>
-    [...host.querySelectorAll("button")].find((b) => b.textContent === "New MCP policy")!.click(),
+    [...host.querySelectorAll("button")].find((b) => b.textContent === "New policy")!.click(),
   );
-  const input = document.querySelector('input[placeholder="10.10.10.0/24"]')!;
+  const input = document.querySelector('input[placeholder="192.168.88.0/24, 10.10.0.0/24"]')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
       input,
@@ -157,7 +157,7 @@ test("saves an explicit domain without a probe and requires consent for a wildca
   vi.mocked(postJson).mockResolvedValue({ ...policy, target: undefined, host: "*.example.com" });
   await mount();
   await act(async () =>
-    [...host.querySelectorAll("button")].find((b) => b.textContent === "New MCP policy")!.click(),
+    [...host.querySelectorAll("button")].find((b) => b.textContent === "New policy")!.click(),
   );
   const fill = async (placeholder: string, value: string) =>
     act(async () => {
@@ -165,18 +165,20 @@ test("saves an explicit domain without a probe and requires consent for a wildca
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-  await fill("Google · household IPv4", "Manual wildcard");
+  await fill("stream-via-vpn", "Manual wildcard");
   await fill("api.example.com or *.example.com", "*.example.com");
-  await fill("10.10.10.0/24", "10.1.0.0/24");
+  await fill("192.168.88.0/24, 10.10.0.0/24", "10.1.0.0/24");
   const exit = [...document.querySelectorAll("fieldset label")].find((e) =>
     e.textContent?.startsWith("main"),
   )!;
-  await act(async () => (exit.querySelector('[role="checkbox"]') as HTMLButtonElement).click());
+  await act(async () => (exit.querySelector('input[type="checkbox"]') as HTMLInputElement).click());
   const save = [...document.querySelectorAll("button")].find(
     (b) => b.textContent === "Save draft",
   )!;
   expect(save.disabled).toBe(true);
-  const consent = document.querySelector('.route-domain [role="checkbox"]') as HTMLButtonElement;
+  const consent = document.querySelector(
+    '.route-domain input[type="checkbox"]',
+  ) as HTMLInputElement;
   await act(async () => consent.click());
   expect(save.disabled).toBe(false);
   await act(async () => save.click());
@@ -208,9 +210,9 @@ test("managing approvals from the policy form preserves the unsaved policy on re
   vi.mocked(postJson).mockResolvedValue({ ok: true });
   await mount();
   await act(async () =>
-    [...host.querySelectorAll("button")].find((b) => b.textContent === "New MCP policy")!.click(),
+    [...host.querySelectorAll("button")].find((b) => b.textContent === "New policy")!.click(),
   );
-  const input = document.querySelector('input[placeholder="Google · household IPv4"]')!;
+  const input = document.querySelector('input[placeholder="stream-via-vpn"]')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
       input,
@@ -223,15 +225,14 @@ test("managing approvals from the policy form preserves the unsaved policy on re
       .find((b) => b.textContent?.includes("Manage service probes"))!
       .click(),
   );
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Manage service probes");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Service probes");
   await act(async () =>
     [...document.querySelectorAll('[role="dialog"] button')]
       .find((b) => b.textContent === "Close")!
       .dispatchEvent(new MouseEvent("click", { bubbles: true })),
   );
   expect(
-    (document.querySelector('input[placeholder="Google · household IPv4"]') as HTMLInputElement)
-      .value,
+    (document.querySelector('input[placeholder="stream-via-vpn"]') as HTMLInputElement).value,
   ).toBe("My unsaved policy");
   expect(vi.mocked(postJson).mock.calls.every(([path]) => path.includes("/validate"))).toBe(true);
 });
@@ -315,7 +316,7 @@ test("does not turn a failed IPv6 read into no routes, and retains IPv4", async 
         : { policies: [] },
   );
   await mount();
-  expect(host.textContent).toContain("1 sections could not be read");
+  expect(host.textContent).toContain("1 section could not be read");
   expect(host.textContent).toContain("Router read timed out");
   expect(host.textContent).toContain("192.0.2.1");
 });
@@ -324,7 +325,7 @@ test("inspect shows rule fields without sending a mutation", async () => {
   await mount();
   const inspect = host.querySelector('button[aria-label="Inspect 0.0.0.0/0"]') as HTMLButtonElement;
   await act(async () => inspect.click());
-  const dialog = document.querySelector('[role="dialog"]');
+  const dialog = document.querySelector('aside[aria-label^="Inspect"]');
   expect(dialog?.textContent).toContain("/ip route");
   expect(dialog?.textContent).toContain("192.0.2.1");
   expect(postJson).not.toHaveBeenCalled();
@@ -347,11 +348,13 @@ test("route gateway badges preserve raw scoped values in search and inspection",
     );
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(host.textContent).toContain("1 matching entries");
+  expect(host.textContent).toContain("1 entry");
   await act(async () =>
     (host.querySelector('button[aria-label="Inspect 0.0.0.0/0"]') as HTMLButtonElement).click(),
   );
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("45.87.6.145%ether1");
+  expect(document.querySelector('aside[aria-label^="Inspect"]')?.textContent).toContain(
+    "45.87.6.145%ether1",
+  );
   expect(data.sections.routes4.rows[0]["immediate-gw"]).toBe("45.87.6.145%ether1");
   expect(postJson).not.toHaveBeenCalled();
 });
@@ -382,7 +385,7 @@ test("address explorer reads every page without writes and survives inventory re
     "/api/service-routing/addresses?device=lab&family=ipv4&offset=0",
     expect.any(AbortSignal),
   );
-  expect(host.textContent).toContain("2 entries indexed");
+  expect(host.textContent).toContain("2 entries searched");
   expect(host.textContent).toContain("192.0.2.6");
   await act(async () =>
     root.render(
@@ -394,7 +397,7 @@ test("address explorer reads every page without writes and survives inventory re
       }),
     ),
   );
-  expect(host.textContent).toContain("2 entries indexed");
+  expect(host.textContent).toContain("2 entries searched");
   expect(api).toHaveBeenCalledTimes(2);
   expect(postJson).not.toHaveBeenCalled();
 });

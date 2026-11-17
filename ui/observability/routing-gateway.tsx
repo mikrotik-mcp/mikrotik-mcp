@@ -1,7 +1,7 @@
-import { Network } from "lucide-react";
-import "./routing-gateway.css";
-
-/** Presentation only: retain raw RouterOS values for search, inspection and commands. */
+/**
+ * Presentation only: retain raw RouterOS values for search, inspection and commands.
+ * Styles live in service-routing.css (`.routing-gateway*`), so the markup stays plain.
+ */
 export function RoutingGateway({ value }: { value: string }) {
   // Split ECMP members only when every member has an unambiguous IP%interface shape.
   // Interface-only names, explanatory text and unknown syntax remain untouched.
@@ -24,7 +24,6 @@ export function RoutingGateway({ value }: { value: string }) {
           >
             <code dir="ltr">{address}</code>
             <span className="routing-gateway__interface" title={`Interface: ${iface}`}>
-              <Network size={12} aria-hidden="true" />
               <span dir="ltr">{iface}</span>
             </span>
           </span>

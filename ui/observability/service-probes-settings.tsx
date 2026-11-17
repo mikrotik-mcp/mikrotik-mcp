@@ -1,17 +1,14 @@
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useEffect, useRef, useState } from "react";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import { ConfigEditor } from "./config-editor";
 import { api } from "./api";
+import { MonitorButton } from "./monitoring-ui";
 
-/** Narrow safe-apply workspace. Closing goes through ConfigEditor's discard/rollback guard. */
+/**
+ * Narrow safe-apply workspace. The header's Close calls ConfigEditor's guarded
+ * close (it asks before dropping a draft and waits out a pending save), so the
+ * dialog ignores Escape and outside clicks.
+ */
 export function ServiceProbesSettings({
   onClose,
   onReload,
@@ -22,6 +19,7 @@ export function ServiceProbesSettings({
   const [config, setConfig] = useState<Record<string, unknown>>();
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const closeRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void api<Record<string, unknown>>("/api/config", controller.signal)
@@ -35,51 +33,72 @@ export function ServiceProbesSettings({
     return () => controller.abort();
   }, [attempt]);
   return (
-    <Dialog open>
-      <DialogContent
-        className="probe-settings"
-        showCloseButton={false}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onPointerDownOutside={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle>Manage service probes</DialogTitle>
-          <DialogDescription>
-            Approve destinations shared by all routers. Only Service Probes settings are changed; no
-            router commands are run. Use Close to leave this editor safely.
-          </DialogDescription>
-        </DialogHeader>
-        <ScrollArea className="probe-settings__scroll">
-          {config ? (
-            <ConfigEditor
-              scope="serviceProbes"
-              initial={config}
-              onClose={onClose}
-              onReload={onReload}
-            />
-          ) : (
-            <div className="grid gap-3 py-4">
-              <p role={error ? "alert" : "status"}>{error || "Loading current approvals…"}</p>
-              <div className="flex gap-2">
-                {error && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setError("");
-                      setAttempt((n) => n + 1);
-                    }}
-                  >
-                    Retry
-                  </Button>
-                )}
-                <Button variant="outline" onClick={onClose}>
-                  Close
-                </Button>
-              </div>
+    <DialogPrimitive.Root open>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55" />
+        <DialogPrimitive.Content
+          className="monitor-dialog probe-settings fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] max-w-[720px] -translate-x-1/2 -translate-y-1/2 flex-col outline-none"
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <div className="monitor-dialog-head">
+            <div className="min-w-0 flex-1">
+              <DialogPrimitive.Title asChild>
+                <h2>Service probes</h2>
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description asChild>
+                <p>
+                  Services MCP may test from a router. Service Routing uses the HTTPS ones to check
+                  exits.
+                </p>
+              </DialogPrimitive.Description>
             </div>
-          )}
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              onClick={() => (config && closeRef.current ? closeRef.current() : onClose())}
+            >
+              Close
+            </MonitorButton>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {config ? (
+              <ConfigEditor
+                scope="serviceProbes"
+                initial={config}
+                onClose={onClose}
+                onReload={onReload}
+                closeRef={closeRef}
+              />
+            ) : (
+              <div className="monitor-dialog-body grid gap-3">
+                <p
+                  role={error ? "alert" : "status"}
+                  className={
+                    error ? "monitor-err text-[13px]" : "text-[13px] text-muted-foreground"
+                  }
+                >
+                  {error || "Loading the approved services…"}
+                </p>
+                <div className="flex gap-2">
+                  {error && (
+                    <MonitorButton
+                      size="sm"
+                      onClick={() => {
+                        setError("");
+                        setAttempt((n) => n + 1);
+                      }}
+                    >
+                      Retry
+                    </MonitorButton>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

@@ -5,14 +5,34 @@
  * MCP tools use (`src/core/l2-fabric.ts`, `advisories.ts`, `access.ts`), so the
  * dashboard can never disagree with what a tool call reports.
  */
+import "./fabric.css";
 import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Cable, Network, RefreshCw, ShieldCheck, ShieldOff } from "lucide-react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  Inbox,
+  RefreshCw,
+  SearchX,
+  ShieldCheck,
+  ShieldOff,
+} from "lucide-react";
 import { api } from "./api";
 import { Panel } from "./atoms";
-import { Button, Select } from "./geist";
+import { Button } from "./geist";
 import { Checkbox } from "./components/ui/checkbox";
+import { clock } from "./format";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorEmpty,
+  MonitorSearch,
+  PageIntro,
+  RouterPicker,
+  useStaggerIn,
+} from "./monitoring-ui";
 
 // ── Shared bits ──────────────────────────────────────────────────────────────
 
@@ -22,35 +42,6 @@ interface DeviceInfo {
 interface DevicesPayload {
   defaultDevice: string;
   devices: DeviceInfo[];
-}
-
-/** Device picker shared by the two device-scoped views. */
-function DevicePicker({
-  value,
-  onChange,
-}: {
-  value: string | undefined;
-  onChange: (d: string | undefined) => void;
-}): ReactNode {
-  const [names, setNames] = useState<string[]>([]);
-  useEffect(() => {
-    void api<DevicesPayload>("/api/devices")
-      .then((d) => setNames(d.devices.map((x) => x.name)))
-      .catch(() => setNames([]));
-  }, []);
-  if (names.length <= 1) return null;
-  return (
-    <Select
-      size="sm"
-      aria-label="Device"
-      value={value ?? ""}
-      onValueChange={(next) => onChange(next || undefined)}
-      options={[
-        { value: "", label: "(default device)" },
-        ...names.map((n) => ({ value: n, label: n })),
-      ]}
-    />
-  );
 }
 
 function Loading(): ReactNode {
@@ -100,26 +91,52 @@ interface FabricMap {
   error?: string;
 }
 
-const ROLE_STYLE: Record<string, string> = {
-  uplink: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  access: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  hybrid: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  empty: "bg-muted text-muted-foreground",
+/** Role colour on the badge text and its dot, from the board. */
+const ROLE_TEXT: Record<FabricPort["role"], string> = {
+  uplink: "text-brand",
+  access: "text-success",
+  hybrid: "text-warning",
+  empty: "text-muted-foreground",
 };
+const PORT_COLS = "grid-cols-[minmax(180px,1.2fr)_112px_minmax(120px,1fr)_96px]";
+const HOST_COLS = "grid-cols-[16px_minmax(160px,240px)_170px_130px_minmax(100px,1fr)]";
+/** Hosts shown under an open port before "Show N more hosts". */
+const HOSTS_SHOWN = 5;
+const LEAD =
+  "Which host sits behind which bridge port. Names come from DHCP, ARP, neighbours and the vendor.";
+
+/** No DHCP name, no IP and no neighbour entry: the analyzer counts these as unidentified. */
+const unidentified = (h: FabricHost): boolean =>
+  h.nameSource === "vendor" || h.nameSource === "none";
 
 /** Per-port occupancy: which hosts sit behind each bridge port. */
 export function FabricView(): ReactNode {
   const [device, setDevice] = useState<string | undefined>(undefined);
+  const [routers, setRouters] = useState<DevicesPayload | null>(null);
   const [data, setData] = useState<FabricMap | null>(null);
+  const [readAt, setReadAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [query, setQuery] = useState("");
+  // Ports the user opened or closed, against the default (first port, or search hits).
+  const [toggled, setToggled] = useState<Set<string>>(() => new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void api<DevicesPayload>("/api/devices")
+      .then(setRouters)
+      .catch(() => setRouters(null));
+  }, []);
 
   const load = useCallback(() => {
     void api<FabricMap>(`/api/fabric${device ? `?device=${encodeURIComponent(device)}` : ""}`)
       .then((d) => {
         setError(d.error ?? null);
-        if (!d.error) setData(d);
+        if (!d.error) {
+          setData(d);
+          setReadAt(Date.now());
+        }
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
@@ -130,6 +147,8 @@ export function FabricView(): ReactNode {
     setBusy(true);
     setError(null);
     setData(null);
+    setToggled(new Set());
+    setExpanded(new Set());
   }
   const reload = () => {
     setBusy(true);
@@ -155,108 +174,259 @@ export function FabricView(): ReactNode {
         : p,
     )
     .filter((p) => !q || p.hosts.length > 0 || p.interface.toLowerCase().includes(q));
+  useStaggerIn(listRef, ".fabric-port", `${q}|${data?.device ?? ""}|${readAt ?? 0}`);
+
+  const isOpen = (p: FabricPort, i: number): boolean =>
+    (q ? p.hosts.length > 0 : i === 0) !== toggled.has(p.interface);
+  const toggle = (name: string) => {
+    const next = new Set(toggled);
+    if (!next.delete(name)) next.add(name);
+    setToggled(next);
+  };
+  const onSearch = (value: string) => {
+    setQuery(value);
+    setToggled(new Set());
+  };
+
+  const names = routers?.devices.map((d) => d.name) ?? [];
+  const bridges = [...new Set((data?.ports ?? []).map((p) => p.bridge).filter(Boolean))];
+  const s = data?.stats;
 
   return (
-    <Panel
-      title="Layer-2 Fabric — hosts by physical port"
-      extra={
-        <div className="flex items-center gap-2">
-          <input
-            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-            placeholder="find MAC / IP / host…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <DevicePicker value={device} onChange={setDevice} />
-          <Button size="sm" ghost loading={busy} icon={<RefreshCw />} onClick={reload}>
-            Refresh
-          </Button>
-        </div>
-      }
-    >
-      {error != null ? (
-        <ErrorBox message={error} />
-      ) : data == null ? (
-        <Loading />
-      ) : (
-        <div className="px-5">
-          <div className="mb-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
-            <span>
-              <strong className="text-foreground">{data.stats.ports}</strong> occupied ports
-            </span>
-            <span>
-              <strong className="text-foreground">{data.stats.hosts}</strong> hosts
-            </span>
-            <span>
-              <strong className="text-foreground">{data.stats.accessPorts}</strong> access
-            </span>
-            <span>
-              <strong className="text-foreground">{data.stats.uplinks}</strong> uplink
-            </span>
-            {data.stats.unidentified > 0 && (
-              <span className="text-amber-600 dark:text-amber-400">
-                <strong>{data.stats.unidentified}</strong> unidentified
+    <section className="fabric grid min-w-0 content-start gap-6">
+      <PageIntro
+        tone={error != null ? "bad" : data ? "good" : "default"}
+        title={
+          error != null ? (
+            <b>Could not read the bridge</b>
+          ) : data && s ? (
+            <>
+              <b>
+                {s.hosts} host{s.hosts === 1 ? "" : "s"} on {s.ports} port
+                {s.ports === 1 ? "" : "s"}
+              </b>
+              <span>
+                · {data.device}
+                {readAt != null ? ` · read at ${clock(readAt)}` : ""}
               </span>
-            )}
-          </div>
-
-          {ports.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              {data.ports.length === 0
-                ? "No bridge host entries — this device may have no bridge, or switch-chip offload " +
-                  "is forwarding without populating the host table."
-                : "No host matches that search."}
-            </div>
+            </>
           ) : (
-            <div className="grid gap-2 pb-2">
-              {ports.map((p) => (
-                <div key={p.interface} className="rounded-lg border border-border p-3">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Cable className="size-3.5 text-muted-foreground" />
-                    <span className="font-mono text-sm font-semibold">{p.interface}</span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
-                        ROLE_STYLE[p.role] ?? ""
-                      }`}
-                    >
-                      {p.role}
-                    </span>
-                    {p.bridge != null && (
-                      <span className="text-[11px] text-muted-foreground">{p.bridge}</span>
-                    )}
-                    <span className="flex-1" />
-                    <span className="text-[11px] text-muted-foreground">
-                      {p.hostCount} host{p.hostCount === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                  <div className="grid gap-1">
-                    {p.hosts.map((h) => (
-                      <div key={h.mac} className="flex items-center gap-2 text-xs">
-                        {h.isNetworkDevice ? (
-                          <Network className="size-3 shrink-0 text-blue-500" />
-                        ) : (
-                          <span className="size-3 shrink-0" />
-                        )}
-                        <span className="font-medium">{h.label}</span>
-                        <span className="font-mono text-[11px] text-muted-foreground">{h.mac}</span>
-                        {h.ip != null && (
-                          <span className="text-[11px] text-muted-foreground">{h.ip}</span>
-                        )}
-                        {h.vendor != null && (
-                          <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
-                            {h.vendor}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+            <b>Reading the bridge host table</b>
+          )
+        }
+        controls={
+          <>
+            {names.length > 1 && (
+              <>
+                <span className="monitor-label">Router</span>
+                <RouterPicker
+                  label="Device"
+                  value={device ?? routers?.defaultDevice ?? ""}
+                  onChange={(next) => setDevice(next || undefined)}
+                  routers={names}
+                  defaultRouter={routers?.defaultDevice}
+                />
+              </>
+            )}
+            <MonitorButton
+              size="sm"
+              disabled={busy}
+              icon={<RefreshCw aria-hidden="true" className={busy ? "animate-spin" : undefined} />}
+              onClick={reload}
+            >
+              Refresh
+            </MonitorButton>
+          </>
+        }
+      >
+        {LEAD}
+      </PageIntro>
+
+      {error != null ? (
+        <div className="monitor-note" data-tone="bad" role="alert">
+          <AlertTriangle aria-hidden="true" className="text-destructive" />
+          <span className="min-w-0 flex-1">
+            <span className="font-[590]">Could not reach the device.</span>{" "}
+            <span className="text-muted-foreground">{error}</span>
+          </span>
         </div>
+      ) : data == null || s == null ? (
+        <LoadingState label="Loading the L2 fabric" layout="cards" />
+      ) : (
+        <>
+          <MetricStrip label="Fabric totals" minCell={170}>
+            <Metric
+              label="Occupied ports"
+              value={s.ports}
+              hint={
+                bridges.length === 1
+                  ? `on ${bridges[0]}`
+                  : bridges.length
+                    ? `on ${bridges.length} bridges`
+                    : "no bridge"
+              }
+            />
+            <Metric label="Hosts" value={s.hosts} hint="seen passing frames" />
+            <Metric label="Access" value={s.accessPorts} hint="one host each" />
+            <Metric label="Uplink" value={s.uplinks} hint="switch or many hosts" />
+            <Metric
+              label="Unidentified"
+              tone={s.unidentified > 0 ? "warn" : "default"}
+              value={s.unidentified}
+              hint="no lease, ARP or neighbour entry"
+            />
+          </MetricStrip>
+
+          <section className="monitor-panel" aria-label="Hosts by port">
+            <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+              <div className="mr-2">
+                <h2 className="text-[14px] font-[590]">Hosts by port</h2>
+              </div>
+              <MonitorSearch
+                className="flex-[1_1_300px]"
+                label="Find a host"
+                placeholder="Find a MAC, IP or host name"
+                value={query}
+                onChange={onSearch}
+              />
+              <span className="text-[12px] text-muted-foreground">Read-only</span>
+            </div>
+            {ports.length === 0 ? (
+              <div className="border-t border-border">
+                {data.ports.length === 0 ? (
+                  <MonitorEmpty icon={<Inbox />} title="No bridge hosts">
+                    This router may have no bridge, or switch-chip offload is forwarding without
+                    filling the host table.
+                  </MonitorEmpty>
+                ) : (
+                  <MonitorEmpty compact icon={<SearchX />} title="No host matches that search" />
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div ref={listRef} className="min-w-[720px]">
+                  <div className={`monitor-thead ${PORT_COLS}`}>
+                    <span>Port</span>
+                    <span>Role</span>
+                    <span>Bridge</span>
+                    <span className="text-right">Hosts</span>
+                  </div>
+                  {ports.map((p, i) => {
+                    const open = isOpen(p, i);
+                    const all = expanded.has(p.interface);
+                    const hosts = all ? p.hosts : p.hosts.slice(0, HOSTS_SHOWN);
+                    const more = p.hosts.length - hosts.length;
+                    const panelId = `fabric-hosts-${i}`;
+                    return (
+                      <Fragment key={p.interface}>
+                        <button
+                          type="button"
+                          className={`monitor-row fabric-port ${PORT_COLS} ${open ? "bg-overlay-03" : ""}`}
+                          aria-expanded={open}
+                          aria-controls={open ? panelId : undefined}
+                          onClick={() => toggle(p.interface)}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <ChevronRight
+                              aria-hidden="true"
+                              strokeWidth={1.5}
+                              className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+                            />
+                            <span className="font-mono text-[13px] text-foreground">
+                              {p.interface}
+                            </span>
+                          </span>
+                          <span>
+                            <span className={`monitor-badge ${ROLE_TEXT[p.role]}`}>
+                              <span className="monitor-dot bg-current" aria-hidden="true" />
+                              {p.role[0].toUpperCase() + p.role.slice(1)}
+                            </span>
+                          </span>
+                          <span className="truncate font-mono text-[12px] text-muted-foreground">
+                            {p.bridge ?? "—"}
+                          </span>
+                          <span className="text-right text-fg-secondary tabular-nums">
+                            {p.hostCount}
+                          </span>
+                        </button>
+                        {open && (
+                          <div id={panelId} className="bg-overlay-02">
+                            {hosts.map((h) => {
+                              const unknown = unidentified(h);
+                              return (
+                                <div key={h.mac} className={`monitor-row ${HOST_COLS} pl-12`}>
+                                  <span className="grid place-items-center text-brand">
+                                    {h.isNetworkDevice && (
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        className="size-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={1.5}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        role="img"
+                                        aria-label="Network device"
+                                      >
+                                        <rect x="3" y="8" width="18" height="8" rx="2" />
+                                        <path d="M7 12h.01M11 12h.01M15 12h.01" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <span
+                                      className={`truncate font-[510] ${unknown ? "text-fg-secondary" : "text-foreground"}`}
+                                    >
+                                      {h.label}
+                                    </span>
+                                    {unknown && (
+                                      <span className="monitor-chip text-warning">
+                                        Unidentified
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="font-mono text-[12px] text-fg-secondary">
+                                    {h.mac}
+                                  </span>
+                                  <span className="font-mono text-[12px] text-muted-foreground">
+                                    {h.ip ?? "—"}
+                                  </span>
+                                  <span>
+                                    {h.vendor != null && (
+                                      <span className="monitor-chip">{h.vendor}</span>
+                                    )}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            {more > 0 && (
+                              <div className="monitor-row grid-cols-1 pl-[72px]">
+                                <button
+                                  type="button"
+                                  className="justify-self-start text-[12px] font-[510] text-brand hover:underline"
+                                  onClick={() => setExpanded(new Set(expanded).add(p.interface))}
+                                >
+                                  Show {more} more hosts
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div className="monitor-row grid-cols-1 text-[12px] text-muted-foreground">
+              Roles come from how many hosts sit behind a port: one host is an access port, more
+              than four or another switch is an uplink, in between is hybrid. Search finds a host on
+              any port and opens it.
+            </div>
+          </section>
+        </>
       )}
-    </Panel>
+    </section>
   );
 }
 

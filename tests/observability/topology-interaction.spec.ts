@@ -63,8 +63,7 @@ afterEach(async () => {
 test("topology renders the MCP hub, managed device and discovered neighbor separately", async () => {
   await act(async () => root.render(createElement(TopologyMap, { topo, onOnboard })));
   expect(host.textContent).toContain("fixture-host");
-  expect(host.textContent).toContain("1 managed · 1 discovered");
-  expect(host.textContent).toContain("1 awaiting onboard");
+  expect(host.textContent).toContain("Can be added (1)");
   expect(host.textContent).toContain("Edge Router");
   expect(host.textContent).toContain("Access Point");
   expect(host.querySelectorAll("svg g.cursor-pointer")).toHaveLength(2);
@@ -81,13 +80,13 @@ test("inspecting an unmanaged neighbor offers only its scoped configuration stub
   expect(host.textContent).toContain("Not managed yet");
   expect(host.textContent).toContain("access-point");
   expect(host.textContent).toContain("192.0.2.5");
-  await act(async () => button("Add to Devices →")!.click());
+  await act(async () => button("Add to Devices")!.click());
   expect(onOnboard).toHaveBeenCalledExactlyOnceWith("access-point", {
     port: 22,
     username: "admin",
     host: "192.0.2.5",
   });
-  await act(async () => button("Close")!.click());
+  await act(async () => button("Close neighbour details")!.click());
   expect(host.textContent).not.toContain("Not managed yet");
 });
 
@@ -96,6 +95,6 @@ test("zoom changes the displayed scale and reset restores the initial viewport",
   expect(host.textContent).toContain("100%");
   await act(async () => button("Zoom in")!.click());
   expect(host.textContent).toContain("125%");
-  await act(async () => button("Reset")!.click());
+  await act(async () => button("Reset view")!.click());
   expect(host.textContent).toContain("100%");
 });

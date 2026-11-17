@@ -82,7 +82,7 @@ test("invalid input stays open, valid add is draft-only, searchable and preserve
   await click("Add to draft");
   expect(document.querySelectorAll('[role="alert"]').length).toBeGreaterThan(0);
   await fill("Service ID", "demo");
-  await fill("Hostname", "api.example.com");
+  await fill("Host name", "api.example.com");
   await fill("Allowed IPs or CIDRs", "192.0.2.8,2001:db8::8/128");
   await click("Add to draft");
   expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -101,7 +101,7 @@ test("stable aliases cannot be renamed, edit and removal affect only the chosen 
   await click("Edit service existing");
   const alias = document.querySelector('input[value="existing"]') as HTMLInputElement;
   expect(alias.disabled).toBe(true);
-  await fill("Hostname", "changed.example.com");
+  await fill("Host name", "changed.example.com");
   await click("Update draft");
   expect(recordDraft.mock.lastCall?.[0].serviceProbes).toMatchObject({
     targets: { existing: { host: "changed.example.com" } },
@@ -122,7 +122,7 @@ test("stable aliases cannot be renamed, edit and removal affect only the chosen 
 test("canceling dirty details asks before discarding and leaves the outer draft unchanged", async () => {
   await act(async () => root.render(h(Harness)));
   await click("Add service");
-  await fill("Hostname", "unsaved.example.com");
+  await fill("Host name", "unsaved.example.com");
   await click("Cancel");
   expect(document.body.textContent).toContain("Discard the unsaved service details?");
   await click("Continue editing");
@@ -132,14 +132,17 @@ test("canceling dirty details asks before discarding and leaves the outer draft 
 });
 test("focused editor validates, previews, saves and confirms using only the probe scope", async () => {
   const onClose = vi.fn(),
-    onReload = vi.fn();
+    onReload = vi.fn(),
+    closeRef: { current: (() => void) | null } = { current: null };
   vi.mocked(postJson).mockImplementation(async (path) =>
     path === "/api/config?scope=serviceProbes"
       ? { ok: true, config: cfg, pendingId: "p", rollbackMs: 60000 }
       : { ok: true, kept: true, summary: { changed: false } },
   );
   await act(async () =>
-    root.render(h(ConfigEditor, { scope: "serviceProbes", initial: cfg, onClose, onReload })),
+    root.render(
+      h(ConfigEditor, { scope: "serviceProbes", initial: cfg, onClose, onReload, closeRef }),
+    ),
   );
   await act(async () => {
     await new Promise((r) => setTimeout(r, 370));
@@ -157,7 +160,8 @@ test("focused editor validates, previews, saves and confirms using only the prob
   await click("Keep changes");
   expect(postJson).toHaveBeenCalledWith("/api/config/keep", { pendingId: "p" });
   expect(onReload).toHaveBeenCalled();
-  await click("Close");
+  // The dialog's header Close calls the editor's guarded close.
+  await act(async () => closeRef.current?.());
   expect(onClose).toHaveBeenCalledOnce();
 });
 

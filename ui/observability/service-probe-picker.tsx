@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { api } from "./api";
+import { MonitorButton } from "./monitoring-ui";
+import { FieldSelect } from "./service-routing-ui";
 
 /** Configuration-only lookup: adding an approval never waits for router SSH inventory. */
 export function ServiceProbePicker({
@@ -46,46 +39,42 @@ export function ServiceProbePicker({
   useEffect(() => {
     if (targets && value && !targets.includes(value)) onChange("");
   }, [targets, value, onChange]);
+  const placeholder = error
+    ? "Approvals unavailable"
+    : !targets
+      ? "Loading approved services…"
+      : targets.length
+        ? "Choose an HTTPS service"
+        : "Add your first HTTPS service";
   return (
-    <div className="ops-field ops-field--wide">
-      <span>Approved service {optional && <small>· optional health probe</small>}</span>
-      <Select
+    <div className="monitor-fl">
+      <div className="flex items-center">
+        <span className="monitor-label flex-1">
+          Approved service {optional && <span className="font-normal">· optional</span>}
+        </span>
+        <button
+          type="button"
+          className="cursor-pointer text-[12px] font-[510] text-brand hover:underline"
+          onClick={onManage}
+        >
+          Manage service probes
+        </button>
+      </div>
+      <FieldSelect
+        label="Approved service"
         value={value || (optional ? "__none__" : "")}
-        onValueChange={(v) => onChange(v === "__none__" ? "" : v)}
+        onChange={(v) => onChange(v === "__none__" ? "" : v)}
         disabled={!optional && !targets?.length}
-      >
-        <SelectTrigger aria-label="Approved service">
-          <SelectValue
-            placeholder={
-              error
-                ? "Approvals unavailable"
-                : !targets
-                  ? "Loading approved services…"
-                  : targets.length
-                    ? "Select HTTPS service"
-                    : "Add your first HTTPS service"
-            }
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {optional && <SelectItem value="__none__">No probe · manual routing</SelectItem>}
-          {targets?.map((alias) => (
-            <SelectItem key={alias} value={alias}>
-              {alias}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {optional && (
-        <small>
-          Only needed for HTTPS exit checks and automatic failover. A wildcard needs an approved
-          concrete subdomain; this never probes every subdomain.
-        </small>
-      )}
+        placeholder={optional ? undefined : placeholder}
+        options={[
+          ...(optional ? [{ value: "__none__", label: "No probe · manual routing" }] : []),
+          ...(targets ?? []).map((alias) => ({ value: alias, label: `${alias} · HTTPS` })),
+        ]}
+      />
       {error ? (
-        <small role="alert">
-          {error}{" "}
-          <Button
+        <span className="monitor-err flex flex-wrap items-center gap-2" role="alert">
+          {error}
+          <MonitorButton
             size="sm"
             variant="ghost"
             onClick={() => {
@@ -93,23 +82,22 @@ export function ServiceProbePicker({
               setRetry((v) => v + 1);
             }}
           >
-            <RefreshCw size={12} />
             Retry approvals
-          </Button>
-        </small>
+          </MonitorButton>
+        </span>
+      ) : targets?.length === 0 ? (
+        <span className="monitor-hint">
+          {optional
+            ? "No HTTPS services approved yet. You can still save a domain route without a probe."
+            : "No HTTPS services approved yet. Add one in Service probes, save and keep it, then pick it here."}
+        </span>
       ) : (
-        targets?.length === 0 && (
-          <small>
-            {optional
-              ? "No HTTPS services approved yet. You can still save a domain route without a health probe."
-              : "No HTTPS services approved yet. Add a service below, save and keep your changes, then select it here. Existing router routes need no approval."}
-          </small>
+        optional && (
+          <span className="monitor-hint">
+            MCP checks each exit with this service. Pick “No probe · manual routing” to skip checks.
+          </span>
         )
       )}
-      <Button variant="outline" onClick={onManage}>
-        <Plus size={15} />
-        Manage service probes
-      </Button>
     </div>
   );
 }

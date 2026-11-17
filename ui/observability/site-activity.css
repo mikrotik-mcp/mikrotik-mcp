@@ -1,0 +1,283 @@
+/*
+ * Site Activity page, after the approved "Site Activity" board.
+ * Builds on monitoring.css; tokens from tailwind.css only.
+ */
+
+/* ── Collection panel ──────────────────────────────────────────────────────── */
+/* The board's live dot: a steady 3px ring. */
+.site-collect .monitor-badge .monitor-dot[data-tone="good"] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);
+}
+.site-collect-copy {
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.site-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  border-top: 1px solid var(--border);
+}
+.site-fact {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 20px;
+}
+.site-fact + .site-fact {
+  box-shadow: -1px 0 0 var(--border);
+}
+.site-fact-label {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 510;
+}
+.site-fact-value {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Collection editor (not on the board; kept in its language) ────────────── */
+.site-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+  background: var(--overlay-03);
+  padding: 20px;
+}
+.site-editor-grid {
+  display: grid;
+  gap: 12px;
+}
+@media (min-width: 1024px) {
+  .site-editor-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr);
+  }
+}
+.site-editor-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 16px;
+  font-size: 13px;
+}
+.site-editor-card h3 {
+  font-size: 14px;
+  font-weight: 590;
+  line-height: 20px;
+}
+.site-editor-card p {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.site-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--input);
+  padding: 10px 12px;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color 150ms ease;
+}
+.site-option:hover {
+  background: var(--overlay-03);
+}
+.site-option[aria-pressed="true"] {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--brand);
+}
+.site-option:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.site-owner-list {
+  display: grid;
+  gap: 2px;
+  padding-right: 10px;
+}
+@media (min-width: 640px) {
+  .site-owner-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.site-owner {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  transition: background-color 150ms ease;
+}
+.site-owner:hover {
+  background: var(--overlay-03);
+}
+.site-owner label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-editor-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+/* ── Filter toolbar ────────────────────────────────────────────────────────── */
+.site-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--border);
+  padding: 12px;
+  line-height: 21px;
+}
+.site-toolbar .site-search {
+  flex: 1 1 260px;
+}
+
+/* ── Destination map: 12 columns of 44px rows ──────────────────────────────── */
+.site-map {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: 44px;
+  gap: 4px;
+}
+.site-tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--border);
+  padding: 8px 10px;
+}
+.site-tile-name {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 510;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-tile-value {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Destinations table ────────────────────────────────────────────────────── */
+.site-grid {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.2fr) 90px 80px 72px;
+}
+.site-cell {
+  min-width: 0;
+}
+.site-title,
+.site-who,
+.site-cell > .site-mono {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-title {
+  color: var(--foreground);
+  font-weight: 510;
+}
+.site-sub {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.site-mono {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.monitor-badge.site-src {
+  height: 18px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.site-num {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.site-last {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.site-footnote {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 21px;
+  text-wrap: pretty;
+}
+
+/* ── Phones: two columns, who and where on the left, numbers on the right ── */
+@media (max-width: 639px) {
+  .site-editor {
+    padding: 16px;
+  }
+  .monitor-thead.site-thead {
+    display: none;
+  }
+  .site-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "dest seen"
+      "who traffic"
+      "who last";
+    row-gap: 4px;
+  }
+  .site-grid > :nth-child(1) {
+    grid-area: dest;
+  }
+  .site-grid > :nth-child(2) {
+    grid-area: who;
+  }
+  .site-grid > :nth-child(3) {
+    grid-area: seen;
+  }
+  .site-grid > :nth-child(4) {
+    grid-area: traffic;
+  }
+  .site-grid > :nth-child(5) {
+    grid-area: last;
+  }
+}

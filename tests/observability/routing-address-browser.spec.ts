@@ -64,7 +64,7 @@ async function search(value: string) {
 }
 test("referenced lists include members after the first page and fuzzy input never fetches again", async () => {
   await mount();
-  expect(host.textContent).toContain("201 entries indexed");
+  expect(host.textContent).toContain("201 entries searched");
   expect(host.textContent).toContain("192.0.2.200");
   expect(host.querySelector('[aria-label="Address search results"]')?.children).toHaveLength(1);
   await search("gogle production");
@@ -81,9 +81,7 @@ test("referenced lists include members after the first page and fuzzy input neve
 test("all-router scope includes unreferenced IPv6 lists and cached results are reused on reopen", async () => {
   await mount();
   await act(async () =>
-    [...host.querySelectorAll("button")]
-      .find((b) => b.textContent?.includes("All router lists"))!
-      .click(),
+    [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("All lists"))!.click(),
   );
   await search("cluade");
   expect(host.textContent).toContain("2001:db8::1");
@@ -118,5 +116,5 @@ test("keeps full row details and copies only the selected address", async () => 
   await act(async () =>
     (host.querySelector('button[aria-label="Copy 192.0.2.200"]') as HTMLButtonElement).click(),
   );
-  expect(host.textContent).toContain("Clipboard unavailable");
+  expect(host.textContent).toContain("clipboard is not available");
 });

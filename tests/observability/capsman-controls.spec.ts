@@ -70,12 +70,11 @@ const button = (label: string) =>
     (el) => el.textContent === label,
   )!;
 const chooseRemote = async () => {
-  await click(host.querySelector<HTMLElement>('[aria-label="CAPsMAN router"]')!);
-  await click(
-    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-      (el) => el.textContent === "remote",
-    )!,
-  );
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="CAPsMAN router"]')!;
+  await act(async () => {
+    select.value = "remote";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 };
 test("scopes all data to the selected router and confirms enable/disable without optimistic status", async () => {
   await open();
@@ -128,9 +127,9 @@ test("locks selection while applying and keeps an uncertain outcome visible unti
   );
   await click(button("Enable"));
   await click(button("Enable manager"));
-  expect(host.querySelector<HTMLButtonElement>('[aria-label="CAPsMAN router"]')?.disabled).toBe(
-    true,
-  );
+  expect(
+    host.querySelector<HTMLSelectElement>('select[aria-label="CAPsMAN router"]')?.disabled,
+  ).toBe(true);
   expect(button("Cancel").disabled).toBe(true);
   await act(async () =>
     finish({ ok: false, error: "Final status unknown. Refresh before trying again." }),
@@ -138,6 +137,6 @@ test("locks selection while applying and keeps an uncertain outcome visible unti
   expect(host.textContent).toContain("Final status unknown");
   expect(button("Enable").disabled).toBe(true);
   expect(postJson).toHaveBeenCalledTimes(1);
-  await click(button("Refresh status"));
+  await click(button("Refresh"));
   expect(button("Enable").disabled).toBe(false);
 });

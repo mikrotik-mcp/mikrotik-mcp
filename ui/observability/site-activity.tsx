@@ -1,31 +1,29 @@
 import { LoadingState } from "./loading-state";
-import { useEffect, useState } from "react";
-import {
-  Activity,
-  CalendarClock,
-  Check,
-  Download,
-  Globe2,
-  Infinity as InfinityIcon,
-  Network,
-  Search,
-  Settings2,
-  ShieldCheck,
-  UsersRound,
-} from "lucide-react";
-import { Tooltip, Treemap } from "recharts";
-import type { TreemapNode } from "recharts";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, Globe2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { api, withToken } from "./api";
-import { cn } from "@/lib/utils";
+import { bytes, num } from "./format";
+import {
+  formatBytes,
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorEmpty,
+  MonitorPanel,
+  MonitorSearch,
+  MonitorSelect,
+  PageIntro,
+  Segmented,
+  StatusBadge,
+  StatusDot,
+  Ticker,
+  useStaggerIn,
+} from "./monitoring-ui";
+import "./monitoring.css";
+import "./site-activity.css";
 
 type Visit = {
   client: string;
@@ -69,6 +67,10 @@ type ActivityPayload = {
   };
   note: string;
 };
+type Measure = "observations" | "bytes";
+
+/** The server returns this many rows per page. */
+const PAGE_SIZE = 100;
 const WINDOWS = [
   { label: "24 hours", ms: 86_400_000 },
   { label: "7 days", ms: 7 * 86_400_000 },
@@ -76,7 +78,7 @@ const WINDOWS = [
 ];
 const sourceLabel: Record<Visit["source"], string> = {
   "dns+flow": "DNS + traffic",
-  flow: "IP only",
+  flow: "Traffic",
   proxy: "Web Proxy",
 };
 const kindLabel: Record<string, string> = {
@@ -88,59 +90,124 @@ const kindLabel: Record<string, string> = {
   proxy: "Web Proxy",
   unknown: "Unidentified",
 };
-const palette = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
+const MEASURES: { value: Measure; label: string }[] = [
+  { value: "observations", label: "Observations" },
+  { value: "bytes", label: "Traffic bytes" },
 ];
-const formatTreeValue = (value: number, metric: "observations" | "bytes") =>
-  metric === "bytes"
-    ? `${(value / 1_048_576).toFixed(1)} MiB`
-    : `${value.toLocaleString()} observations`;
-function SiteTile({
-  x,
-  y,
-  width,
-  height,
-  name,
-  value,
-  index,
-  depth,
-  total,
-  metric,
-}: TreemapNode & { total: number; metric: "observations" | "bytes" }) {
-  if (depth === 0) return <g />;
-  const label = String(name ?? "");
-  return (
-    <g>
-      <rect
-        x={x + 2}
-        y={y + 2}
-        width={Math.max(0, width - 4)}
-        height={Math.max(0, height - 4)}
-        rx={9}
-        fill={palette[index % palette.length]}
-        opacity={0.92}
-      />
-      {width > 85 && height > 38 && (
-        <>
-          <text x={x + 12} y={y + 23} fill="white" fontSize={12} fontWeight={650}>
-            {label.length > Math.floor(width / 8)
-              ? `${label.slice(0, Math.max(4, Math.floor(width / 8) - 1))}…`
-              : label}
-          </text>
-          {height > 62 && (
-            <text x={x + 12} y={y + 43} fill="white" fontSize={11} opacity={0.85}>
-              {formatTreeValue(Number(value), metric)} ·{" "}
-              {total ? Math.round((Number(value) / total) * 100) : 0}%
-            </text>
-          )}
-        </>
-      )}
-    </g>
-  );
+
+const MIB = 1024 * 1024;
+
+/** Row traffic, as the board writes it: "2,140 MiB"; under 1 MiB, "512.0 KiB". */
+function rowBytes(n: number): string {
+  return n >= MIB ? `${num(Math.round(n / MIB))} MiB` : bytes(n);
+}
+
+const formatMeasure = (value: number, measure: Measure): string =>
+  measure === "bytes" ? rowBytes(value) : num(Math.round(value));
+
+/** "13:52" for today, "Nov 12, 13:52" for older rows. */
+function lastSeenLabel(ts: number): string {
+  const d = new Date(ts);
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  if (d.toDateString() === new Date().toDateString()) return time;
+  return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
+}
+
+/** The map is a 12-column grid of 44px rows, five rows tall, like the board. */
+const MAP_COLS = 12;
+const MAP_ROWS = 5;
+/** A map cell is about twice as wide as it is tall. */
+const CELL_ASPECT = 2;
+/** At most this many named tiles; the rest of the top sites share one tile. */
+const MAP_TILES = 9;
+/** Tile tint by rank, strongest first. The shared "Other" tile uses 6%. */
+const TINTS = [45, 35, 28, 22, 18, 16, 12, 12, 8];
+
+type Tile = {
+  name: string;
+  value: number;
+  tint: number;
+  col: string;
+  row: string;
+};
+type Rect = { x0: number; y0: number; x1: number; y1: number };
+
+/**
+ * Ordered treemap in horizontal bands, read like the board's grid: left to
+ * right, top to bottom. Each band takes sites while that keeps its tiles
+ * closer to square. Returns one rectangle per value inside `w` x `h`.
+ */
+function bands(values: number[], w: number, h: number): Rect[] {
+  const total = values.reduce((sum, v) => sum + v, 0);
+  if (!total) return [];
+  const areas = values.map((v) => (v / total) * w * h);
+  const worst = (band: number[]): number => {
+    const sum = band.reduce((a, b) => a + b, 0);
+    return Math.max(
+      (w * w * Math.max(...band)) / (sum * sum),
+      (sum * sum) / (w * w * Math.min(...band)),
+    );
+  };
+  const rects: Rect[] = [];
+  let y = 0;
+  let i = 0;
+  while (i < areas.length) {
+    const band = [areas[i]];
+    let j = i + 1;
+    while (j < areas.length && worst([...band, areas[j]]) <= worst(band)) {
+      band.push(areas[j]);
+      j++;
+    }
+    const sum = band.reduce((a, b) => a + b, 0);
+    const bottom = j >= areas.length ? h : y + sum / w;
+    let x = 0;
+    band.forEach((area, k) => {
+      const right = k === band.length - 1 ? w : x + (area / sum) * w;
+      rects.push({ x0: x, y0: y, x1: right, y1: bottom });
+      x = right;
+    });
+    y = bottom;
+    i = j;
+  }
+  return rects;
+}
+
+/**
+ * Lays the top sites out on the map grid. Each tile snaps to whole cells; when
+ * a site is too small for a cell it joins the "Other" tile.
+ */
+function mapTiles(groups: { name: string; value: number }[]): Tile[] {
+  for (let named = Math.min(MAP_TILES, groups.length); named >= 0; named--) {
+    const rest = groups.slice(named);
+    const items = groups.slice(0, named).map((g, i) => ({ ...g, tint: TINTS[i] }));
+    const restValue = rest.reduce((sum, g) => sum + g.value, 0);
+    if (rest.length && restValue > 0)
+      items.push({ name: `Other ${num(rest.length)}`, value: restValue, tint: 6 });
+    const rects = bands(
+      items.map((t) => t.value),
+      MAP_COLS * CELL_ASPECT,
+      MAP_ROWS,
+    );
+    const tiles = items.map((t, i) => {
+      const r = rects[i];
+      const c0 = Math.round(r.x0 / CELL_ASPECT);
+      const c1 = Math.round(r.x1 / CELL_ASPECT);
+      const r0 = Math.round(r.y0);
+      const r1 = Math.round(r.y1);
+      return {
+        ...t,
+        ok: c1 > c0 && r1 > r0,
+        col: `${c0 + 1} / ${c1 + 1}`,
+        row: `${r0 + 1} / ${r1 + 1}`,
+      };
+    });
+    if (tiles.every((t) => t.ok)) return tiles.map(({ ok: _ok, ...t }) => t);
+  }
+  return [];
 }
 
 export function SiteActivityView() {
@@ -150,8 +217,11 @@ export function SiteActivityView() {
   const [search, setSearch] = useState("");
   const [windowMs, setWindowMs] = useState(WINDOWS[0].ms);
   const [page, setPage] = useState(0);
-  const [metric, setMetric] = useState<"observations" | "bytes">("observations");
+  const [measure, setMeasure] = useState<Measure>("observations");
   const [payload, setPayload] = useState<ActivityPayload | null>(null);
+  // The query behind the payload on screen. It changes on a new filter or
+  // page, not on the 15 s refresh, so rows animate only when the query does.
+  const [loadedKey, setLoadedKey] = useState("");
   const [error, setError] = useState("");
   const [editingPolicy, setEditingPolicy] = useState(false);
   const [draftPolicy, setDraftPolicy] = useState<SitePolicy>({
@@ -161,6 +231,9 @@ export function SiteActivityView() {
   });
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [policySearch, setPolicySearch] = useState("");
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+
   async function savePolicy(next: SitePolicy) {
     setSavingPolicy(true);
     try {
@@ -169,19 +242,21 @@ export function SiteActivityView() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(next),
       });
-      if (!response.ok) throw new Error("Could not save Site Activity settings");
+      if (!response.ok) throw new Error("Could not save the collection settings");
       const saved = (await response.json()) as SitePolicy;
       setPayload((current) => (current ? { ...current, policy: saved } : current));
       setEditingPolicy(false);
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save settings");
+      setError(e instanceof Error ? e.message : "Could not save the collection settings");
     } finally {
       setSavingPolicy(false);
     }
   }
+
   useEffect(() => {
     const controller = new AbortController();
+    const key = JSON.stringify([client, owner, kind, search, windowMs, page]);
     const load = async () => {
       const to = Date.now();
       const params = new URLSearchParams({
@@ -191,7 +266,7 @@ export function SiteActivityView() {
         owner: owner === "*" ? "" : owner,
         kind: kind === "*" ? "" : kind,
         search,
-        offset: String(page * 100),
+        offset: String(page * PAGE_SIZE),
       });
       try {
         const result = await api<ActivityPayload>(
@@ -199,6 +274,7 @@ export function SiteActivityView() {
           controller.signal,
         );
         setPayload(result);
+        setLoadedKey(key);
         setError("");
       } catch (e) {
         if (!controller.signal.aborted)
@@ -212,6 +288,9 @@ export function SiteActivityView() {
       clearInterval(timer);
     };
   }, [client, owner, kind, search, windowMs, page]);
+
+  useStaggerIn(rowsRef, ".site-row", loadedKey);
+  useStaggerIn(mapRef, "[data-tile]", `${loadedKey}:${measure}`);
 
   const visits = payload?.visits ?? [];
   const summary = payload?.summary;
@@ -228,10 +307,25 @@ export function SiteActivityView() {
   );
   const policy = payload?.policy;
   const active = !!policy?.enabled && (policy.until === null || (payload?.to ?? 0) < policy.until);
-  const groups = (summary?.groups ?? [])
-    .map((g) => ({ name: g.label, value: g[metric] }))
-    .filter((g) => g.value > 0);
-  const total = metric === "bytes" ? (summary?.bytes ?? 0) : (summary?.observations ?? 0);
+  const ended = !!policy?.enabled && !active;
+
+  const topGroups = summary?.groups ?? [];
+  // The server sends the top 30 sites. The biggest get their own tile; the
+  // rest of those 30 share the "Other" tile.
+  const tiles = mapTiles(
+    topGroups.map((g) => ({ name: g.label, value: g[measure] })).filter((g) => g.value > 0),
+  );
+
+  const windowLabel = WINDOWS.find((w) => w.ms === windowMs)?.label ?? "24 hours";
+  const selection =
+    owner !== "*"
+      ? owner
+      : client !== "*"
+        ? client
+        : kind !== "*"
+          ? (kindLabel[kind] ?? kind)
+          : "all clients";
+  const filtered = search !== "" || kind !== "*" || owner !== "*" || client !== "*";
   const exportParams = new URLSearchParams({
     from: String((payload?.to ?? 0) - windowMs),
     to: String(payload?.to ?? 0),
@@ -240,606 +334,471 @@ export function SiteActivityView() {
     kind: kind === "*" ? "" : kind,
     search,
   });
+  const firstRow = page * PAGE_SIZE + 1;
+  const lastRow = page * PAGE_SIZE + visits.length;
+
+  function clearFilters() {
+    setSearch("");
+    setKind("*");
+    setOwner("*");
+    setClient("*");
+    setPage(0);
+  }
+
   if (!payload && !error) return <LoadingState label="Loading network activity" layout="chart" />;
+
+  const headline = active
+    ? policy?.owners.length
+      ? `Collecting for ${policy.owners.length} ${policy.owners.length === 1 ? "person or device" : "people and devices"}`
+      : "Collecting for every client"
+    : ended
+      ? "Collection window ended"
+      : "Collection is paused";
+  const subline = active
+    ? "Records stay on this host for 30 days. Nothing is sent anywhere."
+    : ended
+      ? "Nothing new is recorded. Set a new end date or record until you turn it off."
+      : "Nothing new is recorded. Existing records stay on this host for 30 days.";
+
   return (
-    <div className="space-y-6 pb-12">
-      <div className="rounded-3xl border border-border bg-gradient-to-br from-card via-card to-blue-500/10 p-6 md:p-8">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-blue-400">
-          <Globe2 size={15} /> Network / site activity
-        </div>
-        <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-              Where the network goes.
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-              Per-client destinations from observed traffic, DNS replies and Web Proxy connections.
-              Stored on this MCP host for 30 days.
-            </p>
-          </div>
-          <span
-            className={cn(
-              "rounded-full border px-3 py-1.5 text-xs",
-              payload?.collection.flows.running
-                ? "border-emerald-500/30 text-emerald-400"
-                : "border-amber-500/30 text-amber-400",
-            )}
-          >
-            {payload?.collection.flows.running ? "Flow collector online" : "Flow collector offline"}
-          </span>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6 pb-12">
+      <PageIntro>Which sites each device reached, from DNS answers and flow records.</PageIntro>
+
       {error && (
-        <div
-          role="alert"
-          className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400"
-        >
-          {error}
+        <div role="alert" className="monitor-note text-destructive" data-tone="bad">
+          <AlertTriangle aria-hidden="true" />
+          <span>{error}</span>
         </div>
       )}
+
       {policy && (
-        <section
-          className="overflow-hidden rounded-3xl border border-blue-400/20 bg-card shadow-[0_18px_50px_-36px_rgba(59,130,246,0.6)]"
-          aria-label="Site Activity collection settings"
-        >
-          <div className="flex flex-col gap-6 border-b border-border/70 bg-gradient-to-r from-blue-500/[0.12] via-card to-card px-5 py-6 md:flex-row md:items-center md:justify-between md:px-7">
-            <div className="flex items-start gap-4">
-              <div
-                className={cn(
-                  "grid size-12 shrink-0 place-items-center rounded-2xl border",
-                  active
-                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-400"
-                    : "border-border bg-background text-muted-foreground",
-                )}
-              >
-                <Activity size={22} />
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-400">
-                  Collection control
-                </p>
-                <h3 className="mt-1 text-xl font-semibold tracking-tight">
-                  {active
-                    ? "Site Activity is live"
-                    : policy.enabled
-                      ? "Collection window ended"
-                      : "Collection is paused"}
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Choose whose destinations are recorded on this MCP host.
-                </p>
-              </div>
+        <section className="monitor-panel site-collect" aria-label="Collection settings">
+          <div className="monitor-panel-head">
+            <StatusBadge tone={active ? "good" : ended ? "warn" : "default"}>
+              {active ? "Recording" : ended ? "Ended" : "Paused"}
+            </StatusBadge>
+            <div className="site-collect-copy">
+              <h2 className="monitor-panel-title">{headline}</h2>
+              <p className="monitor-panel-desc">{subline}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            <MonitorButton
+              size="sm"
+              aria-expanded={editingPolicy}
+              onClick={() => {
+                setDraftPolicy(policy);
+                setPolicySearch("");
+                setEditingPolicy(!editingPolicy);
+              }}
+            >
+              {editingPolicy ? "Close settings" : "Configure"}
+            </MonitorButton>
+            <MonitorButton
+              size="sm"
+              variant={active ? "ghost" : "glass"}
+              disabled={savingPolicy}
+              onClick={() =>
+                void savePolicy({
+                  ...policy,
+                  enabled: !active,
+                  until: active ? policy.until : null,
+                })
+              }
+            >
+              {active ? "Pause collection" : "Start collection"}
+            </MonitorButton>
+          </div>
+          <div className="site-facts">
+            <div className="site-fact">
+              <span className="site-fact-label">Audience</span>
               <span
-                className={cn(
-                  "mr-1 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
-                  active
-                    ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-400"
-                    : "border-border bg-background text-muted-foreground",
-                )}
+                className="site-fact-value"
+                title={policy.owners.length ? policy.owners.join(", ") : undefined}
               >
-                <span
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    active ? "bg-emerald-400" : "bg-muted-foreground",
-                  )}
-                />
-                {active ? "Recording" : "Not recording"}
+                {policy.owners.length ? `${policy.owners.length} selected` : "Every client"}
               </span>
-              <button
-                type="button"
-                aria-expanded={editingPolicy}
-                onClick={() => {
-                  setDraftPolicy(policy);
-                  setPolicySearch("");
-                  setEditingPolicy(!editingPolicy);
-                }}
-                className="inline-flex items-center gap-2 rounded-xl border border-border bg-background/70 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-blue-400"
-              >
-                <Settings2 size={15} />
-                {editingPolicy ? "Close settings" : "Configure"}
-              </button>
-              <button
-                type="button"
-                disabled={savingPolicy}
-                onClick={() =>
-                  void savePolicy({
-                    ...policy,
-                    enabled: !active,
-                    until: active ? policy.until : null,
-                  })
-                }
-                className={cn(
-                  "rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-blue-400 disabled:opacity-50",
-                  active
-                    ? "border border-border bg-background/70 hover:bg-accent"
-                    : "bg-blue-400 text-slate-950 hover:bg-blue-300",
-                )}
-              >
-                {active ? "Pause collection" : "Start collection"}
-              </button>
+            </div>
+            <div className="site-fact">
+              <span className="site-fact-label">Schedule</span>
+              <span className="site-fact-value">
+                {policy.until
+                  ? `Until ${new Date(policy.until).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
+                  : "Until turned off"}
+              </span>
+            </div>
+            <div className="site-fact">
+              <span className="site-fact-label">Retention</span>
+              <span className="site-fact-value">Local · 30 days</span>
+            </div>
+            <div className="site-fact">
+              <span className="site-fact-label">Flow collector</span>
+              <span className="site-fact-value">
+                <StatusDot tone={payload?.collection.flows.running ? "good" : "warn"} />
+                {payload?.collection.flows.running ? "Online" : "Offline"}
+              </span>
             </div>
           </div>
-          <div className="grid divide-y divide-border/70 md:grid-cols-3 md:divide-x md:divide-y-0">
-            <div className="flex items-center gap-3 px-5 py-4 md:px-7">
-              <UsersRound size={17} className="shrink-0 text-blue-400" />
-              <div>
-                <p className="text-[11px] text-muted-foreground">Audience</p>
-                <p className="mt-0.5 text-sm font-medium">
-                  {policy.owners.length
-                    ? `${policy.owners.length} selected identities`
-                    : "Every client"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 px-5 py-4 md:px-7">
-              <CalendarClock size={17} className="shrink-0 text-blue-400" />
-              <div>
-                <p className="text-[11px] text-muted-foreground">Schedule</p>
-                <p className="mt-0.5 text-sm font-medium">
-                  {policy.until ? new Date(policy.until).toLocaleString() : "Until turned off"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 px-5 py-4 md:px-7">
-              <ShieldCheck size={17} className="shrink-0 text-blue-400" />
-              <div>
-                <p className="text-[11px] text-muted-foreground">Retention</p>
-                <p className="mt-0.5 text-sm font-medium">Local · 30 days</p>
-              </div>
-            </div>
-          </div>
+
           {editingPolicy && (
-            <div className="border-t border-border bg-background/40 p-5 md:p-7">
-              <div className="mb-5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-400">
-                  Define collection
-                </p>
-                <h4 className="mt-1 text-lg font-semibold">Who to watch, and for how long</h4>
+            <div className="site-editor">
+              <div>
+                <h3 className="monitor-panel-title">Who to record, and for how long</h3>
+                <p className="monitor-panel-desc">Changes apply when you save.</p>
               </div>
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,1fr)]">
-                <div className="min-w-0 rounded-2xl border border-border bg-card p-4 md:p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h5 className="font-semibold">People & devices</h5>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Select everyone or named clients.
-                      </p>
-                    </div>
-                    <UsersRound size={18} className="text-blue-400" />
+              <div className="site-editor-grid">
+                <div className="site-editor-card">
+                  <div>
+                    <h3>People and devices</h3>
+                    <p>Record everyone, or only the names you pick.</p>
                   </div>
                   <button
                     type="button"
+                    className="site-option"
                     aria-pressed={!draftPolicy.owners.length}
                     onClick={() => setDraftPolicy({ ...draftPolicy, owners: [] })}
-                    className={cn(
-                      "mt-4 flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-blue-400",
-                      !draftPolicy.owners.length
-                        ? "border-blue-400/60 bg-blue-400/10"
-                        : "border-border hover:bg-accent",
-                    )}
                   >
                     <span>
-                      <span className="block font-medium">All clients</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                      <span className="block font-[510]">All clients</span>
+                      <span className="block text-[12px] text-muted-foreground">
                         Includes clients without a known name
                       </span>
                     </span>
-                    {!draftPolicy.owners.length && <Check size={18} className="text-blue-400" />}
+                    <StatusDot tone={draftPolicy.owners.length ? "default" : "brand"} />
                   </button>
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <p className="text-xs font-medium text-muted-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-[510]">
                       Named clients{" "}
-                      <span className="ml-1 tabular-nums">
+                      <span className="tabular-nums">
                         {draftPolicy.owners.length}/{availableOwners.length}
                       </span>
                     </p>
-                    <div className="relative max-w-48 flex-1">
-                      <Search
-                        size={14}
-                        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      />
-                      <input
-                        aria-label="Find a client for collection"
-                        value={policySearch}
-                        onChange={(e) => setPolicySearch(e.target.value)}
-                        placeholder="Find a client"
-                        className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-xs outline-none focus:border-blue-400"
-                      />
-                    </div>
+                    <MonitorSearch
+                      className="w-full sm:w-48"
+                      label="Find a client"
+                      placeholder="Find a client"
+                      value={policySearch}
+                      onChange={setPolicySearch}
+                    />
                   </div>
                   <ScrollArea
-                    className="mt-2 h-48"
-                    viewportProps={{ tabIndex: 0, "aria-label": "Named clients for collection" }}
+                    className="h-48"
+                    viewportProps={{ tabIndex: 0, "aria-label": "Named clients to record" }}
                   >
-                    <div className="grid gap-1 pr-3 sm:grid-cols-2">
+                    <div className="site-owner-list">
                       {filteredOwners.length ? (
-                        filteredOwners.map((name) => (
-                          <button
-                            key={name}
-                            type="button"
-                            aria-pressed={draftPolicy.owners.includes(name)}
-                            onClick={() =>
-                              setDraftPolicy((current) => ({
-                                ...current,
-                                owners: current.owners.includes(name)
-                                  ? current.owners.filter((item) => item !== name)
-                                  : [...current.owners, name],
-                              }))
-                            }
-                            className={cn(
-                              "flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-blue-400",
-                              draftPolicy.owners.includes(name)
-                                ? "border-blue-400/40 bg-blue-400/10"
-                                : "border-transparent hover:border-border hover:bg-accent",
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "grid size-4 shrink-0 place-items-center rounded border",
-                                draftPolicy.owners.includes(name)
-                                  ? "border-blue-400 bg-blue-400 text-slate-950"
-                                  : "border-muted-foreground/50",
-                              )}
-                            >
-                              {draftPolicy.owners.includes(name) && <Check size={12} />}
-                            </span>
-                            <span className="truncate">{name}</span>
-                          </button>
-                        ))
+                        filteredOwners.map((name, i) => {
+                          const id = `site-owner-${i}`;
+                          return (
+                            <div key={name} className="site-owner">
+                              <Checkbox
+                                id={id}
+                                checked={draftPolicy.owners.includes(name)}
+                                onCheckedChange={() =>
+                                  setDraftPolicy((current) => ({
+                                    ...current,
+                                    owners: current.owners.includes(name)
+                                      ? current.owners.filter((item) => item !== name)
+                                      : [...current.owners, name],
+                                  }))
+                                }
+                              />
+                              <label htmlFor={id} title={name}>
+                                {name}
+                              </label>
+                            </div>
+                          );
+                        })
                       ) : (
-                        <p className="col-span-full py-5 text-center text-xs text-muted-foreground">
-                          {availableOwners.length
-                            ? "No matching clients"
-                            : "No named clients found yet"}
+                        <p className="col-span-full py-5 text-center">
+                          {availableOwners.length ? "No client matches" : "No named clients yet"}
                         </p>
                       )}
                     </div>
                   </ScrollArea>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Selecting names records only those recognized identities.
-                  </p>
+                  <p>Pick names to record only those clients.</p>
                 </div>
-                <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h5 className="font-semibold">Collection window</h5>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Choose when recording stops.
-                      </p>
-                    </div>
-                    <CalendarClock size={18} className="text-blue-400" />
+                <div className="site-editor-card">
+                  <div>
+                    <h3>Collection window</h3>
+                    <p>Choose when recording stops.</p>
                   </div>
-                  <div className="mt-4 grid gap-2">
-                    <button
-                      type="button"
-                      aria-pressed={draftPolicy.until === null}
-                      onClick={() => setDraftPolicy({ ...draftPolicy, until: null })}
-                      className={cn(
-                        "flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-blue-400",
-                        draftPolicy.until === null
-                          ? "border-blue-400/60 bg-blue-400/10"
-                          : "border-border hover:bg-accent",
-                      )}
-                    >
-                      <InfinityIcon size={17} className="text-blue-400" />
-                      <span className="flex-1 font-medium">Until turned off</span>
-                      {draftPolicy.until === null && <Check size={17} className="text-blue-400" />}
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={draftPolicy.until !== null}
-                      onClick={() =>
-                        setDraftPolicy({
-                          ...draftPolicy,
-                          until: draftPolicy.until ?? Date.now() + 86_400_000,
-                        })
-                      }
-                      className={cn(
-                        "flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-blue-400",
-                        draftPolicy.until !== null
-                          ? "border-blue-400/60 bg-blue-400/10"
-                          : "border-border hover:bg-accent",
-                      )}
-                    >
-                      <CalendarClock size={17} className="text-blue-400" />
-                      <span className="flex-1 font-medium">End on a date</span>
-                      {draftPolicy.until !== null && <Check size={17} className="text-blue-400" />}
-                    </button>
-                  </div>
+                  <Segmented
+                    label="Collection window"
+                    value={draftPolicy.until === null ? "off" : "date"}
+                    options={[
+                      { value: "off", label: "Until turned off" },
+                      { value: "date", label: "End on a date" },
+                    ]}
+                    onChange={(v) =>
+                      setDraftPolicy({
+                        ...draftPolicy,
+                        until: v === "off" ? null : (draftPolicy.until ?? Date.now() + 86_400_000),
+                      })
+                    }
+                  />
                   {draftPolicy.until !== null && (
-                    <div className="mt-4">
-                      <DateTimePicker
-                        aria-label="Collection end date and time"
-                        value={new Date(draftPolicy.until)}
-                        onChange={(date) =>
-                          setDraftPolicy({ ...draftPolicy, until: date?.getTime() ?? null })
-                        }
-                      />
-                    </div>
+                    <DateTimePicker
+                      aria-label="Collection end date and time"
+                      value={new Date(draftPolicy.until)}
+                      onChange={(date) =>
+                        setDraftPolicy({ ...draftPolicy, until: date?.getTime() ?? null })
+                      }
+                    />
                   )}
                 </div>
               </div>
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
-                <p className="max-w-xl text-xs text-muted-foreground">
-                  These settings control storage on this host. Router exports and the separate Flow
-                  collector continue.
+              <div className="site-editor-foot">
+                <p className="max-w-xl">
+                  This controls what this host stores. The router keeps exporting, and the Flow
+                  collector keeps running.
                 </p>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingPolicy(false)}
-                    className="rounded-xl px-4 py-2.5 text-sm hover:bg-accent"
-                  >
+                  <MonitorButton size="sm" variant="ghost" onClick={() => setEditingPolicy(false)}>
                     Cancel
-                  </button>
-                  <button
-                    type="button"
+                  </MonitorButton>
+                  <MonitorButton
+                    size="sm"
                     disabled={savingPolicy}
                     onClick={() => void savePolicy(draftPolicy)}
-                    className="rounded-xl bg-blue-400 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-blue-300 disabled:opacity-50"
                   >
                     {savingPolicy ? "Saving…" : "Save changes"}
-                  </button>
+                  </MonitorButton>
                 </div>
               </div>
             </div>
           )}
         </section>
       )}
-      <div className="grid gap-3 md:grid-cols-4">
-        {[
-          { label: "Observations", value: summary?.observations ?? 0, Icon: Activity },
-          { label: "Destinations", value: summary?.destinations ?? 0, Icon: Globe2 },
-          { label: "Client IPs", value: summary?.clients ?? 0, Icon: Network },
-          {
-            label: "Observed MiB",
-            value: ((summary?.bytes ?? 0) / 1_048_576).toFixed(1),
-            Icon: ShieldCheck,
-          },
-        ].map(({ label, value, Icon }) => (
-          <div key={label} className="rounded-2xl border border-border bg-card p-5">
-            <Icon size={18} className="text-blue-400" />
-            <div className="mt-4 text-2xl font-semibold tabular-nums">{value}</div>
-            <div className="text-xs text-muted-foreground">{label} in selected range</div>
-          </div>
-        ))}
-      </div>
-      <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
-        <label className="relative min-w-56 flex-1">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-          />
-          <span className="sr-only">Search domain or destination IP</span>
-          <input
-            className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400"
-            placeholder="Search site or destination IP"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-          />
-        </label>
-        <Select
+
+      <MetricStrip label="Activity metrics" minCell={180}>
+        <Metric
+          label="Observations"
+          value={<Ticker value={summary?.observations ?? 0} format={num} />}
+          hint={`Last ${windowLabel}`}
+        />
+        <Metric
+          label="Destinations"
+          value={<Ticker value={summary?.destinations ?? 0} format={num} />}
+          hint="Unique sites"
+        />
+        <Metric
+          label="Client IPs"
+          value={<Ticker value={summary?.clients ?? 0} format={num} />}
+          hint={windowMs === WINDOWS[0].ms ? "Seen today" : `Seen in the last ${windowLabel}`}
+        />
+        <Metric
+          label="Observed traffic"
+          value={<Ticker value={summary?.bytes ?? 0} format={formatBytes} />}
+          hint="Flow records only"
+        />
+      </MetricStrip>
+
+      <div className="site-toolbar" role="search" aria-label="Filter activity">
+        <MonitorSearch
+          className="site-search"
+          label="Search site or destination IP"
+          placeholder="Search site or destination IP"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(0);
+          }}
+        />
+        <MonitorSelect
+          label="Connection type"
           value={kind}
-          onValueChange={(v) => {
+          options={Object.entries(kindLabel).map(([value, label]) => ({ value, label }))}
+          onChange={(v) => {
             setKind(v);
             setOwner("*");
             setPage(0);
           }}
-        >
-          <SelectTrigger aria-label="Connection type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(kindLabel).map(([key, label]) => (
-              <SelectItem key={key} value={key}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
+        />
+        <MonitorSelect
+          label="Person or device"
           value={owner}
-          onValueChange={(v) => {
+          options={[
+            { value: "*", label: "All people & devices" },
+            ...owners.map((name) => ({ value: name, label: name })),
+          ]}
+          onChange={(v) => {
             setOwner(v);
             setPage(0);
           }}
-        >
-          <SelectTrigger aria-label="Person or device">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="*">All people & devices</SelectItem>
-            {owners.map((name) => (
-              <SelectItem key={name} value={name}>
-                {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
+        />
+        <MonitorSelect
+          label="Client IP"
           value={client}
-          onValueChange={(v) => {
+          options={[
+            { value: "*", label: "All client IPs" },
+            ...(payload?.clients ?? []).map((ip) => ({ value: ip, label: ip })),
+          ]}
+          onChange={(v) => {
             setClient(v);
             setPage(0);
           }}
-        >
-          <SelectTrigger aria-label="Client IP">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="*">All client IPs</SelectItem>
-            {payload?.clients.map((ip) => (
-              <SelectItem key={ip} value={ip}>
-                {ip}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
+        />
+        <MonitorSelect
+          label="Report period"
           value={String(windowMs)}
-          onValueChange={(v) => {
+          options={WINDOWS.map((w) => ({ value: String(w.ms), label: w.label }))}
+          onChange={(v) => {
             setWindowMs(Number(v));
             setPage(0);
           }}
-        >
-          <SelectTrigger aria-label="Report period">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {WINDOWS.map((w) => (
-              <SelectItem key={w.ms} value={String(w.ms)}>
-                {w.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex justify-end">
+        />
+        {filtered && (
+          <MonitorButton size="sm" variant="ghost" onClick={clearFilters}>
+            Clear
+          </MonitorButton>
+        )}
         <a
+          className="monitor-btn"
+          data-variant="glass"
+          data-size="sm"
           href={payload ? withToken(`/api/site-activity/export?${exportParams}`) : undefined}
           download
-          className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm hover:bg-accent"
         >
-          <Download size={15} /> Export filtered CSV
+          Export CSV
         </a>
       </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,6fr)]">
-        <section className="min-w-0 rounded-2xl border border-border bg-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="font-semibold">Destination map</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Area reflects the selected metric · top 30 destinations
-              </p>
-            </div>
-            <Select value={metric} onValueChange={(v) => setMetric(v as typeof metric)}>
-              <SelectTrigger aria-label="Treemap metric" className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="observations">Observations</SelectItem>
-                <SelectItem value="bytes">Traffic bytes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {groups.length ? (
-            <div
-              className="mt-5 h-[440px] w-full"
-              role="img"
-              aria-label="Treemap of observed destinations"
-            >
-              <Treemap
-                style={{ width: "100%", height: "100%" }}
-                data={groups}
-                dataKey="value"
-                nameKey="name"
-                aspectRatio={2.5}
-                content={(node) => <SiteTile {...node} total={total} metric={metric} />}
-                isAnimationActive={false}
+
+      <MonitorPanel
+        title="Destination map"
+        description={
+          topGroups.length
+            ? `Area follows the chosen measure · top ${topGroups.length} sites for ${selection}`
+            : "Area follows the chosen measure"
+        }
+        extra={
+          <Segmented label="Measure" value={measure} options={MEASURES} onChange={setMeasure} />
+        }
+      >
+        {tiles.length ? (
+          <div
+            ref={mapRef}
+            className="site-map"
+            role="img"
+            aria-label={`Map of the top destinations by ${measure === "bytes" ? "traffic bytes" : "observations"}`}
+          >
+            {tiles.map((t) => (
+              <div
+                key={t.name}
+                data-tile=""
+                className="site-tile"
+                title={`${t.name}: ${formatMeasure(t.value, measure)}`}
+                style={{
+                  gridColumn: t.col,
+                  gridRow: t.row,
+                  background: `color-mix(in srgb, var(--chart-1) ${t.tint}%, transparent)`,
+                }}
               >
-                <Tooltip
-                  content={({ active, payload }) =>
-                    active && payload?.length ? (
-                      <div className="rounded-lg border border-border bg-card p-3 text-xs shadow-xl">
-                        <strong>{String(payload[0].name)}</strong>
-                        <div className="mt-1">
-                          {formatTreeValue(Number(payload[0].value), metric)} ·{" "}
-                          {total ? Math.round((Number(payload[0].value) / total) * 100) : 0}%
-                        </div>
-                      </div>
-                    ) : null
-                  }
-                />
-              </Treemap>
-            </div>
-          ) : (
-            <div className="grid h-[440px] place-items-center text-sm text-muted-foreground">
-              No observations for this selection
-            </div>
-          )}
-        </section>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="border-b border-border px-5 py-4">
-            <h3 className="text-sm font-semibold">Observed destinations</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Identity is matched near the observation time.
-            </p>
+                <span className="site-tile-name">{t.name}</span>
+                <span className="site-tile-value">{formatMeasure(t.value, measure)}</span>
+              </div>
+            ))}
           </div>
-          {visits.length ? (
+        ) : (
+          <MonitorEmpty icon={<Globe2 />} title="No observations for this selection">
+            Try a longer period or clear the filters.
+          </MonitorEmpty>
+        )}
+      </MonitorPanel>
+
+      <MonitorPanel
+        flush
+        title="Destinations"
+        description={
+          visits.length ? `Newest first · ${num(firstRow)}–${num(lastRow)}` : "Newest first"
+        }
+      >
+        {visits.length ? (
+          <>
+            <div className="monitor-thead site-grid site-thead" aria-hidden="true">
+              <span>Destination</span>
+              <span>Who</span>
+              <span className="text-right">Seen</span>
+              <span className="text-right">Traffic</span>
+              <span className="text-right">Last</span>
+            </div>
             <ScrollArea
-              className="h-[540px]"
-              viewportProps={{ tabIndex: 0, "aria-label": "Observed destinations" }}
+              viewportProps={{
+                tabIndex: 0,
+                "aria-label": "Destinations",
+                className: "max-h-[560px]",
+              }}
             >
-              <div className="divide-y divide-border">
+              <div ref={rowsRef} role="list">
                 {visits.map((v, i) => (
-                  <article
+                  <div
                     key={`${v.client}:${v.destination}:${v.domain}:${i}`}
-                    className="grid gap-2 px-5 py-3 md:grid-cols-[minmax(0,1fr)_auto]"
+                    role="listitem"
+                    className="monitor-row site-grid site-row"
                   >
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{v.domain ?? v.destination}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {v.domain && v.destination ? `${v.destination} · ` : ""}
-                        {sourceLabel[v.source]}
-                      </div>
-                    </div>
-                    <div className="text-xs md:text-right">
-                      <div className="font-medium">
-                        {v.owner || "Unidentified"}{" "}
-                        <span className="text-muted-foreground">
-                          · {kindLabel[v.kind] ?? v.kind}
-                        </span>
-                      </div>
-                      <div className="mt-1 font-mono text-muted-foreground">{v.client}</div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {v.connections.toLocaleString()} observations
-                      {v.bytes ? ` · ${(v.bytes / 1_048_576).toFixed(1)} MiB` : ""}
-                    </div>
+                    <span className="site-cell">
+                      <span className="site-title" title={v.domain ?? v.destination}>
+                        {v.domain ?? "Unidentified"}
+                      </span>
+                      <span className="site-sub">
+                        <span className="site-mono">{v.destination}</span>
+                        <span className="monitor-badge site-src">{sourceLabel[v.source]}</span>
+                      </span>
+                    </span>
+                    <span className="site-cell">
+                      <span className="site-who" title={kindLabel[v.kind] ?? v.kind}>
+                        {v.owner || "Unidentified"}
+                      </span>
+                      <span className="site-mono">{v.client}</span>
+                    </span>
+                    <span className="site-num">
+                      <span className="sr-only">Seen </span>
+                      {num(v.connections)}
+                    </span>
+                    <span className="site-num">
+                      <span className="sr-only">Traffic </span>
+                      {v.bytes ? rowBytes(v.bytes) : "—"}
+                    </span>
                     <time
-                      className="text-xs text-muted-foreground md:text-right"
+                      className="site-num site-last"
                       dateTime={new Date(v.lastSeen).toISOString()}
+                      title={new Date(v.lastSeen).toLocaleString()}
                     >
-                      {new Date(v.lastSeen).toLocaleString()}
+                      {lastSeenLabel(v.lastSeen)}
                     </time>
-                  </article>
+                  </div>
                 ))}
               </div>
             </ScrollArea>
-          ) : (
-            <div className="px-5 py-14 text-center text-sm text-muted-foreground">
-              No matching observations yet. Traffic Flow and DNS mirroring must be enabled on the
-              router; Web Proxy needs web-proxy logging.
-            </div>
-          )}
-          <div className="flex items-center justify-between border-t border-border px-5 py-3">
-            <button
-              className="text-sm disabled:opacity-40"
-              disabled={page === 0}
-              onClick={() => setPage(page - 1)}
-            >
-              Previous
-            </button>
-            <span className="text-xs text-muted-foreground">Page {page + 1}</span>
-            <button
-              className="text-sm disabled:opacity-40"
-              disabled={visits.length < 100}
-              onClick={() => setPage(page + 1)}
-            >
-              Next
-            </button>
-          </div>
+          </>
+        ) : (
+          <MonitorEmpty icon={<Globe2 />} title="No matching destinations">
+            Turn on Traffic Flow and DNS mirroring on the router. Web Proxy rows need web-proxy
+            logging.
+          </MonitorEmpty>
+        )}
+        <div className="monitor-foot">
+          <span className="flex-1">Page {page + 1}</span>
+          <MonitorButton
+            size="sm"
+            variant="ghost"
+            disabled={page === 0}
+            onClick={() => setPage(page - 1)}
+          >
+            Previous
+          </MonitorButton>
+          <MonitorButton
+            size="sm"
+            disabled={visits.length < PAGE_SIZE}
+            onClick={() => setPage(page + 1)}
+          >
+            Next
+          </MonitorButton>
         </div>
-      </div>
-      <p className="text-xs leading-5 text-muted-foreground">
-        {payload?.note ?? "This view stores destinations only; it does not capture page content."}{" "}
-        Clients using encrypted DNS, another VPN or hardware-offloaded paths may be missing. An IP
-        can host several sites.
+      </MonitorPanel>
+
+      <p className="site-footnote">
+        {payload?.note ?? "This view stores destinations only. It does not capture page content."}{" "}
+        Clients on encrypted DNS, another VPN or hardware-offloaded paths may be missing. One IP can
+        host several sites.
       </p>
     </div>
   );

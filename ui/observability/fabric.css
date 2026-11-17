@@ -1,0 +1,17 @@
+/*
+ * L2 Fabric, after the "L2 Fabric" board (L2-Fabric.dc.html).
+ * Unlayered on purpose: these rules refine the shared monitor-* classes.
+ */
+
+/* The board's status line is 13px muted text with the count in bold. */
+.fabric .monitor-status {
+  flex-wrap: wrap;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 400;
+  margin-top: 0;
+}
+.fabric .monitor-status b {
+  color: var(--foreground);
+  font-weight: 510;
+}

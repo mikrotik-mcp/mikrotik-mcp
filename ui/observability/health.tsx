@@ -1,146 +1,113 @@
-import { useId } from "react";
-import type { CSSProperties, ReactNode } from "react";
-import { Cpu, HardDrive, MemoryStick } from "lucide-react";
-import { MetricArea } from "./charts";
-import { bytes, HEALTH_COLOR } from "./format";
+import type { ReactNode } from "react";
+import { bytes } from "./format";
 import type { DeviceInfo } from "./types";
 
-const memory = (value?: number): string => (value == null ? "—" : bytes(value));
+/** The boards' bar colours: amber from 60 %, red from 85 %. */
+export function meterTone(value: number | null | undefined): string | undefined {
+  if (value == null) return undefined;
+  return value >= 85 ? "bad" : value >= 60 ? "warn" : undefined;
+}
 
-/** Resource readings share the device card; older samples are explicitly historical. */
-export function DeviceHealthCard({
-  d,
-  historyOnly = false,
-}: {
-  d: DeviceInfo;
-  historyOnly?: boolean;
-}): ReactNode {
-  const id = useId();
-  const s = d.status;
-  const hist = d.history ?? [];
-  if (historyOnly)
-    return (
-      <section className="device-history" aria-label={`Resource history for ${d.name}`}>
-        <span className="devices-eyebrow">RECORDED HEALTH SAMPLES</span>
-        {hist.length > 0 ? (
-          <>
-            <p className="devices-caption">
-              {hist.length} samples · {new Date(hist[0].ts).toLocaleTimeString()} –{" "}
-              {new Date(hist[hist.length - 1].ts).toLocaleTimeString()}. Charts auto-scale; gaps are
-              missing samples.
-            </p>
-            <div className="device-history__charts">
-              {(
-                [
-                  ["CPU", "cpuLoad", HEALTH_COLOR.cpu, "%"],
-                  ["Memory", "memUsedPct", HEALTH_COLOR.mem, "%"],
-                  ["Latency", "latencyMs", HEALTH_COLOR.latency, "ms"],
-                ] as const
-              ).map(([label, key, color, unit]) => (
-                <div key={key}>
-                  <span>{label}</span>
-                  <MetricArea
-                    id={`${id}-${key}`}
-                    values={hist.map((h) => h[key])}
-                    color={color}
-                    maxValue={unit === "%" ? 100 : undefined}
-                    unit={unit}
-                  />
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="devices-caption">
-            No health samples yet. Test this device to collect a reading.
-          </p>
-        )}
-        <dl className="device-facts">
-          <div>
-            <dt>RAM used / total</dt>
-            <dd>
-              {memory(
-                s.totalMemory != null && s.freeMemory != null
-                  ? s.totalMemory - s.freeMemory
-                  : undefined,
-              )}{" "}
-              / {memory(s.totalMemory)}
-            </dd>
-          </div>
-          <div>
-            <dt>Disk free / total</dt>
-            <dd>
-              {memory(s.freeHdd)} / {memory(s.totalHdd)}
-            </dd>
-          </div>
-          {s.disks?.map((disk) => (
-            <div key={disk.slot}>
-              <dt>{disk.slot}</dt>
-              <dd>
-                {disk.model ?? disk.mountPoint ?? "External disk"}
-                {disk.fs ? ` · ${disk.fs}` : ""}
-                <br />
-                {memory(disk.free)} free / {memory(disk.size)}
-                {disk.usedPct != null ? ` · ${disk.usedPct}% used` : ""}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-    );
-  const hasResources = [s.cpuLoad, s.memUsedPct, s.hddUsedPct].some((v) => v != null);
+const clamp = (v: number) => Math.max(0, Math.min(v, 100));
+const amount = (value?: number): string => (value == null ? "—" : bytes(value));
+
+/** A 4px bar inside a `.monitor-meter`, or an empty track when there is no reading. */
+export function MeterBar({ value, label }: { value?: number | null; label: string }): ReactNode {
   return (
-    <section className="device-resources" aria-label={`Resources for ${d.name}`}>
-      <div className="device-resources__heading">
-        <span className="devices-eyebrow">SYSTEM RESOURCES</span>
-        <span>
-          {!hasResources
-            ? "Awaiting readings"
-            : s.reachable !== true || d.disabled
-              ? "Last known · not live"
-              : "Last health check"}
+    <span
+      className="monitor-bar"
+      role={value != null ? "meter" : undefined}
+      aria-label={value != null ? `${label} usage` : undefined}
+      aria-valuemin={value != null ? 0 : undefined}
+      aria-valuemax={value != null ? 100 : undefined}
+      aria-valuenow={value != null ? clamp(value) : undefined}
+    >
+      {value != null && <span data-tone={meterTone(value)} style={{ width: `${clamp(value)}%` }} />}
+    </span>
+  );
+}
+
+function span(ms: number): string {
+  const min = Math.round(ms / 60_000);
+  if (min >= 50 && min <= 70) return "last hour";
+  if (min < 60) return `last ${Math.max(min, 1)} min`;
+  return `last ${Math.round(min / 60)} h`;
+}
+
+/**
+ * The Resources column of a router's details: CPU, memory and disk meters, then
+ * CPU over the recorded samples. Readings from an offline or disabled router
+ * are marked as last known.
+ */
+export function DeviceResources({ d }: { d: DeviceInfo }): ReactNode {
+  const s = d.status;
+  const hist = (d.history ?? []).filter((h) => h.cpuLoad != null);
+  const hasReadings = [s.cpuLoad, s.memUsedPct, s.hddUsedPct].some((v) => v != null);
+  const stale = hasReadings && (s.reachable !== true || !!d.disabled);
+  const used =
+    s.totalMemory != null && s.freeMemory != null ? s.totalMemory - s.freeMemory : undefined;
+  const rows: [string, number | undefined, string][] = [
+    ["CPU", s.cpuLoad, s.cpuCount != null ? `${s.cpuCount} CPUs` : "CPU load"],
+    ["Memory", s.memUsedPct, `${amount(used)} / ${amount(s.totalMemory)} used`],
+    [
+      "Disk",
+      s.hddUsedPct,
+      `${amount(s.freeHdd)} / ${amount(s.totalHdd)} free${
+        s.disks?.length ? ` · ${s.disks.length} more disk${s.disks.length === 1 ? "" : "s"}` : ""
+      }`,
+    ],
+  ];
+  const max = Math.max(20, ...hist.map((h) => h.cpuLoad ?? 0));
+  const step = hist.length > 1 ? 300 / (hist.length - 1) : 0;
+  const points = hist
+    .map((h, i) => `${(i * step).toFixed(1)},${(38 - ((h.cpuLoad ?? 0) / max) * 34).toFixed(1)}`)
+    .join(" ");
+  return (
+    <div className="flex min-w-0 flex-col gap-2" aria-label={`Resources for ${d.name}`}>
+      <span className="monitor-label">
+        Resources
+        {!hasReadings ? (
+          <span className="font-normal"> · awaiting readings</span>
+        ) : stale ? (
+          <span className="font-normal"> · last known, not live</span>
+        ) : null}
+      </span>
+      {rows.map(([label, value, detail]) => (
+        <span className="monitor-meter" key={label} title={detail}>
+          <span className="text-muted-foreground w-14 flex-none">{label}</span>
+          <MeterBar value={value} label={label} />
+          <span className="w-9 flex-none text-right">
+            {value != null ? `${Math.round(value)}%` : "—"}
+          </span>
         </span>
-      </div>
-      <div className="device-resources__grid">
-        {(
-          [
-            ["CPU", s.cpuLoad, HEALTH_COLOR.cpu, Cpu],
-            ["Memory", s.memUsedPct, HEALTH_COLOR.mem, MemoryStick],
-            ["Disk", s.hddUsedPct, HEALTH_COLOR.disk, HardDrive],
-          ] as const
-        ).map(([label, value, color, Icon]) => (
-          <div
-            className="device-resource"
-            key={label}
-            style={{ "--resource-color": color } as CSSProperties}
+      ))}
+      {hist.length > 1 ? (
+        <>
+          <svg
+            viewBox="0 0 300 40"
+            width="100%"
+            height="40"
+            role="img"
+            aria-label={`CPU over the ${span(hist[hist.length - 1].ts - hist[0].ts)}`}
+            preserveAspectRatio="none"
           >
-            <span>
-              <Icon size={13} />
-              {label}
-            </span>
-            <strong>
-              {value != null ? (
-                <>
-                  {Math.round(value)}
-                  <small>%</small>
-                </>
-              ) : (
-                "—"
-              )}
-            </strong>
-            <div
-              className="device-resource__track"
-              role={value != null ? "meter" : undefined}
-              aria-label={`${label} usage`}
-              aria-valuemin={value != null ? 0 : undefined}
-              aria-valuemax={value != null ? 100 : undefined}
-              aria-valuenow={value != null ? Math.max(0, Math.min(value, 100)) : undefined}
-            >
-              {value != null && <i style={{ width: `${Math.max(0, Math.min(value, 100))}%` }} />}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+            <polyline
+              points={points}
+              fill="none"
+              stroke="var(--chart-1)"
+              strokeWidth="1.5"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+          <span className="text-muted-foreground text-[12px]">
+            CPU, {span(hist[hist.length - 1].ts - hist[0].ts)} · {hist.length} samples
+          </span>
+        </>
+      ) : (
+        <span className="text-muted-foreground text-[12px]">
+          No CPU samples yet. Test this router to collect one.
+        </span>
+      )}
+    </div>
   );
 }
