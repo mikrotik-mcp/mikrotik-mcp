@@ -120,6 +120,20 @@
       "sourceType": "github",
       "computedHash": "5d6377fea32d7cb9e7185ee6f653f977f0fba5924b2ddc45ff2903a2d01d9e6e"
     },
+    "migrate-radix-to-base": {
+      "source": "shadcn-ui/ui",
+      "commit": "968d8cb9dc42ae5d52e8fd356cf84596ec832a26",
+      "sourceType": "github",
+      "skillPath": "skills/migrate-radix-to-base/SKILL.md",
+      "computedHash": "7644de21e9aa533904def58c30f809ae6574c3cabc6396ab8b03dee751e8ffbe"
+    },
+    "no-ai-slop": {
+      "source": "petergyang/no-ai-slop",
+      "commit": "000650b156983f5159695b441477f4e63b25dc85",
+      "sourceType": "github",
+      "skillPath": "skills/no-ai-slop/SKILL.md",
+      "computedHash": "325408c3843e4a9d148a439fa665a0722d1248e23da8ef84646c9647ff4b3f88"
+    },
     "promptfoo-evals": {
       "source": "promptfoo/promptfoo",
       "sourceType": "github",
@@ -191,6 +205,13 @@
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
       "computedHash": "adc14aa4f9ac5d96284530ffaee56dfd0612ed8187bc0824c7ee73e2ead5f723"
+    },
+    "shadcn": {
+      "source": "shadcn-ui/ui",
+      "commit": "968d8cb9dc42ae5d52e8fd356cf84596ec832a26",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "388962d16c7a4f13aaeee0d8f128e50a87df8553d42ef7988c39c0e1c74a40e8"
     },
     "slides": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",

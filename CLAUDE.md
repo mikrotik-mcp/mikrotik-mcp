@@ -127,6 +127,36 @@ only).
 builder against no live device. "Tested" here means these pass — on-device behavior
 is not exercised in CI.
 
+## UI design work (ui/)
+
+Every change to the dashboard or the ext-app views goes through these four tools.
+Load them before you write UI code, not after.
+
+1. **`/ui-ux-pro-max`**: decide layout, hierarchy, interaction and accessibility
+   first. Search its data (`python .claude/skills/ui-ux-pro-max/scripts/search.py`)
+   for the UX guideline or chart type that fits. Target: a world-class, calm,
+   dense tool UI, in the style of Linear. No generic dashboard templates.
+2. **shadcn** (skill `shadcn` + the `shadcn` MCP server in `.mcp.json`): build
+   from shadcn/ui components in `ui/observability/components/ui` before writing
+   your own. Find and add components with the MCP tools or
+   `bunx shadcn <add|search|view|docs>` (shadcn is a pinned dev dependency, so
+   `bunx shadcn` runs the local copy). Keep the shadcn variable names; their
+   values come from the design system.
+3. **anime.js** (skill `animejs`, package `animejs` v4): use it for motion that
+   explains a change: entrances, staggers, number tickers, SVG line drawing.
+   Always inside `createScope({ root })` with `scope.revert()` on unmount, and
+   honour `prefers-reduced-motion`. Use CSS transitions for plain hover/focus.
+4. **`/no-ai-slop`**: run every user-facing string (labels, empty states,
+   errors, tooltips, docs) and every code comment through it. Write like a
+   person: short, concrete, active voice, no hype words, no "It's not X, it's Y".
+   Keep code the same way: simple, plain names, no clever abstractions.
+
+Design system: the Linear-inspired "MikroTik MCP" system. Tokens live in
+`ui/observability/tailwind.css` (`:root` = light, `.dark` = default dark). Use
+the tokens; do not invent colors, sizes or radii, and never hard-code hex in TSX
+(`tests/observability-ui.spec.ts` fails on it). Check both themes and a 375px
+width in the browser preview before you call a UI change done.
+
 ## Adding or changing a tool module
 
 1. Create `src/tools/<scope>.ts` exporting a `ToolModule`. **Mirror the closest
