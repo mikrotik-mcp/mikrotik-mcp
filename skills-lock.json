@@ -1,169 +1,176 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "add-app-to-server": {
       "source": "modelcontextprotocol/ext-apps",
       "sourceType": "github",
-      "computedHash": "e9441d0b6a4eedf016903b78648e25234d5fd40e191124e1a1d1e56e71e9a4f4"
+      "computedHash": "3da45f65d7b979edaf3d9ec755856c92522e7d7d57d60a9fb4782ac8d2570ca6"
     },
     "asd-ste100": {
       "source": "danyuchn/asd-ste100-skill",
       "sourceType": "github",
       "skillPath": "SKILL.md",
-      "computedHash": "ca622bd559242641eaf52d8cd94faa0de51fff26ef87127777598ed3fa410eae"
+      "computedHash": "84e868227427ff5f0ab797f99f8e6d3ef597a2fa69a954050ba1da76a04a230f"
     },
     "cavecrew": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
-      "computedHash": "c5527c994fbd4c22b36714e3b124a0f167a533d114ab164fb1d35e2123533917"
+      "computedHash": "6d02108eb779216b8456903d4187e91a17ff740dfcc9876cf1f4435d77b27503"
     },
     "caveman": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
-      "computedHash": "d18cdf73a5f5c496d681a43a6846336b110223bdffa6817b8992529c57f1a815"
+      "computedHash": "e74efa19b96130c4972274cfecf277f041a66ec4d87851059f0a3d1737c216b8"
     },
     "caveman-commit": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
-      "computedHash": "790a4eeace0be35c6691faf923518ba5bd50f1f1305d1101d09dd4971be94e00"
+      "computedHash": "248b3a443a6f80ccaa99741c60078379c7d316077e3bb52cc6ccb0f29037a9cf"
     },
     "caveman-compress": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
-      "computedHash": "84517cd4cf7a49d8d2bc1baf00f61bc359306c6ad9389756b6937eff958bd374"
+      "computedHash": ""
     },
     "caveman-help": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
-      "computedHash": "dd85267e76baad76995157e7b9f762dfa557cd58951ee92af0c283f48aa26537"
+      "computedHash": "339d1420e9cf715d7e56623459ff6f06a1c576734e2e91f0aa5fe98cfebadcfc"
     },
     "caveman-review": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
-      "computedHash": "fb7214a1c5793bae6ba8b1be4329e2e6f40dbec6dd911dfb335ad29f09c316a1"
+      "computedHash": "12fb28584817d4073e99fb0cb003562e363348460d85d25c1b08068ec80cad37"
     },
     "caveman-stats": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
-      "computedHash": "47ce2de3d6cb39a75047b5c962e4eb3da15594e7397c94103e9a104d42626553"
+      "computedHash": "c10c9cd5e084c70bbf6e81e15c73bab94138f6f6b245fd1354574ded8452e357"
     },
     "convert-web-app": {
       "source": "modelcontextprotocol/ext-apps",
       "sourceType": "github",
-      "computedHash": "9e2171bff4ea0d0cf82c8cae3ec6c600c8f3ebd41de73cc8a778ef2cd694ade0"
+      "computedHash": "27c73dee20f90981d74cb3014a3b47ce1d49155455a151025213bc5b555e804f"
     },
     "create-mcp-app": {
       "source": "modelcontextprotocol/ext-apps",
       "sourceType": "github",
-      "computedHash": "39f1ce1c5d4c43b8281e7e51332f9a05f4b689ddd9bf426b4833fb671237f757"
+      "computedHash": "f837229568da815af1058d174560cbc38a5ffa9b24c40a96eeb39e12108c857c"
     },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
-      "computedHash": "d31e234f0c90694a670222cdd1dafa853e051d7066beda389f1097c22dadd461"
+      "computedHash": "193031153017118858c7b4640dc04051cf53402e2f3674a66b9a8bdd2657d5f7"
     },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",
-      "computedHash": "4eabc66183767153e404b39d1b839b1c37f2d82d86f0a0d7e880a579d8d62336"
+      "computedHash": "e1481fcd7484d1bc55f2ca7170b788d7357821f5595d27e7132ec7df6841b0cf"
     },
     "git-flow-branch-creator": {
       "source": "github/awesome-copilot",
       "sourceType": "github",
-      "computedHash": "8add10a7fce31ef99856d36bffeb90f1f1130f5afd88b111417c257f1e5d39bd"
+      "computedHash": "dea69823bedd7be090328a01c60ecebf58d925e54ef43faf365e5c82246dfebd"
     },
     "homelab-vlan-segmentation": {
       "source": "affaan-m/ECC",
       "sourceType": "github",
       "skillPath": "skills/homelab-vlan-segmentation/SKILL.md",
-      "computedHash": "16d70e9c4fdf3b5a010db8b808f98f6196c4f6467459334e843f2df691110676"
+      "computedHash": ""
+    },
+    "improve": {
+      "source": "shadcn/improve",
+      "commit": "cac56e1ebd3c279aa9153616cfeac7b174ab90f9",
+      "sourceType": "github",
+      "skillPath": "skills/improve/SKILL.md",
+      "computedHash": "9e8fe9ea4f9a0e4155801d1624e38ca23798467bb88b447efaa5120f7b1fe802"
     },
     "migrate-oai-app": {
       "source": "modelcontextprotocol/ext-apps",
       "sourceType": "github",
-      "computedHash": "de7efc510078320e126b6b0af3c023d88b98e7c6498fbb8bf93b3daecde0f4d3"
+      "computedHash": "5d6377fea32d7cb9e7185ee6f653f977f0fba5924b2ddc45ff2903a2d01d9e6e"
     },
     "promptfoo-evals": {
       "source": "promptfoo/promptfoo",
       "sourceType": "github",
-      "computedHash": "3356c5a2b3ac89acb599cee77818e9fcaab3a0326c01b1290249c34769380355"
+      "computedHash": "212ba95ff52f951e21ef3f6e613ff378ca769b059b4161315814298336e926af"
     },
     "redteam-plugin-development": {
       "source": "promptfoo/promptfoo",
       "sourceType": "github",
-      "computedHash": "d91726a59cf7af9f7692a27d29676b1429dfa4b27f06b6bcbc72c9a898613cbe"
+      "computedHash": "fe94bbc69fa63f4538e29453fe5a88907c01494bcd5e93d446178b59479dde1b"
     },
     "routeros-app-yaml": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "f3c129242c555aeafaa7b8c158291dc2d2abb0253974c32b242897a520179348"
+      "computedHash": "20edc0658cf62e323116b254cda553ae7aa8826d97af2ac3927dc87e9aea93dd"
     },
     "routeros-command-tree": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "4397dd17304e6b62b3492defb31a71a87b55b3a8e697932baa1e76c5a0a0bfaa"
+      "computedHash": "ddef14d59cef5cca59f5c9384a7e75a22b101dc218edc58db456879f736ed342"
     },
     "routeros-container": {
       "source": "aiskillstore/marketplace",
       "sourceType": "github",
       "skillPath": "skills/tikoci/routeros-container/SKILL.md",
-      "computedHash": "88216b11b77c23c0467ae300df8e7ac8d1c5aa10df078469c9b87296df6c5ffd"
+      "computedHash": ""
     },
     "routeros-firewall": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "112192a635bddc07cb55a91a9f1a7edb0676a1937c2013d7ebfe4c98c9ae5e3b"
+      "computedHash": "a2ab065fcda328ba65960f0ea811e55f2c81d813925dd3fe38e9ab28cea001de"
     },
     "routeros-fundamentals": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "fa61f2604068b05094260775b835d79500768d63bb9e65a33776341048249eae"
+      "computedHash": "02e44a5e00066a2dfa4b1c03241c723dd8e444bcfe6ad8c1d9193884ccf3075d"
     },
     "routeros-hotspot": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "67de039a560f9192fd4d52034800c1602890c466bff6dee611a042a6377a200b"
+      "computedHash": "edc5179406b68782901dfefbc94e3c9cca6d942c338f70046fb213f3d1908c5f"
     },
     "routeros-mac-telnet": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "35028a732203e6b54be882d74fa96a47d06b1e9ea238b9f8bf7d128a589c7010"
+      "computedHash": "7853de7003ba1350e5f4b6f199f411c75f75e42a85de946062beaaa7327ae694"
     },
     "routeros-mndp": {
       "source": "aiskillstore/marketplace",
       "sourceType": "github",
       "skillPath": "skills/tikoci/routeros-mndp/SKILL.md",
-      "computedHash": "fb16b193132d088b6d317e3a5bcf6fc111875f137f392333857daf936ba97d65"
+      "computedHash": "da10ed761119d18291f6c70edf0afd34bea7387b024b3c3f4a81f3edb031fd2c"
     },
     "routeros-netinstall": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "2a8d3f7ed49b18eab80d26844e321988f0470bda728f19c386b656804914416a"
+      "computedHash": "c77e194638e40abc494a9e70cb0ee0d85822ab269fe91363370c21905220fae7"
     },
     "routeros-qemu-chr": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "b6d6e95dbe219510f8914e671e598c09396085f00207f0d7aa1ba50685afb2d5"
+      "computedHash": "e6f3d75d0b4b61e303fcde87db38bf20c37b422c20e1a63b1c6fb13346fe1a5f"
     },
     "routeros-scripting": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "7dcf98020cf0433131f5850ddf60d50bee84992a058a1bf00b4637f368503884"
+      "computedHash": "4309a3507cac12c6b2f1eb03872eb73cd6a14de2f24271038aab62bad333e188"
     },
     "routeros-sniffer": {
       "source": "tikoci/routeros-skills",
       "sourceType": "github",
-      "computedHash": "a57baf03a692e3673e13f26fc8207a3ce83fcd4809050b19d97d45022bf94343"
+      "computedHash": "adc14aa4f9ac5d96284530ffaee56dfd0612ed8187bc0824c7ee73e2ead5f723"
     },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
-      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+      "computedHash": "4f68ae07187fb0d1fb78c88b503d089da4cf5a9d9625d1f2e425b1590bf96d92"
     },
     "writing-great-skills": {
       "source": "mattpocock/skills",
       "sourceType": "github",
-      "computedHash": "581f78b50b3d81b095de86b5c18a4d9fa932fbe414cc82bd26d627d4da518f07"
+      "computedHash": "55435d141ca202e1570cdd4e9d18b291ae5ec1da216e34ff2ef2161d2ab03a89"
     }
   }
 }
