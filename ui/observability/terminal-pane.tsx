@@ -19,6 +19,7 @@ import {
   RefreshCw,
   RotateCw,
   Square,
+  Table2,
   Star,
   TriangleAlert,
   X,
@@ -36,6 +37,7 @@ import {
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
 import type { Completion, ExportFormat, RunEnd } from "./terminal-lib";
+import { RecordTable } from "./terminal-table";
 import {
   cleanOutput,
   destructiveWord,
@@ -63,6 +65,8 @@ interface Block {
   /** Shown while waiting to retry: "retry 2/3 in 4s". */
   note?: string;
   collapsed?: boolean;
+  /** Show the output as a table of records. */
+  table?: boolean;
   /** Line numbers that differ from the previous run (watch mode). */
   changed?: Set<number>;
   runs: number;
@@ -250,6 +254,16 @@ function BlockViewBase({
           >
             {watching ? <EyeOff size={13} /> : <Eye size={13} />}
           </button>
+          {/\bprint\b/.test(block.command) && block.status === "ok" && (
+            <button
+              type="button"
+              onClick={() => onAction("table", block)}
+              title={block.table ? "Show as text" : "Show as a table"}
+              data-on={Boolean(block.table)}
+            >
+              <Table2 size={13} />
+            </button>
+          )}
           <button type="button" onClick={() => copy("output")} title="Copy output">
             {copied === "output" ? <Check size={13} /> : <Copy size={13} />}
           </button>
@@ -274,7 +288,11 @@ function BlockViewBase({
       </header>
       {!block.collapsed && (
         <>
-          {body !== null && <pre className="term-output">{body}</pre>}
+          {block.table && block.output ? (
+            <RecordTable output={block.output} />
+          ) : (
+            body !== null && <pre className="term-output">{body}</pre>
+          )}
           {block.status !== "running" && !block.output && !block.error && (
             <div className="term-empty">no output</div>
           )}
@@ -654,6 +672,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
       if (action === "stop") running.current.get(block.id)?.abort();
       else if (action === "rerun") submit(block.command);
       else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
+      else if (action === "table") patch(block.id, { table: !block.table });
       else if (action === "star") void favoritesStore.toggle(block.command);
       else if (action === "save")
         downloadText(`${device}-${block.id}.txt`, exportSession(device, [block], "txt"));

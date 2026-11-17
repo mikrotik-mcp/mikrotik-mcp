@@ -1171,3 +1171,74 @@
 .term-star-input[data-on="true"] {
   color: var(--term-warn);
 }
+
+/* ── table view of a print ───────────────────────────────────────────── */
+.term-table {
+  border-top: 1px dashed var(--term-line);
+}
+.term-table-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  color: var(--term-faint);
+  font-size: 11px;
+}
+.term-table-tools input {
+  width: 180px;
+  padding: 2px 7px;
+  border: 1px solid var(--term-line);
+  border-radius: 6px;
+  outline: none;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-family: inherit;
+  font-size: 11.5px;
+}
+.term-table-tools input:focus {
+  border-color: var(--term-accent);
+}
+.term-table-scroll {
+  max-height: 420px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.term-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.term-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  background: var(--term-raised);
+  text-align: left;
+}
+.term-table th button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--term-accent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.term-table td {
+  padding: 3px 10px;
+  border-top: 1px solid rgb(35 46 69 / 55%);
+  color: #c9d4e6;
+  white-space: nowrap;
+}
+.term-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--term-accent) 8%, transparent);
+}
