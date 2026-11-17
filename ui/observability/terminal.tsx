@@ -51,6 +51,7 @@ import { CompareDialog } from "./terminal-compare";
 import { ScriptDialog } from "./terminal-script";
 import { FindBar } from "./terminal-search";
 import { ShellPane } from "./terminal-shell-pane";
+import { PaneTab } from "./terminal-tab";
 import type { DevicesPayload } from "./types";
 import "./terminal.css";
 
@@ -544,7 +545,12 @@ export function TerminalView(): ReactNode {
 
       <div className="term-body">
         <div className="term-dock">
-          <DockviewReact components={components} onReady={onReady} theme={themeAbyss} />
+          <DockviewReact
+            components={components}
+            defaultTabComponent={PaneTab}
+            onReady={onReady}
+            theme={themeAbyss}
+          />
           {paneCount === 0 && (
             <div className="term-nopane">
               <p>No terminal is open.</p>

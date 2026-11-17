@@ -355,7 +355,9 @@ function BlockViewBase({
 }
 const BlockView = memo(BlockViewBase);
 
-export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): ReactNode {
+export function TerminalPane(
+  props: IDockviewPanelProps<{ device: string; color?: string }>,
+): ReactNode {
   const device = props.params.device;
   const paneId = props.api.id;
   // Blocks survive a reload. A block that was running then has an unknown end.
@@ -988,6 +990,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
     <section
       className="term-pane"
       data-pane-id={paneId}
+      data-pane-color={props.params.color || undefined}
       data-safe={Boolean(conn.safeMode)}
       data-link={conn.link}
       onMouseDown={() => {

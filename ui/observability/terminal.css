@@ -1706,3 +1706,160 @@
   scrollbar-width: thin;
   scrollbar-color: var(--term-line) transparent;
 }
+
+/* ── pane tab: title, colour, context menu ───────────────────────────── */
+[data-pane-color="cyan"] {
+  --pane-color: #5ccfe6;
+}
+[data-pane-color="green"] {
+  --pane-color: #7ee0a1;
+}
+[data-pane-color="amber"] {
+  --pane-color: #ffcf7a;
+}
+[data-pane-color="rose"] {
+  --pane-color: #ff7a93;
+}
+[data-pane-color="violet"] {
+  --pane-color: #c4a2ff;
+}
+[data-pane-color="blue"] {
+  --pane-color: #6ea8ff;
+}
+[data-pane-color="slate"] {
+  --pane-color: #9aa7bd;
+}
+.term-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  padding: 0 6px 0 10px;
+  box-shadow: inset 0 -2px 0 var(--pane-color, transparent);
+  color: var(--pane-color, inherit);
+  font-family: var(--term-mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.term-tab-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--pane-color, var(--term-faint));
+}
+.term-tab-title {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.term-tab-close {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--term-dim);
+  opacity: 0.6;
+}
+.term-tab-close:hover {
+  background: rgb(255 255 255 / 10%);
+  color: var(--term-ink);
+  opacity: 1;
+}
+/* A coloured pane carries its colour on the status bar and the prompt. */
+.term-pane[data-pane-color] {
+  --term-accent: var(--pane-color);
+}
+.term-pane[data-pane-color] > .term-status {
+  box-shadow: inset 0 2px 0 var(--pane-color);
+  background: color-mix(in srgb, var(--pane-color) 9%, rgb(17 23 37 / 85%));
+}
+.term-tab-menu {
+  position: fixed;
+  z-index: 90;
+  display: grid;
+  gap: 8px;
+  width: 240px;
+  padding: 10px;
+  border: 1px solid var(--term-line);
+  border-radius: 10px;
+  background: var(--term-raised);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 60%);
+  color: var(--term-ink);
+  font-size: 12px;
+  animation: term-rise 0.12s ease-out;
+}
+.term-tab-menu form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--term-line);
+  border-radius: 7px;
+  background: var(--term-bg);
+  color: var(--term-dim);
+}
+.term-tab-menu form:focus-within {
+  border-color: var(--term-accent);
+}
+.term-tab-menu input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+  border: 0;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  color: var(--term-ink);
+  font-family: var(--term-mono);
+  font-size: 12px;
+}
+.term-tab-menu form button {
+  display: inline-flex;
+  padding: 3px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--term-ok);
+}
+.term-tab-menu form button:disabled {
+  opacity: 0.3;
+}
+.term-tab-colors {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.term-tab-colors button[data-pane-color] {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--pane-color);
+  transition: transform 0.1s;
+}
+.term-tab-colors button[data-pane-color]:hover {
+  transform: scale(1.15);
+}
+.term-tab-colors button[aria-pressed="true"] {
+  border-color: var(--term-ink);
+}
+.term-tab-nocolor,
+.term-tab-reset {
+  padding: 3px 8px;
+  border: 1px solid var(--term-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--term-dim);
+  font-size: 11px;
+}
+.term-tab-nocolor {
+  margin-left: auto;
+}
+.term-tab-nocolor:hover,
+.term-tab-reset:hover {
+  border-color: var(--term-accent);
+  color: var(--term-ink);
+}

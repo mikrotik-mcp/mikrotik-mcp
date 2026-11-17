@@ -37,6 +37,7 @@ the GitHub release notes.
   - Inline help and completion descriptions from the router.
   - Broadcast groups with a result summary; named workspaces.
   - Alerts on a watched command; export of a pane or a block.
+  - Right-click a pane tab to rename the pane or give it a colour.
   - Command history and favourites are saved on the server
     (`~/.mikrotik-mcp/terminal.db`). Any entry can be run again on any router.
   - Broadcast runs one command in every open pane.

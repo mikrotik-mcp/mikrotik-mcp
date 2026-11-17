@@ -133,6 +133,8 @@ The **Terminal** page gives you RouterOS consoles in the browser, as in WinBox.
 - **Panes.** Open a pane for any router from the toolbar. Drag a pane tab to
   split, stack, float or move it; drag a border to resize. You can open several
   panes for one router. The layout is restored after a reload.
+- **Title and colour.** Right-click a pane tab (or double-click it) to rename
+  the pane or give it one of seven colours. Both are kept with the layout.
 - **Command blocks.** Each command is a block with its live output. A block can
   be stopped, run again, watched (run again every 5 seconds, with changed lines
   marked), copied (output or command) and added to your favourites.

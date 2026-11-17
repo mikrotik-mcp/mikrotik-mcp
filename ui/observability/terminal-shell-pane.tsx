@@ -29,7 +29,9 @@ const post = (path: string, body: unknown, signal?: AbortSignal): Promise<Respon
 const ink = (element: Element, name: string): string =>
   getComputedStyle(element).getPropertyValue(name).trim();
 
-export function ShellPane(props: IDockviewPanelProps<{ device: string }>): ReactNode {
+export function ShellPane(
+  props: IDockviewPanelProps<{ device: string; color?: string }>,
+): ReactNode {
   const device = props.params.device;
   const host = useRef<HTMLDivElement>(null);
   const [link, setLink] = useState<Link>("connecting");
@@ -119,7 +121,11 @@ export function ShellPane(props: IDockviewPanelProps<{ device: string }>): React
   }, [device, attempt]);
 
   return (
-    <section className="term-pane term-shell" data-link={link}>
+    <section
+      className="term-pane term-shell"
+      data-link={link}
+      data-pane-color={props.params.color || undefined}
+    >
       <header className="term-status">
         <span className="term-link" data-link={link === "closed" ? "reconnecting" : link}>
           <span className="term-dot" />
