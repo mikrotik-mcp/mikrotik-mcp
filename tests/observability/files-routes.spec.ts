@@ -74,6 +74,7 @@ function fakeSftp(tree: Record<string, string | "dir">, options: { failWrites?: 
 }
 
 const routers: Record<string, ReturnType<typeof fakeSftp>> = {};
+const endpoints: Record<string, Record<string, unknown>> = {};
 const config = { readOnly: false };
 const audit = vi.fn();
 
@@ -90,7 +91,7 @@ vi.mock("../../src/core/runtime", () => ({
   getConfig: () => config,
   getDevice: (name: string) => {
     if (!routers[name]) throw new Error(`Unknown device '${name}'`);
-    return { name };
+    return { name, ...endpoints[name] };
   },
   resolveDeviceName: (name: string) => name,
 }));
@@ -103,6 +104,11 @@ const commands: string[] = [];
 vi.mock("../../src/core/connector", () => ({
   executeMikrotikCommand: async (command: string) => {
     commands.push(command);
+    // A fake `/tool fetch`: the destination pulls the file from the source.
+    const fetch = command.match(/^\/tool fetch .*src-path=(\S+) dst-path=(\S+)/);
+    if (fetch && !command.includes("unreachable"))
+      routers.beta!.disk.set(`/${fetch[2]}`, routers.alpha!.disk.get(`/${fetch[1]}`) as Buffer);
+    if (command.includes("unreachable")) return "failure: connection timeout";
     return command.includes("bad.rsc") ? "failure: bad command name" : "";
   },
 }));
@@ -133,6 +139,7 @@ beforeEach(() => {
   files.closeFileSessions();
   config.readOnly = false;
   audit.mockClear();
+  for (const name of Object.keys(endpoints)) delete endpoints[name];
   routers.alpha = fakeSftp({
     "/flash": "dir",
     "/flash/config.rsc": "/ip address\nadd address=10.0.0.1/24\n",
@@ -266,7 +273,7 @@ describe("changes", () => {
       to: { device: "beta", path: "/config.rsc" },
     });
     const items = await lines(res);
-    expect(items[0]).toEqual({ t: "start", total: 36 });
+    expect(items[0]).toEqual({ t: "start", total: 36, via: "relay" });
     expect(items.at(-1)).toEqual({ t: "end", ok: true, bytes: 36 });
     expect(routers.beta!.disk.get("/config.rsc")).toEqual(
       routers.alpha!.disk.get("/flash/config.rsc"),
@@ -369,6 +376,57 @@ describe("folders", () => {
     expect(zip.readUInt32LE(first + 4)).toBe(
       crc32(routers.alpha!.disk.get("/flash/config.rsc") as Buffer),
     );
+  });
+});
+
+describe("direct copy", () => {
+  const copy = {
+    from: { device: "alpha", path: "/notes.txt" },
+    to: { device: "beta", path: "/notes.txt" },
+  };
+  test("the destination fetches the file itself when it can", async () => {
+    endpoints.alpha = { host: "10.0.0.1", port: 22, username: "admin", password: "s3cret" };
+    endpoints.beta = { host: "10.0.0.2" };
+    commands.length = 0;
+    const items = await lines(await call("POST", "/api/files/transfer", { ...copy, direct: true }));
+    expect(items[0]).toEqual({ t: "start", total: 14, via: "direct" });
+    expect(items.at(-1)).toEqual({ t: "end", ok: true, bytes: 14 });
+    expect(commands).toEqual([
+      "/tool fetch mode=sftp address=10.0.0.1 port=22 user=admin password=s3cret src-path=notes.txt dst-path=notes.txt",
+    ]);
+    // The password reaches the router, and nothing else.
+    expect(JSON.stringify(audit.mock.calls)).not.toContain("s3cret");
+    expect(JSON.stringify(items)).not.toContain("s3cret");
+  });
+  test("a key-only source, and a failed fetch, are relayed instead", async () => {
+    endpoints.alpha = { host: "10.0.0.1", username: "admin" };
+    endpoints.beta = { host: "10.0.0.2" };
+    const keyOnly = await lines(
+      await call("POST", "/api/files/transfer", { ...copy, direct: true }),
+    );
+    expect(keyOnly[0]).toEqual(expect.objectContaining({ t: "note" }));
+    expect(keyOnly.find((item) => item.t === "start")).toEqual({
+      t: "start",
+      total: 14,
+      via: "relay",
+    });
+    endpoints.alpha = { host: "unreachable", username: "admin", password: "p" };
+    const failed = await lines(
+      await call("POST", "/api/files/transfer", { ...copy, direct: true }),
+    );
+    expect(failed.filter((item) => item.t === "start").map((item) => item.via)).toEqual([
+      "direct",
+      "relay",
+    ]);
+    expect(failed.at(-1)).toEqual({ t: "end", ok: true, bytes: 14 });
+    expect(routers.beta!.disk.get("/notes.txt")?.toString()).toBe("wan is ether1\n");
+  });
+  test("it is used only when asked", async () => {
+    endpoints.alpha = { host: "10.0.0.1", username: "admin", password: "p" };
+    endpoints.beta = { host: "10.0.0.2" };
+    commands.length = 0;
+    await lines(await call("POST", "/api/files/transfer", copy));
+    expect(commands).toEqual([]);
   });
 });
 

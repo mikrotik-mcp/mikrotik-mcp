@@ -127,6 +127,9 @@ export const pickForCompare = (file: FileRef): void => {
   compareStore.set(first && compareStore.get().length === 1 ? [first, file] : [file]);
 };
 
+/** When on, a copy asks the destination router to fetch the file from the source by itself. */
+export const directStore = store(false);
+
 /** The `.rsc` file open in the import dialog, or null. */
 export const importStore = store<FileRef | null>(null);
 
@@ -303,8 +306,13 @@ export interface Transfer {
   error?: string;
   started?: number;
   finished?: number;
+  /** How a copy travels: relayed by the server, or fetched by the router itself. */
+  via?: string;
+  /** Something the user should know, such as a fallback. */
+  note?: string;
 }
-type Report = (done: number, total?: number) => void;
+/** `extra` sets other fields of the row, such as how a copy travels. */
+type Report = (done: number, total?: number, extra?: Partial<Transfer>) => void;
 type Job = (report: Report, signal: AbortSignal) => Promise<void>;
 
 /** Transfers that run at the same time; the rest wait in the queue. */
@@ -330,11 +338,11 @@ function pump(): void {
     entry.abort = abort;
     patch(item.id, { status: "active", started: Date.now(), done: 0, error: undefined });
     let shown = 0;
-    const report: Report = (done, total) => {
+    const report: Report = (done, total, extra) => {
       // Many small progress events; the list redraws about ten times a second.
-      if (Date.now() - shown < 100 && total === undefined) return;
+      if (Date.now() - shown < 100 && total === undefined && !extra) return;
       shown = Date.now();
-      patch(item.id, total === undefined ? { done } : { done, total });
+      patch(item.id, { done, ...(total === undefined ? {} : { total }), ...extra });
     };
     entry
       .job(report, abort.signal)
@@ -521,12 +529,14 @@ export const transferQueue = {
           body: JSON.stringify({
             from: { device: from.device, path: from.path },
             to: { device: to.device, path: joinPath(to.dir, name) },
+            direct: directStore.get(),
           }),
         });
         let ended = false;
         try {
           await readLines(res, (item) => {
-            if (item.t === "start") report(0, Number(item.total));
+            if (item.t === "start") report(0, Number(item.total), { via: String(item.via ?? "") });
+            else if (item.t === "note") report(0, undefined, { note: String(item.text) });
             else if (item.t === "progress") report(Number(item.done));
             else if (item.t === "end") {
               ended = true;

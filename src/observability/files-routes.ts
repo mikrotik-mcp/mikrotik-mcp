@@ -483,6 +483,72 @@ export function closeFileSessions(): void {
   }
 }
 
+// ── direct copy ───────────────────────────────────────────────────────────
+interface Endpoint {
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  jumpHost?: unknown;
+  jumpVia?: unknown;
+}
+
+/**
+ * Why the destination router cannot fetch a file from the source by itself, or
+ * `null` when it can. A direct copy gives the destination the source's SSH
+ * password for one command, so it is used only when the caller asks for it.
+ */
+export function directBlocker(source: Endpoint, target: Endpoint): string | null {
+  if (!source.host) return "the source router has no IP address in the config.";
+  if (!source.password) return "the source router signs in with a key, not a password.";
+  if (source.jumpHost || source.jumpVia) return "the source router is behind a jump host.";
+  if (!target.host) return "the destination router is not reached over SSH.";
+  return null;
+}
+
+/** The `/tool fetch` that makes a router pull a file from another router over SFTP. */
+export function fetchCommand(source: Endpoint, sourcePath: string, targetPath: string): string {
+  return new Cmd("/tool fetch")
+    .raw("mode=sftp")
+    .set("address", source.host ?? "")
+    .set("port", source.port ?? 22)
+    .set("user", source.username ?? "")
+    .set("password", source.password ?? "")
+    .set("src-path", sourcePath.slice(1))
+    .set("dst-path", targetPath.slice(1))
+    .build();
+}
+
+/** Have the destination fetch the file; progress is the size of the growing file. */
+async function directCopy(
+  source: { device: string; path: string },
+  target: { device: string; path: string },
+  total: number,
+  writer: Sftp,
+  progress: (done: number) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  await ensureDir(writer, parentOf(target.path));
+  const size = (): Promise<number> =>
+    call<{ size: number }>((done) => writer.stat(target.path, done)).then(
+      (stats) => stats.size,
+      () => 0,
+    );
+  const poll = setInterval(() => void size().then(progress), 1000);
+  try {
+    const output = await executeMikrotikCommand(
+      fetchCommand(getDevice(source.device), source.path, target.path),
+      createContext(undefined, target.device),
+      { maxMs: 600_000, signal },
+    );
+    if (looksLikeError(output)) throw new Error(output.trim().split("\n").pop() ?? "fetch failed");
+    const got = await size();
+    if (got !== total) throw new Error(`the destination has ${got} of ${total} bytes`);
+  } finally {
+    clearInterval(poll);
+  }
+}
+
 // ── routes ────────────────────────────────────────────────────────────────
 const noStore = { "cache-control": "no-store" };
 const json = (body: unknown, status = 200): Response =>
@@ -814,6 +880,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
           copy: `${source.device}:${source.path}`,
           to: `${target.device}:${target.path}`,
         };
+        const wantDirect = body.direct === true && source.device !== target.device;
         return ndjson(req, async (send, signal) => {
           try {
             const bytes = await withSftp(source.device, (reader) =>
@@ -822,17 +889,34 @@ export function createFilesRoutes(options: { denied: string | null }) {
                   reader.stat(source.path, done),
                 );
                 if (stats.isDirectory()) throw new Error("A directory cannot be copied.");
-                send({ t: "start", total: stats.size });
                 let last = 0;
+                const progress = (done: number): void => {
+                  if (Date.now() - last < 150) return;
+                  last = Date.now();
+                  send({ t: "progress", done });
+                };
+                const blocker = wantDirect
+                  ? directBlocker(getDevice(source.device), getDevice(target.device))
+                  : "not asked";
+                if (blocker === null) {
+                  send({ t: "start", total: stats.size, via: "direct" });
+                  try {
+                    await directCopy(source, target, stats.size, writer, progress, signal);
+                    return stats.size;
+                  } catch (error) {
+                    if (signal.aborted) throw error;
+                    send({
+                      t: "note",
+                      text: `Direct copy failed (${message(error)}). Relaying instead.`,
+                    });
+                  }
+                } else if (wantDirect) send({ t: "note", text: `Relayed: ${blocker}` });
+                send({ t: "start", total: stats.size, via: "relay" });
                 return writeStream(
                   writer,
                   target.path,
                   reader.createReadStream(source.path) as AsyncIterable<Uint8Array>,
-                  (done) => {
-                    if (Date.now() - last < 150) return;
-                    last = Date.now();
-                    send({ t: "progress", done });
-                  },
+                  progress,
                   signal,
                 );
               }),

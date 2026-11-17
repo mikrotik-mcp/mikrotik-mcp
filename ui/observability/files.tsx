@@ -23,6 +23,7 @@ import {
   ShieldAlert,
   Square,
   X,
+  Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -33,6 +34,7 @@ import type { FilesState, SearchDone, SearchHit, Transfer } from "./files-lib";
 import {
   baseName,
   broadcastStore,
+  directStore,
   filePanes,
   filesApi,
   filesLayout,
@@ -75,6 +77,7 @@ function TransferRow({ item }: { item: Transfer }): ReactNode {
           <strong title={item.name}>{item.name}</strong>
           <span>
             {item.from} → {item.to}
+            {item.via && ` · ${item.via}`}
           </span>
         </p>
         <div className="files-bar" role="progressbar" aria-valuenow={Math.round(part * 100)}>
@@ -92,6 +95,7 @@ function TransferRow({ item }: { item: Transfer }): ReactNode {
             `${bytes(item.total)} · done in ${(((item.finished ?? 0) - (item.started ?? 0)) / 1000).toFixed(1)}s`}
           {item.status === "stopped" && "Stopped"}
           {item.status === "error" && (item.error ?? "Failed")}
+          {item.note && <em> · {item.note}</em>}
         </small>
       </div>
       <span className="files-transfer-state">
@@ -142,6 +146,7 @@ export function FilesView(): ReactNode {
   const transfers = useSyncExternalStore(transferQueue.subscribe, transferQueue.get);
   const panes = useSyncExternalStore(filePanes.subscribe, filePanes.all);
   const broadcasting = useSyncExternalStore(broadcastStore.subscribe, broadcastStore.get);
+  const direct = useSyncExternalStore(directStore.subscribe, directStore.get);
   // Speeds and times left move while a transfer runs.
   const [, tick] = useState(0);
   const active = transfers.filter((item) => item.status === "active" || item.status === "queued");
@@ -297,6 +302,15 @@ export function FilesView(): ReactNode {
               title="An upload to one pane goes to the same folder on every open router"
             >
               <Radio size={13} /> Upload to all
+            </button>
+            <button
+              type="button"
+              data-on={direct}
+              aria-pressed={direct}
+              onClick={() => directStore.set(!direct)}
+              title="For a large file: the destination router fetches the file from the source by itself, when it can reach it. The destination gets the SSH password of the source for that one command. Otherwise the server relays the copy."
+            >
+              <Zap size={13} /> Direct copy
             </button>
           </div>
         )}
