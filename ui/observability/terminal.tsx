@@ -50,10 +50,11 @@ import { TerminalPane } from "./terminal-pane";
 import { CompareDialog } from "./terminal-compare";
 import { ScriptDialog } from "./terminal-script";
 import { FindBar } from "./terminal-search";
+import { ShellPane } from "./terminal-shell-pane";
 import type { DevicesPayload } from "./types";
 import "./terminal.css";
 
-const components = { terminal: TerminalPane };
+const components = { terminal: TerminalPane, shell: ShellPane };
 
 function Code({ text }: { text: string }): ReactNode {
   return (
@@ -101,6 +102,10 @@ export function TerminalView(): ReactNode {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [armed, setArmed] = useState(false);
   const [finding, setFinding] = useState(false);
+  /** What "New terminal" opens: command blocks, or an interactive shell. */
+  const [kind, setKind] = useState<"terminal" | "shell">("terminal");
+  const kindRef = useRef(kind);
+  kindRef.current = kind;
   /** Raised by Ctrl+F so an open find bar takes the focus again. */
   const [findFocus, setFindFocus] = useState(0);
   const [, setGrammarReady] = useState(false);
@@ -182,8 +187,10 @@ export function TerminalView(): ReactNode {
     const reference = view.activePanel;
     view.addPanel({
       id,
-      component: "terminal",
-      title: sameDevice.length ? `${device} · ${sameDevice.length + 1}` : device,
+      component: kindRef.current,
+      title:
+        (sameDevice.length ? `${device} · ${sameDevice.length + 1}` : device) +
+        (kindRef.current === "shell" ? " (shell)" : ""),
       params: { device },
       position: reference ? { referencePanel: reference.id, direction } : undefined,
     });
@@ -297,6 +304,25 @@ export function TerminalView(): ReactNode {
         <div className="term-devices" role="group" aria-label="Open a terminal">
           <span className="term-toolbar-label">
             <Plus size={13} /> New terminal
+          </span>
+          <span className="term-kind" role="group" aria-label="Kind of terminal">
+            <button
+              type="button"
+              data-on={kind === "terminal"}
+              onClick={() => setKind("terminal")}
+              title="Command blocks: history, retry, watch, table, compare. Every command is recorded."
+            >
+              Blocks
+            </button>
+            <button
+              type="button"
+              data-on={kind === "shell"}
+              disabled={state.readOnly}
+              onClick={() => setKind("shell")}
+              title="Interactive shell, as in WinBox: enter menus, answer prompts, run live monitors. Keys are not recorded."
+            >
+              Shell
+            </button>
           </span>
           {devices.devices.map((device) => (
             <button

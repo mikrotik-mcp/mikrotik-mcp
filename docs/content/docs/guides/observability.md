@@ -150,6 +150,31 @@ The **Terminal** page gives you RouterOS consoles in the browser, as in WinBox.
   terminal or in all terminals, with match case, whole words and regular
   expressions. `Enter` and `Shift+Enter` move between results. The filter button
   hides the blocks without a match.
+- **Interactive shell.** Next to "New terminal", choose **Shell** to open a real
+  RouterOS console (as in WinBox): enter a menu, answer a prompt, run a live
+  monitor. Keys typed in a shell are not saved to the history; only the opening
+  and closing of the session reach the audit feed.
+- **Safe Mode.** The `safe mode` button of a pane opens RouterOS Safe Mode, then
+  offers **Commit** and **Roll back**. The router undoes uncommitted changes if
+  the session is lost.
+- **Snapshot before a change.** With `snapshot on`, the configuration is stored
+  on this computer before every command that is not a read. If the snapshot
+  fails, the command does not run. The block then offers **what changed?**.
+- **Snippets.** A command may hold `{{name}}` or `{{name=default}}`. Running it
+  asks for the values. The star beside the input saves what is typed.
+- **Table and compare.** A `print` block can show as a sortable, filterable
+  table. Pick two blocks, in any panes, to see their differences.
+- **Script.** The script button runs several commands, one per line. **Check
+  syntax** validates each line with the router and runs nothing.
+- **Help.** A strip under the input explains what can follow the typed word, in
+  the router's own words.
+- **Broadcast groups.** Broadcast to every open pane or to a saved group of
+  routers. A bar lists each pane's result.
+- **Workspaces.** Save the current pane layout under a name and open it later.
+- **Alerts.** A watched block takes a rule (`changed`, `cpu-load > 80`,
+  `/regex/`, or a text) and notifies when the rule starts to hold.
+- **Export.** Save a pane as a transcript (`.txt`), a report (`.md`) or the
+  commands that succeeded (`.rsc`).
 - **Limits.** Each pane has a command time limit (30 s, 2 min or 10 min) and a
   watch interval (2 s to 60 s).
 - **Blocks are kept.** A pane keeps its last 40 blocks in the browser, so a
@@ -182,6 +207,8 @@ The terminal runs any command on a router, so:
 - A read-only server runs only `print`, `export` and diagnostic commands.
 - Auto-retry sends a command again only when the router was not reached, or when
   the command only reads. A change that may already have run is not repeated.
+- The interactive shell is not available on a read-only server, and its keys are
+  not recorded. Use block panes when you need a record of every command.
 - Every command is saved to the audit feed (tool `dashboard_terminal`) and to
   `~/.mikrotik-mcp/terminal.db`.
 - A command stops at the pane's time limit (30 seconds by default) unless it

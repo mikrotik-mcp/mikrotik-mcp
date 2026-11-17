@@ -41,6 +41,8 @@
         "@typescript/native": "npm:typescript@^7.0.2",
         "@vitest/coverage-v8": "5.1.0",
         "@vitest/ui": "5.1.0",
+        "@xterm/addon-fit": "0.11.0",
+        "@xterm/xterm": "6.0.0",
         "bunup": "^0.16.32",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -775,6 +777,10 @@
     "@voidzero-dev/vite-plus-win32-arm64-msvc": ["@voidzero-dev/vite-plus-win32-arm64-msvc@1.0.0-rc.1", "", { "os": "win32", "cpu": "arm64" }, "sha512-vk3F0JBO9SZi7sa2wrlIqd5RKfGXVrKA7BOI93yi9SMZOlj0+Le7+6atSjVvwcWn6W8zgZcbI5SgWG0v7WWa9Q=="],
 
     "@voidzero-dev/vite-plus-win32-x64-msvc": ["@voidzero-dev/vite-plus-win32-x64-msvc@1.0.0-rc.1", "", { "os": "win32", "cpu": "x64" }, "sha512-yA8bLkcPn9I3BOCn2RXPgGPP9dTubR39fBFhH9U4sVbz/BGZeJbqbpsAO+mGDvBLEBITr5/ipwVg+/28pfId/Q=="],
+
+    "@xterm/addon-fit": ["@xterm/addon-fit@0.11.0", "", {}, "sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g=="],
+
+    "@xterm/xterm": ["@xterm/xterm@6.0.0", "", {}, "sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg=="],
 
     "@yuku-codegen/binding-android-arm64": ["@yuku-codegen/binding-android-arm64@0.9.5", "", { "os": "android", "cpu": "arm64" }, "sha512-jrOY5WM+AaAqkv51fHP1x28ifto4WgcZVzodLUyMU1jMWn5Sq+VciRdk/n8E0Ey5w4p4cWWE+m5GfXWOYh7Kzw=="],
 

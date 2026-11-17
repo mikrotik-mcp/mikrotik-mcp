@@ -26,6 +26,17 @@ the GitHub release notes.
     filter that hides blocks without a match.
   - Per-pane command time limit (30 s, 2 min, 10 min) and watch interval.
   - A pane keeps its last 40 blocks across a reload.
+  - Interactive shell panes: a real RouterOS console over one SSH PTY
+    (xterm.js), for menus, prompts and live monitors. Keys are not recorded.
+  - Safe Mode from a pane: enable, commit, roll back.
+  - Optional config snapshot before every command that is not a read, with a
+    "what changed?" diff. A failed snapshot stops the command.
+  - Snippets with `{{name}}` / `{{name=default}}` placeholders.
+  - Table view of a `print` output; comparison of two outputs.
+  - Script runner with a syntax check that runs nothing.
+  - Inline help and completion descriptions from the router.
+  - Broadcast groups with a result summary; named workspaces.
+  - Alerts on a watched command; export of a pane or a block.
   - Command history and favourites are saved on the server
     (`~/.mikrotik-mcp/terminal.db`). Any entry can be run again on any router.
   - Broadcast runs one command in every open pane.

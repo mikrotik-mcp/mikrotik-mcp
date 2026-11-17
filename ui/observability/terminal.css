@@ -1673,3 +1673,36 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* ── interactive shell ───────────────────────────────────────────────── */
+.term-kind {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--term-line);
+  border-radius: 8px;
+}
+.term-toolbar .term-kind button {
+  padding: 2px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 11.5px;
+}
+.term-toolbar .term-kind button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.term-shell-host {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 0 0 8px;
+  overflow: hidden;
+}
+.term-shell-host .xterm,
+.term-shell-host .xterm-viewport {
+  height: 100%;
+}
+.term-shell-host .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}

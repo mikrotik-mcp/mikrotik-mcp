@@ -19,6 +19,7 @@ import { logger } from "../logger";
 import { DashboardInputError, readOperationBody } from "./bounded-request";
 import type { Risk } from "./event";
 import { recordToolCall } from "./recorder";
+import { closeShell, openShell, shellInput, shellResize } from "./terminal-shell";
 import type { TerminalStore } from "./terminal-store";
 import { z } from "zod";
 import { configSnapshotTools } from "../tools/config-snapshot";
@@ -328,8 +329,25 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
         return json({ removed: (await options.store()).deleteFavorite(body.id) });
       }
 
+      // Interactive shell: keys and size go to an open session by its id.
+      if (key === "POST /api/terminal/shell/input")
+        return json({ ok: shellInput(text("id"), text("data")) });
+      if (key === "POST /api/terminal/shell/resize")
+        return json({ ok: shellResize(text("id"), body.cols, body.rows) });
+      if (key === "POST /api/terminal/shell/close") return json({ ok: closeShell(text("id")) });
+
       // The remaining routes talk to a router.
       const device = resolveDeviceName(text("device") || undefined);
+
+      if (key === "POST /api/terminal/shell/open") {
+        // Keys cannot be classified as reads, so a read-only server has no shell.
+        if (getConfig().readOnly)
+          return json(
+            { error: "This server is in read-only mode: the interactive shell is not available." },
+            403,
+          );
+        return await openShell(device, { cols: body.cols, rows: body.rows }, req.signal);
+      }
       const quick = (command: string) => {
         const ctx = createContext(undefined, device);
         return { ctx, result: executeMikrotikCommand(command, ctx, { maxMs: 8000 }) };

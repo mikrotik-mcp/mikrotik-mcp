@@ -62,6 +62,7 @@ import { createContext } from "../core/context";
 import { investigationRoutes } from "./investigation-routes";
 import { homeRoutes } from "./home-routes";
 import { createTerminalRoutes, terminalAccess } from "./terminal-routes";
+import { closeAllShells } from "./terminal-shell";
 import { openTerminalStore } from "./terminal-store";
 import type { TerminalStore } from "./terminal-store";
 import { workspaceRoutes } from "./workspace-routes";
@@ -2180,6 +2181,7 @@ export async function runDashboard(
       store.close();
       usageStore?.close();
       usageStore = null;
+      closeAllShells();
       void terminalStore?.then((opened) => opened.close()).catch(() => {});
       capsmanStore?.close();
       capsmanStore = null;
