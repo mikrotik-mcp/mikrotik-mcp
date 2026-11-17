@@ -50,13 +50,17 @@ function fakeSftp(tree: Record<string, string | "dir">, options: { failWrites?: 
       const body = disk.get(path);
       return Buffer.isBuffer(body) ? done(undefined, body) : done(missing());
     },
-    createReadStream(path: string) {
-      const body = disk.get(path) as Buffer;
+    createReadStream(path: string, range?: { start?: number }) {
+      const body = (disk.get(path) as Buffer).subarray(range?.start ?? 0);
       return Readable.from([body.subarray(0, 3), body.subarray(3)]);
     },
-    createWriteStream(path: string) {
-      const parts: Buffer[] = [];
-      disk.set(path, Buffer.alloc(0)); // SFTP creates the file when it opens it
+    createWriteStream(path: string, range?: { start?: number }) {
+      // With a start, the bytes before it stay (a resumed copy).
+      const kept = range?.start
+        ? (disk.get(path) as Buffer).subarray(0, range.start)
+        : Buffer.alloc(0);
+      const parts: Buffer[] = [kept];
+      if (!range?.start) disk.set(path, Buffer.alloc(0)); // SFTP creates the file when it opens it
       return new Writable({
         write(chunk: Buffer, _encoding, next) {
           if (options.failWrites) return next(new Error("disk full"));
@@ -273,8 +277,8 @@ describe("changes", () => {
       to: { device: "beta", path: "/config.rsc" },
     });
     const items = await lines(res);
-    expect(items[0]).toEqual({ t: "start", total: 36, via: "relay" });
-    expect(items.at(-1)).toEqual({ t: "end", ok: true, bytes: 36 });
+    expect(items[0]).toEqual({ t: "start", total: 36, via: "relay", resumed: 0 });
+    expect(items.at(-1)).toEqual(expect.objectContaining({ t: "end", ok: true, bytes: 36 }));
     expect(routers.beta!.disk.get("/config.rsc")).toEqual(
       routers.alpha!.disk.get("/flash/config.rsc"),
     );
@@ -379,6 +383,60 @@ describe("folders", () => {
   });
 });
 
+describe("checksum and resume", () => {
+  const big = "0123456789".repeat(1_000_000); // 10 MB: above the resumable size
+  const copy = {
+    from: { device: "alpha", path: "/big.npk" },
+    to: { device: "beta", path: "/big.npk" },
+  };
+  const sha = async (text: string) =>
+    (await import("node:crypto")).createHash("sha256").update(text).digest("hex");
+
+  test("a copy reports the SHA-256 of what passed, and verify reads the copy back", async () => {
+    const plain = await lines(
+      await call("POST", "/api/files/transfer", {
+        from: { device: "alpha", path: "/notes.txt" },
+        to: { device: "beta", path: "/notes.txt" },
+        verify: true,
+      }),
+    );
+    expect(plain.at(-1)).toEqual({
+      t: "end",
+      ok: true,
+      bytes: 14,
+      sha256: await sha("wan is ether1\n"),
+      verified: true,
+    });
+    const hashed = await call("GET", "/api/files/hash?device=beta&path=/notes.txt");
+    expect(await hashed.json()).toEqual({ sha256: await sha("wan is ether1\n") });
+  });
+  test("a large copy goes through a .part file and replaces the old file at the end", async () => {
+    routers.alpha!.disk.set("/big.npk", Buffer.from(big));
+    routers.beta!.disk.set("/big.npk", Buffer.from("old"));
+    const items = await lines(await call("POST", "/api/files/transfer", copy));
+    expect(items.at(-1)).toEqual(expect.objectContaining({ ok: true, sha256: await sha(big) }));
+    expect(routers.beta!.disk.get("/big.npk")?.length).toBe(big.length);
+    expect(routers.beta!.disk.has("/big.npk.part")).toBe(false);
+  });
+  test("a large copy continues from the bytes a failed copy left", async () => {
+    routers.alpha!.disk.set("/big.npk", Buffer.from(big));
+    routers.beta!.disk.set("/big.npk.part", Buffer.from(big.slice(0, 4_000_000)));
+    const items = await lines(await call("POST", "/api/files/transfer", { ...copy, verify: true }));
+    expect(items.find((item) => item.t === "start")).toEqual(
+      expect.objectContaining({ resumed: 4_000_000 }),
+    );
+    expect(items.at(-1)).toEqual(
+      expect.objectContaining({ ok: true, verified: true, sha256: await sha(big) }),
+    );
+    expect(routers.beta!.disk.get("/big.npk")?.toString()).toBe(big);
+  });
+  test("a download continues at an offset", async () => {
+    const res = await call("GET", "/api/files/download?device=alpha&path=/notes.txt&offset=7");
+    expect(res.headers.get("x-file-size")).toBe("14");
+    expect(await res.text()).toBe("ether1\n");
+  });
+});
+
 describe("direct copy", () => {
   const copy = {
     from: { device: "alpha", path: "/notes.txt" },
@@ -405,11 +463,9 @@ describe("direct copy", () => {
       await call("POST", "/api/files/transfer", { ...copy, direct: true }),
     );
     expect(keyOnly[0]).toEqual(expect.objectContaining({ t: "note" }));
-    expect(keyOnly.find((item) => item.t === "start")).toEqual({
-      t: "start",
-      total: 14,
-      via: "relay",
-    });
+    expect(keyOnly.find((item) => item.t === "start")).toEqual(
+      expect.objectContaining({ via: "relay" }),
+    );
     endpoints.alpha = { host: "unreachable", username: "admin", password: "p" };
     const failed = await lines(
       await call("POST", "/api/files/transfer", { ...copy, direct: true }),
@@ -418,7 +474,7 @@ describe("direct copy", () => {
       "direct",
       "relay",
     ]);
-    expect(failed.at(-1)).toEqual({ t: "end", ok: true, bytes: 14 });
+    expect(failed.at(-1)).toEqual(expect.objectContaining({ ok: true, bytes: 14 }));
     expect(routers.beta!.disk.get("/notes.txt")?.toString()).toBe("wan is ether1\n");
   });
   test("it is used only when asked", async () => {

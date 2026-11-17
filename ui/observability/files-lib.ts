@@ -130,6 +130,9 @@ export const pickForCompare = (file: FileRef): void => {
 /** When on, a copy asks the destination router to fetch the file from the source by itself. */
 export const directStore = store(false);
 
+/** When on, a copy is read back from the destination and its SHA-256 compared with the source. */
+export const verifyStore = store(false);
+
 /** The `.rsc` file open in the import dialog, or null. */
 export const importStore = store<FileRef | null>(null);
 
@@ -153,6 +156,11 @@ export const filesApi = {
     path: string,
   ): Promise<{ files: { path: string; size: number }[]; dirs: string[]; truncated: boolean }> =>
     api(`/api/files/tree?${query(device, path)}`),
+  /** The SHA-256 of a file, computed by the server from the router's bytes. */
+  hash: (file: FileRef): Promise<string> =>
+    api<{ sha256: string }>(`/api/files/hash?${query(file.device, file.path)}`).then(
+      (answer) => answer.sha256,
+    ),
   read: (file: FileRef): Promise<{ text: string; size: number; mtime: number }> =>
     api(`/api/files/read?${query(file.device, file.path)}`),
   /** Replace a file with `text`. */
@@ -382,26 +390,42 @@ function saveBlob(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-/** Stream a response into memory with progress, then save it. `size` 0 = unknown. */
+/** The bytes a download has so far; a retry continues after them. */
+interface Received {
+  parts: Uint8Array<ArrayBuffer>[];
+  done: number;
+}
+
+/**
+ * Stream a response into memory with progress, then save it. `size` 0 = unknown.
+ * With `kept`, a retry asks the server for the bytes after the ones it has.
+ */
 async function fetchToDisk(
   url: string,
   name: string,
   size: number,
   report: Report,
   signal: AbortSignal,
+  kept?: Received,
 ): Promise<void> {
-  const res = await fetch(withToken(url), { signal, headers: auth });
+  const state = kept ?? { parts: [], done: 0 };
+  const res = await fetch(withToken(state.done ? `${url}&offset=${state.done}` : url), {
+    signal,
+    headers: auth,
+  });
   if (!res.ok || !res.body) throw await failure(res);
-  const total = Number(res.headers.get("content-length")) || size;
-  if (total) report(0, total);
+  const total = Number(res.headers.get("x-file-size")) || size;
+  if (total)
+    report(state.done, total, state.done ? { note: `continued at ${state.done} bytes` } : {});
   const reader = res.body.getReader();
-  const parts: Uint8Array<ArrayBuffer>[] = [];
-  let done = 0;
+  const { parts } = state;
+  let { done } = state;
   for (;;) {
     const chunk = await reader.read();
     if (chunk.done) break;
     parts.push(chunk.value as Uint8Array<ArrayBuffer>);
     done += chunk.value.byteLength;
+    state.done = done;
     report(done);
   }
   if (done < total) throw new Error("The router closed the file before the end.");
@@ -471,6 +495,7 @@ export const transferQueue = {
 
   /** Router → browser, then saved as a file. */
   download(device: string, path: string, size: number): void {
+    const received: Received = { parts: [], done: 0 };
     enqueue(
       {
         kind: "download",
@@ -486,6 +511,7 @@ export const transferQueue = {
           size,
           report,
           signal,
+          received,
         ),
     );
   },
@@ -530,16 +556,27 @@ export const transferQueue = {
             from: { device: from.device, path: from.path },
             to: { device: to.device, path: joinPath(to.dir, name) },
             direct: directStore.get(),
+            verify: verifyStore.get(),
           }),
         });
         let ended = false;
         try {
           await readLines(res, (item) => {
-            if (item.t === "start") report(0, Number(item.total), { via: String(item.via ?? "") });
+            if (item.t === "start")
+              report(Number(item.resumed ?? 0), Number(item.total), {
+                via: String(item.via ?? ""),
+                ...(Number(item.resumed) > 0
+                  ? { note: `continued at ${String(item.resumed)} bytes` }
+                  : {}),
+              });
             else if (item.t === "note") report(0, undefined, { note: String(item.text) });
             else if (item.t === "progress") report(Number(item.done));
             else if (item.t === "end") {
               ended = true;
+              if (typeof item.sha256 === "string")
+                report(Number(item.bytes), undefined, {
+                  note: `sha256 ${item.sha256.slice(0, 16)}…${item.verified === true ? " verified" : ""}`,
+                });
               if (item.ok !== true) throw new Error(String(item.error ?? "The copy failed."));
             } else if (item.t === "error") throw new Error(String(item.error));
           });

@@ -14,6 +14,7 @@
  * protected dashboard (see {@link filesAccess}). A read-only server lists,
  * searches and downloads only. Every operation reaches the audit feed.
  */
+import { createHash } from "node:crypto";
 import { crc32 } from "node:zlib";
 import type { SFTPWrapper } from "ssh2";
 import { createContext } from "../core/context";
@@ -243,7 +244,8 @@ const MAX_ZIP_BYTES = 2 * 1024 ** 3;
 /**
  * Copy a byte stream into a file on a router, with backpressure. A failed or
  * stopped copy removes the partial file: half of a package or a backup is worse
- * than none.
+ * than none. With `keep`, the partial file stays, so a later copy can continue
+ * at `start`.
  */
 export async function writeStream(
   sftp: Sftp,
@@ -251,14 +253,17 @@ export async function writeStream(
   source: AsyncIterable<Uint8Array>,
   onBytes?: (total: number) => void,
   signal?: AbortSignal,
+  options: { start?: number; keep?: boolean } = {},
 ): Promise<number> {
   await ensureDir(sftp, parentOf(path));
-  const out = sftp.createWriteStream(path);
+  const out = options.start
+    ? sftp.createWriteStream(path, { flags: "r+", start: options.start })
+    : sftp.createWriteStream(path);
   let failure: Error | undefined;
   out.on("error", (error: Error) => {
     failure = error;
   });
-  let total = 0;
+  let total = options.start ?? 0;
   try {
     for await (const chunk of source) {
       if (signal?.aborted) throw new Error("Stopped.");
@@ -279,10 +284,21 @@ export async function writeStream(
     return total;
   } catch (error) {
     out.destroy();
-    await call<void>((done) => sftp.unlink(path, done)).catch(() => {});
+    if (!options.keep) await call<void>((done) => sftp.unlink(path, done)).catch(() => {});
     throw error;
   }
 }
+
+/** The SHA-256 of a file on a router, as hex. */
+export async function hashFile(sftp: Sftp, path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of sftp.createReadStream(path) as AsyncIterable<Uint8Array>)
+    hash.update(chunk);
+  return hash.digest("hex");
+}
+
+/** A copy larger than this is written to `<name>.part` first, so it can continue after a failure. */
+export const RESUMABLE_BYTES = 8 * 1024 * 1024;
 
 export interface SearchHit {
   path: string;
@@ -679,7 +695,12 @@ export function createFilesRoutes(options: { denied: string | null }) {
           );
           if (stats.isDirectory())
             throw new DashboardInputError(400, "A directory cannot be downloaded.");
-          const source = sftp.createReadStream(file);
+          // A stopped download continues where it was.
+          const offset = Math.min(
+            Math.max(Number(url.searchParams.get("offset")) || 0, 0),
+            stats.size,
+          );
+          const source = sftp.createReadStream(file, offset ? { start: offset } : undefined);
           // Hold the SFTP session until the browser has the whole file.
           let release!: () => void;
           const held = withSftp(device, () => new Promise<void>((resolve) => (release = resolve)));
@@ -721,7 +742,9 @@ export function createFilesRoutes(options: { denied: string | null }) {
           return new Response(body, {
             headers: {
               "content-type": "application/octet-stream",
-              "content-length": String(stats.size),
+              "content-length": String(stats.size - offset),
+              // Bun streams without a length; the browser reads the size here.
+              "x-file-size": String(stats.size),
               "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(baseName(file))}`,
               ...noStore,
             },
@@ -785,6 +808,12 @@ export function createFilesRoutes(options: { denied: string | null }) {
             ...noStore,
           },
         });
+      }
+
+      if (key === "GET /api/files/hash") {
+        const device = deviceOf(url.searchParams.get("device"));
+        const file = cleanPath(url.searchParams.get("path"));
+        return json({ sha256: await withSftp(device, (sftp) => hashFile(sftp, file)) });
       }
 
       if (key === "GET /api/files/read") {
@@ -883,7 +912,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
         const wantDirect = body.direct === true && source.device !== target.device;
         return ndjson(req, async (send, signal) => {
           try {
-            const bytes = await withSftp(source.device, (reader) =>
+            const done = await withSftp(source.device, (reader) =>
               withSftp(target.device, async (writer) => {
                 const stats = await call<{ size: number; isDirectory: () => boolean }>((done) =>
                   reader.stat(source.path, done),
@@ -902,7 +931,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
                   send({ t: "start", total: stats.size, via: "direct" });
                   try {
                     await directCopy(source, target, stats.size, writer, progress, signal);
-                    return stats.size;
+                    return { bytes: stats.size };
                   } catch (error) {
                     if (signal.aborted) throw error;
                     send({
@@ -911,18 +940,51 @@ export function createFilesRoutes(options: { denied: string | null }) {
                     });
                   }
                 } else if (wantDirect) send({ t: "note", text: `Relayed: ${blocker}` });
-                send({ t: "start", total: stats.size, via: "relay" });
-                return writeStream(
-                  writer,
-                  target.path,
-                  reader.createReadStream(source.path) as AsyncIterable<Uint8Array>,
-                  progress,
-                  signal,
-                );
+                // A large copy goes to `<name>.part`, which a later copy continues.
+                const resumable = stats.size > RESUMABLE_BYTES;
+                const part = resumable ? `${target.path}.part` : target.path;
+                const sizeOf = (path: string): Promise<number> =>
+                  call<{ size: number }>((done) => writer.stat(path, done)).then(
+                    (found) => found.size,
+                    () => -1,
+                  );
+                let offset = resumable ? Math.max(await sizeOf(part), 0) : 0;
+                if (offset > stats.size) offset = 0;
+                send({ t: "start", total: stats.size, via: "relay", resumed: offset });
+                // The hash of what passes through, when the copy starts at the first byte.
+                const passing = offset === 0 ? createHash("sha256") : null;
+                const source$ = reader.createReadStream(
+                  source.path,
+                  offset ? { start: offset } : undefined,
+                ) as AsyncIterable<Uint8Array>;
+                const tap = async function* (): AsyncGenerator<Uint8Array> {
+                  for await (const chunk of source$) {
+                    passing?.update(chunk);
+                    yield chunk;
+                  }
+                };
+                await writeStream(writer, part, tap(), progress, signal, {
+                  start: offset,
+                  keep: resumable,
+                });
+                if (resumable) {
+                  await call<void>((done) => writer.unlink(target.path, done)).catch(() => {});
+                  await call<void>((done) => writer.rename(part, target.path, done));
+                }
+                const written = await sizeOf(target.path);
+                if (written !== stats.size)
+                  throw new Error(`The destination has ${written} of ${stats.size} bytes.`);
+                let sha256 = passing?.digest("hex");
+                if (body.verify === true) {
+                  sha256 ??= await hashFile(reader, source.path);
+                  if ((await hashFile(writer, target.path)) !== sha256)
+                    throw new Error("Checksum mismatch: the copy is not the same as the source.");
+                }
+                return { bytes: stats.size, sha256, verified: body.verify === true };
               }),
             );
-            audit(target.device, "WRITE", started, args, `${bytes} bytes`);
-            send({ t: "end", ok: true, bytes });
+            audit(target.device, "WRITE", started, args, `${done.bytes} bytes`);
+            send({ t: "end", ok: true, ...done });
           } catch (error) {
             audit(target.device, "WRITE", started, args, message(error), true);
             send({ t: "end", ok: false, error: message(error) });

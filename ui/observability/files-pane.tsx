@@ -19,6 +19,7 @@ import {
   FileImage,
   FileKey2,
   FileText,
+  Fingerprint,
   Folder,
   FolderPlus,
   GitCompareArrows,
@@ -750,6 +751,26 @@ export function FilesPane(
               }
             >
               <Eye size={13} /> View
+            </button>
+          )}
+          {chosenFiles.length === 1 && chosen.length === 1 && (
+            <button
+              type="button"
+              title="SHA-256 of the file on the router"
+              onClick={() => {
+                const name = chosenFiles[0]?.name ?? "";
+                setBusy(true);
+                filesApi
+                  .hash({ device, path: joinPath(path, name) })
+                  .then((sha) => {
+                    void navigator.clipboard?.writeText(sha).catch(() => {});
+                    setNotice(`sha256 of ${name} (copied):\n${sha}`);
+                  })
+                  .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              <Fingerprint size={13} /> Checksum
             </button>
           )}
           {chosenFiles.length > 0 && chosenFiles.length <= 2 && chosenFiles.every(canPreview) && (

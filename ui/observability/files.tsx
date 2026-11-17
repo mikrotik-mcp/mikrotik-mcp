@@ -21,6 +21,7 @@ import {
   RotateCw,
   Search,
   ShieldAlert,
+  ShieldCheck,
   Square,
   X,
   Zap,
@@ -42,6 +43,7 @@ import {
   syncStore,
   parentOf,
   transferQueue,
+  verifyStore,
   when,
 } from "./files-lib";
 import { FileCompare } from "./files-compare";
@@ -147,6 +149,7 @@ export function FilesView(): ReactNode {
   const panes = useSyncExternalStore(filePanes.subscribe, filePanes.all);
   const broadcasting = useSyncExternalStore(broadcastStore.subscribe, broadcastStore.get);
   const direct = useSyncExternalStore(directStore.subscribe, directStore.get);
+  const verify = useSyncExternalStore(verifyStore.subscribe, verifyStore.get);
   // Speeds and times left move while a transfer runs.
   const [, tick] = useState(0);
   const active = transfers.filter((item) => item.status === "active" || item.status === "queued");
@@ -311,6 +314,15 @@ export function FilesView(): ReactNode {
               title="For a large file: the destination router fetches the file from the source by itself, when it can reach it. The destination gets the SSH password of the source for that one command. Otherwise the server relays the copy."
             >
               <Zap size={13} /> Direct copy
+            </button>
+            <button
+              type="button"
+              data-on={verify}
+              aria-pressed={verify}
+              onClick={() => verifyStore.set(!verify)}
+              title="After a copy, read the file back from the destination and compare its SHA-256 with the source"
+            >
+              <ShieldCheck size={13} /> Verify
             </button>
           </div>
         )}
