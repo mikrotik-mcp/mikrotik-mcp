@@ -119,6 +119,14 @@ export interface FileRef {
 /** The file open in the viewer, or null. */
 export const viewerStore = store<FileRef | null>(null);
 
+/** Files picked for a comparison: none, the first, or both. */
+export const compareStore = store<FileRef[]>([]);
+/** Add a file to the comparison; the second pick opens the differences. */
+export const pickForCompare = (file: FileRef): void => {
+  const [first] = compareStore.get();
+  compareStore.set(first && compareStore.get().length === 1 ? [first, file] : [file]);
+};
+
 /** Files the viewer can show: text kinds, up to the server's 1 MiB limit. */
 export const canPreview = (entry: FileEntry): boolean =>
   !entry.dir &&

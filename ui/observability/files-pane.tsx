@@ -20,6 +20,7 @@ import {
   FileText,
   Folder,
   FolderPlus,
+  GitCompareArrows,
   Globe,
   HardDrive,
   LifeBuoy,
@@ -38,6 +39,7 @@ import type { FileEntry, FileKind } from "./files-lib";
 import {
   DRAG_TYPE,
   canPreview,
+  compareStore,
   conflicts,
   dragState,
   filePanes,
@@ -46,6 +48,7 @@ import {
   joinPath,
   kindOf,
   parentOf,
+  pickForCompare,
   transferQueue,
   viewerStore,
   when,
@@ -648,6 +651,22 @@ export function FilesPane(
               }
             >
               <Eye size={13} /> View
+            </button>
+          )}
+          {chosenFiles.length > 0 && chosenFiles.length <= 2 && chosenFiles.every(canPreview) && (
+            <button
+              type="button"
+              title="Compare two text files, on one router or on two"
+              onClick={() => {
+                const refs = chosenFiles.map((entry) => ({
+                  device,
+                  path: joinPath(path, entry.name),
+                }));
+                if (refs.length === 2) compareStore.set(refs);
+                else if (refs[0]) pickForCompare(refs[0]);
+              }}
+            >
+              <GitCompareArrows size={13} /> Compare
             </button>
           )}
           {!readOnly && (
