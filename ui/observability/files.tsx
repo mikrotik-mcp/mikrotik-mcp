@@ -16,6 +16,7 @@ import {
   ChevronDown,
   CircleAlert,
   Plus,
+  Radio,
   RotateCw,
   Search,
   ShieldAlert,
@@ -30,6 +31,7 @@ import { bytes } from "./format";
 import type { FilesState, SearchDone, SearchHit, Transfer } from "./files-lib";
 import {
   baseName,
+  broadcastStore,
   filePanes,
   filesApi,
   filesLayout,
@@ -135,6 +137,7 @@ export function FilesView(): ReactNode {
   const running = useRef<AbortController | null>(null);
   const transfers = useSyncExternalStore(transferQueue.subscribe, transferQueue.get);
   const panes = useSyncExternalStore(filePanes.subscribe, filePanes.all);
+  const broadcasting = useSyncExternalStore(broadcastStore.subscribe, broadcastStore.get);
   // Speeds and times left move while a transfer runs.
   const [, tick] = useState(0);
   const active = transfers.filter((item) => item.status === "active" || item.status === "queued");
@@ -270,6 +273,19 @@ export function FilesView(): ReactNode {
             </button>
           ))}
         </div>
+        {!readOnly && (
+          <div className="term-tools">
+            <button
+              type="button"
+              data-on={broadcasting}
+              aria-pressed={broadcasting}
+              onClick={() => broadcastStore.set(!broadcasting)}
+              title="An upload to one pane goes to the same folder on every open router"
+            >
+              <Radio size={13} /> Upload to all
+            </button>
+          </div>
+        )}
         <form
           className="files-search"
           role="search"

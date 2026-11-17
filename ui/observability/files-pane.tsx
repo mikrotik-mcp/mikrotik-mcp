@@ -38,6 +38,7 @@ import { Select } from "./geist";
 import type { FileEntry, FileKind } from "./files-lib";
 import {
   DRAG_TYPE,
+  broadcastStore,
   droppedFiles,
   canPreview,
   compareStore,
@@ -51,6 +52,7 @@ import {
   parentOf,
   pickForCompare,
   transferQueue,
+  uploadTargets,
   viewerStore,
   when,
 } from "./files-lib";
@@ -103,6 +105,7 @@ export function FilesPane(
   const picker = useRef<HTMLInputElement>(null);
   const reveal = useRef<string | undefined>(undefined);
   const others = useSyncExternalStore(filePanes.subscribe, filePanes.all);
+  const broadcasting = useSyncExternalStore(broadcastStore.subscribe, broadcastStore.get);
 
   const load = useCallback(
     (dir: string): void => {
@@ -250,7 +253,8 @@ export function FilesPane(
     void plan(dir, Array.from(new Set(items.map(top))), (skip) => {
       for (const item of items)
         if (!skip.has(top(item)))
-          transferQueue.upload(device, item.sub ? joinPath(dir, item.sub) : dir, item.file);
+          for (const target of uploadTargets(device))
+            transferQueue.upload(target, item.sub ? joinPath(dir, item.sub) : dir, item.file);
     });
   };
 
@@ -366,7 +370,9 @@ export function FilesPane(
       ? ""
       : dragState.current
         ? `Copy ${dragState.current.entries.length} from ${dragState.current.device}`
-        : "Drop to upload";
+        : broadcasting
+          ? "Drop to upload to every open router"
+          : "Drop to upload";
   const sortBy = (key: SortKey): void =>
     setSort((now) => ({ key, down: now.key === key ? !now.down : key !== "name" }));
 

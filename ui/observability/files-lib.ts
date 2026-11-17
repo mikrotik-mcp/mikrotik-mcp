@@ -221,6 +221,14 @@ export const filePanes = {
   },
 };
 
+/** When on, an upload to one pane goes to the same folder on every open router. */
+export const broadcastStore = store(false);
+/** The routers an upload goes to: this one, or every open router when broadcasting. */
+export const uploadTargets = (device: string): string[] =>
+  broadcastStore.get()
+    ? Array.from(new Set([device, ...paneList.map((pane) => pane.device)]))
+    : [device];
+
 /**
  * The files of a drop from the computer. A dropped folder gives its files with
  * `sub`, their folder below the drop target.
