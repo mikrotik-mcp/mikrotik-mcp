@@ -18,11 +18,20 @@ const state = vi.hoisted(() => ({
   readOnly: false,
   run: vi.fn(),
   capture: vi.fn(),
+  safe: {
+    isActive: false,
+    enable: vi.fn(),
+    commit: vi.fn(),
+    rollback: vi.fn(),
+  },
   history: [] as Record<string, unknown>[],
 }));
 vi.mock("../../src/core/connector", async (original) => ({
   ...(await original<typeof import("../../src/core/connector")>()),
   executeMikrotikCommand: state.run,
+}));
+vi.mock("../../src/ssh/safe-mode", () => ({
+  getSafeModeManager: () => state.safe,
 }));
 vi.mock("../../src/tools/config-snapshot", () => ({
   configSnapshotTools: [
@@ -154,6 +163,41 @@ describe("router syntax help", () => {
       { symbol: "wg-rw", text: "WG server; phones", nested: 2 },
     ]);
     expect(parseSyntaxHelp("")).toEqual([]);
+  });
+});
+
+describe("safe mode", () => {
+  const act = async (action: string) =>
+    (await call("/api/terminal/safe-mode", { device: "lab", action }))!;
+
+  it("enables, commits and rolls back through the device's Safe Mode session", async () => {
+    state.safe.enable.mockImplementation(async () => {
+      state.safe.isActive = true;
+      return "Safe mode enabled.";
+    });
+    state.safe.commit.mockResolvedValue({ ok: true, message: "Changes kept." });
+    state.safe.rollback.mockResolvedValue("Rolled back.");
+    expect(await (await act("enable")).json()).toEqual({
+      ok: true,
+      message: "Safe mode enabled.",
+      active: true,
+    });
+    expect(await (await act("commit")).json()).toMatchObject({
+      ok: true,
+      message: "Changes kept.",
+    });
+    expect(await (await act("rollback")).json()).toMatchObject({ message: "Rolled back." });
+    state.safe.isActive = false;
+  });
+
+  it("reports a failed enable or commit as not ok, and rejects other actions", async () => {
+    state.safe.enable.mockResolvedValue("Error: could not open the session");
+    state.safe.commit.mockResolvedValue({ ok: false, message: "Nothing was saved." });
+    expect(await (await act("enable")).json()).toMatchObject({ ok: false });
+    expect(await (await act("commit")).json()).toMatchObject({ ok: false });
+    expect((await act("explode")).status).toBe(400);
+    state.readOnly = true;
+    expect((await act("enable")).status).toBe(403);
   });
 });
 

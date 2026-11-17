@@ -41,6 +41,8 @@ export interface Probe {
   identity?: string;
   transport?: string;
   error?: string;
+  /** A Safe Mode session is open on this router. */
+  safeMode?: boolean;
 }
 export interface RunEnd {
   ok: boolean;
@@ -98,6 +100,11 @@ export const terminalApi = {
     post("/api/terminal/syntax", { device, input }, signal)
       .then((r) => r.json() as Promise<{ items?: SyntaxHelp[] }>)
       .then((r) => r.items ?? []),
+  safeMode: (
+    device: string,
+    action: "enable" | "commit" | "rollback",
+  ): Promise<{ ok?: boolean; message?: string; active?: boolean; error?: string }> =>
+    post("/api/terminal/safe-mode", { device, action }).then((r) => r.json()),
   /** Differences between the newest stored snapshot and the router now. */
   changes: (device: string): Promise<string> =>
     post("/api/terminal/changes", { device })

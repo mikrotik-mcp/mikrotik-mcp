@@ -1628,3 +1628,48 @@
 .term-chip-button:hover {
   border-color: var(--term-accent);
 }
+
+/* ── safe mode ───────────────────────────────────────────────────────── */
+.term-pane[data-safe="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--term-warn) 70%, transparent);
+}
+.term-safe {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--term-warn);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--term-warn) 16%, transparent);
+  color: var(--term-warn);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.term-safe button,
+.term-safe-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--term-line);
+  border-radius: 999px;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.term-safe-start {
+  color: var(--term-dim);
+}
+.term-safe button:hover:not(:disabled),
+.term-safe-start:hover:not(:disabled) {
+  border-color: var(--term-warn);
+  color: var(--term-warn);
+}
+.term-safe button:disabled,
+.term-safe-start:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

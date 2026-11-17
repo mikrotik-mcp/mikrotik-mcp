@@ -23,6 +23,7 @@ import {
   EyeOff,
   RefreshCw,
   RotateCw,
+  ShieldCheck,
   Square,
   Table2,
   Star,
@@ -92,6 +93,8 @@ interface Connection {
   identity?: string;
   transport?: string;
   error?: string;
+  /** A Safe Mode session is open on this router. */
+  safeMode?: boolean;
   /** Epoch ms of the next reconnect attempt. */
   retryAt?: number;
   attempt: number;
@@ -395,6 +398,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
   const [fill, setFill] = useState<{ command: string; values: Record<string, string> } | null>(
     null,
   );
+  const [safeBusy, setSafeBusy] = useState(false);
   const [autoRetry, setAutoRetry] = useState(true);
   /** Store a config snapshot before every command that is not a read. */
   const [guard, setGuard] = useState(false);
@@ -489,6 +493,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
           latency: handshake ? c.latency : [...c.latency, result.ms].slice(-30),
           identity: result.identity,
           transport: result.transport,
+          safeMode: result.safeMode,
           attempt: 0,
         }));
         timer = setTimeout(probe, handshake ? 400 : PROBE_EVERY_MS);
@@ -944,6 +949,35 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
     [blocks],
   );
   const retryIn = conn.retryAt ? Math.max(0, Math.ceil((conn.retryAt - now) / 1000)) : 0;
+  /** Enable, commit or roll back Safe Mode; the answer is shown as a block. */
+  const safeMode = async (action: "enable" | "commit" | "rollback"): Promise<void> => {
+    setSafeBusy(true);
+    const started = performance.now();
+    const answer = await terminalApi
+      .safeMode(device, action)
+      .catch((e: unknown): Awaited<ReturnType<typeof terminalApi.safeMode>> => ({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      }));
+    setSafeBusy(false);
+    const failed = answer.ok === false || Boolean(answer.error);
+    const text = answer.message ?? answer.error ?? "";
+    setBlocks((list) => [
+      ...list,
+      {
+        id: nextBlockId++,
+        ts: Date.now(),
+        command: `# safe mode: ${action}`,
+        output: failed ? "" : text,
+        error: failed ? text : undefined,
+        status: failed ? "error" : "ok",
+        ms: Math.round(performance.now() - started),
+        runs: 1,
+      },
+    ]);
+    if ("active" in answer) setConn((c) => ({ ...c, safeMode: answer.active }));
+    probeNow.current();
+  };
   const clear = (): void => setBlocks((list) => list.filter((b) => b.status === "running"));
   const exportAs = (format: ExportFormat): void => {
     const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
@@ -954,6 +988,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
     <section
       className="term-pane"
       data-pane-id={paneId}
+      data-safe={Boolean(conn.safeMode)}
       data-link={conn.link}
       onMouseDown={() => {
         workspace.activePane = paneId;
@@ -981,6 +1016,37 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
           {stats.failed > 0 && <b className="term-failed"> · {stats.failed} failed</b>}
           {stats.active > 0 && ` · ${stats.active} running`}
         </span>
+        {conn.safeMode ? (
+          <span className="term-safe" role="group" aria-label="Safe Mode">
+            <ShieldCheck size={12} /> SAFE MODE
+            <button
+              type="button"
+              disabled={safeBusy}
+              onClick={() => void safeMode("commit")}
+              title="Keep the changes made in Safe Mode"
+            >
+              Commit
+            </button>
+            <button
+              type="button"
+              disabled={safeBusy}
+              onClick={() => void safeMode("rollback")}
+              title="Undo every change made since Safe Mode started"
+            >
+              Roll back
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="term-safe-start"
+            disabled={safeBusy || conn.link !== "online"}
+            onClick={() => void safeMode("enable")}
+            title="Safe Mode: the router undoes your uncommitted changes if this session is lost. Changes run through one Safe Mode session until you commit or roll back."
+          >
+            <ShieldCheck size={12} /> safe mode
+          </button>
+        )}
         <span className="term-status-actions">
           <button
             type="button"

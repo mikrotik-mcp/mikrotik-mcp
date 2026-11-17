@@ -14,6 +14,7 @@ import { bypassesSafeMode, executeMikrotikCommand } from "../core/connector";
 import { DeviceConnectionError } from "../core/device-connection-error";
 import { looksLikeError, quoteValue } from "../core/routeros";
 import { getConfig, resolveDeviceName } from "../core/runtime";
+import { getSafeModeManager } from "../ssh/safe-mode";
 import { logger } from "../logger";
 import { DashboardInputError, readOperationBody } from "./bounded-request";
 import type { Risk } from "./event";
@@ -343,6 +344,7 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
             ok: true,
             ms: Math.round(performance.now() - started),
             identity: out.trim().split(/\r?\n/)[0] ?? "",
+            safeMode: getSafeModeManager(device).isActive,
             transport: ctx.transport,
           });
         } catch (e) {
@@ -352,6 +354,41 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
             error: e instanceof Error ? e.message : String(e),
           });
         }
+      }
+
+      if (key === "POST /api/terminal/safe-mode") {
+        // Safe Mode: RouterOS undoes uncommitted changes if this session is lost.
+        if (getConfig().readOnly)
+          return json({ error: "This server is in read-only mode: Safe Mode is not needed." }, 403);
+        const manager = getSafeModeManager(device);
+        const action = text("action");
+        const started = Date.now();
+        let message: string;
+        let ok = true;
+        if (action === "enable") {
+          message = await manager.enable();
+          ok = !message.startsWith("Error");
+        } else if (action === "commit") {
+          const result = await manager.commit();
+          message = result.message;
+          ok = result.ok;
+        } else if (action === "rollback") message = await manager.rollback();
+        else return json({ error: "action must be enable, commit or rollback." }, 400);
+        recordToolCall({
+          tool: "dashboard_terminal",
+          title: "Dashboard Terminal",
+          risk: "WRITE",
+          device,
+          deviceTransport: "ssh",
+          ts: started,
+          durationMs: Date.now() - started,
+          isError: !ok,
+          error: ok ? undefined : message,
+          args: { safeMode: action },
+          output: message,
+          hasStructured: false,
+        });
+        return json({ ok, message, active: manager.isActive });
       }
 
       if (key === "POST /api/terminal/highlight") {
