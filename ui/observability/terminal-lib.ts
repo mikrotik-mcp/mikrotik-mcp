@@ -723,3 +723,53 @@ export function readNumber(output: string, key: string): number | undefined {
   );
   return found?.[1] === undefined ? undefined : Number(found[1]);
 }
+
+// ── tokens in an output that can start the next command ─────────────────
+
+export type OutputToken = { kind: "ip" | "mac"; value: string };
+const TOKEN_RE =
+  /\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b|\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\/\d{1,2})?\b/g;
+
+/** An output cut into plain text and IP / MAC tokens, in order. */
+export function tokenize(output: string): (string | OutputToken)[] {
+  const parts: (string | OutputToken)[] = [];
+  let last = 0;
+  for (const match of output.matchAll(TOKEN_RE)) {
+    if (match.index > last) parts.push(output.slice(last, match.index));
+    parts.push({ kind: match[0].includes(":") ? "mac" : "ip", value: match[0] });
+    last = match.index + match[0].length;
+  }
+  if (last < output.length) parts.push(output.slice(last));
+  return parts;
+}
+
+/** Commands a token suggests. They are put in the input to review, never run. */
+export function tokenCommands(token: OutputToken): { label: string; command: string }[] {
+  const { kind, value } = token;
+  if (kind === "mac")
+    return [
+      { label: "Find in ARP", command: `/ip arp print where mac-address=${value}` },
+      {
+        label: "Find the bridge port",
+        command: `/interface bridge host print where mac-address=${value}`,
+      },
+      {
+        label: "Find the DHCP lease",
+        command: `/ip dhcp-server lease print where mac-address=${value}`,
+      },
+    ];
+  const host = value.split("/")[0] ?? value;
+  return [
+    { label: "Ping", command: `/ping ${host} count=4` },
+    { label: "Traceroute", command: `/tool traceroute ${host} count=1` },
+    { label: "Find in ARP", command: `/ip arp print where address=${host}` },
+    {
+      label: "Find connections",
+      command: `/ip firewall connection print where src-address~"${host}"`,
+    },
+    {
+      label: "Add to an address list…",
+      command: `/ip firewall address-list add list={{list}} address=${value}`,
+    },
+  ];
+}

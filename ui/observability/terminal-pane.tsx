@@ -45,7 +45,14 @@ import {
 } from "react";
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
-import type { BroadcastResult, Completion, ExportFormat, RunEnd, SyntaxHelp } from "./terminal-lib";
+import type {
+  BroadcastResult,
+  Completion,
+  ExportFormat,
+  OutputToken,
+  RunEnd,
+  SyntaxHelp,
+} from "./terminal-lib";
 import { RecordTable } from "./terminal-table";
 import {
   applyPipes,
@@ -67,6 +74,8 @@ import {
   snippetFields,
   splitPipes,
   terminalApi,
+  tokenCommands,
+  tokenize,
   workspace,
 } from "./terminal-lib";
 
@@ -209,12 +218,14 @@ function BlockViewBase({
   comparing,
   onAction,
   onMenu,
+  onToken,
 }: {
   block: Block;
   device: string;
   starred: boolean;
   watching: boolean;
   onMenu: (block: Block, x: number, y: number) => void;
+  onToken: (token: OutputToken, x: number, y: number) => void;
   /** This block is the first side of a comparison. */
   comparing: boolean;
   onAction: (action: string, block: Block) => void;
@@ -241,12 +252,27 @@ function BlockViewBase({
         </span>
       ));
     }
-    return isScript && block.output.length < 60_000 ? (
-      <Spans lines={staticSpans(block.output)} />
-    ) : (
-      block.output
+    if (isScript && block.output.length < 60_000)
+      return <Spans lines={staticSpans(block.output)} />;
+    if (block.output.length > 120_000) return block.output;
+    // IP and MAC addresses open a menu of commands about them.
+    return tokenize(block.output).map((part, i) =>
+      typeof part === "string" ? (
+        part
+      ) : (
+        <span
+          // eslint-disable-next-line react/no-array-index-key -- the same address may repeat
+          key={i}
+          className="term-token"
+          role="button"
+          tabIndex={-1}
+          onClick={(event) => onToken(part, event.clientX, event.clientY)}
+        >
+          {part.value}
+        </span>
+      ),
     );
-  }, [block.output, block.changed, isScript]);
+  }, [block.output, block.changed, isScript, onToken]);
 
   return (
     <article
@@ -491,6 +517,9 @@ export function TerminalPane(
   const scroller = useRef<HTMLDivElement>(null);
   const menuBox = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ id: number; x: number; y: number; selection: string } | null>(
+    null,
+  );
+  const [tokenMenu, setTokenMenu] = useState<{ token: OutputToken; x: number; y: number } | null>(
     null,
   );
   /** False while the user has scrolled up from the end. */
@@ -861,6 +890,20 @@ export function TerminalPane(
     if (box && stick.current) box.scrollTop = box.scrollHeight;
   }, [blocks]);
 
+  const closeMenus = (): void => {
+    setMenu(null);
+    setTokenMenu(null);
+  };
+  const openToken = useCallback((token: OutputToken, x: number, y: number): void => {
+    // A click that ends a text selection is a copy gesture, not a menu request.
+    if (window.getSelection()?.toString()) return;
+    setMenu(null);
+    setTokenMenu({
+      token,
+      x: Math.min(x, window.innerWidth - 300),
+      y: Math.min(y + 6, window.innerHeight - 240),
+    });
+  }, []);
   // ── context menu of a block ─────────────────────────────────────────────
   const openMenu = useCallback((block: Block, x: number, y: number): void => {
     setMenu({
@@ -871,14 +914,14 @@ export function TerminalPane(
     });
   }, []);
   useEffect(() => {
-    if (!menu) return;
+    if (!menu && !tokenMenu) return;
     const onDown = (event: MouseEvent): void => {
-      if (!menuBox.current?.contains(event.target as Node)) setMenu(null);
+      if (!menuBox.current?.contains(event.target as Node)) closeMenus();
     };
     const onKey = (event: KeyboardEvent_): void => {
-      if (event.key === "Escape") setMenu(null);
+      if (event.key === "Escape") closeMenus();
     };
-    const close = (): void => setMenu(null);
+    const close = closeMenus;
     window.addEventListener("mousedown", onDown, true);
     window.addEventListener("keydown", onKey);
     window.addEventListener("blur", close);
@@ -887,7 +930,7 @@ export function TerminalPane(
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("blur", close);
     };
-  }, [menu]);
+  }, [menu, tokenMenu]);
   const menuItems = (block: Block): (MenuItem | null)[] => [
     ...(menu?.selection
       ? [{ action: "copy-selection", label: "Copy selected text" } satisfies MenuItem, null]
@@ -1085,6 +1128,7 @@ export function TerminalPane(
       comparing={comparePick === `${paneId}:${block.id}`}
       onAction={onAction}
       onMenu={openMenu}
+      onToken={openToken}
     />
   );
   const menuBlock = menu ? blocks.find((b) => b.id === menu.id) : undefined;
@@ -1372,6 +1416,46 @@ export function TerminalPane(
           </button>
         )}
       </div>
+      {tokenMenu &&
+        page &&
+        createPortal(
+          <div
+            ref={menuBox}
+            className="term-context"
+            role="menu"
+            aria-label={`Commands for ${tokenMenu.token.value}`}
+            style={{ left: tokenMenu.x, top: tokenMenu.y }}
+          >
+            <span className="term-context-title">{tokenMenu.token.value}</span>
+            {tokenCommands(tokenMenu.token).map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                role="menuitem"
+                title={item.command}
+                onClick={() => {
+                  setTokenMenu(null);
+                  setInput(item.command);
+                  field.current?.focus();
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+            <hr />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                void navigator.clipboard.writeText(tokenMenu.token.value);
+                setTokenMenu(null);
+              }}
+            >
+              Copy
+            </button>
+          </div>,
+          page,
+        )}
       {menuBlock &&
         menu &&
         page &&

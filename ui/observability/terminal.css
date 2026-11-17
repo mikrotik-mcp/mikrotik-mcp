@@ -1992,3 +1992,19 @@
 .term-chart-key input:focus {
   border-color: var(--term-accent);
 }
+
+/* ── addresses in an output ──────────────────────────────────────────── */
+.term-token {
+  border-bottom: 1px dotted color-mix(in srgb, var(--term-accent) 55%, transparent);
+  cursor: pointer;
+}
+.term-token:hover {
+  background: color-mix(in srgb, var(--term-accent) 18%, transparent);
+  color: var(--term-accent);
+}
+.term-context-title {
+  padding: 4px 10px 6px;
+  color: var(--term-accent);
+  font-family: var(--term-mono);
+  font-size: 12px;
+}

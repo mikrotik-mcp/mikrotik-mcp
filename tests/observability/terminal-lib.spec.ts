@@ -128,3 +128,23 @@ test("reads the number after a key, in print and as-value forms", () => {
   expect(lib.readNumber("cpu-load: 37%", "load")).toBeUndefined();
   expect(lib.readNumber("cpu-load: 37%", "")).toBeUndefined();
 });
+
+describe("output tokens", () => {
+  test("finds IPv4 addresses, prefixes and MAC addresses, and nothing else", () => {
+    const text = "0 10.0.0.1/24 ether1 00:0C:29:AB:cd:ef v7.25.1 999.1.1.1 12:39:53";
+    const parts = lib.tokenize(text);
+    expect(parts.filter((part) => typeof part !== "string")).toEqual([
+      { kind: "ip", value: "10.0.0.1/24" },
+      { kind: "mac", value: "00:0C:29:AB:cd:ef" },
+    ]);
+    expect(parts.map((part) => (typeof part === "string" ? part : part.value)).join("")).toBe(text);
+  });
+  test("suggests commands that use the host, not the prefix, for ping", () => {
+    const commands = lib.tokenCommands({ kind: "ip", value: "10.0.0.1/24" });
+    expect(commands[0]).toEqual({ label: "Ping", command: "/ping 10.0.0.1 count=4" });
+    expect(commands.at(-1)?.command).toContain("address=10.0.0.1/24");
+    expect(lib.tokenCommands({ kind: "mac", value: "00:0C:29:AB:CD:EF" })[0]?.command).toBe(
+      "/ip arp print where mac-address=00:0C:29:AB:CD:EF",
+    );
+  });
+});
