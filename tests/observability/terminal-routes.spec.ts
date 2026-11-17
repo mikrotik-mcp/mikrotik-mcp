@@ -10,6 +10,7 @@ import {
   createTerminalRoutes,
   parseCompletions,
   parseHighlight,
+  parseSyntaxHelp,
   terminalAccess,
 } from "../../src/observability/terminal-routes";
 
@@ -125,6 +126,22 @@ describe("router inspect replies", () => {
       { completion: "address", style: "dir", offset: 4 },
       { completion: "/", style: "dir", offset: 8 },
     ]);
+  });
+});
+
+describe("router syntax help", () => {
+  it("reads each explanation, keeps a semicolon inside a text, drops empty records", () => {
+    const reply =
+      "nested=0;nonorm=true;symbol=;symbol-type=collection;text=;type=syntax;" +
+      "nested=1;nonorm=false;symbol=address;symbol-type=explanation;text=Local IP address;type=syntax;" +
+      "nested=1;nonorm=false;symbol=;symbol-type=definition;text=ether1 | lo | ...;type=syntax;" +
+      "nested=2;nonorm=false;symbol=wg-rw;symbol-type=explanation;text=WG server; phones;type=syntax\r\n";
+    expect(parseSyntaxHelp(reply)).toEqual([
+      { symbol: "address", text: "Local IP address", nested: 1 },
+      { symbol: "", text: "ether1 | lo | ...", nested: 1 },
+      { symbol: "wg-rw", text: "WG server; phones", nested: 2 },
+    ]);
+    expect(parseSyntaxHelp("")).toEqual([]);
   });
 });
 

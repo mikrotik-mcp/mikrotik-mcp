@@ -85,6 +85,34 @@ export function parseCompletions(output: string): TerminalCompletion[] {
     .map(({ completion, style, offset }) => ({ completion, style, offset }));
 }
 
+export interface SyntaxHelp {
+  /** The word: a menu, a command, an argument or a value. Empty for a note. */
+  symbol: string;
+  /** RouterOS's own short explanation; may be empty. */
+  text: string;
+  /** Depth in the reply: 1 is a direct choice, 2 a value of that choice. */
+  nested: number;
+}
+
+/**
+ * Explanations from `:put [/console/inspect request=syntax … as-value]`, which
+ * prints records as `nested=1;nonorm=false;symbol=address;symbol-type=explanation;text=…;type=syntax`.
+ */
+export function parseSyntaxHelp(output: string): SyntaxHelp[] {
+  const items: SyntaxHelp[] = [];
+  for (const record of output.trim().split(/;type=syntax(?:;|\s*$)/)) {
+    const cells = record.match(
+      /nested=(\d+);nonorm=\w+;symbol=(.*?);symbol-type=([\w-]+);text=(.*)$/s,
+    );
+    if (!cells) continue;
+    const symbol = cells[2] ?? "";
+    const text = (cells[4] ?? "").trim();
+    if (!symbol && !text) continue;
+    items.push({ symbol, text, nested: Number(cells[1]) });
+  }
+  return items;
+}
+
 interface TerminalRouteOptions {
   /** Why the terminal is unavailable, or `null`. */
   denied: string | null;
@@ -290,6 +318,10 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
         if (!input.trim()) return json({ tokens: [] });
         const command = `:put [/console/inspect request=highlight input=${quoteValue(input)} as-value]`;
         return json({ tokens: parseHighlight(await quick(command).result) });
+      }
+      if (key === "POST /api/terminal/syntax") {
+        const command = `:put [/console/inspect request=syntax input=${quoteValue(text("input"))} as-value]`;
+        return json({ items: parseSyntaxHelp(await quick(command).result).slice(0, 200) });
       }
       if (key === "POST /api/terminal/complete") {
         const command = `/console/inspect request=completion input=${quoteValue(text("input"))}`;

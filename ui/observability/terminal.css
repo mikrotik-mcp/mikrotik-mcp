@@ -1582,3 +1582,39 @@
   color: #06222a;
   font-weight: 600;
 }
+
+/* ── help from the router ────────────────────────────────────────────── */
+.term-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-height: 74px;
+  padding: 6px 10px;
+  overflow: auto;
+  border-top: 1px solid var(--term-line);
+  background: rgb(17 23 37 / 70%);
+  color: var(--term-dim);
+  font-size: 11px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.term-help span {
+  padding: 0 7px;
+  border: 1px solid var(--term-line);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.term-help span[data-nested="2"] {
+  border-style: dashed;
+}
+.term-help b {
+  margin-right: 6px;
+  color: var(--term-syn-argument);
+  font-weight: 500;
+}
+.term-complete small {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -30,6 +30,11 @@ export interface Completion {
   style: string;
   offset: number;
 }
+export interface SyntaxHelp {
+  symbol: string;
+  text: string;
+  nested: number;
+}
 export interface Probe {
   ok: boolean;
   ms: number;
@@ -87,6 +92,10 @@ export const terminalApi = {
     post("/api/terminal/highlight", { device, input }, signal)
       .then((r) => r.json() as Promise<{ tokens?: string[] }>)
       .then((r) => r.tokens ?? []),
+  syntax: (device: string, input: string, signal?: AbortSignal): Promise<SyntaxHelp[]> =>
+    post("/api/terminal/syntax", { device, input }, signal)
+      .then((r) => r.json() as Promise<{ items?: SyntaxHelp[] }>)
+      .then((r) => r.items ?? []),
   complete: (device: string, input: string, signal?: AbortSignal): Promise<Completion[]> =>
     post("/api/terminal/complete", { device, input }, signal)
       .then((r) => r.json() as Promise<{ completions?: Completion[] }>)

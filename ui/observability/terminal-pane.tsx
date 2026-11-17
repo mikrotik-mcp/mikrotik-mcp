@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  CircleHelp,
   Copy,
   Download,
   GitCompareArrows,
@@ -39,7 +40,7 @@ import {
 } from "react";
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
-import type { BroadcastResult, Completion, ExportFormat, RunEnd } from "./terminal-lib";
+import type { BroadcastResult, Completion, ExportFormat, RunEnd, SyntaxHelp } from "./terminal-lib";
 import { RecordTable } from "./terminal-table";
 import {
   cleanOutput,
@@ -364,6 +365,9 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
   } | null>(null);
   const [limit, setLimit] = useState(LIMIT_CHOICES[0] ?? 30_000);
   const [watchEvery, setWatchEvery] = useState(5000);
+  /** The router's explanations for what can follow the input. */
+  const [help, setHelp] = useState<{ for: string; items: SyntaxHelp[] }>({ for: "", items: [] });
+  const [showHelp, setShowHelp] = useState(true);
   /** Alert rule for the watched block (see evalAlert). */
   const [alertRule, setAlertRule] = useState("");
   const alertRuleRef = useRef(alertRule);
@@ -683,6 +687,22 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
     return () => clearTimeout(timer);
   }, [blocks, paneId]);
 
+  // ── the router's help for the word being typed ──────────────────────────
+  useEffect(() => {
+    if (!showHelp || !input.trim() || input.includes("\n") || conn.link !== "online") return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      terminalApi
+        .syntax(device, input, abort.signal)
+        .then((items) => setHelp({ for: input, items }))
+        .catch(() => {});
+    }, 320);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [input, device, conn.link, showHelp]);
+
   // ── completion while typing, a moment after the last key ────────────────
   useEffect(() => {
     if (!input.trim() || input.includes("\n") || conn.link !== "online") return;
@@ -870,6 +890,22 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
     }
   };
 
+  // Help for the word at the end of the input: the choices that start with it.
+  const typedWord = input.match(/[\w.-]*$/)?.[0] ?? "";
+  const helpItems = useMemo(
+    () =>
+      help.for === input
+        ? help.items.filter(
+            (item) =>
+              item.text && (!item.symbol || !typedWord || item.symbol.startsWith(typedWord)),
+          )
+        : [],
+    [help, input, typedWord],
+  );
+  const helpText = useMemo(
+    () => new Map(help.items.filter((item) => item.symbol).map((item) => [item.symbol, item.text])),
+    [help.items],
+  );
   const fromRouter =
     input.trim() && tokens.for === input ? deviceSpans(input, tokens.classes) : null;
   const syntaxError = fromRouter !== null && hasSyntaxError(tokens.classes);
@@ -1129,6 +1165,18 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
         </form>
       )}
 
+      {showHelp && helpItems.length > 0 && !completions && (
+        <div className="term-help" aria-label="Help from the router">
+          {helpItems.slice(0, 24).map((item, i) => (
+            // eslint-disable-next-line react/no-array-index-key -- notes have no symbol
+            <span key={`${item.symbol}-${i}`} data-nested={item.nested}>
+              {item.symbol && <b>{item.symbol}</b>}
+              {item.text}
+            </span>
+          ))}
+        </div>
+      )}
+
       <footer className="term-input" data-error={syntaxError}>
         <span className="term-prompt">
           <span className="term-prompt-device">{device}</span>
@@ -1170,7 +1218,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
                   }}
                 >
                   <span>{item.completion}</span>
-                  <small>{item.style}</small>
+                  <small>{helpText.get(item.completion) || item.style}</small>
                 </li>
               ))}
               <li className="term-complete-hint" aria-hidden="true">
@@ -1179,6 +1227,15 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
             </ul>
           )}
         </div>
+        <button
+          type="button"
+          className="term-star-input"
+          data-on={showHelp}
+          onClick={() => setShowHelp((on) => !on)}
+          title="Help from the router for the word being typed"
+        >
+          <CircleHelp size={13} />
+        </button>
         <button
           type="button"
           className="term-star-input"
