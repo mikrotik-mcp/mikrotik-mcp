@@ -223,6 +223,22 @@ export async function searchTree(
   return { scanned, truncated };
 }
 
+/** The text of a small file. Refuses a folder, a large file and a binary file. */
+export async function readText(
+  sftp: Sftp,
+  path: string,
+): Promise<{ text: string; size: number; mtime: number }> {
+  const stats = await call<{ size: number; mtime: number; isDirectory: () => boolean }>((done) =>
+    sftp.stat(path, done),
+  );
+  if (stats.isDirectory()) throw new DashboardInputError(400, "This is a folder, not a file.");
+  if (stats.size > MAX_CONTENT_BYTES)
+    throw new DashboardInputError(413, "The file is larger than 1 MiB. Download it instead.");
+  const body = await call<Buffer>((done) => sftp.readFile(path, done));
+  if (body.includes(0)) throw new DashboardInputError(415, "This is not a text file.");
+  return { text: body.toString("utf8"), size: stats.size, mtime: stats.mtime };
+}
+
 /** A matcher for the search box: plain text (no case) or a regular expression. */
 export function matcher(query: string, regex: boolean): (text: string) => boolean {
   if (regex) {
@@ -488,6 +504,15 @@ export function createFilesRoutes(options: { denied: string | null }) {
             },
           });
         });
+      }
+
+      if (key === "GET /api/files/read") {
+        const device = deviceOf(url.searchParams.get("device"));
+        const file = cleanPath(url.searchParams.get("path"));
+        const started = Date.now();
+        const answer = await withSftp(device, (sftp) => readText(sftp, file));
+        audit(device, "READ", started, { read: file }, `${answer.size} bytes`);
+        return json(answer);
       }
 
       if (req.method !== "POST") return json({ error: "Unsupported files route" }, 405);

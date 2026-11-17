@@ -81,6 +81,50 @@ const postFiles = async (path: string, body: unknown): Promise<void> => {
     );
 };
 
+// ── listings changed ──────────────────────────────────────────────────────
+type Changed = (device: string, dir: string) => void;
+const changeListeners = new Set<Changed>();
+/** Panes listen here, and reload when a transfer or an edit changed their folder. */
+export const filesBus = {
+  subscribe(listener: Changed): () => void {
+    changeListeners.add(listener);
+    return () => changeListeners.delete(listener);
+  },
+  changed(device: string, dir: string): void {
+    for (const listener of changeListeners) listener(device, dir);
+  },
+};
+
+/** A small store for one value, for `useSyncExternalStore`. */
+function store<T>(initial: T) {
+  let value = initial;
+  const listeners = new Set<() => void>();
+  return {
+    get: (): T => value,
+    set(next: T): void {
+      value = next;
+      for (const listener of listeners) listener();
+    },
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
+
+export interface FileRef {
+  device: string;
+  path: string;
+}
+/** The file open in the viewer, or null. */
+export const viewerStore = store<FileRef | null>(null);
+
+/** Files the viewer can show: text kinds, up to the server's 1 MiB limit. */
+export const canPreview = (entry: FileEntry): boolean =>
+  !entry.dir &&
+  entry.size <= 1024 * 1024 &&
+  ["script", "text", "web", "key"].includes(kindOf(entry));
+
 export const filesApi = {
   state: (): Promise<FilesState> => api<FilesState>("/api/files/state"),
   list: (device: string, path: string, signal?: AbortSignal): Promise<FileEntry[]> =>
@@ -89,6 +133,18 @@ export const filesApi = {
     ),
   usage: (device: string): Promise<{ free?: number; total?: number }> =>
     api(`/api/files/usage?device=${encodeURIComponent(device)}`),
+  read: (file: FileRef): Promise<{ text: string; size: number; mtime: number }> =>
+    api(`/api/files/read?${query(file.device, file.path)}`),
+  /** Replace a file with `text`. */
+  async write(file: FileRef, text: string): Promise<void> {
+    const res = await fetch(withToken(`/api/files/upload?${query(file.device, file.path)}`), {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream", ...auth },
+      body: text,
+    });
+    if (!res.ok) throw await failure(res);
+    filesBus.changed(file.device, parentOf(file.path));
+  },
   remove: (device: string, paths: string[]): Promise<void> =>
     postFiles("/api/files/delete", { device, paths }),
   rename: (device: string, from: string, to: string): Promise<void> =>
@@ -118,20 +174,6 @@ export const filesApi = {
       else if (item.t === "done") onDone(item as unknown as SearchDone);
       else if (item.t === "error") throw new Error(String(item.error));
     });
-  },
-};
-
-// ── listings changed ──────────────────────────────────────────────────────
-type Changed = (device: string, dir: string) => void;
-const changeListeners = new Set<Changed>();
-/** Panes listen here, and reload when a transfer or an edit changed their folder. */
-export const filesBus = {
-  subscribe(listener: Changed): () => void {
-    changeListeners.add(listener);
-    return () => changeListeners.delete(listener);
-  },
-  changed(device: string, dir: string): void {
-    for (const listener of changeListeners) listener(device, dir);
   },
 };
 

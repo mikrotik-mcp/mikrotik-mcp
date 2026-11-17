@@ -11,6 +11,7 @@ import {
   ArrowUpFromLine,
   ChevronRight,
   CornerLeftUp,
+  Eye,
   File,
   FileArchive,
   FileCode2,
@@ -36,6 +37,7 @@ import { Select } from "./geist";
 import type { FileEntry, FileKind } from "./files-lib";
 import {
   DRAG_TYPE,
+  canPreview,
   conflicts,
   dragState,
   filePanes,
@@ -45,6 +47,7 @@ import {
   kindOf,
   parentOf,
   transferQueue,
+  viewerStore,
   when,
 } from "./files-lib";
 
@@ -214,6 +217,7 @@ export function FilesPane(
 
   const activate = (entry: FileEntry): void => {
     if (entry.dir) open(joinPath(path, entry.name));
+    else if (canPreview(entry)) viewerStore.set({ device, path: joinPath(path, entry.name) });
     else transferQueue.download(device, joinPath(path, entry.name), entry.size);
   };
 
@@ -636,6 +640,16 @@ export function FilesPane(
           >
             <ArrowDownToLine size={13} /> Download
           </button>
+          {chosen.length === 1 && chosen[0] && canPreview(chosen[0]) && (
+            <button
+              type="button"
+              onClick={() =>
+                viewerStore.set({ device, path: joinPath(path, chosen[0]?.name ?? "") })
+              }
+            >
+              <Eye size={13} /> View
+            </button>
+          )}
           {!readOnly && (
             <>
               {targets.length > 0 && chosenFiles.length > 0 && (

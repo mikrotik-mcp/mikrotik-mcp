@@ -216,6 +216,14 @@ test("a download streams the whole file with its size", async () => {
   expect((await call("GET", "/api/files/download?device=alpha&path=/flash")).status).toBe(400);
 });
 
+test("a text file is read whole; a folder and a binary file are refused", async () => {
+  const res = await call("GET", "/api/files/read?device=alpha&path=/notes.txt");
+  expect(await res.json()).toEqual({ text: "wan is ether1\n", size: 14, mtime: 1_700_000_000 });
+  expect((await call("GET", "/api/files/read?device=alpha&path=/flash")).status).toBe(400);
+  routers.alpha!.disk.set("/blob.bin", Buffer.from([1, 0, 2]));
+  expect((await call("GET", "/api/files/read?device=alpha&path=/blob.bin")).status).toBe(415);
+});
+
 describe("changes", () => {
   test("an upload writes the body to the router and is audited", async () => {
     const res = await call(

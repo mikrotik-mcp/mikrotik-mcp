@@ -39,6 +39,7 @@ import {
   when,
 } from "./files-lib";
 import { FilesPane } from "./files-pane";
+import { FileViewer } from "./files-viewer";
 import { PaneTab } from "./terminal-tab";
 import type { DevicesPayload } from "./types";
 import "./terminal.css";
@@ -408,6 +409,8 @@ export function FilesView(): ReactNode {
           </aside>
         )}
       </div>
+
+      <FileViewer readOnly={readOnly} />
 
       {transfers.length > 0 && (
         <section className="files-transfers" data-open={dockOpen} aria-label="Transfers">
