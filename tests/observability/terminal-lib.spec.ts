@@ -81,3 +81,21 @@ describe("watch alerts", () => {
     expect(lib.evalAlert("  ", output, "")).toBeNull();
   });
 });
+
+test("a script drops comments and blank lines, and joins continued lines", () => {
+  const script = [
+    "# header",
+    "",
+    "/ip address print",
+    "/ip firewall filter add chain=input \\",
+    "    action=accept comment=ok",
+    "  # indented comment",
+    "/log print",
+  ].join("\n");
+  expect(lib.scriptLines(script)).toEqual([
+    "/ip address print",
+    "/ip firewall filter add chain=input action=accept comment=ok",
+    "/log print",
+  ]);
+  expect(lib.scriptLines("\n# only a comment\n")).toEqual([]);
+});

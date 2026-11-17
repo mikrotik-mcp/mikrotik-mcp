@@ -561,3 +561,44 @@ export function notify(title: string, body: string): void {
   else if (Notification.permission === "default")
     void Notification.requestPermission().then((answer) => answer === "granted" && show());
 }
+
+// ── scripts: several commands, one per line ─────────────────────────────
+
+/**
+ * The commands of a script: blank lines and `#` comments dropped, and a line
+ * that ends with `\\` joined to the next one (as RouterOS exports do).
+ */
+export function scriptLines(text: string): string[] {
+  const commands: string[] = [];
+  let pending = "";
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!pending && (!line || line.startsWith("#"))) continue;
+    if (line.endsWith("\\")) {
+      pending += `${line.slice(0, -1).trimEnd()} `;
+      continue;
+    }
+    commands.push((pending + line).trim());
+    pending = "";
+  }
+  if (pending.trim()) commands.push(pending.trim());
+  return commands.filter(Boolean);
+}
+
+/** Which pane the script dialog works on; empty when it is closed. */
+let scriptPane = "";
+const scriptListeners = new Set<() => void>();
+export const scriptStore = {
+  get: (): string => scriptPane,
+  subscribe(listener: () => void): () => void {
+    scriptListeners.add(listener);
+    return () => scriptListeners.delete(listener);
+  },
+  open(paneId: string): void {
+    scriptPane = paneId;
+    for (const listener of scriptListeners) listener();
+  },
+  close(): void {
+    scriptStore.open("");
+  },
+};

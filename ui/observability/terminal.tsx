@@ -48,6 +48,7 @@ import {
 } from "./terminal-lib";
 import { TerminalPane } from "./terminal-pane";
 import { CompareDialog } from "./terminal-compare";
+import { ScriptDialog } from "./terminal-script";
 import { FindBar } from "./terminal-search";
 import type { DevicesPayload } from "./types";
 import "./terminal.css";
@@ -493,6 +494,7 @@ export function TerminalView(): ReactNode {
       </div>
 
       <CompareDialog />
+      <ScriptDialog />
       {sent && (
         <div className="term-sent" role="status">
           <Radio size={14} />

@@ -16,6 +16,7 @@ import {
   GitCompareArrows,
   CornerDownLeft,
   Eraser,
+  FileCode2,
   Eye,
   EyeOff,
   RefreshCw,
@@ -53,6 +54,7 @@ import {
   paneRegistry,
   paneStorage,
   runCommand,
+  scriptStore,
   snippetFields,
   terminalApi,
   workspace,
@@ -970,6 +972,13 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
           </label>
           <button type="button" onClick={() => probeNow.current()} title="Check the connection now">
             <RotateCw size={12} />
+          </button>
+          <button
+            type="button"
+            onClick={() => scriptStore.open(paneId)}
+            title="Run a script: several commands, one per line"
+          >
+            <FileCode2 size={12} />
           </button>
           <details className="term-menu">
             <summary title="Save this pane as a file">
