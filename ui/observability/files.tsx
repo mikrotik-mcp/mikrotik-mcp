@@ -15,6 +15,7 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
+  FolderSync as FolderSyncIcon,
   Plus,
   Radio,
   RotateCw,
@@ -36,12 +37,14 @@ import {
   filesApi,
   filesLayout,
   pace,
+  syncStore,
   parentOf,
   transferQueue,
   when,
 } from "./files-lib";
 import { FileCompare } from "./files-compare";
 import { FilesPane } from "./files-pane";
+import { FolderSync } from "./files-sync";
 import { FileViewer } from "./files-viewer";
 import { PaneTab } from "./terminal-tab";
 import type { DevicesPayload } from "./types";
@@ -273,6 +276,16 @@ export function FilesView(): ReactNode {
             </button>
           ))}
         </div>
+        <div className="term-tools">
+          <button
+            type="button"
+            disabled={panes.length < 2}
+            onClick={() => syncStore.set(true)}
+            title="Compare the open folders of two panes, and copy what is missing"
+          >
+            <FolderSyncIcon size={13} /> Compare folders
+          </button>
+        </div>
         {!readOnly && (
           <div className="term-tools">
             <button
@@ -429,6 +442,7 @@ export function FilesView(): ReactNode {
 
       <FileViewer readOnly={readOnly} />
       <FileCompare />
+      <FolderSync readOnly={readOnly} />
 
       {transfers.length > 0 && (
         <section className="files-transfers" data-open={dockOpen} aria-label="Transfers">

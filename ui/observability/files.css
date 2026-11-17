@@ -791,3 +791,107 @@
 .files-editor:focus {
   border-color: var(--term-accent);
 }
+
+/* ── compare folders ─────────────────────────────────────────────────── */
+.files-sync {
+  width: min(980px, 100%);
+}
+.files-sync-sides,
+.files-sync-bulk {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.files-sync-bulk {
+  grid-template-columns: auto auto 1fr;
+  justify-items: start;
+}
+.files-sync-bulk button:last-child {
+  justify-self: end;
+}
+.files-sync button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--term-line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--term-ink);
+  font-size: 12px;
+}
+.files-sync button:hover:not(:disabled) {
+  border-color: var(--term-accent);
+  color: var(--term-accent);
+}
+.files-sync button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.files-sync button[data-on="true"] {
+  border-color: var(--term-accent);
+  color: var(--term-accent);
+}
+.files-sync-rows {
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--term-line);
+  border-radius: 10px;
+}
+.files-sync-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(220px, 1.4fr) 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--term-line) 60%, transparent);
+  font-size: 12px;
+}
+.files-sync-row:last-child {
+  border-bottom: 0;
+}
+.files-sync-cell {
+  color: var(--term-dim);
+  font-family: var(--term-mono);
+  font-size: 11px;
+}
+.files-sync-cell:last-child {
+  text-align: right;
+}
+.files-sync-cell em {
+  margin: 0 6px;
+  color: var(--term-ok);
+  font-style: normal;
+}
+.files-sync-mid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+.files-sync-mid strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-sync-mid small {
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: var(--term-raised);
+  color: var(--term-dim);
+  white-space: nowrap;
+}
+.files-sync-mid button {
+  padding: 3px 5px;
+}
+.files-sync-row[data-state="left"] small,
+.files-sync-row[data-state="right"] small {
+  background: color-mix(in srgb, var(--term-accent) 16%, transparent);
+  color: var(--term-accent);
+}
+.files-sync-row[data-state="different"] small {
+  background: color-mix(in srgb, var(--term-warn) 16%, transparent);
+  color: var(--term-warn);
+}

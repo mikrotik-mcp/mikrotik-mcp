@@ -574,6 +574,42 @@ export const conflicts = (existing: FileEntry[], names: string[]): string[] => {
   return names.filter((name) => have.has(name));
 };
 
+export interface FolderRow {
+  name: string;
+  /** `left`/`right`: only on that side. `different`: both, with another size. */
+  state: "left" | "right" | "different" | "same";
+  left?: FileEntry;
+  right?: FileEntry;
+  /** For `different`: the side with the later time of change. */
+  newer?: "left" | "right";
+}
+
+/** Compare the files of two folders by name and size. Folders are left out. */
+export function compareFolders(left: FileEntry[], right: FileEntry[]): FolderRow[] {
+  const files = (list: FileEntry[]): Map<string, FileEntry> =>
+    new Map(list.filter((entry) => !entry.dir).map((entry) => [entry.name, entry]));
+  const a = files(left);
+  const b = files(right);
+  return Array.from(new Set([...a.keys(), ...b.keys()]))
+    .sort((x, y) => x.localeCompare(y))
+    .map((name) => {
+      const l = a.get(name);
+      const r = b.get(name);
+      if (!l || !r) return { name, state: l ? "left" : "right", left: l, right: r };
+      if (l.size === r.size) return { name, state: "same", left: l, right: r };
+      return {
+        name,
+        state: "different",
+        left: l,
+        right: r,
+        newer: l.mtime === r.mtime ? undefined : l.mtime > r.mtime ? "left" : "right",
+      };
+    });
+}
+
+/** Whether the folder comparison dialog is open. */
+export const syncStore = store(false);
+
 const LAYOUT_KEY = "mikrotik-mcp.files.layout";
 export const filesLayout = {
   load(): unknown {
