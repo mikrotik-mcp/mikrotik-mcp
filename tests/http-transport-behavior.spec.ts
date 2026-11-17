@@ -120,7 +120,8 @@ test("localhost security and CORS preserve MCP response headers across a reused 
   expect(first.headers.get("access-control-allow-origin")).toBe("*");
   expect(state.transports[0].config).toMatchObject({
     enableDnsRebindingProtection: true,
-    allowedHosts: ["127.0.0.1:*", "localhost:*", "[::1]:*"],
+    allowedHosts: ["127.0.0.1:8080", "localhost:8080", "[::1]:8080"],
+    allowedOrigins: ["http://127.0.0.1:8080", "http://localhost:8080", "http://[::1]:8080"],
   });
   // The body was read to find `initialize`, so the transport must get it parsed.
   expect(state.transports[0].handleRequest.mock.calls[0][1]).toEqual({

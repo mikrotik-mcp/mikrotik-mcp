@@ -39,8 +39,6 @@ async function startServer(port: number, home: string) {
       "--transport=streamable-http",
       "--mcp-host=127.0.0.1",
       `--mcp-port=${port}`,
-      // The SDK matches Host exactly, so the built-in "127.0.0.1:*" never matches.
-      `--mcp-allowed-hosts=127.0.0.1:${port}`,
       "--dashboard=false",
       "--host=192.0.2.1",
     ],

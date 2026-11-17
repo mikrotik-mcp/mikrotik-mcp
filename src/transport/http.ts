@@ -56,10 +56,13 @@ function buildSecurity(mcp: McpServerSettings): SecuritySettings {
     };
   }
   if (LOCALHOST.has(mcp.host) && mcp.host !== "0.0.0.0") {
+    // The SDK compares Host and Origin exactly, so each entry carries the real
+    // port: a "127.0.0.1:*" pattern matches nothing and rejects every request.
+    const names = ["127.0.0.1", "localhost", "[::1]"];
     return {
       enableDnsRebindingProtection: true,
-      allowedHosts: ["127.0.0.1:*", "localhost:*", "[::1]:*"],
-      allowedOrigins: ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
+      allowedHosts: names.map((name) => `${name}:${mcp.port}`),
+      allowedOrigins: names.map((name) => `http://${name}:${mcp.port}`),
     };
   }
   logger.warn(
