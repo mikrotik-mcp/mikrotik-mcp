@@ -1119,8 +1119,8 @@
   border-color: var(--term-line);
   color: var(--term-ink);
 }
-.term-complete[data-auto="true"] li[aria-selected="true"] {
-  background: color-mix(in srgb, var(--term-accent) 10%, transparent);
+.term-complete li {
+  scroll-margin-block: 4px 26px;
 }
 .term-complete-hint {
   position: sticky;

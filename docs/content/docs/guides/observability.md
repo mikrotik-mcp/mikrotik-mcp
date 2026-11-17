@@ -144,10 +144,13 @@ The **Terminal** page gives you RouterOS consoles in the browser, as in WinBox.
 - **Syntax.** Input is highlighted as you type. The router then checks it and
   marks what it does not accept, before the command runs. `Tab` completes from
   the router.
-- **Completion.** A list of words from the router opens while you type. `Tab`
-  accepts the first word, `↓` moves into the list, `Esc` closes it. `Enter` still
-  runs the command. An earlier command that starts with what you typed is shown
-  in grey; `→` accepts it.
+- **Completion.** A list of words from the router opens while you type. `↑` and
+  `↓` move in the list, `Tab` accepts the marked word, `Esc` closes the list.
+  `Enter` runs the command, unless an arrow moved the mark: then it accepts. An
+  earlier command that starts with what you typed is shown in grey; `→` accepts
+  it.
+- **Recall.** When the list is closed, `↑` and `↓` put your earlier commands in
+  the field.
 - **Find.** `Ctrl+F` opens a find bar that searches commands and output in this
   terminal or in all terminals, with match case, whole words and regular
   expressions. `Enter` and `Shift+Enter` move between results. The filter button

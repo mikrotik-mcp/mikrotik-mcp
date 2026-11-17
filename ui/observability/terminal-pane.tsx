@@ -375,13 +375,15 @@ export function TerminalPane(
     for: "",
     classes: [],
   });
-  // `auto` lists open while typing: Enter still runs the command, and the
-  // arrows still recall history, until ArrowDown moves into the list.
+  // While the list is open the arrows move in it and Tab accepts the marked
+  // word. Enter accepts only after an arrow moved the mark (`moved`); otherwise
+  // it runs the command, as a terminal must.
   const [completions, setCompletions] = useState<{
     items: Completion[];
     index: number;
-    auto?: boolean;
+    moved?: boolean;
   } | null>(null);
+  const completeList = useRef<HTMLUListElement>(null);
   const [limit, setLimit] = useState(LIMIT_CHOICES[0] ?? 30_000);
   const [watchEvery, setWatchEvery] = useState(5000);
   /** The router's explanations for what can follow the input. */
@@ -730,6 +732,14 @@ export function TerminalPane(
     };
   }, [input, device, conn.link, showHelp]);
 
+  // Scroll the list so the marked word stays in view.
+  const marked = completions?.index;
+  useEffect(() => {
+    completeList.current
+      ?.querySelector('[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [marked]);
+
   // ── completion while typing, a moment after the last key ────────────────
   useEffect(() => {
     if (!input.trim() || input.includes("\n") || conn.link !== "online") return;
@@ -745,7 +755,7 @@ export function TerminalPane(
             .filter((item) => /\w/.test(item.completion))
             // Nothing to offer when the word is already typed in full.
             .filter((item) => input.slice(item.offset) !== item.completion);
-          setCompletions(words.length ? { items: words.slice(0, 40), index: 0, auto: true } : null);
+          setCompletions(words.length ? { items: words.slice(0, 40), index: 0 } : null);
         })
         .catch(() => {});
     }, 220);
@@ -836,40 +846,31 @@ export function TerminalPane(
     else setCompletions(words.length ? { items: words.slice(0, 40), index: 0 } : null);
   };
 
+  /** Put an earlier command in the field. No list opens, so ↑ and ↓ keep recalling. */
+  const recallInto = (command: string): void => {
+    dismissed.current = command;
+    setCompletions(null);
+    setInput(command);
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     const area = event.currentTarget;
-    if (completions?.auto) {
+    if (completions) {
       const chosen = completions.items[completions.index];
-      if (event.key === "Tab" && chosen) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const size = completions.items.length;
+        const step = event.key === "ArrowUp" ? -1 : 1;
+        setCompletions({
+          ...completions,
+          index: (completions.index + step + size) % size,
+          moved: true,
+        });
+        return;
+      }
+      if (chosen && (event.key === "Tab" || (event.key === "Enter" && completions.moved))) {
         event.preventDefault();
         applyCompletion(chosen);
-        return;
-      }
-      if (event.key === "ArrowDown") {
-        // Move into the list: from here the arrows and Enter act on it.
-        event.preventDefault();
-        setCompletions({ ...completions, auto: false });
-        return;
-      }
-      if (event.key === "Escape") {
-        dismissed.current = input;
-        setCompletions(null);
-        return;
-      }
-      // Any other key (Enter, ArrowUp, …) keeps its terminal meaning.
-      if (event.key === "Enter" || event.key === "ArrowUp") setCompletions(null);
-    } else if (completions) {
-      if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Tab") {
-        event.preventDefault();
-        const move = event.key === "ArrowUp" || event.shiftKey ? -1 : 1;
-        const size = completions.items.length;
-        setCompletions({ ...completions, index: (completions.index + move + size) % size });
-        return;
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        const chosen = completions.items[completions.index];
-        if (chosen) applyCompletion(chosen);
         return;
       }
       setCompletions(null);
@@ -911,13 +912,13 @@ export function TerminalPane(
       event.preventDefault();
       if (state.index === -1) state.draft = input;
       state.index = state.index === -1 ? state.list.length - 1 : Math.max(0, state.index - 1);
-      setInput(state.list[state.index] ?? "");
+      recallInto(state.list[state.index] ?? "");
     } else if (event.key === "ArrowDown" && !input.slice(area.selectionEnd).includes("\n")) {
       const state = recall.current;
       if (state.index === -1) return;
       event.preventDefault();
       state.index = state.index >= state.list.length - 1 ? -1 : state.index + 1;
-      setInput(state.index === -1 ? state.draft : (state.list[state.index] ?? ""));
+      recallInto(state.index === -1 ? state.draft : (state.list[state.index] ?? ""));
     }
   };
 
@@ -1301,12 +1302,14 @@ export function TerminalPane(
             onChange={(event) => {
               setInput(event.target.value);
               setCompletions(null);
+              // Typing ends a walk through the history.
+              recall.current.index = -1;
             }}
             onKeyDown={onKeyDown}
             onBlur={() => setTimeout(() => setCompletions(null), 150)}
           />
           {completions && (
-            <ul className="term-complete" role="listbox" data-auto={Boolean(completions.auto)}>
+            <ul className="term-complete" role="listbox" ref={completeList}>
               {completions.items.map((item, i) => (
                 <li
                   key={`${item.completion}-${item.style}`}
@@ -1323,7 +1326,7 @@ export function TerminalPane(
                 </li>
               ))}
               <li className="term-complete-hint" aria-hidden="true">
-                {completions.auto ? "Tab accept · ↓ browse · Esc close" : "↑↓ move · Enter accept"}
+                ↑↓ move · Tab accept · Esc close
               </li>
             </ul>
           )}
