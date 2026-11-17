@@ -2,8 +2,16 @@
  * `mikrotik-mcp dashboard --server <url>`: where a local request is sent on the
  * server, and which headers go with it. Pure helpers — no sockets.
  */
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
-import { serverOrigin, upstreamHeaders, upstreamUrl } from "../src/observability/remote.ts";
+import {
+  localPage,
+  serverOrigin,
+  upstreamHeaders,
+  upstreamUrl,
+} from "../src/observability/remote.ts";
 
 describe("remote dashboard", () => {
   it("reduces the server URL to its origin and rejects anything else", () => {
@@ -29,6 +37,13 @@ describe("remote dashboard", () => {
     );
     // A request path is always origin-relative; `//host` must not switch hosts.
     expect(new URL(upstreamUrl(origin, "/%2F%2Fevil.example/x")).host).toBe("192.0.2.10:9090");
+  });
+
+  it("uses this machine's built page when there is one", () => {
+    const dir = mkdtempSync(join(tmpdir(), "remote-dash-"));
+    expect(localPage(dir)).toBeUndefined();
+    writeFileSync(join(dir, "observability.html"), "<title>local</title>");
+    expect(localPage(dir)).toBe("<title>local</title>");
   });
 
   it("sends the server token and drops the client's own credentials and host", () => {

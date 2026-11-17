@@ -3,12 +3,17 @@
  *
  * Runs the dashboard on a machine that has no MCP server and no device config.
  * It is a reverse proxy to the dashboard port of a server started with
- * `--dashboard` somewhere else: page, REST, SSE and WebSocket all pass through.
+ * `--dashboard` somewhere else: REST, SSE and WebSocket all pass through. The
+ * page itself is this machine's own build (`bun run build:ui`) when there is
+ * one, so local UI work shows here; without a build the server's page is used.
  * The server's token is added here, so the browser never holds it.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ServerWebSocket } from "bun";
 import { serve } from "bun";
 import { logger } from "../logger";
+import { UI_DIST_DIR } from "../paths";
 
 export interface RemoteDashboardOptions {
   /** Base URL of the server's dashboard, e.g. `http://192.168.1.10:9090`. */
@@ -48,6 +53,15 @@ export function upstreamHeaders(incoming: Headers, token?: string): Headers {
   return out;
 }
 
+/** This machine's built dashboard page, or undefined when it has not been built. */
+export function localPage(dir = UI_DIST_DIR): string | undefined {
+  try {
+    return readFileSync(join(dir, "observability.html"), "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
 interface Bridge {
   target: string;
   upstream?: WebSocket;
@@ -70,6 +84,13 @@ export function runRemoteDashboard(options: RemoteDashboardOptions): { stop: () 
         return srv.upgrade(req, { data: { target } })
           ? undefined
           : new Response("WebSocket upgrade failed", { status: 400 });
+      }
+
+      // Read per request: a rebuild shows on the next refresh, no restart.
+      if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+        const page = localPage();
+        if (page !== undefined)
+          return new Response(page, { headers: { "content-type": "text/html; charset=utf-8" } });
       }
 
       try {
@@ -114,7 +135,8 @@ export function runRemoteDashboard(options: RemoteDashboardOptions): { stop: () 
 
   logger.info(
     `Remote dashboard ready — open http://${options.host === "0.0.0.0" ? "localhost" : options.host}:${options.port} ` +
-      `(server ${origin}${options.token ? ", token set" : ""})`,
+      `(server ${origin}${options.token ? ", token set" : ""}, page: ` +
+      `${localPage() === undefined ? "the server's — no local build, run `bun run build:ui` to use this machine's UI" : "this machine's build"})`,
   );
   if (options.host !== "127.0.0.1" && options.host !== "localhost" && options.host !== "::1") {
     logger.warn(

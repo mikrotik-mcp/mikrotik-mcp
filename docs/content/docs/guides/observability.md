@@ -130,9 +130,15 @@ forwards it to the API and the live WebSocket automatically.
 
 `mikrotik-mcp dashboard --server <url>` serves the dashboard on a machine that
 has no MCP server and no device configuration. It connects to the dashboard port
-of a server that runs somewhere else and passes everything through: the page,
-the API, the live WebSocket and the SSE fallback. That machine opens no SSH
-connection to a router and stores no events.
+of a server that runs somewhere else and takes all data from it: the API, the
+live WebSocket and the SSE fallback. That machine opens no SSH connection to a
+router and stores no events.
+
+The page is the build on the machine that runs the command
+(`dist/ui/observability.html`, made by `bun run build:ui`, and included in an
+installed package). If that machine has no build, the server's page is used. The
+startup log line says which one. The file is read on each request, so a rebuild
+shows on the next browser refresh.
 
 **On the server.** The dashboard port is the data source, so it must be enabled
 and reachable from the other machine. Set a token.
