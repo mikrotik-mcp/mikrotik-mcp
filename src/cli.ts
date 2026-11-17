@@ -15,7 +15,7 @@ import { startBandwidthScheduler, stopBandwidthScheduler } from "./bandwidth/ser
  * Multiple named devices come from --config / MIKROTIK_DEVICES.
  */
 import { existsSync } from "node:fs";
-import { loadConfig } from "./config";
+import { loadConfig, parseFlags } from "./config";
 import { closeAll as closeConnectionPool } from "./core/connection-pool";
 import { closeMemoryStore } from "./memory/accessor";
 import { setConfig } from "./core/runtime";
@@ -42,6 +42,10 @@ USAGE
 
 COMMANDS
   serve         Start the MCP server (default)
+  dashboard     Open the dashboard of a server that runs somewhere else
+                  --server <url>     that server's dashboard URL (http://host:9090)
+                  --server-token     its --dashboard-token   (MIKROTIK_DASHBOARD_SERVER_TOKEN)
+                  --host / --port    where to serve it here  (default 127.0.0.1:9090)
   auth-check    Connect over SSH to every configured device and probe it
   devices       List the configured devices (name · host · auth)
   tools         Print the full tool catalog (name · risk · title)
@@ -186,6 +190,29 @@ async function main(): Promise<void> {
   }
   if (command === "devices") {
     listDevicesCli();
+    return;
+  }
+  if (command === "dashboard") {
+    const flags = parseFlags(argv);
+    const server = flags.server ?? process.env.MIKROTIK_DASHBOARD_SERVER;
+    if (!server) {
+      process.stderr.write(
+        "Usage: mikrotik-mcp dashboard --server http://<server-ip>:9090 [--server-token <token>] [--port 9090]\n",
+      );
+      process.exit(2);
+    }
+    const { runRemoteDashboard } = await import("./observability/remote");
+    try {
+      runRemoteDashboard({
+        server,
+        token: flags["server-token"] ?? process.env.MIKROTIK_DASHBOARD_SERVER_TOKEN,
+        host: flags.host ?? "127.0.0.1",
+        port: Number(flags.port ?? 9090),
+      });
+    } catch (e) {
+      process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
+      process.exit(2);
+    }
     return;
   }
   if (command === "auth-check") {
