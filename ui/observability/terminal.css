@@ -2837,3 +2837,14 @@ label.term-pop-row {
   color: var(--term-ink);
   font-size: 11.5px;
 }
+
+/* ── the block the arrow keys are on ─────────────────────────────────── */
+.term-block[data-cursor="true"] {
+  border-color: var(--term-accent);
+  background: color-mix(in srgb, var(--term-accent) 9%, rgb(17 23 37 / 70%));
+  box-shadow: 0 0 0 1px var(--term-accent);
+  scroll-margin-block: 10px;
+}
+.term-block[data-cursor="true"] .term-actions {
+  opacity: 1;
+}

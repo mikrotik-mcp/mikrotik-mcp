@@ -294,6 +294,7 @@ function BlockViewBase({
   starred,
   watching,
   comparing,
+  cursor,
   onAction,
   onMenu,
   onToken,
@@ -306,6 +307,8 @@ function BlockViewBase({
   onToken: (token: OutputToken, x: number, y: number) => void;
   /** This block is the first side of a comparison. */
   comparing: boolean;
+  /** The arrow keys are on this block. */
+  cursor: boolean;
   onAction: (action: string, block: Block) => void;
 }) {
   const [copied, setCopied] = useState("");
@@ -356,6 +359,8 @@ function BlockViewBase({
     <article
       className="term-block"
       data-status={block.status}
+      data-block-id={block.id}
+      data-cursor={cursor || undefined}
       onContextMenu={(event) => {
         // Shift + right-click keeps the browser's own menu.
         if (event.shiftKey) return;
@@ -610,6 +615,8 @@ export function TerminalPane(
   const [tokenMenu, setTokenMenu] = useState<{ token: OutputToken; x: number; y: number } | null>(
     null,
   );
+  /** The block the arrow keys are on; null while typing a new command. */
+  const [cursorBlock, setCursorBlock] = useState<number | null>(null);
   /** False while the user has scrolled up from the end. */
   const [atEnd, setAtEnd] = useState(true);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -845,6 +852,7 @@ export function TerminalPane(
       const list = recall.current.list;
       if (list.at(-1) !== command) list.push(command);
       recall.current.index = -1;
+      setCursorBlock(null);
       const own = runBlock(command).then((end) => ({ ...end, device }));
       const target = workspace.broadcast;
       if (target && !options.fromBroadcast) {
@@ -1137,6 +1145,22 @@ export function TerminalPane(
     setInput(command);
   };
 
+  /** Mark a block as the one the arrows are on, show its command, and bring it into view. */
+  const walkTo = (block: Block): void => {
+    setCursorBlock(block.id);
+    recallInto(block.command);
+    stick.current = false;
+  };
+  // Bring the marked block into view once it is rendered as marked.
+  useEffect(() => {
+    if (cursorBlock === null) return;
+    scroller.current
+      ?.closest(".term-pane")
+      ?.querySelector(`[data-block-id="${cursorBlock}"]`)
+      // The top of the block: its command line must be in view, also for a long output.
+      ?.scrollIntoView({ block: "start" });
+  }, [cursorBlock]);
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
     const area = event.currentTarget;
     if (completions) {
@@ -1191,14 +1215,41 @@ export function TerminalPane(
         last.abort();
       }
     } else if (event.key === "ArrowUp" && !input.slice(0, area.selectionStart).includes("\n")) {
+      // Walk up the blocks of this pane: its command goes to the field and the
+      // block is marked and scrolled into view. With no block, recall the history.
+      const list = blocksRef.current;
       const state = recall.current;
+      if (list.length) {
+        event.preventDefault();
+        const at = list.findIndex((block) => block.id === cursorBlock);
+        if (at === -1) state.draft = input;
+        const target = list[at === -1 ? list.length - 1 : Math.max(0, at - 1)];
+        if (target) walkTo(target);
+        return;
+      }
       if (!state.list.length) return;
       event.preventDefault();
       if (state.index === -1) state.draft = input;
       state.index = state.index === -1 ? state.list.length - 1 : Math.max(0, state.index - 1);
       recallInto(state.list[state.index] ?? "");
     } else if (event.key === "ArrowDown" && !input.slice(area.selectionEnd).includes("\n")) {
+      const list = blocksRef.current;
       const state = recall.current;
+      const at = list.findIndex((block) => block.id === cursorBlock);
+      if (at !== -1) {
+        event.preventDefault();
+        const target = list[at + 1];
+        if (target) walkTo(target);
+        else {
+          // Past the last block: back to what was being typed, at the end of the pane.
+          setCursorBlock(null);
+          recallInto(state.draft);
+          stick.current = true;
+          const box = scroller.current;
+          if (box) box.scrollTop = box.scrollHeight;
+        }
+        return;
+      }
       if (state.index === -1) return;
       event.preventDefault();
       state.index = state.index >= state.list.length - 1 ? -1 : state.index + 1;
@@ -1230,6 +1281,7 @@ export function TerminalPane(
       starred={starred.has(block.command)}
       watching={watch === block.id}
       comparing={comparePick === `${paneId}:${block.id}`}
+      cursor={cursorBlock === block.id}
       onAction={onAction}
       onMenu={openMenu}
       onToken={openToken}
@@ -1775,8 +1827,9 @@ export function TerminalPane(
             onChange={(event) => {
               setInput(event.target.value);
               setCompletions(null);
-              // Typing ends a walk through the history.
+              // Typing ends a walk through the blocks or the history.
               recall.current.index = -1;
+              setCursorBlock(null);
             }}
             onKeyDown={onKeyDown}
             onBlur={() => setTimeout(() => setCompletions(null), 150)}

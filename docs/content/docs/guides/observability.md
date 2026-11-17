@@ -152,8 +152,10 @@ The **Terminal** page gives you RouterOS consoles in the browser, as in WinBox.
   `Enter` runs the command, unless an arrow moved the mark: then it accepts. An
   earlier command that starts with what you typed is shown in grey; `→` accepts
   it.
-- **Recall.** When the list is closed, `↑` and `↓` put your earlier commands in
-  the field.
+- **Walk the blocks.** When the list is closed, `↑` and `↓` move through the
+  blocks of the pane: the block is marked and scrolled into view, and its
+  command is put in the field, ready to run or edit. `↓` past the last block
+  returns to what you were typing.
 - **Find.** `Ctrl+F` opens a find bar that searches commands and output in this
   terminal or in all terminals, with match case, whole words and regular
   expressions. `Enter` and `Shift+Enter` move between results. The filter button
