@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Copy,
   Download,
+  GitCompareArrows,
   CornerDownLeft,
   Eraser,
   Eye,
@@ -40,6 +41,7 @@ import type { Completion, ExportFormat, RunEnd } from "./terminal-lib";
 import { RecordTable } from "./terminal-table";
 import {
   cleanOutput,
+  compareStore,
   destructiveWord,
   downloadText,
   exportSession,
@@ -146,12 +148,15 @@ function BlockViewBase({
   device,
   starred,
   watching,
+  comparing,
   onAction,
 }: {
   block: Block;
   device: string;
   starred: boolean;
   watching: boolean;
+  /** This block is the first side of a comparison. */
+  comparing: boolean;
   onAction: (action: string, block: Block) => void;
 }) {
   const [copied, setCopied] = useState("");
@@ -264,6 +269,18 @@ function BlockViewBase({
               <Table2 size={13} />
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => onAction("compare", block)}
+            title={
+              comparing
+                ? "Picked for comparison. Pick another block, in any pane, to see the differences."
+                : "Compare this output with another block"
+            }
+            data-on={comparing}
+          >
+            <GitCompareArrows size={13} />
+          </button>
           <button type="button" onClick={() => copy("output")} title="Copy output">
             {copied === "output" ? <Check size={13} /> : <Copy size={13} />}
           </button>
@@ -350,6 +367,10 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
   const [, setGrammarReady] = useState(false);
   const [now, setNow] = useState(Date.now());
   const favorites = useSyncExternalStore(favoritesStore.subscribe, favoritesStore.get);
+  const comparePick = useSyncExternalStore(
+    compareStore.subscribe,
+    () => compareStore.get().first?.key ?? "",
+  );
   const starred = useMemo(() => new Set(favorites.map((f) => f.command)), [favorites]);
 
   const blocksRef = useRef(blocks);
@@ -673,6 +694,12 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
       else if (action === "rerun") submit(block.command);
       else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
       else if (action === "table") patch(block.id, { table: !block.table });
+      else if (action === "compare")
+        compareStore.pick({
+          key: `${paneId}:${block.id}`,
+          label: `${device} > ${block.command}`,
+          text: block.output,
+        });
       else if (action === "star") void favoritesStore.toggle(block.command);
       else if (action === "save")
         downloadText(`${device}-${block.id}.txt`, exportSession(device, [block], "txt"));
@@ -683,7 +710,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
         setBlocks((list) => list.filter((b) => b.id !== block.id));
       }
     },
-    [patch, submit, device],
+    [patch, submit, device, paneId],
   );
 
   /** The newest earlier command that starts with what is typed (accepted with →). */
@@ -951,6 +978,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
             device={device}
             starred={starred.has(block.command)}
             watching={watch === block.id}
+            comparing={comparePick === `${paneId}:${block.id}`}
             onAction={onAction}
           />
         ))}

@@ -37,6 +37,7 @@ import {
   workspace,
 } from "./terminal-lib";
 import { TerminalPane } from "./terminal-pane";
+import { CompareDialog } from "./terminal-compare";
 import { FindBar } from "./terminal-search";
 import type { DevicesPayload } from "./types";
 import "./terminal.css";
@@ -316,6 +317,7 @@ export function TerminalView(): ReactNode {
         </div>
       </div>
 
+      <CompareDialog />
       {finding && <FindBar focus={findFocus} onClose={() => setFinding(false)} />}
 
       <div className="term-body">

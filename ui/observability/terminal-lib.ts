@@ -396,3 +396,36 @@ export function fillSnippet(command: string, values: Record<string, string>): st
     (_all, name: string) => values[name] || defaults.get(name) || "",
   );
 }
+
+// ── compare: pick two outputs (any panes), then see their differences ───
+
+export interface CompareSide {
+  /** `paneId:blockId`, so a block knows that it is the one picked. */
+  key: string;
+  label: string;
+  text: string;
+}
+let compareState: { first?: CompareSide; second?: CompareSide } = {};
+const compareListeners = new Set<() => void>();
+const compareChanged = (): void => {
+  for (const listener of compareListeners) listener();
+};
+export const compareStore = {
+  get: (): { first?: CompareSide; second?: CompareSide } => compareState,
+  subscribe(listener: () => void): () => void {
+    compareListeners.add(listener);
+    return () => compareListeners.delete(listener);
+  },
+  /** First pick marks a side; picking it again unmarks; a second pick opens the diff. */
+  pick(side: CompareSide): void {
+    const first = compareState.first;
+    if (!first) compareState = { first: side };
+    else if (first.key === side.key) compareState = {};
+    else compareState = { first, second: side };
+    compareChanged();
+  },
+  clear(): void {
+    compareState = {};
+    compareChanged();
+  },
+};

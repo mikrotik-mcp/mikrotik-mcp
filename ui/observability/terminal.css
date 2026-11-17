@@ -1242,3 +1242,106 @@
 .term-table tbody tr:hover td {
   background: color-mix(in srgb, var(--term-accent) 8%, transparent);
 }
+
+/* ── compare ─────────────────────────────────────────────────────────── */
+.term-compare-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--term-accent) 50%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--term-accent) 10%, var(--term-surface));
+  font-size: 12.5px;
+}
+.term-compare-hint span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-compare-hint code {
+  font-family: var(--term-mono);
+  color: var(--term-accent);
+}
+.term-compare-hint button,
+.term-modal-card > header button {
+  display: inline-flex;
+  padding: 3px 10px;
+  border: 1px solid var(--term-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--term-ink);
+  font-size: 12px;
+}
+.term-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(4 7 12 / 72%);
+  backdrop-filter: blur(3px);
+}
+.term-modal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(1100px, 100%);
+  max-height: 100%;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid var(--term-line);
+  border-radius: 14px;
+  background: var(--term-surface);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 60%);
+  animation: term-rise 0.18s ease-out;
+}
+.term-modal-card > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.term-modal-card > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+.term-modal-card > header button {
+  margin-left: auto;
+  padding: 4px;
+  border-color: transparent;
+}
+.term-compare-sum {
+  display: inline-flex;
+  gap: 8px;
+  color: var(--term-dim);
+  font-family: var(--term-mono);
+  font-size: 12px;
+}
+.term-compare-sum [data-kind="add"],
+.term-compare-sides [data-kind="add"] {
+  color: var(--term-ok);
+}
+.term-compare-sum [data-kind="del"],
+.term-compare-sides [data-kind="del"] {
+  color: var(--term-err);
+}
+.term-compare-sides {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+.term-compare-sides code {
+  font-family: var(--term-mono);
+  overflow-wrap: anywhere;
+}
+.term-compare-same {
+  margin: 0;
+  padding: 24px;
+  color: var(--term-dim);
+  text-align: center;
+}
