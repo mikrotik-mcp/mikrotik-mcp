@@ -47,6 +47,7 @@ import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./ter
 import type { BroadcastResult, Completion, ExportFormat, RunEnd, SyntaxHelp } from "./terminal-lib";
 import { RecordTable } from "./terminal-table";
 import {
+  applyPipes,
   changesStore,
   cleanOutput,
   compareStore,
@@ -62,6 +63,7 @@ import {
   runCommand,
   scriptStore,
   snippetFields,
+  splitPipes,
   terminalApi,
   workspace,
 } from "./terminal-lib";
@@ -581,6 +583,8 @@ export function TerminalPane(
           ...list,
           { id, ts: Date.now(), command, output: "", status: "running", runs: 1 },
         ]);
+      // `… | grep x | count` filters the output here; the router gets the command only.
+      const sent = splitPipes(command);
       const abort = new AbortController();
       running.current.set(id, abort);
       // A new command jumps to the end; a watch tick must not move the view.
@@ -595,13 +599,13 @@ export function TerminalPane(
         buffer = "";
         // A watched block keeps its old output until the new run is complete.
         if (!options.quiet) patch(id, { output: "", changed: undefined });
-        end = await runCommand(device, command, {
+        end = await runCommand(device, sent.command, {
           maxMs: limitRef.current,
           snapshot: guardRef.current,
           signal: abort.signal,
           onOutput: (text) => {
             buffer = (buffer + cleanOutput(text)).slice(-MAX_BLOCK_CHARS);
-            if (!options.quiet) patch(id, { output: buffer });
+            if (!options.quiet) patch(id, { output: applyPipes(buffer, sent.filters) });
           },
         });
         if (end.ok || end.stopped || !end.retryable) break;
@@ -614,7 +618,7 @@ export function TerminalPane(
         patch(id, { note: `retry ${attempt}/${MAX_RETRIES}` });
       }
       running.current.delete(id);
-      const output = buffer.replace(/\n+$/, "");
+      const output = applyPipes(buffer.replace(/\n+$/, ""), sent.filters);
       const result = end;
       // A watched run may raise an alert; it notifies once, when it starts to hold.
       const earlier = blocksRef.current.find((b) => b.id === id);

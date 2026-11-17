@@ -649,3 +649,66 @@ export const scriptStore = {
     scriptStore.open("");
   },
 };
+
+// ── pipes: filters applied to the output in the browser ─────────────────
+
+const PIPE_VERBS = new Set(["grep", "count", "sort", "head", "tail", "uniq"]);
+
+/**
+ * Split `command | grep x | count` into the RouterOS command and its filters.
+ * A `|` inside quotes, brackets or braces belongs to the command, and so does
+ * one that no known filter follows (RouterOS uses `|` in expressions).
+ */
+export function splitPipes(input: string): { command: string; filters: string[] } {
+  const parts: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let start = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    if (char === "\\") i++;
+    else if (char === '"') quoted = !quoted;
+    else if (quoted) continue;
+    else if (char === "[" || char === "{" || char === "(") depth++;
+    else if (char === "]" || char === "}" || char === ")") depth = Math.max(0, depth - 1);
+    else if (char === "|" && depth === 0) {
+      parts.push(input.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(input.slice(start));
+  // Filters are the trailing parts that all start with a known verb.
+  let first = parts.length;
+  while (first > 1 && PIPE_VERBS.has(parts[first - 1]?.trim().split(/\s+/)[0] ?? "")) first--;
+  return {
+    command: parts.slice(0, first).join("|").trim(),
+    filters: parts.slice(first).map((part) => part.trim()),
+  };
+}
+
+/** Apply the filters of {@link splitPipes} to an output, in order. */
+export function applyPipes(output: string, filters: string[]): string {
+  let lines = output.split("\n");
+  for (const filter of filters) {
+    const [verb = "", ...args] = filter.split(/\s+/);
+    if (verb === "grep") {
+      const invert = args.includes("-v");
+      const pattern = args.filter((arg) => arg !== "-v" && arg !== "-i").join(" ");
+      let test: (line: string) => boolean;
+      try {
+        const regex = new RegExp(pattern, "i");
+        test = (line) => regex.test(line);
+      } catch {
+        test = (line) => line.toLowerCase().includes(pattern.toLowerCase());
+      }
+      lines = lines.filter((line) => test(line) !== invert);
+    } else if (verb === "count") lines = [String(lines.filter((line) => line.trim()).length)];
+    else if (verb === "sort") {
+      lines = lines.toSorted((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      if (args.includes("-r")) lines.reverse();
+    } else if (verb === "uniq") lines = lines.filter((line, i) => line !== lines[i - 1]);
+    else if (verb === "head") lines = lines.slice(0, Number(args[0]) || 10);
+    else if (verb === "tail") lines = lines.slice(-(Number(args[0]) || 10));
+  }
+  return lines.join("\n");
+}

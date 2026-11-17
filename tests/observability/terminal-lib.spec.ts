@@ -99,3 +99,25 @@ test("a script drops comments and blank lines, and joins continued lines", () =>
   ]);
   expect(lib.scriptLines("\n# only a comment\n")).toEqual([]);
 });
+
+describe("pipes", () => {
+  test("splits trailing filters, and leaves RouterOS's own | alone", () => {
+    expect(lib.splitPipes("/interface print | grep ether | count")).toEqual({
+      command: "/interface print",
+      filters: ["grep ether", "count"],
+    });
+    expect(lib.splitPipes(":put (1 | 2)").filters).toEqual([]);
+    expect(lib.splitPipes('/log print where message~"a|b"').filters).toEqual([]);
+    expect(lib.splitPipes(":put [:pick $a 0 1] | unknown").filters).toEqual([]);
+    expect(lib.splitPipes("/ip address print").command).toBe("/ip address print");
+  });
+  test("applies grep, sort, uniq, head, tail and count in order", () => {
+    const output = "ether2 up\nether1 down\nwg1 up\nether1 down\n";
+    expect(lib.applyPipes(output, ["grep ether"])).toBe("ether2 up\nether1 down\nether1 down");
+    expect(lib.applyPipes(output, ["grep -v ETHER", "count"])).toBe("1");
+    expect(lib.applyPipes(output, ["grep ether", "sort", "uniq"])).toBe("ether1 down\nether2 up");
+    expect(lib.applyPipes(output, ["head 1"])).toBe("ether2 up");
+    expect(lib.applyPipes("a\nb\nc", ["tail 2"])).toBe("b\nc");
+    expect(lib.applyPipes(output, ["grep ("])).toBe("");
+  });
+});
