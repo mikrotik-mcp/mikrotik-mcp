@@ -5,6 +5,7 @@
 import { Command } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { paneRegistry, terminalApi, workspace } from "./terminal-lib";
 
 export interface PaletteAction {
   id: string;
@@ -35,7 +36,47 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const list = useRef<HTMLUListElement>(null);
-  const shown = useMemo(() => filterActions(actions, query).slice(0, 60), [actions, query]);
+  // "?" starts a question: known commands and MCP tools whose words match it.
+  const asking = query.startsWith("?");
+  const [answers, setAnswers] = useState<PaletteAction[]>([]);
+  useEffect(() => {
+    const question = query.slice(1).trim();
+    if (!asking || question.length < 3) {
+      setAnswers([]);
+      return;
+    }
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      terminalApi
+        .suggest(question, abort.signal)
+        .then((found) =>
+          setAnswers([
+            ...found.commands.map((command) => ({
+              id: `cmd:${command}`,
+              label: command,
+              group: "Put in the input",
+              run: () =>
+                (paneRegistry.get(workspace.activePane) ?? paneRegistry.all()[0])?.insert(command),
+            })),
+            ...found.tools.map((tool) => ({
+              id: `tool:${tool.name}`,
+              label: `${tool.title} (${tool.name})`,
+              group: "MCP tool · copy name",
+              run: () => void navigator.clipboard.writeText(tool.name),
+            })),
+          ]),
+        )
+        .catch(() => {});
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [query, asking]);
+  const shown = useMemo(
+    () => (asking ? answers : filterActions(actions, query).slice(0, 60)),
+    [actions, query, asking, answers],
+  );
   const marked = Math.min(index, Math.max(0, shown.length - 1));
 
   useEffect(() => {
@@ -65,7 +106,7 @@ export function CommandPalette({
             // eslint-disable-next-line jsx-a11y/no-autofocus -- the palette opens on a key press
             autoFocus
             value={query}
-            placeholder="Type an action, a router, a favourite…"
+            placeholder="Type an action, a router, a favourite…  ·  ? to ask in words"
             spellCheck={false}
             aria-label="Search actions"
             onChange={(event) => {
@@ -84,7 +125,13 @@ export function CommandPalette({
           />
         </label>
         <ul ref={list} role="listbox">
-          {shown.length === 0 && <li className="term-palette-empty">No action matches.</li>}
+          {shown.length === 0 && (
+            <li className="term-palette-empty">
+              {asking
+                ? "Type what you want to do. Matching is by words: earlier commands, favourites and MCP tools."
+                : "No action matches."}
+            </li>
+          )}
           {shown.map((action, i) => (
             <li
               key={action.id}

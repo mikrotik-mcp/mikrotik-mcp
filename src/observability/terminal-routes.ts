@@ -23,6 +23,7 @@ import { closeShell, openShell, shellInput, shellResize } from "./terminal-shell
 import type { TerminalStore } from "./terminal-store";
 import { z } from "zod";
 import { configSnapshotTools } from "../tools/config-snapshot";
+import { toolGatewayTools } from "../tools/tool-gateway";
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
 
@@ -115,6 +116,34 @@ export function parseSyntaxHelp(output: string): SyntaxHelp[] {
     items.push({ symbol, text, nested: Number(cells[1]) });
   }
   return items;
+}
+
+/** Commands that hold the most words of a question, best first. */
+export function rankCommands(question: string, commands: string[], limit = 8): string[] {
+  const words = question
+    .toLowerCase()
+    .split(/[^a-z0-9.-]+/)
+    .filter((word) => word.length > 1);
+  if (!words.length) return [];
+  const seen = new Set<string>();
+  return commands
+    .filter((command) => !seen.has(command) && seen.add(command))
+    .map((command) => {
+      const text = command.toLowerCase();
+      return { command, score: words.filter((word) => text.includes(word)).length };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((item) => item.command);
+}
+
+/** The tools named in a `find_tools` answer: `1. name  [module]` then `title — …`. */
+export function parseFoundTools(answer: string): { name: string; title: string }[] {
+  return Array.from(answer.matchAll(/^\d+\. (\S+)\s+\[[^\]]*\]\n\s+(.+?) — /gm), (match) => ({
+    name: match[1] ?? "",
+    title: match[2] ?? "",
+  }));
 }
 
 interface TerminalRouteOptions {
@@ -299,6 +328,26 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
             limit: Number(url.searchParams.get("limit")) || undefined,
           }),
         });
+      }
+      if (key === "GET /api/terminal/suggest") {
+        // Word matching only: no language model is involved.
+        const question = url.searchParams.get("q") ?? "";
+        const store = await options.store();
+        const known = [
+          ...store.listFavorites().map((favorite) => favorite.command),
+          ...store.listHistory({ limit: 1000 }).map((entry) => entry.command),
+        ];
+        let tools: { name: string; title: string }[] = [];
+        const finder = toolGatewayTools.find((tool) => tool.name === "find_tools");
+        if (finder && question.trim()) {
+          try {
+            const answer = await finder.handler({ query: question, limit: 6 }, createContext());
+            tools = parseFoundTools(typeof answer === "string" ? answer : "");
+          } catch {
+            /* the catalog search is optional */
+          }
+        }
+        return json({ commands: rankCommands(question, known), tools });
       }
       if (key === "GET /api/terminal/favorites")
         return json({ favorites: (await options.store()).listFavorites() });

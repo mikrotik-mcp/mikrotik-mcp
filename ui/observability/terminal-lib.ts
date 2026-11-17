@@ -105,6 +105,12 @@ export const terminalApi = {
     action: "enable" | "commit" | "rollback",
   ): Promise<{ ok?: boolean; message?: string; active?: boolean; error?: string }> =>
     post("/api/terminal/safe-mode", { device, action }).then((r) => r.json()),
+  /** Known commands and MCP tools whose words match a question (no language model). */
+  suggest: (question: string, signal?: AbortSignal) =>
+    api<{ commands: string[]; tools: { name: string; title: string }[] }>(
+      `/api/terminal/suggest?q=${encodeURIComponent(question)}`,
+      signal,
+    ),
   /** Differences between the newest stored snapshot and the router now. */
   changes: (device: string): Promise<string> =>
     post("/api/terminal/changes", { device })

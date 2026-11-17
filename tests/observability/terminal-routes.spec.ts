@@ -9,8 +9,10 @@ import {
   classifyCommand,
   createTerminalRoutes,
   parseCompletions,
+  parseFoundTools,
   parseHighlight,
   parseSyntaxHelp,
+  rankCommands,
   terminalAccess,
 } from "../../src/observability/terminal-routes";
 
@@ -30,6 +32,7 @@ vi.mock("../../src/core/connector", async (original) => ({
   ...(await original<typeof import("../../src/core/connector")>()),
   executeMikrotikCommand: state.run,
 }));
+vi.mock("../../src/tools/tool-gateway", () => ({ toolGatewayTools: [] }));
 vi.mock("../../src/ssh/safe-mode", () => ({
   getSafeModeManager: () => state.safe,
 }));
@@ -146,6 +149,35 @@ describe("router inspect replies", () => {
     expect(parseCompletions(print)).toEqual([
       { completion: "address", style: "dir", offset: 4 },
       { completion: "/", style: "dir", offset: 8 },
+    ]);
+  });
+});
+
+describe("suggestions", () => {
+  it("ranks known commands by the words of the question, each command once", () => {
+    const known = [
+      "/ip firewall filter print",
+      "/ip address print",
+      "/ip firewall filter print",
+      "/log print",
+    ];
+    expect(rankCommands("show firewall filter rules", known)).toEqual([
+      "/ip firewall filter print",
+    ]);
+    expect(rankCommands("ip print", known)).toEqual([
+      "/ip firewall filter print",
+      "/ip address print",
+      "/log print",
+    ]);
+    expect(rankCommands("a ?", known)).toEqual([]);
+  });
+  it("reads tool names and titles from a find_tools answer", () => {
+    const answer =
+      'Found 2 tools for "nat":\n\n1. create_nat_rule  [Firewall NAT]\n   Create NAT Rule — adds a rule · params: chain\n   Run: …\n\n' +
+      "2. list_nat_rules  [Firewall NAT]\n   List NAT Rules — lists them · params: none\n   Run: …";
+    expect(parseFoundTools(answer)).toEqual([
+      { name: "create_nat_rule", title: "Create NAT Rule" },
+      { name: "list_nat_rules", title: "List NAT Rules" },
     ]);
   });
 });
