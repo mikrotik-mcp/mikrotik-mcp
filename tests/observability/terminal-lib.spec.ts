@@ -60,3 +60,24 @@ describe("snippets", () => {
     );
   });
 });
+
+describe("watch alerts", () => {
+  const output = "  uptime: 2d\n  cpu-load: 87%\n  free-memory: 512.5MiB\n ether1 link down";
+  test("changed fires only when an earlier run differs", () => {
+    expect(lib.evalAlert("changed", output, "")).toBeNull();
+    expect(lib.evalAlert("changed", output, output)).toBeNull();
+    expect(lib.evalAlert("Changed", output, "old")).toBe("The output changed.");
+  });
+  test("a number rule reads the value after the key", () => {
+    expect(lib.evalAlert("cpu-load > 80", output, "")).toBe("cpu-load is 87 (> 80)");
+    expect(lib.evalAlert("cpu-load > 90", output, "")).toBeNull();
+    expect(lib.evalAlert("free-memory<=512.5", output, "")).toBe("free-memory is 512.5 (<= 512.5)");
+    expect(lib.evalAlert("no-such-key > 1", output, "")).toBeNull();
+  });
+  test("text and regex rules, and a bad regex never throws", () => {
+    expect(lib.evalAlert("LINK DOWN", output, "")).toContain("contains");
+    expect(lib.evalAlert("/ether\\d+ link (down|up)/", output, "")).toContain("ether1 link down");
+    expect(lib.evalAlert("/(/", output, "")).toBeNull();
+    expect(lib.evalAlert("  ", output, "")).toBeNull();
+  });
+});

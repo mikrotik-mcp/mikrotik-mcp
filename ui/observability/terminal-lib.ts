@@ -491,3 +491,73 @@ export const workspaceStorage = {
     }
   },
 };
+
+// ── alerts on a watched command ─────────────────────────────────────────
+
+/**
+ * Check a watched output against a rule. Returns the alert text, or `null`.
+ *
+ * Rules:
+ *  - `changed`             the output differs from the previous run
+ *  - `cpu-load > 80`       the number after `cpu-load` (any of > >= < <= = !=)
+ *  - `/regex/`             the output matches the regular expression
+ *  - anything else         the output contains that text (case ignored)
+ */
+export function evalAlert(rule: string, output: string, previous: string): string | null {
+  const text = rule.trim();
+  if (!text) return null;
+  if (text.toLowerCase() === "changed")
+    return previous && previous !== output ? "The output changed." : null;
+  const numeric = text.match(/^([\w.-]+)\s*(>=|<=|!=|>|<|=)\s*(-?\d+(?:\.\d+)?)$/);
+  if (numeric) {
+    const [, key = "", op = "", limit = ""] = numeric;
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const found = output.match(
+      new RegExp(`(?:^|[\\s;])${escaped}\\s*[:=]\\s*(-?\\d+(?:\\.\\d+)?)`, "m"),
+    );
+    if (!found?.[1]) return null;
+    const value = Number(found[1]);
+    const bound = Number(limit);
+    const hit =
+      op === ">"
+        ? value > bound
+        : op === ">="
+          ? value >= bound
+          : op === "<"
+            ? value < bound
+            : op === "<="
+              ? value <= bound
+              : op === "="
+                ? value === bound
+                : value !== bound;
+    return hit ? `${key} is ${found[1]} (${op} ${limit})` : null;
+  }
+  const regex = text.match(/^\/(.+)\/([a-z]*)$/);
+  if (regex) {
+    try {
+      const found = output.match(new RegExp(regex[1] ?? "", regex[2] || "m"));
+      return found ? `Matched ${text}: ${found[0].slice(0, 80)}` : null;
+    } catch {
+      return null;
+    }
+  }
+  return output.toLowerCase().includes(text.toLowerCase())
+    ? `The output contains "${text}".`
+    : null;
+}
+
+/** Show a browser notification when the user allowed it (asks once). */
+export function notify(title: string, body: string): void {
+  if (typeof Notification === "undefined") return;
+  const show = (): void => {
+    try {
+      const _shown = new Notification(title, { body, tag: title });
+      void _shown;
+    } catch {
+      /* notifications are blocked in this context */
+    }
+  };
+  if (Notification.permission === "granted") show();
+  else if (Notification.permission === "default")
+    void Notification.requestPermission().then((answer) => answer === "granted" && show());
+}

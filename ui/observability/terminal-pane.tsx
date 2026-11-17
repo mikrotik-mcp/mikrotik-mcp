@@ -7,6 +7,7 @@
  */
 import type { IDockviewPanelProps } from "dockview-react";
 import {
+  BellRing,
   Check,
   ChevronDown,
   ChevronRight,
@@ -44,9 +45,11 @@ import {
   compareStore,
   destructiveWord,
   downloadText,
+  evalAlert,
   exportSession,
   fillSnippet,
   favoritesStore,
+  notify,
   paneRegistry,
   paneStorage,
   runCommand,
@@ -67,6 +70,8 @@ interface Block {
   /** Shown while waiting to retry: "retry 2/3 in 4s". */
   note?: string;
   collapsed?: boolean;
+  /** Why the watch alert fired on the last run; undefined when it did not. */
+  alert?: string;
   /** Show the output as a table of records. */
   table?: boolean;
   /** Line numbers that differ from the previous run (watch mode). */
@@ -228,6 +233,11 @@ function BlockViewBase({
             </span>
           )}
           {block.runs > 1 && <span className="term-chip">×{block.runs}</span>}
+          {block.alert && (
+            <span className="term-chip" data-tone="alert" title={block.alert}>
+              <BellRing size={11} /> {block.alert}
+            </span>
+          )}
           <time className="term-time">{new Date(block.ts).toLocaleTimeString()}</time>
         </span>
         <span className="term-actions">
@@ -352,6 +362,10 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
   } | null>(null);
   const [limit, setLimit] = useState(LIMIT_CHOICES[0] ?? 30_000);
   const [watchEvery, setWatchEvery] = useState(5000);
+  /** Alert rule for the watched block (see evalAlert). */
+  const [alertRule, setAlertRule] = useState("");
+  const alertRuleRef = useRef(alertRule);
+  alertRuleRef.current = alertRule;
   const limitRef = useRef(limit);
   limitRef.current = limit;
   /** Input for which the user closed the list with Escape. */
@@ -535,6 +549,13 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
       running.current.delete(id);
       const output = buffer.replace(/\n+$/, "");
       const result = end;
+      // A watched run may raise an alert; it notifies once, when it starts to hold.
+      const earlier = blocksRef.current.find((b) => b.id === id);
+      const alert =
+        options.quiet && result.ok
+          ? (evalAlert(alertRuleRef.current, output, earlier?.output ?? "") ?? undefined)
+          : undefined;
+      if (alert && !earlier?.alert) notify(`${device}: ${command}`, alert);
       patch(id, (b) => {
         let changed: Set<number> | undefined;
         if (options.quiet && b.output && b.output !== output) {
@@ -548,6 +569,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
         return {
           output,
           changed,
+          alert,
           ts: Date.now(),
           ms: result.ms,
           note: undefined,
@@ -916,6 +938,23 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
               ))}
             </select>
           </label>
+          {watch !== null && (
+            <label
+              className="term-alert-rule"
+              title={
+                "Alert for the watched block. Examples: changed · cpu-load > 80 · /down|error/ · ether1"
+              }
+            >
+              <BellRing size={12} />
+              <input
+                value={alertRule}
+                placeholder="alert when… (changed, cpu-load > 80)"
+                spellCheck={false}
+                aria-label="Alert rule for the watched command"
+                onChange={(event) => setAlertRule(event.target.value)}
+              />
+            </label>
+          )}
           <label title="How often a watched command runs again">
             watch
             <select

@@ -1445,3 +1445,29 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* ── watch alerts ────────────────────────────────────────────────────── */
+.term-chip[data-tone="alert"] {
+  max-width: 320px;
+  overflow: hidden;
+  border-color: var(--term-warn);
+  background: color-mix(in srgb, var(--term-warn) 18%, transparent);
+  color: var(--term-warn);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: term-glow 1.4s ease-in-out infinite;
+}
+.term-alert-rule input {
+  width: 210px;
+  padding: 1px 6px;
+  border: 1px solid var(--term-line);
+  border-radius: 5px;
+  outline: none;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-family: var(--term-mono);
+  font-size: 11px;
+}
+.term-alert-rule input:focus {
+  border-color: var(--term-warn);
+}
