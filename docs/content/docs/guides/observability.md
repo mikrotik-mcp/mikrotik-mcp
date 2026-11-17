@@ -96,17 +96,18 @@ Then open **http://127.0.0.1:9090/** in a browser on the same machine.
 
 ## Configuration
 
-| Env var                              | Flag                         | Default                     | Meaning                                                                            |
-| ------------------------------------ | ---------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| `MIKROTIK_DASHBOARD__ENABLED`        | `--dashboard`                | `false`                     | Master switch. When off, zero overhead and no SQLite is loaded.                    |
-| `MIKROTIK_DASHBOARD__HOST`           | `--dashboard-host`           | `0.0.0.0`                   | Set to loopback for local-only access.                                             |
-| `MIKROTIK_DASHBOARD__PORT`           | `--dashboard-port`           | `9090`                      | Bind port.                                                                         |
-| `MIKROTIK_DASHBOARD__DB_PATH`        | `--dashboard-db`             | `~/.mikrotik-mcp/events.db` | SQLite file (per-user home on Win/macOS/Linux); `:memory:` for an ephemeral store. |
-| `MIKROTIK_DASHBOARD__MAX_EVENTS`     | `--dashboard-max-events`     | `100000`                    | Retention cap; older rows are pruned.                                              |
-| `MIKROTIK_DASHBOARD__CAPTURE_BODY`   | `--dashboard-capture-body`   | `true`                      | Record bodies; input redaction is a separate setting.                              |
-| `MIKROTIK_DASHBOARD__REDACT_INPUT`   | `--dashboard-redact-input`   | `false`                     | Enable to mask credential fields before persisting input.                          |
-| `MIKROTIK_DASHBOARD__MAX_BODY_BYTES` | `--dashboard-max-body-bytes` | `16384`                     | Per-body truncation budget.                                                        |
-| `MIKROTIK_DASHBOARD__TOKEN`          | `--dashboard-token`          | _(none)_                    | Optional bearer token; when set, the page, API and WebSocket all require it.       |
+| Env var                              | Flag                         | Default                     | Meaning                                                                                |
+| ------------------------------------ | ---------------------------- | --------------------------- | -------------------------------------------------------------------------------------- |
+| `MIKROTIK_DASHBOARD__ENABLED`        | `--dashboard`                | `false`                     | Master switch. When off, zero overhead and no SQLite is loaded.                        |
+| `MIKROTIK_DASHBOARD__HOST`           | `--dashboard-host`           | `0.0.0.0`                   | Set to loopback for local-only access.                                                 |
+| `MIKROTIK_DASHBOARD__PORT`           | `--dashboard-port`           | `9090`                      | Bind port.                                                                             |
+| `MIKROTIK_DASHBOARD__DB_PATH`        | `--dashboard-db`             | `~/.mikrotik-mcp/events.db` | SQLite file (per-user home on Win/macOS/Linux); `:memory:` for an ephemeral store.     |
+| `MIKROTIK_DASHBOARD__MAX_EVENTS`     | `--dashboard-max-events`     | `100000`                    | Retention cap; older rows are pruned.                                                  |
+| `MIKROTIK_DASHBOARD__CAPTURE_BODY`   | `--dashboard-capture-body`   | `true`                      | Record bodies; input redaction is a separate setting.                                  |
+| `MIKROTIK_DASHBOARD__REDACT_INPUT`   | `--dashboard-redact-input`   | `false`                     | Enable to mask credential fields before persisting input.                              |
+| `MIKROTIK_DASHBOARD__MAX_BODY_BYTES` | `--dashboard-max-body-bytes` | `16384`                     | Per-body truncation budget.                                                            |
+| `MIKROTIK_DASHBOARD__TOKEN`          | `--dashboard-token`          | _(none)_                    | Optional bearer token; when set, the page, API and WebSocket all require it.           |
+| `MIKROTIK_DASHBOARD__TERMINAL`       | `--dashboard-terminal`       | `true`                      | Serve the [Terminal](/docs/guides/terminal). It also needs a token or a loopback bind. |
 
 A `dashboard` block in the JSON config file provides the baseline. Explicit environment variables and CLI flags override it:
 
@@ -128,123 +129,13 @@ forwards it to the API and the live WebSocket automatically.
 
 ## Terminal
 
-The **Terminal** page gives you RouterOS consoles in the browser, as in WinBox.
+The **Terminal** page gives you RouterOS consoles in the browser, as the Terminal of WinBox does: command blocks with live output, an interactive shell, history, favourites, broadcast to several routers, and Safe Mode.
 
-- **Panes.** Open a pane for any router from the toolbar. Drag a pane tab to
-  split, stack, float or move it; drag a border to resize. You can open several
-  panes for one router. The layout is restored after a reload.
-- **Title and colour.** Right-click a pane tab (or double-click it) to rename
-  the pane or give it one of seven colours. Both are kept with the layout.
-- **Command blocks.** Each command is a block with its live output. A block can
-  be stopped, run again, watched (run again every 5 seconds, with changed lines
-  marked), copied (output or command) and added to your favourites.
-  Right-click a block for the same actions in a menu (`Shift` + right-click
-  keeps the browser's menu). A new command scrolls the pane to its end; when
-  you scroll up, a button returns to the end.
-- **Connection.** Each pane shows the connection state, the router identity,
-  the transport, the round-trip latency and command counts. A lost connection is
-  retried with a growing delay.
-- **Syntax.** Input is highlighted as you type. The router then checks it and
-  marks what it does not accept, before the command runs. `Tab` completes from
-  the router.
-- **Completion.** A list of words from the router opens while you type. `↑` and
-  `↓` move in the list, `Tab` accepts the marked word, `Esc` closes the list.
-  `Enter` runs the command, unless an arrow moved the mark: then it accepts. An
-  earlier command that starts with what you typed is shown in grey; `→` accepts
-  it.
-- **Walk the blocks.** When the list is closed, `↑` and `↓` move through the
-  blocks of the pane: the block is marked and scrolled into view, and its
-  command is put in the field, ready to run or edit. `↓` past the last block
-  returns to what you were typing.
-- **Find.** `Ctrl+F` opens a find bar that searches commands and output in this
-  terminal or in all terminals, with match case, whole words and regular
-  expressions. `Enter` and `Shift+Enter` move between results. The filter button
-  hides the blocks without a match.
-- **Interactive shell.** Next to "New terminal", choose **Shell** to open a real
-  RouterOS console (as in WinBox): enter a menu, answer a prompt, run a live
-  monitor. Keys typed in a shell are not saved to the history; only the opening
-  and closing of the session reach the audit feed.
-- **Safe Mode.** The `safe mode` button of a pane opens RouterOS Safe Mode, then
-  offers **Commit** and **Roll back**. The router undoes uncommitted changes if
-  the session is lost.
-- **Snapshot before a change.** With `snapshot on`, the configuration is stored
-  on this computer before every command that is not a read. If the snapshot
-  fails, the command does not run. The block then offers **what changed?**.
-- **Snippets.** A command may hold `{{name}}` or `{{name=default}}`. Running it
-  asks for the values. The star beside the input saves what is typed.
-- **Table and compare.** A `print` block can show as a sortable, filterable
-  table. Pick two blocks, in any panes, to see their differences.
-- **Script.** The script button runs several commands, one per line. **Check
-  syntax** validates each line with the router and runs nothing.
-- **Help.** A strip under the input explains what can follow the typed word, in
-  the router's own words.
-- **Broadcast groups.** Broadcast to every open pane or to a saved group of
-  routers. A bar lists each pane's result.
-- **Workspaces.** Save the current pane layout under a name and open it later.
-- **Alerts.** A watched block takes a rule (`changed`, `cpu-load > 80`,
-  `/regex/`, or a text) and notifies when the rule starts to hold.
-- **Export.** Save a pane as a transcript (`.txt`), a report (`.md`) or the
-  commands that succeeded (`.rsc`).
-- **Command palette.** `Ctrl+Shift+P` lists every action of the page. Start the
-  query with `?` to ask in words: you get earlier commands, favourites and MCP
-  tools whose words match. No language model is used.
-- **Pipes.** End a command with `| grep`, `| count`, `| sort`, `| uniq`,
-  `| head` or `| tail`. The filters run on the output in the browser.
-- **Addresses.** Click an IPv4 or MAC address in an output for commands about
-  it. The chosen command goes to the input to review.
-- **Pin and chart.** Pin a block to the top of its pane. For a watched block,
-  name a number (`cpu-load`) to chart it over the runs.
-- **Undo.** A block offers the opposite command when it is certain:
-  `enable`/`disable`, `disabled=yes/no`, and a plain `add`. For anything else,
-  use a snapshot or Safe Mode.
-- **Scheduled commands.** The server runs a read command at a time or on a
-  repeat, also with the browser closed. Only reads can be scheduled.
-- **Shared view.** A pane gives a link to a read-only view of its router's
-  commands from that moment, for 24 hours. The viewer still needs access to the
-  dashboard; the link does not limit that access.
-- **Shell recordings.** What the router prints in an interactive shell is
-  recorded (asciicast v2, in `terminal-recordings/` beside the databases).
-  **Recordings** plays a session back and searches it. Typed keys are not
-  recorded.
-- **Limits.** Each pane has a command time limit (30 s, 2 min or 10 min) and a
-  watch interval (2 s to 60 s).
-- **Blocks are kept.** A pane keeps its last 40 blocks in the browser, so a
-  reload does not empty it.
-- **History and favourites.** The drawer lists every command that ran. Run or
-  edit any entry on the active pane or on a router you choose. `Ctrl+K` searches.
-- **Broadcast.** When on, a command typed in one pane runs in every open pane.
+It runs any command on a router, so it is served only when the dashboard has a token or listens on loopback. Turn it off with `--dashboard-terminal=false`.
 
-| Key           | Action                             |
-| ------------- | ---------------------------------- |
-| `Enter`       | Run the command                    |
-| `Shift+Enter` | New line                           |
-| `Tab`         | Accept the completion              |
-| `↑` / `↓`     | Recall earlier commands            |
-| `Ctrl+C`      | Stop the running command           |
-| `Ctrl+L`      | Clear the pane                     |
-| `Ctrl+K`      | Search the history                 |
-| `Ctrl+F`      | Find in the terminals              |
-| `→`           | Accept the suggestion from history |
+Every command of a block pane is saved to the audit feed as the tool `dashboard_terminal`, so it shows on this page with the tool calls.
 
-### Safety
-
-The terminal runs any command on a router, so:
-
-- It is served only when the dashboard has a token (`--dashboard-token`) or
-  listens on loopback (`--dashboard-host 127.0.0.1`). Turn it off with
-  `--dashboard-terminal=false`.
-- Destructive commands (`remove`, `reboot`, `reset-configuration`, `shutdown`
-  and similar) ask for confirmation.
-- A read-only server runs only `print`, `export` and diagnostic commands.
-- Auto-retry sends a command again only when the router was not reached, or when
-  the command only reads. A change that may already have run is not repeated.
-- The interactive shell is not available on a read-only server. Its output is
-  recorded, its typed keys are not. Use block panes when you need each command
-  as a separate record.
-- Every command is saved to the audit feed (tool `dashboard_terminal`) and to
-  `~/.mikrotik-mcp/terminal.db`.
-- A command stops at the pane's time limit (30 seconds by default) unless it
-  finishes or you stop it earlier.
+See the [terminal guide](/docs/guides/terminal).
 
 ## Run the dashboard on another machine
 

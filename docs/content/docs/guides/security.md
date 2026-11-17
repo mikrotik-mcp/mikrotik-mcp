@@ -93,3 +93,9 @@ form is in [`schemas/tool-catalog.json`](https://github.com/mikrotik-mcp/mikroti
   bastion is reachable; the target rides a forwarded channel, so no extra port is
   opened. See [Multiple devices → SSH jump hosts](/docs/guides/multi-device#ssh-jump-hosts-bastion--proxyjump).
   Enable forwarding narrowly on the bastion (`/ip ssh set forwarding-enabled=local`).
+
+## Dashboard terminal
+
+The dashboard's [Terminal](/docs/guides/terminal) page runs raw RouterOS commands from the browser. It is served only when the dashboard has a token (`--dashboard-token`) or listens on loopback, and `--dashboard-terminal=false` turns it off.
+
+Destructive commands ask for confirmation, a read-only server runs reads only, and every command is written to the audit feed. Automatic retry never repeats a change that may already have run. See [Safety](/docs/guides/terminal#safety).

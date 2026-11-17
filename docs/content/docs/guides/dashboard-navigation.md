@@ -13,7 +13,7 @@ one category; pinned shortcuts are independent and keep their saved order.
 | Users & VPN          | Clients, OpenVPN, RADIUS & UM                                                                      |
 | Diagnostics          | Investigations, Client Check, Round-trip Lab, Simulator, Packets, Flight Recorder, Support Bundles |
 | Security             | Attacks, Vulnerabilities, Policies                                                                 |
-| Router configuration | Explain, Change Plan, Transactions, Drift Guard                                                    |
+| Router configuration | Terminal, Explain, Change Plan, Transactions, Drift Guard                                          |
 | Backup & recovery    | Snapshots, Backups, S3 Backups, Router Migration, Recovery Lab                                     |
 | MCP workspace        | Prompts, Memory, Modules, Access Scope, Config, Releases                                           |
 

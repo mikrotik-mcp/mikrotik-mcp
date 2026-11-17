@@ -2,7 +2,7 @@
   "version": "6.10.0",
   "toolCount": 983,
   "moduleCount": 155,
-  "dashboardCount": 43,
+  "dashboardCount": 44,
   "modules": [
     {
       "slug": "client-check",
@@ -1999,6 +1999,23 @@
       "fullPage": true,
       "reviewedSources": ["ui/observability/main.tsx", "ui/observability/tool-call-lookup.tsx"],
       "reviewScope": "Dashboard actions, filters, data meaning and failure boundaries reviewed against current source."
+    },
+    {
+      "id": "terminal",
+      "screenshot": false,
+      "detailsReviewed": true,
+      "privacyCheck": "No screenshot yet: the page shows router names, identities and addresses, which must be masked first.",
+      "fullPage": false,
+      "reviewedSources": [
+        "ui/observability/terminal.tsx",
+        "ui/observability/terminal-pane.tsx",
+        "ui/observability/terminal-shell-pane.tsx",
+        "ui/observability/terminal-lib.ts",
+        "src/observability/terminal-routes.ts",
+        "src/observability/terminal-shell.ts",
+        "src/observability/terminal-store.ts"
+      ],
+      "reviewScope": "Controls, keys, limits, safety rules, storage and routes checked against source."
     }
   ]
 }
