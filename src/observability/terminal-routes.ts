@@ -148,6 +148,11 @@ export function parseFoundTools(answer: string): { name: string; title: string }
   }));
 }
 
+/** Shared views: a link that shows one router's terminal activity from a moment on. */
+const shares = new Map<string, { device: string; since: number }>();
+const SHARE_TTL_MS = 24 * 3_600_000;
+const MAX_SHARES = 20;
+
 /** Shortest repeat of a scheduled command. */
 export const MIN_SCHEDULE_MS = 60_000;
 export const MAX_SCHEDULES = 50;
@@ -406,6 +411,16 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
           }),
         });
       }
+      if (key === "GET /api/terminal/shared") {
+        const share = shares.get(url.searchParams.get("id") ?? "");
+        if (!share || Date.now() - share.since > SHARE_TTL_MS)
+          return json({ error: "This shared view does not exist or has ended." }, 404);
+        const entries = (await options.store())
+          .listHistory({ device: share.device, limit: 300 })
+          .filter((entry) => entry.ts >= share.since)
+          .reverse();
+        return json({ device: share.device, since: share.since, entries });
+      }
       if (key === "GET /api/terminal/schedules")
         return json({ schedules: (await options.store()).listSchedules() });
       if (key === "GET /api/terminal/suggest") {
@@ -497,6 +512,17 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
 
       // The remaining routes talk to a router.
       const device = resolveDeviceName(text("device") || undefined);
+
+      if (key === "POST /api/terminal/share") {
+        for (const [id, share] of shares)
+          if (Date.now() - share.since > SHARE_TTL_MS) shares.delete(id);
+        if (shares.size >= MAX_SHARES)
+          return json({ error: `At most ${MAX_SHARES} shared views are open.` }, 400);
+        const id = crypto.randomUUID();
+        shares.set(id, { device, since: Date.now() });
+        return json({ id, device });
+      }
+      if (key === "POST /api/terminal/unshare") return json({ ok: shares.delete(text("id")) });
 
       if (key === "POST /api/terminal/shell/open") {
         // Keys cannot be classified as reads, so a read-only server has no shell.

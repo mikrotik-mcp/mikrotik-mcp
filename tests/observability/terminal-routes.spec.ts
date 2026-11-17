@@ -155,6 +155,40 @@ describe("router inspect replies", () => {
   });
 });
 
+describe("shared view", () => {
+  it("shows one router's commands from the moment of sharing, oldest first", async () => {
+    const before = Date.now() - 60_000;
+    const entries = [
+      { id: 3, ts: Date.now() + 2000, device: "lab", command: "/log print" },
+      { id: 2, ts: Date.now() + 1000, device: "lab", command: "/ip address print" },
+      { id: 1, ts: before, device: "lab", command: "/old print" },
+    ];
+    const route = createTerminalRoutes({
+      denied: null,
+      store: async () => ({ listHistory: () => entries }) as never,
+    });
+    stopTerminalScheduler();
+    const at = (path: string) => new URL(`http://127.0.0.1:9090${path}`);
+    const made = await route(
+      new Request(at("/api/terminal/share"), { method: "POST", body: '{"device":"lab"}' }),
+      at("/api/terminal/share"),
+    );
+    const { id } = (await made!.json()) as { id: string };
+    const view = await route(
+      new Request(at(`/api/terminal/shared?id=${id}`)),
+      at(`/api/terminal/shared?id=${id}`),
+    );
+    const body = (await view!.json()) as { device: string; entries: { command: string }[] };
+    expect(body.device).toBe("lab");
+    expect(body.entries.map((entry) => entry.command)).toEqual(["/ip address print", "/log print"]);
+    const missing = await route(
+      new Request(at("/api/terminal/shared?id=nope")),
+      at("/api/terminal/shared?id=nope"),
+    );
+    expect(missing!.status).toBe(404);
+  });
+});
+
 describe("scheduled commands", () => {
   const memory = () => {
     const rows: Record<string, unknown>[] = [];

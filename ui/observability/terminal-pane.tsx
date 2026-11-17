@@ -25,6 +25,7 @@ import {
   EyeOff,
   RefreshCw,
   RotateCw,
+  Share2,
   ShieldCheck,
   Square,
   Table2,
@@ -1207,6 +1208,31 @@ export function TerminalPane(
     if ("active" in answer) setConn((c) => ({ ...c, safeMode: answer.active }));
     probeNow.current();
   };
+  /** Start a shared view and show its link as a block (also copied when allowed). */
+  const shareView = async (): Promise<void> => {
+    let output = "";
+    let error: string | undefined;
+    try {
+      const link = await terminalApi.share(device);
+      void navigator.clipboard?.writeText(link).catch(() => {});
+      output = `${link}\n\nRead-only view of the commands on ${device} from now, for 24 hours.\nThe viewer needs access to this dashboard. The link does not limit that access.`;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+    setBlocks((list) => [
+      ...list,
+      {
+        id: nextBlockId++,
+        ts: Date.now(),
+        command: "# share this terminal",
+        output,
+        error,
+        status: error ? "error" : "ok",
+        ms: 0,
+        runs: 1,
+      },
+    ]);
+  };
   const clear = (): void => setBlocks((list) => list.filter((b) => b.status === "running"));
   const exportAs = (format: ExportFormat): void => {
     const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
@@ -1351,6 +1377,13 @@ export function TerminalPane(
           </label>
           <button type="button" onClick={() => probeNow.current()} title="Check the connection now">
             <RotateCw size={12} />
+          </button>
+          <button
+            type="button"
+            onClick={() => void shareView()}
+            title="Share: copy a link to a read-only view of this router's commands from now on. The link is not a permission: the viewer still needs access to this dashboard."
+          >
+            <Share2 size={12} />
           </button>
           <button
             type="button"

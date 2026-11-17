@@ -2141,3 +2141,10 @@
 .term-schedule-form p[data-bad="true"] {
   color: var(--term-err);
 }
+
+.term-shared {
+  padding: 10px;
+  overflow: auto;
+  font-family: var(--term-mono);
+  font-size: 12.5px;
+}

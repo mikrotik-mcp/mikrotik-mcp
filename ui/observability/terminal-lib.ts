@@ -105,6 +105,14 @@ export const terminalApi = {
     action: "enable" | "commit" | "rollback",
   ): Promise<{ ok?: boolean; message?: string; active?: boolean; error?: string }> =>
     post("/api/terminal/safe-mode", { device, action }).then((r) => r.json()),
+  /** Start a shared view of a router; resolves with the link to give away. */
+  share: (device: string): Promise<string> =>
+    post("/api/terminal/share", { device })
+      .then((r) => r.json() as Promise<{ id?: string; error?: string }>)
+      .then((r) => {
+        if (!r.id) throw new Error(r.error ?? "Could not start a shared view.");
+        return `${location.origin}${location.pathname}?share=${r.id}#terminal`;
+      }),
   /** Known commands and MCP tools whose words match a question (no language model). */
   suggest: (question: string, signal?: AbortSignal) =>
     api<{ commands: string[]; tools: { name: string; title: string }[] }>(

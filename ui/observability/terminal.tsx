@@ -54,6 +54,7 @@ import { CompareDialog } from "./terminal-compare";
 import { ScheduleDrawer } from "./terminal-schedules";
 import { ScriptDialog } from "./terminal-script";
 import { FindBar } from "./terminal-search";
+import { SharedView } from "./terminal-shared";
 import { ShellPane } from "./terminal-shell-pane";
 import { PaneTab } from "./terminal-tab";
 import type { DevicesPayload } from "./types";
@@ -88,7 +89,13 @@ function ago(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
 
+/** The page, or a shared read-only view when the URL carries `?share=<id>`. */
 export function TerminalView(): ReactNode {
+  const share = new URLSearchParams(location.search).get("share");
+  return share ? <SharedView id={share} /> : <TerminalWorkspace />;
+}
+
+function TerminalWorkspace(): ReactNode {
   const [state, setState] = useState<TerminalState | null>(null);
   const [devices, setDevices] = useState<DevicesPayload | null>(null);
   const [broadcast, setBroadcast] = useState<BroadcastTarget | null>(null);
