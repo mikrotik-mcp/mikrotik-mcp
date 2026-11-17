@@ -465,3 +465,29 @@ export const groupStorage = {
     }
   },
 };
+
+// ── named workspaces: saved pane layouts ────────────────────────────────
+
+export interface SavedWorkspace {
+  name: string;
+  /** A dockview layout (`api.toJSON()`), panes and their routers included. */
+  layout: unknown;
+}
+const WORKSPACES_KEY = "mikrotik-mcp.terminal.workspaces.v1";
+export const workspaceStorage = {
+  load(): SavedWorkspace[] {
+    try {
+      const raw = localStorage.getItem(WORKSPACES_KEY);
+      return raw ? (JSON.parse(raw) as SavedWorkspace[]) : [];
+    } catch {
+      return [];
+    }
+  },
+  save(list: SavedWorkspace[]): void {
+    try {
+      localStorage.setItem(WORKSPACES_KEY, JSON.stringify(list));
+    } catch {
+      /* storage unavailable: workspaces last for this visit only */
+    }
+  },
+};

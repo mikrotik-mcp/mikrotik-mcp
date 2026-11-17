@@ -1435,3 +1435,13 @@
   color: var(--term-dim);
   text-align: center;
 }
+
+.term-menu-note {
+  padding: 6px 8px;
+  color: var(--term-faint);
+  font-size: 11.5px;
+}
+.term-group-form button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

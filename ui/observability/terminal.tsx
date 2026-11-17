@@ -12,6 +12,7 @@ import "dockview-react/dist/styles/dockview.css";
 import {
   History,
   LayoutGrid,
+  PanelsTopLeft,
   Play,
   Plus,
   Radio,
@@ -31,6 +32,7 @@ import type {
   BroadcastResult,
   BroadcastTarget,
   HistoryEntry,
+  SavedWorkspace,
   TerminalState,
 } from "./terminal-lib";
 import {
@@ -42,6 +44,7 @@ import {
   paneStorage,
   terminalApi,
   workspace,
+  workspaceStorage,
 } from "./terminal-lib";
 import { TerminalPane } from "./terminal-pane";
 import { CompareDialog } from "./terminal-compare";
@@ -84,6 +87,10 @@ export function TerminalView(): ReactNode {
   const [broadcast, setBroadcast] = useState<BroadcastTarget | null>(null);
   const [groups, setGroups] = useState<BroadcastGroup[]>(groupStorage.load);
   const [draft, setDraft] = useState<{ name: string; devices: string[] } | null>(null);
+  const [saved, setSaved] = useState<SavedWorkspace[]>(workspaceStorage.load);
+  const [workspaceName, setWorkspaceName] = useState("");
+  /** True while one layout replaces another: closed panes then keep their blocks. */
+  const switching = useRef(false);
   const [sent, setSent] = useState<{ command: string; results: BroadcastResult[] } | null>(null);
   const [drawer, setDrawer] = useState<"history" | "favorites" | null>("history");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -198,10 +205,35 @@ export function TerminalView(): ReactNode {
       }
       if (!restored && devices) addPane(devices.defaultDevice || devices.devices[0]?.name || "");
       event.api.onDidLayoutChange(() => layoutStorage.save(event.api.toJSON()));
-      event.api.onDidRemovePanel((panel) => paneStorage.remove(panel.id));
+      event.api.onDidRemovePanel((panel) => {
+        if (!switching.current) paneStorage.remove(panel.id);
+      });
     },
     [addPane, devices],
   );
+
+  const openWorkspace = (item: SavedWorkspace): void => {
+    const view = dock.current;
+    if (!view) return;
+    switching.current = true;
+    try {
+      view.clear();
+      view.fromJSON(item.layout as Parameters<DockviewApi["fromJSON"]>[0]);
+    } catch {
+      view.clear();
+    } finally {
+      switching.current = false;
+    }
+  };
+  const saveWorkspace = (): void => {
+    const name = workspaceName.trim();
+    const view = dock.current;
+    if (!name || !view) return;
+    const next = [...saved.filter((w) => w.name !== name), { name, layout: view.toJSON() }];
+    setSaved(next);
+    workspaceStorage.save(next);
+    setWorkspaceName("");
+  };
 
   /** Run on the chosen target: the active pane, or a pane of the named router. */
   const runOn = useCallback(
@@ -293,6 +325,53 @@ export function TerminalView(): ReactNode {
           >
             <LayoutGrid size={14} /> All routers
           </button>
+          <details className="term-menu term-broadcast-menu">
+            <summary title="Saved pane layouts">
+              <PanelsTopLeft size={14} /> Workspaces{" "}
+              {saved.length > 0 && <small>{saved.length}</small>}
+            </summary>
+            <div>
+              {saved.length === 0 && (
+                <span className="term-menu-note">No saved workspace yet.</span>
+              )}
+              {saved.map((item) => (
+                <span key={item.name} className="term-group-row">
+                  <button type="button" onClick={() => openWorkspace(item)}>
+                    {item.name}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete workspace ${item.name}`}
+                    title="Delete this workspace"
+                    onClick={() => {
+                      const next = saved.filter((w) => w.name !== item.name);
+                      setSaved(next);
+                      workspaceStorage.save(next);
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </span>
+              ))}
+              <form
+                className="term-group-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveWorkspace();
+                }}
+              >
+                <input
+                  value={workspaceName}
+                  placeholder="Name for the current layout"
+                  aria-label="Workspace name"
+                  onChange={(event) => setWorkspaceName(event.target.value)}
+                />
+                <button type="submit" disabled={!workspaceName.trim()}>
+                  Save current layout
+                </button>
+              </form>
+            </div>
+          </details>
           <details className="term-menu term-broadcast-menu">
             <summary
               className="term-broadcast"
