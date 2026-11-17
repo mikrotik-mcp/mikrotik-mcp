@@ -779,3 +779,52 @@ export function tokenCommands(token: OutputToken): { label: string; command: str
     },
   ];
 }
+
+// ── undo for simple changes ─────────────────────────────────────────────
+
+export type UndoPlan =
+  /** The opposite command is known before the command runs. */
+  | { kind: "known"; undo: string }
+  /** `add`: run `wrapped` so the router prints the new item's id; undo removes that id. */
+  | { kind: "add"; wrapped: string; path: string };
+
+/**
+ * How to undo a command, when that is certain: `enable` / `disable`,
+ * `disabled=yes|no`, and a plain `add`. Anything else returns `null` (use a
+ * snapshot or Safe Mode): a `set` needs the old values, a `remove` the old item.
+ */
+export function planUndo(command: string): UndoPlan | null {
+  const text = command.trim();
+  // One plain command only: no script, no sub-expression that could change things.
+  if (!text.startsWith("/") || /[;{}]/.test(text)) return null;
+  const verb = text.match(/^(\/[\w\s/-]+?)\s+(enable|disable|add|set)(\s|$)/);
+  if (!verb) return null;
+  const [, path = "", action = ""] = verb;
+  if (action === "enable" || action === "disable")
+    return {
+      kind: "known",
+      undo: text.replace(
+        /\s(enable|disable)(\s|$)/,
+        (_all, was: string, end: string) => ` ${was === "enable" ? "disable" : "enable"}${end}`,
+      ),
+    };
+  if (action === "set") {
+    const flag = text.match(/\sdisabled=(yes|no|true|false)(\s|$)/);
+    // Only when `disabled` is the one property that is set.
+    if (!flag || (text.match(/\s[\w-]+=/g) ?? []).filter((p) => !/numbers=/.test(p)).length !== 1)
+      return null;
+    const was = flag[1] === "yes" || flag[1] === "true";
+    return {
+      kind: "known",
+      undo: text.replace(/\sdisabled=\w+/, ` disabled=${was ? "no" : "yes"}`),
+    };
+  }
+  if (text.includes("[")) return null;
+  return { kind: "add", wrapped: `:put [${text}]`, path: path.trim() };
+}
+
+/** The undo of an `add`, from what the router printed for the wrapped command. */
+export function undoOfAdd(path: string, output: string): string | undefined {
+  const id = output.match(/\*[0-9A-Fa-f]+/)?.[0];
+  return id ? `${path} remove ${id}` : undefined;
+}

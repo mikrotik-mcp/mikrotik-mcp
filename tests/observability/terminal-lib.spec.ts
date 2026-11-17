@@ -148,3 +148,42 @@ describe("output tokens", () => {
     );
   });
 });
+
+describe("undo", () => {
+  test("enable and disable swap, with the target kept", () => {
+    expect(lib.planUndo("/interface disable ether5")).toEqual({
+      kind: "known",
+      undo: "/interface enable ether5",
+    });
+    expect(lib.planUndo("/ip firewall filter enable 3")).toEqual({
+      kind: "known",
+      undo: "/ip firewall filter disable 3",
+    });
+    expect(lib.planUndo("/interface set ether5 disabled=yes")).toEqual({
+      kind: "known",
+      undo: "/interface set ether5 disabled=no",
+    });
+  });
+  test("an add is wrapped to learn the id, and undone by removing that id", () => {
+    const plan = lib.planUndo("/ip address add address=10.0.0.1/24 interface=ether1");
+    expect(plan).toEqual({
+      kind: "add",
+      wrapped: ":put [/ip address add address=10.0.0.1/24 interface=ether1]",
+      path: "/ip address",
+    });
+    expect(lib.undoOfAdd("/ip address", "*1A\n")).toBe("/ip address remove *1A");
+    expect(lib.undoOfAdd("/ip address", "failure: already have such address")).toBeUndefined();
+  });
+  test("nothing is offered when the undo is not certain", () => {
+    for (const command of [
+      "/ip address print",
+      "/ip address remove 2",
+      "/interface set ether5 mtu=1400",
+      "/interface set ether5 disabled=yes mtu=1400",
+      "/ip address add address=[:put 1] interface=ether1",
+      "/interface disable ether5; /system reboot",
+      ":put hello",
+    ])
+      expect(lib.planUndo(command), command).toBeNull();
+  });
+});

@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Square,
   Table2,
+  Undo2,
   Star,
   TriangleAlert,
   X,
@@ -68,6 +69,7 @@ import {
   notify,
   paneRegistry,
   paneStorage,
+  planUndo,
   readNumber,
   runCommand,
   scriptStore,
@@ -76,6 +78,7 @@ import {
   terminalApi,
   tokenCommands,
   tokenize,
+  undoOfAdd,
   workspace,
 } from "./terminal-lib";
 
@@ -103,6 +106,8 @@ interface Block {
   snapshot?: boolean;
   /** Why the watch alert fired on the last run; undefined when it did not. */
   alert?: string;
+  /** The command that reverses this one, when that is certain. */
+  undo?: string;
   /** One value per run of the charted number (watch mode). */
   series?: number[];
   /** Kept above the scrolling list, always in view. */
@@ -323,6 +328,16 @@ function BlockViewBase({
             </span>
           )}
           {block.runs > 1 && <span className="term-chip">×{block.runs}</span>}
+          {block.undo && (
+            <button
+              type="button"
+              className="term-chip term-chip-button"
+              onClick={() => onAction("undo", block)}
+              title={`Put the opposite command in the input: ${block.undo}`}
+            >
+              <Undo2 size={11} /> undo
+            </button>
+          )}
           {block.snapshot && (
             <button
               type="button"
@@ -648,6 +663,9 @@ export function TerminalPane(
         ]);
       // `… | grep x | count` filters the output here; the router gets the command only.
       const sent = splitPipes(command);
+      // An `add` is wrapped so the router prints the new id, which the undo needs.
+      const plan = planUndo(sent.command);
+      const toRun = plan?.kind === "add" ? plan.wrapped : sent.command;
       const abort = new AbortController();
       running.current.set(id, abort);
       // A new command jumps to the end; a watch tick must not move the view.
@@ -662,7 +680,7 @@ export function TerminalPane(
         buffer = "";
         // A watched block keeps its old output until the new run is complete.
         if (!options.quiet) patch(id, { output: "", changed: undefined });
-        end = await runCommand(device, sent.command, {
+        end = await runCommand(device, toRun, {
           maxMs: limitRef.current,
           snapshot: guardRef.current,
           signal: abort.signal,
@@ -706,6 +724,13 @@ export function TerminalPane(
           output,
           changed,
           alert,
+          undo: !result.ok
+            ? undefined
+            : plan?.kind === "known"
+              ? plan.undo
+              : plan?.kind === "add"
+                ? undoOfAdd(plan.path, output)
+                : undefined,
           series: charted === undefined ? b.series : [...(b.series ?? []), charted].slice(-120),
           snapshot: result.snapshot,
           ts: Date.now(),
@@ -973,7 +998,11 @@ export function TerminalPane(
       else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
       else if (action === "table") patch(block.id, { table: !block.table });
       else if (action === "pin") patch(block.id, { pinned: !block.pinned });
-      else if (action === "changes")
+      else if (action === "undo" && block.undo) {
+        // Shown for review; the user runs it.
+        setInput(block.undo);
+        field.current?.focus();
+      } else if (action === "changes")
         void terminalApi
           .changes(device)
           .then((text) => changesStore.show(`Changed on ${device} since the snapshot`, text));
