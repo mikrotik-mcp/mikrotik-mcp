@@ -138,6 +138,9 @@ The **Terminal** page gives you RouterOS consoles in the browser, as in WinBox.
 - **Command blocks.** Each command is a block with its live output. A block can
   be stopped, run again, watched (run again every 5 seconds, with changed lines
   marked), copied (output or command) and added to your favourites.
+  Right-click a block for the same actions in a menu (`Shift` + right-click
+  keeps the browser's menu). A new command scrolls the pane to its end; when
+  you scroll up, a button returns to the end.
 - **Connection.** Each pane shows the connection state, the router identity,
   the transport, the round-trip latency and command counts. A lost connection is
   retried with a growing delay.

@@ -9,6 +9,7 @@ import type { IDockviewPanelProps } from "dockview-react";
 import {
   BellRing,
   Check,
+  ArrowDownToLine,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -31,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   memo,
   useCallback,
@@ -64,6 +66,14 @@ import {
   workspace,
 } from "./terminal-lib";
 
+interface MenuItem {
+  action: string;
+  label: string;
+  hint?: string;
+  disabled?: boolean;
+  danger?: boolean;
+}
+type KeyboardEvent_ = globalThis.KeyboardEvent;
 type BlockStatus = "running" | "ok" | "error" | "stopped";
 interface Block {
   id: number;
@@ -165,11 +175,13 @@ function BlockViewBase({
   watching,
   comparing,
   onAction,
+  onMenu,
 }: {
   block: Block;
   device: string;
   starred: boolean;
   watching: boolean;
+  onMenu: (block: Block, x: number, y: number) => void;
   /** This block is the first side of a comparison. */
   comparing: boolean;
   onAction: (action: string, block: Block) => void;
@@ -204,7 +216,16 @@ function BlockViewBase({
   }, [block.output, block.changed, isScript]);
 
   return (
-    <article className="term-block" data-status={block.status}>
+    <article
+      className="term-block"
+      data-status={block.status}
+      onContextMenu={(event) => {
+        // Shift + right-click keeps the browser's own menu.
+        if (event.shiftKey) return;
+        event.preventDefault();
+        onMenu(block, event.clientX, event.clientY);
+      }}
+    >
       <header className="term-block-head">
         <button
           type="button"
@@ -430,6 +451,12 @@ export function TerminalPane(
     draft: "",
   });
   const scroller = useRef<HTMLDivElement>(null);
+  const menuBox = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{ id: number; x: number; y: number; selection: string } | null>(
+    null,
+  );
+  /** False while the user has scrolled up from the end. */
+  const [atEnd, setAtEnd] = useState(true);
   const field = useRef<HTMLTextAreaElement>(null);
   const stick = useRef(true);
   const probeNow = useRef<() => void>(() => {});
@@ -554,7 +581,11 @@ export function TerminalPane(
         ]);
       const abort = new AbortController();
       running.current.set(id, abort);
-      stick.current = true;
+      // A new command jumps to the end; a watch tick must not move the view.
+      if (!options.quiet) {
+        stick.current = true;
+        setAtEnd(true);
+      }
 
       let end: RunEnd = { ok: false, ms: 0 };
       let buffer = "";
@@ -787,6 +818,67 @@ export function TerminalPane(
     if (box && stick.current) box.scrollTop = box.scrollHeight;
   }, [blocks]);
 
+  // ── context menu of a block ─────────────────────────────────────────────
+  const openMenu = useCallback((block: Block, x: number, y: number): void => {
+    setMenu({
+      id: block.id,
+      x: Math.min(x, window.innerWidth - 250),
+      y: Math.min(y, window.innerHeight - 420),
+      selection: window.getSelection()?.toString() ?? "",
+    });
+  }, []);
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (event: MouseEvent): void => {
+      if (!menuBox.current?.contains(event.target as Node)) setMenu(null);
+    };
+    const onKey = (event: KeyboardEvent_): void => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    const close = (): void => setMenu(null);
+    window.addEventListener("mousedown", onDown, true);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", close);
+    };
+  }, [menu]);
+  const menuItems = (block: Block): (MenuItem | null)[] => [
+    ...(menu?.selection
+      ? [{ action: "copy-selection", label: "Copy selected text" } satisfies MenuItem, null]
+      : []),
+    block.status === "running"
+      ? { action: "stop", label: "Stop", hint: "Ctrl+C", danger: true }
+      : { action: "rerun", label: "Run again" },
+    { action: "edit", label: "Edit in the input" },
+    null,
+    { action: "copy-output", label: "Copy output", disabled: !block.output },
+    { action: "copy-command", label: "Copy command" },
+    { action: "save", label: "Save as a text file" },
+    null,
+    {
+      action: "star",
+      label: starred.has(block.command) ? "Remove from favourites" : "Add to favourites",
+    },
+    { action: "watch", label: watch === block.id ? "Stop watching" : "Watch (run on a timer)" },
+    {
+      action: "table",
+      label: block.table ? "Show as text" : "Show as a table",
+      disabled: !block.output,
+    },
+    {
+      action: "compare",
+      label: comparePick ? "Compare with the picked block" : "Compare with another block…",
+      disabled: !block.output,
+    },
+    ...(block.snapshot ? [{ action: "changes", label: "What changed since the snapshot?" }] : []),
+    null,
+    { action: "fold", label: block.collapsed ? "Show output" : "Hide output" },
+    { action: "remove", label: "Remove block", danger: true },
+  ];
+
   const onAction = useCallback(
     (action: string, block: Block): void => {
       if (action === "stop") running.current.get(block.id)?.abort();
@@ -938,6 +1030,8 @@ export function TerminalPane(
     () => new Map(help.items.filter((item) => item.symbol).map((item) => [item.symbol, item.text])),
     [help.items],
   );
+  const menuBlock = menu ? blocks.find((b) => b.id === menu.id) : undefined;
+  const page = document.querySelector(".term-page");
   const fromRouter =
     input.trim() && tokens.for === input ? deviceSpans(input, tokens.classes) : null;
   const syntaxError = fromRouter !== null && hasSyntaxError(tokens.classes);
@@ -1146,47 +1240,116 @@ export function TerminalPane(
         </div>
       )}
 
-      <div
-        className="term-scroll"
-        ref={scroller}
-        onScroll={(event) => {
-          const box = event.currentTarget;
-          stick.current = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-        }}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) field.current?.focus();
-        }}
-      >
-        {blocks.length === 0 && (
-          <div className="term-welcome">
-            <strong>{conn.identity ?? device}</strong>
-            <span>Type a RouterOS command. Tab completes from the router, ↑ recalls history.</span>
-            <div className="term-suggest">
-              {[
-                "/system resource print",
-                "/interface print",
-                "/ip address print",
-                "/log print",
-              ].map((command) => (
-                <button key={command} type="button" onClick={() => void submit(command)}>
-                  {command}
-                </button>
-              ))}
+      <div className="term-scroll-wrap">
+        <div
+          className="term-scroll"
+          ref={scroller}
+          onScroll={(event) => {
+            const box = event.currentTarget;
+            const end = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+            stick.current = end;
+            setAtEnd(end);
+          }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) field.current?.focus();
+          }}
+        >
+          {blocks.length === 0 && (
+            <div className="term-welcome">
+              <strong>{conn.identity ?? device}</strong>
+              <span>
+                Type a RouterOS command. Tab completes from the router, ↑ recalls history.
+              </span>
+              <div className="term-suggest">
+                {[
+                  "/system resource print",
+                  "/interface print",
+                  "/ip address print",
+                  "/log print",
+                ].map((command) => (
+                  <button key={command} type="button" onClick={() => void submit(command)}>
+                    {command}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+          {blocks.map((block) => (
+            <BlockView
+              key={block.id}
+              block={block}
+              device={device}
+              starred={starred.has(block.command)}
+              watching={watch === block.id}
+              comparing={comparePick === `${paneId}:${block.id}`}
+              onAction={onAction}
+              onMenu={openMenu}
+            />
+          ))}
+        </div>
+        {!atEnd && (
+          <button
+            type="button"
+            className="term-to-end"
+            onClick={() => {
+              const box = scroller.current;
+              if (!box) return;
+              // Not animated: a smooth scroll does not run while the tab is in the background.
+              box.scrollTop = box.scrollHeight;
+              stick.current = true;
+              setAtEnd(true);
+            }}
+            title="Go to the end of this terminal"
+            aria-label="Go to the end of this terminal"
+          >
+            <ArrowDownToLine size={15} />
+          </button>
         )}
-        {blocks.map((block) => (
-          <BlockView
-            key={block.id}
-            block={block}
-            device={device}
-            starred={starred.has(block.command)}
-            watching={watch === block.id}
-            comparing={comparePick === `${paneId}:${block.id}`}
-            onAction={onAction}
-          />
-        ))}
       </div>
+      {menuBlock &&
+        menu &&
+        page &&
+        createPortal(
+          <div
+            ref={menuBox}
+            className="term-context"
+            role="menu"
+            aria-label="Block actions"
+            style={{ left: menu.x, top: menu.y }}
+          >
+            {menuItems(menuBlock).map((item, i) =>
+              item === null ? (
+                // eslint-disable-next-line react/no-array-index-key -- separators have no identity
+                <hr key={`rule-${i}`} />
+              ) : (
+                <button
+                  key={item.action}
+                  type="button"
+                  role="menuitem"
+                  disabled={item.disabled}
+                  data-danger={item.danger}
+                  onClick={() => {
+                    setMenu(null);
+                    if (item.action === "copy-selection")
+                      void navigator.clipboard.writeText(menu.selection);
+                    else if (item.action === "copy-output")
+                      void navigator.clipboard.writeText(menuBlock.output);
+                    else if (item.action === "copy-command")
+                      void navigator.clipboard.writeText(menuBlock.command);
+                    else if (item.action === "edit") {
+                      setInput(menuBlock.command);
+                      field.current?.focus();
+                    } else onAction(item.action, menuBlock);
+                  }}
+                >
+                  {item.label}
+                  {item.hint && <small>{item.hint}</small>}
+                </button>
+              ),
+            )}
+          </div>,
+          page,
+        )}
 
       {confirm && (
         <div className="term-confirm" role="alertdialog" aria-label="Confirm command">

@@ -420,6 +420,13 @@
   flex: none;
   margin-top: 3px;
 }
+.term-scroll-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
 .term-scroll {
   flex: 1;
   min-height: 0;
@@ -1862,4 +1869,73 @@
 .term-tab-reset:hover {
   border-color: var(--term-accent);
   color: var(--term-ink);
+}
+
+/* ── jump to the end, block context menu ─────────────────────────────── */
+.term-to-end {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--term-accent) 60%, transparent);
+  border-radius: 50%;
+  background: var(--term-raised);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 55%);
+  color: var(--term-accent);
+  animation: term-rise 0.16s ease-out;
+}
+.term-to-end:hover {
+  background: var(--term-accent);
+  color: var(--term-bg);
+}
+.term-context {
+  position: fixed;
+  z-index: 90;
+  display: grid;
+  min-width: 232px;
+  padding: 5px;
+  border: 1px solid var(--term-line);
+  border-radius: 10px;
+  background: var(--term-raised);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 60%);
+  font-size: 12.5px;
+  animation: term-rise 0.1s ease-out;
+}
+.term-context button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--term-ink);
+  font-size: 12.5px;
+  text-align: left;
+}
+.term-context button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--term-accent) 18%, transparent);
+}
+.term-context button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.term-context button[data-danger="true"] {
+  color: var(--term-err);
+}
+.term-context small {
+  color: var(--term-faint);
+  font-family: var(--term-mono);
+  font-size: 10.5px;
+}
+.term-context hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--term-line);
 }
