@@ -1036,7 +1036,8 @@
 
 /* ── storage analysis ────────────────────────────────────────────────── */
 .files-analysis-body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   min-height: 0;
   overflow-y: auto;
@@ -1082,6 +1083,10 @@
 }
 .files-analysis-map span[data-tone="5"] {
   --files-tone: var(--files-key);
+}
+.files-analysis-map,
+.files-analysis section {
+  flex: none;
 }
 .files-analysis section {
   border: 1px solid var(--term-line);
