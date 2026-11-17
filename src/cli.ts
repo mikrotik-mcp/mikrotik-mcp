@@ -76,6 +76,8 @@ TRANSPORT OPTIONS
   --tool-surface       full | core tool list            (MIKROTIK_MCP__TOOL_SURFACE)
   --core-tools         Extra tools listed in core mode  (MIKROTIK_MCP__CORE_TOOLS)
   --mcp-allowed-hosts  Host heaxder allow-list (DNS-rebinding protection)
+  --mcp-session-idle-timeout  Close an HTTP session idle this long, ms (default 24h)
+                              (MIKROTIK_MCP__SESSION_IDLE_TIMEOUT)
 
 SSH CONNECTION POOLING  (persistent connections, on by default)
   --ssh-keep-alive          Enable/disable pooling   (MIKROTIK_SSH__KEEP_ALIVE, default true)

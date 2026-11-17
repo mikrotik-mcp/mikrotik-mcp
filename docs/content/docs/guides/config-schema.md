@@ -281,6 +281,7 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "allowedHosts": "",
     "allowedOrigins": "",
     "corsOrigins": "",
+    "sessionIdleTimeout": 86400000,
     "toolPageSize": 0,
     "toolSurface": "full",
     "coreTools": "",
@@ -316,6 +317,12 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
       "default": "",
       "type": "string"
     },
+    "sessionIdleTimeout": {
+      "default": 86400000,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
     "toolPageSize": {
       "default": 0,
       "type": "integer",
@@ -348,6 +355,7 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "allowedHosts",
     "allowedOrigins",
     "corsOrigins",
+    "sessionIdleTimeout",
     "toolPageSize",
     "toolSurface",
     "coreTools",

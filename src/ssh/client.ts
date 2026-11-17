@@ -95,6 +95,48 @@ export function decodeOutput(data: Buffer): string {
   return new TextDecoder("utf-8").decode(data); // replacement chars, never throws
 }
 
+/**
+ * Connection-loss listeners, shared by every command in flight on a connection.
+ * A pooled connection runs many commands at once; one listener set per command
+ * passed Node's 10-listener limit at 8 concurrent commands.
+ */
+interface ConnectionWatch {
+  waiters: Set<(lost: string) => void>;
+  onError: (error: Error) => void;
+  onClose: () => void;
+}
+const watches = new WeakMap<Client, ConnectionWatch>();
+
+/** Call `waiter` if `connection` is lost. Returns the function that stops watching. */
+function watchConnection(connection: Client, waiter: (lost: string) => void): () => void {
+  let watch = watches.get(connection);
+  if (!watch) {
+    const waiters = new Set<(lost: string) => void>();
+    const notify = (lost: string): void => {
+      for (const each of Array.from(waiters)) each(lost);
+    };
+    watch = {
+      waiters,
+      onError: (error) => notify(`SSH connection lost: ${error.message}.`),
+      onClose: () => notify("SSH connection closed before command completion."),
+    };
+    watches.set(connection, watch);
+    connection.on("error", watch.onError);
+    connection.on("end", watch.onClose);
+    connection.on("close", watch.onClose);
+  }
+  const current = watch;
+  current.waiters.add(waiter);
+  return () => {
+    current.waiters.delete(waiter);
+    if (current.waiters.size > 0 || watches.get(connection) !== current) return;
+    watches.delete(connection);
+    connection.off("error", current.onError);
+    connection.off("end", current.onClose);
+    connection.off("close", current.onClose);
+  };
+}
+
 export class MikroTikSSHClient {
   private client: Client | null = null;
   /**
@@ -316,14 +358,13 @@ export class MikroTikSSHClient {
       let timer: ReturnType<typeof setTimeout> | undefined;
       let idleTimer: ReturnType<typeof setTimeout> | undefined;
       let hardTimer: ReturnType<typeof setTimeout> | undefined;
+      let unwatch = (): void => {};
       const clearTimers = (): void => {
         if (openTimer) clearTimeout(openTimer);
         if (timer) clearTimeout(timer);
         if (idleTimer) clearTimeout(idleTimer);
         if (hardTimer) clearTimeout(hardTimer);
-        connection.off("error", onConnectionError);
-        connection.off("end", onConnectionClose);
-        connection.off("close", onConnectionClose);
+        unwatch();
       };
       const finish = (): void => {
         if (settled) return;
@@ -351,15 +392,7 @@ export class MikroTikSSHClient {
       };
       const uncertain =
         "Command outcome is unknown; do not retry a write blindly. Reconnect and read back the target state first.";
-      function onConnectionError(error: Error): void {
-        fail(new Error(`SSH connection lost: ${error.message}. ${uncertain}`));
-      }
-      function onConnectionClose(): void {
-        fail(new Error(`SSH connection closed before command completion. ${uncertain}`));
-      }
-      connection.on("error", onConnectionError);
-      connection.on("end", onConnectionClose);
-      connection.on("close", onConnectionClose);
+      unwatch = watchConnection(connection, (lost) => fail(new Error(`${lost} ${uncertain}`)));
       // exec() includes channel-open and command-request acknowledgement. Its
       // callback can stall before any stream/watchdog exists.
       openTimer = setTimeout(() => {

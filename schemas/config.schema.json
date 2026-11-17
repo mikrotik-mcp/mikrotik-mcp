@@ -261,6 +261,7 @@
         "allowedHosts": "",
         "allowedOrigins": "",
         "corsOrigins": "",
+        "sessionIdleTimeout": 86400000,
         "toolPageSize": 0,
         "toolSurface": "full",
         "coreTools": "",
@@ -296,6 +297,12 @@
           "default": "",
           "type": "string"
         },
+        "sessionIdleTimeout": {
+          "default": 86400000,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
         "toolPageSize": {
           "default": 0,
           "type": "integer",
@@ -328,6 +335,7 @@
         "allowedHosts",
         "allowedOrigins",
         "corsOrigins",
+        "sessionIdleTimeout",
         "toolPageSize",
         "toolSurface",
         "coreTools",

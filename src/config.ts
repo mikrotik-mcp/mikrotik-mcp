@@ -76,6 +76,11 @@ export const McpServerSettingsSchema = z.object({
    */
   corsOrigins: z.string().default(""),
   /**
+   * Close an HTTP session after this many milliseconds without a request
+   * (default 24 hours). The client then gets HTTP 404 and initializes again.
+   */
+  sessionIdleTimeout: z.coerce.number().int().positive().default(86_400_000),
+  /**
    * Page size for `tools/list`. `0` (default) sends every tool in one response —
    * the current behaviour. A positive value delivers the SAME full catalog in
    * cursor-paginated pages (MCP-standard) so clients that struggle with a very
@@ -925,6 +930,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     allowedHosts: pick("mcp-allowed-hosts", "MIKROTIK_MCP__ALLOWED_HOSTS"),
     allowedOrigins: pick("mcp-allowed-origins", "MIKROTIK_MCP__ALLOWED_ORIGINS"),
     corsOrigins: pick("mcp-cors-origins", "MIKROTIK_MCP__CORS_ORIGINS"),
+    sessionIdleTimeout: pick("mcp-session-idle-timeout", "MIKROTIK_MCP__SESSION_IDLE_TIMEOUT"),
     toolPageSize: pick("tool-page-size", "MIKROTIK_MCP__TOOL_PAGE_SIZE"),
     toolSurface: pick("tool-surface", "MIKROTIK_MCP__TOOL_SURFACE"),
     coreTools: pick("core-tools", "MIKROTIK_MCP__CORE_TOOLS"),

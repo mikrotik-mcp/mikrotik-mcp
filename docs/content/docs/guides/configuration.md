@@ -95,17 +95,18 @@ Full guide, file format, and the per-device Safe Mode behaviour:
 These control how MCP clients reach the server. See [Transports](/docs/guides/transports)
 for the full behavior.
 
-| Setting                    | CLI flag                | Environment variable                              | Default               |
-| -------------------------- | ----------------------- | ------------------------------------------------- | --------------------- |
-| Transport                  | `--transport`           | `MIKROTIK_MCP__TRANSPORT` (alias `MCP_TRANSPORT`) | `stdio`               |
-| HTTP bind host             | `--mcp-host`            | `MIKROTIK_MCP__HOST`                              | `0.0.0.0`             |
-| HTTP bind port             | `--mcp-port`            | `MIKROTIK_MCP__PORT`                              | `8000`                |
-| Allowed `Host` headers     | `--mcp-allowed-hosts`   | `MIKROTIK_MCP__ALLOWED_HOSTS`                     | _(empty)_             |
-| Allowed `Origin` headers   | `--mcp-allowed-origins` | `MIKROTIK_MCP__ALLOWED_ORIGINS`                   | _(empty)_             |
-| CORS allow-list for `/mcp` | `--mcp-cors-origins`    | `MIKROTIK_MCP__CORS_ORIGINS`                      | _(MCP-host defaults)_ |
-| Read-only mode             | `--read-only`           | `MIKROTIK_READ_ONLY`                              | `false`               |
-| App Views                  | `--app-views`           | `MIKROTIK_MCP__APP_VIEWS`                         | `false`               |
-| Capability gating          | `--capability-gating`   | `MIKROTIK_MCP__CAPABILITY_GATING`                 | `annotate`            |
+| Setting                    | CLI flag                     | Environment variable                              | Default               |
+| -------------------------- | ---------------------------- | ------------------------------------------------- | --------------------- |
+| Transport                  | `--transport`                | `MIKROTIK_MCP__TRANSPORT` (alias `MCP_TRANSPORT`) | `stdio`               |
+| HTTP bind host             | `--mcp-host`                 | `MIKROTIK_MCP__HOST`                              | `0.0.0.0`             |
+| HTTP bind port             | `--mcp-port`                 | `MIKROTIK_MCP__PORT`                              | `8000`                |
+| Allowed `Host` headers     | `--mcp-allowed-hosts`        | `MIKROTIK_MCP__ALLOWED_HOSTS`                     | _(empty)_             |
+| Allowed `Origin` headers   | `--mcp-allowed-origins`      | `MIKROTIK_MCP__ALLOWED_ORIGINS`                   | _(empty)_             |
+| CORS allow-list for `/mcp` | `--mcp-cors-origins`         | `MIKROTIK_MCP__CORS_ORIGINS`                      | _(MCP-host defaults)_ |
+| HTTP session idle timeout  | `--mcp-session-idle-timeout` | `MIKROTIK_MCP__SESSION_IDLE_TIMEOUT`              | `86400000` ms (24 h)  |
+| Read-only mode             | `--read-only`                | `MIKROTIK_READ_ONLY`                              | `false`               |
+| App Views                  | `--app-views`                | `MIKROTIK_MCP__APP_VIEWS`                         | `false`               |
+| Capability gating          | `--capability-gating`        | `MIKROTIK_MCP__CAPABILITY_GATING`                 | `annotate`            |
 
 Transport values are `stdio`, `streamable-http`, or `sse`. The HTTP bind host,
 port, and allow-lists only apply to the HTTP transports; they're ignored for

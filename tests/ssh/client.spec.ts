@@ -113,3 +113,23 @@ test.each([false, true])(
     expect(vi.getTimerCount()).toBe(0);
   },
 );
+
+test("concurrent commands share one connection-loss listener set", async () => {
+  const s = session(false);
+  const errors: string[] = [];
+  process.on("warning", (w) => errors.push(w.name));
+  const runs = Array.from({ length: 20 }, (_, i) =>
+    s.client.run(`/log print ${i}`).catch((e) => e),
+  );
+  expect(s.connection.listenerCount("close")).toBe(1);
+  expect(s.connection.listenerCount("error")).toBe(1);
+  expect(s.connection.listenerCount("end")).toBe(1);
+  s.connection.emit("close");
+  const results = await Promise.all(runs);
+  expect(results.every((r) => r instanceof Error && /outcome.*unknown/i.test(r.message))).toBe(
+    true,
+  );
+  expect(s.connection.listenerCount("close")).toBe(0);
+  await new Promise((r) => setImmediate(r));
+  expect(errors).not.toContain("MaxListenersExceededWarning");
+});
