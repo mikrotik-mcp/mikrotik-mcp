@@ -19,7 +19,7 @@ import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
 import type { SFTPWrapper } from "ssh2";
-import { backupDir, safeName, writeBinaryBackup } from "../backups/vault";
+import { backupDir, deleteBackup, safeName, writeBinaryBackup } from "../backups/vault";
 import { createContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
 import { Cmd, looksLikeError } from "../core/routeros";
@@ -32,6 +32,7 @@ import { MikroTikSSHClient } from "../ssh/client";
 import { DashboardInputError, readOperationBody } from "./bounded-request";
 import type { Risk } from "./event";
 import { recordToolCall } from "./recorder";
+import { addJob, listJobs, removeJob, runDueJobs, runJob } from "./files-schedules";
 import { listTrash, openTrash, purgeTrash, stash, trashEnabled } from "./files-trash";
 import { terminalAccess } from "./terminal-routes";
 
@@ -504,8 +505,12 @@ async function holdSftp(device: string): Promise<{ sftp: SFTPWrapper; release: (
   return { sftp, release };
 }
 
-/** Close every SFTP session (dashboard shutdown). */
+let jobTimer: ReturnType<typeof setInterval> | undefined;
+
+/** Close every SFTP session and stop the scheduled jobs (dashboard shutdown). */
 export function closeFileSessions(): void {
+  if (jobTimer) clearInterval(jobTimer);
+  jobTimer = undefined;
   for (const [device, pending] of Array.from(sessions)) {
     sessions.delete(device);
     void pending.then((session) => session.client.disconnect()).catch(() => {});
@@ -537,6 +542,33 @@ export function listVault(): VaultFile[] {
 /** `<router>_<file>`, as the Backups page names its files, with only safe characters. */
 export const vaultName = (device: string, path: string): string =>
   `${deviceSlug(device)}_${baseName(path).replace(/[^A-Za-z0-9._-]+/g, "-")}`;
+
+/**
+ * Copy the files of `dir` that match `pattern` into the vault, for a scheduled
+ * job. A file that the vault already has, with the same size, is left out.
+ */
+async function collectToVault(device: string, dir: string, pattern: RegExp): Promise<string[]> {
+  return withSftp(device, async (sftp) => {
+    const written: string[] = [];
+    const have = new Map(listVault().map((item) => [item.name, item.bytes]));
+    for (const entry of await listDir(sftp, dir)) {
+      if (entry.dir || entry.size > MAX_VAULT_BYTES || !pattern.test(entry.name)) continue;
+      const name = vaultName(device, entry.name);
+      if (have.get(name) === entry.size) continue;
+      const data = await call<Buffer>((done) => sftp.readFile(joinPath(dir, entry.name), done));
+      written.push(writeBinaryBackup(name, data));
+    }
+    return written;
+  });
+}
+const dropFromVault = (name: string): void => {
+  try {
+    deleteBackup(name);
+  } catch {
+    /* already gone */
+  }
+};
+const routerNames = (): string[] => Object.keys(getConfig().devices ?? {});
 
 // ── direct copy ───────────────────────────────────────────────────────────
 interface Endpoint {
@@ -692,6 +724,15 @@ const deviceOf = (value: unknown): string => {
 };
 
 export function createFilesRoutes(options: { denied: string | null }) {
+  if (options.denied === null && !jobTimer) {
+    jobTimer = setInterval(() => {
+      void runDueJobs(routerNames(), collectToVault, dropFromVault).catch((error) =>
+        logger.warn(`Scheduled file jobs did not run: ${message(error)}`),
+      );
+    }, 60_000);
+    jobTimer.unref?.();
+  }
+
   return async function filesRoutes(req: Request, url: URL): Promise<Response | null> {
     const path = url.pathname;
     if (!path.startsWith("/api/files/")) return null;
@@ -856,6 +897,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
       }
 
       if (key === "GET /api/files/trash") return json({ items: listTrash() });
+      if (key === "GET /api/files/jobs") return json({ jobs: listJobs() });
       if (key === "GET /api/files/vault") return json({ dir: backupDir(), files: listVault() });
 
       if (key === "GET /api/files/hash") {
@@ -907,6 +949,30 @@ export function createFilesRoutes(options: { denied: string | null }) {
             }),
           );
         });
+      }
+
+      if (key.startsWith("POST /api/files/jobs")) {
+        // A job reads routers and writes this host, so a read-only server may have jobs.
+        const input = JSON.parse((await readOperationBody(req, 16_384)) || "{}") as Record<
+          string,
+          unknown
+        >;
+        if (key === "POST /api/files/jobs") {
+          const devices = (Array.isArray(input.devices) ? input.devices : []).map(deviceOf);
+          try {
+            return json({
+              job: addJob({ ...input, devices, dir: cleanPath(input.dir ?? "/") }),
+            });
+          } catch (error) {
+            throw new DashboardInputError(400, message(error));
+          }
+        }
+        const id = String(input.id ?? "");
+        if (key === "POST /api/files/jobs/remove") return json({ ok: removeJob(id) });
+        const job = listJobs().find((candidate) => candidate.id === id);
+        if (!job) throw new DashboardInputError(404, "There is no such job.");
+        await runJob(job, routerNames(), collectToVault, dropFromVault);
+        return json({ job });
       }
 
       if (key === "POST /api/files/vault/save") {

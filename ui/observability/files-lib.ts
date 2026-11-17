@@ -99,6 +99,17 @@ export const filesBus = {
   },
 };
 
+export interface FileJob {
+  id: string;
+  devices: string[];
+  dir: string;
+  pattern: string;
+  everyMs: number;
+  keep: number;
+  next: number;
+  last?: { at: number; ok: boolean; note: string };
+}
+
 export interface VaultFile {
   name: string;
   bytes: number;
@@ -151,6 +162,9 @@ export const directStore = store(false);
 
 /** When on, a copy is read back from the destination and its SHA-256 compared with the source. */
 export const verifyStore = store(false);
+
+/** Whether the scheduled jobs dialog is open. */
+export const jobsStore = store(false);
 
 /** Whether the vault dialog is open. */
 export const vaultStore = store(false);
@@ -240,6 +254,22 @@ export const filesApi = {
     });
     if (!answer.ok) throw new Error(answer.error ?? "The file was not sent.");
     filesBus.changed(device, dir);
+  },
+  jobs: (): Promise<FileJob[]> => api<{ jobs: FileJob[] }>("/api/files/jobs").then((a) => a.jobs),
+  async addJob(job: {
+    devices: string[];
+    dir: string;
+    pattern: string;
+    everyMs: number;
+    keep: number;
+  }): Promise<void> {
+    const answer = await postJson<{ job?: FileJob; error?: string }>("/api/files/jobs", job);
+    if (!answer.job) throw new Error(answer.error ?? "The job was not saved.");
+  },
+  removeJob: (id: string): Promise<unknown> => postJson("/api/files/jobs/remove", { id }),
+  async runJob(id: string): Promise<void> {
+    const answer = await postJson<{ job?: FileJob; error?: string }>("/api/files/jobs/run", { id });
+    if (!answer.job) throw new Error(answer.error ?? "The job did not run.");
   },
   trash: (): Promise<TrashItem[]> =>
     api<{ items: TrashItem[] }>("/api/files/trash").then((answer) => answer.items),

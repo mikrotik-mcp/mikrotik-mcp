@@ -12,6 +12,7 @@ import {
   ArrowDownToLine,
   ArrowLeftRight,
   ArrowUpFromLine,
+  CalendarClock,
   Check,
   ChevronDown,
   CircleAlert,
@@ -41,6 +42,7 @@ import {
   filePanes,
   filesApi,
   filesLayout,
+  jobsStore,
   pace,
   syncStore,
   parentOf,
@@ -53,6 +55,7 @@ import {
 import { FileCompare } from "./files-compare";
 import { ImportDialog } from "./files-import";
 import { FilesPane } from "./files-pane";
+import { JobsDialog } from "./files-jobs";
 import { FolderSync } from "./files-sync";
 import { RecycleBin } from "./files-trash";
 import { VaultDialog } from "./files-vault";
@@ -307,6 +310,13 @@ export function FilesView(): ReactNode {
           >
             <Vault size={13} /> Vault
           </button>
+          <button
+            type="button"
+            onClick={() => jobsStore.set(true)}
+            title="Copy matching files of the routers into the vault at an interval"
+          >
+            <CalendarClock size={13} /> Scheduled
+          </button>
           {state.trash && (
             <button
               type="button"
@@ -491,6 +501,7 @@ export function FilesView(): ReactNode {
 
       <FileViewer readOnly={readOnly} />
       <FileCompare />
+      <JobsDialog routers={names} />
       <VaultDialog readOnly={readOnly} />
       {state.trash && <RecycleBin readOnly={readOnly} />}
       <ImportDialog />

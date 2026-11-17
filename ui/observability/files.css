@@ -971,3 +971,65 @@
   width: auto;
   margin: 0;
 }
+
+/* ── scheduled collection ────────────────────────────────────────────── */
+.files-job-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--term-line);
+  border-radius: 10px;
+  background: var(--term-bg);
+  font-size: 12px;
+}
+.files-job-form fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.files-job-form legend {
+  padding: 0 0 4px;
+  color: var(--term-dim);
+}
+.files-job-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--term-dim);
+}
+.files-job-form fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--term-ink);
+  cursor: pointer;
+}
+.files-job-form small {
+  color: var(--term-faint);
+}
+.files-job-form input {
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--term-line);
+  border-radius: 7px;
+  outline: 0;
+  background: var(--term-surface);
+  font-family: var(--term-mono);
+  font-size: 12px;
+}
+.files-job-form input:focus {
+  border-color: var(--term-accent);
+}
+.files-sync-cell em[data-bad="true"] {
+  color: var(--term-err);
+}
+@media (max-width: 760px) {
+  .files-job-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
