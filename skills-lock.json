@@ -10,7 +10,8 @@
       "source": "danyuchn/asd-ste100-skill",
       "sourceType": "github",
       "skillPath": "SKILL.md",
-      "computedHash": "84e868227427ff5f0ab797f99f8e6d3ef597a2fa69a954050ba1da76a04a230f"
+      "computedHash": "8249c452dfc3c991870a7e9dd9ff948f42ede848e9fd92048f0c1ffc7e8db4ec",
+      "commit": "9c351694439ea1171f36c65b91ba661e7a0499c8"
     },
     "banner-design": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
@@ -104,7 +105,8 @@
       "source": "affaan-m/ECC",
       "sourceType": "github",
       "skillPath": "skills/homelab-vlan-segmentation/SKILL.md",
-      "computedHash": ""
+      "computedHash": "caf04b83d858e783cd4bade79e566ac9a5ea9f91eededb2593d8a2429a00f2e7",
+      "commit": "3f14a103a8694e51c1df9a806217a6d0b5f7a6f7"
     },
     "improve": {
       "source": "shadcn/improve",
