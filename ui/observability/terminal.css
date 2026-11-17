@@ -1097,3 +1097,77 @@
 .term-menu > div button:hover {
   background: color-mix(in srgb, var(--term-accent) 18%, transparent);
 }
+
+/* ── snippet values ──────────────────────────────────────────────────── */
+.term-fill {
+  display: grid;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--term-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--term-accent) 8%, var(--term-bg));
+  font-family: var(--term-mono);
+  font-size: 12px;
+}
+.term-fill code {
+  font-family: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.term-fill > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.term-fill label {
+  display: grid;
+  gap: 2px;
+  color: var(--term-dim);
+  font-size: 11px;
+}
+.term-fill input {
+  width: 150px;
+  padding: 4px 7px;
+  border: 1px solid var(--term-line);
+  border-radius: 6px;
+  outline: none;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-family: inherit;
+  font-size: 12px;
+}
+.term-fill input:focus {
+  border-color: var(--term-accent);
+}
+.term-fill button {
+  padding: 4px 12px;
+  border: 1px solid var(--term-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--term-ink);
+}
+.term-fill .term-go {
+  border-color: var(--term-accent);
+  background: var(--term-accent);
+  color: #06222a;
+  font-weight: 600;
+}
+.term-star-input {
+  display: inline-flex;
+  flex: none;
+  padding: 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--term-faint);
+}
+.term-star-input:hover:not(:disabled) {
+  color: var(--term-warn);
+}
+.term-star-input:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.term-star-input[data-on="true"] {
+  color: var(--term-warn);
+}

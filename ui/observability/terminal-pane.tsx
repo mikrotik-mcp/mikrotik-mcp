@@ -41,10 +41,12 @@ import {
   destructiveWord,
   downloadText,
   exportSession,
+  fillSnippet,
   favoritesStore,
   paneRegistry,
   paneStorage,
   runCommand,
+  snippetFields,
   terminalApi,
   workspace,
 } from "./terminal-lib";
@@ -320,6 +322,10 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
   /** Input for which the user closed the list with Escape. */
   const dismissed = useRef("");
   const [confirm, setConfirm] = useState<{ command: string; word: string } | null>(null);
+  /** A snippet waiting for the values of its {{placeholders}}. */
+  const [fill, setFill] = useState<{ command: string; values: Record<string, string> } | null>(
+    null,
+  );
   const [autoRetry, setAutoRetry] = useState(true);
   const [watch, setWatch] = useState<number | null>(null);
   const [conn, setConn] = useState<Connection>({ link: "connecting", latency: [], attempt: 0 });
@@ -517,6 +523,15 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
     (raw: string, options: { confirmed?: boolean; fromBroadcast?: boolean } = {}): void => {
       const command = raw.trim();
       if (!command) return;
+      const fields = snippetFields(command);
+      if (fields.length) {
+        // Ask for the values first; the filled command comes back through here.
+        setFill({
+          command,
+          values: Object.fromEntries(fields.map((field) => [field.name, field.fallback])),
+        });
+        return;
+      }
       const word = destructiveWord(command);
       if (word && !options.confirmed && !options.fromBroadcast) {
         setConfirm({ command, word });
@@ -948,6 +963,58 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
         </div>
       )}
 
+      {fill && (
+        <form
+          className="term-fill"
+          aria-label="Snippet values"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const filled = fillSnippet(fill.command, fill.values);
+            setFill(null);
+            submit(filled);
+          }}
+        >
+          <code>
+            <Spans lines={staticSpans(fillSnippet(fill.command, fill.values))} />
+          </code>
+          <div>
+            {snippetFields(fill.command).map((item, i) => (
+              <label key={item.name}>
+                {item.name}
+                <input
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- the form opens on a key press
+                  autoFocus={i === 0}
+                  value={fill.values[item.name] ?? ""}
+                  placeholder={item.fallback}
+                  spellCheck={false}
+                  onChange={(event) =>
+                    setFill({
+                      ...fill,
+                      values: { ...fill.values, [item.name]: event.target.value },
+                    })
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setFill(null);
+                  }}
+                />
+              </label>
+            ))}
+            <button type="submit" className="term-go">
+              Run
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setInput(fill.command);
+                setFill(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
       <footer className="term-input" data-error={syntaxError}>
         <span className="term-prompt">
           <span className="term-prompt-device">{device}</span>
@@ -998,6 +1065,16 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
             </ul>
           )}
         </div>
+        <button
+          type="button"
+          className="term-star-input"
+          disabled={!input.trim()}
+          data-on={starred.has(input.trim())}
+          onClick={() => void favoritesStore.toggle(input.trim())}
+          title="Save what is typed as a favourite. Use {{name}} or {{name=default}} for values asked at run time."
+        >
+          <Star size={13} fill={starred.has(input.trim()) ? "currentColor" : "none"} />
+        </button>
         <span
           className="term-check"
           data-state={fromRouter === null ? "idle" : syntaxError ? "bad" : "ok"}

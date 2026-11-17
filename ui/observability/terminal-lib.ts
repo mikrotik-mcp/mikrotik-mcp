@@ -365,3 +365,34 @@ export function downloadText(name: string, text: string): void {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// ── snippets: commands with {{placeholders}} ────────────────────────────
+
+const FIELD_RE = /\{\{\s*([\w-]+)\s*(?:=([^}]*))?\}\}/g;
+export interface SnippetField {
+  name: string;
+  /** From `{{name=value}}`; empty when the snippet gives none. */
+  fallback: string;
+}
+
+/** The placeholders of a command, each name once, in order of appearance. */
+export function snippetFields(command: string): SnippetField[] {
+  const fields = new Map<string, SnippetField>();
+  for (const match of command.matchAll(FIELD_RE)) {
+    const name = match[1] ?? "";
+    const fallback = (match[2] ?? "").trim();
+    const known = fields.get(name);
+    if (!known) fields.set(name, { name, fallback });
+    else if (!known.fallback && fallback) known.fallback = fallback;
+  }
+  return Array.from(fields.values());
+}
+
+/** Replace every placeholder with its value, or with the snippet's default for it. */
+export function fillSnippet(command: string, values: Record<string, string>): string {
+  const defaults = new Map(snippetFields(command).map((field) => [field.name, field.fallback]));
+  return command.replace(
+    FIELD_RE,
+    (_all, name: string) => values[name] || defaults.get(name) || "",
+  );
+}

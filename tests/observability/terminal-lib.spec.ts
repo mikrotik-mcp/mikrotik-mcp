@@ -40,3 +40,23 @@ describe("session export", () => {
     expect(text).toContain("bad command name");
   });
 });
+
+describe("snippets", () => {
+  const snippet =
+    "/ip firewall address-list add list={{list=blocked}} address={{ip}} comment={{ list }}";
+  test("lists each placeholder once, with its default", () => {
+    expect(lib.snippetFields(snippet)).toEqual([
+      { name: "list", fallback: "blocked" },
+      { name: "ip", fallback: "" },
+    ]);
+    expect(lib.snippetFields("/ip address print")).toEqual([]);
+  });
+  test("fills every occurrence, falling back to the default", () => {
+    expect(lib.fillSnippet(snippet, { ip: "10.0.0.9", list: "" })).toBe(
+      "/ip firewall address-list add list=blocked address=10.0.0.9 comment=blocked",
+    );
+    expect(lib.fillSnippet(snippet, { ip: "10.0.0.9", list: "guests" })).toBe(
+      "/ip firewall address-list add list=guests address=10.0.0.9 comment=guests",
+    );
+  });
+});
