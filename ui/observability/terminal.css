@@ -1748,6 +1748,24 @@
   font-size: 12px;
   white-space: nowrap;
 }
+/* A coloured tab is filled with its colour. The tab element keeps dockview's
+   own padding, so the fill reaches over it. */
+.term-tab[data-pane-color] {
+  box-sizing: border-box;
+  height: calc(100% + 8px);
+  margin: -4px -8px;
+  padding: 0 8px 0 12px;
+  background: color-mix(in srgb, var(--pane-color) 16%, var(--term-surface));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--pane-color) 55%, transparent);
+}
+.dv-active-tab .term-tab[data-pane-color] {
+  background: color-mix(in srgb, var(--pane-color) 32%, var(--term-bg));
+  box-shadow: inset 0 -2px 0 var(--pane-color);
+  color: color-mix(in srgb, var(--pane-color) 55%, white);
+}
+.term-tab[data-pane-color] .term-tab-close {
+  color: inherit;
+}
 .term-tab-dot {
   width: 7px;
   height: 7px;
