@@ -121,3 +121,10 @@ describe("pipes", () => {
     expect(lib.applyPipes(output, ["grep ("])).toBe("");
   });
 });
+
+test("reads the number after a key, in print and as-value forms", () => {
+  expect(lib.readNumber("  cpu-load: 37%\n  uptime: 2d", "cpu-load")).toBe(37);
+  expect(lib.readNumber("rx-byte=1024;tx-byte=-5.5", "tx-byte")).toBe(-5.5);
+  expect(lib.readNumber("cpu-load: 37%", "load")).toBeUndefined();
+  expect(lib.readNumber("cpu-load: 37%", "")).toBeUndefined();
+});

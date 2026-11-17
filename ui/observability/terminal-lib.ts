@@ -712,3 +712,14 @@ export function applyPipes(output: string, filters: string[]): string {
   }
   return lines.join("\n");
 }
+
+/** The number after `key` in an output (`cpu-load: 37%`, `rx-byte=1024`), if any. */
+export function readNumber(output: string, key: string): number | undefined {
+  const name = key.trim();
+  if (!name) return undefined;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const found = output.match(
+    new RegExp(`(?:^|[\\s;])${escaped}\\s*[:=]\\s*(-?\\d+(?:\\.\\d+)?)`, "m"),
+  );
+  return found?.[1] === undefined ? undefined : Number(found[1]);
+}

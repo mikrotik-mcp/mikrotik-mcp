@@ -10,6 +10,7 @@ import {
   BellRing,
   Check,
   ArrowDownToLine,
+  ChartLine,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -60,6 +61,7 @@ import {
   notify,
   paneRegistry,
   paneStorage,
+  readNumber,
   runCommand,
   scriptStore,
   snippetFields,
@@ -92,6 +94,8 @@ interface Block {
   snapshot?: boolean;
   /** Why the watch alert fired on the last run; undefined when it did not. */
   alert?: string;
+  /** One value per run of the charted number (watch mode). */
+  series?: number[];
   /** Kept above the scrolling list, always in view. */
   pinned?: boolean;
   /** Show the output as a table of records. */
@@ -166,6 +170,31 @@ function Sparkline({ values }: { values: number[] }): ReactNode {
     <svg className="term-spark" viewBox="0 0 56 16" aria-hidden="true">
       <polyline points={points} />
     </svg>
+  );
+}
+
+/** Line chart of a watched number: one point per run. */
+function SeriesChart({ values }: { values: number[] }): ReactNode {
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const span = high - low || 1;
+  const step = 600 / (values.length - 1);
+  const points = values
+    .map((v, i) => `${(i * step).toFixed(1)},${(58 - ((v - low) / span) * 52).toFixed(1)}`)
+    .join(" ");
+  return (
+    <figure className="term-chart">
+      <svg viewBox="0 0 600 64" preserveAspectRatio="none" aria-hidden="true">
+        <polygon points={`0,64 ${points} 600,64`} />
+        <polyline points={points} />
+      </svg>
+      <figcaption>
+        <span>min {low}</span>
+        <span>max {high}</span>
+        <b>now {values.at(-1)}</b>
+        <span>{values.length} runs</span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -360,6 +389,7 @@ function BlockViewBase({
       </header>
       {!block.collapsed && (
         <>
+          {block.series && block.series.length > 1 && <SeriesChart values={block.series} />}
           {block.table && block.output ? (
             <RecordTable output={block.output} />
           ) : (
@@ -414,6 +444,10 @@ export function TerminalPane(
   /** The router's explanations for what can follow the input. */
   const [help, setHelp] = useState<{ for: string; items: SyntaxHelp[] }>({ for: "", items: [] });
   const [showHelp, setShowHelp] = useState(true);
+  /** Name of the number to chart for the watched block, e.g. `cpu-load`. */
+  const [chartKey, setChartKey] = useState("");
+  const chartKeyRef = useRef(chartKey);
+  chartKeyRef.current = chartKey;
   /** Alert rule for the watched block (see evalAlert). */
   const [alertRule, setAlertRule] = useState("");
   const alertRuleRef = useRef(alertRule);
@@ -627,6 +661,8 @@ export function TerminalPane(
           ? (evalAlert(alertRuleRef.current, output, earlier?.output ?? "") ?? undefined)
           : undefined;
       if (alert && !earlier?.alert) notify(`${device}: ${command}`, alert);
+      const charted =
+        options.quiet && result.ok ? readNumber(output, chartKeyRef.current) : undefined;
       patch(id, (b) => {
         let changed: Set<number> | undefined;
         if (options.quiet && b.output && b.output !== output) {
@@ -641,6 +677,7 @@ export function TerminalPane(
           output,
           changed,
           alert,
+          series: charted === undefined ? b.series : [...(b.series ?? []), charted].slice(-120),
           snapshot: result.snapshot,
           ts: Date.now(),
           ms: result.ms,
@@ -1192,6 +1229,21 @@ export function TerminalPane(
               ))}
             </select>
           </label>
+          {watch !== null && (
+            <label
+              className="term-alert-rule term-chart-key"
+              title="Chart a number of the watched block over time. Type its name, for example cpu-load or free-memory."
+            >
+              <ChartLine size={12} />
+              <input
+                value={chartKey}
+                placeholder="chart… (cpu-load)"
+                spellCheck={false}
+                aria-label="Number to chart for the watched command"
+                onChange={(event) => setChartKey(event.target.value)}
+              />
+            </label>
+          )}
           {watch !== null && (
             <label
               className="term-alert-rule"

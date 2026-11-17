@@ -1954,3 +1954,41 @@
 .term-pinned .term-block {
   animation: none;
 }
+
+/* ── chart of a watched number ───────────────────────────────────────── */
+.term-chart {
+  margin: 0;
+  padding: 6px 10px 2px;
+  border-top: 1px dashed var(--term-line);
+}
+.term-chart svg {
+  display: block;
+  width: 100%;
+  height: 64px;
+}
+.term-chart polyline {
+  fill: none;
+  stroke: var(--term-accent);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.term-chart polygon {
+  fill: color-mix(in srgb, var(--term-accent) 14%, transparent);
+}
+.term-chart figcaption {
+  display: flex;
+  gap: 14px;
+  color: var(--term-faint);
+  font-size: 10.5px;
+}
+.term-chart figcaption b {
+  color: var(--term-accent);
+  font-weight: 500;
+}
+.term-chart-key input {
+  width: 130px;
+}
+.term-chart-key input:focus {
+  border-color: var(--term-accent);
+}
