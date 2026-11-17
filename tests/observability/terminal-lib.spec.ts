@@ -2,6 +2,9 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 
 vi.stubGlobal("location", { search: "" });
+vi.mock("@xterm/xterm", () => ({ Terminal: class {} }));
+vi.mock("@xterm/addon-fit", () => ({ FitAddon: class {} }));
+vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 const lib = await import("../../ui/observability/terminal-lib");
 
 const blocks = [
@@ -186,4 +189,14 @@ describe("undo", () => {
     ])
       expect(lib.planUndo(command), command).toBeNull();
   });
+});
+
+test("a recording is read frame by frame, and a cut-off last line is skipped", async () => {
+  const { parseCast } = await import("../../ui/observability/terminal-recordings");
+  const cast =
+    '{"version":2,"width":80,"height":24}\n[0.1,"o","hello"]\n[0.5,"i","x"]\n[1.2,"o","\\r\\nworld"]\n[2.0,"o","cut';
+  expect(parseCast(cast)).toEqual([
+    [0.1, "hello"],
+    [1.2, "\r\nworld"],
+  ]);
 });

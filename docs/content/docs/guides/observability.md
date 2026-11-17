@@ -183,6 +183,27 @@ The **Terminal** page gives you RouterOS consoles in the browser, as in WinBox.
   `/regex/`, or a text) and notifies when the rule starts to hold.
 - **Export.** Save a pane as a transcript (`.txt`), a report (`.md`) or the
   commands that succeeded (`.rsc`).
+- **Command palette.** `Ctrl+Shift+P` lists every action of the page. Start the
+  query with `?` to ask in words: you get earlier commands, favourites and MCP
+  tools whose words match. No language model is used.
+- **Pipes.** End a command with `| grep`, `| count`, `| sort`, `| uniq`,
+  `| head` or `| tail`. The filters run on the output in the browser.
+- **Addresses.** Click an IPv4 or MAC address in an output for commands about
+  it. The chosen command goes to the input to review.
+- **Pin and chart.** Pin a block to the top of its pane. For a watched block,
+  name a number (`cpu-load`) to chart it over the runs.
+- **Undo.** A block offers the opposite command when it is certain:
+  `enable`/`disable`, `disabled=yes/no`, and a plain `add`. For anything else,
+  use a snapshot or Safe Mode.
+- **Scheduled commands.** The server runs a read command at a time or on a
+  repeat, also with the browser closed. Only reads can be scheduled.
+- **Shared view.** A pane gives a link to a read-only view of its router's
+  commands from that moment, for 24 hours. The viewer still needs access to the
+  dashboard; the link does not limit that access.
+- **Shell recordings.** What the router prints in an interactive shell is
+  recorded (asciicast v2, in `terminal-recordings/` beside the databases).
+  **Recordings** plays a session back and searches it. Typed keys are not
+  recorded.
 - **Limits.** Each pane has a command time limit (30 s, 2 min or 10 min) and a
   watch interval (2 s to 60 s).
 - **Blocks are kept.** A pane keeps its last 40 blocks in the browser, so a
@@ -215,8 +236,9 @@ The terminal runs any command on a router, so:
 - A read-only server runs only `print`, `export` and diagnostic commands.
 - Auto-retry sends a command again only when the router was not reached, or when
   the command only reads. A change that may already have run is not repeated.
-- The interactive shell is not available on a read-only server, and its keys are
-  not recorded. Use block panes when you need a record of every command.
+- The interactive shell is not available on a read-only server. Its output is
+  recorded, its typed keys are not. Use block panes when you need each command
+  as a separate record.
 - Every command is saved to the audit feed (tool `dashboard_terminal`) and to
   `~/.mikrotik-mcp/terminal.db`.
 - A command stops at the pane's time limit (30 seconds by default) unless it

@@ -22,6 +22,7 @@ import {
   Star,
   TextCursorInput,
   Trash2,
+  Video,
   X,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -51,6 +52,7 @@ import type { PaletteAction } from "./terminal-palette";
 import { CommandPalette } from "./terminal-palette";
 import { TerminalPane } from "./terminal-pane";
 import { CompareDialog } from "./terminal-compare";
+import { RecordingsDialog } from "./terminal-recordings";
 import { ScheduleDrawer } from "./terminal-schedules";
 import { ScriptDialog } from "./terminal-script";
 import { FindBar } from "./terminal-search";
@@ -116,6 +118,7 @@ function TerminalWorkspace(): ReactNode {
   const [armed, setArmed] = useState(false);
   const [finding, setFinding] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [recordings, setRecordings] = useState(false);
   /** What "New terminal" opens: command blocks, or an interactive shell. */
   const [kind, setKind] = useState<"terminal" | "shell">("terminal");
   const kindRef = useRef(kind);
@@ -354,6 +357,18 @@ function TerminalWorkspace(): ReactNode {
         group: "Broadcast",
         run: () => setBroadcast({ label: group.name, devices: group.devices }),
       })),
+      {
+        id: "recordings",
+        label: "Play a shell recording",
+        group: "View",
+        run: () => setRecordings(true),
+      },
+      {
+        id: "scheduled",
+        label: "Show the scheduled commands",
+        group: "View",
+        run: () => setDrawer("scheduled"),
+      },
       { id: "find", label: "Find in the terminals", group: "View", run: () => setFinding(true) },
       {
         id: "history",
@@ -614,6 +629,13 @@ function TerminalWorkspace(): ReactNode {
           </button>
           <button
             type="button"
+            onClick={() => setRecordings(true)}
+            title="Play back and search recorded interactive shell sessions"
+          >
+            <Video size={14} /> Recordings
+          </button>
+          <button
+            type="button"
             data-on={drawer === "scheduled"}
             onClick={() => setDrawer(drawer === "scheduled" ? null : "scheduled")}
             title="Commands the server runs at a time or on a repeat"
@@ -632,6 +654,7 @@ function TerminalWorkspace(): ReactNode {
       </div>
 
       {palette && <CommandPalette actions={paletteActions()} onClose={() => setPalette(false)} />}
+      {recordings && <RecordingsDialog onClose={() => setRecordings(false)} />}
       <CompareDialog />
       <ScriptDialog />
       {sent && (

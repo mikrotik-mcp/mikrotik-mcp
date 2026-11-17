@@ -62,7 +62,7 @@ import { createContext } from "../core/context";
 import { investigationRoutes } from "./investigation-routes";
 import { homeRoutes } from "./home-routes";
 import { createTerminalRoutes, stopTerminalScheduler, terminalAccess } from "./terminal-routes";
-import { closeAllShells } from "./terminal-shell";
+import { closeAllShells, setRecordingDir } from "./terminal-shell";
 import { openTerminalStore } from "./terminal-store";
 import type { TerminalStore } from "./terminal-store";
 import { workspaceRoutes } from "./workspace-routes";
@@ -1663,6 +1663,10 @@ export async function runDashboard(
   };
 
   const accessSettingsRoutes = createAccessSettingsRoutes(configAdmin);
+  // Interactive shell sessions are recorded beside the databases (not for an in-memory run).
+  setRecordingDir(
+    cfg.dbPath === ":memory:" ? undefined : join(dirname(cfg.dbPath), "terminal-recordings"),
+  );
   // The terminal's history database opens on the first terminal request.
   let terminalStore: Promise<TerminalStore> | undefined;
   const terminalRoutes = createTerminalRoutes({

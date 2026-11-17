@@ -2148,3 +2148,111 @@
   font-family: var(--term-mono);
   font-size: 12.5px;
 }
+
+/* ── shell recordings ────────────────────────────────────────────────── */
+.term-recordings {
+  width: min(1180px, 100%);
+  height: min(720px, 100%);
+}
+.term-recordings-body {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+.term-recordings-body > ol {
+  flex: 0 0 280px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.term-recordings-body > ol li {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+.term-recordings-body > ol li[data-on="true"] {
+  background: color-mix(in srgb, var(--term-accent) 16%, transparent);
+}
+.term-recordings-body > ol button {
+  border: 0;
+  background: transparent;
+  color: var(--term-ink);
+}
+.term-recordings-body > ol button:first-child {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  padding: 7px 10px;
+  font-size: 12px;
+  text-align: left;
+}
+.term-recordings-body > ol b {
+  color: var(--term-accent);
+  font-family: var(--term-mono);
+  font-weight: 500;
+}
+.term-recordings-body > ol span,
+.term-recordings-body > ol small {
+  color: var(--term-dim);
+  font-size: 11px;
+}
+.term-recordings-body > section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.term-recordings-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.term-recordings-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--term-line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--term-ink);
+  font-size: 12px;
+}
+.term-recordings-tools button[data-on="true"] {
+  border-color: var(--term-accent);
+  color: var(--term-accent);
+}
+.term-recordings-tools input {
+  flex: 1;
+  min-width: 140px;
+  padding: 4px 9px;
+  border: 1px solid var(--term-line);
+  border-radius: 7px;
+  outline: none;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-family: var(--term-mono);
+  font-size: 12px;
+}
+.term-recordings-screen,
+.term-recordings-hits {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--term-line);
+  border-radius: 8px;
+  background: #000;
+}
+.term-recordings-hits {
+  color: #c9d4e6;
+  font-family: var(--term-mono);
+  font-size: 12px;
+  white-space: pre;
+}

@@ -135,8 +135,11 @@ export function ShellPane(
         </span>
         <span className="term-stat term-identity">{device}</span>
         {size && <span className="term-stat">{size}</span>}
-        <span className="term-stat" title="Keys typed in a shell are not saved to the history.">
-          <Plug size={11} /> not recorded
+        <span
+          className="term-stat"
+          title="What the router prints is recorded (toolbar: Recordings). Typed keys are not."
+        >
+          <Plug size={11} /> output recorded
         </span>
         <span className="term-status-actions">
           <button

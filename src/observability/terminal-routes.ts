@@ -19,7 +19,15 @@ import { logger } from "../logger";
 import { DashboardInputError, readOperationBody } from "./bounded-request";
 import type { Risk } from "./event";
 import { recordToolCall } from "./recorder";
-import { closeShell, openShell, shellInput, shellResize } from "./terminal-shell";
+import {
+  closeShell,
+  deleteRecording,
+  listRecordings,
+  openShell,
+  readRecording,
+  shellInput,
+  shellResize,
+} from "./terminal-shell";
 import type { TerminalStore } from "./terminal-store";
 import { z } from "zod";
 import { configSnapshotTools } from "../tools/config-snapshot";
@@ -411,6 +419,14 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
           }),
         });
       }
+      if (key === "GET /api/terminal/recordings") return json({ recordings: listRecordings() });
+      if (key === "GET /api/terminal/recording") {
+        const cast = readRecording(url.searchParams.get("id") ?? "");
+        if (cast === undefined) return json({ error: "No such recording." }, 404);
+        return new Response(cast, {
+          headers: { "content-type": "text/plain; charset=utf-8", ...noStore },
+        });
+      }
       if (key === "GET /api/terminal/shared") {
         const share = shares.get(url.searchParams.get("id") ?? "");
         if (!share || Date.now() - share.since > SHARE_TTL_MS)
@@ -522,6 +538,8 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
         shares.set(id, { device, since: Date.now() });
         return json({ id, device });
       }
+      if (key === "DELETE /api/terminal/recordings")
+        return json({ ok: deleteRecording(text("id")) });
       if (key === "POST /api/terminal/unshare") return json({ ok: shares.delete(text("id")) });
 
       if (key === "POST /api/terminal/shell/open") {
