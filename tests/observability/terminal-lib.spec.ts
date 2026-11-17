@@ -192,11 +192,22 @@ describe("undo", () => {
 });
 
 test("a recording is read frame by frame, and a cut-off last line is skipped", async () => {
-  const { parseCast } = await import("../../ui/observability/terminal-recordings");
+  const { castSize, frameTimes, parseCast } =
+    await import("../../ui/observability/terminal-recordings");
   const cast =
     '{"version":2,"width":80,"height":24}\n[0.1,"o","hello"]\n[0.5,"i","x"]\n[1.2,"o","\\r\\nworld"]\n[2.0,"o","cut';
   expect(parseCast(cast)).toEqual([
     [0.1, "hello"],
     [1.2, "\r\nworld"],
   ]);
+  expect(castSize(cast)).toEqual({ cols: 80, rows: 24 });
+  expect(castSize("not json")).toEqual({ cols: 100, rows: 30 });
+  // A long idle pause is played as two seconds.
+  expect(
+    frameTimes([
+      [0.5, "a"],
+      [1.5, "b"],
+      [61.5, "c"],
+    ]),
+  ).toEqual([0, 1, 3]);
 });

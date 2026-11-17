@@ -1786,9 +1786,13 @@
   position: fixed;
   z-index: 90;
   display: grid;
-  gap: 8px;
-  width: 240px;
-  padding: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 280px;
+  max-width: min(340px, calc(100vw - 24px));
+  padding: 12px;
   border: 1px solid var(--term-line);
   border-radius: 10px;
   background: var(--term-raised);
@@ -1835,8 +1839,19 @@
 }
 .term-tab-colors {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+}
+.term-tab-menu button {
+  box-sizing: border-box;
+  flex: none;
+}
+.term-tab-reset {
+  width: 100%;
+  padding: 6px 8px;
+  text-align: center;
+  white-space: normal;
 }
 .term-tab-colors button[data-pane-color] {
   width: 20px;
@@ -2151,108 +2166,368 @@
 
 /* ── shell recordings ────────────────────────────────────────────────── */
 .term-recordings {
-  width: min(1180px, 100%);
-  height: min(720px, 100%);
+  gap: 0;
+  width: min(1240px, 100%);
+  height: min(760px, 100%);
+  padding: 0;
+}
+.term-recordings > header {
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--term-line);
+  background: linear-gradient(180deg, var(--term-raised), var(--term-surface));
+}
+.term-recordings-badge {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--term-accent) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--term-accent) 14%, transparent);
+  color: var(--term-accent);
+}
+.term-recordings > header strong {
+  display: block;
+  font-size: 14.5px;
+}
+.term-recordings > header p {
+  margin: 2px 0 0;
+  color: var(--term-dim);
+  font-size: 12px;
 }
 .term-recordings-body {
   display: flex;
   flex: 1;
-  gap: 12px;
   min-height: 0;
 }
-.term-recordings-body > ol {
-  flex: 0 0 280px;
-  margin: 0;
-  padding: 0;
+.term-recordings-body > aside {
+  display: flex;
+  flex: 0 0 290px;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px 0 0;
+  border-right: 1px solid var(--term-line);
+  background: rgb(11 15 23 / 45%);
+}
+.term-recordings-body .term-search small {
+  color: var(--term-faint);
+  font-family: var(--term-mono);
+  font-size: 11px;
+}
+.term-recordings-list {
+  flex: 1;
+  min-height: 0;
+  padding: 0 8px 10px;
   overflow: auto;
-  list-style: none;
   scrollbar-width: thin;
   scrollbar-color: var(--term-line) transparent;
 }
-.term-recordings-body > ol li {
+.term-recordings-list h4 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 8px 6px 5px;
+  background: var(--term-surface);
+  color: var(--term-faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.term-recordings-none {
+  margin: 0;
+  padding: 18px 10px;
+  color: var(--term-dim);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.term-recording {
+  position: relative;
   display: flex;
   align-items: center;
+  margin-bottom: 3px;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
   border-radius: 8px;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 }
-.term-recordings-body > ol li[data-on="true"] {
-  background: color-mix(in srgb, var(--term-accent) 16%, transparent);
+.term-recording:hover {
+  background: rgb(255 255 255 / 4%);
 }
-.term-recordings-body > ol button {
+.term-recording[data-on="true"] {
+  border-color: color-mix(in srgb, var(--term-accent) 35%, transparent);
+  border-left-color: var(--term-accent);
+  background: color-mix(in srgb, var(--term-accent) 11%, transparent);
+}
+.term-recording button {
   border: 0;
   background: transparent;
   color: var(--term-ink);
 }
-.term-recordings-body > ol button:first-child {
+.term-recording > button:first-child {
   display: grid;
   flex: 1;
-  gap: 1px;
-  padding: 7px 10px;
-  font-size: 12px;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 10px;
   text-align: left;
 }
-.term-recordings-body > ol b {
-  color: var(--term-accent);
+.term-recording b {
+  overflow: hidden;
+  color: var(--term-ink);
   font-family: var(--term-mono);
+  font-size: 12.5px;
   font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.term-recordings-body > ol span,
-.term-recordings-body > ol small {
+.term-recording[data-on="true"] b {
+  color: var(--term-accent);
+}
+.term-recording span {
+  display: flex;
+  gap: 10px;
   color: var(--term-dim);
   font-size: 11px;
 }
-.term-recordings-body > section {
+.term-recording i {
+  color: var(--term-faint);
+  font-style: normal;
+  font-family: var(--term-mono);
+}
+.term-recording-delete {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  border-radius: 6px !important;
+  color: var(--term-faint) !important;
+  opacity: 0;
+}
+.term-recording:hover .term-recording-delete,
+.term-recording-delete:focus-visible {
+  opacity: 1;
+}
+.term-recording-delete:hover {
+  background: color-mix(in srgb, var(--term-err) 18%, transparent) !important;
+  color: var(--term-err) !important;
+}
+
+.term-player {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 8px;
   min-width: 0;
+  min-height: 0;
+  background: var(--term-bg);
 }
-.term-recordings-tools {
+.term-player-empty {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--term-faint);
+}
+.term-player-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+.term-player > header {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-}
-.term-recordings-tools button {
-  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: 1px solid var(--term-line);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--term-ink);
-  font-size: 12px;
+  gap: 6px 14px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--term-line);
+  background: var(--term-surface);
+  color: var(--term-dim);
+  font-size: 11.5px;
 }
-.term-recordings-tools button[data-on="true"] {
-  border-color: var(--term-accent);
+.term-player-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--term-err);
+  box-shadow: 0 0 8px var(--term-err);
+}
+.term-player > header b {
   color: var(--term-accent);
+  font-family: var(--term-mono);
+  font-size: 12.5px;
+  font-weight: 500;
 }
-.term-recordings-tools input {
-  flex: 1;
-  min-width: 140px;
+.term-player-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 240px;
+  margin-left: auto;
   padding: 4px 9px;
   border: 1px solid var(--term-line);
   border-radius: 7px;
-  outline: none;
   background: var(--term-bg);
+}
+.term-player-search:focus-within {
+  border-color: var(--term-accent);
+}
+.term-player-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
   color: var(--term-ink);
   font-family: var(--term-mono);
   font-size: 12px;
 }
-.term-recordings-screen,
-.term-recordings-hits {
+.term-player-search small {
+  color: var(--term-accent);
+  font-family: var(--term-mono);
+}
+.term-player-stage {
+  position: relative;
+  box-sizing: border-box;
   flex: 1;
   min-height: 0;
-  margin: 0;
-  padding: 8px;
-  overflow: auto;
-  border: 1px solid var(--term-line);
-  border-radius: 8px;
-  background: #000;
+  /* The padding is here, not on the screen: the terminal fits its own box exactly. */
+  padding: 12px 6px 10px 14px;
 }
-.term-recordings-hits {
+.term-player-screen {
+  box-sizing: border-box;
+  /* xterm measures its rows from the inherited line height: keep them compact. */
+  line-height: 1.25;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.term-player-screen[data-hidden="true"] {
+  visibility: hidden;
+}
+.term-player-screen .xterm {
+  height: 100%;
+}
+.term-player-screen .xterm-viewport {
+  background: transparent !important;
+}
+.term-player-hits {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 10px 14px;
+  overflow: auto;
+  list-style: none;
   color: #c9d4e6;
   font-family: var(--term-mono);
   font-size: 12px;
+  line-height: 1.6;
   white-space: pre;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.term-player-hits li:not(.term-rows-empty) {
+  padding: 0 6px;
+  border-left: 2px solid var(--term-line);
+}
+.term-player-hits mark {
+  border-radius: 2px;
+  background: #ffb454;
+  color: #1a1206;
+}
+.term-player > footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--term-line);
+  background: var(--term-surface);
+}
+.term-player-play {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--term-accent);
+  color: var(--term-bg);
+  transition: transform 0.1s;
+}
+.term-player-play:hover {
+  transform: scale(1.07);
+}
+.term-player-time {
+  flex: none;
+  min-width: 82px;
+  color: var(--term-dim);
+  font-family: var(--term-mono);
+  font-size: 12px;
+}
+.term-player-seek {
+  flex: 1;
+  min-width: 60px;
+  height: 5px;
+  border-radius: 999px;
+  outline: none;
+  appearance: none;
+  background: linear-gradient(
+    to right,
+    var(--term-accent) var(--done, 0%),
+    var(--term-line) var(--done, 0%)
+  );
+  cursor: pointer;
+}
+.term-player-seek::-webkit-slider-thumb {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--term-bg);
+  border-radius: 50%;
+  appearance: none;
+  background: var(--term-accent);
+}
+.term-player-seek::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--term-bg);
+  border-radius: 50%;
+  background: var(--term-accent);
+}
+.term-player-speeds {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--term-line);
+  border-radius: 8px;
+}
+.term-player-speeds button {
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--term-dim);
+  font-family: var(--term-mono);
+  font-size: 11.5px;
+}
+.term-player-speeds button[data-on="true"] {
+  background: color-mix(in srgb, var(--term-accent) 20%, transparent);
+  color: var(--term-accent);
+}
+@media (max-width: 860px) {
+  .term-recordings-body {
+    flex-direction: column;
+  }
+  .term-recordings-body > aside {
+    flex: 0 0 170px;
+    border-right: 0;
+    border-bottom: 1px solid var(--term-line);
+  }
 }
