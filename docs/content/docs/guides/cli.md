@@ -6,6 +6,7 @@ description: Start a server, inspect the catalog and verify connectivity.
 Use `mikrotik-mcp --help` for your installed release. Run from source with `bun src/cli.ts`, or from a build with `bun dist/cli.js`. Both use Bun.
 
 - `serve`: starts MCP and the configured background services. The default transport is stdio.
+- `dashboard --server <url>`: serves the dashboard of a server that runs on another machine. It needs no device configuration. See [Run the dashboard on another machine](/docs/guides/observability#run-the-dashboard-on-another-machine).
 - `devices`: prints configured connection targets; it does not test reachability.
 - `tools`: lists the tool catalog without changing a router.
 - `auth-check`: makes read-only connection probes to configured devices.
