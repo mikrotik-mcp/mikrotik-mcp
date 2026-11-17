@@ -306,3 +306,62 @@ export const paneStorage = {
     }
   },
 };
+
+// ── export ──────────────────────────────────────────────────────────────
+
+export interface ExportBlock {
+  ts: number;
+  command: string;
+  output: string;
+  status: string;
+  ms?: number;
+  error?: string;
+}
+export type ExportFormat = "txt" | "md" | "rsc";
+
+/**
+ * A pane's blocks as one document: `txt` is a transcript, `md` is a report with
+ * fenced blocks, `rsc` holds only the commands that succeeded (a script).
+ */
+export function exportSession(device: string, blocks: ExportBlock[], format: ExportFormat): string {
+  const when = (ts: number): string => new Date(ts).toISOString().replace("T", " ").slice(0, 19);
+  if (format === "rsc") {
+    const commands = blocks.filter((b) => b.status === "ok").map((b) => b.command);
+    return [`# ${device} - commands exported ${when(Date.now())} UTC`, ...commands, ""].join("\n");
+  }
+  if (format === "md") {
+    const parts = blocks.map((b) => {
+      const result = b.status === "ok" ? `${b.ms ?? 0} ms` : b.status;
+      const body = b.error ? `${b.output}\n${b.error}`.trim() : b.output;
+      return [
+        `### \`${b.command.replace(/`/g, "'")}\``,
+        `${when(b.ts)} UTC - ${result}`,
+        "",
+        "```text",
+        body || "(no output)",
+        "```",
+      ].join("\n");
+    });
+    return [`# Terminal session - ${device}`, "", ...parts, ""]
+      .join("\n\n")
+      .replace(/\n{3,}/g, "\n\n");
+  }
+  return blocks
+    .map((b) =>
+      [`[${when(b.ts)}] ${device} > ${b.command}`, b.output, b.error ? `! ${b.error}` : ""]
+        .filter(Boolean)
+        .join("\n"),
+    )
+    .join("\n\n")
+    .concat("\n");
+}
+
+/** Save text as a file through the browser. */
+export function downloadText(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

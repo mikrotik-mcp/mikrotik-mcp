@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Download,
   CornerDownLeft,
   Eraser,
   Eye,
@@ -34,10 +35,12 @@ import {
 } from "react";
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
-import type { Completion, RunEnd } from "./terminal-lib";
+import type { Completion, ExportFormat, RunEnd } from "./terminal-lib";
 import {
   cleanOutput,
   destructiveWord,
+  downloadText,
+  exportSession,
   favoritesStore,
   paneRegistry,
   paneStorage,
@@ -258,6 +261,9 @@ function BlockViewBase({
             data-on={starred}
           >
             <Star size={13} fill={starred ? "currentColor" : "none"} />
+          </button>
+          <button type="button" onClick={() => onAction("save", block)} title="Save as a text file">
+            <Download size={13} />
           </button>
           <button type="button" onClick={() => onAction("remove", block)} title="Remove block">
             <X size={13} />
@@ -634,6 +640,8 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
       else if (action === "rerun") submit(block.command);
       else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
       else if (action === "star") void favoritesStore.toggle(block.command);
+      else if (action === "save")
+        downloadText(`${device}-${block.id}.txt`, exportSession(device, [block], "txt"));
       else if (action === "watch") setWatch((current) => (current === block.id ? null : block.id));
       else if (action === "remove") {
         running.current.get(block.id)?.abort();
@@ -641,7 +649,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
         setBlocks((list) => list.filter((b) => b.id !== block.id));
       }
     },
-    [patch, submit],
+    [patch, submit, device],
   );
 
   /** The newest earlier command that starts with what is typed (accepted with →). */
@@ -774,6 +782,10 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
   );
   const retryIn = conn.retryAt ? Math.max(0, Math.ceil((conn.retryAt - now) / 1000)) : 0;
   const clear = (): void => setBlocks((list) => list.filter((b) => b.status === "running"));
+  const exportAs = (format: ExportFormat): void => {
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    downloadText(`${device}-${stamp}.${format}`, exportSession(device, blocks, format));
+  };
 
   return (
     <section
@@ -841,6 +853,22 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
           <button type="button" onClick={() => probeNow.current()} title="Check the connection now">
             <RotateCw size={12} />
           </button>
+          <details className="term-menu">
+            <summary title="Save this pane as a file">
+              <Download size={12} />
+            </summary>
+            <div>
+              <button type="button" onClick={() => exportAs("txt")}>
+                Transcript (.txt)
+              </button>
+              <button type="button" onClick={() => exportAs("md")}>
+                Report (.md)
+              </button>
+              <button type="button" onClick={() => exportAs("rsc")}>
+                Commands that ran (.rsc)
+              </button>
+            </div>
+          </details>
           <button type="button" onClick={clear} title="Clear this pane (Ctrl+L)">
             <Eraser size={12} />
           </button>
