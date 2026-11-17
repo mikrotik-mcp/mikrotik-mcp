@@ -99,7 +99,13 @@ vi.mock("../../src/core/transport", () => ({
   resolveJump: () => undefined,
   sshOptionsOf: (dc: { name: string }) => ({ name: dc.name }),
 }));
-vi.mock("../../src/core/connector", () => ({ executeMikrotikCommand: async () => "100/400" }));
+const commands: string[] = [];
+vi.mock("../../src/core/connector", () => ({
+  executeMikrotikCommand: async (command: string) => {
+    commands.push(command);
+    return command.includes("bad.rsc") ? "failure: bad command name" : "";
+  },
+}));
 vi.mock("../../src/core/context", () => ({ createContext: () => ({}) }));
 vi.mock("../../src/observability/recorder", () => ({ recordToolCall: audit }));
 vi.mock("../../src/observability/terminal-routes", () => ({
@@ -363,6 +369,44 @@ describe("folders", () => {
     expect(zip.readUInt32LE(first + 4)).toBe(
       crc32(routers.alpha!.disk.get("/flash/config.rsc") as Buffer),
     );
+  });
+});
+
+describe("router-made files and import", () => {
+  test("a backup and an export are made by the router, with a safe name", async () => {
+    commands.length = 0;
+    const made = await call("POST", "/api/files/make", {
+      device: "alpha",
+      kind: "backup",
+      name: "nightly",
+    });
+    expect(await made.json()).toEqual({ ok: true, file: "nightly.backup" });
+    await call("POST", "/api/files/make", { device: "alpha", kind: "export", name: "cfg" });
+    expect(commands).toEqual(["/system backup save name=nightly", "/export file=cfg"]);
+    const bad = await call("POST", "/api/files/make", {
+      device: "alpha",
+      kind: "backup",
+      name: "a b;c",
+    });
+    expect(bad.status).toBe(400);
+  });
+  test("an import is a dry run unless the caller says otherwise", async () => {
+    commands.length = 0;
+    await call("POST", "/api/files/import", { device: "alpha", path: "/flash/config.rsc" });
+    await call("POST", "/api/files/import", {
+      device: "alpha",
+      path: "/flash/config.rsc",
+      dryRun: false,
+    });
+    expect(commands).toEqual([
+      "/import file-name=flash/config.rsc verbose=yes dry-run=yes",
+      "/import file-name=flash/config.rsc verbose=yes",
+    ]);
+    const failed = await call("POST", "/api/files/import", { device: "alpha", path: "/bad.rsc" });
+    expect(await failed.json()).toEqual(expect.objectContaining({ ok: false, dryRun: true }));
+    expect(
+      (await call("POST", "/api/files/import", { device: "alpha", path: "/x.backup" })).status,
+    ).toBe(400);
   });
 });
 

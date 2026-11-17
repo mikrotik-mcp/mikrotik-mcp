@@ -895,3 +895,53 @@
   background: color-mix(in srgb, var(--term-warn) 16%, transparent);
   color: var(--term-warn);
 }
+
+/* ── router-made files, import ───────────────────────────────────────── */
+.files-more {
+  position: relative;
+}
+.files-more > summary {
+  display: inline-flex;
+  padding: 5px 7px;
+  border-radius: 7px;
+  color: var(--term-dim);
+  cursor: pointer;
+  list-style: none;
+}
+.files-more > summary::-webkit-details-marker {
+  display: none;
+}
+.files-more > summary:hover,
+.files-more[open] > summary {
+  background: color-mix(in srgb, var(--term-accent) 12%, transparent);
+  color: var(--term-ink);
+}
+.files-more > div {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 6;
+  display: grid;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--term-line);
+  border-radius: 9px;
+  background: var(--term-raised);
+  box-shadow: 0 14px 40px rgb(0 0 0 / 50%);
+}
+.files-pane .files-more > div button {
+  justify-content: flex-start;
+  padding: 6px 9px;
+  color: var(--term-ink);
+  white-space: nowrap;
+}
+.files-strip[data-tone="ok"] {
+  background: color-mix(in srgb, var(--term-ok) 10%, transparent);
+  color: var(--term-ok);
+}
+.files-viewer .files-strip button[data-danger="true"] {
+  background: var(--term-err);
+  border-color: var(--term-err);
+  color: var(--term-bg);
+  font-weight: 600;
+}

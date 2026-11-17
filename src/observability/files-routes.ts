@@ -18,6 +18,7 @@ import { crc32 } from "node:zlib";
 import type { SFTPWrapper } from "ssh2";
 import { createContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
+import { Cmd, looksLikeError } from "../core/routeros";
 import { getConfig, getDevice, resolveDeviceName } from "../core/runtime";
 import { isMacTelnetDevice, resolveJump, sshOptionsOf } from "../core/transport";
 import { logger } from "../logger";
@@ -871,6 +872,50 @@ export function createFilesRoutes(options: { denied: string | null }) {
           failed.length > 0,
         );
         return json({ ok: failed.length === 0, failed });
+      }
+
+      if (key === "POST /api/files/make") {
+        // A backup or an export, written by the router into its own files.
+        const kind = body.kind === "export" ? "export" : "backup";
+        const stamp = new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15);
+        const name = typeof body.name === "string" && body.name ? body.name : `${kind}-${stamp}`;
+        if (!/^[\w.-]{1,80}$/.test(name))
+          throw new DashboardInputError(400, "Use letters, digits, '.', '-' and '_' in the name.");
+        const command =
+          kind === "backup"
+            ? new Cmd("/system backup save").set("name", name).build()
+            : new Cmd("/export").set("file", name).build();
+        const output = await executeMikrotikCommand(command, createContext(undefined, device));
+        const failed = looksLikeError(output);
+        audit(device, "WRITE", started, { [kind]: name }, output || "created", failed);
+        if (failed) throw new DashboardInputError(502, output.trim());
+        return json({ ok: true, file: `${name}.${kind === "backup" ? "backup" : "rsc"}` });
+      }
+
+      if (key === "POST /api/files/import") {
+        // RouterOS names a file without the leading '/'.
+        const file = cleanPath(body.path).slice(1);
+        if (!/\.rsc$/i.test(file))
+          throw new DashboardInputError(400, "Only a .rsc file is imported.");
+        const dryRun = body.dryRun !== false;
+        const command = new Cmd("/import")
+          .set("file-name", file)
+          .raw("verbose=yes")
+          .flag("dry-run", dryRun)
+          .build();
+        const output = await executeMikrotikCommand(command, createContext(undefined, device), {
+          maxMs: 120_000,
+        });
+        const failed = looksLikeError(output);
+        audit(
+          device,
+          dryRun ? "READ" : "DANGEROUS",
+          started,
+          { import: file, dryRun },
+          output,
+          failed,
+        );
+        return json({ ok: !failed, dryRun, output });
       }
 
       if (key === "POST /api/files/rename") {

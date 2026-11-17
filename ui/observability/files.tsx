@@ -43,6 +43,7 @@ import {
   when,
 } from "./files-lib";
 import { FileCompare } from "./files-compare";
+import { ImportDialog } from "./files-import";
 import { FilesPane } from "./files-pane";
 import { FolderSync } from "./files-sync";
 import { FileViewer } from "./files-viewer";
@@ -442,6 +443,7 @@ export function FilesView(): ReactNode {
 
       <FileViewer readOnly={readOnly} />
       <FileCompare />
+      <ImportDialog />
       <FolderSync readOnly={readOnly} />
 
       {transfers.length > 0 && (

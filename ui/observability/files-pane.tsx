@@ -6,6 +6,7 @@
  */
 import type { IDockviewPanelProps } from "dockview-react";
 import {
+  Archive,
   ArrowDownToLine,
   ArrowUp,
   ArrowUpFromLine,
@@ -26,6 +27,7 @@ import {
   LifeBuoy,
   Package,
   Pencil,
+  Play,
   RefreshCw,
   Send,
   Trash2,
@@ -47,6 +49,7 @@ import {
   filePanes,
   filesApi,
   filesBus,
+  importStore,
   joinPath,
   kindOf,
   packageWarnings,
@@ -445,6 +448,32 @@ export function FilesPane(
               >
                 <FolderPlus size={14} />
               </button>
+              <details className="files-more">
+                <summary title="Have the router make a file">
+                  <Archive size={14} />
+                </summary>
+                <div>
+                  {(["backup", "export"] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={(event) => {
+                        event.currentTarget.closest("details")?.removeAttribute("open");
+                        setBusy(true);
+                        filesApi
+                          .make(device, kind)
+                          .then((file) => setNotice(`${device} made ${file}.`))
+                          .catch((e: unknown) =>
+                            setNotice(e instanceof Error ? e.message : String(e)),
+                          )
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      {kind === "backup" ? "Backup now (.backup)" : "Export now (.rsc)"}
+                    </button>
+                  ))}
+                </div>
+              </details>
               <button
                 type="button"
                 className="files-upload"
@@ -761,6 +790,17 @@ export function FilesPane(
                     }}
                   />
                 </span>
+              )}
+              {chosen.length === 1 && chosen[0] && /\.rsc$/i.test(chosen[0].name) && (
+                <button
+                  type="button"
+                  title="Check this script on the router, then run it"
+                  onClick={() =>
+                    importStore.set({ device, path: joinPath(path, chosen[0]?.name ?? "") })
+                  }
+                >
+                  <Play size={13} /> Import…
+                </button>
               )}
               {chosen.length === 1 && chosen[0] && (
                 <button

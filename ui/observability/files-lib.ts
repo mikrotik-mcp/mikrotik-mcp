@@ -127,6 +127,9 @@ export const pickForCompare = (file: FileRef): void => {
   compareStore.set(first && compareStore.get().length === 1 ? [first, file] : [file]);
 };
 
+/** The `.rsc` file open in the import dialog, or null. */
+export const importStore = store<FileRef | null>(null);
+
 /** Files the viewer can show: text kinds, up to the server's 1 MiB limit. */
 export const canPreview = (entry: FileEntry): boolean =>
   !entry.dir &&
@@ -158,6 +161,25 @@ export const filesApi = {
     });
     if (!res.ok) throw await failure(res);
     filesBus.changed(file.device, parentOf(file.path));
+  },
+  /** Have the router write a backup or an export into its files. */
+  async make(device: string, kind: "backup" | "export"): Promise<string> {
+    const answer = await postJson<{ file?: string; error?: string }>("/api/files/make", {
+      device,
+      kind,
+    });
+    if (!answer.file) throw new Error(answer.error ?? "The router did not make the file.");
+    filesBus.changed(device, "/");
+    return answer.file;
+  },
+  /** Run a `.rsc` file. A dry run reports the errors and changes nothing. */
+  async importScript(file: FileRef, dryRun: boolean): Promise<{ ok: boolean; output: string }> {
+    const answer = await postJson<{ ok?: boolean; output?: string; error?: string }>(
+      "/api/files/import",
+      { device: file.device, path: file.path, dryRun },
+    );
+    if (answer.error) throw new Error(answer.error);
+    return { ok: answer.ok === true, output: answer.output ?? "" };
   },
   remove: (device: string, paths: string[]): Promise<void> =>
     postFiles("/api/files/delete", { device, paths }),
