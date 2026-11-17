@@ -2027,7 +2027,9 @@
         "ui/observability/files.tsx",
         "ui/observability/files-pane.tsx",
         "ui/observability/files-lib.ts",
-        "src/observability/files-routes.ts"
+        "src/observability/files-routes.ts",
+        "src/observability/files-trash.ts",
+        "src/observability/files-schedules.ts"
       ],
       "reviewScope": "Controls, keys, limits, safety rules and routes checked against source."
     }

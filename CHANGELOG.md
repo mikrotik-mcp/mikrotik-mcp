@@ -27,6 +27,31 @@ the GitHub release notes.
   - Served only on a protected dashboard (token or loopback), like the
     Terminal. A read-only server lists, searches and downloads only. Every
     operation reaches the audit feed as `dashboard_files`.
+  - View and edit text files in the browser, with RouterOS colours for `.rsc`,
+    and compare two files, also on two routers.
+  - Whole folders: drop a folder to upload it, drag a folder to copy it, and
+    download a selection as one ZIP archive.
+  - Upload to all: one file to the same folder on every open router.
+  - Compare folders: what two folders have and do not have, and copy what is
+    missing.
+  - A `.npk` for another architecture or RouterOS version is reported before
+    the upload.
+  - Backup now and Export now on the router, and Import of a `.rsc` file with
+    a dry run first.
+  - Direct copy: the destination router fetches a large file from the source
+    by itself, with a fall back to the relayed copy.
+  - SHA-256 for every relayed copy, Verify to read the copy back, and copies
+    over 8 MiB that continue after a failure. A retried download continues at
+    its offset.
+  - Recycle bin: files the page deleted or replaced are kept on the server for
+    7 days and can be put back.
+  - Vault and S3: save router files to the backup vault (and the bucket), and
+    send a vault file to a router.
+  - Scheduled collection of matching router files into the vault, with a
+    number of files to keep.
+  - Storage analysis with the largest files and what is usually safe to remove.
+  - A right-click menu on rows, folder bookmarks and saved workspaces.
+  - Follow (live tail) for a file that grows.
 - `dashboard.files` (`--dashboard-files`, `MIKROTIK_DASHBOARD__FILES`, default
   `true`) turns the page off.
 
