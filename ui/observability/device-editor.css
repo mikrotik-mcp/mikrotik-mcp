@@ -7,8 +7,10 @@
   gap: 0;
   padding: 0;
   overflow: hidden;
-  border-radius: 22px;
-  box-shadow: 0 32px 100px #0005;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 32px 100px rgba(0, 0, 0, 0.33);
 }
 .device-editor__header {
   display: flex;

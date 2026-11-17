@@ -11,13 +11,13 @@
  *   --accent  is shadcn's MUTED HOVER SURFACE (`hover:bg-accent`). It is NOT a
  *             brand colour. An earlier revision aliased it to the bright
  *             per-view accent, which lights up every hover state.
- *   --brand   is the signal-blue identity (nav, focus ring, chart series),
+ *   --brand   is the indigo identity (nav, focus ring, links),
  *             separate from success/warning/error semantics.
  */
 /* Must precede every other rule: `@import url()` is only legal at the top of a
    stylesheet. Kept in CSS (not an index.html <link>) because the build inliner
    reads stylesheet links off disk and would choke on a remote href. */
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 /* SVG geometry, filters and @keyframes that utilities cannot express. */
@@ -29,45 +29,65 @@
 /* shadcn's dark variant keys off a `.dark` class on <html>, set by main.tsx. */
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Values come from the "MikroTik MCP" design system (Linear-inspired): dark is
+ * primary, light is its derived counterpart. Glass layers (`--secondary`,
+ * `--accent`, borders) are translucent white on dark and translucent ink on
+ * light, so they sit on any of the three surface steps.
+ */
+
 /* ── Light ────────────────────────────────────────────────────────────────── */
 :root {
-  --background: #f1f5fa;
-  --foreground: #172b46;
-  --card: #ffffff;
-  --card-foreground: #172b46;
+  --background: #ffffff;
+  --foreground: #08090a;
+  --card: #f7f8f8;
+  --card-foreground: #08090a;
   --popover: #ffffff;
-  --popover-foreground: #172b46;
-  --primary: #245bd6;
-  --primary-foreground: #ffffff;
-  --secondary: #e8eef7;
-  --secondary-foreground: #172b46;
-  --muted: #eaf0f7;
-  --muted-foreground: #5c6e86;
-  --accent: #e7eefb;
-  --accent-foreground: #172b46;
-  --destructive: #e5484d;
+  --popover-foreground: #08090a;
+  /* The solid "inverse" button: one decisive action per view. */
+  --primary: #18191a;
+  --primary-foreground: #f7f8f8;
+  /* Glass fill: the default button and chips. */
+  --secondary: rgba(8, 9, 10, 0.05);
+  --secondary-foreground: #08090a;
+  --muted: #eff0f1;
+  --muted-foreground: #62666d;
+  --accent: rgba(8, 9, 10, 0.05);
+  --accent-foreground: #08090a;
+  /* Darkened pink so it passes as text on white (5.2:1); white on it passes too. */
+  --destructive: #d0136b;
   --destructive-foreground: #ffffff;
-  --success: #18794e;
-  --warning: #ab6400;
-  --border: #d8e1ed;
-  --input: #c8d4e4;
-  --radius: 0.65rem;
-  --shell-sidebar: #f8fafd;
-  --shell-selected: #e5edfc;
-  --shell-shadow: 0 3px 12px #233f6310, 0 1px 2px #233f6308;
+  --success: #00875a;
+  --warning: #a35a12;
+  --border: rgba(8, 9, 10, 0.08);
+  --input: rgba(8, 9, 10, 0.14);
+  --radius: 0.5rem;
+  --shell-sidebar: #f7f8f8;
+  --shell-selected: rgba(8, 9, 10, 0.08);
+  --shell-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(8, 9, 10, 0.04);
 
-  --page-accent: #245bd6;
-  --page-accent-2: #427db3;
+  /* Design-system extras. */
+  --overlay-02: rgba(8, 9, 10, 0.02);
+  --overlay-03: rgba(8, 9, 10, 0.03);
+  --overlay-08: rgba(8, 9, 10, 0.08);
+  --text-faint: #8a8f98;
+  --on-accent: #08090a;
+  --shadow-button:
+    inset 0 0 0 1px rgba(8, 9, 10, 0.08), 0 1px 1px 0 rgba(0, 0, 0, 0.07),
+    0 0 1px 0 rgba(0, 0, 0, 0.08);
+
+  --page-accent: #5e6ad2;
+  --page-accent-2: #62666d;
   --brand: var(--page-accent);
   --brand-foreground: #ffffff;
   --ring: var(--brand);
 
-  /* Data-visualisation palette, shared by recharts and the SVG views. */
-  --chart-1: #0068d6;
-  --chart-2: #0f8a7e;
-  --chart-3: #3d8f2f;
-  --chart-4: #a35200;
-  --chart-5: #7048c4;
+  /* Data-visualisation palette: interactive, success, warning, danger, neutral. */
+  --chart-1: #5e6ad2;
+  --chart-2: #00875a;
+  --chart-3: #a35a12;
+  --chart-4: #d0136b;
+  --chart-5: #62666d;
 
   /*
    * Categorical palette for the memory graph's entity types, which hashes a type
@@ -87,41 +107,50 @@
   --entity-10: #b4530f;
 }
 
-/* ── Dark (the dashboard's historical default) ────────────────────────────── */
+/* ── Dark (the dashboard's default) ───────────────────────────────────────── */
 .dark {
-  --background: #0d1422;
-  --foreground: #e6edf8;
-  --card: #141e30;
-  --card-foreground: #e6edf8;
-  --popover: #1a263b;
-  --popover-foreground: #e6edf8;
-  --primary: #94b9ff;
-  --primary-foreground: #101e35;
-  --secondary: #1e2c42;
-  --secondary-foreground: #e6edf8;
-  --muted: #1c293e;
-  --muted-foreground: #9daec5;
-  --accent: #23344f;
-  --accent-foreground: #e6edf8;
-  --destructive: #ff5c5c;
-  --destructive-foreground: #ffffff;
-  --success: #2dd4a7;
-  --warning: #f5a623;
-  --border: #2a3951;
-  --input: #3b4e6b;
-  --page-accent: #94b9ff;
-  --page-accent-2: #81c5d7;
-  --brand-foreground: #101e35;
-  --shell-sidebar: #111a2b;
-  --shell-selected: #223858;
-  --shell-shadow: 0 4px 18px #02081624, 0 1px 0 #ffffff04 inset;
+  --background: #08090a;
+  --foreground: #f7f8f8;
+  --card: #0f1011;
+  --card-foreground: #f7f8f8;
+  --popover: #18191a;
+  --popover-foreground: #f7f8f8;
+  --primary: #e5e5e6;
+  --primary-foreground: #08090a;
+  --secondary: rgba(255, 255, 255, 0.05);
+  --secondary-foreground: #f7f8f8;
+  --muted: #18191a;
+  --muted-foreground: #8a8f98;
+  --accent: rgba(255, 255, 255, 0.05);
+  --accent-foreground: #f7f8f8;
+  /* White on #f91880 is 3.8:1, so text on the danger fill is dark ink. */
+  --destructive: #f91880;
+  --destructive-foreground: #08090a;
+  --success: #00ba7c;
+  --warning: #f2994a;
+  --border: rgba(255, 255, 255, 0.05);
+  --input: rgba(255, 255, 255, 0.08);
+  --page-accent: #828fff;
+  --page-accent-2: #8a8f98;
+  --brand-foreground: #08090a;
+  --shell-sidebar: #0f1011;
+  --shell-selected: rgba(255, 255, 255, 0.08);
+  --shell-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 
-  /* Geist's vibrant series, legible on near-black. */
-  --chart-1: #3291ff;
-  --chart-2: #2dd4bf;
-  --chart-3: #69d05a;
-  --chart-4: #f5a623;
-  --chart-5: #9d7bff;
+  --overlay-02: rgba(255, 255, 255, 0.02);
+  --overlay-03: rgba(255, 255, 255, 0.03);
+  --overlay-08: rgba(255, 255, 255, 0.08);
+  --text-faint: #62666d;
+  --on-accent: #08090a;
+  --shadow-button:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.6), 0 4px 4px 0 rgba(0, 0, 0, 0.1);
+
+  --chart-1: #5e6ad2;
+  --chart-2: #00ba7c;
+  --chart-3: #f2994a;
+  --chart-4: #f91880;
+  --chart-5: #8a8f98;
 
   --entity-1: #3291ff;
   --entity-2: #34d399;
@@ -154,6 +183,11 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
+  --color-on-accent: var(--on-accent);
+  --color-overlay-02: var(--overlay-02);
+  --color-overlay-03: var(--overlay-03);
+  --color-overlay-08: var(--overlay-08);
+  --color-faint: var(--text-faint);
   --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -167,16 +201,19 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
-  --font-sans: "Avenir Next", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Design-system radii: 4 / 6 / 8, pills via rounded-full. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans:
+    "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-mt);
 }
 
 @layer base {
   :root {
-    --font-mt: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --font-mt: "Berkeley Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   }
 
   * {

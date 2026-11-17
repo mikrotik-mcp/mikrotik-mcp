@@ -6,7 +6,6 @@ import type { HTMLMotionProps } from "motion/react";
 import { forwardRef, useCallback, useRef, useState } from "react";
 import type { PointerEvent, ReactNode } from "react";
 import { EASE_OUT, SPRING_PRESS } from "@/components/beui/registry/lib/ease";
-import { useHoverCapable } from "@/components/beui/registry/lib/hooks/use-hover-capable";
 import { cn } from "@/components/beui/registry/lib/utils";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "outline";
@@ -33,15 +32,15 @@ type Ripple = { id: number; x: number; y: number; size: number };
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary: "bg-primary text-primary-foreground hover:bg-primary/90",
   secondary: "border border-border bg-card text-foreground hover:border-border",
-  ghost: "text-muted-foreground hover:text-foreground hover:bg-primary/5",
-  outline: "border border-border bg-transparent text-foreground hover:bg-primary/5",
+  ghost: "text-muted-foreground hover:text-foreground hover:bg-accent",
+  outline: "border border-border bg-transparent text-foreground hover:bg-accent",
 };
 
 const SIZE_CLASS: Record<ButtonSize, string> = {
   sm: "h-8 px-3 text-xs gap-1.5 rounded-full",
   md: "h-10 px-5 text-sm gap-2 rounded-full",
   lg: "h-12 px-6 text-base gap-2 rounded-full",
-  icon: "h-8 w-8 rounded-lg",
+  icon: "h-8 w-8 rounded-sm",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -59,7 +58,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const reduce = useReducedMotion();
-    const canHover = useHoverCapable();
     const [ripples, setRipples] = useState<Ripple[]>([]);
     const nextId = useRef(0);
 
@@ -89,7 +87,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         type="button"
         whileTap={reduce ? undefined : { scale: pressScale }}
-        whileHover={reduce || !canHover ? undefined : { scale: 1.02 }}
         transition={SPRING_PRESS}
         onPointerDown={handlePointerDown}
         className={cn(
@@ -139,13 +136,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 export const ButtonLink = forwardRef<HTMLAnchorElement, ButtonLinkProps>(
   ({ variant = "primary", size = "md", pressScale = 0.93, className, children, ...rest }, ref) => {
     const reduce = useReducedMotion();
-    const canHover = useHoverCapable();
 
     return (
       <motion.a
         ref={ref}
         whileTap={reduce ? undefined : { scale: pressScale }}
-        whileHover={reduce || !canHover ? undefined : { scale: 1.02 }}
         transition={SPRING_PRESS}
         className={cn(
           "inline-flex items-center justify-center font-medium select-none",

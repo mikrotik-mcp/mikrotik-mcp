@@ -7,42 +7,42 @@
   display: flex;
   justify-content: center;
   pointer-events: none;
-  --island-signal: #5ee4c0;
+  --island-signal: #00ba7c;
 }
 .operations-island-anchor[data-signal="offline"],
 .operations-island-anchor[data-signal="paused"] {
-  --island-signal: #a5b2ca;
+  --island-signal: #8a8f98;
 }
 .operations-island-anchor[data-signal="error"] {
-  --island-signal: #ff8f92;
+  --island-signal: #f91880;
 }
 .operations-island-anchor[data-signal="alerts"] {
-  --island-signal: #f3c77e;
+  --island-signal: #f2994a;
 }
 .operations-island-anchor[data-signal="busy"] {
-  --island-signal: #99baff;
+  --island-signal: #828fff;
 }
 .operations-island {
   pointer-events: auto;
-  color: #eef4ff;
-  background: linear-gradient(160deg, #17243bfa, #090f1cfa 75%);
-  border: 1px solid #7c95bd42;
+  color: #f7f8f8;
+  background: #18191a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 18px 64px #02071355,
-    0 3px 14px #02071344,
-    inset 0 1px 0 #d5e7ff12;
+    0 18px 64px rgba(0, 0, 0, 0.5),
+    0 3px 14px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(24px);
   max-width: calc(100vw - 24px);
-  --foreground: #eef4ff;
-  --background: #0d1525;
-  --muted-foreground: #a5b4cd;
+  --foreground: #f7f8f8;
+  --background: #0f1011;
+  --muted-foreground: #8a8f98;
   --card: #ffffff07;
   --border: #ffffff17;
-  --primary: #273d61;
-  --primary-foreground: #eaf2ff;
+  --primary: #e5e5e6;
+  --primary-foreground: #08090a;
   --accent: #ffffff0c;
-  --accent-foreground: #eef4ff;
-  --ring: #9bbaff;
+  --accent-foreground: #f7f8f8;
+  --ring: #828fff;
 }
 .operations-island-anchor .island-compact {
   height: 44px;
@@ -71,7 +71,7 @@
 }
 .island-compact-copy > span {
   font-size: 10px;
-  color: #9dafca;
+  color: #8a8f98;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -86,7 +86,7 @@
   font-variant-numeric: tabular-nums;
 }
 .island-chevron {
-  color: #9bacc6;
+  color: #8a8f98;
 }
 .island-equalizer {
   display: flex;
@@ -137,7 +137,7 @@
 .island-header p {
   margin: 0 0 3px;
   font-size: 8px;
-  color: #9dafca;
+  color: #8a8f98;
   letter-spacing: 1.7px;
 }
 .island-header h2 {
@@ -148,13 +148,13 @@
 }
 .island-close {
   margin-left: auto;
-  color: #afbdd3;
+  color: #8a8f98;
 }
 .island-connection {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #a0b2cc;
+  color: #8a8f98;
   font-size: 10px;
   margin: 16px 0;
 }
@@ -163,16 +163,16 @@
   height: 5px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: #8494ab;
+  background: #62666d;
 }
 .island-dot.is-connected {
-  background: #5ee4c0;
-  box-shadow: 0 0 0 3px #5ee4c00c;
+  background: #00ba7c;
+  box-shadow: 0 0 0 3px rgba(0, 186, 124, 0.05);
 }
 .island-tab-list {
   width: 100%;
   justify-content: space-between;
-  background: #03091666;
+  background: rgba(0, 0, 0, 0.4);
   border-color: #ffffff0c;
   padding: 4px;
 }
@@ -192,7 +192,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: #90a3c0;
+  color: #8a8f98;
   font-size: 9px;
 }
 .island-chart-heading > span:first-child {
@@ -206,7 +206,7 @@
   height: 54px;
   margin-top: 13px;
   padding: 0 3px;
-  background-image: radial-gradient(#b4c9e121 0.7px, transparent 0.7px);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 0.7px, transparent 0.7px);
   background-size: 8px 8px;
 }
 .island-volume[data-stale="true"] {
@@ -227,16 +227,16 @@
   transition: height 0.5s ease;
 }
 .island-bar-ok {
-  background: linear-gradient(#63d4bc, #2b7f7466);
+  background: #00ba7c;
 }
 .island-bar-error {
-  background: #f29599;
+  background: #f91880;
 }
 .island-chart-caption {
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  color: #a0b2cc;
+  color: #8a8f98;
   font-size: 9px;
   margin-top: 8px;
 }
@@ -248,11 +248,11 @@
 .island-chart-caption i {
   width: 4px;
   height: 4px;
-  background: #63d4bc;
+  background: #00ba7c;
   border-radius: 1px;
 }
 .island-chart-caption .is-error {
-  background: #f29599;
+  background: #f91880;
   margin-left: 5px;
 }
 .island-metrics {
@@ -276,7 +276,7 @@
 }
 .island-metrics span {
   display: block;
-  color: #a0b2cc;
+  color: #8a8f98;
   font-size: 10px;
   margin-bottom: 4px;
 }
@@ -290,7 +290,7 @@
   display: grid;
   gap: 8px;
   padding: 14px 0 6px;
-  color: #b3c3db;
+  color: #d0d6e0;
   font-size: 11px;
 }
 .island-insights > span {
@@ -301,8 +301,8 @@
 .operations-island .island-link {
   width: 100%;
   justify-content: space-between;
-  color: #adc9fb;
-  background: #91b9ff09;
+  color: #828fff;
+  background: rgba(130, 143, 255, 0.06);
   font-size: 11px;
   padding-inline: 12px;
   margin-top: 10px;
@@ -322,7 +322,7 @@
   align-items: center;
   gap: 10px;
   padding: 10px 4px;
-  color: #dce8fa;
+  color: #f7f8f8;
   border-bottom: 1px solid #ffffff0a;
   white-space: normal;
 }
@@ -333,15 +333,15 @@
   height: 34px;
   border-radius: 10px;
   background: #ffffff08;
-  color: #93a3ba;
+  color: #8a8f98;
 }
 .island-device[data-state="reachable"] .island-router-icon {
-  color: #5ee4c0;
-  background: #5ee4c00a;
+  color: #00ba7c;
+  background: rgba(0, 186, 124, 0.06);
 }
 .island-device[data-state="unreachable"] .island-router-icon {
-  color: #ff8f92;
-  background: #ff8f920a;
+  color: #f91880;
+  background: rgba(249, 24, 128, 0.06);
 }
 .island-row-copy {
   display: grid;
@@ -360,13 +360,13 @@
 }
 .island-row-copy > span {
   display: block;
-  color: #9dafca;
+  color: #8a8f98;
   font-size: 10px;
   text-align: left;
 }
 .island-device-latency,
 .island-event-duration {
-  color: #a8bad5;
+  color: #d0d6e0;
   font-size: 10px;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
@@ -377,14 +377,14 @@
   gap: 8px;
 }
 .island-error-text {
-  color: #ff8f92;
+  color: #f91880;
 }
 .island-success-text {
-  color: #5ee4c0;
+  color: #00ba7c;
 }
 .island-empty,
 .island-footnote {
-  color: #a0b2cc;
+  color: #8a8f98;
   font-size: 10px;
   line-height: 1.7;
   margin: 12px 0 0;
@@ -394,7 +394,7 @@
 }
 .island-empty-chart {
   font-size: 11px;
-  color: #a0b2cc;
+  color: #8a8f98;
   margin: auto;
 }
 .island-footer {
@@ -403,7 +403,7 @@
   gap: 5px;
   font-size: 8px;
   letter-spacing: 0.7px;
-  color: #8da2c0;
+  color: #8a8f98;
   margin-top: 16px;
   padding: 13px 0 15px;
   border-top: 1px solid #ffffff0c;

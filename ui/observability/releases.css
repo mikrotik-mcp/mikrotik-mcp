@@ -59,7 +59,7 @@
 }
 .release-timeline-node[data-relation="current"] {
   background: var(--success);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--success);
 }
 .release-timeline-node[data-relation="newer"] {
@@ -70,7 +70,7 @@
   min-height: 64px;
 }
 .release-downgrade {
-  --release-warning: #8a4b00;
+  --release-warning: var(--warning);
   height: 36px;
   gap: 8px;
   padding: 5px 10px 5px 5px;
@@ -84,9 +84,6 @@
     background 180ms,
     border-color 180ms,
     box-shadow 180ms;
-}
-.dark .release-downgrade {
-  --release-warning: #f6bc64;
 }
 .release-downgrade:focus-visible,
 .release-downgrade:hover:not(:disabled) {

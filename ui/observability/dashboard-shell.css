@@ -563,7 +563,7 @@
   margin-bottom: 5px;
 }
 .shell-page-title h1 {
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-size: clamp(24px, 2.4vw, 32px);
   font-weight: 650;
   letter-spacing: -1.1px;

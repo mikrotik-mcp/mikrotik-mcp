@@ -57,6 +57,7 @@
     "build:mcp": "bun run --bun scripts/build-mcpb.ts",
     "build:mcp:all": "bun run --bun scripts/build-mcpb.ts --all",
     "dev": "bunup --watch",
+    "dev:all": "bun run scripts/dev-all.ts",
     "dev:dashboard": "bunx vp dev -c ui/vite.observability.config.ts",
     "dev:tools": "bunx vp dev -c ui/vite.observability.config.ts --mode devtools",
     "docker:publish": "bun --no-env-file scripts/publish-docker.ts",

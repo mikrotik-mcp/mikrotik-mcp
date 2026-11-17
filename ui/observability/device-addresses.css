@@ -153,11 +153,11 @@
   background: var(--muted-foreground);
 }
 .device-address-status__row[data-state="connected"] > i {
-  background: var(--success, #14b8a6);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success, #14b8a6) 12%, transparent);
+  background: var(--success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 12%, transparent);
 }
 .device-address-status__row[data-state="failed"] > i {
-  background: var(--warning, #f59e0b);
+  background: var(--warning);
 }
 .device-address-status__row code {
   font-size: 12px;
@@ -187,11 +187,11 @@
   color: var(--muted-foreground);
 }
 .device-address-status__row[data-state="connected"] strong {
-  color: var(--success, #14b8a6);
+  color: var(--success);
 }
 .device-address-status__row[data-state="failed"] strong,
 .device-address-status__row .device-address-status__error {
-  color: var(--warning, #f59e0b);
+  color: var(--warning);
 }
 .device-address-status__row .device-address-status__preferred {
   display: flex;

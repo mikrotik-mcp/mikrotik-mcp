@@ -1,21 +1,16 @@
 .activity-chart {
-  --activity-ok: #087f8c;
-  --activity-error: #be4934;
-  --activity-dot: #b9ccda;
-  --activity-grid: #ccdbe5;
-  --activity-cursor: #7e98a9;
-  --activity-surface: #f6fafc;
+  --activity-ok: var(--success);
+  --activity-error: var(--destructive);
+  --activity-dot: #d0d6e0;
+  --activity-grid: var(--border);
+  --activity-cursor: var(--muted-foreground);
+  --activity-surface: var(--card);
   display: grid;
   gap: 12px;
   min-width: 0;
 }
 .dark .activity-chart {
-  --activity-ok: #48d8cf;
-  --activity-error: #fb967e;
-  --activity-dot: #3d5369;
-  --activity-grid: #31455a;
-  --activity-cursor: #8fa8bf;
-  --activity-surface: #101c2c;
+  --activity-dot: #3e3e44;
 }
 .activity-toolbar {
   display: flex;
@@ -100,7 +95,9 @@
   background: var(--popover);
   border-color: var(--border);
   border-radius: 10px;
-  box-shadow: 0 8px 25px #0002;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.4),
+    0 8px 24px rgba(0, 0, 0, 0.12);
 }
 .activity-tooltip > div:first-child {
   font-family: var(--font-mt);

@@ -1,13 +1,8 @@
 .feature-new-badge {
-  color: #0f766e;
-  background: #ccfbf1;
-  border-color: #5eead4;
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 30%, transparent);
   vertical-align: middle;
-}
-.dark .feature-new-badge {
-  color: #99f6e4;
-  background: #134e4a;
-  border-color: #0f766e;
 }
 .feature-new-menu {
   height: 18px;
@@ -28,7 +23,7 @@
   top: -3px;
   right: -4px;
   border-radius: 50%;
-  background: #14b8a6;
+  background: var(--brand);
   box-shadow: 0 0 0 2px var(--shell-sidebar, var(--background));
 }
 .shell-page-heading {

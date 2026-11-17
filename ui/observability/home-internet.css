@@ -2,7 +2,7 @@
   display: grid;
   gap: 24px;
   min-width: 0;
-  --home-signal: #2dd4bf;
+  --home-signal: var(--success);
 }
 .home-intro {
   display: flex;
@@ -213,10 +213,7 @@
   border-radius: 20px;
 }
 .home-findings article[data-state="suspected"] .home-finding-label b {
-  color: #bf8700;
-}
-.dark .home-findings article[data-state="suspected"] .home-finding-label b {
-  color: #f2cc60;
+  color: var(--warning);
 }
 .home-findings article[data-state="unknown"] .home-finding-label b {
   color: var(--muted-foreground);

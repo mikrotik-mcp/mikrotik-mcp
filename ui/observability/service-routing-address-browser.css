@@ -170,7 +170,7 @@
   background: color-mix(in oklab, var(--muted) 30%, transparent);
 }
 .address-browser__coverage[data-complete="true"] > svg {
-  color: var(--success, #2dd4bf);
+  color: var(--success);
 }
 .address-browser__coverage small {
   display: block;
@@ -238,7 +238,7 @@
 }
 .address-browser__approx {
   font-size: 9px;
-  color: var(--warning, #f5a623);
+  color: var(--warning);
 }
 .address-browser__row-meta {
   padding-inline-end: 24px;
