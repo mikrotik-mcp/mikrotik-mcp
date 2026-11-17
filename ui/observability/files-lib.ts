@@ -11,6 +11,8 @@ export interface FilesState {
   readOnly: boolean;
   /** Deleted and replaced files are kept in the recycle bin. */
   trash?: boolean;
+  /** S3 is configured, so a file can also be saved there. */
+  s3?: boolean;
 }
 export interface FileEntry {
   name: string;
@@ -97,6 +99,12 @@ export const filesBus = {
   },
 };
 
+export interface VaultFile {
+  name: string;
+  bytes: number;
+  modified: number;
+}
+
 export interface TrashItem {
   id: string;
   device: string;
@@ -143,6 +151,9 @@ export const directStore = store(false);
 
 /** When on, a copy is read back from the destination and its SHA-256 compared with the source. */
 export const verifyStore = store(false);
+
+/** Whether the vault dialog is open. */
+export const vaultStore = store(false);
 
 /** Whether the recycle bin dialog is open. */
 export const trashStore = store(false);
@@ -205,6 +216,30 @@ export const filesApi = {
     );
     if (answer.error) throw new Error(answer.error);
     return { ok: answer.ok === true, output: answer.output ?? "" };
+  },
+  vault: (): Promise<{ dir: string; files: VaultFile[] }> => api("/api/files/vault"),
+  /** Copy router files into the backup vault of the server (and to S3). */
+  async saveToVault(device: string, paths: string[], s3: boolean): Promise<string[]> {
+    const answer = await postJson<{
+      saved?: { name: string }[];
+      failed?: { path: string; error: string }[];
+      error?: string;
+    }>("/api/files/vault/save", { device, paths, s3 });
+    if (answer.error) throw new Error(answer.error);
+    if (answer.failed?.length)
+      throw new Error(
+        answer.failed.map((item) => `${baseName(item.path)}: ${item.error}`).join("\n"),
+      );
+    return (answer.saved ?? []).map((item) => item.name);
+  },
+  async sendFromVault(name: string, device: string, dir: string): Promise<void> {
+    const answer = await postJson<{ ok?: boolean; error?: string }>("/api/files/vault/send", {
+      name,
+      device,
+      dir,
+    });
+    if (!answer.ok) throw new Error(answer.error ?? "The file was not sent.");
+    filesBus.changed(device, dir);
   },
   trash: (): Promise<TrashItem[]> =>
     api<{ items: TrashItem[] }>("/api/files/trash").then((answer) => answer.items),

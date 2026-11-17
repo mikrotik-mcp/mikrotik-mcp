@@ -428,6 +428,45 @@ describe("recycle bin", () => {
   });
 });
 
+test("router files are saved to the vault, and a vault file is sent to a router", async () => {
+  const { mkdtempSync, readFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "files-vault-"));
+  process.env.MIKROTIK_BACKUP_DIR = dir;
+  try {
+    config.readOnly = true; // saving reads the router, so a read-only server may do it
+    const saved = await call("POST", "/api/files/vault/save", {
+      device: "alpha",
+      paths: ["/backup.backup", "/flash"],
+    });
+    expect(await saved.json()).toEqual({
+      ok: false,
+      saved: [{ path: "/backup.backup", name: "alpha_backup.backup" }],
+      failed: [{ path: "/flash", error: "A folder is not saved. Select its files." }],
+    });
+    expect(readFileSync(join(dir, "alpha_backup.backup"), "utf8")).toBe("BINARY");
+    const listed = (await (await call("GET", "/api/files/vault")).json()) as {
+      files: { name: string; bytes: number }[];
+    };
+    expect(listed.files.map((file) => [file.name, file.bytes])).toEqual([
+      ["alpha_backup.backup", 6],
+    ]);
+    const send = { name: "alpha_backup.backup", device: "beta", dir: "/restore" };
+    expect((await call("POST", "/api/files/vault/send", send)).status).toBe(403);
+    config.readOnly = false;
+    expect(await (await call("POST", "/api/files/vault/send", send)).json()).toEqual({
+      ok: true,
+      path: "/restore/alpha_backup.backup",
+    });
+    expect(routers.beta!.disk.get("/restore/alpha_backup.backup")?.toString()).toBe("BINARY");
+    const escape = await call("POST", "/api/files/vault/send", { ...send, name: "../x" });
+    expect(escape.status).toBe(502);
+  } finally {
+    delete process.env.MIKROTIK_BACKUP_DIR;
+  }
+});
+
 describe("checksum and resume", () => {
   const big = "0123456789".repeat(1_000_000); // 10 MB: above the resumable size
   const copy = {
@@ -580,6 +619,7 @@ test("a locked page answers only its state", async () => {
     reason: "locked",
     readOnly: false,
     trash: false,
+    s3: false,
   });
   const list = (await locked(
     new Request("http://dash.test/api/files/list?device=alpha"),

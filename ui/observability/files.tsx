@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Square,
   Trash2,
+  Vault,
   X,
   Zap,
 } from "lucide-react";
@@ -45,6 +46,7 @@ import {
   parentOf,
   transferQueue,
   trashStore,
+  vaultStore,
   verifyStore,
   when,
 } from "./files-lib";
@@ -53,6 +55,7 @@ import { ImportDialog } from "./files-import";
 import { FilesPane } from "./files-pane";
 import { FolderSync } from "./files-sync";
 import { RecycleBin } from "./files-trash";
+import { VaultDialog } from "./files-vault";
 import { FileViewer } from "./files-viewer";
 import { PaneTab } from "./terminal-tab";
 import type { DevicesPayload } from "./types";
@@ -188,11 +191,11 @@ export function FilesView(): ReactNode {
         id: `files-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         component: "files",
         title: same.length ? `${device} · ${same.length + 1}` : device,
-        params: { device, path, readOnly, trash: state?.trash === true },
+        params: { device, path, readOnly, trash: state?.trash === true, s3: state?.s3 === true },
         position: reference ? { referencePanel: reference.id, direction: "right" } : undefined,
       });
     },
-    [readOnly, state?.trash],
+    [readOnly, state?.trash, state?.s3],
   );
 
   const onReady = useCallback(
@@ -296,6 +299,13 @@ export function FilesView(): ReactNode {
             title="Compare the open folders of two panes, and copy what is missing"
           >
             <FolderSyncIcon size={13} /> Compare folders
+          </button>
+          <button
+            type="button"
+            onClick={() => vaultStore.set(true)}
+            title="The backup vault of the server: send a saved file to a router"
+          >
+            <Vault size={13} /> Vault
           </button>
           {state.trash && (
             <button
@@ -481,6 +491,7 @@ export function FilesView(): ReactNode {
 
       <FileViewer readOnly={readOnly} />
       <FileCompare />
+      <VaultDialog readOnly={readOnly} />
       {state.trash && <RecycleBin readOnly={readOnly} />}
       <ImportDialog />
       <FolderSync readOnly={readOnly} />

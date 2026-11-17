@@ -32,6 +32,7 @@ import {
   RefreshCw,
   Send,
   Trash2,
+  Vault,
   X,
 } from "lucide-react";
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
@@ -90,6 +91,7 @@ export function FilesPane(
     path?: string;
     readOnly?: boolean;
     trash?: boolean;
+    s3?: boolean;
   }>,
 ): ReactNode {
   const { api } = props;
@@ -781,6 +783,34 @@ export function FilesPane(
               <Fingerprint size={13} /> Checksum
             </button>
           )}
+          {chosenFiles.length > 0 &&
+            (props.params.s3 ? [false, true] : [false]).map((s3) => (
+              <button
+                key={String(s3)}
+                type="button"
+                title={
+                  s3
+                    ? "Copy the selected files to the backup vault of the server and to S3"
+                    : "Copy the selected files to the backup vault of the server"
+                }
+                onClick={() => {
+                  setBusy(true);
+                  filesApi
+                    .saveToVault(
+                      device,
+                      chosenFiles.map((entry) => joinPath(path, entry.name)),
+                      s3,
+                    )
+                    .then((names) =>
+                      setNotice(`Saved to the vault${s3 ? " and S3" : ""}:\n${names.join("\n")}`),
+                    )
+                    .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                <Vault size={13} /> {s3 ? "S3" : "Vault"}
+              </button>
+            ))}
           {chosenFiles.length > 0 && chosenFiles.length <= 2 && chosenFiles.every(canPreview) && (
             <button
               type="button"

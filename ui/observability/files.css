@@ -967,3 +967,7 @@
   background: color-mix(in srgb, var(--term-err) 16%, transparent);
   color: var(--term-err);
 }
+.files-vault-filter {
+  width: auto;
+  margin: 0;
+}

@@ -15,11 +15,16 @@
  * searches and downloads only. Every operation reaches the audit feed.
  */
 import { createHash } from "node:crypto";
+import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { crc32 } from "node:zlib";
 import type { SFTPWrapper } from "ssh2";
+import { backupDir, safeName, writeBinaryBackup } from "../backups/vault";
 import { createContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
 import { Cmd, looksLikeError } from "../core/routeros";
+import { getS3Client, isS3Configured, s3Key } from "../core/s3";
+import { deviceSlug } from "../core/slug";
 import { getConfig, getDevice, resolveDeviceName } from "../core/runtime";
 import { isMacTelnetDevice, resolveJump, sshOptionsOf } from "../core/transport";
 import { logger } from "../logger";
@@ -507,6 +512,32 @@ export function closeFileSessions(): void {
   }
 }
 
+// ── vault ─────────────────────────────────────────────────────────────────
+/** A file is read into memory on its way to the vault; larger ones are refused. */
+export const MAX_VAULT_BYTES = 256 * 1024 * 1024;
+
+export interface VaultFile {
+  name: string;
+  bytes: number;
+  /** Milliseconds since the epoch. */
+  modified: number;
+}
+
+/** Every file in the backup vault of this host, newest first. */
+export function listVault(): VaultFile[] {
+  const dir = backupDir();
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .map((name) => ({ name, stats: statSync(join(dir, name)) }))
+    .filter(({ stats }) => stats.isFile())
+    .map(({ name, stats }) => ({ name, bytes: stats.size, modified: stats.mtimeMs }))
+    .sort((a, b) => b.modified - a.modified);
+}
+
+/** `<router>_<file>`, as the Backups page names its files, with only safe characters. */
+export const vaultName = (device: string, path: string): string =>
+  `${deviceSlug(device)}_${baseName(path).replace(/[^A-Za-z0-9._-]+/g, "-")}`;
+
 // ── direct copy ───────────────────────────────────────────────────────────
 interface Endpoint {
   host?: string;
@@ -673,6 +704,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
         reason: options.denied,
         readOnly,
         trash: trashEnabled(),
+        s3: isS3Configured(),
       });
     if (options.denied !== null) return json({ error: options.denied }, 403);
 
@@ -824,6 +856,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
       }
 
       if (key === "GET /api/files/trash") return json({ items: listTrash() });
+      if (key === "GET /api/files/vault") return json({ dir: backupDir(), files: listVault() });
 
       if (key === "GET /api/files/hash") {
         const device = deviceOf(url.searchParams.get("device"));
@@ -874,6 +907,52 @@ export function createFilesRoutes(options: { denied: string | null }) {
             }),
           );
         });
+      }
+
+      if (key === "POST /api/files/vault/save") {
+        // Reads the router and writes this host, so a read-only server may do it.
+        const input = JSON.parse((await readOperationBody(req, 65_536)) || "{}") as Record<
+          string,
+          unknown
+        >;
+        const device = deviceOf(input.device);
+        const paths = (Array.isArray(input.paths) ? input.paths : []).slice(0, 100).map(cleanPath);
+        if (paths.length === 0) throw new DashboardInputError(400, "Choose the files to save.");
+        const toS3 = input.s3 === true;
+        if (toS3 && !isS3Configured()) throw new DashboardInputError(400, "S3 is not configured.");
+        const started = Date.now();
+        const saved: { path: string; name: string; s3?: string }[] = [];
+        const failed: { path: string; error: string }[] = [];
+        await withSftp(device, async (sftp) => {
+          for (const file of paths) {
+            try {
+              const stats = await call<{ size: number; isDirectory: () => boolean }>((done) =>
+                sftp.stat(file, done),
+              );
+              if (stats.isDirectory()) throw new Error("A folder is not saved. Select its files.");
+              if (stats.size > MAX_VAULT_BYTES) throw new Error("The file is larger than 256 MiB.");
+              const data = await call<Buffer>((done) => sftp.readFile(file, done));
+              const name = writeBinaryBackup(vaultName(device, file), data);
+              const entry: (typeof saved)[number] = { path: file, name };
+              if (toS3) {
+                entry.s3 = s3Key(name, device);
+                await getS3Client().write(entry.s3, data);
+              }
+              saved.push(entry);
+            } catch (error) {
+              failed.push({ path: file, error: message(error) });
+            }
+          }
+        });
+        audit(
+          device,
+          "READ",
+          started,
+          { toVault: paths, s3: toS3 },
+          `${saved.length} saved, ${failed.length} failed`,
+          failed.length > 0,
+        );
+        return json({ ok: failed.length === 0, saved, failed });
       }
 
       // Everything below changes a router.
@@ -1008,6 +1087,22 @@ export function createFilesRoutes(options: { denied: string | null }) {
             send({ t: "end", ok: false, error: message(error) });
           }
         });
+      }
+
+      if (key === "POST /api/files/vault/send") {
+        // A vault file to a folder of a router.
+        const name = safeName(String(body.name ?? ""));
+        const file = join(backupDir(), name);
+        if (!existsSync(file)) throw new DashboardInputError(404, "This file is not in the vault.");
+        const device = deviceOf(body.device);
+        const target = joinPath(cleanPath(body.dir ?? "/"), name);
+        const started = Date.now();
+        const bytes = await withSftp(device, async (sftp) => {
+          await stash(sftp, device, target, "replaced");
+          return writeStream(sftp, target, createReadStream(file));
+        });
+        audit(device, "WRITE", started, { fromVault: name, to: target }, `${bytes} bytes`);
+        return json({ ok: true, path: target });
       }
 
       if (key === "POST /api/files/trash/restore") {
