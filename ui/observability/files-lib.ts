@@ -139,7 +139,7 @@ export const filesApi = {
     api<{ entries: FileEntry[] }>(`/api/files/list?${query(device, path)}`, signal).then(
       (answer) => answer.entries,
     ),
-  usage: (device: string): Promise<{ free?: number; total?: number }> =>
+  usage: (device: string): Promise<RouterSystem> =>
     api(`/api/files/usage?device=${encodeURIComponent(device)}`),
   /** Every file under a folder, for a folder copy. */
   tree: (
@@ -573,6 +573,43 @@ export const conflicts = (existing: FileEntry[], names: string[]): string[] => {
   const have = new Set(existing.map((entry) => entry.name));
   return names.filter((name) => have.has(name));
 };
+
+/** What `/system resource` says about a router. */
+export interface RouterSystem {
+  free?: number;
+  total?: number;
+  arch?: string;
+  version?: string;
+}
+
+/** `routeros-7.16.1-arm64.npk` → package, version, architecture (none for x86). */
+export function npkInfo(name: string): { pkg: string; version: string; arch?: string } | null {
+  const cells = name.match(
+    /^(.+?)-(\d+\.\d+(?:\.\d+)?(?:(?:beta|rc)\d+)?)(?:-([a-z0-9_]+))?\.npk$/i,
+  );
+  return cells
+    ? { pkg: cells[1] ?? "", version: cells[2] ?? "", arch: cells[3]?.toLowerCase() }
+    : null;
+}
+
+/** Why a package file does not fit a router. Empty when it fits, or cannot be told. */
+export function packageWarnings(name: string, router: RouterSystem): string[] {
+  const info = npkInfo(name);
+  if (!info || !router.arch) return [];
+  const warnings: string[] = [];
+  // RouterOS names x86 packages without an architecture.
+  const fileArch = info.arch ?? "x86";
+  const routerArch = router.arch.toLowerCase().replace(/^x86_64$/, "x86");
+  if (fileArch !== routerArch)
+    warnings.push(
+      `${name} is for ${fileArch}, but the router is ${router.arch}. It will not install.`,
+    );
+  if (router.version && info.pkg !== "routeros" && info.version !== router.version)
+    warnings.push(
+      `${name} is version ${info.version}, but the router runs ${router.version}. An extra package must have the version of RouterOS.`,
+    );
+  return warnings;
+}
 
 export interface FolderRow {
   name: string;

@@ -590,11 +590,16 @@ export function createFilesRoutes(options: { denied: string | null }) {
       if (key === "GET /api/files/usage") {
         const device = deviceOf(url.searchParams.get("device"));
         const output = await executeMikrotikCommand(
-          ':put ([/system resource get free-hdd-space] . "/" . [/system resource get total-hdd-space])',
+          ':put ([/system resource get free-hdd-space] . "/" . [/system resource get total-hdd-space] . "/" . [/system resource get architecture-name] . "/" . [/system resource get version])',
           createContext(undefined, device),
         );
-        const cells = output.match(/(\d+)\/(\d+)/);
-        return json(cells ? { free: Number(cells[1]), total: Number(cells[2]) } : {});
+        // 83382272/134217728/arm64/7.16.1 (stable)
+        const cells = output.match(/(\d+)\/(\d+)\/([^/\s]*)\/(\S*)/);
+        return json(
+          cells
+            ? { free: Number(cells[1]), total: Number(cells[2]), arch: cells[3], version: cells[4] }
+            : {},
+        );
       }
 
       if (key === "GET /api/files/download") {

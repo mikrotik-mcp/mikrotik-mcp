@@ -35,7 +35,7 @@ import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { bytes } from "./format";
 import { Select } from "./geist";
-import type { FileEntry, FileKind } from "./files-lib";
+import type { FileEntry, FileKind, RouterSystem } from "./files-lib";
 import {
   DRAG_TYPE,
   broadcastStore,
@@ -49,6 +49,7 @@ import {
   filesBus,
   joinPath,
   kindOf,
+  packageWarnings,
   parentOf,
   pickForCompare,
   transferQueue,
@@ -92,11 +93,14 @@ export function FilesPane(
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; down: boolean }>({ key: "name", down: false });
-  const [usage, setUsage] = useState<{ free?: number; total?: number }>({});
+  const [usage, setUsage] = useState<RouterSystem>({});
   /** Where a drag is hovering: a folder name, or "" for the open folder. */
   const [over, setOver] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingDrop | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [packageCheck, setPackageCheck] = useState<{ warnings: string[]; go: () => void } | null>(
+    null,
+  );
   const [renaming, setRenaming] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState("");
@@ -247,7 +251,11 @@ export function FilesPane(
   };
 
   /** `sub` is the folder of a file below `dir`, for a dropped folder. */
-  const upload = (dir: string, items: { file: File; sub: string }[]): void => {
+  const upload = (dir: string, items: { file: File; sub: string }[], checked = false): void => {
+    // A package for another architecture or version never installs: say so first.
+    const warnings = checked ? [] : items.flatMap((item) => packageWarnings(item.file.name, usage));
+    if (warnings.length > 0)
+      return setPackageCheck({ warnings, go: () => upload(dir, items, true) });
     const top = (item: { file: File; sub: string }): string =>
       item.sub.split("/")[0] || item.file.name;
     void plan(dir, Array.from(new Set(items.map(top))), (skip) => {
@@ -469,6 +477,7 @@ export function FilesPane(
           </span>
           <small>
             {bytes(usage.free ?? 0)} free of {bytes(usage.total ?? 0)}
+            {usage.arch && ` · ${usage.arch} · ${usage.version ?? ""}`}
           </small>
         </div>
       )}
@@ -478,6 +487,28 @@ export function FilesPane(
           <span>{notice}</span>
           <button type="button" onClick={() => setNotice("")} aria-label="Dismiss">
             <X size={13} />
+          </button>
+        </div>
+      )}
+      {packageCheck && (
+        <div
+          className="files-strip"
+          data-tone="danger"
+          role="alertdialog"
+          aria-label="Package check"
+        >
+          <span>{packageCheck.warnings.join("\n")}</span>
+          <button
+            type="button"
+            onClick={() => {
+              packageCheck.go();
+              setPackageCheck(null);
+            }}
+          >
+            Upload anyway
+          </button>
+          <button type="button" onClick={() => setPackageCheck(null)}>
+            Cancel
           </button>
         </div>
       )}
