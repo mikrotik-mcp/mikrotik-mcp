@@ -94,6 +94,9 @@ OBSERVABILITY DASHBOARD  (optional; real-time feed + analytics of every tool cal
   --dashboard-capture-body  Record redacted in/out bodies  (MIKROTIK_DASHBOARD__CAPTURE_BODY)
   --dashboard-token         Bearer token to protect the dashboard
                                                            (MIKROTIK_DASHBOARD__TOKEN)
+  --dashboard-terminal      Serve the Terminal page (default true). It also needs
+                            a dashboard token or a loopback bind
+                                                           (MIKROTIK_DASHBOARD__TERMINAL)
 `;
 
 function warnIfPlaintextPasswordInContainer(anyPassword: boolean): void {

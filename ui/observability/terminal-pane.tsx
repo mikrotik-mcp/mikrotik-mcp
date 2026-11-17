@@ -1,0 +1,982 @@
+/**
+ * One terminal pane: a command-block console bound to one router.
+ *
+ * Each command is a block (command, live output, status, actions). The pane
+ * also owns its connection state: it probes the router on a timer, shows the
+ * latency, and reconnects with a growing delay when the probe fails.
+ */
+import type { IDockviewPanelProps } from "dockview-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  CornerDownLeft,
+  Eraser,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  RotateCw,
+  Square,
+  Star,
+  TriangleAlert,
+  X,
+} from "lucide-react";
+import type { KeyboardEvent, ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import type { Span } from "./terminal-highlight";
+import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
+import type { Completion, RunEnd } from "./terminal-lib";
+import {
+  cleanOutput,
+  destructiveWord,
+  favoritesStore,
+  paneRegistry,
+  paneStorage,
+  runCommand,
+  terminalApi,
+  workspace,
+} from "./terminal-lib";
+
+type BlockStatus = "running" | "ok" | "error" | "stopped";
+interface Block {
+  id: number;
+  ts: number;
+  command: string;
+  output: string;
+  status: BlockStatus;
+  ms?: number;
+  error?: string;
+  /** Shown while waiting to retry: "retry 2/3 in 4s". */
+  note?: string;
+  collapsed?: boolean;
+  /** Line numbers that differ from the previous run (watch mode). */
+  changed?: Set<number>;
+  runs: number;
+}
+type Link = "connecting" | "online" | "reconnecting";
+interface Connection {
+  link: Link;
+  latency: number[];
+  identity?: string;
+  transport?: string;
+  error?: string;
+  /** Epoch ms of the next reconnect attempt. */
+  retryAt?: number;
+  attempt: number;
+}
+
+const PROBE_EVERY_MS = 15_000;
+const MAX_RETRIES = 3;
+const MAX_BLOCK_CHARS = 400_000;
+const WATCH_CHOICES = [2000, 5000, 15_000, 60_000];
+/** Longest a command may run before it is stopped. */
+const LIMIT_CHOICES = [30_000, 120_000, 600_000];
+const seconds = (ms: number): string => (ms < 60_000 ? `${ms / 1000}s` : `${ms / 60_000}m`);
+let nextBlockId = 1;
+
+const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+
+function Spans({ lines }: { lines: Span[][] }): ReactNode {
+  return lines.map((line, row) => (
+    // eslint-disable-next-line react/no-array-index-key -- lines have no identity
+    <span key={row}>
+      {row > 0 && "\n"}
+      {line.map((span, i) => (
+        <span
+          // eslint-disable-next-line react/no-array-index-key
+          key={i}
+          className={span.bad ? "term-bad" : undefined}
+          style={span.color ? { color: span.color } : undefined}
+        >
+          {span.text}
+        </span>
+      ))}
+    </span>
+  ));
+}
+
+function Sparkline({ values }: { values: number[] }): ReactNode {
+  if (values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const step = 56 / (values.length - 1);
+  const points = values
+    .map((v, i) => `${(i * step).toFixed(1)},${(15 - (v / max) * 13).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg className="term-spark" viewBox="0 0 56 16" aria-hidden="true">
+      <polyline points={points} />
+    </svg>
+  );
+}
+
+const latencyTone = (ms: number | undefined): string =>
+  ms === undefined ? "idle" : ms < 80 ? "good" : ms < 300 ? "fair" : "slow";
+
+function BlockViewBase({
+  block,
+  device,
+  starred,
+  watching,
+  onAction,
+}: {
+  block: Block;
+  device: string;
+  starred: boolean;
+  watching: boolean;
+  onAction: (action: string, block: Block) => void;
+}) {
+  const [copied, setCopied] = useState("");
+  const copy = (what: "output" | "command"): void => {
+    void navigator.clipboard
+      .writeText(what === "output" ? block.output : block.command)
+      .then(() => {
+        setCopied(what);
+        setTimeout(() => setCopied(""), 1200);
+      });
+  };
+  const isScript = /(?:^|\s)export(?:\s|$)/.test(block.command);
+  const body = useMemo(() => {
+    if (!block.output) return null;
+    const changed = block.changed;
+    if (changed?.size) {
+      return block.output.split("\n").map((line, i) => (
+        // eslint-disable-next-line react/no-array-index-key
+        <span key={i} className={changed.has(i) ? "term-line-changed" : undefined}>
+          {line}
+          {"\n"}
+        </span>
+      ));
+    }
+    return isScript && block.output.length < 60_000 ? (
+      <Spans lines={staticSpans(block.output)} />
+    ) : (
+      block.output
+    );
+  }, [block.output, block.changed, isScript]);
+
+  return (
+    <article className="term-block" data-status={block.status}>
+      <header className="term-block-head">
+        <button
+          type="button"
+          className="term-fold"
+          onClick={() => onAction("fold", block)}
+          aria-label={block.collapsed ? "Show output" : "Hide output"}
+        >
+          {block.collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+        </button>
+        <span className="term-prompt">
+          <span className="term-prompt-device">{device}</span>
+          <span className="term-prompt-mark">&gt;</span>
+        </span>
+        <code className="term-block-command">
+          <Spans lines={staticSpans(block.command)} />
+        </code>
+        <span className="term-block-meta">
+          {block.status === "running" && (
+            <span className="term-chip" data-tone="run">
+              <span className="term-pulse" /> {block.note ?? "running"}
+            </span>
+          )}
+          {block.status === "ok" && (
+            <span className="term-chip" data-tone="ok">
+              {block.ms} ms
+            </span>
+          )}
+          {block.status === "stopped" && (
+            <span className="term-chip" data-tone="stop">
+              stopped · {block.ms} ms
+            </span>
+          )}
+          {block.status === "error" && (
+            <span className="term-chip" data-tone="err">
+              failed · {block.ms} ms
+            </span>
+          )}
+          {block.runs > 1 && <span className="term-chip">×{block.runs}</span>}
+          <time className="term-time">{new Date(block.ts).toLocaleTimeString()}</time>
+        </span>
+        <span className="term-actions">
+          {/* Stop and Run again never share a place: a late click on Stop
+              must not run a finished command a second time. */}
+          {block.status === "running" && (
+            <button
+              type="button"
+              className="term-stop"
+              onClick={() => onAction("stop", block)}
+              title="Stop (Ctrl+C)"
+            >
+              <Square size={13} /> Stop
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={block.status === "running"}
+            onClick={() => onAction("rerun", block)}
+            title="Run again"
+          >
+            <RotateCw size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onAction("watch", block)}
+            title={watching ? "Stop watching" : "Watch: run again on a timer and mark what changed"}
+            data-on={watching}
+          >
+            {watching ? <EyeOff size={13} /> : <Eye size={13} />}
+          </button>
+          <button type="button" onClick={() => copy("output")} title="Copy output">
+            {copied === "output" ? <Check size={13} /> : <Copy size={13} />}
+          </button>
+          <button type="button" onClick={() => copy("command")} title="Copy command">
+            {copied === "command" ? <Check size={13} /> : <CornerDownLeft size={13} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => onAction("star", block)}
+            title={starred ? "Remove from favourites" : "Add to favourites"}
+            data-on={starred}
+          >
+            <Star size={13} fill={starred ? "currentColor" : "none"} />
+          </button>
+          <button type="button" onClick={() => onAction("remove", block)} title="Remove block">
+            <X size={13} />
+          </button>
+        </span>
+      </header>
+      {!block.collapsed && (
+        <>
+          {body !== null && <pre className="term-output">{body}</pre>}
+          {block.status !== "running" && !block.output && !block.error && (
+            <div className="term-empty">no output</div>
+          )}
+          {block.error && (
+            <div className="term-error">
+              <TriangleAlert size={13} /> {block.error}
+            </div>
+          )}
+        </>
+      )}
+    </article>
+  );
+}
+const BlockView = memo(BlockViewBase);
+
+export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): ReactNode {
+  const device = props.params.device;
+  const paneId = props.api.id;
+  // Blocks survive a reload. A block that was running then has an unknown end.
+  const [blocks, setBlocks] = useState<Block[]>(() =>
+    paneStorage.load<Block>(props.api.id).map((block) => ({
+      ...block,
+      changed: undefined,
+      note: undefined,
+      status: block.status === "running" ? "stopped" : block.status,
+      id: nextBlockId++,
+    })),
+  );
+  const [input, setInput] = useState("");
+  const [tokens, setTokens] = useState<{ for: string; classes: string[] }>({
+    for: "",
+    classes: [],
+  });
+  // `auto` lists open while typing: Enter still runs the command, and the
+  // arrows still recall history, until ArrowDown moves into the list.
+  const [completions, setCompletions] = useState<{
+    items: Completion[];
+    index: number;
+    auto?: boolean;
+  } | null>(null);
+  const [limit, setLimit] = useState(LIMIT_CHOICES[0] ?? 30_000);
+  const [watchEvery, setWatchEvery] = useState(5000);
+  const limitRef = useRef(limit);
+  limitRef.current = limit;
+  /** Input for which the user closed the list with Escape. */
+  const dismissed = useRef("");
+  const [confirm, setConfirm] = useState<{ command: string; word: string } | null>(null);
+  const [autoRetry, setAutoRetry] = useState(true);
+  const [watch, setWatch] = useState<number | null>(null);
+  const [conn, setConn] = useState<Connection>({ link: "connecting", latency: [], attempt: 0 });
+  const [, setGrammarReady] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const favorites = useSyncExternalStore(favoritesStore.subscribe, favoritesStore.get);
+  const starred = useMemo(() => new Set(favorites.map((f) => f.command)), [favorites]);
+
+  const blocksRef = useRef(blocks);
+  blocksRef.current = blocks;
+  const autoRetryRef = useRef(autoRetry);
+  autoRetryRef.current = autoRetry;
+  const running = useRef(new Map<number, AbortController>());
+  const recall = useRef<{ list: string[]; index: number; draft: string }>({
+    list: [],
+    index: -1,
+    draft: "",
+  });
+  const scroller = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const stick = useRef(true);
+  const probeNow = useRef<() => void>(() => {});
+
+  const patch = useCallback(
+    (id: number, change: Partial<Block> | ((b: Block) => Partial<Block>)) => {
+      setBlocks((list) =>
+        list.map((b) =>
+          b.id === id ? { ...b, ...(typeof change === "function" ? change(b) : change) } : b,
+        ),
+      );
+    },
+    [],
+  );
+
+  // ── grammar + recall history ────────────────────────────────────────────
+  useEffect(() => {
+    let alive = true;
+    void loadHighlighter().then(() => alive && setGrammarReady(true));
+    void terminalApi
+      .history({ device, limit: 200 })
+      .then((entries) => {
+        if (!alive) return;
+        const seen = new Set<string>();
+        recall.current.list = entries
+          .map((e) => e.command)
+          .filter((c) => !seen.has(c) && seen.add(c))
+          .reverse();
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [device]);
+
+  // ── connection: probe, latency, reconnect with a growing delay ──────────
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
+    let warm = false;
+    const abort = new AbortController();
+    const probe = async (): Promise<void> => {
+      clearTimeout(timer);
+      if (!alive) return;
+      if (document.hidden) {
+        timer = setTimeout(probe, PROBE_EVERY_MS);
+        return;
+      }
+      let result;
+      try {
+        result = await terminalApi.probe(device, abort.signal);
+      } catch (e) {
+        result = { ok: false, ms: 0, error: e instanceof Error ? e.message : String(e) };
+      }
+      if (!alive) return;
+      if (result.ok) {
+        attempt = 0;
+        // The first probe on a new connection includes the SSH handshake, so
+        // it is not a round-trip time: measure again straight away.
+        const handshake = !warm;
+        warm = true;
+        setConn((c) => ({
+          link: "online",
+          latency: handshake ? c.latency : [...c.latency, result.ms].slice(-30),
+          identity: result.identity,
+          transport: result.transport,
+          attempt: 0,
+        }));
+        timer = setTimeout(probe, handshake ? 400 : PROBE_EVERY_MS);
+      } else {
+        warm = false;
+        attempt++;
+        const delay = Math.min(30_000, 1000 * 2 ** Math.min(attempt, 5));
+        setConn((c) => ({
+          ...c,
+          link: "reconnecting",
+          error: result.error,
+          attempt,
+          retryAt: Date.now() + delay,
+        }));
+        timer = setTimeout(probe, delay);
+      }
+    };
+    probeNow.current = () => void probe();
+    void probe();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [device]);
+
+  // Countdown text while reconnecting.
+  useEffect(() => {
+    if (conn.link !== "reconnecting") return;
+    const tick = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(tick);
+  }, [conn.link]);
+
+  // ── run a command (with auto-retry when a retry cannot repeat a change) ──
+  const runBlock = useCallback(
+    async (command: string, options: { blockId?: number; quiet?: boolean } = {}): Promise<void> => {
+      const id = options.blockId ?? nextBlockId++;
+      const previous = blocksRef.current.find((b) => b.id === id);
+      if (previous?.status === "running") return;
+      if (previous)
+        patch(id, (b) => ({
+          status: "running",
+          error: undefined,
+          note: undefined,
+          runs: b.runs + 1,
+        }));
+      else
+        setBlocks((list) => [
+          ...list,
+          { id, ts: Date.now(), command, output: "", status: "running", runs: 1 },
+        ]);
+      const abort = new AbortController();
+      running.current.set(id, abort);
+      stick.current = true;
+
+      let end: RunEnd = { ok: false, ms: 0 };
+      let buffer = "";
+      for (let attempt = 1; ; attempt++) {
+        buffer = "";
+        // A watched block keeps its old output until the new run is complete.
+        if (!options.quiet) patch(id, { output: "", changed: undefined });
+        end = await runCommand(device, command, {
+          maxMs: limitRef.current,
+          signal: abort.signal,
+          onOutput: (text) => {
+            buffer = (buffer + cleanOutput(text)).slice(-MAX_BLOCK_CHARS);
+            if (!options.quiet) patch(id, { output: buffer });
+          },
+        });
+        if (end.ok || end.stopped || !end.retryable) break;
+        if (!autoRetryRef.current || attempt > MAX_RETRIES || abort.signal.aborted) break;
+        const wait = 1000 * 2 ** (attempt - 1);
+        patch(id, { note: `retry ${attempt}/${MAX_RETRIES} in ${wait / 1000}s`, error: end.error });
+        probeNow.current();
+        await sleep(wait, abort.signal);
+        if (abort.signal.aborted) break;
+        patch(id, { note: `retry ${attempt}/${MAX_RETRIES}` });
+      }
+      running.current.delete(id);
+      const output = buffer.replace(/\n+$/, "");
+      const result = end;
+      patch(id, (b) => {
+        let changed: Set<number> | undefined;
+        if (options.quiet && b.output && b.output !== output) {
+          const before = b.output.split("\n");
+          const differing = new Set<number>();
+          output.split("\n").forEach((line, i) => {
+            if (line !== before[i]) differing.add(i);
+          });
+          changed = differing;
+        }
+        return {
+          output,
+          changed,
+          ts: Date.now(),
+          ms: result.ms,
+          note: undefined,
+          error: result.ok ? undefined : result.error,
+          status: result.stopped ? "stopped" : result.ok ? "ok" : "error",
+        };
+      });
+      if (!result.ok && !result.stopped) probeNow.current();
+      workspace.onCommandDone();
+    },
+    [device, patch],
+  );
+
+  const submit = useCallback(
+    (raw: string, options: { confirmed?: boolean; fromBroadcast?: boolean } = {}): void => {
+      const command = raw.trim();
+      if (!command) return;
+      const word = destructiveWord(command);
+      if (word && !options.confirmed && !options.fromBroadcast) {
+        setConfirm({ command, word });
+        return;
+      }
+      setConfirm(null);
+      const list = recall.current.list;
+      if (list.at(-1) !== command) list.push(command);
+      recall.current.index = -1;
+      void runBlock(command);
+      if (workspace.broadcast && !options.fromBroadcast) {
+        for (const pane of paneRegistry.all())
+          if (pane.id !== paneId) pane.run(command, { fromBroadcast: true });
+      }
+    },
+    [runBlock, paneId],
+  );
+
+  // ── registry: the drawer and broadcast reach this pane through it ────────
+  useEffect(
+    () =>
+      paneRegistry.add({
+        id: paneId,
+        device,
+        run: (command, options) => submit(command, options),
+        insert: (command) => {
+          setInput(command);
+          field.current?.focus();
+        },
+        focus: () => field.current?.focus(),
+      }),
+    [paneId, device, submit],
+  );
+  useEffect(() => {
+    const active = props.api.onDidActiveChange((event) => {
+      if (event.isActive) workspace.activePane = paneId;
+    });
+    if (props.api.isActive) workspace.activePane = paneId;
+    return () => active.dispose();
+  }, [props.api, paneId]);
+
+  // Stop everything this pane started when it closes.
+  useEffect(() => {
+    const controllers = running.current;
+    return () => {
+      for (const controller of controllers.values()) controller.abort();
+    };
+  }, []);
+
+  // ── watch: run one block again on a timer ───────────────────────────────
+  useEffect(() => {
+    if (watch === null) return;
+    const timer = setInterval(() => {
+      const block = blocksRef.current.find((b) => b.id === watch);
+      if (!block) {
+        setWatch(null);
+        return;
+      }
+      if (block.status !== "running" && !document.hidden)
+        void runBlock(block.command, { blockId: block.id, quiet: true });
+    }, watchEvery);
+    return () => clearInterval(timer);
+  }, [watch, watchEvery, runBlock]);
+
+  // ── keep the blocks for the next visit ──────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => paneStorage.save(paneId, blocks), 400);
+    return () => clearTimeout(timer);
+  }, [blocks, paneId]);
+
+  // ── completion while typing, a moment after the last key ────────────────
+  useEffect(() => {
+    if (!input.trim() || input.includes("\n") || conn.link !== "online") return;
+    if (dismissed.current === input) return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      const area = field.current;
+      if (!area || document.activeElement !== area || area.selectionStart !== input.length) return;
+      terminalApi
+        .complete(device, input, abort.signal)
+        .then((items) => {
+          const words = items
+            .filter((item) => /\w/.test(item.completion))
+            // Nothing to offer when the word is already typed in full.
+            .filter((item) => input.slice(item.offset) !== item.completion);
+          setCompletions(words.length ? { items: words.slice(0, 40), index: 0, auto: true } : null);
+        })
+        .catch(() => {});
+    }, 220);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [input, device, conn.link]);
+
+  // ── syntax check by the router, a moment after typing stops ─────────────
+  useEffect(() => {
+    if (input.trim().length < 2 || conn.link !== "online") return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      terminalApi
+        .highlight(device, input, abort.signal)
+        .then((classes) => setTokens({ for: input, classes }))
+        .catch(() => {});
+    }, 280);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [input, device, conn.link]);
+
+  // Keep the newest output in view unless the user scrolled up.
+  useEffect(() => {
+    const box = scroller.current;
+    if (box && stick.current) box.scrollTop = box.scrollHeight;
+  }, [blocks]);
+
+  const onAction = useCallback(
+    (action: string, block: Block): void => {
+      if (action === "stop") running.current.get(block.id)?.abort();
+      else if (action === "rerun") submit(block.command);
+      else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
+      else if (action === "star") void favoritesStore.toggle(block.command);
+      else if (action === "watch") setWatch((current) => (current === block.id ? null : block.id));
+      else if (action === "remove") {
+        running.current.get(block.id)?.abort();
+        setWatch((current) => (current === block.id ? null : current));
+        setBlocks((list) => list.filter((b) => b.id !== block.id));
+      }
+    },
+    [patch, submit],
+  );
+
+  /** The newest earlier command that starts with what is typed (accepted with →). */
+  const ghost = useMemo(() => {
+    if (!input || input.includes("\n")) return "";
+    const list = recall.current.list;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const earlier = list[i];
+      if (earlier && earlier.length > input.length && earlier.startsWith(input)) return earlier;
+    }
+    return "";
+    // `blocks` changes when a command is added to the recall list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input, blocks]);
+
+  const applyCompletion = (item: Completion): void => {
+    const caret = field.current?.selectionStart ?? input.length;
+    const tail = item.style === "arg" ? "=" : item.completion === "/" ? "" : " ";
+    const head = input.slice(0, Math.min(item.offset, caret)) + item.completion + tail;
+    setInput(head + input.slice(caret));
+    setCompletions(null);
+    requestAnimationFrame(() => field.current?.setSelectionRange(head.length, head.length));
+  };
+
+  const complete = async (): Promise<void> => {
+    const caret = field.current?.selectionStart ?? input.length;
+    const items = await terminalApi.complete(device, input.slice(0, caret)).catch(() => []);
+    const words = items.filter((item) => /\w/.test(item.completion));
+    if (words.length === 1 && words[0]) applyCompletion(words[0]);
+    else setCompletions(words.length ? { items: words.slice(0, 40), index: 0 } : null);
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    const area = event.currentTarget;
+    if (completions?.auto) {
+      const chosen = completions.items[completions.index];
+      if (event.key === "Tab" && chosen) {
+        event.preventDefault();
+        applyCompletion(chosen);
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        // Move into the list: from here the arrows and Enter act on it.
+        event.preventDefault();
+        setCompletions({ ...completions, auto: false });
+        return;
+      }
+      if (event.key === "Escape") {
+        dismissed.current = input;
+        setCompletions(null);
+        return;
+      }
+      // Any other key (Enter, ArrowUp, …) keeps its terminal meaning.
+      if (event.key === "Enter" || event.key === "ArrowUp") setCompletions(null);
+    } else if (completions) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Tab") {
+        event.preventDefault();
+        const move = event.key === "ArrowUp" || event.shiftKey ? -1 : 1;
+        const size = completions.items.length;
+        setCompletions({ ...completions, index: (completions.index + move + size) % size });
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const chosen = completions.items[completions.index];
+        if (chosen) applyCompletion(chosen);
+        return;
+      }
+      setCompletions(null);
+      if (event.key === "Escape") {
+        dismissed.current = input;
+        return;
+      }
+    }
+    if (
+      event.key === "ArrowRight" &&
+      ghost &&
+      area.selectionStart === input.length &&
+      area.selectionEnd === input.length
+    ) {
+      // Accept the suggestion from the history.
+      event.preventDefault();
+      setInput(ghost);
+      return;
+    }
+    if (event.key === "Tab") {
+      event.preventDefault();
+      void complete();
+    } else if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submit(input);
+      setInput("");
+    } else if (event.key === "l" && event.ctrlKey) {
+      event.preventDefault();
+      setBlocks((list) => list.filter((b) => b.status === "running"));
+    } else if (event.key === "c" && event.ctrlKey && area.selectionStart === area.selectionEnd) {
+      const last = Array.from(running.current.values()).at(-1);
+      if (last) {
+        event.preventDefault();
+        last.abort();
+      }
+    } else if (event.key === "ArrowUp" && !input.slice(0, area.selectionStart).includes("\n")) {
+      const state = recall.current;
+      if (!state.list.length) return;
+      event.preventDefault();
+      if (state.index === -1) state.draft = input;
+      state.index = state.index === -1 ? state.list.length - 1 : Math.max(0, state.index - 1);
+      setInput(state.list[state.index] ?? "");
+    } else if (event.key === "ArrowDown" && !input.slice(area.selectionEnd).includes("\n")) {
+      const state = recall.current;
+      if (state.index === -1) return;
+      event.preventDefault();
+      state.index = state.index >= state.list.length - 1 ? -1 : state.index + 1;
+      setInput(state.index === -1 ? state.draft : (state.list[state.index] ?? ""));
+    }
+  };
+
+  const fromRouter =
+    input.trim() && tokens.for === input ? deviceSpans(input, tokens.classes) : null;
+  const syntaxError = fromRouter !== null && hasSyntaxError(tokens.classes);
+  const inputSpans = fromRouter ?? staticSpans(input);
+  const last = conn.latency.at(-1);
+  const stats = useMemo(
+    () => ({
+      total: blocks.length,
+      failed: blocks.filter((b) => b.status === "error").length,
+      active: blocks.filter((b) => b.status === "running").length,
+    }),
+    [blocks],
+  );
+  const retryIn = conn.retryAt ? Math.max(0, Math.ceil((conn.retryAt - now) / 1000)) : 0;
+  const clear = (): void => setBlocks((list) => list.filter((b) => b.status === "running"));
+
+  return (
+    <section
+      className="term-pane"
+      data-pane-id={paneId}
+      data-link={conn.link}
+      onMouseDown={() => {
+        workspace.activePane = paneId;
+      }}
+    >
+      <header className="term-status">
+        <span className="term-link" data-link={conn.link}>
+          <span className="term-dot" />
+          {conn.link === "online" && "connected"}
+          {conn.link === "connecting" && "connecting…"}
+          {conn.link === "reconnecting" && `reconnecting in ${retryIn}s · try ${conn.attempt}`}
+        </span>
+        {conn.identity && <span className="term-stat term-identity">{conn.identity}</span>}
+        {conn.transport && <span className="term-stat">{conn.transport}</span>}
+        <span
+          className="term-stat"
+          data-tone={latencyTone(last)}
+          title="Round trip of the last probe"
+        >
+          {last === undefined ? "— ms" : `${last} ms`}
+          <Sparkline values={conn.latency} />
+        </span>
+        <span className="term-stat" title="Commands in this pane">
+          {stats.total} cmd
+          {stats.failed > 0 && <b className="term-failed"> · {stats.failed} failed</b>}
+          {stats.active > 0 && ` · ${stats.active} running`}
+        </span>
+        <span className="term-status-actions">
+          <button
+            type="button"
+            data-on={autoRetry}
+            onClick={() => setAutoRetry((on) => !on)}
+            title="Auto-retry: send a command again when the router was not reached, or when the command only reads. A change that may already have run is never sent twice."
+          >
+            <RefreshCw size={12} /> auto-retry {autoRetry ? "on" : "off"}
+          </button>
+          <label title="Stop a command after this long">
+            limit
+            <select value={limit} onChange={(event) => setLimit(Number(event.target.value))}>
+              {LIMIT_CHOICES.map((ms) => (
+                <option key={ms} value={ms}>
+                  {seconds(ms)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label title="How often a watched command runs again">
+            watch
+            <select
+              value={watchEvery}
+              onChange={(event) => setWatchEvery(Number(event.target.value))}
+            >
+              {WATCH_CHOICES.map((ms) => (
+                <option key={ms} value={ms}>
+                  {seconds(ms)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={() => probeNow.current()} title="Check the connection now">
+            <RotateCw size={12} />
+          </button>
+          <button type="button" onClick={clear} title="Clear this pane (Ctrl+L)">
+            <Eraser size={12} />
+          </button>
+        </span>
+      </header>
+
+      {conn.link === "reconnecting" && conn.error && (
+        <div className="term-banner">
+          <TriangleAlert size={13} /> {conn.error}
+        </div>
+      )}
+
+      <div
+        className="term-scroll"
+        ref={scroller}
+        onScroll={(event) => {
+          const box = event.currentTarget;
+          stick.current = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) field.current?.focus();
+        }}
+      >
+        {blocks.length === 0 && (
+          <div className="term-welcome">
+            <strong>{conn.identity ?? device}</strong>
+            <span>Type a RouterOS command. Tab completes from the router, ↑ recalls history.</span>
+            <div className="term-suggest">
+              {[
+                "/system resource print",
+                "/interface print",
+                "/ip address print",
+                "/log print",
+              ].map((command) => (
+                <button key={command} type="button" onClick={() => submit(command)}>
+                  {command}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {blocks.map((block) => (
+          <BlockView
+            key={block.id}
+            block={block}
+            device={device}
+            starred={starred.has(block.command)}
+            watching={watch === block.id}
+            onAction={onAction}
+          />
+        ))}
+      </div>
+
+      {confirm && (
+        <div className="term-confirm" role="alertdialog" aria-label="Confirm command">
+          <TriangleAlert size={15} />
+          <span>
+            <b>{confirm.word}</b> changes or removes configuration on <b>{device}</b>
+            {workspace.broadcast && " and on every other open pane (broadcast is on)"}. Run it?
+          </span>
+          <button
+            type="button"
+            className="term-danger"
+            onClick={() => submit(confirm.command, { confirmed: true })}
+          >
+            Run
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setInput(confirm.command);
+              setConfirm(null);
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      <footer className="term-input" data-error={syntaxError}>
+        <span className="term-prompt">
+          <span className="term-prompt-device">{device}</span>
+          <span className="term-prompt-mark">&gt;</span>
+        </span>
+        <div className="term-editor">
+          <pre className="term-editor-paint" aria-hidden="true">
+            <Spans lines={inputSpans} />
+            {ghost && <span className="term-ghost">{ghost.slice(input.length)}</span>}
+            {"​"}
+          </pre>
+          <textarea
+            ref={field}
+            value={input}
+            rows={Math.min(8, input.split("\n").length)}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            aria-label={`Command for ${device}`}
+            placeholder="/ip address print"
+            onChange={(event) => {
+              setInput(event.target.value);
+              setCompletions(null);
+            }}
+            onKeyDown={onKeyDown}
+            onBlur={() => setTimeout(() => setCompletions(null), 150)}
+          />
+          {completions && (
+            <ul className="term-complete" role="listbox" data-auto={Boolean(completions.auto)}>
+              {completions.items.map((item, i) => (
+                <li
+                  key={`${item.completion}-${item.style}`}
+                  role="option"
+                  aria-selected={i === completions.index}
+                  data-style={item.style}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    applyCompletion(item);
+                  }}
+                >
+                  <span>{item.completion}</span>
+                  <small>{item.style}</small>
+                </li>
+              ))}
+              <li className="term-complete-hint" aria-hidden="true">
+                {completions.auto ? "Tab accept · ↓ browse · Esc close" : "↑↓ move · Enter accept"}
+              </li>
+            </ul>
+          )}
+        </div>
+        <span
+          className="term-check"
+          data-state={fromRouter === null ? "idle" : syntaxError ? "bad" : "ok"}
+        >
+          {fromRouter === null ? "" : syntaxError ? "router: syntax error" : "router: syntax ok"}
+        </span>
+      </footer>
+    </section>
+  );
+}

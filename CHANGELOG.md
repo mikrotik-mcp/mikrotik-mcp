@@ -3,6 +3,42 @@
 Notable changes to `@usex/mikrotik-mcp`. Releases before 6.14.1 are described in
 the GitHub release notes.
 
+## 6.15.0 — unreleased
+
+### Added
+
+- **Dashboard Terminal page.** RouterOS consoles in dockable panes: split,
+  resize, move, stack as tabs, float and maximise, with several panes per router
+  and the layout restored after a reload.
+  - Each command is a block with live output, a Stop button, copy output, copy
+    command, run again, watch (run again every 5 s and mark changed lines) and
+    add to favourites.
+  - Each pane shows its connection state, the router identity, the transport,
+    the round-trip latency with a sparkline, and command counts. A lost
+    connection is retried with a growing delay.
+  - Syntax highlighting with Shiki and a RouterOS TextMate grammar. The router
+    also checks the input (`/console/inspect request=highlight`) and marks what
+    it does not accept before the command runs. Tab completes from the router.
+  - Completion opens while you type, and an earlier command that starts with
+    the input is suggested inline (`→` accepts it).
+  - Find bar (`Ctrl+F`): search one terminal or all terminals, with match case,
+    whole words, regular expressions, a result counter, next/previous and a
+    filter that hides blocks without a match.
+  - Per-pane command time limit (30 s, 2 min, 10 min) and watch interval.
+  - A pane keeps its last 40 blocks across a reload.
+  - Command history and favourites are saved on the server
+    (`~/.mikrotik-mcp/terminal.db`). Any entry can be run again on any router.
+  - Broadcast runs one command in every open pane.
+  - Destructive commands (`remove`, `reboot`, `reset-configuration`, …) ask for
+    confirmation. A read-only server runs only `print`, `export` and
+    diagnostic commands.
+  - Auto-retry sends a command again only when the router was not reached or
+    the command only reads. A change that may already have run is not repeated.
+  - Every command is written to the audit feed as `dashboard_terminal`.
+- `dashboard.terminal` (`--dashboard-terminal`, `MIKROTIK_DASHBOARD__TERMINAL`,
+  default `true`). The terminal is served only when the dashboard has a token or
+  listens on loopback, because it runs any command on a router.
+
 ## 6.14.1 — 2026-11-17
 
 ### Fixed

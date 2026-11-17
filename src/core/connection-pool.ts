@@ -16,6 +16,7 @@
  * to avoid duplicate connections.
  */
 import { MikroTikSSHClient } from "../ssh/client";
+import type { RunOptions } from "../ssh/client";
 import type { DeviceConfig } from "../config";
 import { logger } from "../logger";
 import { getConfig, getDevice } from "./runtime";
@@ -166,11 +167,7 @@ async function acquire(name: string): Promise<PoolEntry> {
 }
 
 /** Run one command on a connected pool entry; manages inflight + idle. */
-async function runOnEntry(
-  name: string,
-  command: string,
-  opts?: { maxMs?: number },
-): Promise<string> {
+async function runOnEntry(name: string, command: string, opts?: RunOptions): Promise<string> {
   const entry = await acquire(name);
   if (entry.idleTimer) {
     clearTimeout(entry.idleTimer);
@@ -199,7 +196,7 @@ async function runOnEntry(
 export async function runPooled(
   command: string,
   deviceName: string,
-  opts?: { maxMs?: number },
+  opts?: RunOptions,
 ): Promise<string> {
   try {
     return await runOnEntry(deviceName, command, opts);

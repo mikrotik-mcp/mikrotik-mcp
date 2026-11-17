@@ -480,6 +480,12 @@ export const DashboardConfigSchema = z.object({
    * same for every viewer.
    */
   feedLimit: z.coerce.number().int().positive().max(10_000).default(200),
+  /**
+   * Serve the dashboard terminal (raw RouterOS commands from the browser).
+   * Even when true, it is served only if the dashboard has a token or listens
+   * on loopback.
+   */
+  terminal: z.boolean().default(true),
 });
 export type DashboardConfig = z.infer<typeof DashboardConfigSchema>;
 
@@ -992,6 +998,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     maxBodyBytes: pick("dashboard-max-body-bytes", "MIKROTIK_DASHBOARD__MAX_BODY_BYTES"),
     token: pick("dashboard-token", "MIKROTIK_DASHBOARD__TOKEN"),
     feedLimit: pick("dashboard-feed-limit", "MIKROTIK_DASHBOARD__FEED_LIMIT"),
+    terminal: boolOpt(pick("dashboard-terminal", "MIKROTIK_DASHBOARD__TERMINAL")),
   });
 
   // 5) SSH connection pooling. Config-file block is the baseline; env/flags override.

@@ -6,6 +6,7 @@ import type { ViewId } from "./navigation";
  * Every new ViewId must explicitly declare its release (or null for legacy pages).
  */
 export const FEATURE_RELEASES: Record<ViewId, string | null> = {
+  terminal: "6.15.0",
   bandwidth: "6.10.0",
   "ip-intelligence": null,
   openvpn: null,

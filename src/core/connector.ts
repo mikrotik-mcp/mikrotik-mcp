@@ -22,6 +22,7 @@ import {
 } from "./transport";
 import { getSafeModeManager } from "../ssh/safe-mode";
 import { MikroTikSSHClient } from "../ssh/client";
+import type { RunOptions } from "../ssh/client";
 import { toRequest } from "../rest/bridge";
 import { parseRecords } from "./routeros-parse";
 import type { ParsedRecords } from "./routeros-parse";
@@ -87,7 +88,7 @@ async function tryRest(
 async function runOnce(
   command: string,
   deviceName?: string,
-  opts?: { maxMs?: number },
+  opts?: RunOptions,
   ctx?: ToolContext,
 ): Promise<string> {
   const name = resolveDeviceName(deviceName);
@@ -158,7 +159,7 @@ export function bypassesSafeMode(command: string, ctx: Pick<ToolContext, "risk">
 export async function executeMikrotikCommand(
   command: string,
   ctx: ToolContext,
-  opts?: { maxMs?: number },
+  opts?: RunOptions,
 ): Promise<string> {
   const deviceName = resolveDeviceName(ctx.device);
   const safe = getSafeModeManager(deviceName);
@@ -198,7 +199,7 @@ export async function executeMikrotikCommand(
 export async function executeMikrotikJson(
   command: string,
   ctx: ToolContext,
-  opts?: { maxMs?: number },
+  opts?: RunOptions,
 ): Promise<ParsedRecords> {
   const deviceName = resolveDeviceName(ctx.device);
   const dc = getDevice(deviceName);

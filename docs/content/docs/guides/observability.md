@@ -126,6 +126,67 @@ A `dashboard` block in the JSON config file provides the baseline. Explicit envi
 With a token set, open `http://127.0.0.1:9090/?token=YOUR_TOKEN` — the page
 forwards it to the API and the live WebSocket automatically.
 
+## Terminal
+
+The **Terminal** page gives you RouterOS consoles in the browser, as in WinBox.
+
+- **Panes.** Open a pane for any router from the toolbar. Drag a pane tab to
+  split, stack, float or move it; drag a border to resize. You can open several
+  panes for one router. The layout is restored after a reload.
+- **Command blocks.** Each command is a block with its live output. A block can
+  be stopped, run again, watched (run again every 5 seconds, with changed lines
+  marked), copied (output or command) and added to your favourites.
+- **Connection.** Each pane shows the connection state, the router identity,
+  the transport, the round-trip latency and command counts. A lost connection is
+  retried with a growing delay.
+- **Syntax.** Input is highlighted as you type. The router then checks it and
+  marks what it does not accept, before the command runs. `Tab` completes from
+  the router.
+- **Completion.** A list of words from the router opens while you type. `Tab`
+  accepts the first word, `↓` moves into the list, `Esc` closes it. `Enter` still
+  runs the command. An earlier command that starts with what you typed is shown
+  in grey; `→` accepts it.
+- **Find.** `Ctrl+F` opens a find bar that searches commands and output in this
+  terminal or in all terminals, with match case, whole words and regular
+  expressions. `Enter` and `Shift+Enter` move between results. The filter button
+  hides the blocks without a match.
+- **Limits.** Each pane has a command time limit (30 s, 2 min or 10 min) and a
+  watch interval (2 s to 60 s).
+- **Blocks are kept.** A pane keeps its last 40 blocks in the browser, so a
+  reload does not empty it.
+- **History and favourites.** The drawer lists every command that ran. Run or
+  edit any entry on the active pane or on a router you choose. `Ctrl+K` searches.
+- **Broadcast.** When on, a command typed in one pane runs in every open pane.
+
+| Key           | Action                             |
+| ------------- | ---------------------------------- |
+| `Enter`       | Run the command                    |
+| `Shift+Enter` | New line                           |
+| `Tab`         | Accept the completion              |
+| `↑` / `↓`     | Recall earlier commands            |
+| `Ctrl+C`      | Stop the running command           |
+| `Ctrl+L`      | Clear the pane                     |
+| `Ctrl+K`      | Search the history                 |
+| `Ctrl+F`      | Find in the terminals              |
+| `→`           | Accept the suggestion from history |
+
+### Safety
+
+The terminal runs any command on a router, so:
+
+- It is served only when the dashboard has a token (`--dashboard-token`) or
+  listens on loopback (`--dashboard-host 127.0.0.1`). Turn it off with
+  `--dashboard-terminal=false`.
+- Destructive commands (`remove`, `reboot`, `reset-configuration`, `shutdown`
+  and similar) ask for confirmation.
+- A read-only server runs only `print`, `export` and diagnostic commands.
+- Auto-retry sends a command again only when the router was not reached, or when
+  the command only reads. A change that may already have run is not repeated.
+- Every command is saved to the audit feed (tool `dashboard_terminal`) and to
+  `~/.mikrotik-mcp/terminal.db`.
+- A command stops at the pane's time limit (30 seconds by default) unless it
+  finishes or you stop it earlier.
+
 ## Run the dashboard on another machine
 
 `mikrotik-mcp dashboard --server <url>` serves the dashboard on a machine that

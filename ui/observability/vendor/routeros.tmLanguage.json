@@ -1,0 +1,760 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "RouterOS",
+  "aliases": ["routeros", "mikrotik"],
+  "scopeName": "source.routeros",
+  "patterns": [
+    {
+      "include": "#session"
+    },
+    {
+      "include": "#output-lines"
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "session": {
+      "begin": "^(?=[ \\t]*\\[[\\w.+-]+@[^\\]\\r\\n\"\\[]+\\](?:[ \\t]*<SAFE>)?(?:[ \\t]*/[\\w/ .-]*?)?[ \\t]*>)",
+      "end": "(?!)",
+      "patterns": [
+        {
+          "include": "#prompt-line"
+        },
+        {
+          "include": "#continuation-prompt-line"
+        },
+        {
+          "include": "#print-comment"
+        },
+        {
+          "match": "^.+$",
+          "name": "meta.program-output.routeros"
+        }
+      ]
+    },
+    "prompt-line": {
+      "begin": "^([ \\t]*\\[[\\w.+-]+@[^\\]\\r\\n\"\\[]+\\](?:[ \\t]*<SAFE>)?(?:[ \\t]*/[\\w/ .-]*?)?[ \\t]*>)(?:([ \\t]*)(reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run)(?![\\w=/-]))?",
+      "beginCaptures": {
+        "1": {
+          "name": "meta.prompt.routeros"
+        },
+        "3": {
+          "name": "entity.name.function.routeros"
+        }
+      },
+      "end": "(?<!\\\\)$",
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "continuation-prompt-line": {
+      "begin": "^([ \\t]*\\{\\.\\.\\.)",
+      "beginCaptures": {
+        "1": {
+          "name": "meta.prompt.routeros"
+        }
+      },
+      "end": "(?<!\\\\)$",
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "output-lines": {
+      "patterns": [
+        {
+          "include": "#print-comment"
+        },
+        {
+          "match": "^[ \\t]*(?:Flags|Columns):[ \\t].*$",
+          "name": "meta.program-output.routeros"
+        },
+        {
+          "match": "^[ \\t]*#(?:[ \\t]{2,}|[ \\t](?=\\S+[ \\t]{2,}))[A-Z][A-Z0-9_.-]*(?:[ \\t]+[A-Z][A-Z0-9_.-]*)+[ \\t]*$",
+          "name": "meta.program-output.routeros"
+        },
+        {
+          "match": "^[ \\t]*\\d+[ \\t]+\\S.*$",
+          "name": "meta.program-output.routeros"
+        },
+        {
+          "match": "^[ \\t]*[a-z][a-z0-9-]*(?: [a-z0-9-]+)*:[ \\t]+\\S.*$",
+          "name": "meta.program-output.routeros"
+        }
+      ]
+    },
+    "print-comment": {
+      "match": "^([ \\t]*(?:\\d+[ \\t]+)?(?:[A-Z][ \\t]+)*)(;;;.*)$",
+      "captures": {
+        "1": {
+          "name": "meta.program-output.routeros"
+        },
+        "2": {
+          "name": "comment.line.semicolon.routeros"
+        }
+      }
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#line-continuation"
+        },
+        {
+          "include": "#regex-string"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#path"
+        },
+        {
+          "include": "#relative-command"
+        },
+        {
+          "include": "#colon-command"
+        },
+        {
+          "include": "#control-argument"
+        },
+        {
+          "include": "#enum-argument"
+        },
+        {
+          "include": "#argument"
+        },
+        {
+          "include": "#where"
+        },
+        {
+          "include": "#print-flag"
+        },
+        {
+          "include": "#compared-property"
+        },
+        {
+          "include": "#variable"
+        },
+        {
+          "include": "#operator"
+        },
+        {
+          "include": "#literal"
+        },
+        {
+          "include": "#punctuation"
+        }
+      ]
+    },
+    "comment": {
+      "match": "(?:^[ \\t]*|(?<=;)[ \\t]*|(?<=[ \\t]))(#).*$",
+      "name": "comment.line.number-sign.routeros",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.comment.routeros"
+        }
+      }
+    },
+    "line-continuation": {
+      "match": "\\\\(?=[ \\t]*(?:#.*)?$)",
+      "name": "constant.character.escape.line-continuation.routeros"
+    },
+    "string": {
+      "begin": "\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.routeros"
+        }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.routeros"
+        }
+      },
+      "name": "string.quoted.double.routeros",
+      "patterns": [
+        {
+          "include": "#string-content"
+        }
+      ]
+    },
+    "regex-string": {
+      "begin": "(~)[ \\t]*(\")",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.operator.regexp.routeros"
+        },
+        "2": {
+          "name": "string.regexp.routeros punctuation.definition.string.begin.routeros"
+        }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": {
+          "name": "string.regexp.routeros punctuation.definition.string.end.routeros"
+        }
+      },
+      "contentName": "string.regexp.routeros",
+      "patterns": [
+        {
+          "include": "#string-content"
+        }
+      ]
+    },
+    "string-content": {
+      "patterns": [
+        {
+          "match": "\\\\(?:[0-9A-F]{2}|[\"\\\\$?_abfnrtv])",
+          "name": "constant.character.escape.routeros"
+        },
+        {
+          "match": "\\\\$",
+          "name": "constant.character.escape.line-continuation.routeros"
+        },
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.routeros"
+        },
+        {
+          "begin": "(\\$)(\\[)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.routeros"
+            }
+          },
+          "end": "\\]",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.routeros"
+            }
+          },
+          "name": "meta.interpolation.routeros",
+          "patterns": [
+            {
+              "include": "#statements"
+            }
+          ]
+        },
+        {
+          "begin": "(\\$)(\\()",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.routeros"
+            }
+          },
+          "end": "\\)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.routeros"
+            }
+          },
+          "name": "meta.interpolation.routeros",
+          "patterns": [
+            {
+              "include": "#statements"
+            }
+          ]
+        },
+        {
+          "include": "#variable"
+        }
+      ]
+    },
+    "path": {
+      "patterns": [
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(/[a-z][\\w-]*(?:/(?!(?:reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run)(?![\\w-]))[a-z0-9][\\w-]*)*(?![\\w/-]))((?:[ \\t]+(?!(?:reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run|where)(?![\\w=-]))[a-z][a-z0-9-]*(?![\\w=/.-]))*)([ \\t]+)(reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run)(?![\\w=/-])",
+          "captures": {
+            "1": {
+              "name": "entity.name.tag.routeros"
+            },
+            "2": {
+              "name": "entity.name.tag.routeros"
+            },
+            "4": {
+              "name": "entity.name.function.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(/[a-z][\\w-]*(?:/(?!(?:reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run)(?![\\w-]))[a-z0-9][\\w-]*)*(?![\\w/-]))((?:[ \\t]+(?!(?:reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run|where)(?![\\w=-]))[a-z][a-z0-9-]*(?![\\w=/.-]))+)(?=[ \\t]*(?:$|;|\\}))",
+          "captures": {
+            "1": {
+              "name": "entity.name.tag.routeros"
+            },
+            "2": {
+              "name": "entity.name.tag.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(?:(/)(reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run)|(/[a-z][\\w-]*(?:/[a-z0-9][\\w-]*)*?)(?:(/)(reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run))?)(?![\\w/-])",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.routeros"
+            },
+            "2": {
+              "name": "entity.name.function.routeros"
+            },
+            "3": {
+              "name": "entity.name.tag.routeros"
+            },
+            "4": {
+              "name": "entity.name.tag.routeros"
+            },
+            "5": {
+              "name": "entity.name.function.routeros"
+            }
+          }
+        }
+      ]
+    },
+    "relative-command": {
+      "match": "(?:^|(?<=[\\[{;]))([ \\t]*)(reset-configuration|reset-counters-all|check-for-updates|monitor-traffic|reset-counters|bandwidth-test|apply-changes|make-static|traceroute|shutdown|download|disable|comment|monitor|upgrade|install|release|remove|export|import|enable|reboot|update|cancel|print|unset|reset|start|flush|clear|fetch|torch|renew|blink|find|edit|move|stop|save|load|ping|send|add|set|get|run)(?![\\w=/-])",
+      "captures": {
+        "2": {
+          "name": "entity.name.function.routeros"
+        }
+      }
+    },
+    "colon-command": {
+      "patterns": [
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(:(?:local|global))\\b(?:[ \\t]+([A-Za-z_][\\w]*|\"[^\"\\r\\n]*\"))?",
+          "captures": {
+            "1": {
+              "name": "storage.type.routeros"
+            },
+            "2": {
+              "name": "variable.other.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(:set)\\b(?:[ \\t]+([A-Za-z_][\\w]*|\"[^\"\\r\\n]*\"))?",
+          "captures": {
+            "1": {
+              "name": "support.function.builtin.routeros"
+            },
+            "2": {
+              "name": "variable.other.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(:foreach)\\b(?:[ \\t]+([A-Za-z_]\\w*)(?:(,)([A-Za-z_]\\w*))?)?",
+          "captures": {
+            "1": {
+              "name": "keyword.control.routeros"
+            },
+            "2": {
+              "name": "variable.other.routeros"
+            },
+            "3": {
+              "name": "punctuation.separator.comma.routeros"
+            },
+            "4": {
+              "name": "variable.other.routeros"
+            }
+          }
+        },
+        {
+          "begin": "(?<![\\w.:/<>$\"=-])(:for)\\b(?:[ \\t]+([A-Za-z_]\\w*))?",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.routeros"
+            },
+            "2": {
+              "name": "variable.other.routeros"
+            }
+          },
+          "end": "(?=\\bdo=|[;}\\]]|$)",
+          "patterns": [
+            {
+              "match": "(?<![\\w-])(from|to|step)(=)",
+              "captures": {
+                "1": {
+                  "name": "keyword.control.routeros"
+                },
+                "2": {
+                  "name": "keyword.operator.assignment.routeros"
+                }
+              }
+            },
+            {
+              "include": "#statements"
+            }
+          ]
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(:onerror)\\b(?:[ \\t]+([A-Za-z_]\\w*))?",
+          "captures": {
+            "1": {
+              "name": "keyword.control.routeros"
+            },
+            "2": {
+              "name": "variable.other.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(:log)\\b(?:[ \\t]+(info|warning|error|debug)\\b)?",
+          "captures": {
+            "1": {
+              "name": "support.function.builtin.routeros"
+            },
+            "2": {
+              "name": "support.constant.log-topic.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-]):(?:if|do|while|for|foreach|return|onerror|retry)(?![\\w-])",
+          "name": "keyword.control.routeros"
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-]):[a-z][a-z0-9-]*(?![\\w-])",
+          "name": "support.function.builtin.routeros"
+        }
+      ]
+    },
+    "control-argument": {
+      "match": "(?<![\\w.:/<>$\"=-])(do|else|on-error|in|while)(=)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.routeros"
+        },
+        "2": {
+          "name": "keyword.operator.assignment.routeros"
+        }
+      }
+    },
+    "enum-argument": {
+      "patterns": [
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(action)(=)(accept|drop|reject|jump|return|passthrough|fasttrack-connection|add-dst-to-address-list|add-src-to-address-list|redirect|masquerade|src-nat|dst-nat|netmap|same|tarpit|mark-connection|mark-packet|mark-routing|log|notrack|endpoint-independent-nat|change-mss|change-dscp|change-ttl|clear-df|route|sniff-tzsp|sniff-pc|strip-ipv4-options|set-priority)(?=[\\s;\\]})]|$)",
+          "captures": {
+            "1": {
+              "name": "support.type.property-name.routeros"
+            },
+            "2": {
+              "name": "keyword.operator.assignment.routeros"
+            },
+            "3": {
+              "name": "support.function.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(chain)(=)(input|output|forward|prerouting|postrouting|srcnat|dstnat)(?=[\\s;\\]})]|$)",
+          "captures": {
+            "1": {
+              "name": "support.type.property-name.routeros"
+            },
+            "2": {
+              "name": "keyword.operator.assignment.routeros"
+            },
+            "3": {
+              "name": "constant.language.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(protocol)(=)(tcp|udp|udp-lite|icmp|icmpv6|gre|ipip|ipsec-ah|ipsec-esp|ospf|bgp|rip|pim|vrrp|igmp|sctp|l2tp|pptp|dccp|ipv6-encap|etherip)(?=[\\s;\\]})]|$)",
+          "captures": {
+            "1": {
+              "name": "support.type.property-name.routeros"
+            },
+            "2": {
+              "name": "keyword.operator.assignment.routeros"
+            },
+            "3": {
+              "name": "constant.language.routeros"
+            }
+          }
+        },
+        {
+          "match": "(?<![\\w.:/<>$\"=-])(connection-state|connection-nat-state)(=)(!?(?:new|established|related|invalid|untracked|srcnat|dstnat)(?:,!?(?:new|established|related|invalid|untracked|srcnat|dstnat))*)(?=[\\s;\\]})]|$)",
+          "captures": {
+            "1": {
+              "name": "support.type.property-name.routeros"
+            },
+            "2": {
+              "name": "keyword.operator.assignment.routeros"
+            },
+            "3": {
+              "name": "constant.language.routeros"
+            }
+          }
+        }
+      ]
+    },
+    "argument": {
+      "begin": "(?<![\\w.:/<>$\"=-])(\\.?[A-Za-z][\\w-]*)(=)",
+      "beginCaptures": {
+        "1": {
+          "name": "support.type.property-name.routeros"
+        },
+        "2": {
+          "name": "keyword.operator.assignment.routeros"
+        }
+      },
+      "end": "(?=[\\s;\\]})]|$)",
+      "patterns": [
+        {
+          "include": "#value"
+        }
+      ]
+    },
+    "value": {
+      "patterns": [
+        {
+          "match": "(?<==)<[^<>\\r\\n]+>",
+          "name": "constant.other.placeholder.routeros"
+        },
+        {
+          "include": "#regex-string"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#variable"
+        },
+        {
+          "include": "#brackets"
+        },
+        {
+          "include": "#parens"
+        },
+        {
+          "include": "#block"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.routeros"
+        },
+        {
+          "match": "(?<=[=,])!",
+          "name": "keyword.operator.negation.routeros"
+        },
+        {
+          "match": "(?<=[=,!])(?:yes|no|true|false)(?=[,\\s;\\]})]|$)",
+          "name": "constant.language.boolean.routeros"
+        },
+        {
+          "match": "(?<=[=,!])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?:/(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2})?(?=[,\\s;\\]})]|$)",
+          "name": "constant.numeric.mac.routeros"
+        },
+        {
+          "match": "(?<=[=,!])\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2}|-\\d{1,3}(?:\\.\\d{1,3}){3})?(?::\\d{1,5})?(?=[,\\s;\\]})]|$)",
+          "name": "constant.numeric.ip.routeros"
+        },
+        {
+          "match": "(?<=[=,!])(?=[0-9A-Fa-f:]*::?[0-9A-Fa-f]*:)[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:/\\d{1,3})?(?=[,\\s;\\]})]|$)",
+          "name": "constant.numeric.ip.routeros"
+        },
+        {
+          "match": "(?<=[=,!])(?:\\d+(?:\\.\\d+)?(?:ms|us|ns|w|d|h|m|s))+(?=[,\\s;\\]})]|$)",
+          "name": "constant.numeric.duration.routeros"
+        },
+        {
+          "match": "(?<=[=,!])(?:\\d+[wd])?\\d{1,2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?(?=[,\\s;\\]})]|$)",
+          "name": "constant.numeric.duration.routeros"
+        },
+        {
+          "match": "(?<=[=,!])(?:0x[0-9A-Fa-f]+|\\d+(?:\\.\\d+)?(?:[kKMGT]i?[Bb]?|%)?(?:-\\d+(?:\\.\\d+)?)?)(?=[,\\s;\\]})]|$)",
+          "name": "constant.numeric.routeros"
+        },
+        {
+          "match": "[^\\s,;\\[\\]{}()\"$\\\\]+",
+          "name": "string.unquoted.routeros"
+        }
+      ]
+    },
+    "where": {
+      "match": "(?<![\\w-])where(?![\\w=-])",
+      "name": "keyword.other.where.routeros"
+    },
+    "print-flag": {
+      "match": "(?<=[ \\t])(as-value|count-only|detail|terse|without-paging|once|stats|stats-detail|brief|value-list|follow|follow-only|show-ids|show-sensitive|hide-sensitive|verbose|compact|as-string)(?=[\\s;\\]})]|$)",
+      "name": "support.type.property-name.routeros"
+    },
+    "compared-property": {
+      "match": "(?<![\\w.:/<>$\"=-])([a-z][\\w-]*)(?=~|!=|[ \\t]+in[ \\t])|(?<=!)(?!(?:true|false|yes|no)(?![\\w-]))[a-z][\\w-]*(?![\\w=(\\[-])",
+      "name": "support.type.property-name.routeros"
+    },
+    "variable": {
+      "patterns": [
+        {
+          "match": "(\\$)(\")([^\"\\r\\n]*)(\")",
+          "name": "variable.other.routeros",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.variable.routeros"
+            }
+          }
+        },
+        {
+          "match": "(\\$)(?:[A-Za-z_][A-Za-z0-9_]*|\\d+)",
+          "name": "variable.other.routeros",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.variable.routeros"
+            }
+          }
+        }
+      ]
+    },
+    "operator": {
+      "patterns": [
+        {
+          "match": "->",
+          "name": "keyword.operator.accessor.routeros"
+        },
+        {
+          "match": "<=|>=|!=|<|>|=|~",
+          "name": "keyword.operator.comparison.routeros"
+        },
+        {
+          "match": "&&|\\|\\||!",
+          "name": "keyword.operator.logical.routeros"
+        },
+        {
+          "match": "(?<![\\w-])(?:and|or|not|in)(?![\\w=-])",
+          "name": "keyword.operator.word.routeros"
+        },
+        {
+          "match": "(?<=[\\s)\\]\"])\\.(?=[\\s($\\[\"])",
+          "name": "keyword.operator.concatenation.routeros"
+        },
+        {
+          "match": "(?<=[\\s(])[+\\-*/%](?=[\\s($\\[(])",
+          "name": "keyword.operator.arithmetic.routeros"
+        }
+      ]
+    },
+    "literal": {
+      "patterns": [
+        {
+          "match": "(?<![\\w.:$/-])(?:yes|no|true|false)(?![\\w.:/=-])",
+          "name": "constant.language.boolean.routeros"
+        },
+        {
+          "match": "(?<![\\w.:$/-])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![\\w.:/-])",
+          "name": "constant.numeric.mac.routeros"
+        },
+        {
+          "match": "(?<![\\w.:$/-])\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?(?![\\w.:/-])",
+          "name": "constant.numeric.ip.routeros"
+        },
+        {
+          "match": "(?<![\\w.:$/-])(?:\\d+(?:\\.\\d+)?(?:ms|us|ns|w|d|h|m|s))+(?![\\w.:/-])",
+          "name": "constant.numeric.duration.routeros"
+        },
+        {
+          "match": "(?<![\\w.:$/-])(?:0x[0-9A-Fa-f]+|\\d+(?:\\.\\d+)?(?:[kKMGT]i?[Bb]?)?)(?![\\w.:/-])",
+          "name": "constant.numeric.routeros"
+        }
+      ]
+    },
+    "brackets": {
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.brackets.begin.routeros"
+        }
+      },
+      "end": "\\]",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.brackets.end.routeros"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "parens": {
+      "begin": "\\(",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.parens.begin.routeros"
+        }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.parens.end.routeros"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "block": {
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.block.begin.routeros"
+        }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.block.end.routeros"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "match": "\\[",
+          "name": "punctuation.section.brackets.begin.routeros"
+        },
+        {
+          "match": "\\]",
+          "name": "punctuation.section.brackets.end.routeros"
+        },
+        {
+          "match": "\\(",
+          "name": "punctuation.section.parens.begin.routeros"
+        },
+        {
+          "match": "\\)",
+          "name": "punctuation.section.parens.end.routeros"
+        },
+        {
+          "match": "\\{",
+          "name": "punctuation.section.block.begin.routeros"
+        },
+        {
+          "match": "\\}",
+          "name": "punctuation.section.block.end.routeros"
+        },
+        {
+          "match": ";",
+          "name": "punctuation.terminator.statement.routeros"
+        }
+      ]
+    }
+  }
+}

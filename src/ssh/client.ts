@@ -95,6 +95,16 @@ export function decodeOutput(data: Buffer): string {
   return new TextDecoder("utf-8").decode(data); // replacement chars, never throws
 }
 
+/** Options for one command. `onData` and `signal` serve a live terminal. */
+export interface RunOptions {
+  /** Stop the command after this long and return what it printed. */
+  maxMs?: number;
+  /** Receives stdout as it arrives. The full output is still returned. */
+  onData?: (text: string) => void;
+  /** Aborting stops the command and returns what it printed so far. */
+  signal?: AbortSignal;
+}
+
 /**
  * Connection-loss listeners, shared by every command in flight on a connection.
  * A pooled connection runs many commands at once; one listener set per command
@@ -341,7 +351,7 @@ export class MikroTikSSHClient {
   }
 
   /** Run a single command on a fresh SSH channel and return its decoded output. */
-  run(command: string, opts: { maxMs?: number } = {}): Promise<string> {
+  run(command: string, opts: RunOptions = {}): Promise<string> {
     if (!this.client) {
       return Promise.reject(new Error("Not connected to MikroTik device"));
     }
@@ -359,7 +369,9 @@ export class MikroTikSSHClient {
       let idleTimer: ReturnType<typeof setTimeout> | undefined;
       let hardTimer: ReturnType<typeof setTimeout> | undefined;
       let unwatch = (): void => {};
+      const live = opts.onData ? new TextDecoder("utf-8") : undefined;
       const clearTimers = (): void => {
+        opts.signal?.removeEventListener("abort", onAbort);
         if (openTimer) clearTimeout(openTimer);
         if (timer) clearTimeout(timer);
         if (idleTimer) clearTimeout(idleTimer);
@@ -490,6 +502,7 @@ export class MikroTikSSHClient {
           .on("data", (d: Buffer) => {
             if (settled) return;
             stdout.push(d);
+            if (live) opts.onData?.(live.decode(d, { stream: true }));
             armIdle();
           })
           .stderr.on("data", (d: Buffer) => {
@@ -498,6 +511,22 @@ export class MikroTikSSHClient {
             armIdle();
           });
       };
+      function onAbort(): void {
+        const channel = stream;
+        finish();
+        try {
+          channel?.signal("INT");
+        } catch {
+          /* RouterOS may not honour signals */
+        }
+        try {
+          channel?.close();
+        } catch {
+          /* channel already closing */
+        }
+      }
+      if (opts.signal?.aborted) return onAbort();
+      opts.signal?.addEventListener("abort", onAbort, { once: true });
       try {
         openChannel(command, onChannel);
       } catch (error) {

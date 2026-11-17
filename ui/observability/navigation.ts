@@ -1,6 +1,7 @@
 import { NAVIGATION_SECTIONS, PAGE_SEARCH_TERMS } from "./navigation-sections";
 
 export type ViewId =
+  | "terminal"
   | "bandwidth"
   | "ip-intelligence"
   | "openvpn"
@@ -98,6 +99,11 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     sub: "Understand slowdowns, manage your household & compare paths",
   },
   { id: "overview", label: "Overview", sub: "Calls, latency & risk at a glance" },
+  {
+    id: "terminal",
+    label: "Terminal",
+    sub: "RouterOS consoles in dockable panes — history, favourites, broadcast",
+  },
   { id: "devices", label: "Devices", sub: "Router management, connectivity & system health" },
   { id: "interfaces", label: "Interfaces", sub: "Every port and tunnel — live traffic & counters" },
   { id: "clients", label: "Clients", sub: "Connected LAN devices — usage, block/allow, pin IP" },

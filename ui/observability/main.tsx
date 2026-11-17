@@ -98,6 +98,7 @@ import { Button, Dot, Input, Select } from "./geist";
 import { JsonView } from "./highlight";
 import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
+import { TerminalView } from "./terminal";
 import { TransactionsView } from "./transactions";
 import { FlowsView } from "./flows";
 import { SiteActivityView } from "./site-activity";
@@ -405,6 +406,15 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Capture a snapshot before a risky change, then diff after to audit the delta.",
       "The diff is line-level: green added, red removed.",
       "Snapshots are device config exports — for the dashboard’s OWN config history see the Config page.",
+    ],
+  },
+  terminal: {
+    what: "RouterOS consoles in dockable panes. Every command is saved to the history and to the audit feed.",
+    tips: [
+      "Drag a pane tab to split, stack or float it. Open several panes for one router.",
+      "Tab completes from the router. The router also checks the syntax before you press Enter.",
+      "Broadcast runs one command in every open pane. Destructive commands ask first.",
+      "Auto-retry never repeats a change that may already have run.",
     ],
   },
   drift: {
@@ -869,6 +879,13 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M12 3 3 7.5 12 12 21 7.5 12 3Z" />
         <path d="M3 12 12 16.5 21 12" />
         <path d="M3 16.5 12 21 21 16.5" />
+      </>
+    ),
+    terminal: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="m7 9 3 3-3 3" />
+        <path d="M13 15h4" />
       </>
     ),
     drift: (
@@ -1855,6 +1872,8 @@ function App(): ReactNode {
               {view === "snapshots" && <SnapshotsView />}
 
               {/* ── Drift Guard ── */}
+              {view === "terminal" && <TerminalView />}
+
               {view === "drift" && <DriftView />}
 
               {/* ── L2 Fabric: hosts by physical port ── */}
