@@ -17,6 +17,7 @@ import {
   ChevronDown,
   CircleAlert,
   FolderSync as FolderSyncIcon,
+  PanelsTopLeft,
   Plus,
   Radio,
   RotateCw,
@@ -24,6 +25,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Square,
+  Star,
   Trash2,
   Vault,
   X,
@@ -37,6 +39,7 @@ import { bytes } from "./format";
 import type { FilesState, SearchDone, SearchHit, Transfer } from "./files-lib";
 import {
   baseName,
+  bookmarkStore,
   broadcastStore,
   directStore,
   filePanes,
@@ -45,11 +48,13 @@ import {
   jobsStore,
   pace,
   syncStore,
+  toggleBookmark,
   parentOf,
   transferQueue,
   trashStore,
   vaultStore,
   verifyStore,
+  workspaceStore,
   when,
 } from "./files-lib";
 import { DiskAnalysis } from "./files-analysis";
@@ -159,6 +164,9 @@ export function FilesView(): ReactNode {
   const panes = useSyncExternalStore(filePanes.subscribe, filePanes.all);
   const broadcasting = useSyncExternalStore(broadcastStore.subscribe, broadcastStore.get);
   const direct = useSyncExternalStore(directStore.subscribe, directStore.get);
+  const bookmarks = useSyncExternalStore(bookmarkStore.subscribe, bookmarkStore.get);
+  const workspaces = useSyncExternalStore(workspaceStore.subscribe, workspaceStore.get);
+  const [workspaceName, setWorkspaceName] = useState("");
   const verify = useSyncExternalStore(verifyStore.subscribe, verifyStore.get);
   // Speeds and times left move while a transfer runs.
   const [, tick] = useState(0);
@@ -318,6 +326,101 @@ export function FilesView(): ReactNode {
           >
             <CalendarClock size={13} /> Scheduled
           </button>
+          <details className="term-menu term-broadcast-menu">
+            <summary title="Bookmarked folders">
+              <Star size={13} /> Bookmarks{" "}
+              {bookmarks.length > 0 && <small>{bookmarks.length}</small>}
+            </summary>
+            <div>
+              {bookmarks.length === 0 && (
+                <span className="term-menu-note">
+                  No bookmark yet. Click the star in a pane to bookmark its folder.
+                </span>
+              )}
+              {bookmarks.map((item) => (
+                <span key={`${item.device}:${item.path}`} className="term-group-row">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      const pane = panes.find((p) => p.device === item.device);
+                      if (pane) pane.reveal(item.path);
+                      else addPane(item.device, item.path);
+                    }}
+                  >
+                    {item.device}:{item.path}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove the bookmark ${item.device}:${item.path}`}
+                    onClick={() => toggleBookmark(item.device, item.path)}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </details>
+          <details className="term-menu term-broadcast-menu">
+            <summary title="Saved pane layouts">
+              <PanelsTopLeft size={13} /> Workspaces{" "}
+              {workspaces.length > 0 && <small>{workspaces.length}</small>}
+            </summary>
+            <div>
+              {workspaces.map((item) => (
+                <span key={item.name} className="term-group-row">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      try {
+                        dock.current?.fromJSON(
+                          item.layout as Parameters<DockviewApi["fromJSON"]>[0],
+                        );
+                      } catch {
+                        /* a layout from an older version: leave the panes as they are */
+                      }
+                    }}
+                  >
+                    {item.name}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete the workspace ${item.name}`}
+                    onClick={() =>
+                      workspaceStore.set(workspaces.filter((w) => w.name !== item.name))
+                    }
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+              <form
+                className="files-workspace-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const name = workspaceName.trim();
+                  if (!name || !dock.current) return;
+                  workspaceStore.set([
+                    ...workspaces.filter((w) => w.name !== name),
+                    { name, layout: dock.current.toJSON() },
+                  ]);
+                  setWorkspaceName("");
+                }}
+              >
+                <input
+                  value={workspaceName}
+                  placeholder="Save these panes as…"
+                  aria-label="Workspace name"
+                  maxLength={40}
+                  onChange={(event) => setWorkspaceName(event.target.value)}
+                />
+                <button type="submit" disabled={!workspaceName.trim()}>
+                  Save
+                </button>
+              </form>
+            </div>
+          </details>
           {state.trash && (
             <button
               type="button"

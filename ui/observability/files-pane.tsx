@@ -31,17 +31,20 @@ import {
   Play,
   RefreshCw,
   Send,
+  Star,
   Trash2,
   Vault,
   X,
 } from "lucide-react";
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { bytes } from "./format";
 import { Select } from "./geist";
 import type { FileEntry, FileKind, RouterSystem } from "./files-lib";
 import {
   DRAG_TYPE,
+  bookmarkStore,
   analysisStore,
   broadcastStore,
   droppedFiles,
@@ -53,8 +56,10 @@ import {
   filesApi,
   filesBus,
   importStore,
+  isBookmarked,
   joinPath,
   kindOf,
+  toggleBookmark,
   packageWarnings,
   parentOf,
   pickForCompare,
@@ -117,6 +122,8 @@ export function FilesPane(
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState("");
+  const [menu, setMenu] = useState<{ entry: FileEntry; x: number; y: number } | null>(null);
+  const bookmarks = useSyncExternalStore(bookmarkStore.subscribe, bookmarkStore.get);
   const anchor = useRef<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const reveal = useRef<string | undefined>(undefined);
@@ -192,6 +199,21 @@ export function FilesPane(
     });
   }, [api, device, load, open, path]);
   useEffect(() => () => filePanes.remove(api.id), [api.id]);
+
+  // The row menu closes on a click anywhere, and on Escape.
+  useEffect(() => {
+    if (!menu) return;
+    const close = (): void => setMenu(null);
+    const onKey = (event: globalThis.KeyboardEvent): void => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
 
   useEffect(() => {
     if (!notice) return;
@@ -441,6 +463,16 @@ export function FilesPane(
           >
             <CornerLeftUp size={14} />
           </button>
+          <button
+            type="button"
+            data-on={isBookmarked(bookmarks, device, path)}
+            onClick={() => toggleBookmark(device, path)}
+            title={
+              isBookmarked(bookmarks, device, path) ? "Remove the bookmark" : "Bookmark this folder"
+            }
+          >
+            <Star size={14} />
+          </button>
           <button type="button" onClick={() => load(path)} title="Reload" data-spin={busy}>
             <RefreshCw size={14} />
           </button>
@@ -673,6 +705,15 @@ export function FilesPane(
               draggable={renaming !== entry.name}
               onClick={(event) => pick(entry, event)}
               onDoubleClick={() => activate(entry)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                if (!selected.has(entry.name)) setSelected(new Set([entry.name]));
+                setMenu({
+                  entry,
+                  x: Math.min(event.clientX, window.innerWidth - 230),
+                  y: Math.min(event.clientY, window.innerHeight - 330),
+                });
+              }}
               onKeyDown={(event) => {
                 if (event.key === " ") pick(entry, event);
               }}
@@ -897,6 +938,72 @@ export function FilesPane(
           </button>
         </footer>
       )}
+
+      {menu &&
+        createPortal(
+          <div
+            className="files-menu"
+            role="menu"
+            aria-label={menu.entry.name}
+            style={{ left: menu.x, top: menu.y }}
+          >
+            {(() => {
+              const { entry } = menu;
+              const full = joinPath(path, entry.name);
+              const copyText = (text: string): void =>
+                void navigator.clipboard?.writeText(text).catch(() => {});
+              const items: ([string, () => void, boolean?] | null)[] = [
+                [
+                  entry.dir ? "Open" : canPreview(entry) ? "View" : "Download",
+                  () => activate(entry),
+                ],
+                entry.dir || !canPreview(entry)
+                  ? null
+                  : ["Download", () => transferQueue.download(device, full, entry.size)],
+                entry.dir || !canPreview(entry)
+                  ? null
+                  : ["Compare with…", () => pickForCompare({ device, path: full })],
+                entry.dir ? ["Bookmark this folder", () => toggleBookmark(device, full)] : null,
+                ["Copy the path", () => copyText(`${device}:${full}`)],
+                /\.rsc$/i.test(entry.name)
+                  ? [
+                      "Copy the import command",
+                      () => copyText(`/import file-name=${full.slice(1)}`),
+                    ]
+                  : null,
+                readOnly || !/\.rsc$/i.test(entry.name)
+                  ? null
+                  : ["Import…", () => importStore.set({ device, path: full })],
+                readOnly
+                  ? null
+                  : [
+                      "Rename",
+                      () => {
+                        setCreating(false);
+                        setDraft(entry.name);
+                        setRenaming(entry.name);
+                      },
+                    ],
+                readOnly ? null : ["Delete…", () => setConfirmDelete(true), true],
+              ];
+              return items.map(
+                (item) =>
+                  item && (
+                    <button
+                      key={item[0]}
+                      type="button"
+                      role="menuitem"
+                      data-danger={item[2] === true}
+                      onClick={item[1]}
+                    >
+                      {item[0]}
+                    </button>
+                  ),
+              );
+            })()}
+          </div>,
+          document.querySelector(".files-page") ?? document.body,
+        )}
 
       {over !== null && (
         <div className="files-drop" aria-hidden="true">

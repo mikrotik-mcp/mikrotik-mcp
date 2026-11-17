@@ -142,6 +142,29 @@ function store<T>(initial: T) {
   };
 }
 
+/** A store that is also kept in the browser, so it is there after a reload. */
+function persisted<T>(key: string, initial: T) {
+  let start = initial;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) start = JSON.parse(raw) as T;
+  } catch {
+    /* storage unavailable: start empty */
+  }
+  const inner = store(start);
+  return {
+    ...inner,
+    set(next: T): void {
+      inner.set(next);
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        /* it just does not persist */
+      }
+    },
+  };
+}
+
 export interface FileRef {
   device: string;
   path: string;
@@ -162,6 +185,25 @@ export const directStore = store(false);
 
 /** When on, a copy is read back from the destination and its SHA-256 compared with the source. */
 export const verifyStore = store(false);
+
+/** Folders the user marked, to open again with one click. */
+export const bookmarkStore = persisted<FileRef[]>("mikrotik-mcp.files.bookmarks", []);
+export const isBookmarked = (list: FileRef[], device: string, path: string): boolean =>
+  list.some((item) => item.device === device && item.path === path);
+export function toggleBookmark(device: string, path: string): void {
+  const list = bookmarkStore.get();
+  bookmarkStore.set(
+    isBookmarked(list, device, path)
+      ? list.filter((item) => !(item.device === device && item.path === path))
+      : [...list, { device, path }],
+  );
+}
+
+/** Pane layouts saved under a name. */
+export const workspaceStore = persisted<{ name: string; layout: unknown }[]>(
+  "mikrotik-mcp.files.workspaces",
+  [],
+);
 
 /** The router whose storage is being analysed, or null. */
 export const analysisStore = store<string | null>(null);
