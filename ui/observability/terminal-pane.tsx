@@ -16,6 +16,7 @@ import {
   CircleHelp,
   Copy,
   Download,
+  Ellipsis,
   GitCompareArrows,
   History,
   CornerDownLeft,
@@ -23,8 +24,9 @@ import {
   FileCode2,
   Eye,
   EyeOff,
-  RefreshCw,
+  Pin,
   RotateCw,
+  Settings2,
   Share2,
   ShieldCheck,
   Square,
@@ -45,6 +47,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { Switch } from "@/components/ui/switch";
 import { Select } from "./geist";
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
@@ -211,6 +214,74 @@ function SeriesChart({ values }: { values: number[] }): ReactNode {
         <span>{values.length} runs</span>
       </figcaption>
     </figure>
+  );
+}
+
+/** An icon button that opens a small panel under it; closes on Escape or a click outside. */
+function PaneMenu({
+  label,
+  icon,
+  marked,
+  closeOnPick,
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  /** Show a dot on the button: something in the panel is not at its default. */
+  marked?: boolean;
+  /** Close after any button inside is clicked (an action list). */
+  closeOnPick?: boolean;
+  children: ReactNode;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent): void => {
+      const target = event.target as Element;
+      // A Select opened from the panel renders outside it: that is not "outside".
+      if (box.current?.contains(target) || target.closest?.("[data-radix-popper-content-wrapper]"))
+        return;
+      setOpen(false);
+    };
+    const onKey = (event: globalThis.KeyboardEvent): void => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("mousedown", onDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return (
+    <span className="term-pop" ref={box}>
+      <button
+        type="button"
+        className="term-icon"
+        data-on={open}
+        aria-expanded={open}
+        aria-label={label}
+        title={label}
+        onClick={() => setOpen((on) => !on)}
+      >
+        {icon}
+        {marked && <i className="term-pop-mark" />}
+      </button>
+      {open && (
+        <div
+          className="term-pop-panel"
+          role="group"
+          aria-label={label}
+          data-list={closeOnPick}
+          onClick={(event) => {
+            if (closeOnPick && (event.target as Element).closest("button")) setOpen(false);
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -1252,165 +1323,180 @@ export function TerminalPane(
       }}
     >
       <header className="term-status">
-        <span className="term-link" data-link={conn.link}>
+        <span
+          className="term-link"
+          data-link={conn.link}
+          title={conn.link === "reconnecting" ? `Attempt ${conn.attempt}` : undefined}
+        >
           <span className="term-dot" />
           {conn.link === "online" && "connected"}
           {conn.link === "connecting" && "connecting…"}
-          {conn.link === "reconnecting" && `reconnecting in ${retryIn}s · try ${conn.attempt}`}
+          {conn.link === "reconnecting" && `retry in ${retryIn}s`}
         </span>
-        {conn.identity && <span className="term-stat term-identity">{conn.identity}</span>}
-        {conn.transport && <span className="term-stat">{conn.transport}</span>}
+        {conn.identity && <span className="term-identity">{conn.identity}</span>}
         <span
           className="term-stat"
           data-tone={latencyTone(last)}
-          title="Round trip of the last probe"
+          title={`Round trip of the last probe${conn.transport ? ` over ${conn.transport}` : ""}`}
         >
           {last === undefined ? "— ms" : `${last} ms`}
           <Sparkline values={conn.latency} />
         </span>
-        <span className="term-stat" title="Commands in this pane">
-          {stats.total} cmd
-          {stats.failed > 0 && <b className="term-failed"> · {stats.failed} failed</b>}
-          {stats.active > 0 && ` · ${stats.active} running`}
-        </span>
-        {conn.safeMode ? (
-          <span className="term-safe" role="group" aria-label="Safe Mode">
-            <ShieldCheck size={12} /> SAFE MODE
-            <button
-              type="button"
-              disabled={safeBusy}
-              onClick={() => void safeMode("commit")}
-              title="Keep the changes made in Safe Mode"
-            >
-              Commit
-            </button>
-            <button
-              type="button"
-              disabled={safeBusy}
-              onClick={() => void safeMode("rollback")}
-              title="Undo every change made since Safe Mode started"
-            >
-              Roll back
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="term-safe-start"
-            disabled={safeBusy || conn.link !== "online"}
-            onClick={() => void safeMode("enable")}
-            title="Safe Mode: the router undoes your uncommitted changes if this session is lost. Changes run through one Safe Mode session until you commit or roll back."
-          >
-            <ShieldCheck size={12} /> safe mode
-          </button>
-        )}
-        <span className="term-status-actions">
-          <button
-            type="button"
-            data-on={autoRetry}
-            onClick={() => setAutoRetry((on) => !on)}
-            title="Auto-retry: send a command again when the router was not reached, or when the command only reads. A change that may already have run is never sent twice."
-          >
-            <RefreshCw size={12} /> auto-retry {autoRetry ? "on" : "off"}
-          </button>
-          <button
-            type="button"
-            data-on={guard}
-            onClick={() => setGuard((on) => !on)}
-            title="Snapshot: store the router's configuration before every command that changes it. The snapshot is kept on this computer (Snapshots page), not on the router."
-          >
-            <History size={12} /> snapshot {guard ? "on" : "off"}
-          </button>
-          <span className="term-field" title="Stop a command after this long">
-            limit
-            <Select
-              size="sm"
-              className="term-select"
-              aria-label="Command time limit"
-              value={String(limit)}
-              onValueChange={(value) => setLimit(Number(value))}
-              options={LIMIT_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
-            />
-          </span>
+        <span className="term-status-end">
+          {stats.active > 0 && (
+            <span className="term-chip" data-tone="run">
+              <span className="term-pulse" /> {stats.active} running
+            </span>
+          )}
+          {stats.failed > 0 && (
+            <span className="term-chip" data-tone="err" title="Failed commands in this pane">
+              {stats.failed} failed
+            </span>
+          )}
           {watch !== null && (
-            <label
-              className="term-alert-rule term-chart-key"
-              title="Chart a number of the watched block over time. Type its name, for example cpu-load or free-memory."
+            <span className="term-chip" data-tone="run" title="A block is being watched">
+              <Eye size={11} /> {seconds(watchEvery)}
+            </span>
+          )}
+          {conn.safeMode ? (
+            <span className="term-safe" role="group" aria-label="Safe Mode">
+              <ShieldCheck size={12} /> SAFE
+              <button
+                type="button"
+                disabled={safeBusy}
+                onClick={() => void safeMode("commit")}
+                title="Keep the changes made in Safe Mode"
+              >
+                Commit
+              </button>
+              <button
+                type="button"
+                disabled={safeBusy}
+                onClick={() => void safeMode("rollback")}
+                title="Undo every change made since Safe Mode started"
+              >
+                Roll back
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="term-icon"
+              disabled={safeBusy || conn.link !== "online"}
+              onClick={() => void safeMode("enable")}
+              aria-label="Start Safe Mode"
+              title="Safe Mode: the router undoes your uncommitted changes if this session is lost. Changes run through one Safe Mode session until you commit or roll back."
             >
-              <ChartLine size={12} />
+              <ShieldCheck size={14} />
+            </button>
+          )}
+          <PaneMenu
+            label="Pane settings"
+            icon={<Settings2 size={14} />}
+            marked={guard || !autoRetry}
+          >
+            <label className="term-pop-row">
+              <span>
+                <b>Auto-retry</b>
+                <small>
+                  Only when the router was not reached, or the command only reads. A change that may
+                  already have run is never sent twice.
+                </small>
+              </span>
+              <Switch checked={autoRetry} onCheckedChange={setAutoRetry} aria-label="Auto-retry" />
+            </label>
+            <label className="term-pop-row">
+              <span>
+                <b>Snapshot before changes</b>
+                <small>Stored on this computer. If it fails, the command does not run.</small>
+              </span>
+              <Switch
+                checked={guard}
+                onCheckedChange={setGuard}
+                aria-label="Snapshot before changes"
+              />
+            </label>
+            <div className="term-pop-row">
+              <span>
+                <b>Time limit</b>
+                <small>A command is stopped after this long.</small>
+              </span>
+              <Select
+                size="sm"
+                className="term-select"
+                aria-label="Command time limit"
+                value={String(limit)}
+                onValueChange={(value) => setLimit(Number(value))}
+                options={LIMIT_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
+              />
+            </div>
+            <div className="term-pop-row">
+              <span>
+                <b>Watch every</b>
+                <small>How often a watched block runs again.</small>
+              </span>
+              <Select
+                size="sm"
+                className="term-select"
+                aria-label="Watch interval"
+                value={String(watchEvery)}
+                onValueChange={(value) => setWatchEvery(Number(value))}
+                options={WATCH_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
+              />
+            </div>
+            <label className="term-pop-field">
+              <span>
+                <ChartLine size={12} /> Chart a number of the watched block
+              </span>
               <input
                 value={chartKey}
-                placeholder="chart… (cpu-load)"
+                placeholder="cpu-load"
                 spellCheck={false}
-                aria-label="Number to chart for the watched command"
                 onChange={(event) => setChartKey(event.target.value)}
               />
             </label>
-          )}
-          {watch !== null && (
-            <label
-              className="term-alert-rule"
-              title={
-                "Alert for the watched block. Examples: changed · cpu-load > 80 · /down|error/ · ether1"
-              }
-            >
-              <BellRing size={12} />
+            <label className="term-pop-field">
+              <span>
+                <BellRing size={12} /> Alert when the watched block…
+              </span>
               <input
                 value={alertRule}
-                placeholder="alert when… (changed, cpu-load > 80)"
+                placeholder="changed · cpu-load > 80 · /down|error/"
                 spellCheck={false}
-                aria-label="Alert rule for the watched command"
                 onChange={(event) => setAlertRule(event.target.value)}
               />
             </label>
-          )}
-          <span className="term-field" title="How often a watched command runs again">
-            watch
-            <Select
-              size="sm"
-              className="term-select"
-              aria-label="Watch interval"
-              value={String(watchEvery)}
-              onValueChange={(value) => setWatchEvery(Number(value))}
-              options={WATCH_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
-            />
-          </span>
-          <button type="button" onClick={() => probeNow.current()} title="Check the connection now">
-            <RotateCw size={12} />
-          </button>
-          <button
-            type="button"
-            onClick={() => void shareView()}
-            title="Share: copy a link to a read-only view of this router's commands from now on. The link is not a permission: the viewer still needs access to this dashboard."
-          >
-            <Share2 size={12} />
-          </button>
-          <button
-            type="button"
-            onClick={() => scriptStore.open(paneId)}
-            title="Run a script: several commands, one per line"
-          >
-            <FileCode2 size={12} />
-          </button>
-          <details className="term-menu">
-            <summary title="Save this pane as a file">
-              <Download size={12} />
-            </summary>
-            <div>
-              <button type="button" onClick={() => exportAs("txt")}>
-                Transcript (.txt)
-              </button>
-              <button type="button" onClick={() => exportAs("md")}>
-                Report (.md)
-              </button>
-              <button type="button" onClick={() => exportAs("rsc")}>
-                Commands that ran (.rsc)
-              </button>
-            </div>
-          </details>
-          <button type="button" onClick={clear} title="Clear this pane (Ctrl+L)">
-            <Eraser size={12} />
-          </button>
+            <p className="term-pop-foot">
+              {conn.transport ?? "not connected"} · {stats.total} command
+              {stats.total === 1 ? "" : "s"}
+              {stats.failed > 0 && ` · ${stats.failed} failed`}
+            </p>
+          </PaneMenu>
+          <PaneMenu label="More actions" icon={<Ellipsis size={15} />} closeOnPick>
+            <button type="button" onClick={() => scriptStore.open(paneId)}>
+              <FileCode2 size={13} /> Run a script…
+            </button>
+            <button type="button" onClick={() => void shareView()}>
+              <Share2 size={13} /> Share a read-only view
+            </button>
+            <button type="button" onClick={() => probeNow.current()}>
+              <RotateCw size={13} /> Check the connection now
+            </button>
+            <hr />
+            <button type="button" onClick={() => exportAs("txt")}>
+              <Download size={13} /> Save transcript (.txt)
+            </button>
+            <button type="button" onClick={() => exportAs("md")}>
+              <Download size={13} /> Save report (.md)
+            </button>
+            <button type="button" onClick={() => exportAs("rsc")}>
+              <Download size={13} /> Save commands that ran (.rsc)
+            </button>
+            <hr />
+            <button type="button" onClick={clear}>
+              <Eraser size={13} /> Clear this pane <small>Ctrl+L</small>
+            </button>
+          </PaneMenu>
         </span>
       </header>
 
@@ -1422,6 +1508,16 @@ export function TerminalPane(
 
       {blocks.some((block) => block.pinned) && (
         <div className="term-pinned" aria-label="Pinned blocks">
+          <div className="term-pinned-head">
+            <Pin size={11} /> Pinned · {blocks.filter((block) => block.pinned).length}
+            <button
+              type="button"
+              onClick={() => setBlocks((list) => list.map((b) => ({ ...b, pinned: false })))}
+              title="Move the pinned blocks back into the list"
+            >
+              Unpin all
+            </button>
+          </div>
           {blocks.filter((block) => block.pinned).map(renderBlock)}
         </div>
       )}
