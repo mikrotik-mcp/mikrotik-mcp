@@ -46,6 +46,8 @@ import {
   workspace,
   workspaceStorage,
 } from "./terminal-lib";
+import type { PaletteAction } from "./terminal-palette";
+import { CommandPalette } from "./terminal-palette";
 import { TerminalPane } from "./terminal-pane";
 import { CompareDialog } from "./terminal-compare";
 import { ScriptDialog } from "./terminal-script";
@@ -103,6 +105,7 @@ export function TerminalView(): ReactNode {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [armed, setArmed] = useState(false);
   const [finding, setFinding] = useState(false);
+  const [palette, setPalette] = useState(false);
   /** What "New terminal" opens: command blocks, or an interactive shell. */
   const [kind, setKind] = useState<"terminal" | "shell">("terminal");
   const kindRef = useRef(kind);
@@ -162,6 +165,12 @@ export function TerminalView(): ReactNode {
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (!(event.metaKey || event.ctrlKey)) return;
+      // Ctrl/Cmd+Shift+P: the command palette.
+      if (event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setPalette((open) => !open);
+        return;
+      }
       // Ctrl/Cmd+F: find in the terminals, in place of the browser's page search.
       if (event.key.toLowerCase() === "f") {
         event.preventDefault();
@@ -273,6 +282,86 @@ export function TerminalView(): ReactNode {
     },
     [addPane, target],
   );
+
+  /** Everything the page can do, for the command palette. */
+  const paletteActions = (): PaletteAction[] => {
+    const active = paneRegistry.get(workspace.activePane) ?? paneRegistry.all()[0];
+    const open = (device: string, as: "terminal" | "shell"): void => {
+      kindRef.current = as;
+      addPane(device);
+      kindRef.current = kind;
+    };
+    return [
+      ...names.map((name) => ({
+        id: `open:${name}`,
+        label: `Open terminal: ${name}`,
+        group: "Panes",
+        run: () => open(name, "terminal"),
+      })),
+      ...(state?.readOnly
+        ? []
+        : names.map((name) => ({
+            id: `shell:${name}`,
+            label: `Open interactive shell: ${name}`,
+            group: "Panes",
+            run: () => open(name, "shell"),
+          }))),
+      ...paneRegistry.all().map((pane, i) => ({
+        id: `focus:${pane.id}`,
+        label: `Go to pane ${i + 1}: ${pane.device}`,
+        group: "Panes",
+        run: () => {
+          dock.current?.getPanel(pane.id)?.api.setActive();
+          pane.focus();
+        },
+      })),
+      ...favorites.map((favorite) => ({
+        id: `fav:${favorite.id}`,
+        label: `Run favourite: ${favorite.command}`,
+        group: active ? `Favourites → ${active.device}` : "Favourites",
+        run: () => void active?.run(favorite.command),
+      })),
+      ...saved.map((item) => ({
+        id: `ws:${item.name}`,
+        label: `Open workspace: ${item.name}`,
+        group: "Workspaces",
+        run: () => openWorkspace(item),
+      })),
+      { id: "bc:off", label: "Broadcast: off", group: "Broadcast", run: () => setBroadcast(null) },
+      {
+        id: "bc:all",
+        label: "Broadcast: all open panes",
+        group: "Broadcast",
+        run: () => setBroadcast({ label: "all panes", devices: null }),
+      },
+      ...groups.map((group) => ({
+        id: `bc:${group.name}`,
+        label: `Broadcast: group ${group.name}`,
+        group: "Broadcast",
+        run: () => setBroadcast({ label: group.name, devices: group.devices }),
+      })),
+      { id: "find", label: "Find in the terminals", group: "View", run: () => setFinding(true) },
+      {
+        id: "history",
+        label: "Show the command history",
+        group: "View",
+        run: () => setDrawer("history"),
+      },
+      {
+        id: "favs",
+        label: "Show the favourites",
+        group: "View",
+        run: () => setDrawer("favorites"),
+      },
+      { id: "drawer", label: "Hide the side drawer", group: "View", run: () => setDrawer(null) },
+      {
+        id: "all",
+        label: "Open one terminal for every router",
+        group: "Panes",
+        run: () => names.forEach((name, i) => addPane(name, i % 2 ? "below" : "right")),
+      },
+    ];
+  };
 
   if (!state || !devices) return <div className="term-page term-loading">Opening terminal…</div>;
   if (!state.enabled) {
@@ -520,6 +609,7 @@ export function TerminalView(): ReactNode {
         </div>
       </div>
 
+      {palette && <CommandPalette actions={paletteActions()} onClose={() => setPalette(false)} />}
       <CompareDialog />
       <ScriptDialog />
       {sent && (

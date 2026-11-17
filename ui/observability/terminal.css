@@ -2008,3 +2008,73 @@
   font-family: var(--term-mono);
   font-size: 12px;
 }
+
+/* ── command palette ─────────────────────────────────────────────────── */
+.term-palette-back {
+  place-items: start center;
+  padding-top: 12vh;
+}
+.term-palette {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: 62vh;
+  overflow: hidden;
+  border: 1px solid var(--term-line);
+  border-radius: 14px;
+  background: var(--term-surface);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 65%);
+  animation: term-rise 0.14s ease-out;
+}
+.term-palette label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--term-line);
+  color: var(--term-accent);
+}
+.term-palette input {
+  flex: 1;
+  border: 0;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  color: var(--term-ink);
+  font-size: 14px;
+}
+.term-palette ul {
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.term-palette li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.term-palette li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-palette li[aria-selected="true"] {
+  background: color-mix(in srgb, var(--term-accent) 18%, transparent);
+}
+.term-palette small {
+  flex: none;
+  color: var(--term-faint);
+  font-size: 11px;
+}
+.term-palette-empty {
+  color: var(--term-faint);
+  cursor: default;
+}
