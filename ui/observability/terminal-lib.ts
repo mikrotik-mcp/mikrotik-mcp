@@ -50,6 +50,8 @@ export interface RunEnd {
   transport?: string;
   /** Safe to send again without repeating a change on the router. */
   retryable?: boolean;
+  /** A config snapshot was stored just before this command. */
+  snapshot?: boolean;
 }
 
 const TOKEN = new URLSearchParams(location.search).get("token") ?? "";
@@ -96,6 +98,11 @@ export const terminalApi = {
     post("/api/terminal/syntax", { device, input }, signal)
       .then((r) => r.json() as Promise<{ items?: SyntaxHelp[] }>)
       .then((r) => r.items ?? []),
+  /** Differences between the newest stored snapshot and the router now. */
+  changes: (device: string): Promise<string> =>
+    post("/api/terminal/changes", { device })
+      .then((r) => r.json() as Promise<{ text?: string; error?: string }>)
+      .then((r) => r.text ?? r.error ?? "No answer."),
   complete: (device: string, input: string, signal?: AbortSignal): Promise<Completion[]> =>
     post("/api/terminal/complete", { device, input }, signal)
       .then((r) => r.json() as Promise<{ completions?: Completion[] }>)
@@ -121,7 +128,13 @@ export const isReadCommand = (command: string): boolean => READ_RE.test(command.
 export async function runCommand(
   device: string,
   command: string,
-  options: { maxMs?: number; signal?: AbortSignal; onOutput: (text: string) => void },
+  options: {
+    maxMs?: number;
+    /** Store a config snapshot first when the command is not a read. */
+    snapshot?: boolean;
+    signal?: AbortSignal;
+    onOutput: (text: string) => void;
+  },
 ): Promise<RunEnd> {
   const started = performance.now();
   const elapsed = (): number => Math.round(performance.now() - started);
@@ -129,7 +142,7 @@ export async function runCommand(
   try {
     res = await post(
       "/api/terminal/run",
-      { device, command, maxMs: options.maxMs },
+      { device, command, maxMs: options.maxMs, snapshot: options.snapshot },
       options.signal,
     );
   } catch (e) {
@@ -436,6 +449,24 @@ const compareListeners = new Set<() => void>();
 const compareChanged = (): void => {
   for (const listener of compareListeners) listener();
 };
+/** Show a ready-made diff text (a snapshot diff) in the compare dialog. */
+let changesText: { title: string; text: string } | null = null;
+export const changesStore = {
+  get: (): { title: string; text: string } | null => changesText,
+  subscribe(listener: () => void): () => void {
+    compareListeners.add(listener);
+    return () => compareListeners.delete(listener);
+  },
+  show(title: string, text: string): void {
+    changesText = { title, text };
+    compareChanged();
+  },
+  close(): void {
+    changesText = null;
+    compareChanged();
+  },
+};
+
 export const compareStore = {
   get: (): { first?: CompareSide; second?: CompareSide } => compareState,
   subscribe(listener: () => void): () => void {

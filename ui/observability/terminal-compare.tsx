@@ -7,10 +7,11 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { diffLines } from "../../src/core/diff";
 import { UnifiedDiff } from "./diff-view";
-import { compareStore } from "./terminal-lib";
+import { changesStore, compareStore } from "./terminal-lib";
 
 export function CompareDialog(): ReactNode {
   const { first, second } = useSyncExternalStore(compareStore.subscribe, compareStore.get);
+  const changes = useSyncExternalStore(changesStore.subscribe, changesStore.get);
   const diff = useMemo(
     () =>
       first && second
@@ -27,6 +28,23 @@ export function CompareDialog(): ReactNode {
     return () => window.removeEventListener("keydown", onKey);
   }, [first]);
 
+  if (changes) {
+    return (
+      <div className="term-modal" role="dialog" aria-modal="true" aria-label="What changed">
+        <div className="term-modal-card">
+          <header>
+            <strong>
+              <GitCompareArrows size={15} /> {changes.title}
+            </strong>
+            <button type="button" onClick={changesStore.close} aria-label="Close">
+              <X size={16} />
+            </button>
+          </header>
+          <UnifiedDiff unified={changes.text} maxHeight={560} />
+        </div>
+      </div>
+    );
+  }
   if (!first) return null;
   if (!second || !diff) {
     return (

@@ -17,11 +17,22 @@ import {
 const state = vi.hoisted(() => ({
   readOnly: false,
   run: vi.fn(),
+  capture: vi.fn(),
   history: [] as Record<string, unknown>[],
 }));
 vi.mock("../../src/core/connector", async (original) => ({
   ...(await original<typeof import("../../src/core/connector")>()),
   executeMikrotikCommand: state.run,
+}));
+vi.mock("../../src/tools/config-snapshot", () => ({
+  configSnapshotTools: [
+    {
+      name: "capture_config_snapshot",
+      inputSchema: {},
+      handler: (...a: unknown[]) => state.capture(...a),
+    },
+    { name: "diff_config_snapshots", inputSchema: {}, handler: async () => "CONFIG DIFF\n+added" },
+  ],
 }));
 vi.mock("../../src/core/runtime", () => ({
   getConfig: () => ({ readOnly: state.readOnly }),
@@ -52,6 +63,7 @@ const lines = async (res: Response | null) =>
 beforeEach(() => {
   state.readOnly = false;
   state.run.mockReset();
+  state.capture.mockReset();
   state.history = [];
 });
 
@@ -185,6 +197,35 @@ describe("run route", () => {
     expect(await endOf("/ip address add address=10.0.0.1/24 interface=ether1")).toMatchObject({
       retryable: false,
     });
+  });
+
+  it("takes a snapshot before a change when asked, and never before a read", async () => {
+    state.run.mockResolvedValue("");
+    state.capture.mockResolvedValue("captured");
+    const write = "/ip address add address=10.0.0.1/24 interface=ether1";
+    const end = (
+      await lines(await call("/api/terminal/run", { command: write, snapshot: true }))
+    ).at(-1);
+    expect(end).toMatchObject({ ok: true, snapshot: true });
+    expect(state.capture).toHaveBeenCalledOnce();
+    await lines(await call("/api/terminal/run", { command: "/log print", snapshot: true }));
+    await lines(await call("/api/terminal/run", { command: write }));
+    expect(state.capture).toHaveBeenCalledOnce();
+  });
+
+  it("does not run the change when the snapshot fails", async () => {
+    state.capture.mockRejectedValue(new Error("disk full"));
+    const end = (
+      await lines(await call("/api/terminal/run", { command: "/system reboot", snapshot: true }))
+    ).at(-1);
+    expect(end).toMatchObject({ ok: false, retryable: false, snapshot: false });
+    expect(end.error).toMatch(/NOT run.*disk full/);
+    expect(state.run).not.toHaveBeenCalled();
+  });
+
+  it("reports what changed since the newest snapshot", async () => {
+    const res = await call("/api/terminal/changes", { device: "lab" });
+    expect(await res!.json()).toEqual({ text: "CONFIG DIFF\n+added" });
   });
 
   it("refuses writes on a read-only server and rejects cross-origin requests", async () => {

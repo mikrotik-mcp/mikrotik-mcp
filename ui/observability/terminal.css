@@ -1618,3 +1618,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.term-chip-button {
+  background: transparent;
+  color: var(--term-accent);
+  font-family: inherit;
+  font-size: 11px;
+}
+.term-chip-button:hover {
+  border-color: var(--term-accent);
+}

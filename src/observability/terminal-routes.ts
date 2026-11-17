@@ -19,6 +19,8 @@ import { DashboardInputError, readOperationBody } from "./bounded-request";
 import type { Risk } from "./event";
 import { recordToolCall } from "./recorder";
 import type { TerminalStore } from "./terminal-store";
+import { z } from "zod";
+import { configSnapshotTools } from "../tools/config-snapshot";
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
 
@@ -128,9 +130,30 @@ const json = (body: unknown, status = 200): Response =>
 const DEFAULT_MAX_MS = 30_000;
 const MAX_MAX_MS = 600_000;
 
+/** Run a config-snapshot tool as the tools do, and return its text. */
+async function snapshotTool(
+  name: string,
+  device: string,
+  input: Record<string, unknown>,
+): Promise<string> {
+  const tool = configSnapshotTools.find((candidate) => candidate.name === name);
+  if (!tool) throw new Error(`Snapshot tool ${name} is not available.`);
+  const result = await tool.handler(
+    z.object(tool.inputSchema).parse(input),
+    createContext(undefined, device),
+  );
+  return typeof result === "string" ? result : JSON.stringify(result);
+}
+
 export function createTerminalRoutes(options: TerminalRouteOptions) {
   /** Run one command and stream it as NDJSON: start, out…, end. */
-  function run(req: Request, device: string, command: string, maxMs: number): Response {
+  function run(
+    req: Request,
+    device: string,
+    command: string,
+    maxMs: number,
+    snapshot: boolean,
+  ): Response {
     const risk = classifyCommand(command);
     const encoder = new TextEncoder();
     const started = Date.now();
@@ -149,13 +172,29 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
           }
         };
         const ctx = createContext(undefined, device);
-        send({ t: "start", ts: started, device, risk });
+        // A restore point before a change, when the pane asked for one.
+        const guarded = snapshot && risk !== "READ";
+        send({ t: "start", ts: started, device, risk, snapshot: guarded });
         let streamed = false;
         let output = "";
         let error: string | undefined;
         let dispatched = true;
         let transportFailed = false;
+        let snapshotFailed = false;
         try {
+          if (guarded) {
+            try {
+              await snapshotTool("capture_config_snapshot", device, {
+                label: `terminal: ${command.slice(0, 80)}`,
+              });
+            } catch (e) {
+              snapshotFailed = true;
+              throw new Error(
+                `The command was NOT run: the snapshot before it failed (${e instanceof Error ? e.message : String(e)}).`,
+                { cause: e },
+              );
+            }
+          }
           output = await executeMikrotikCommand(command, ctx, {
             maxMs,
             signal: abort.signal,
@@ -171,9 +210,10 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
             error = "RouterOS rejected the command.";
         } catch (e) {
           error = e instanceof Error ? e.message : String(e);
-          transportFailed = true;
+          // A failed snapshot is not a lost connection: the pane must not retry it.
+          transportFailed = !snapshotFailed;
           // A failed connect never sent the command, so a retry cannot repeat it.
-          dispatched = !(e instanceof DeviceConnectionError);
+          dispatched = !snapshotFailed && !(e instanceof DeviceConnectionError);
         }
         const ms = Date.now() - started;
         const stopped = abort.signal.aborted;
@@ -213,6 +253,7 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
           error,
           stopped,
           historyId,
+          snapshot: guarded && dispatched,
           transport: ctx.transport,
           // Safe to send again without repeating a change on the router.
           retryable: transportFailed && (!dispatched || risk === "READ"),
@@ -342,7 +383,13 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
         const asked = Number(body.maxMs);
         const maxMs =
           Number.isFinite(asked) && asked > 0 ? Math.min(asked, MAX_MAX_MS) : DEFAULT_MAX_MS;
-        return run(req, device, command, maxMs);
+        return run(req, device, command, maxMs, body.snapshot === true);
+      }
+      if (key === "POST /api/terminal/changes") {
+        // What differs between the newest stored snapshot and the router now.
+        return json({
+          text: await snapshotTool("diff_config_snapshots", device, { from: "latest", to: "live" }),
+        });
       }
       return json({ error: "Unsupported terminal route" }, 405);
     } catch (e) {

@@ -15,6 +15,7 @@ import {
   Copy,
   Download,
   GitCompareArrows,
+  History,
   CornerDownLeft,
   Eraser,
   FileCode2,
@@ -43,6 +44,7 @@ import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./ter
 import type { BroadcastResult, Completion, ExportFormat, RunEnd, SyntaxHelp } from "./terminal-lib";
 import { RecordTable } from "./terminal-table";
 import {
+  changesStore,
   cleanOutput,
   compareStore,
   destructiveWord,
@@ -73,6 +75,8 @@ interface Block {
   /** Shown while waiting to retry: "retry 2/3 in 4s". */
   note?: string;
   collapsed?: boolean;
+  /** A config snapshot was stored just before this command ran. */
+  snapshot?: boolean;
   /** Why the watch alert fired on the last run; undefined when it did not. */
   alert?: string;
   /** Show the output as a table of records. */
@@ -236,6 +240,16 @@ function BlockViewBase({
             </span>
           )}
           {block.runs > 1 && <span className="term-chip">×{block.runs}</span>}
+          {block.snapshot && (
+            <button
+              type="button"
+              className="term-chip term-chip-button"
+              onClick={() => onAction("changes", block)}
+              title="A snapshot was stored before this command. Show what differs from it now."
+            >
+              <History size={11} /> what changed?
+            </button>
+          )}
           {block.alert && (
             <span className="term-chip" data-tone="alert" title={block.alert}>
               <BellRing size={11} /> {block.alert}
@@ -382,6 +396,10 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
     null,
   );
   const [autoRetry, setAutoRetry] = useState(true);
+  /** Store a config snapshot before every command that is not a read. */
+  const [guard, setGuard] = useState(false);
+  const guardRef = useRef(guard);
+  guardRef.current = guard;
   const [watch, setWatch] = useState<number | null>(null);
   const [conn, setConn] = useState<Connection>({ link: "connecting", latency: [], attempt: 0 });
   const [, setGrammarReady] = useState(false);
@@ -537,6 +555,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
         if (!options.quiet) patch(id, { output: "", changed: undefined });
         end = await runCommand(device, command, {
           maxMs: limitRef.current,
+          snapshot: guardRef.current,
           signal: abort.signal,
           onOutput: (text) => {
             buffer = (buffer + cleanOutput(text)).slice(-MAX_BLOCK_CHARS);
@@ -576,6 +595,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
           output,
           changed,
           alert,
+          snapshot: result.snapshot,
           ts: Date.now(),
           ms: result.ms,
           note: undefined,
@@ -756,6 +776,10 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
       else if (action === "rerun") void submit(block.command);
       else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
       else if (action === "table") patch(block.id, { table: !block.table });
+      else if (action === "changes")
+        void terminalApi
+          .changes(device)
+          .then((text) => changesStore.show(`Changed on ${device} since the snapshot`, text));
       else if (action === "compare")
         compareStore.pick({
           key: `${paneId}:${block.id}`,
@@ -965,6 +989,14 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
             title="Auto-retry: send a command again when the router was not reached, or when the command only reads. A change that may already have run is never sent twice."
           >
             <RefreshCw size={12} /> auto-retry {autoRetry ? "on" : "off"}
+          </button>
+          <button
+            type="button"
+            data-on={guard}
+            onClick={() => setGuard((on) => !on)}
+            title="Snapshot: store the router's configuration before every command that changes it. The snapshot is kept on this computer (Snapshots page), not on the router."
+          >
+            <History size={12} /> snapshot {guard ? "on" : "off"}
           </button>
           <label title="Stop a command after this long">
             limit
