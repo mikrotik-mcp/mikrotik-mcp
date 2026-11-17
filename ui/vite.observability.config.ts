@@ -37,7 +37,16 @@ export default defineConfig(async ({ command, mode, isSsrBuild }) => ({
     open: false,
     proxy: {
       // Do not proxy the frontend module /api.ts along with backend /api/*.
-      [DASHBOARD_API_PATH]: { target: "http://127.0.0.1:9091", ws: true, changeOrigin: true },
+      // Defaults to a local `start:dev` server. Point it at a server on another
+      // machine with the same variables `mikrotik-mcp dashboard` reads.
+      [DASHBOARD_API_PATH]: {
+        target: process.env.MIKROTIK_DASHBOARD_SERVER ?? "http://127.0.0.1:9091",
+        ws: true,
+        changeOrigin: true,
+        headers: process.env.MIKROTIK_DASHBOARD_SERVER_TOKEN
+          ? { authorization: `Bearer ${process.env.MIKROTIK_DASHBOARD_SERVER_TOKEN}` }
+          : undefined,
+      },
     },
   },
   // `@/*` → the dashboard's own directory, matching the shadcn aliases in

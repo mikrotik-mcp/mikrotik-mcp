@@ -642,7 +642,7 @@ function env(...names: string[]): string | undefined {
  * Parse `--flag value` / `--flag=value` style arguments into a flat map.
  * Booleans without a value default to "true".
  */
-function parseFlags(argv: string[]): Record<string, string> {
+export function parseFlags(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];

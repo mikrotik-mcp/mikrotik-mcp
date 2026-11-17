@@ -126,6 +126,51 @@ A `dashboard` block in the JSON config file provides the baseline. Explicit envi
 With a token set, open `http://127.0.0.1:9090/?token=YOUR_TOKEN` — the page
 forwards it to the API and the live WebSocket automatically.
 
+## Run the dashboard on another machine
+
+`mikrotik-mcp dashboard --server <url>` serves the dashboard on a machine that
+has no MCP server and no device configuration. It connects to the dashboard port
+of a server that runs somewhere else and passes everything through: the page,
+the API, the live WebSocket and the SSE fallback. That machine opens no SSH
+connection to a router and stores no events.
+
+**On the server.** The dashboard port is the data source, so it must be enabled
+and reachable from the other machine. Set a token.
+
+```bash
+mikrotik-mcp serve --config ./devices.json \
+  --dashboard --dashboard-host 0.0.0.0 --dashboard-port 9090 \
+  --dashboard-token YOUR_TOKEN
+```
+
+**On the other machine.**
+
+```bash
+MIKROTIK_DASHBOARD_SERVER_TOKEN=YOUR_TOKEN \
+  mikrotik-mcp dashboard --server http://192.168.1.10:9090
+```
+
+Then open **http://127.0.0.1:9090/** on that machine. No `?token=` is needed.
+
+| Flag             | Env var                           | Default      | Meaning                                          |
+| ---------------- | --------------------------------- | ------------ | ------------------------------------------------ |
+| `--server`       | `MIKROTIK_DASHBOARD_SERVER`       | _(required)_ | Dashboard URL of the server, `http://host:port`. |
+| `--server-token` | `MIKROTIK_DASHBOARD_SERVER_TOKEN` | _(none)_     | The server's `--dashboard-token`.                |
+| `--host`         |                                   | `127.0.0.1`  | Bind host on this machine.                       |
+| `--port`         |                                   | `9090`       | Bind port on this machine.                       |
+
+- The token is added to each request by this command. It does not reach the
+  browser and is not put in a URL. Prefer the environment variable to the flag:
+  a flag is visible in the process list.
+- This command asks for no token of its own. Anyone who can open it gets the
+  server's dashboard, and that includes the configuration editor. Keep the
+  default `127.0.0.1` unless that is intended; a wider bind prints a warning.
+- A server started with `--dashboard=false` records nothing and has no API, so
+  there is nothing for a remote dashboard to show.
+- If the server cannot be reached, each request returns HTTP 502 with the reason.
+- Traffic between the two machines is plain HTTP unless `--server` is an
+  `https://` URL of a TLS proxy in front of the server.
+
 ## Storage — Bun-native SQLite
 
 Events persist to `bun:sqlite` (no external database, no extra dependency). The
