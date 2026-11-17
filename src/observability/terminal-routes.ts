@@ -41,6 +41,8 @@ export function terminalAccess(cfg: {
   );
 }
 
+/** Commands are capped here unless the caller asks for longer (max 10 minutes). */
+const DEFAULT_MAX_MS = 30_000;
 const DESTRUCTIVE_RE =
   /(?:^|[\s/;[{])(?:remove|reset-configuration|reset|reboot|shutdown|format|format-drive|downgrade|uninstall|wipe)(?:$|[\s;\]}])/;
 const DIAGNOSTIC_RE =
@@ -146,6 +148,71 @@ export function parseFoundTools(answer: string): { name: string; title: string }
   }));
 }
 
+/** Shortest repeat of a scheduled command. */
+export const MIN_SCHEDULE_MS = 60_000;
+export const MAX_SCHEDULES = 50;
+let schedulerTimer: ReturnType<typeof setInterval> | undefined;
+
+/** Stop the scheduled-command loop (dashboard shutdown, tests). */
+export function stopTerminalScheduler(): void {
+  if (schedulerTimer) clearInterval(schedulerTimer);
+  schedulerTimer = undefined;
+}
+
+/**
+ * Run every schedule that is due. Only reads are scheduled (the routes refuse
+ * anything else), so nothing changes a router while nobody is watching.
+ */
+export async function runDueSchedules(store: TerminalStore, now = Date.now()): Promise<number> {
+  let ran = 0;
+  for (const item of store.listSchedules()) {
+    if (item.nextRun === null || item.nextRun > now) continue;
+    ran++;
+    const ctx = createContext(undefined, item.device);
+    let output = "";
+    let error: string | undefined;
+    try {
+      // Checked again here: the stored row is not trusted to be a read.
+      if (classifyCommand(item.command) !== "READ") throw new Error("Only reads may be scheduled.");
+      output = await executeMikrotikCommand(item.command, ctx, { maxMs: DEFAULT_MAX_MS });
+      if (looksLikeError(output)) error = "RouterOS rejected the command.";
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+    const ms = Date.now() - now;
+    store.addHistory({
+      ts: now,
+      device: item.device,
+      command: item.command,
+      output,
+      ok: !error,
+      ms,
+      error,
+    });
+    recordToolCall({
+      tool: "dashboard_terminal",
+      title: "Dashboard Terminal",
+      risk: "READ",
+      device: item.device,
+      deviceTransport: ctx.transport,
+      ts: now,
+      durationMs: ms,
+      isError: Boolean(error),
+      error,
+      args: { command: item.command, scheduled: true },
+      output,
+      hasStructured: false,
+    });
+    store.markScheduleRun(item.id, {
+      at: now,
+      ok: !error,
+      note: error ?? `${output.split(/\r?\n/).filter(Boolean).length} lines`,
+      next: item.everyMs > 0 ? now + item.everyMs : null,
+    });
+  }
+  return ran;
+}
+
 interface TerminalRouteOptions {
   /** Why the terminal is unavailable, or `null`. */
   denied: string | null;
@@ -157,8 +224,6 @@ const noStore = { "cache-control": "no-store" };
 const json = (body: unknown, status = 200): Response =>
   Response.json(body, { status, headers: noStore });
 
-/** Commands are capped here unless the caller asks for longer (max 10 minutes). */
-const DEFAULT_MAX_MS = 30_000;
 const MAX_MAX_MS = 600_000;
 
 /** Run a config-snapshot tool as the tools do, and return its text. */
@@ -177,6 +242,18 @@ async function snapshotTool(
 }
 
 export function createTerminalRoutes(options: TerminalRouteOptions) {
+  if (options.denied === null && !schedulerTimer) {
+    schedulerTimer = setInterval(() => {
+      void options
+        .store()
+        .then((store) => runDueSchedules(store))
+        .catch((e) =>
+          logger.warn(`Terminal schedules did not run: ${e instanceof Error ? e.message : e}`),
+        );
+    }, 20_000);
+    schedulerTimer.unref?.();
+  }
+
   /** Run one command and stream it as NDJSON: start, out…, end. */
   function run(
     req: Request,
@@ -329,6 +406,8 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
           }),
         });
       }
+      if (key === "GET /api/terminal/schedules")
+        return json({ schedules: (await options.store()).listSchedules() });
       if (key === "GET /api/terminal/suggest") {
         // Word matching only: no language model is involved.
         const question = url.searchParams.get("q") ?? "";
@@ -372,6 +451,37 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
         if (!command) return json({ error: "A command is required." }, 400);
         const label = (text("label").trim() || command).slice(0, 120);
         return json({ favorite: (await options.store()).saveFavorite(command, label) });
+      }
+      if (key === "DELETE /api/terminal/schedules") {
+        if (typeof body.id !== "number") return json({ error: "A schedule id is required." }, 400);
+        return json({ removed: (await options.store()).deleteSchedule(body.id) });
+      }
+      if (key === "POST /api/terminal/schedules") {
+        const command = text("command").trim();
+        if (!command) return json({ error: "A command is required." }, 400);
+        if (classifyCommand(command) !== "READ")
+          return json(
+            {
+              error:
+                "Only commands that read (print, export, ping, traceroute) can be scheduled. A change must be run by a person.",
+            },
+            400,
+          );
+        const store = await options.store();
+        if (store.listSchedules().length >= MAX_SCHEDULES)
+          return json({ error: `At most ${MAX_SCHEDULES} schedules are kept.` }, 400);
+        const everyMs = Math.max(0, Math.floor(Number(body.everyMs) || 0));
+        if (everyMs > 0 && everyMs < MIN_SCHEDULE_MS)
+          return json({ error: "The shortest repeat is one minute." }, 400);
+        const at = Number(body.at);
+        const nextRun = Number.isFinite(at) && at > Date.now() ? at : Date.now() + (everyMs || 0);
+        const id = store.addSchedule({
+          device: resolveDeviceName(text("device") || undefined),
+          command,
+          everyMs,
+          nextRun,
+        });
+        return json({ id, schedules: store.listSchedules() });
       }
       if (key === "DELETE /api/terminal/favorites") {
         if (typeof body.id !== "number") return json({ error: "A favourite id is required." }, 400);

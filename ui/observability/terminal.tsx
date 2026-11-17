@@ -10,6 +10,7 @@ import type { DockviewApi, DockviewReadyEvent } from "dockview-react";
 import { DockviewReact, themeAbyss } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 import {
+  CalendarClock,
   History,
   LayoutGrid,
   PanelsTopLeft,
@@ -50,6 +51,7 @@ import type { PaletteAction } from "./terminal-palette";
 import { CommandPalette } from "./terminal-palette";
 import { TerminalPane } from "./terminal-pane";
 import { CompareDialog } from "./terminal-compare";
+import { ScheduleDrawer } from "./terminal-schedules";
 import { ScriptDialog } from "./terminal-script";
 import { FindBar } from "./terminal-search";
 import { ShellPane } from "./terminal-shell-pane";
@@ -97,7 +99,8 @@ export function TerminalView(): ReactNode {
   /** True while one layout replaces another: closed panes then keep their blocks. */
   const switching = useRef(false);
   const [sent, setSent] = useState<{ command: string; results: BroadcastResult[] } | null>(null);
-  const [drawer, setDrawer] = useState<"history" | "favorites" | null>("history");
+  const [drawer, setDrawer] = useState<"history" | "favorites" | "scheduled" | null>("history");
+  const [scheduleDraft, setScheduleDraft] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [query, setQuery] = useState("");
   const [filterDevice, setFilterDevice] = useState("");
@@ -155,6 +158,10 @@ export function TerminalView(): ReactNode {
   useEffect(() => {
     workspace.broadcast = broadcast;
     workspace.onBroadcastDone = (command, results) => setSent({ command, results });
+    workspace.onSchedule = (command) => {
+      setScheduleDraft(command);
+      setDrawer("scheduled");
+    };
     return () => {
       workspace.broadcast = null;
       workspace.onBroadcastDone = () => {};
@@ -600,6 +607,14 @@ export function TerminalView(): ReactNode {
           </button>
           <button
             type="button"
+            data-on={drawer === "scheduled"}
+            onClick={() => setDrawer(drawer === "scheduled" ? null : "scheduled")}
+            title="Commands the server runs at a time or on a repeat"
+          >
+            <CalendarClock size={14} /> Scheduled
+          </button>
+          <button
+            type="button"
             data-on={drawer === "favorites"}
             onClick={() => setDrawer(drawer === "favorites" ? null : "favorites")}
           >
@@ -655,7 +670,10 @@ export function TerminalView(): ReactNode {
           )}
         </div>
 
-        {drawer && (
+        {drawer === "scheduled" && (
+          <ScheduleDrawer devices={names} draft={scheduleDraft} onClose={() => setDrawer(null)} />
+        )}
+        {drawer && drawer !== "scheduled" && (
           <aside
             className="term-drawer"
             aria-label={drawer === "history" ? "History" : "Favourites"}

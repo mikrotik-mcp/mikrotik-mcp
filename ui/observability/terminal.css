@@ -2078,3 +2078,66 @@
   color: var(--term-faint);
   cursor: default;
 }
+
+/* ── scheduled commands ──────────────────────────────────────────────── */
+.term-drawer > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.term-schedule-form {
+  display: grid;
+  gap: 6px;
+  padding: 4px 10px 10px;
+  border-bottom: 1px solid var(--term-line);
+  font-size: 12px;
+}
+.term-schedule-form > div {
+  display: flex;
+  gap: 6px;
+}
+.term-schedule-form input,
+.term-schedule-form select {
+  min-width: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--term-line);
+  border-radius: 6px;
+  outline: none;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  color-scheme: dark;
+  font-family: var(--term-mono);
+  font-size: 12px;
+}
+.term-schedule-form select {
+  flex: 1;
+}
+.term-schedule-form label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--term-dim);
+}
+.term-schedule-form label input {
+  flex: 1;
+}
+.term-schedule-form button {
+  padding: 6px;
+  border: 1px solid var(--term-accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--term-accent) 16%, transparent);
+  color: var(--term-ink);
+}
+.term-schedule-form button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.term-schedule-form p {
+  margin: 0;
+  color: var(--term-faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.term-schedule-form p[data-bad="true"] {
+  color: var(--term-err);
+}

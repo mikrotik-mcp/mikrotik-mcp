@@ -262,6 +262,8 @@ export interface BroadcastGroup {
 /** Page-wide switches the panes read. */
 export const workspace = {
   broadcast: null as BroadcastTarget | null,
+  /** Opens the schedule drawer with a command to schedule. */
+  onSchedule: (() => {}) as (command: string) => void,
   /** Called with every pane's result when a broadcast command has finished. */
   onBroadcastDone: (() => {}) as (command: string, results: BroadcastResult[]) => void,
   /** The pane that last had focus. */

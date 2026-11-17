@@ -13,6 +13,8 @@ import {
   parseHighlight,
   parseSyntaxHelp,
   rankCommands,
+  runDueSchedules,
+  stopTerminalScheduler,
   terminalAccess,
 } from "../../src/observability/terminal-routes";
 
@@ -150,6 +152,62 @@ describe("router inspect replies", () => {
       { completion: "address", style: "dir", offset: 4 },
       { completion: "/", style: "dir", offset: 8 },
     ]);
+  });
+});
+
+describe("scheduled commands", () => {
+  const memory = () => {
+    const rows: Record<string, unknown>[] = [];
+    const marks: Record<string, unknown>[] = [];
+    return {
+      rows,
+      marks,
+      store: {
+        listSchedules: () => rows,
+        addSchedule: (item: Record<string, unknown>) => rows.push({ id: rows.length + 1, ...item }),
+        deleteSchedule: () => 1,
+        addHistory: (entry: Record<string, unknown>) => state.history.push(entry),
+        markScheduleRun: (id: number, run: Record<string, unknown>) => marks.push({ id, ...run }),
+      },
+    };
+  };
+  const post = async (store: unknown, body: unknown) => {
+    const url = new URL("http://127.0.0.1:9090/api/terminal/schedules");
+    const route = createTerminalRoutes({ denied: null, store: async () => store as never });
+    stopTerminalScheduler();
+    return route(new Request(url, { method: "POST", body: JSON.stringify(body) }), url);
+  };
+
+  it("accepts a read, and refuses a change or a repeat under a minute", async () => {
+    const m = memory();
+    expect((await post(m.store, { device: "lab", command: "/system reboot" }))!.status).toBe(400);
+    expect(
+      (await post(m.store, { device: "lab", command: "/log print", everyMs: 5000 }))!.status,
+    ).toBe(400);
+    expect(m.rows).toHaveLength(0);
+    const ok = await post(m.store, { device: "lab", command: "/log print", everyMs: 60_000 });
+    expect(ok!.status).toBe(200);
+    expect(m.rows[0]).toMatchObject({ device: "lab", command: "/log print", everyMs: 60_000 });
+  });
+
+  it("runs what is due, saves it, and sets the next run", async () => {
+    const m = memory();
+    m.rows.push(
+      { id: 1, device: "lab", command: "/log print", everyMs: 60_000, nextRun: 1000 },
+      { id: 2, device: "lab", command: "/ip address print", everyMs: 0, nextRun: 1000 },
+      { id: 3, device: "lab", command: "/log print", everyMs: 0, nextRun: 9_999_999 },
+      { id: 4, device: "lab", command: "/system reboot", everyMs: 0, nextRun: 1000 },
+    );
+    state.run.mockResolvedValue("line 1\nline 2");
+    expect(await runDueSchedules(m.store as never, 5000)).toBe(3);
+    expect(m.marks).toEqual([
+      expect.objectContaining({ id: 1, ok: true, next: 65_000, note: "2 lines" }),
+      expect.objectContaining({ id: 2, ok: true, next: null }),
+      // A stored change is never run, whatever put it there.
+      expect.objectContaining({ id: 4, ok: false, note: "Only reads may be scheduled." }),
+    ]);
+    expect(state.run).toHaveBeenCalledTimes(2);
+    expect(state.history).toHaveLength(3);
   });
 });
 

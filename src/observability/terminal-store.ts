@@ -27,6 +27,19 @@ export interface TerminalFavorite {
   command: string;
 }
 
+export interface TerminalSchedule {
+  id: number;
+  device: string;
+  command: string;
+  /** Milliseconds between runs; 0 runs once. */
+  everyMs: number;
+  /** Epoch ms of the next run; null when a one-time run is done. */
+  nextRun: number | null;
+  lastRun: number | null;
+  lastOk: boolean | null;
+  lastNote: string;
+}
+
 /** Stored output per command. A long `/export` is cut, the command is not. */
 export const MAX_OUTPUT_CHARS = 200_000;
 /** Oldest history rows are removed past this count. */
@@ -50,6 +63,16 @@ export class TerminalStore {
       error TEXT
     )`);
     db.run("CREATE INDEX IF NOT EXISTS terminal_history_device ON terminal_history(device, id)");
+    db.run(`CREATE TABLE IF NOT EXISTS terminal_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device TEXT NOT NULL,
+      command TEXT NOT NULL,
+      every_ms INTEGER NOT NULL,
+      next_run INTEGER,
+      last_run INTEGER,
+      last_ok INTEGER,
+      last_note TEXT NOT NULL
+    )`);
     db.run(`CREATE TABLE IF NOT EXISTS terminal_favorites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ts INTEGER NOT NULL,
@@ -136,6 +159,37 @@ export class TerminalStore {
 
   deleteFavorite(id: number): number {
     return this.db.run("DELETE FROM terminal_favorites WHERE id = ?", [id]).changes;
+  }
+
+  listSchedules(): TerminalSchedule[] {
+    const rows = this.db
+      .query(
+        `SELECT id, device, command, every_ms AS everyMs, next_run AS nextRun,
+                last_run AS lastRun, last_ok AS lastOk, last_note AS lastNote
+         FROM terminal_schedules ORDER BY next_run IS NULL, next_run, id`,
+      )
+      .all() as (Omit<TerminalSchedule, "lastOk"> & { lastOk: number | null })[];
+    return rows.map((row) => ({ ...row, lastOk: row.lastOk === null ? null : row.lastOk === 1 }));
+  }
+
+  addSchedule(item: Pick<TerminalSchedule, "device" | "command" | "everyMs" | "nextRun">): number {
+    const result = this.db.run(
+      "INSERT INTO terminal_schedules (device, command, every_ms, next_run, last_note) VALUES (?, ?, ?, ?, '')",
+      [item.device, item.command, item.everyMs, item.nextRun],
+    );
+    return Number(result.lastInsertRowid);
+  }
+
+  deleteSchedule(id: number): number {
+    return this.db.run("DELETE FROM terminal_schedules WHERE id = ?", [id]).changes;
+  }
+
+  /** Record a run and set the next one (null ends a one-time schedule). */
+  markScheduleRun(id: number, run: { at: number; ok: boolean; note: string; next: number | null }) {
+    this.db.run(
+      "UPDATE terminal_schedules SET last_run = ?, last_ok = ?, last_note = ?, next_run = ? WHERE id = ?",
+      [run.at, run.ok ? 1 : 0, run.note.slice(0, 300), run.next, id],
+    );
   }
 
   close(): void {

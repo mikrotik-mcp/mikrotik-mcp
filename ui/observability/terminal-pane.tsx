@@ -975,6 +975,7 @@ export function TerminalPane(
     },
     { action: "watch", label: watch === block.id ? "Stop watching" : "Watch (run on a timer)" },
     { action: "pin", label: block.pinned ? "Unpin" : "Pin to the top of the pane" },
+    { action: "schedule", label: "Schedule this command…" },
     {
       action: "table",
       label: block.table ? "Show as text" : "Show as a table",
@@ -998,6 +999,7 @@ export function TerminalPane(
       else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
       else if (action === "table") patch(block.id, { table: !block.table });
       else if (action === "pin") patch(block.id, { pinned: !block.pinned });
+      else if (action === "schedule") workspace.onSchedule(block.command);
       else if (action === "undo" && block.undo) {
         // Shown for review; the user runs it.
         setInput(block.undo);
