@@ -9,6 +9,8 @@ export interface FilesState {
   enabled: boolean;
   reason: string | null;
   readOnly: boolean;
+  /** Deleted and replaced files are kept in the recycle bin. */
+  trash?: boolean;
 }
 export interface FileEntry {
   name: string;
@@ -95,6 +97,15 @@ export const filesBus = {
   },
 };
 
+export interface TrashItem {
+  id: string;
+  device: string;
+  path: string;
+  size: number;
+  ts: number;
+  reason: "deleted" | "replaced";
+}
+
 /** A small store for one value, for `useSyncExternalStore`. */
 function store<T>(initial: T) {
   let value = initial;
@@ -132,6 +143,9 @@ export const directStore = store(false);
 
 /** When on, a copy is read back from the destination and its SHA-256 compared with the source. */
 export const verifyStore = store(false);
+
+/** Whether the recycle bin dialog is open. */
+export const trashStore = store(false);
 
 /** The `.rsc` file open in the import dialog, or null. */
 export const importStore = store<FileRef | null>(null);
@@ -192,6 +206,18 @@ export const filesApi = {
     if (answer.error) throw new Error(answer.error);
     return { ok: answer.ok === true, output: answer.output ?? "" };
   },
+  trash: (): Promise<TrashItem[]> =>
+    api<{ items: TrashItem[] }>("/api/files/trash").then((answer) => answer.items),
+  async restore(id: string): Promise<void> {
+    const answer = await postJson<{ device?: string; path?: string; error?: string }>(
+      "/api/files/trash/restore",
+      { id },
+    );
+    if (!answer.device || !answer.path)
+      throw new Error(answer.error ?? "The file was not restored.");
+    filesBus.changed(answer.device, parentOf(answer.path));
+  },
+  purge: (id?: string): Promise<unknown> => postJson("/api/files/trash/purge", { id }),
   remove: (device: string, paths: string[]): Promise<void> =>
     postFiles("/api/files/delete", { device, paths }),
   rename: (device: string, from: string, to: string): Promise<void> =>

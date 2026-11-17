@@ -23,6 +23,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Square,
+  Trash2,
   X,
   Zap,
 } from "lucide-react";
@@ -43,6 +44,7 @@ import {
   syncStore,
   parentOf,
   transferQueue,
+  trashStore,
   verifyStore,
   when,
 } from "./files-lib";
@@ -50,6 +52,7 @@ import { FileCompare } from "./files-compare";
 import { ImportDialog } from "./files-import";
 import { FilesPane } from "./files-pane";
 import { FolderSync } from "./files-sync";
+import { RecycleBin } from "./files-trash";
 import { FileViewer } from "./files-viewer";
 import { PaneTab } from "./terminal-tab";
 import type { DevicesPayload } from "./types";
@@ -185,11 +188,11 @@ export function FilesView(): ReactNode {
         id: `files-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         component: "files",
         title: same.length ? `${device} · ${same.length + 1}` : device,
-        params: { device, path, readOnly },
+        params: { device, path, readOnly, trash: state?.trash === true },
         position: reference ? { referencePanel: reference.id, direction: "right" } : undefined,
       });
     },
-    [readOnly],
+    [readOnly, state?.trash],
   );
 
   const onReady = useCallback(
@@ -294,6 +297,15 @@ export function FilesView(): ReactNode {
           >
             <FolderSyncIcon size={13} /> Compare folders
           </button>
+          {state.trash && (
+            <button
+              type="button"
+              onClick={() => trashStore.set(true)}
+              title="Files deleted or replaced on this page in the last 7 days"
+            >
+              <Trash2 size={13} /> Recycle bin
+            </button>
+          )}
         </div>
         {!readOnly && (
           <div className="term-tools">
@@ -469,6 +481,7 @@ export function FilesView(): ReactNode {
 
       <FileViewer readOnly={readOnly} />
       <FileCompare />
+      {state.trash && <RecycleBin readOnly={readOnly} />}
       <ImportDialog />
       <FolderSync readOnly={readOnly} />
 

@@ -945,3 +945,25 @@
   color: var(--term-bg);
   font-weight: 600;
 }
+
+/* ── recycle bin ─────────────────────────────────────────────────────── */
+.files-trash-row {
+  grid-template-columns: minmax(180px, 1fr) minmax(0, 1.6fr) auto;
+}
+.files-trash-row .files-sync-mid:first-child {
+  justify-content: flex-start;
+}
+.files-trash-row .files-sync-cell {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-sync-row[data-state="replaced"] small {
+  background: color-mix(in srgb, var(--term-warn) 16%, transparent);
+  color: var(--term-warn);
+}
+.files-sync-row[data-state="deleted"] small {
+  background: color-mix(in srgb, var(--term-err) 16%, transparent);
+  color: var(--term-err);
+}

@@ -383,6 +383,51 @@ describe("folders", () => {
   });
 });
 
+describe("recycle bin", () => {
+  test("a deleted and a replaced file can be put back", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const trash = await import("../../src/observability/files-trash");
+    trash.setTrashDir(mkdtempSync(join(tmpdir(), "files-trash-")));
+    try {
+      await call("POST", "/api/files/delete", { device: "alpha", paths: ["/notes.txt"] });
+      await call("POST", "/api/files/upload?device=beta&path=/old.rsc", undefined, "new text");
+      const listed = (await (await call("GET", "/api/files/trash")).json()) as {
+        items: { id: string; path: string; reason: string; device: string }[];
+      };
+      expect(listed.items.map((item) => [item.device, item.path, item.reason]).sort()).toEqual([
+        ["alpha", "/notes.txt", "deleted"],
+        ["beta", "/old.rsc", "replaced"],
+      ]);
+      const deleted = listed.items.find((item) => item.reason === "deleted")!;
+      const res = await call("POST", "/api/files/trash/restore", { id: deleted.id });
+      expect(await res.json()).toEqual({ ok: true, device: "alpha", path: "/notes.txt" });
+      expect(routers.alpha!.disk.get("/notes.txt")?.toString()).toBe("wan is ether1\n");
+      expect((await call("POST", "/api/files/trash/restore", { id: "../x" })).status).toBe(404);
+      expect(await (await call("POST", "/api/files/trash/purge", {})).json()).toEqual({
+        removed: 1,
+      });
+    } finally {
+      trash.setTrashDir(undefined);
+    }
+  });
+  test("items older than a week are removed", async () => {
+    const { mkdtempSync, writeFileSync, readdirSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const trash = await import("../../src/observability/files-trash");
+    const dir = mkdtempSync(join(tmpdir(), "files-trash-"));
+    trash.setTrashDir(dir);
+    const old = { id: "1-old", device: "alpha", path: "/a", size: 1, ts: 1, reason: "deleted" };
+    writeFileSync(join(dir, "1-old.json"), JSON.stringify(old));
+    writeFileSync(join(dir, "1-old.bin"), "x");
+    expect(trash.listTrash()).toEqual([]);
+    expect(readdirSync(dir)).toEqual([]);
+    trash.setTrashDir(undefined);
+  });
+});
+
 describe("checksum and resume", () => {
   const big = "0123456789".repeat(1_000_000); // 10 MB: above the resumable size
   const copy = {
@@ -530,7 +575,12 @@ test("a locked page answers only its state", async () => {
     new Request("http://dash.test/api/files/state"),
     new URL("http://dash.test/api/files/state"),
   )) as Response;
-  expect(await state.json()).toEqual({ enabled: false, reason: "locked", readOnly: false });
+  expect(await state.json()).toEqual({
+    enabled: false,
+    reason: "locked",
+    readOnly: false,
+    trash: false,
+  });
   const list = (await locked(
     new Request("http://dash.test/api/files/list?device=alpha"),
     new URL("http://dash.test/api/files/list?device=alpha"),

@@ -62,6 +62,7 @@ import { createContext } from "../core/context";
 import { investigationRoutes } from "./investigation-routes";
 import { homeRoutes } from "./home-routes";
 import { closeFileSessions, createFilesRoutes, filesAccess } from "./files-routes";
+import { setTrashDir } from "./files-trash";
 import { createTerminalRoutes, stopTerminalScheduler, terminalAccess } from "./terminal-routes";
 import { closeAllShells, setRecordingDir } from "./terminal-shell";
 import { openTerminalStore } from "./terminal-store";
@@ -1678,6 +1679,8 @@ export async function runDashboard(
       )),
   });
 
+  // Files deleted or replaced on the Files page are kept here for a week.
+  setTrashDir(cfg.dbPath === ":memory:" ? undefined : join(dirname(cfg.dbPath), "files-trash"));
   const filesRoutes = createFilesRoutes({ denied: filesAccess(cfg) });
 
   /** Route all dashboard API requests; exceptions bubble to the caller. */

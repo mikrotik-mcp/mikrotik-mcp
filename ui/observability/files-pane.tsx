@@ -85,7 +85,12 @@ interface PendingDrop {
 }
 
 export function FilesPane(
-  props: IDockviewPanelProps<{ device: string; path?: string; readOnly?: boolean }>,
+  props: IDockviewPanelProps<{
+    device: string;
+    path?: string;
+    readOnly?: boolean;
+    trash?: boolean;
+  }>,
 ): ReactNode {
   const { api } = props;
   const device = props.params.device;
@@ -581,7 +586,10 @@ export function FilesPane(
         >
           <span>
             Delete <strong>{chosen.length}</strong> from {device}? Folders go with everything in
-            them. This cannot be undone.
+            them.{" "}
+            {props.params.trash
+              ? "Files up to 64 MiB stay in the recycle bin for 7 days."
+              : "This cannot be undone."}
           </span>
           <button
             type="button"

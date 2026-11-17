@@ -27,6 +27,7 @@ import { MikroTikSSHClient } from "../ssh/client";
 import { DashboardInputError, readOperationBody } from "./bounded-request";
 import type { Risk } from "./event";
 import { recordToolCall } from "./recorder";
+import { listTrash, openTrash, purgeTrash, stash, trashEnabled } from "./files-trash";
 import { terminalAccess } from "./terminal-routes";
 
 /** Why the Files page is unavailable, or `null` when it may be used. */
@@ -163,10 +164,17 @@ export async function walkTree(
 }
 
 /** Delete a file, or a folder with everything in it. */
-export async function removeTree(sftp: Sftp, target: string): Promise<void> {
+export async function removeTree(
+  sftp: Sftp,
+  target: string,
+  before?: (file: string) => Promise<unknown>,
+): Promise<void> {
   const tree = await walkTree(sftp, target);
   if (tree.truncated) throw new Error("The folder is too large to delete in one step.");
-  for (const file of tree.files) await call<void>((done) => sftp.unlink(file.path, done));
+  for (const file of tree.files) {
+    await before?.(file.path);
+    await call<void>((done) => sftp.unlink(file.path, done));
+  }
   for (const dir of tree.dirs.reverse()) await call<void>((done) => sftp.rmdir(dir, done));
 }
 
@@ -660,7 +668,12 @@ export function createFilesRoutes(options: { denied: string | null }) {
     const readOnly = getConfig().readOnly;
 
     if (key === "GET /api/files/state")
-      return json({ enabled: options.denied === null, reason: options.denied, readOnly });
+      return json({
+        enabled: options.denied === null,
+        reason: options.denied,
+        readOnly,
+        trash: trashEnabled(),
+      });
     if (options.denied !== null) return json({ error: options.denied }, 403);
 
     try {
@@ -810,6 +823,8 @@ export function createFilesRoutes(options: { denied: string | null }) {
         });
       }
 
+      if (key === "GET /api/files/trash") return json({ items: listTrash() });
+
       if (key === "GET /api/files/hash") {
         const device = deviceOf(url.searchParams.get("device"));
         const file = cleanPath(url.searchParams.get("path"));
@@ -875,15 +890,17 @@ export function createFilesRoutes(options: { denied: string | null }) {
         if (file === "/" || !req.body) throw new DashboardInputError(400, "A file is required.");
         const started = Date.now();
         try {
-          const bytes = await withSftp(device, (sftp) =>
-            writeStream(
+          const bytes = await withSftp(device, async (sftp) => {
+            // The file this upload replaces goes to the recycle bin first.
+            await stash(sftp, device, file, "replaced");
+            return writeStream(
               sftp,
               file,
               req.body as unknown as AsyncIterable<Uint8Array>,
               undefined,
               req.signal,
-            ),
-          );
+            );
+          });
           audit(device, "WRITE", started, { upload: file }, `${bytes} bytes`);
           return json({ ok: true, bytes });
         } catch (error) {
@@ -924,6 +941,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
                   last = Date.now();
                   send({ t: "progress", done });
                 };
+                await stash(writer, target.device, target.path, "replaced");
                 const blocker = wantDirect
                   ? directBlocker(getDevice(source.device), getDevice(target.device))
                   : "not asked";
@@ -992,6 +1010,19 @@ export function createFilesRoutes(options: { denied: string | null }) {
         });
       }
 
+      if (key === "POST /api/files/trash/restore") {
+        const found = openTrash(String(body.id ?? ""));
+        if (!found) throw new DashboardInputError(404, "This item is not in the recycle bin.");
+        const { item, bytes } = found;
+        const started = Date.now();
+        await withSftp(deviceOf(item.device), (sftp) => writeStream(sftp, item.path, bytes));
+        purgeTrash(item.id);
+        audit(item.device, "WRITE", started, { restore: item.path }, `${item.size} bytes`);
+        return json({ ok: true, device: item.device, path: item.path });
+      }
+      if (key === "POST /api/files/trash/purge")
+        return json({ removed: purgeTrash(typeof body.id === "string" ? body.id : undefined) });
+
       const device = deviceOf(body.device);
       const started = Date.now();
 
@@ -1003,7 +1034,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
         await withSftp(device, async (sftp) => {
           for (const target of paths) {
             try {
-              await removeTree(sftp, target);
+              await removeTree(sftp, target, (file) => stash(sftp, device, file, "deleted"));
             } catch (error) {
               failed.push({ path: target, error: message(error) });
             }
