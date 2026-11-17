@@ -486,6 +486,11 @@ export const DashboardConfigSchema = z.object({
    * on loopback.
    */
   terminal: z.boolean().default(true),
+  /**
+   * Serve the dashboard Files page (browse, upload, download and copy router
+   * files). Like the terminal, it also needs a token or a loopback bind.
+   */
+  files: z.boolean().default(true),
 });
 export type DashboardConfig = z.infer<typeof DashboardConfigSchema>;
 
@@ -999,6 +1004,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     token: pick("dashboard-token", "MIKROTIK_DASHBOARD__TOKEN"),
     feedLimit: pick("dashboard-feed-limit", "MIKROTIK_DASHBOARD__FEED_LIMIT"),
     terminal: boolOpt(pick("dashboard-terminal", "MIKROTIK_DASHBOARD__TERMINAL")),
+    files: boolOpt(pick("dashboard-files", "MIKROTIK_DASHBOARD__FILES")),
   });
 
   // 5) SSH connection pooling. Config-file block is the baseline; env/flags override.

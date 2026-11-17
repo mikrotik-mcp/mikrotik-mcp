@@ -2,7 +2,7 @@
   "version": "6.10.0",
   "toolCount": 983,
   "moduleCount": 155,
-  "dashboardCount": 44,
+  "dashboardCount": 45,
   "modules": [
     {
       "slug": "client-check",
@@ -2016,6 +2016,20 @@
         "src/observability/terminal-store.ts"
       ],
       "reviewScope": "Controls, keys, limits, safety rules, storage and routes checked against source."
+    },
+    {
+      "id": "files",
+      "screenshot": false,
+      "detailsReviewed": true,
+      "privacyCheck": "No screenshot yet: the page shows router names and file names, which must be masked first.",
+      "fullPage": false,
+      "reviewedSources": [
+        "ui/observability/files.tsx",
+        "ui/observability/files-pane.tsx",
+        "ui/observability/files-lib.ts",
+        "src/observability/files-routes.ts"
+      ],
+      "reviewScope": "Controls, keys, limits, safety rules and routes checked against source."
     }
   ]
 }

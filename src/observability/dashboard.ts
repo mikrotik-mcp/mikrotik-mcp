@@ -61,6 +61,7 @@ import {
 import { createContext } from "../core/context";
 import { investigationRoutes } from "./investigation-routes";
 import { homeRoutes } from "./home-routes";
+import { closeFileSessions, createFilesRoutes, filesAccess } from "./files-routes";
 import { createTerminalRoutes, stopTerminalScheduler, terminalAccess } from "./terminal-routes";
 import { closeAllShells, setRecordingDir } from "./terminal-shell";
 import { openTerminalStore } from "./terminal-store";
@@ -1677,6 +1678,8 @@ export async function runDashboard(
       )),
   });
 
+  const filesRoutes = createFilesRoutes({ denied: filesAccess(cfg) });
+
   /** Route all dashboard API requests; exceptions bubble to the caller. */
   async function dashboardRoute(
     req: Request,
@@ -1735,6 +1738,8 @@ export async function runDashboard(
     if (homeResp) return homeResp;
     const terminalResp = await terminalRoutes(req, url);
     if (terminalResp) return terminalResp;
+    const filesResp = await filesRoutes(req, url);
+    if (filesResp) return filesResp;
     if (url.pathname === "/api/client-checks/network" && req.method === "GET")
       return json(clientCheckNetwork(cfg.host, srv.port ?? cfg.port));
     const workspaceResp = await workspaceRoutes(req, url);
@@ -2088,6 +2093,8 @@ export async function runDashboard(
     hostname: cfg.host,
     port: cfg.port,
     idleTimeout: 0,
+    // Room for a RouterOS package or a backup uploaded on the Files page.
+    maxRequestBodySize: 1024 ** 3,
     async fetch(req, srv) {
       const url = new URL(req.url);
 
@@ -2187,6 +2194,7 @@ export async function runDashboard(
       usageStore = null;
       closeAllShells();
       stopTerminalScheduler();
+      closeFileSessions();
       void terminalStore?.then((opened) => opened.close()).catch(() => {});
       capsmanStore?.close();
       capsmanStore = null;

@@ -108,6 +108,7 @@ Then open **http://127.0.0.1:9090/** in a browser on the same machine.
 | `MIKROTIK_DASHBOARD__MAX_BODY_BYTES` | `--dashboard-max-body-bytes` | `16384`                     | Per-body truncation budget.                                                            |
 | `MIKROTIK_DASHBOARD__TOKEN`          | `--dashboard-token`          | _(none)_                    | Optional bearer token; when set, the page, API and WebSocket all require it.           |
 | `MIKROTIK_DASHBOARD__TERMINAL`       | `--dashboard-terminal`       | `true`                      | Serve the [Terminal](/docs/guides/terminal). It also needs a token or a loopback bind. |
+| `MIKROTIK_DASHBOARD__FILES`          | `--dashboard-files`          | `true`                      | Serve the [Files](/docs/guides/files) page. It also needs a token or a loopback bind.  |
 
 A `dashboard` block in the JSON config file provides the baseline. Explicit environment variables and CLI flags override it:
 
@@ -136,6 +137,14 @@ It runs any command on a router, so it is served only when the dashboard has a t
 Every command of a block pane is saved to the audit feed as the tool `dashboard_terminal`, so it shows on this page with the tool calls.
 
 See the [terminal guide](/docs/guides/terminal).
+
+## Files
+
+The **Files** page shows the files of every router side by side. You can search all open routers at once, upload and download with drag and drop, and copy a file from one router to another; the server relays the copy over SFTP.
+
+Like the terminal, it is served only when the dashboard has a token or listens on loopback. Turn it off with `--dashboard-files=false`. Every operation is saved to the audit feed as the tool `dashboard_files`.
+
+See the [files guide](/docs/guides/files).
 
 ## Run the dashboard on another machine
 

@@ -2,6 +2,7 @@ import { NAVIGATION_SECTIONS, PAGE_SEARCH_TERMS } from "./navigation-sections";
 
 export type ViewId =
   | "terminal"
+  | "files"
   | "bandwidth"
   | "ip-intelligence"
   | "openvpn"
@@ -103,6 +104,11 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     id: "terminal",
     label: "Terminal",
     sub: "RouterOS consoles in dockable panes — history, favourites, broadcast",
+  },
+  {
+    id: "files",
+    label: "Files",
+    sub: "The files of every router — search, upload, download, copy between routers",
   },
   { id: "devices", label: "Devices", sub: "Router management, connectivity & system health" },
   { id: "interfaces", label: "Interfaces", sub: "Every port and tunnel — live traffic & counters" },

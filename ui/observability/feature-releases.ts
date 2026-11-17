@@ -7,6 +7,7 @@ import type { ViewId } from "./navigation";
  */
 export const FEATURE_RELEASES: Record<ViewId, string | null> = {
   terminal: "6.15.0",
+  files: "6.16.0",
   bandwidth: "6.10.0",
   "ip-intelligence": null,
   openvpn: null,

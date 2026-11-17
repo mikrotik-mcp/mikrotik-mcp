@@ -3,7 +3,34 @@
 Notable changes to `@usex/mikrotik-mcp`. Releases before 6.14.1 are described in
 the GitHub release notes.
 
-## 6.15.0 — unreleased
+## 6.16.0 — unreleased
+
+### Added
+
+- **Dashboard Files page.** The files of every router, as the Files window of
+  WinBox, in dockable panes side by side.
+  - Each pane shows one folder of one router, with the storage of the router,
+    sorting, a name filter and multi-select.
+  - Upload by dropping files from the computer on a pane or on a folder row.
+    Download with a double-click or for a whole selection.
+  - Copy files from one router to another by dragging them between panes. The
+    server relays the copy over SFTP as one stream, so the routers do not need
+    to reach each other and neither learns the other's credentials.
+  - One transfer queue with progress, speed, time left, stop and try again.
+    Three transfers run at the same time.
+  - Search every open router at once: file names, or the text inside small text
+    files, with an optional regular expression. A result opens its folder in
+    the pane of its router.
+  - Rename, new folder and delete (with confirmation). A name that already
+    exists asks before it is replaced. A stopped or failed upload leaves no
+    partial file on the router.
+  - Served only on a protected dashboard (token or loopback), like the
+    Terminal. A read-only server lists, searches and downloads only. Every
+    operation reaches the audit feed as `dashboard_files`.
+- `dashboard.files` (`--dashboard-files`, `MIKROTIK_DASHBOARD__FILES`, default
+  `true`) turns the page off.
+
+## 6.15.0
 
 ### Added
 

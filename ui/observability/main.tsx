@@ -98,6 +98,7 @@ import { Button, Dot, Input, Select } from "./geist";
 import { JsonView } from "./highlight";
 import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
+import { FilesView } from "./files";
 import { TerminalView } from "./terminal";
 import { TransactionsView } from "./transactions";
 import { FlowsView } from "./flows";
@@ -415,6 +416,15 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Tab completes from the router. The router also checks the syntax before you press Enter.",
       "Broadcast runs one command in every open pane. Destructive commands ask first.",
       "Auto-retry never repeats a change that may already have run.",
+    ],
+  },
+  files: {
+    what: "The files of your routers, side by side. Files travel over SFTP; every operation reaches the audit feed.",
+    tips: [
+      "Drop files from your computer on a pane to upload them. Double-click a file to download it.",
+      "Drag files from one router's pane to another to copy them. The server relays the copy.",
+      "Search runs on every open router at once: file names, or the text inside small text files.",
+      "A stopped or failed upload removes the partial file from the router.",
     ],
   },
   drift: {
@@ -879,6 +889,13 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <path d="M12 3 3 7.5 12 12 21 7.5 12 3Z" />
         <path d="M3 12 12 16.5 21 12" />
         <path d="M3 16.5 12 21 21 16.5" />
+      </>
+    ),
+    files: (
+      <>
+        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+        <path d="M12 16v-5" />
+        <path d="m9.5 13 2.5-2.5 2.5 2.5" />
       </>
     ),
     terminal: (
@@ -1873,6 +1890,7 @@ function App(): ReactNode {
 
               {/* ── Drift Guard ── */}
               {view === "terminal" && <TerminalView />}
+              {view === "files" && <FilesView />}
 
               {view === "drift" && <DriftView />}
 

@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import type { Readable } from "node:stream";
 import { Client } from "ssh2";
-import type { ConnectConfig, ClientChannel } from "ssh2";
+import type { ConnectConfig, ClientChannel, SFTPWrapper } from "ssh2";
 import { logger } from "../logger";
 import type { EndpointOptions } from "../core/device-endpoints";
 import { endpointAddress } from "../core/device-endpoints";
@@ -592,6 +592,22 @@ export class MikroTikSSHClient {
           else resolve(data);
         });
       });
+    });
+  }
+
+  /**
+   * Open the SFTP subsystem and keep it open, for callers that list, stream or
+   * rename files (the dashboard Files page). The caller ends it.
+   */
+  sftp(): Promise<SFTPWrapper> {
+    if (!this.client) {
+      return Promise.reject(new Error("Not connected to MikroTik device"));
+    }
+    const openSftp = this.client.sftp.bind(this.client);
+    return new Promise((resolve, reject) => {
+      openSftp((err, sftp) =>
+        err ? reject(new Error(`SFTP subsystem unavailable: ${err.message}`)) : resolve(sftp),
+      );
     });
   }
 
