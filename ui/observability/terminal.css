@@ -1939,3 +1939,18 @@
   border: 0;
   border-top: 1px solid var(--term-line);
 }
+
+/* ── pinned blocks ───────────────────────────────────────────────────── */
+.term-pinned {
+  flex: none;
+  max-height: 42%;
+  padding: 8px 8px 0;
+  overflow: auto;
+  border-bottom: 1px solid color-mix(in srgb, var(--term-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--term-accent) 5%, transparent);
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
+}
+.term-pinned .term-block {
+  animation: none;
+}

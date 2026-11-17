@@ -90,6 +90,8 @@ interface Block {
   snapshot?: boolean;
   /** Why the watch alert fired on the last run; undefined when it did not. */
   alert?: string;
+  /** Kept above the scrolling list, always in view. */
+  pinned?: boolean;
   /** Show the output as a table of records. */
   table?: boolean;
   /** Line numbers that differ from the previous run (watch mode). */
@@ -863,6 +865,7 @@ export function TerminalPane(
       label: starred.has(block.command) ? "Remove from favourites" : "Add to favourites",
     },
     { action: "watch", label: watch === block.id ? "Stop watching" : "Watch (run on a timer)" },
+    { action: "pin", label: block.pinned ? "Unpin" : "Pin to the top of the pane" },
     {
       action: "table",
       label: block.table ? "Show as text" : "Show as a table",
@@ -885,6 +888,7 @@ export function TerminalPane(
       else if (action === "rerun") void submit(block.command);
       else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
       else if (action === "table") patch(block.id, { table: !block.table });
+      else if (action === "pin") patch(block.id, { pinned: !block.pinned });
       else if (action === "changes")
         void terminalApi
           .changes(device)
@@ -1029,6 +1033,18 @@ export function TerminalPane(
   const helpText = useMemo(
     () => new Map(help.items.filter((item) => item.symbol).map((item) => [item.symbol, item.text])),
     [help.items],
+  );
+  const renderBlock = (block: Block): ReactNode => (
+    <BlockView
+      key={block.id}
+      block={block}
+      device={device}
+      starred={starred.has(block.command)}
+      watching={watch === block.id}
+      comparing={comparePick === `${paneId}:${block.id}`}
+      onAction={onAction}
+      onMenu={openMenu}
+    />
   );
   const menuBlock = menu ? blocks.find((b) => b.id === menu.id) : undefined;
   const page = document.querySelector(".term-page");
@@ -1240,6 +1256,11 @@ export function TerminalPane(
         </div>
       )}
 
+      {blocks.some((block) => block.pinned) && (
+        <div className="term-pinned" aria-label="Pinned blocks">
+          {blocks.filter((block) => block.pinned).map(renderBlock)}
+        </div>
+      )}
       <div className="term-scroll-wrap">
         <div
           className="term-scroll"
@@ -1274,18 +1295,7 @@ export function TerminalPane(
               </div>
             </div>
           )}
-          {blocks.map((block) => (
-            <BlockView
-              key={block.id}
-              block={block}
-              device={device}
-              starred={starred.has(block.command)}
-              watching={watch === block.id}
-              comparing={comparePick === `${paneId}:${block.id}`}
-              onAction={onAction}
-              onMenu={openMenu}
-            />
-          ))}
+          {blocks.filter((block) => !block.pinned).map(renderBlock)}
         </div>
         {!atEnd && (
           <button
