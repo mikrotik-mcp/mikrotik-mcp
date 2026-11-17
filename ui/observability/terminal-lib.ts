@@ -182,7 +182,8 @@ export function cleanOutput(text: string): string {
 export interface PaneHandle {
   id: string;
   device: string;
-  run: (command: string, options?: { fromBroadcast?: boolean }) => void;
+  /** Resolves with the result, or `null` when the pane first asks the user something. */
+  run: (command: string, options?: { fromBroadcast?: boolean }) => Promise<BroadcastResult | null>;
   insert: (command: string) => void;
   focus: () => void;
 }
@@ -209,9 +210,25 @@ export const paneRegistry = {
   },
 };
 
+export interface BroadcastResult extends RunEnd {
+  device: string;
+}
+/** Where a broadcast goes: every open pane, or the panes of a group's routers. */
+export interface BroadcastTarget {
+  label: string;
+  /** `null` means every router. */
+  devices: string[] | null;
+}
+export interface BroadcastGroup {
+  name: string;
+  devices: string[];
+}
+
 /** Page-wide switches the panes read. */
 export const workspace = {
-  broadcast: false,
+  broadcast: null as BroadcastTarget | null,
+  /** Called with every pane's result when a broadcast command has finished. */
+  onBroadcastDone: (() => {}) as (command: string, results: BroadcastResult[]) => void,
   /** The pane that last had focus. */
   activePane: "" as string,
   /** Called after any command finishes, so the history drawer can refresh. */
@@ -427,5 +444,24 @@ export const compareStore = {
   clear(): void {
     compareState = {};
     compareChanged();
+  },
+};
+
+const GROUPS_KEY = "mikrotik-mcp.terminal.groups.v1";
+export const groupStorage = {
+  load(): BroadcastGroup[] {
+    try {
+      const raw = localStorage.getItem(GROUPS_KEY);
+      return raw ? (JSON.parse(raw) as BroadcastGroup[]) : [];
+    } catch {
+      return [];
+    }
+  },
+  save(groups: BroadcastGroup[]): void {
+    try {
+      localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+    } catch {
+      /* storage unavailable: groups last for this visit only */
+    }
   },
 };

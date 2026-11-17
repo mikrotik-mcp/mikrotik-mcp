@@ -105,6 +105,96 @@
 .term-device {
   font-family: var(--term-mono);
 }
+.term-broadcast-menu > summary {
+  padding: 5px 10px;
+  border: 1px solid var(--term-line);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--term-ink);
+  font-size: 12.5px;
+}
+.term-broadcast-menu > div {
+  right: auto;
+  left: 0;
+  min-width: 230px;
+}
+.term-toolbar .term-menu > div button {
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+}
+.term-toolbar .term-menu > div button[data-on="true"] {
+  background: color-mix(in srgb, var(--term-accent) 16%, transparent);
+  color: var(--term-accent);
+}
+.term-group-row {
+  display: flex;
+}
+.term-group-row > button:first-child {
+  flex: 1;
+}
+.term-group-form {
+  display: grid;
+  gap: 5px;
+  padding: 6px;
+  border-top: 1px solid var(--term-line);
+  font-size: 12px;
+}
+.term-group-form input:not([type="checkbox"]) {
+  padding: 4px 7px;
+  border: 1px solid var(--term-line);
+  border-radius: 6px;
+  outline: none;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-size: 12px;
+}
+.term-group-form label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--term-mono);
+}
+.term-sent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--term-warn) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--term-warn) 8%, var(--term-surface));
+  font-family: var(--term-mono);
+  font-size: 12px;
+}
+.term-sent code {
+  max-width: 40%;
+  overflow: hidden;
+  font-family: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.term-sent span {
+  padding: 1px 8px;
+  border: 1px solid var(--term-line);
+  border-radius: 999px;
+}
+.term-sent span[data-ok="true"] {
+  border-color: color-mix(in srgb, var(--term-ok) 45%, transparent);
+  color: var(--term-ok);
+}
+.term-sent span[data-ok="false"] {
+  border-color: color-mix(in srgb, var(--term-err) 55%, transparent);
+  color: var(--term-err);
+}
+.term-sent button {
+  display: inline-flex;
+  margin-left: auto;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--term-dim);
+}
 .term-broadcast[data-on="true"] {
   border-color: var(--term-warn) !important;
   background: color-mix(in srgb, var(--term-warn) 16%, transparent) !important;

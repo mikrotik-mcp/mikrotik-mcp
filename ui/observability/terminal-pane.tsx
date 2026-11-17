@@ -37,7 +37,7 @@ import {
 } from "react";
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
-import type { Completion, ExportFormat, RunEnd } from "./terminal-lib";
+import type { BroadcastResult, Completion, ExportFormat, RunEnd } from "./terminal-lib";
 import { RecordTable } from "./terminal-table";
 import {
   cleanOutput,
@@ -486,10 +486,13 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
 
   // ── run a command (with auto-retry when a retry cannot repeat a change) ──
   const runBlock = useCallback(
-    async (command: string, options: { blockId?: number; quiet?: boolean } = {}): Promise<void> => {
+    async (
+      command: string,
+      options: { blockId?: number; quiet?: boolean } = {},
+    ): Promise<RunEnd> => {
       const id = options.blockId ?? nextBlockId++;
       const previous = blocksRef.current.find((b) => b.id === id);
-      if (previous?.status === "running") return;
+      if (previous?.status === "running") return { ok: false, ms: 0, error: "Already running." };
       if (previous)
         patch(id, (b) => ({
           status: "running",
@@ -554,14 +557,18 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
       });
       if (!result.ok && !result.stopped) probeNow.current();
       workspace.onCommandDone();
+      return result;
     },
     [device, patch],
   );
 
   const submit = useCallback(
-    (raw: string, options: { confirmed?: boolean; fromBroadcast?: boolean } = {}): void => {
+    (
+      raw: string,
+      options: { confirmed?: boolean; fromBroadcast?: boolean } = {},
+    ): Promise<BroadcastResult | null> => {
       const command = raw.trim();
-      if (!command) return;
+      if (!command) return Promise.resolve(null);
       const fields = snippetFields(command);
       if (fields.length) {
         // Ask for the values first; the filled command comes back through here.
@@ -569,22 +576,33 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
           command,
           values: Object.fromEntries(fields.map((field) => [field.name, field.fallback])),
         });
-        return;
+        return Promise.resolve(null);
       }
       const word = destructiveWord(command);
       if (word && !options.confirmed && !options.fromBroadcast) {
         setConfirm({ command, word });
-        return;
+        return Promise.resolve(null);
       }
       setConfirm(null);
       const list = recall.current.list;
       if (list.at(-1) !== command) list.push(command);
       recall.current.index = -1;
-      void runBlock(command);
-      if (workspace.broadcast && !options.fromBroadcast) {
-        for (const pane of paneRegistry.all())
-          if (pane.id !== paneId) pane.run(command, { fromBroadcast: true });
+      const own = runBlock(command).then((end) => ({ ...end, device }));
+      const target = workspace.broadcast;
+      if (target && !options.fromBroadcast) {
+        const others = paneRegistry
+          .all()
+          .filter((pane) => pane.id !== paneId)
+          .filter((pane) => !target.devices || target.devices.includes(pane.device))
+          .map((pane) => pane.run(command, { fromBroadcast: true }));
+        void Promise.all([own, ...others]).then((results) =>
+          workspace.onBroadcastDone(
+            command,
+            results.filter((result): result is BroadcastResult => result !== null),
+          ),
+        );
       }
+      return own;
     },
     [runBlock, paneId],
   );
@@ -691,7 +709,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
   const onAction = useCallback(
     (action: string, block: Block): void => {
       if (action === "stop") running.current.get(block.id)?.abort();
-      else if (action === "rerun") submit(block.command);
+      else if (action === "rerun") void submit(block.command);
       else if (action === "fold") patch(block.id, { collapsed: !block.collapsed });
       else if (action === "table") patch(block.id, { table: !block.table });
       else if (action === "compare")
@@ -801,7 +819,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
       void complete();
     } else if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      submit(input);
+      void submit(input);
       setInput("");
     } else if (event.key === "l" && event.ctrlKey) {
       event.preventDefault();
@@ -964,7 +982,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
                 "/ip address print",
                 "/log print",
               ].map((command) => (
-                <button key={command} type="button" onClick={() => submit(command)}>
+                <button key={command} type="button" onClick={() => void submit(command)}>
                   {command}
                 </button>
               ))}
@@ -989,12 +1007,13 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
           <TriangleAlert size={15} />
           <span>
             <b>{confirm.word}</b> changes or removes configuration on <b>{device}</b>
-            {workspace.broadcast && " and on every other open pane (broadcast is on)"}. Run it?
+            {workspace.broadcast && ` and on the other panes of “${workspace.broadcast.label}”`}.
+            Run it?
           </span>
           <button
             type="button"
             className="term-danger"
-            onClick={() => submit(confirm.command, { confirmed: true })}
+            onClick={() => void submit(confirm.command, { confirmed: true })}
           >
             Run
           </button>
@@ -1018,7 +1037,7 @@ export function TerminalPane(props: IDockviewPanelProps<{ device: string }>): Re
             event.preventDefault();
             const filled = fillSnippet(fill.command, fill.values);
             setFill(null);
-            submit(filled);
+            void submit(filled);
           }}
         >
           <code>

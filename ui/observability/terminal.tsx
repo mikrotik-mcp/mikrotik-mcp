@@ -26,10 +26,17 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api } from "./api";
 import { loadHighlighter, staticSpans } from "./terminal-highlight";
-import type { HistoryEntry, TerminalState } from "./terminal-lib";
+import type {
+  BroadcastGroup,
+  BroadcastResult,
+  BroadcastTarget,
+  HistoryEntry,
+  TerminalState,
+} from "./terminal-lib";
 import {
   cleanOutput,
   favoritesStore,
+  groupStorage,
   layoutStorage,
   paneRegistry,
   paneStorage,
@@ -74,7 +81,10 @@ function ago(ts: number): string {
 export function TerminalView(): ReactNode {
   const [state, setState] = useState<TerminalState | null>(null);
   const [devices, setDevices] = useState<DevicesPayload | null>(null);
-  const [broadcast, setBroadcast] = useState(false);
+  const [broadcast, setBroadcast] = useState<BroadcastTarget | null>(null);
+  const [groups, setGroups] = useState<BroadcastGroup[]>(groupStorage.load);
+  const [draft, setDraft] = useState<{ name: string; devices: string[] } | null>(null);
+  const [sent, setSent] = useState<{ command: string; results: BroadcastResult[] } | null>(null);
   const [drawer, setDrawer] = useState<"history" | "favorites" | null>("history");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [query, setQuery] = useState("");
@@ -127,8 +137,10 @@ export function TerminalView(): ReactNode {
   }, [refreshHistory]);
   useEffect(() => {
     workspace.broadcast = broadcast;
+    workspace.onBroadcastDone = (command, results) => setSent({ command, results });
     return () => {
-      workspace.broadcast = false;
+      workspace.broadcast = null;
+      workspace.onBroadcastDone = () => {};
     };
   }, [broadcast]);
 
@@ -281,15 +293,99 @@ export function TerminalView(): ReactNode {
           >
             <LayoutGrid size={14} /> All routers
           </button>
-          <button
-            type="button"
-            data-on={broadcast}
-            className="term-broadcast"
-            onClick={() => setBroadcast((on) => !on)}
-            title="Broadcast: a command typed in one pane also runs in every other open pane"
-          >
-            <Radio size={14} /> Broadcast {broadcast ? `· ${paneCount} panes` : "off"}
-          </button>
+          <details className="term-menu term-broadcast-menu">
+            <summary
+              className="term-broadcast"
+              data-on={broadcast !== null}
+              title="Broadcast: a command typed in one pane also runs in other open panes"
+            >
+              <Radio size={14} /> Broadcast {broadcast ? `· ${broadcast.label}` : "off"}
+            </summary>
+            <div>
+              <button type="button" data-on={broadcast === null} onClick={() => setBroadcast(null)}>
+                Off
+              </button>
+              <button
+                type="button"
+                data-on={broadcast?.devices === null}
+                onClick={() => setBroadcast({ label: "all panes", devices: null })}
+              >
+                All open panes ({paneCount})
+              </button>
+              {groups.map((group) => (
+                <span key={group.name} className="term-group-row">
+                  <button
+                    type="button"
+                    data-on={broadcast?.label === group.name}
+                    onClick={() => setBroadcast({ label: group.name, devices: group.devices })}
+                    title={group.devices.join(", ")}
+                  >
+                    {group.name} <small>{group.devices.length}</small>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete group ${group.name}`}
+                    title="Delete this group"
+                    onClick={() => {
+                      const next = groups.filter((g) => g.name !== group.name);
+                      setGroups(next);
+                      groupStorage.save(next);
+                      if (broadcast?.label === group.name) setBroadcast(null);
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </span>
+              ))}
+              {draft ? (
+                <form
+                  className="term-group-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const name = draft.name.trim();
+                    if (!name || !draft.devices.length) return;
+                    const next = [
+                      ...groups.filter((g) => g.name !== name),
+                      { name, devices: draft.devices },
+                    ];
+                    setGroups(next);
+                    groupStorage.save(next);
+                    setBroadcast({ label: name, devices: draft.devices });
+                    setDraft(null);
+                  }}
+                >
+                  <input
+                    value={draft.name}
+                    placeholder="Group name"
+                    aria-label="Group name"
+                    onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                  />
+                  {names.map((name) => (
+                    <label key={name}>
+                      <input
+                        type="checkbox"
+                        checked={draft.devices.includes(name)}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            devices: event.target.checked
+                              ? [...draft.devices, name]
+                              : draft.devices.filter((d) => d !== name),
+                          })
+                        }
+                      />
+                      {name}
+                    </label>
+                  ))}
+                  <button type="submit">Save group</button>
+                </form>
+              ) : (
+                <button type="button" onClick={() => setDraft({ name: "", devices: [] })}>
+                  <Plus size={12} /> New group…
+                </button>
+              )}
+            </div>
+          </details>
           <button
             type="button"
             data-on={finding}
@@ -318,6 +414,25 @@ export function TerminalView(): ReactNode {
       </div>
 
       <CompareDialog />
+      {sent && (
+        <div className="term-sent" role="status">
+          <Radio size={14} />
+          <code>{sent.command}</code>
+          {sent.results.map((result, i) => (
+            <span
+              // eslint-disable-next-line react/no-array-index-key -- one router may have two panes
+              key={`${result.device}-${i}`}
+              data-ok={result.ok}
+              title={result.error}
+            >
+              {result.device} {result.ok ? `${result.ms} ms` : "failed"}
+            </span>
+          ))}
+          <button type="button" onClick={() => setSent(null)} aria-label="Dismiss">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {finding && <FindBar focus={findFocus} onClose={() => setFinding(false)} />}
 
       <div className="term-body">
