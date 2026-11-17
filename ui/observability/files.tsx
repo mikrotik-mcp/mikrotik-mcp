@@ -52,6 +52,7 @@ import {
   verifyStore,
   when,
 } from "./files-lib";
+import { DiskAnalysis } from "./files-analysis";
 import { FileCompare } from "./files-compare";
 import { ImportDialog } from "./files-import";
 import { FilesPane } from "./files-pane";
@@ -501,6 +502,7 @@ export function FilesView(): ReactNode {
 
       <FileViewer readOnly={readOnly} />
       <FileCompare />
+      <DiskAnalysis readOnly={readOnly} />
       <JobsDialog routers={names} />
       <VaultDialog readOnly={readOnly} />
       {state.trash && <RecycleBin readOnly={readOnly} />}

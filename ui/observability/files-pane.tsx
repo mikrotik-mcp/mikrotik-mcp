@@ -42,6 +42,7 @@ import { Select } from "./geist";
 import type { FileEntry, FileKind, RouterSystem } from "./files-lib";
 import {
   DRAG_TYPE,
+  analysisStore,
   broadcastStore,
   droppedFiles,
   canPreview,
@@ -457,10 +458,19 @@ export function FilesPane(
                 <FolderPlus size={14} />
               </button>
               <details className="files-more">
-                <summary title="Have the router make a file">
+                <summary title="Backup, export and storage">
                   <Archive size={14} />
                 </summary>
                 <div>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      analysisStore.set(device);
+                    }}
+                  >
+                    Analyse the storage
+                  </button>
                   {(["backup", "export"] as const).map((kind) => (
                     <button
                       key={kind}

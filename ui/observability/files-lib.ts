@@ -163,6 +163,9 @@ export const directStore = store(false);
 /** When on, a copy is read back from the destination and its SHA-256 compared with the source. */
 export const verifyStore = store(false);
 
+/** The router whose storage is being analysed, or null. */
+export const analysisStore = store<string | null>(null);
+
 /** Whether the scheduled jobs dialog is open. */
 export const jobsStore = store(false);
 
@@ -193,7 +196,7 @@ export const filesApi = {
   tree: (
     device: string,
     path: string,
-  ): Promise<{ files: { path: string; size: number }[]; dirs: string[]; truncated: boolean }> =>
+  ): Promise<{ files: TreeFile[]; dirs: string[]; truncated: boolean }> =>
     api(`/api/files/tree?${query(device, path)}`),
   /** The SHA-256 of a file, computed by the server from the router's bytes. */
   hash: (file: FileRef): Promise<string> =>
@@ -769,6 +772,71 @@ export function packageWarnings(name: string, router: RouterSystem): string[] {
       `${name} is version ${info.version}, but the router runs ${router.version}. An extra package must have the version of RouterOS.`,
     );
   return warnings;
+}
+
+export interface TreeFile {
+  path: string;
+  size: number;
+  mtime: number;
+}
+export interface DiskReport {
+  total: number;
+  /** Bytes for each top-level folder, and for the files in the root, largest first. */
+  groups: { name: string; bytes: number; count: number }[];
+  largest: TreeFile[];
+  /** Files that are usually safe to remove, with the reason. */
+  suggestions: { title: string; why: string; files: TreeFile[] }[];
+}
+
+const DAY = 24 * 60 * 60;
+/** Where the space of a router goes, and what could be removed. */
+export function analyzeDisk(files: TreeFile[], nowSeconds = Date.now() / 1000): DiskReport {
+  const groups = new Map<string, { bytes: number; count: number }>();
+  for (const file of files) {
+    const parts = file.path.split("/").filter(Boolean);
+    const name = parts.length > 1 ? `/${parts[0]}` : "files in /";
+    const group = groups.get(name) ?? { bytes: 0, count: 0 };
+    group.bytes += file.size;
+    group.count += 1;
+    groups.set(name, group);
+  }
+  const bySize = [...files].sort((a, b) => b.size - a.size);
+  // Old backups: in each folder, the ones after the newest three, older than 30 days.
+  const backups = new Map<string, TreeFile[]>();
+  for (const file of files)
+    if (/\.backup$/i.test(file.path))
+      backups.set(parentOf(file.path), [...(backups.get(parentOf(file.path)) ?? []), file]);
+  const oldBackups = Array.from(backups.values()).flatMap((list) =>
+    list
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(3)
+      .filter((file) => nowSeconds - file.mtime > 30 * DAY),
+  );
+  const suggestions = [
+    {
+      title: "Support output files",
+      why: "autosupout files are made after a crash or for MikroTik support. They are large and are made again when needed.",
+      files: files.filter((file) => /autosupout.*\.rif$/i.test(file.path)),
+    },
+    {
+      title: "Old backups",
+      why: "Backups older than 30 days, after the newest three of each folder.",
+      files: oldBackups,
+    },
+    {
+      title: "Unfinished copies",
+      why: ".part files are left by a copy that did not finish. A retry of that copy continues from them.",
+      files: files.filter((file) => /\.part$/i.test(file.path)),
+    },
+  ].filter((item) => item.files.length > 0);
+  return {
+    total: files.reduce((sum, file) => sum + file.size, 0),
+    groups: Array.from(groups, ([name, group]) => ({ name, ...group })).sort(
+      (a, b) => b.bytes - a.bytes,
+    ),
+    largest: bySize.slice(0, 15),
+    suggestions,
+  };
 }
 
 export interface FolderRow {

@@ -49,3 +49,39 @@ test("a package is checked against the router before it is uploaded", () => {
   expect(lib.packageWarnings("wireless-7.15-arm64.npk", arm)[0]).toContain("version 7.15");
   expect(lib.packageWarnings("routeros-7.16.1-arm.npk", {})).toEqual([]);
 });
+
+test("the storage report groups by top folder and suggests what to remove", () => {
+  const day = 24 * 60 * 60;
+  const now = 100 * day;
+  const at = (path: string, size: number, ageDays = 0) => ({
+    path,
+    size,
+    mtime: now - ageDays * day,
+  });
+  const report = lib.analyzeDisk(
+    [
+      at("/autosupout.rif", 500),
+      at("/usb1/b1.backup", 100, 1),
+      at("/usb1/b2.backup", 100, 2),
+      at("/usb1/b3.backup", 100, 40),
+      at("/usb1/b4.backup", 100, 50),
+      at("/usb1/b5.backup", 100, 60),
+      at("/big.npk.part", 50),
+      at("/notes.txt", 5),
+    ],
+    now,
+  );
+  expect(report.total).toBe(1055);
+  expect(report.groups).toEqual([
+    { name: "files in /", bytes: 555, count: 3 },
+    { name: "/usb1", bytes: 500, count: 5 },
+  ]);
+  expect(report.largest[0]?.path).toBe("/autosupout.rif");
+  expect(
+    report.suggestions.map((item) => [item.title, item.files.map((file) => file.path)]),
+  ).toEqual([
+    ["Support output files", ["/autosupout.rif"]],
+    ["Old backups", ["/usb1/b4.backup", "/usb1/b5.backup"]],
+    ["Unfinished copies", ["/big.npk.part"]],
+  ]);
+});

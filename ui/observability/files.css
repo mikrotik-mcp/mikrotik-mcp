@@ -1033,3 +1033,123 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ── storage analysis ────────────────────────────────────────────────── */
+.files-analysis-body {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.files-analysis-map {
+  display: flex;
+  gap: 3px;
+  height: 74px;
+}
+.files-analysis-map span {
+  display: grid;
+  align-content: center;
+  flex-basis: 0;
+  min-width: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--files-tone, var(--term-accent)) 26%, var(--term-bg));
+  border: 1px solid color-mix(in srgb, var(--files-tone, var(--term-accent)) 55%, transparent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.files-analysis-map b {
+  overflow: hidden;
+  font-family: var(--term-mono);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.files-analysis-map small {
+  color: var(--term-dim);
+}
+.files-analysis-map span[data-tone="1"] {
+  --files-tone: var(--files-backup);
+}
+.files-analysis-map span[data-tone="2"] {
+  --files-tone: var(--files-script);
+}
+.files-analysis-map span[data-tone="3"] {
+  --files-tone: var(--files-package);
+}
+.files-analysis-map span[data-tone="4"] {
+  --files-tone: var(--files-folder);
+}
+.files-analysis-map span[data-tone="5"] {
+  --files-tone: var(--files-key);
+}
+.files-analysis section {
+  border: 1px solid var(--term-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.files-analysis h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 7px 10px;
+  background: var(--term-raised);
+  font-size: 12.5px;
+}
+.files-analysis h3 small {
+  color: var(--term-accent);
+  font-family: var(--term-mono);
+  font-weight: 400;
+}
+.files-analysis h3 button {
+  margin-left: auto;
+  padding: 2px 8px;
+}
+.files-analysis section > p {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--term-dim);
+  font-size: 12px;
+}
+.files-analysis-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 78px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--term-line) 60%, transparent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.files-analysis-file span {
+  overflow: hidden;
+  font-family: var(--term-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-analysis-file small {
+  color: var(--term-faint);
+  font-family: var(--term-mono);
+  font-size: 11px;
+}
+.files-analysis-file b {
+  font-family: var(--term-mono);
+  font-weight: 500;
+  text-align: right;
+}
+.files-analysis .files-strip {
+  border: 1px solid var(--term-line);
+  border-radius: 8px;
+}
+.files-analysis .files-strip button {
+  padding: 3px 9px;
+  border-color: currentcolor;
+  color: inherit;
+}
+.files-analysis .files-strip button[data-danger="true"] {
+  background: var(--term-err);
+  border-color: var(--term-err);
+  color: var(--term-bg);
+  font-weight: 600;
+}
