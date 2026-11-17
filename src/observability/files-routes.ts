@@ -14,6 +14,7 @@
  * protected dashboard (see {@link filesAccess}). A read-only server lists,
  * searches and downloads only. Every operation reaches the audit feed.
  */
+import { crc32 } from "node:zlib";
 import type { SFTPWrapper } from "ssh2";
 import { createContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
@@ -99,6 +100,145 @@ export async function listDir(sftp: Sftp, path: string): Promise<FileEntry[]> {
     .sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name));
 }
 
+/** A walk of a tree stops at these bounds, and says so. */
+const MAX_VISITED = 4000;
+const MAX_DEPTH = 8;
+const parentOf = (path: string): string => path.slice(0, path.lastIndexOf("/")) || "/";
+
+/** Make `dir` and the folders above it, when they do not exist. */
+export async function ensureDir(sftp: Sftp, dir: string): Promise<void> {
+  if (dir === "/") return;
+  try {
+    await call<unknown>((done) => sftp.stat(dir, done));
+    return;
+  } catch {
+    /* not there yet */
+  }
+  await ensureDir(sftp, parentOf(dir));
+  await call<void>((done) => sftp.mkdir(dir, done));
+}
+
+export interface TreeFile {
+  path: string;
+  size: number;
+  mtime: number;
+}
+
+/**
+ * Every file and folder under `root` (or `root` itself when it is a file),
+ * folders before their contents. Bounded like a search.
+ */
+export async function walkTree(
+  sftp: Sftp,
+  root: string,
+): Promise<{ files: TreeFile[]; dirs: string[]; truncated: boolean }> {
+  const stats = await call<{ size: number; mtime: number; isDirectory: () => boolean }>((done) =>
+    sftp.stat(root, done),
+  );
+  if (!stats.isDirectory())
+    return {
+      files: [{ path: root, size: stats.size, mtime: stats.mtime }],
+      dirs: [],
+      truncated: false,
+    };
+  const files: TreeFile[] = [];
+  const dirs = [root];
+  let truncated = false;
+  const queue = [{ path: root, depth: 0 }];
+  while (queue.length > 0) {
+    const { path, depth } = queue.shift()!;
+    for (const entry of await listDir(sftp, path)) {
+      if (files.length + dirs.length >= MAX_VISITED) return { files, dirs, truncated: true };
+      const full = joinPath(path, entry.name);
+      if (!entry.dir) files.push({ path: full, size: entry.size, mtime: entry.mtime });
+      else if (depth + 1 < MAX_DEPTH) {
+        dirs.push(full);
+        queue.push({ path: full, depth: depth + 1 });
+      } else truncated = true;
+    }
+  }
+  return { files, dirs, truncated };
+}
+
+/** Delete a file, or a folder with everything in it. */
+export async function removeTree(sftp: Sftp, target: string): Promise<void> {
+  const tree = await walkTree(sftp, target);
+  if (tree.truncated) throw new Error("The folder is too large to delete in one step.");
+  for (const file of tree.files) await call<void>((done) => sftp.unlink(file.path, done));
+  for (const dir of tree.dirs.reverse()) await call<void>((done) => sftp.rmdir(dir, done));
+}
+
+const u16 = (n: number): number[] => [n & 0xff, (n >>> 8) & 0xff];
+const u32 = (n: number): number[] => [...u16(n & 0xffff), ...u16(n >>> 16)];
+
+/**
+ * A ZIP archive as a stream. Files are stored, not compressed: router files are
+ * mostly compressed already, and the router's link is the limit, not the size.
+ */
+export async function* zipStream(
+  entries: { name: string; mtime: number; read: () => AsyncIterable<Uint8Array> }[],
+): AsyncGenerator<Uint8Array> {
+  const central: number[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, "utf8");
+    const date = new Date(entry.mtime * 1000);
+    const time = (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1);
+    const day =
+      (Math.max(date.getFullYear() - 1980, 0) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+    // Flags: sizes follow the data (bit 3), the name is UTF-8 (bit 11).
+    const head = [...u16(20), ...u16(0x0808), ...u16(0), ...u16(time), ...u16(day)];
+    yield Uint8Array.from([
+      ...u32(0x04034b50),
+      ...head,
+      ...u32(0),
+      ...u32(0),
+      ...u32(0),
+      ...u16(name.length),
+      ...u16(0),
+      ...name,
+    ]);
+    let sum = 0;
+    let size = 0;
+    for await (const chunk of entry.read()) {
+      sum = crc32(chunk, sum);
+      size += chunk.byteLength;
+      yield chunk;
+    }
+    yield Uint8Array.from([...u32(0x08074b50), ...u32(sum), ...u32(size), ...u32(size)]);
+    central.push(
+      ...u32(0x02014b50),
+      ...u16(20),
+      ...head,
+      ...u32(sum),
+      ...u32(size),
+      ...u32(size),
+      ...u16(name.length),
+      ...u16(0),
+      ...u16(0),
+      ...u16(0),
+      ...u16(0),
+      ...u32(0),
+      ...u32(offset),
+      ...name,
+    );
+    offset += 30 + name.length + size + 16;
+  }
+  yield Uint8Array.from([
+    ...central,
+    ...u32(0x06054b50),
+    ...u16(0),
+    ...u16(0),
+    ...u16(entries.length),
+    ...u16(entries.length),
+    ...u32(central.length),
+    ...u32(offset),
+    ...u16(0),
+  ]);
+}
+/** A ZIP without ZIP64 holds less than 4 GiB; stay well under it. */
+const MAX_ZIP_BYTES = 2 * 1024 ** 3;
+
 /**
  * Copy a byte stream into a file on a router, with backpressure. A failed or
  * stopped copy removes the partial file: half of a package or a backup is worse
@@ -111,6 +251,7 @@ export async function writeStream(
   onBytes?: (total: number) => void,
   signal?: AbortSignal,
 ): Promise<number> {
+  await ensureDir(sftp, parentOf(path));
   const out = sftp.createWriteStream(path);
   let failure: Error | undefined;
   out.on("error", (error: Error) => {
@@ -154,8 +295,6 @@ export interface SearchHit {
 
 /** Contents are searched in files up to this size. */
 export const MAX_CONTENT_BYTES = 1024 * 1024;
-const MAX_VISITED = 4000;
-const MAX_DEPTH = 8;
 const MAX_HITS = 500;
 const TEXT_FILE =
   /\.(?:rsc|txt|log|conf|cfg|json|csv|html?|xml|ya?ml|sh|lua|py|md|ini|pem|crt|key|pub|ovpn)$/i;
@@ -321,6 +460,18 @@ async function withSftp<T>(device: string, work: (sftp: SFTPWrapper) => Promise<
       session.idle.unref?.();
     }
   }
+}
+
+/** The router's SFTP session, held until `release`: for a response that streams. */
+async function holdSftp(device: string): Promise<{ sftp: SFTPWrapper; release: () => void }> {
+  let release!: () => void;
+  const sftp = await new Promise<SFTPWrapper>((resolve, reject) => {
+    withSftp(device, (session) => {
+      resolve(session);
+      return new Promise<void>((done) => (release = done));
+    }).catch(reject);
+  });
+  return { sftp, release };
 }
 
 /** Close every SFTP session (dashboard shutdown). */
@@ -506,6 +657,64 @@ export function createFilesRoutes(options: { denied: string | null }) {
         });
       }
 
+      if (key === "GET /api/files/tree") {
+        const device = deviceOf(url.searchParams.get("device"));
+        const root = cleanPath(url.searchParams.get("path"));
+        return json(await withSftp(device, (sftp) => walkTree(sftp, root)));
+      }
+
+      if (key === "GET /api/files/zip") {
+        const device = deviceOf(url.searchParams.get("device"));
+        const roots = url.searchParams.getAll("path").slice(0, 200).map(cleanPath);
+        if (roots.length === 0) throw new DashboardInputError(400, "Choose the files to download.");
+        const started = Date.now();
+        // Names in the archive are relative to the folder the selection is in.
+        const base = parentOf(roots[0] ?? "/");
+        const files: TreeFile[] = [];
+        await withSftp(device, async (sftp) => {
+          for (const root of roots) files.push(...(await walkTree(sftp, root)).files);
+        });
+        if (files.reduce((sum, file) => sum + file.size, 0) > MAX_ZIP_BYTES)
+          throw new DashboardInputError(413, "The selection is larger than 2 GiB.");
+        const { sftp, release } = await holdSftp(device);
+        const archive = zipStream(
+          files.map((file) => ({
+            name: file.path.slice(base === "/" ? 1 : base.length + 1),
+            mtime: file.mtime,
+            read: () => sftp.createReadStream(file.path) as AsyncIterable<Uint8Array>,
+          })),
+        );
+        const finish = (error?: string): void => {
+          release();
+          audit(device, "READ", started, { zip: roots }, error ?? `${files.length} files`, !!error);
+        };
+        const body = new ReadableStream<Uint8Array>({
+          async pull(controller) {
+            try {
+              const next = await archive.next();
+              if (next.done) {
+                controller.close();
+                finish();
+              } else controller.enqueue(next.value);
+            } catch (error) {
+              controller.error(error);
+              finish(message(error));
+            }
+          },
+          cancel() {
+            void archive.return(undefined);
+            finish("The viewer stopped the download.");
+          },
+        });
+        return new Response(body, {
+          headers: {
+            "content-type": "application/zip",
+            "content-disposition": `attachment; filename="${device.replace(/[^\w.-]+/g, "-")}-files.zip"`,
+            ...noStore,
+          },
+        });
+      }
+
       if (key === "GET /api/files/read") {
         const device = deviceOf(url.searchParams.get("device"));
         const file = cleanPath(url.searchParams.get("path"));
@@ -642,12 +851,7 @@ export function createFilesRoutes(options: { denied: string | null }) {
         await withSftp(device, async (sftp) => {
           for (const target of paths) {
             try {
-              const stats = await call<{ isDirectory: () => boolean }>((done) =>
-                sftp.stat(target, done),
-              );
-              await call<void>((done) =>
-                stats.isDirectory() ? sftp.rmdir(target, done) : sftp.unlink(target, done),
-              );
+              await removeTree(sftp, target);
             } catch (error) {
               failed.push({ path: target, error: message(error) });
             }

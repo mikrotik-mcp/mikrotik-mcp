@@ -38,6 +38,7 @@ import { Select } from "./geist";
 import type { FileEntry, FileKind } from "./files-lib";
 import {
   DRAG_TYPE,
+  droppedFiles,
   canPreview,
   compareStore,
   conflicts,
@@ -242,14 +243,15 @@ export function FilesPane(
     else setPending({ dir, existing: clash, start });
   };
 
-  const upload = (dir: string, files: File[]): void => {
-    void plan(
-      dir,
-      files.map((file) => file.name),
-      (skip) => {
-        for (const file of files) if (!skip.has(file.name)) transferQueue.upload(device, dir, file);
-      },
-    );
+  /** `sub` is the folder of a file below `dir`, for a dropped folder. */
+  const upload = (dir: string, items: { file: File; sub: string }[]): void => {
+    const top = (item: { file: File; sub: string }): string =>
+      item.sub.split("/")[0] || item.file.name;
+    void plan(dir, Array.from(new Set(items.map(top))), (skip) => {
+      for (const item of items)
+        if (!skip.has(top(item)))
+          transferQueue.upload(device, item.sub ? joinPath(dir, item.sub) : dir, item.file);
+    });
   };
 
   const copyHere = (
@@ -257,20 +259,33 @@ export function FilesPane(
     source: { device: string; dir: string; entries: FileEntry[] },
   ): void => {
     if (source.device === device && source.dir === dir) return;
-    const files = source.entries.filter((entry) => !entry.dir);
-    // ponytail: folders are not copied; add a recursive walk when someone needs it.
-    if (files.length < source.entries.length)
-      setNotice("Folders are not copied. Only the files were sent.");
     void plan(
       dir,
-      files.map((entry) => entry.name),
+      source.entries.map((entry) => entry.name),
       (skip) => {
-        for (const entry of files) {
+        for (const entry of source.entries) {
           if (skip.has(entry.name)) continue;
-          transferQueue.copy(
-            { device: source.device, path: joinPath(source.dir, entry.name), size: entry.size },
-            { device, dir },
-          );
+          const from = joinPath(source.dir, entry.name);
+          if (!entry.dir) {
+            transferQueue.copy(
+              { device: source.device, path: from, size: entry.size },
+              { device, dir },
+            );
+            continue;
+          }
+          // A folder: every file in it, each to the same place below the target.
+          filesApi
+            .tree(source.device, from)
+            .then((tree) => {
+              if (tree.truncated) setNotice(`${entry.name} is very large: only a part was copied.`);
+              const cut = source.dir === "/" ? 0 : source.dir.length;
+              for (const file of tree.files)
+                transferQueue.copy(
+                  { device: source.device, path: file.path, size: file.size },
+                  { device, dir: `${dir === "/" ? "" : dir}${parentOf(file.path).slice(cut)}` },
+                );
+            })
+            .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)));
         }
       },
     );
@@ -284,13 +299,9 @@ export function FilesPane(
     const internal = event.dataTransfer.types.includes(DRAG_TYPE) ? dragState.current : null;
     dragState.current = null;
     if (internal) return copyHere(dir, internal);
-    const items = Array.from(event.dataTransfer.items ?? []);
-    const folders = items.filter((item) => item.webkitGetAsEntry?.()?.isDirectory).length;
-    const files = Array.from(event.dataTransfer.files).filter(
-      (_, index) => !items[index]?.webkitGetAsEntry?.()?.isDirectory,
-    );
-    if (folders > 0) setNotice("Folders are not uploaded. Drop the files of the folder.");
-    upload(dir, files);
+    droppedFiles(event.dataTransfer)
+      .then((items) => upload(dir, items))
+      .catch(() => setNotice("The dropped files could not be read."));
   };
 
   const onDragOver = (event: DragEvent, target: string): void => {
@@ -433,7 +444,10 @@ export function FilesPane(
                 multiple
                 hidden
                 onChange={(event) => {
-                  upload(path, Array.from(event.target.files ?? []));
+                  upload(
+                    path,
+                    Array.from(event.target.files ?? []).map((file) => ({ file, sub: "" })),
+                  );
                   event.target.value = "";
                 }}
               />
@@ -499,7 +513,8 @@ export function FilesPane(
           aria-label="Delete files"
         >
           <span>
-            Delete <strong>{chosen.length}</strong> from {device}? This cannot be undone.
+            Delete <strong>{chosen.length}</strong> from {device}? Folders go with everything in
+            them. This cannot be undone.
           </span>
           <button
             type="button"
@@ -643,6 +658,24 @@ export function FilesPane(
           >
             <ArrowDownToLine size={13} /> Download
           </button>
+          {(chosen.length > 1 || chosen.some((entry) => entry.dir)) && (
+            <button
+              type="button"
+              title="Download the selection, folders included, as one ZIP archive"
+              onClick={() =>
+                transferQueue.downloadZip(
+                  device,
+                  path,
+                  chosen.map((entry) => joinPath(path, entry.name)),
+                  chosenFiles.length === chosen.length
+                    ? chosenFiles.reduce((sum, entry) => sum + entry.size, 0)
+                    : 0,
+                )
+              }
+            >
+              <FileArchive size={13} /> ZIP
+            </button>
+          )}
           {chosen.length === 1 && chosen[0] && canPreview(chosen[0]) && (
             <button
               type="button"

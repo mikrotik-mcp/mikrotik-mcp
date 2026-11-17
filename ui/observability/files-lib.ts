@@ -141,6 +141,12 @@ export const filesApi = {
     ),
   usage: (device: string): Promise<{ free?: number; total?: number }> =>
     api(`/api/files/usage?device=${encodeURIComponent(device)}`),
+  /** Every file under a folder, for a folder copy. */
+  tree: (
+    device: string,
+    path: string,
+  ): Promise<{ files: { path: string; size: number }[]; dirs: string[]; truncated: boolean }> =>
+    api(`/api/files/tree?${query(device, path)}`),
   read: (file: FileRef): Promise<{ text: string; size: number; mtime: number }> =>
     api(`/api/files/read?${query(file.device, file.path)}`),
   /** Replace a file with `text`. */
@@ -214,6 +220,37 @@ export const filePanes = {
     return () => paneListeners.delete(listener);
   },
 };
+
+/**
+ * The files of a drop from the computer. A dropped folder gives its files with
+ * `sub`, their folder below the drop target.
+ */
+export async function droppedFiles(transfer: DataTransfer): Promise<{ file: File; sub: string }[]> {
+  // The browser forgets the drop when the event ends: read the entries first.
+  const entries = Array.from(transfer.items ?? []).map((item) => item.webkitGetAsEntry?.() ?? null);
+  const plain = Array.from(transfer.files);
+  if (!entries.some((entry) => entry?.isDirectory)) return plain.map((file) => ({ file, sub: "" }));
+  const found: { file: File; sub: string }[] = [];
+  const walk = async (entry: FileSystemEntry, sub: string): Promise<void> => {
+    if (entry.isFile) {
+      const file = await new Promise<File>((resolve, reject) =>
+        (entry as FileSystemFileEntry).file(resolve, reject),
+      );
+      found.push({ file, sub });
+      return;
+    }
+    const reader = (entry as FileSystemDirectoryEntry).createReader();
+    for (;;) {
+      const batch = await new Promise<FileSystemEntry[]>((resolve, reject) =>
+        reader.readEntries(resolve, reject),
+      );
+      if (batch.length === 0) return;
+      for (const child of batch) await walk(child, sub ? `${sub}/${entry.name}` : entry.name);
+    }
+  };
+  for (const entry of entries) if (entry) await walk(entry, "");
+  return found;
+}
 
 /** What is being dragged between panes (the browser hides drag data until the drop). */
 export const dragState: { current: { device: string; dir: string; entries: FileEntry[] } | null } =
@@ -307,6 +344,34 @@ function saveBlob(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
+/** Stream a response into memory with progress, then save it. `size` 0 = unknown. */
+async function fetchToDisk(
+  url: string,
+  name: string,
+  size: number,
+  report: Report,
+  signal: AbortSignal,
+): Promise<void> {
+  const res = await fetch(withToken(url), { signal, headers: auth });
+  if (!res.ok || !res.body) throw await failure(res);
+  const total = Number(res.headers.get("content-length")) || size;
+  if (total) report(0, total);
+  const reader = res.body.getReader();
+  const parts: Uint8Array<ArrayBuffer>[] = [];
+  let done = 0;
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    parts.push(chunk.value as Uint8Array<ArrayBuffer>);
+    done += chunk.value.byteLength;
+    report(done);
+  }
+  if (done < total) throw new Error("The router closed the file before the end.");
+  // An archive has no known size until it ends.
+  report(done, done);
+  saveBlob(new Blob(parts), name);
+}
+
 export const transferQueue = {
   get: (): Transfer[] => transfers,
   subscribe(listener: () => void): () => void {
@@ -376,27 +441,31 @@ export const transferQueue = {
         to: "this computer",
         total: size,
       },
-      async (report, signal) => {
-        const res = await fetch(withToken(`/api/files/download?${query(device, path)}`), {
+      (report, signal) =>
+        fetchToDisk(
+          `/api/files/download?${query(device, path)}`,
+          baseName(path),
+          size,
+          report,
           signal,
-          headers: auth,
-        });
-        if (!res.ok || !res.body) throw await failure(res);
-        const total = Number(res.headers.get("content-length")) || size;
-        report(0, total);
-        const reader = res.body.getReader();
-        const parts: Uint8Array<ArrayBuffer>[] = [];
-        let done = 0;
-        for (;;) {
-          const chunk = await reader.read();
-          if (chunk.done) break;
-          parts.push(chunk.value as Uint8Array<ArrayBuffer>);
-          done += chunk.value.byteLength;
-          report(done);
-        }
-        if (done < total) throw new Error("The router closed the file before the end.");
-        saveBlob(new Blob(parts), baseName(path));
-      },
+        ),
+    );
+  },
+
+  /** Several files or folders of one router, as one ZIP archive. */
+  downloadZip(device: string, dir: string, paths: string[], size: number): void {
+    const name = `${device}-${paths.length === 1 ? baseName(paths[0] ?? "") : "files"}.zip`;
+    const list = paths.map((path) => `path=${encodeURIComponent(path)}`).join("&");
+    enqueue(
+      { kind: "download", name, from: `${device}:${dir}`, to: "this computer", total: size },
+      (report, signal) =>
+        fetchToDisk(
+          `/api/files/zip?device=${encodeURIComponent(device)}&${list}`,
+          name,
+          0,
+          report,
+          signal,
+        ),
     );
   },
 

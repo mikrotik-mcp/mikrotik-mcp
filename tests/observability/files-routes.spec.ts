@@ -323,6 +323,49 @@ describe("changes", () => {
   });
 });
 
+describe("folders", () => {
+  test("an upload makes the folders above the file", async () => {
+    await call("POST", "/api/files/upload?device=beta&path=/a/b/c.txt", undefined, "x");
+    expect(Array.from(routers.beta!.disk.keys()).sort()).toEqual([
+      "/a",
+      "/a/b",
+      "/a/b/c.txt",
+      "/old.rsc",
+    ]);
+  });
+  test("a tree lists every file below a folder", async () => {
+    const res = await call("GET", "/api/files/tree?device=alpha&path=/flash");
+    expect(await res.json()).toEqual({
+      files: [{ path: "/flash/config.rsc", size: 36, mtime: 1_700_000_000 }],
+      dirs: ["/flash"],
+      truncated: false,
+    });
+  });
+  test("a folder is deleted with what is in it", async () => {
+    const res = await call("POST", "/api/files/delete", { device: "alpha", paths: ["/flash"] });
+    expect(await res.json()).toEqual({ ok: true, failed: [] });
+    expect(Array.from(routers.alpha!.disk.keys()).sort()).toEqual(["/backup.backup", "/notes.txt"]);
+  });
+  test("a ZIP holds the selected files, with folders, and valid checksums", async () => {
+    const res = await call("GET", "/api/files/zip?device=alpha&path=/flash&path=/notes.txt");
+    const zip = Buffer.from(await res.arrayBuffer());
+    expect(res.headers.get("content-type")).toBe("application/zip");
+    // End record: two entries; the central directory names both files.
+    const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    expect(zip.readUInt16LE(end + 10)).toBe(2);
+    const directory = zip.subarray(zip.readUInt32LE(end + 16), end).toString("latin1");
+    expect(directory).toContain("flash/config.rsc");
+    expect(directory).toContain("notes.txt");
+    // The stored bytes of the second file follow its local header.
+    expect(zip.toString("latin1")).toContain("wan is ether1\n");
+    const { crc32 } = await import("node:zlib");
+    const first = zip.indexOf(Buffer.from([0x50, 0x4b, 0x07, 0x08]));
+    expect(zip.readUInt32LE(first + 4)).toBe(
+      crc32(routers.alpha!.disk.get("/flash/config.rsc") as Buffer),
+    );
+  });
+});
+
 test("a locked page answers only its state", async () => {
   const locked = files.createFilesRoutes({ denied: "locked" });
   const state = (await locked(
