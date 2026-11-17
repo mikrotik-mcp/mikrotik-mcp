@@ -376,11 +376,39 @@ export interface ServiceReport {
   dashboard: string;
   dashboardUp: boolean;
   config: string;
-  devices?: { total: number; enabled: number };
+  /** Configured routers. Empty list = none configured; undefined = config unreadable. */
+  devices?: DeviceRow[];
+  /** True when `devices` carries live health from the running server. */
+  devicesLive: boolean;
   data: string;
   logs: string;
   commands: string;
   bun: string;
+}
+
+/** One configured router, with the health the running server last measured. */
+export interface DeviceRow {
+  name: string;
+  isDefault: boolean;
+  disabled: boolean;
+  /** true = reachable, false = unreachable, null = not probed (or no live data). */
+  reachable: boolean | null;
+  version?: string;
+  latencyMs?: number;
+  cpuLoad?: number;
+  memUsedPct?: number;
+  uptime?: string;
+  error?: string;
+}
+
+/** Keep text from a config file or a router on one line of the terminal. */
+function oneLine(text: unknown, max = 60): string {
+  const flat = [...String(text ?? "")]
+    .map((char) => (char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127 ? " " : char))
+    .join("")
+    .replace(/ {2,}/g, " ")
+    .trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
 const SUPERVISOR: Record<Platform, string> = {
@@ -428,14 +456,59 @@ async function inspect(state: ServiceState): Promise<ServiceReport> {
       "LaunchAgent StandardErrorPath / StandardOutPath"
     );
   };
-  const devices = async (): Promise<{ total: number; enabled: number } | undefined> => {
-    const all = Object.values(
-      (JSON.parse((await optionalFile(state.config)) ?? "{}").devices ?? {}) as Record<
-        string,
-        { disabled?: boolean }
-      >,
-    );
-    return { total: all.length, enabled: all.filter((device) => !device?.disabled).length };
+  const devices = async (): Promise<{ rows: DeviceRow[]; live: boolean }> => {
+    const config = JSON.parse((await optionalFile(state.config)) ?? "{}") as {
+      devices?: Record<string, { disabled?: boolean }>;
+      defaultDevice?: string;
+      dashboard?: { token?: string };
+    };
+    const configured: DeviceRow[] = Object.entries(config.devices ?? {}).map(([name, device]) => ({
+      name: oneLine(name, 40),
+      isDefault: name === config.defaultDevice,
+      disabled: device?.disabled === true,
+      reachable: null,
+    }));
+    // Live health comes from the running server's dashboard API — the same
+    // numbers the dashboard shows, with no extra connection to any router.
+    try {
+      const flag = state.args.indexOf("--dashboard-token");
+      const token = config.dashboard?.token ?? (flag >= 0 ? state.args[flag + 1] : undefined);
+      const response = await fetch(`${dashboard}/api/devices`, {
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+        signal: AbortSignal.timeout(2500),
+      });
+      if (!response.ok) return { rows: configured, live: false };
+      const body = (await response.json()) as {
+        devices?: {
+          name?: unknown;
+          isDefault?: unknown;
+          disabled?: unknown;
+          status?: Record<string, unknown> | null;
+        }[];
+      };
+      if (!Array.isArray(body.devices)) return { rows: configured, live: false };
+      const number = (value: unknown): number | undefined =>
+        typeof value === "number" && Number.isFinite(value) ? value : undefined;
+      const text = (value: unknown): string | undefined =>
+        typeof value === "string" && value ? oneLine(value) : undefined;
+      return {
+        live: true,
+        rows: body.devices.map((device) => ({
+          name: oneLine(device.name, 40),
+          isDefault: device.isDefault === true,
+          disabled: device.disabled === true,
+          reachable: typeof device.status?.reachable === "boolean" ? device.status.reachable : null,
+          version: text(device.status?.version),
+          latencyMs: number(device.status?.latencyMs),
+          cpuLoad: number(device.status?.cpuLoad),
+          memUsedPct: number(device.status?.memUsedPct),
+          uptime: text(device.status?.uptime),
+          error: text(device.status?.error),
+        })),
+      };
+    } catch {
+      return { rows: configured, live: false };
+    }
   };
   const latest = async (): Promise<string | undefined> => {
     const response = await fetch(
@@ -483,7 +556,8 @@ async function inspect(state: ServiceState): Promise<ServiceReport> {
     dashboard,
     dashboardUp: dashboardUp === true,
     config: state.config,
-    devices: deviceCount,
+    devices: deviceCount?.rows,
+    devicesLive: deviceCount?.live === true,
     data: state.cwd,
     logs: logPath ?? "",
     commands: join(state.installRoot, "bin"),
@@ -555,11 +629,56 @@ export function renderStatus(report: ServiceReport, on: boolean): string {
   ];
   if (report.tools !== undefined)
     service.push(["Tools", `${report.tools} ${c.dim("in tools/list")}`]);
-  const deviceNote = report.devices
-    ? c.dim(
-        `  ${report.devices.total} device${report.devices.total === 1 ? "" : "s"}, ${report.devices.enabled} enabled`,
-      )
-    : "";
+  const fleet = report.devices ?? [];
+  const count = {
+    disabled: fleet.filter((d) => d.disabled).length,
+    online: fleet.filter((d) => !d.disabled && d.reachable === true).length,
+    offline: fleet.filter((d) => !d.disabled && d.reachable === false).length,
+  };
+  const pending = fleet.length - count.disabled - count.online - count.offline;
+  const summary = [`${c.bold(String(fleet.length))} configured`];
+  if (report.devicesLive) {
+    summary.push(`${c.ok(String(count.online))} online`);
+    if (count.offline) summary.push(`${c.bad(String(count.offline))} offline`);
+    if (pending) summary.push(`${pending} not checked yet`);
+  } else summary.push(`${fleet.length - count.disabled} enabled`);
+  if (count.disabled) summary.push(`${count.disabled} disabled`);
+  const MAX_DEVICE_ROWS = 12;
+  const nameWidth = Math.max(0, ...fleet.slice(0, MAX_DEVICE_ROWS).map((d) => d.name.length));
+  const deviceLine = (d: DeviceRow): string => {
+    const name = `${c.bold(d.name.padEnd(nameWidth))} ${d.isDefault ? c.violet("★") : " "}`;
+    if (d.disabled) return `${c.dim("◌")} ${name}  ${c.dim("disabled")}`;
+    if (d.reachable === true) {
+      const facts = [
+        d.version ? `RouterOS ${d.version.replace(/\s*\(.*\)$/, "")}` : undefined,
+        d.latencyMs !== undefined ? `${Math.round(d.latencyMs)} ms` : undefined,
+        d.cpuLoad !== undefined ? `CPU ${Math.round(d.cpuLoad)}%` : undefined,
+        d.memUsedPct !== undefined ? `RAM ${Math.round(d.memUsedPct)}%` : undefined,
+        // Seconds are noise next to days and hours.
+        d.uptime ? `up ${d.uptime.replace(/(?<=[wdhm])\d+s$/, "")}` : undefined,
+      ].filter(Boolean);
+      return `${c.ok("●")} ${name}  ${c.ok("online ")}  ${c.dim(facts.join(" · "))}`;
+    }
+    if (d.reachable === false)
+      return `${c.bad("○")} ${name}  ${c.bad("offline")}  ${c.dim(d.error ?? "no answer")}`;
+    return `${c.dim("·")} ${name}  ${c.dim(report.devicesLive ? "not checked yet" : "state unknown")}`;
+  };
+  const devices: Rows = [["Summary", summary.join(c.dim(" · "))]];
+  if (!report.devices) devices[0] = ["Summary", c.dim("the config file could not be read")];
+  fleet
+    .slice(0, MAX_DEVICE_ROWS)
+    .forEach((d, i) => devices.push([i === 0 ? "Routers" : "", deviceLine(d)]));
+  if (fleet.length > MAX_DEVICE_ROWS)
+    devices.push(["", c.dim(`… and ${fleet.length - MAX_DEVICE_ROWS} more (see the dashboard)`)]);
+  if (report.devices && !report.devicesLive && fleet.length)
+    devices.push(["", c.dim("Live state needs the running service and its dashboard.")]);
+  if (count.offline)
+    advice.push(
+      `${c.warn("!")} ${count.offline} device${count.offline === 1 ? " is" : "s are"} offline: ${fleet
+        .filter((d) => !d.disabled && d.reachable === false)
+        .map((d) => d.name)
+        .join(", ")}`,
+    );
 
   const urlWidth = Math.max(report.mcp.length, report.dashboard.length);
   const endpoints: Rows = [
@@ -567,7 +686,7 @@ export function renderStatus(report: ServiceReport, on: boolean): string {
     ["Dashboard", `${c.sky(report.dashboard.padEnd(urlWidth))}  ${mark(report.dashboardUp)}`],
   ];
   const files: Rows = [
-    ["Config", `${tidy(report.config)}${deviceNote}`],
+    ["Config", tidy(report.config)],
     ["Data", tidy(report.data)],
     ["Logs", tidy(report.logs)],
     ["Commands", tidy(report.commands)],
@@ -577,6 +696,7 @@ export function renderStatus(report: ServiceReport, on: boolean): string {
   const min = Math.max(
     panelWidth("Service", service),
     panelWidth("Endpoints", endpoints),
+    panelWidth("Devices", devices),
     panelWidth("Files", files),
   );
 
@@ -584,6 +704,7 @@ export function renderStatus(report: ServiceReport, on: boolean): string {
     banner("status", on),
     panel("Service", service, on, min),
     panel("Endpoints", endpoints, on, min),
+    panel("Devices", devices, on, min),
     panel("Files", files, on, min),
     advice.length
       ? advice.map((line) => `  ${line}`).join("\n")
@@ -814,7 +935,8 @@ export async function installCommands(
 }
 
 /** Verify the CLI and the live MCP version after service activation. */
-async function waitReady(state: ServiceState): Promise<void> {
+/** Wait until the running server answers as the installed version; returns that version. */
+async function waitReady(state: ServiceState): Promise<string> {
   const version = await command([state.bun, state.cli, "--version"]);
   await upgrade({
     install: async () => {},
@@ -823,9 +945,30 @@ async function waitReady(state: ServiceState): Promise<void> {
     ready: (v) => ready(`http://127.0.0.1:${state.port}/mcp`, v),
     wait: () => sleep(1000),
   });
-  console.warn(
-    `MikroTik MCP ${version} is ready.\nDashboard: http://127.0.0.1:${state.dashboardPort}\nMCP: http://127.0.0.1:${state.port}/mcp`,
-  );
+  return version;
+}
+
+/** The `--help` screen. */
+export function renderHelp(on: boolean): string {
+  const c = palette(on);
+  const row = (commandLine: string, what: string): string =>
+    `  ${c.bold(commandLine.padEnd(46))}${c.dim(what)}`;
+  return [
+    banner("help", on),
+    "",
+    row("mikrotik-mcp-service install", "Install and start the service"),
+    row("  [--config devices.json]", "Use an existing config file"),
+    row("  [--mcp-port 8000] [--dashboard-port 9090]", "Choose the local ports"),
+    row("mikrotik-mcp-service status", "Service, versions, endpoints and devices"),
+    row("mikrotik-mcp-service restart", "Restart without updating"),
+    row("mikrotik-mcp-upgrade", "Install the latest version and restart"),
+    row("mikrotik-mcp-service uninstall", "Stop and remove automatic startup"),
+    "",
+    `  ${c.dim("No config? Install creates a disabled example router; configure it in the dashboard.")}`,
+    `  ${c.dim("Runs as your login user: macOS launchd, Linux systemd --user, Windows logon task.")}`,
+    `  ${c.dim("Uninstall keeps your config, keys and history. Bun required. No sudo.")}`,
+    "",
+  ].join("\n");
 }
 
 /** Parse a deliberately small CLI with strict options and explicit install-only flags. */
@@ -866,15 +1009,18 @@ export function serviceOptions(argv: string[]): {
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   const options = serviceOptions(argv);
   if (options.action === "help") {
-    console.warn(
-      `MikroTik MCP shared service (Bun required)\n\n  mikrotik-mcp-service install [--config devices.json]\n  mikrotik-mcp-upgrade\n  mikrotik-mcp-service restart | status | uninstall\n\nOptional install ports: --mcp-port 8000 --dashboard-port 9090\nNo config? Install creates a disabled example router; configure it in the dashboard.\nRuns as your login user: macOS launchd, Linux systemd --user, Windows logon task.\nUninstall keeps your config, keys and history. No sudo required.`,
-    );
+    console.warn(renderHelp(useColor()));
     return;
   }
   if (!["darwin", "linux", "win32"].includes(process.platform))
     throw new Error("Supported platforms: Windows, macOS, Linux with systemd.");
   if (process.getuid?.() === 0) throw new Error("Run as your regular login user, without sudo.");
   const platform = process.platform as Platform;
+  const on = useColor();
+  const c = palette(on);
+  const say = (line: string): void => console.warn(`  ${line}`);
+  const tidy = (path: string): string =>
+    homedir() && path.startsWith(homedir()) ? `~${path.slice(homedir().length)}` : path;
   const directory = join(homedir(), ".mikrotik-mcp", "service");
   const metadata = join(directory, "service.json");
   await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -893,6 +1039,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       throw new Error("Incompatible service metadata; nothing changed.");
     if (!state && platform === "darwin") state = await adoptMac();
     if (options.action === "install") {
+      console.warn(`${banner("install", on)}\n`);
+      const fresh = !state;
       if (state) {
         if (
           (options.config && resolve(options.config) !== state.config) ||
@@ -1001,27 +1149,71 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         await save(metadata, JSON.stringify(state, null, 2));
       }
       await save(metadata, JSON.stringify(state, null, 2));
-      await installCommands(directory, state.bun);
+      say(
+        fresh
+          ? `${c.ok("✓")} Config        ${tidy(state.config)}`
+          : `${c.dim("•")} Already installed ${c.dim("— checking that it runs")}`,
+      );
+      await installCommands(directory, state.bun, true);
+      const bin = join(state.installRoot, "bin");
+      say(`${c.ok("✓")} Commands      ${tidy(bin)}`);
       await ensureStarted(state);
-      await waitReady(state);
+      say(`${c.ok("✓")} Registered    ${c.dim(SUPERVISOR[platform])}`);
+      say(`${c.sky("◆")} Waiting       ${c.dim("for the server to answer …")}`);
+      const version = await waitReady(state);
+      say(`${c.ok("✓")} Ready         ${c.dim("the server answers as")} ${c.bold(version)}`);
+      const mcp = `http://127.0.0.1:${state.port}/mcp`;
+      const onPath = (process.env.PATH ?? "").split(platform === "win32" ? ";" : ":").includes(bin);
+      console.warn(
+        [
+          "",
+          panel(
+            fresh ? "Service installed" : "Service running",
+            [
+              ["Version", c.bold(version)],
+              ["MCP", c.sky(mcp)],
+              ["Dashboard", c.sky(`http://127.0.0.1:${state.dashboardPort}`)],
+              ["Config", tidy(state.config)],
+            ],
+            on,
+          ),
+          "",
+          `  ${c.dim("Add this URL to your MCP clients:")} ${mcp}`,
+          // Only when it matters: the commands are not reachable from this shell.
+          ...(onPath
+            ? []
+            : [
+                `  ${c.warn("!")} ${tidy(bin)} is not on your PATH. Add it to run the commands by name.`,
+              ]),
+          `  ${c.dim("Next: mikrotik-mcp-service status · mikrotik-mcp-upgrade")}`,
+          "",
+        ].join("\n"),
+      );
       return;
     }
     if (!state)
       throw new Error("Service is not installed. Run mikrotik-mcp-service install first.");
     if (options.action === "uninstall") {
+      console.warn(`${banner("uninstall", on)}\n`);
       await control(state, "remove");
       if (platform !== "win32") await unlink(nativeFile(platform));
       if (platform === "linux") await command(["systemctl", "--user", "daemon-reload"]);
       await unlink(metadata).catch((error) => {
         if (error.code !== "ENOENT") throw error;
       });
+      say(`${c.ok("✓")} Stopped       ${c.dim("and removed from automatic startup")}`);
       console.warn(
-        "Service removed. Config, SSH keys and history were kept. Run install to enable it again.",
+        `\n${panel(
+          "Service removed · kept on this machine",
+          [
+            ["Config", tidy(state.config)],
+            ["Data", `${tidy(state.cwd)}  ${c.dim("history, snapshots, SSH keys")}`],
+            ["Package", `${tidy(dirname(dirname(state.cli)))}`],
+          ],
+          on,
+        )}\n\n  ${c.dim("Enable it again: mikrotik-mcp-service install")}\n`,
       );
     } else if (options.action === "upgrade") {
-      const on = useColor();
-      const c = palette(on);
-      const say = (line: string): void => console.warn(`  ${line}`);
       const mcp = `http://127.0.0.1:${state.port}/mcp`;
       console.warn(`${banner("upgrade", on)}\n`);
       const before = (await probe(mcp)).version;
@@ -1099,10 +1291,27 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         throw error;
       }
     } else if (options.action === "status") {
-      console.warn(renderStatus(await inspect(state), useColor()));
+      console.warn(renderStatus(await inspect(state), on));
     } else {
+      console.warn(`${banner("restart", on)}\n`);
+      const started = Date.now();
       await control(state, "restart");
-      await waitReady(state);
+      say(`${c.ok("✓")} Restarted     ${c.dim(SUPERVISOR[platform].split(" · ")[0])}`);
+      say(`${c.sky("◆")} Waiting       ${c.dim("for the server to answer …")}`);
+      const version = await waitReady(state);
+      say(`${c.ok("✓")} Ready         ${c.dim("the server answers as")} ${c.bold(version)}`);
+      console.warn(
+        `\n${panel(
+          "Service restarted",
+          [
+            ["Version", c.bold(version)],
+            ["Took", `${Math.max(1, Math.round((Date.now() - started) / 1000))}s`],
+            ["MCP", c.sky(`http://127.0.0.1:${state.port}/mcp`)],
+            ["Dashboard", c.sky(`http://127.0.0.1:${state.dashboardPort}`)],
+          ],
+          on,
+        )}\n\n  ${c.dim("Reconnect your MCP clients if they do not reconnect by themselves.")}\n`,
+      );
     }
   } finally {
     await rmdir(lock);

@@ -11,6 +11,7 @@ import {
   panel,
   parseLaunchctl,
   parseSystemd,
+  renderHelp,
   renderStatus,
   uptime,
 } from "../scripts/service.ts";
@@ -32,7 +33,32 @@ const healthy: ServiceReport = {
   dashboard: "http://127.0.0.1:9090",
   dashboardUp: true,
   config: "/etc/mikrotik/devices.json",
-  devices: { total: 4, enabled: 3 },
+  devicesLive: true,
+  devices: [
+    {
+      name: "home",
+      isDefault: true,
+      disabled: false,
+      reachable: true,
+      version: "7.25.1",
+      latencyMs: 242.4,
+      cpuLoad: 6,
+      memUsedPct: 41.4,
+      uptime: "2d11h20m15s",
+    },
+    {
+      name: "branch office",
+      isDefault: false,
+      disabled: false,
+      reachable: true,
+      version: "7.23 (stable)",
+      latencyMs: 433,
+      cpuLoad: 7,
+      memUsedPct: 91.5,
+      uptime: "24w1d17h45m10s",
+    },
+    { name: "lab", isDefault: false, disabled: true, reachable: null },
+  ],
   data: "/var/lib/mikrotik-mcp",
   logs: "/var/log/mikrotik-mcp.err",
   commands: "/opt/bun/bin",
@@ -125,15 +151,24 @@ describe("status screen", () => {
       "983 in tools/list",
       "http://127.0.0.1:8000/mcp  ✓ answering",
       "http://127.0.0.1:9090      ✓ answering",
-      "/etc/mikrotik/devices.json  4 devices, 3 enabled",
+      "3 configured · 2 online · 1 disabled",
+      "● home          ★  online   RouterOS 7.25.1 · 242 ms · CPU 6% · RAM 41% · up 2d11h20m",
+      "● branch office    online   RouterOS 7.23 · 433 ms · CPU 7% · RAM 92% · up 24w1d17h45m",
+      "◌ lab              disabled",
+      "/etc/mikrotik/devices.json",
       "/var/log/mikrotik-mcp.err",
       "Everything is in order.",
     ]) {
       expect(out).toContain(expected);
     }
-    // The three panels share one width.
+    // The four panels share one width.
     const tops = out.split("\n").filter((line) => line.includes("╭─"));
-    expect(tops).toHaveLength(3);
+    expect(tops.map((line) => line.trim().split(" ")[1])).toEqual([
+      "Service",
+      "Endpoints",
+      "Devices",
+      "Files",
+    ]);
     expect(new Set(tops.map((line) => line.length)).size).toBe(1);
   });
 
@@ -171,6 +206,7 @@ describe("status screen", () => {
         tools: undefined,
         latest: undefined,
         devices: undefined,
+        devicesLive: false,
         dashboardUp: false,
       },
       false,
@@ -181,7 +217,7 @@ describe("status screen", () => {
     expect(out).toContain("✗ no answer");
     expect(out).toContain("The service is not running. Start it: mikrotik-mcp-service restart");
     expect(out).not.toContain("in tools/list");
-    expect(out).not.toContain("devices,");
+    expect(out).toContain("the config file could not be read");
   });
 
   it("warns when the process runs but MCP does not answer", () => {
@@ -192,5 +228,84 @@ describe("status screen", () => {
 
   it("colour changes nothing but the colour", () => {
     expect(plain(renderStatus(healthy, true))).toBe(renderStatus(healthy, false));
+  });
+});
+
+describe("devices in the status screen", () => {
+  it("names offline devices with the reason and raises it as advice", () => {
+    const out = renderStatus(
+      {
+        ...healthy,
+        devices: [
+          ...healthy.devices!,
+          {
+            name: "edge",
+            isDefault: false,
+            disabled: false,
+            reachable: false,
+            error: "connect ECONNREFUSED 192.0.2.9:22",
+          },
+          { name: "new", isDefault: false, disabled: false, reachable: null },
+        ],
+      },
+      false,
+    );
+    expect(out).toContain("5 configured · 2 online · 1 offline · 1 not checked yet · 1 disabled");
+    expect(out).toContain("○ edge             offline  connect ECONNREFUSED 192.0.2.9:22");
+    expect(out).toContain("· new              not checked yet");
+    expect(out).toContain("! 1 device is offline: edge");
+    expect(out).not.toContain("Everything is in order.");
+  });
+
+  it("without live data it shows the configured devices and says why there is no state", () => {
+    const out = renderStatus(
+      {
+        ...healthy,
+        devicesLive: false,
+        devices: healthy.devices!.map((device) => ({
+          name: device.name,
+          isDefault: device.isDefault,
+          disabled: device.disabled,
+          reachable: null,
+        })),
+      },
+      false,
+    );
+    expect(out).toContain("3 configured · 2 enabled · 1 disabled");
+    expect(out).toContain("· home          ★  state unknown");
+    expect(out).toContain("Live state needs the running service and its dashboard.");
+    expect(out).not.toContain("online");
+  });
+
+  it("handles no devices and a long fleet", () => {
+    expect(renderStatus({ ...healthy, devices: [] }, false)).toContain("0 configured · 0 online");
+    const many = Array.from({ length: 15 }, (_, i) => ({
+      name: `r${i}`,
+      isDefault: false,
+      disabled: false,
+      reachable: true as const,
+    }));
+    const out = renderStatus({ ...healthy, devices: many }, false);
+    expect(out).toContain("15 configured · 15 online");
+    expect(out).toContain("… and 3 more (see the dashboard)");
+    expect(out).not.toContain("r12 ");
+  });
+});
+
+describe("help screen", () => {
+  it("lists every command under the banner", () => {
+    const out = renderHelp(false);
+    expect(out).toContain("Shared service · help");
+    for (const commandLine of [
+      "mikrotik-mcp-service install",
+      "mikrotik-mcp-service status",
+      "mikrotik-mcp-service restart",
+      "mikrotik-mcp-upgrade",
+      "mikrotik-mcp-service uninstall",
+      "--mcp-port 8000",
+    ]) {
+      expect(out).toContain(commandLine);
+    }
+    expect(plain(renderHelp(true))).toBe(out);
   });
 });

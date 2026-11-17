@@ -333,7 +333,9 @@ describe("status and upgrade screens", () => {
     expect(out).toContain("6.11.0 running and installed");
     expect(out).toContain("http://127.0.0.1:28021/mcp");
     expect(out).toContain("http://127.0.0.1:28022");
-    expect(out).toContain("1 device, 0 enabled");
+    // The fetch stub is not the dashboard API, so only the config is known.
+    expect(out).toContain("1 configured · 0 enabled · 1 disabled");
+    expect(out).toContain("◌ router ★  disabled");
     // Read-only: no install, restart, enable or removal was issued.
     expect(
       mock.commands.some((args) =>
@@ -369,5 +371,76 @@ describe("status and upgrade screens", () => {
       "Upgrade stopped during install. The service was not restarted; 6.11.0 keeps running.",
     );
     expect(printed()).not.toContain("✓ Installed");
+  });
+});
+
+describe("install, restart, uninstall and help screens", () => {
+  function capture(): () => string {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    return () => spy.mock.calls.map((call) => String(call[0])).join("\n");
+  }
+
+  it("install narrates its steps and ends with the endpoints", async () => {
+    await setup();
+    const printed = capture();
+    await main(["install", "--mcp-port", "28031", "--dashboard-port", "28032"]);
+    const out = printed();
+    expect(out).toContain("Shared service · install");
+    const order = ["✓ Config", "✓ Commands", "✓ Registered", "Waiting", "✓ Ready"];
+    const positions = order.map((text) => out.indexOf(text));
+    expect(positions.every((at) => at >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(out).toContain("Service installed");
+    expect(out).toContain("Add this URL to your MCP clients: http://127.0.0.1:28031/mcp");
+    expect(out).toContain("http://127.0.0.1:28032");
+    expect(out).toContain("is not on your PATH");
+  });
+
+  it("a repeat install says it is already installed and skips the PATH note when not needed", async () => {
+    await setup();
+    await main(["install", "--mcp-port", "28033", "--dashboard-port", "28034"]);
+    vi.stubEnv("PATH", `${join(mock.home, ".bun/bin")}:/usr/bin`);
+    const printed = capture();
+    await main(["install"]);
+    const out = printed();
+    expect(out).toContain("Already installed");
+    expect(out).toContain("Service running");
+    expect(out).not.toContain("Service installed");
+    expect(out).not.toContain("is not on your PATH");
+  });
+
+  it("restart shows the banner, the steps and the version that answers", async () => {
+    await setup();
+    await main(["install", "--mcp-port", "28035", "--dashboard-port", "28036"]);
+    const printed = capture();
+    await main(["restart"]);
+    const out = printed();
+    expect(out).toContain("Shared service · restart");
+    expect(out).toContain("✓ Restarted");
+    expect(out).toContain("✓ Ready");
+    expect(out).toContain("Service restarted");
+    expect(out).toContain("6.11.0");
+    expect(mock.commands.some((args) => args.includes("restart"))).toBe(true);
+  });
+
+  it("uninstall says what was removed and what was kept", async () => {
+    await setup();
+    await main(["install", "--mcp-port", "28037", "--dashboard-port", "28038"]);
+    const printed = capture();
+    await main(["uninstall"]);
+    const out = printed();
+    expect(out).toContain("Shared service · uninstall");
+    expect(out).toContain("✓ Stopped");
+    expect(out).toContain("Service removed · kept on this machine");
+    expect(out).toContain("devices.json");
+    expect(out).toContain("Enable it again: mikrotik-mcp-service install");
+  });
+
+  it("help prints without touching the service", async () => {
+    await setup();
+    const printed = capture();
+    await main(["--help"]);
+    expect(printed()).toContain("Shared service · help");
+    expect(mock.commands).toHaveLength(0);
   });
 });
