@@ -1206,3 +1206,28 @@
   background: var(--term-bg);
   font-size: 12px;
 }
+
+/* ── live tail ───────────────────────────────────────────────────────── */
+.files-tail {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.files-viewer-meta[data-live="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--term-ok);
+  animation: files-pulse-dot 1.4s ease-in-out infinite;
+}
+.files-viewer-actions button[data-on="true"] {
+  border-color: var(--term-accent);
+  color: var(--term-accent);
+}
+@keyframes files-pulse-dot {
+  50% {
+    opacity: 0.3;
+  }
+}

@@ -50,8 +50,11 @@ function fakeSftp(tree: Record<string, string | "dir">, options: { failWrites?: 
       const body = disk.get(path);
       return Buffer.isBuffer(body) ? done(undefined, body) : done(missing());
     },
-    createReadStream(path: string, range?: { start?: number }) {
-      const body = (disk.get(path) as Buffer).subarray(range?.start ?? 0);
+    createReadStream(path: string, range?: { start?: number; end?: number }) {
+      const body = (disk.get(path) as Buffer).subarray(
+        range?.start ?? 0,
+        range?.end === undefined ? undefined : range.end + 1,
+      );
       return Readable.from([body.subarray(0, 3), body.subarray(3)]);
     },
     createWriteStream(path: string, range?: { start?: number }) {
@@ -465,6 +468,21 @@ test("router files are saved to the vault, and a vault file is sent to a router"
   } finally {
     delete process.env.MIKROTIK_BACKUP_DIR;
   }
+});
+
+test("a tail gives the end of a file, then what is added to it", async () => {
+  const res = await call("GET", "/api/files/tail?device=alpha&path=/notes.txt&every=200");
+  const reader = res.body!.getReader();
+  const text = async (): Promise<string> => {
+    let got = "";
+    // The fake stream gives a read in two parts.
+    while (!got.endsWith("\n")) got += new TextDecoder().decode((await reader.read()).value);
+    return got;
+  };
+  expect(await text()).toBe("wan is ether1\n");
+  routers.alpha!.disk.set("/notes.txt", Buffer.from("wan is ether1\nlink down\n"));
+  expect(await text()).toBe("link down\n");
+  await reader.cancel();
 });
 
 describe("checksum and resume", () => {

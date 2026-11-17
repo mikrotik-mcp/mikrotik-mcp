@@ -63,6 +63,7 @@ import { ImportDialog } from "./files-import";
 import { FilesPane } from "./files-pane";
 import { JobsDialog } from "./files-jobs";
 import { FolderSync } from "./files-sync";
+import { TailDialog } from "./files-tail";
 import { RecycleBin } from "./files-trash";
 import { VaultDialog } from "./files-vault";
 import { FileViewer } from "./files-viewer";
@@ -605,6 +606,7 @@ export function FilesView(): ReactNode {
 
       <FileViewer readOnly={readOnly} />
       <FileCompare />
+      <TailDialog />
       <DiskAnalysis readOnly={readOnly} />
       <JobsDialog routers={names} />
       <VaultDialog readOnly={readOnly} />

@@ -517,6 +517,10 @@ export function closeFileSessions(): void {
   }
 }
 
+/** A tail starts with this much of the end of the file, and ends after this long. */
+const TAIL_START_BYTES = 32 * 1024;
+const TAIL_MAX_MS = 30 * 60_000;
+
 // ── vault ─────────────────────────────────────────────────────────────────
 /** A file is read into memory on its way to the vault; larger ones are refused. */
 export const MAX_VAULT_BYTES = 256 * 1024 * 1024;
@@ -899,6 +903,58 @@ export function createFilesRoutes(options: { denied: string | null }) {
       if (key === "GET /api/files/trash") return json({ items: listTrash() });
       if (key === "GET /api/files/jobs") return json({ jobs: listJobs() });
       if (key === "GET /api/files/vault") return json({ dir: backupDir(), files: listVault() });
+
+      if (key === "GET /api/files/tail") {
+        // Follow a file that grows (a log): its end now, then what is added.
+        const device = deviceOf(url.searchParams.get("device"));
+        const file = cleanPath(url.searchParams.get("path"));
+        const every = Math.min(
+          Math.max(Number(url.searchParams.get("every")) || 2000, 200),
+          60_000,
+        );
+        const { sftp, release } = await holdSftp(device);
+        const size = (): Promise<number> =>
+          call<{ size: number }>((done) => sftp.stat(file, done)).then((stats) => stats.size);
+        const stop = new AbortController();
+        req.signal.addEventListener("abort", () => stop.abort(), { once: true });
+        const encoder = new TextEncoder();
+        const body = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            try {
+              let offset = Math.max((await size()) - TAIL_START_BYTES, 0);
+              const until = Date.now() + TAIL_MAX_MS;
+              while (!stop.signal.aborted && Date.now() < until) {
+                const now = await size();
+                if (now < offset) {
+                  offset = 0;
+                  controller.enqueue(encoder.encode("\n--- the file was replaced ---\n"));
+                }
+                if (now > offset) {
+                  const range = { start: offset, end: now - 1 };
+                  for await (const chunk of sftp.createReadStream(
+                    file,
+                    range,
+                  ) as AsyncIterable<Uint8Array>)
+                    controller.enqueue(new Uint8Array(chunk));
+                  offset = now;
+                }
+                await new Promise((resolve) => setTimeout(resolve, every));
+              }
+              controller.close();
+            } catch (error) {
+              if (!stop.signal.aborted) controller.error(error);
+            } finally {
+              release();
+            }
+          },
+          cancel() {
+            stop.abort();
+          },
+        });
+        return new Response(body, {
+          headers: { "content-type": "text/plain; charset=utf-8", ...noStore },
+        });
+      }
 
       if (key === "GET /api/files/hash") {
         const device = deviceOf(url.searchParams.get("device"));

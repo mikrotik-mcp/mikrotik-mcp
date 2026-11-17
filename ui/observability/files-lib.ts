@@ -205,6 +205,9 @@ export const workspaceStore = persisted<{ name: string; layout: unknown }[]>(
   [],
 );
 
+/** The file being followed (tail), or null. */
+export const tailStore = store<FileRef | null>(null);
+
 /** The router whose storage is being analysed, or null. */
 export const analysisStore = store<string | null>(null);
 
@@ -334,6 +337,21 @@ export const filesApi = {
     postFiles("/api/files/rename", { device, from, to }),
   mkdir: (device: string, path: string): Promise<void> =>
     postFiles("/api/files/mkdir", { device, path }),
+  /** Follow a growing file: `onText` gets its end, then what is added, until the signal aborts. */
+  async tail(file: FileRef, onText: (text: string) => void, signal: AbortSignal): Promise<void> {
+    const res = await fetch(withToken(`/api/files/tail?${query(file.device, file.path)}`), {
+      signal,
+      headers: auth,
+    });
+    if (!res.ok || !res.body) throw await failure(res);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) return;
+      onText(decoder.decode(chunk.value, { stream: true }));
+    }
+  },
   /** Streams hits; resolves when every router has answered. */
   async search(
     body: {

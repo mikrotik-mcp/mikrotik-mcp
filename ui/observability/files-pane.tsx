@@ -59,6 +59,7 @@ import {
   isBookmarked,
   joinPath,
   kindOf,
+  tailStore,
   toggleBookmark,
   packageWarnings,
   parentOf,
@@ -963,6 +964,9 @@ export function FilesPane(
                 entry.dir || !canPreview(entry)
                   ? null
                   : ["Compare with…", () => pickForCompare({ device, path: full })],
+                entry.dir || kindOf(entry) !== "text"
+                  ? null
+                  : ["Follow (live tail)", () => tailStore.set({ device, path: full })],
                 entry.dir ? ["Bookmark this folder", () => toggleBookmark(device, full)] : null,
                 ["Copy the path", () => copyText(`${device}:${full}`)],
                 /\.rsc$/i.test(entry.name)
