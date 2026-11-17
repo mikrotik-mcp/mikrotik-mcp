@@ -2549,3 +2549,52 @@
     border-bottom: 1px solid var(--term-line);
   }
 }
+
+/* ── project Select / Checkbox inside the terminal page ──────────────── */
+.term-select {
+  width: auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  border-color: var(--term-line);
+  background: var(--term-bg);
+  color: var(--term-ink);
+  font-family: var(--term-mono);
+  font-size: 11.5px;
+}
+.term-status-actions .term-select {
+  height: 20px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--term-dim);
+  font-size: 11px;
+}
+.term-status-actions .term-select:hover {
+  border-color: var(--term-line);
+  color: var(--term-ink);
+}
+.term-schedule-form .term-select {
+  flex: 1;
+  height: 28px;
+}
+
+/* A caption with a Select beside it. Not a <label>: a label would forward its
+   click to the Select and close it again. */
+.term-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--term-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.term-drawer-filters .term-field {
+  color: var(--term-dim);
+  font-size: 11.5px;
+}
+.term-group-form label,
+.term-script footer label,
+.term-script-risk {
+  cursor: pointer;
+}

@@ -45,6 +45,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { Select } from "./geist";
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
 import type {
@@ -1320,16 +1321,17 @@ export function TerminalPane(
           >
             <History size={12} /> snapshot {guard ? "on" : "off"}
           </button>
-          <label title="Stop a command after this long">
+          <span className="term-field" title="Stop a command after this long">
             limit
-            <select value={limit} onChange={(event) => setLimit(Number(event.target.value))}>
-              {LIMIT_CHOICES.map((ms) => (
-                <option key={ms} value={ms}>
-                  {seconds(ms)}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Select
+              size="sm"
+              className="term-select"
+              aria-label="Command time limit"
+              value={String(limit)}
+              onValueChange={(value) => setLimit(Number(value))}
+              options={LIMIT_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
+            />
+          </span>
           {watch !== null && (
             <label
               className="term-alert-rule term-chart-key"
@@ -1362,19 +1364,17 @@ export function TerminalPane(
               />
             </label>
           )}
-          <label title="How often a watched command runs again">
+          <span className="term-field" title="How often a watched command runs again">
             watch
-            <select
-              value={watchEvery}
-              onChange={(event) => setWatchEvery(Number(event.target.value))}
-            >
-              {WATCH_CHOICES.map((ms) => (
-                <option key={ms} value={ms}>
-                  {seconds(ms)}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Select
+              size="sm"
+              className="term-select"
+              aria-label="Watch interval"
+              value={String(watchEvery)}
+              onValueChange={(value) => setWatchEvery(Number(value))}
+              options={WATCH_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
+            />
+          </span>
           <button type="button" onClick={() => probeNow.current()} title="Check the connection now">
             <RotateCw size={12} />
           </button>

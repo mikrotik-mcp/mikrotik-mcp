@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select } from "./geist";
 import { api } from "./api";
 import { loadHighlighter, staticSpans } from "./terminal-highlight";
 import type {
@@ -587,15 +589,16 @@ function TerminalWorkspace(): ReactNode {
                   />
                   {names.map((name) => (
                     <label key={name}>
-                      <input
-                        type="checkbox"
+                      <Checkbox
+                        aria-label={`Include ${name}`}
                         checked={draft.devices.includes(name)}
-                        onChange={(event) =>
+                        onCheckedChange={(value) =>
                           setDraft({
                             ...draft,
-                            devices: event.target.checked
-                              ? [...draft.devices, name]
-                              : draft.devices.filter((d) => d !== name),
+                            devices:
+                              value === true
+                                ? [...draft.devices, name]
+                                : draft.devices.filter((d) => d !== name),
                           })
                         }
                       />
@@ -726,25 +729,35 @@ function TerminalWorkspace(): ReactNode {
             </label>
             <div className="term-drawer-filters">
               {drawer === "history" && (
-                <label>
+                <span className="term-field">
                   From
-                  <select value={filterDevice} onChange={(e) => setFilterDevice(e.target.value)}>
-                    <option value="">all routers</option>
-                    {names.map((name) => (
-                      <option key={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
+                  <Select
+                    size="sm"
+                    className="term-select"
+                    aria-label="Show the history of"
+                    value={filterDevice}
+                    onValueChange={setFilterDevice}
+                    options={[
+                      { value: "", label: "all routers" },
+                      ...names.map((name) => ({ value: name, label: name })),
+                    ]}
+                  />
+                </span>
               )}
-              <label>
+              <span className="term-field">
                 Run on
-                <select value={target} onChange={(e) => setTarget(e.target.value)}>
-                  <option value="active">active pane</option>
-                  {names.map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </select>
-              </label>
+                <Select
+                  size="sm"
+                  className="term-select"
+                  aria-label="Run on"
+                  value={target}
+                  onValueChange={setTarget}
+                  options={[
+                    { value: "active", label: "active pane" },
+                    ...names.map((name) => ({ value: name, label: name })),
+                  ]}
+                />
+              </span>
               {drawer === "history" && history.length > 0 && (
                 <button
                   type="button"

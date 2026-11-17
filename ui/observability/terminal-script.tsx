@@ -5,6 +5,7 @@
 import { FileCode2, Play, ShieldCheck, TriangleAlert, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef, useState, useSyncExternalStore } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { hasSyntaxError } from "./terminal-highlight";
 import {
   destructiveWord,
@@ -133,10 +134,10 @@ export function ScriptDialog(): ReactNode {
         )}
         {risky.length > 0 && (
           <label className="term-script-risk">
-            <input
-              type="checkbox"
+            <Checkbox
+              aria-label="I reviewed the lines that change or remove configuration"
               checked={reviewed}
-              onChange={(event) => setReviewed(event.target.checked)}
+              onCheckedChange={(value) => setReviewed(value === true)}
             />
             <TriangleAlert size={14} />
             {risky.length} line{risky.length > 1 ? "s" : ""} change or remove configuration (
@@ -145,10 +146,10 @@ export function ScriptDialog(): ReactNode {
         )}
         <footer>
           <label>
-            <input
-              type="checkbox"
+            <Checkbox
+              aria-label="Stop at the first error"
               checked={stopOnError}
-              onChange={(event) => setStopOnError(event.target.checked)}
+              onCheckedChange={(value) => setStopOnError(value === true)}
             />
             Stop at the first error
           </label>

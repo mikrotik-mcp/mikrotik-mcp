@@ -7,6 +7,7 @@ import { CalendarClock, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, deleteJson, postJson } from "./api";
+import { Select } from "./geist";
 import { isReadCommand } from "./terminal-lib";
 
 interface Schedule {
@@ -98,26 +99,22 @@ export function ScheduleDrawer({
           onChange={(event) => setCommand(event.target.value)}
         />
         <div>
-          <select
-            value={device}
-            onChange={(event) => setDevice(event.target.value)}
+          <Select
+            size="sm"
+            className="term-select"
             aria-label="Router"
-          >
-            {devices.map((name) => (
-              <option key={name}>{name}</option>
-            ))}
-          </select>
-          <select
-            value={everyMs}
-            onChange={(event) => setEveryMs(Number(event.target.value))}
+            value={device}
+            onValueChange={setDevice}
+            options={devices.map((name) => ({ value: name, label: name }))}
+          />
+          <Select
+            size="sm"
+            className="term-select"
             aria-label="Repeat"
-          >
-            {REPEATS.map(([label, value]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+            value={String(everyMs)}
+            onValueChange={(value) => setEveryMs(Number(value))}
+            options={REPEATS.map(([label, value]) => ({ value: String(value), label }))}
+          />
         </div>
         <label>
           first run
