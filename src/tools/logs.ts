@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
-import { READ, DESTRUCTIVE, defineTool } from "../core/registry";
+import { READ, DESTRUCTIVE, defineTool, WRITE } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { isEmpty, quoted, quoteValue, durationArg } from "../core/routeros";
 import { tailLines, orMatch } from "../utils";
@@ -354,7 +354,7 @@ export const logTools: ToolModule = [
   defineTool({
     name: "export_logs",
     title: "Export Log Entries to a Device File",
-    annotations: READ,
+    annotations: WRITE,
     description:
       "Export RouterOS log entries to a file on the device filesystem (`/log print file=<name>`)" +
       " with optional topic and time filters. Use when you need a persistent log file on the" +

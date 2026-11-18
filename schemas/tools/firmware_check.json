@@ -3,11 +3,6 @@
   "title": "firmware_check",
   "type": "object",
   "properties": {
-    "channel": {
-      "description": "Set the update channel before checking (default: keep current).",
-      "type": "string",
-      "enum": ["stable", "long-term", "testing"]
-    },
     "fleet": {
       "default": false,
       "description": "Check all configured devices instead of just one.",

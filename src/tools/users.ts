@@ -472,7 +472,7 @@ export const userTools: ToolModule = [
   defineTool({
     name: "export_user_config",
     title: "Export User Configuration to File",
-    annotations: READ,
+    annotations: WRITE,
     description:
       "Export the router's user accounts and user-group configuration as a RouterOS script (`/user export file=<filename>`). " +
       "The file is saved on the router's flash storage as `<filename>.rsc`. If `filename` is omitted, defaults to `user_config`. " +

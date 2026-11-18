@@ -199,3 +199,33 @@ test(
     expect(Array.from(new Set(leaks))).toEqual([]);
   },
 );
+
+/**
+ * Read-only mode and the READ risk ceiling register tools by their annotation
+ * alone, so a READ tool that changes the router breaks both (GHSA-p524-m32j-hf32).
+ * A command changes the router when it has a changing verb, or writes a file.
+ */
+const CHANGES =
+  /(?:^|[\s/[{;])(?:add|set|remove|enable|disable|unset|import|reboot|shutdown|upgrade|downgrade|install|uninstall|reset-configuration|save|restore|load|format-drive|run|fetch|move)(?:\s|$)|(?:^|\s)file=/;
+
+test("no READ tool sends a command that changes the router", { timeout: 300_000 }, async () => {
+  const offenders: string[] = [];
+  let called = 0;
+  for (const tool of tools) {
+    if (tool.annotations.readOnlyHint !== true) continue;
+    const args = argsFor((tool.inputSchema ?? {}) as Record<string, Schema>, "a");
+    if (!args) continue;
+    sent.commands = [];
+    called += 1;
+    await Promise.race([
+      Promise.resolve()
+        .then(() => tool.handler(args as never, ctx as never))
+        .catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+    for (const cmd of sent.commands)
+      if (CHANGES.test(outsideStrings(cmd))) offenders.push(`${tool.name}: ${cmd.slice(0, 160)}`);
+  }
+  expect(called).toBeGreaterThan(200);
+  expect(Array.from(new Set(offenders))).toEqual([]);
+});

@@ -7460,10 +7460,9 @@
     {
       "name": "export_dns_config",
       "title": "Export DNS Configuration to File",
-      "risk": "read",
+      "risk": "write",
       "annotations": {
-        "readOnlyHint": true,
-        "idempotentHint": true,
+        "destructiveHint": false,
         "openWorldHint": false
       },
       "description": "Exports the full DNS configuration (resolver settings and static records) to a RouterOS script file on the router's flash storage (`/ip dns export file=<filename>`). The router appends `.rsc` to the filename automatically; defaults to `dns_config.rsc`. The exported file can be imported on another RouterOS device to replicate DNS configuration. To read current settings as structured output without writing a file use get_dns_settings. To list static records use list_dns_static. Returns the filename of the exported `.rsc` file on the router.",
@@ -27771,16 +27770,11 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Discover available RouterOS updates for a single device or the entire fleet. Queries the configured update channel, compares installed vs. latest version, flags outdated firmware, and assesses upgrade readiness (CPU, memory, version jump). Optionally set the update channel before checking. Use `firmware_status` for detailed package/routerboard info; use `firmware_stage` to download packages after confirming an update is available.",
+      "description": "Discover available RouterOS updates for a single device or the entire fleet. Queries the configured update channel, compares installed vs. latest version, flags outdated firmware, and assesses upgrade readiness (CPU, memory, version jump). It reads only: it does not change the update channel (set one with `firmware_stage`). Use `firmware_status` for detailed package/routerboard info; use `firmware_stage` to download packages after confirming an update is available.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "channel": {
-            "description": "Set the update channel before checking (default: keep current).",
-            "type": "string",
-            "enum": ["stable", "long-term", "testing"]
-          },
           "fleet": {
             "default": false,
             "description": "Check all configured devices instead of just one.",
@@ -31401,10 +31395,9 @@
     {
       "name": "export_user_config",
       "title": "Export User Configuration to File",
-      "risk": "read",
+      "risk": "write",
       "annotations": {
-        "readOnlyHint": true,
-        "idempotentHint": true,
+        "destructiveHint": false,
         "openWorldHint": false
       },
       "description": "Export the router's user accounts and user-group configuration as a RouterOS script (`/user export file=<filename>`). The file is saved on the router's flash storage as `<filename>.rsc`. If `filename` is omitted, defaults to `user_config`. The exported script can be used to restore user accounts on another device.",
@@ -31728,10 +31721,9 @@
     {
       "name": "export_logs",
       "title": "Export Log Entries to a Device File",
-      "risk": "read",
+      "risk": "write",
       "annotations": {
-        "readOnlyHint": true,
-        "idempotentHint": true,
+        "destructiveHint": false,
         "openWorldHint": false
       },
       "description": "Export RouterOS log entries to a file on the device filesystem (`/log print file=<name>`) with optional topic and time filters. Use when you need a persistent log file on the router for later retrieval (e.g. via FTP or SCP). For reading log entries directly to the MCP client use `get_logs`; for a quick count summary use `get_log_statistics`. `filename` defaults to `logs_export_<unix-timestamp>`; `time_filter` is a RouterOS duration string (e.g. `1h`); `topics` accepts a single RouterOS topic name. Returns the filename on success (file is written as `<filename>.txt` on the device).",
@@ -32075,10 +32067,9 @@
     {
       "name": "create_export",
       "title": "Create Full Configuration Export",
-      "risk": "read",
+      "risk": "write",
       "annotations": {
-        "readOnlyHint": true,
-        "idempotentHint": true,
+        "destructiveHint": false,
         "openWorldHint": false
       },
       "description": "Exports the complete device configuration to a `.rsc` plain-text script file (`/export file=<name>`), re-applicable via `import_configuration`. Unlike `create_backup`, the result is human-readable plain text — not a binary snapshot — and passwords are hidden by default (`hide_sensitive=true`). `file_format` changes only the file extension used when looking up the saved file — no `format=` flag is ever sent to RouterOS, so the content is always RouterOS script text regardless of the chosen extension; selecting `json` or `xml` will also cause the post-export file lookup to fail because RouterOS saves the file as `.rsc`. ALWAYS default to a FULL configuration export: leave `compact` and `verbose` off (the plain full export) unless the user explicitly asks for less or more. Set `compact` ONLY when the user wants a smaller diff that omits default values, or `verbose` ONLY when they want every parameter (including defaults). `export_type` only controls where the `file=` argument is positioned in the command and does not independently drive compactness or verbosity. For a single subsection only use `export_section`. Returns file details of the created export file.",
@@ -32122,10 +32113,9 @@
     {
       "name": "export_section",
       "title": "Export Configuration Section",
-      "risk": "read",
+      "risk": "write",
       "annotations": {
-        "readOnlyHint": true,
-        "idempotentHint": true,
+        "destructiveHint": false,
         "openWorldHint": false
       },
       "description": "Exports one RouterOS subsection to a `.rsc` script file (`/<section> export file=<name>`). Use when you need only a partial config snapshot rather than the full device export. `section` is the RouterOS command path without a leading slash — e.g. \"ip address\", \"interface vlan\", \"ip firewall filter\", \"ip firewall nat\", \"queue simple\". For the full device configuration use `create_export`; to apply the resulting file use `import_configuration`. Returns file details of the created `.rsc` file.",

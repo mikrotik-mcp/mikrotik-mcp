@@ -42,7 +42,7 @@ Lists `.backup` binary files on the device filesystem (`/file print where type=b
 
 ## create_export
 
-**Create Full Configuration Export** · Risk: **read**
+**Create Full Configuration Export** · Risk: **write**
 
 Exports the complete device configuration to a `.rsc` plain-text script file (`/export file=<name>`), re-applicable via `import_configuration`. Unlike `create_backup`, the result is human-readable plain text — not a binary snapshot — and passwords are hidden by default (`hide_sensitive=true`). `file_format` changes only the file extension used when looking up the saved file — no `format=` flag is ever sent to RouterOS, so the content is always RouterOS script text regardless of the chosen extension; selecting `json` or `xml` will also cause the post-export file lookup to fail because RouterOS saves the file as `.rsc`. ALWAYS default to a FULL configuration export: leave `compact` and `verbose` off (the plain full export) unless the user explicitly asks for less or more. Set `compact` ONLY when the user wants a smaller diff that omits default values, or `verbose` ONLY when they want every parameter (including defaults). `export_type` only controls where the `file=` argument is positioned in the command and does not independently drive compactness or verbosity. For a single subsection only use `export_section`. Returns file details of the created export file.
 
@@ -58,7 +58,7 @@ Exports the complete device configuration to a `.rsc` plain-text script file (`/
 
 ## export_section
 
-**Export Configuration Section** · Risk: **read**
+**Export Configuration Section** · Risk: **write**
 
 Exports one RouterOS subsection to a `.rsc` script file (`/<section> export file=<name>`). Use when you need only a partial config snapshot rather than the full device export. `section` is the RouterOS command path without a leading slash — e.g. "ip address", "interface vlan", "ip firewall filter", "ip firewall nat", "queue simple". For the full device configuration use `create_export`; to apply the resulting file use `import_configuration`. Returns file details of the created `.rsc` file.
 

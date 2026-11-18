@@ -111,7 +111,7 @@ No tool-specific parameters.
 
 ## export_logs
 
-**Export Log Entries to a Device File** · Risk: **read**
+**Export Log Entries to a Device File** · Risk: **write**
 
 Export RouterOS log entries to a file on the device filesystem (`/log print file=<name>`) with optional topic and time filters. Use when you need a persistent log file on the router for later retrieval (e.g. via FTP or SCP). For reading log entries directly to the MCP client use `get_logs`; for a quick count summary use `get_log_statistics`. `filename` defaults to `logs_export_<unix-timestamp>`; `time_filter` is a RouterOS duration string (e.g. `1h`); `topics` accepts a single RouterOS topic name. Returns the filename on success (file is written as `<filename>.txt` on the device).
 

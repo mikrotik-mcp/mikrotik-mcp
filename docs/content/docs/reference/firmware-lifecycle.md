@@ -14,13 +14,12 @@ description: "Zero-touch RouterOS upgrade pipeline: discover available releases,
 
 **Check Firmware Updates** · Risk: **read**
 
-Discover available RouterOS updates for a single device or the entire fleet. Queries the configured update channel, compares installed vs. latest version, flags outdated firmware, and assesses upgrade readiness (CPU, memory, version jump). Optionally set the update channel before checking. Use `firmware_status` for detailed package/routerboard info; use `firmware_stage` to download packages after confirming an update is available.
+Discover available RouterOS updates for a single device or the entire fleet. Queries the configured update channel, compares installed vs. latest version, flags outdated firmware, and assesses upgrade readiness (CPU, memory, version jump). It reads only: it does not change the update channel (set one with `firmware_stage`). Use `firmware_status` for detailed package/routerboard info; use `firmware_stage` to download packages after confirming an update is available.
 
-| Parameter | Required | Definition                                                                                                                  |
-| --------- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `channel` | No       | Set the update channel before checking (default: keep current). `{"type":"string","enum":["stable","long-term","testing"]}` |
-| `fleet`   | Yes      | Check all configured devices instead of just one. `{"default":false,"type":"boolean"}`                                      |
-| `devices` | No       | Specific device names to check (fleet mode). Omit to check all. `{"type":"array","items":{"type":"string"}}`                |
+| Parameter | Required | Definition                                                                                                   |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `fleet`   | Yes      | Check all configured devices instead of just one. `{"default":false,"type":"boolean"}`                       |
+| `devices` | No       | Specific device names to check (fleet mode). Omit to check all. `{"type":"array","items":{"type":"string"}}` |
 
 ## firmware_stage
 

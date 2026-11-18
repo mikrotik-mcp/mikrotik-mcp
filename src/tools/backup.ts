@@ -148,7 +148,7 @@ export const backupTools: ToolModule = [
   defineTool({
     name: "create_export",
     title: "Create Full Configuration Export",
-    annotations: READ,
+    annotations: WRITE,
     description:
       "Exports the complete device configuration to a `.rsc` plain-text script file (`/export" +
       " file=<name>`), re-applicable via `import_configuration`. Unlike `create_backup`, the result" +
@@ -227,7 +227,7 @@ export const backupTools: ToolModule = [
   defineTool({
     name: "export_section",
     title: "Export Configuration Section",
-    annotations: READ,
+    annotations: WRITE,
     description:
       "Exports one RouterOS subsection to a `.rsc` script file (`/<section> export file=<name>`)." +
       " Use when you need only a partial config snapshot rather than the full device export." +

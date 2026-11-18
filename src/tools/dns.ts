@@ -614,7 +614,7 @@ export const dnsTools: ToolModule = [
   defineTool({
     name: "export_dns_config",
     title: "Export DNS Configuration to File",
-    annotations: READ,
+    annotations: WRITE,
     description:
       "Exports the full DNS configuration (resolver settings and static records) to a RouterOS " +
       "script file on the router's flash storage (`/ip dns export file=<filename>`). " +

@@ -154,13 +154,10 @@ export const firmwareLifecycleTools: ToolModule = [
       "Discover available RouterOS updates for a single device or the entire fleet. " +
       "Queries the configured update channel, compares installed vs. latest version, " +
       "flags outdated firmware, and assesses upgrade readiness (CPU, memory, version jump). " +
-      "Optionally set the update channel before checking. " +
+      "It reads only: it does not change the update channel (set one with `firmware_stage`). " +
       "Use `firmware_status` for detailed package/routerboard info; " +
       "use `firmware_stage` to download packages after confirming an update is available.",
     inputSchema: {
-      channel: channelEnum
-        .optional()
-        .describe("Set the update channel before checking (default: keep current)."),
       fleet: z
         .boolean()
         .default(false)
@@ -175,14 +172,6 @@ export const firmwareLifecycleTools: ToolModule = [
       if (!a.fleet) {
         const device = resolveDeviceName(ctx.device);
         ctx.info(`Checking firmware updates on '${device}'`);
-
-        // Optionally set channel
-        if (a.channel) {
-          await executeMikrotikCommand(
-            `/system package update set channel=${quoteValue(a.channel)}`,
-            ctx,
-          );
-        }
 
         // Trigger update check
         await executeMikrotikCommand("/system package update check-for-updates once", ctx);
@@ -223,12 +212,6 @@ export const firmwareLifecycleTools: ToolModule = [
         const resolved = resolveDeviceName(deviceName);
         const dctx = createContext(undefined, deviceName);
         try {
-          if (a.channel) {
-            await executeMikrotikCommand(
-              `/system package update set channel=${quoteValue(a.channel)}`,
-              dctx,
-            );
-          }
           await executeMikrotikCommand("/system package update check-for-updates once", dctx);
           const state = await fetchFirmwareState(dctx);
           results.push({ name: resolved, state });
@@ -266,7 +249,6 @@ export const firmwareLifecycleTools: ToolModule = [
       const device = resolveDeviceName(ctx.device);
       ctx.info(`Staging firmware on '${device}'`);
 
-      // Optionally set channel
       if (a.channel) {
         const chResult = await executeMikrotikCommand(
           `/system package update set channel=${quoteValue(a.channel)}`,
