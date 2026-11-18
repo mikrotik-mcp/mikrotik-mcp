@@ -11,6 +11,7 @@ import {
   isEmpty,
   commandUnsupported,
   Cmd,
+  quoteValue,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -101,7 +102,7 @@ export const routingBfdTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating BFD configuration ${a.config_id}`);
-      const base = `/routing bfd configuration set ${a.config_id}`;
+      const base = `/routing bfd configuration set ${quoteValue(a.config_id)}`;
       const cmd = new Cmd(base)
         .opt("interfaces", a.interfaces)
         .opt("vrf", a.vrf)
@@ -119,7 +120,7 @@ export const routingBfdTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update BFD configuration: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing bfd configuration print detail where .id=${a.config_id}`,
+        `/routing bfd configuration print detail where .id=${quoteValue(a.config_id)}`,
         ctx,
       );
       return `BFD configuration updated successfully:\n\n${details}`;
@@ -140,7 +141,7 @@ export const routingBfdTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing BFD configuration ${a.config_id}`);
       const result = await executeMikrotikCommand(
-        `/routing bfd configuration remove ${a.config_id}`,
+        `/routing bfd configuration remove ${quoteValue(a.config_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -165,7 +166,7 @@ export const routingBfdTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Setting BFD configuration ${a.config_id} enabled=${a.enabled}`);
       const result = await executeMikrotikCommand(
-        `/routing bfd configuration set ${a.config_id} disabled=${yesno(!a.enabled)}`,
+        `/routing bfd configuration set ${quoteValue(a.config_id)} disabled=${yesno(!a.enabled)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

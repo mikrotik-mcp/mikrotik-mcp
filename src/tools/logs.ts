@@ -9,9 +9,14 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { isEmpty, quoted } from "../core/routeros";
+import { isEmpty, quoted, quoteValue, durationArg } from "../core/routeros";
 import { tailLines, orMatch } from "../utils";
 import type { ToolContext } from "../core/context";
+
+/** A RouterOS time value. It is written bare into a filter expression, so it is checked here. */
+const TIME_FILTER = z
+  .string()
+  .regex(/^\d+(?:[wdhms](?:\d+[wdhms])*)?$/, "Use a RouterOS time such as 30m, 1h or 1d12h.");
 
 interface GetLogsOptions {
   topics?: string;
@@ -45,8 +50,8 @@ async function runGetLogs(o: GetLogsOptions, ctx: ToolContext): Promise<string> 
 
   if (o.action) filters.push(`action=${quoted(o.action)}`);
   if (o.message_filter) filters.push(`message~${quoted(o.message_filter)}`);
-  if (o.prefix_filter) filters.push(`message~"^${o.prefix_filter}"`);
-  if (o.time_filter) filters.push(`time > ([:timestamp] - ${o.time_filter})`);
+  if (o.prefix_filter) filters.push(`message~${quoted(`^${o.prefix_filter}`)}`);
+  if (o.time_filter) filters.push(`time > ([:timestamp] - ${durationArg(o.time_filter)})`);
 
   if (filters.length) cmd += ` where ${filters.join(" and ")}`;
   if (o.follow) cmd += " follow";
@@ -75,7 +80,7 @@ export const logTools: ToolModule = [
     inputSchema: {
       topics: z.string().optional(),
       action: z.string().optional(),
-      time_filter: z.string().optional(),
+      time_filter: TIME_FILTER.optional(),
       message_filter: z.string().optional(),
       prefix_filter: z.string().optional(),
       limit: z.number().int().optional(),
@@ -114,7 +119,7 @@ export const logTools: ToolModule = [
       " `time_filter` is a RouterOS duration string (e.g. `1h`, `30m`).",
     inputSchema: {
       severity: z.enum(["debug", "info", "warning", "error", "critical"]),
-      time_filter: z.string().optional(),
+      time_filter: TIME_FILTER.optional(),
       limit: z.number().int().optional(),
     },
     async handler(a, ctx) {
@@ -149,7 +154,7 @@ export const logTools: ToolModule = [
       " `time_filter` is a RouterOS duration string (e.g. `1h`).",
     inputSchema: {
       topic: z.string(),
-      time_filter: z.string().optional(),
+      time_filter: TIME_FILTER.optional(),
       limit: z.number().int().optional(),
     },
     async handler(a, ctx) {
@@ -172,7 +177,7 @@ export const logTools: ToolModule = [
       " matches; `time_filter` is a RouterOS duration string (e.g. `1h`).",
     inputSchema: {
       search_term: z.string(),
-      time_filter: z.string().optional(),
+      time_filter: TIME_FILTER.optional(),
       case_sensitive: z.boolean().default(false),
       limit: z.number().int().optional(),
     },
@@ -203,7 +208,7 @@ export const logTools: ToolModule = [
       " string (e.g. `1h`).",
     inputSchema: {
       event_type: z.string().optional(),
-      time_filter: z.string().optional(),
+      time_filter: TIME_FILTER.optional(),
       limit: z.number().int().optional(),
     },
     async handler(a, ctx) {
@@ -250,7 +255,7 @@ export const logTools: ToolModule = [
       " `limit` caps to the N most recent lines; `time_filter` is a RouterOS duration string" +
       " (e.g. `1h`).",
     inputSchema: {
-      time_filter: z.string().optional(),
+      time_filter: TIME_FILTER.optional(),
       limit: z.number().int().optional(),
     },
     async handler(a, ctx) {
@@ -265,7 +270,7 @@ export const logTools: ToolModule = [
 
       let cmd = `/log print where ${orMatch("topics", securityTopics)} and message~${quoted(securityKeywords)}`;
 
-      if (a.time_filter) cmd += ` and time > ([:timestamp] - ${a.time_filter})`;
+      if (a.time_filter) cmd += ` and time > ([:timestamp] - ${durationArg(a.time_filter)})`;
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (isEmpty(result)) return "No security-related log entries found.";
@@ -361,7 +366,7 @@ export const logTools: ToolModule = [
     inputSchema: {
       filename: z.string().optional(),
       topics: z.string().optional(),
-      time_filter: z.string().optional(),
+      time_filter: TIME_FILTER.optional(),
       format: z.enum(["plain", "csv"]).default("plain"),
     },
     async handler(a, ctx) {
@@ -369,11 +374,11 @@ export const logTools: ToolModule = [
 
       ctx.info(`Exporting logs to file: ${filename}`);
 
-      let cmd = `/log print file=${filename}`;
+      let cmd = `/log print file=${quoteValue(filename)}`;
 
       const filters: string[] = [];
       if (a.topics) filters.push(`topics~${quoted(a.topics)}`);
-      if (a.time_filter) filters.push(`time > ([:timestamp] - ${a.time_filter})`);
+      if (a.time_filter) filters.push(`time > ([:timestamp] - ${durationArg(a.time_filter)})`);
 
       if (filters.length) cmd += ` where ${filters.join(" and ")}`;
 
@@ -415,7 +420,7 @@ export const logTools: ToolModule = [
       const filters: string[] = [];
       if (a.topics) filters.push(`topics~${quoted(a.topics)}`);
       if (a.action) filters.push(`action=${quoted(a.action)}`);
-      filters.push(`time > ([:timestamp] - ${duration}s)`);
+      filters.push(`time > ([:timestamp] - ${durationArg(duration)}s)`);
 
       const cmd = `/log print where ${filters.join(" and ")}`;
       const result = await executeMikrotikCommand(cmd, ctx);

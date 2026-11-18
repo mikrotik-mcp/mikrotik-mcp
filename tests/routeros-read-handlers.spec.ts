@@ -147,7 +147,9 @@ function filteredArgs(shape: z.ZodRawShape): Record<string, unknown> | null {
           : prop.type === "string"
             ? /(?:address|ip$|host$)/.test(key)
               ? "192.0.2.1"
-              : "fixture"
+              : /time|duration|interval/.test(key)
+                ? "1h"
+                : "fixture"
             : undefined);
     if (candidate === undefined) continue;
     const parsed = z.object(shape).safeParse({ ...minimal, [key]: candidate });

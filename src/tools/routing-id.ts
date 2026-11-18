@@ -4,7 +4,15 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, looksLikeError, isEmpty, commandUnsupported, Cmd, quoted } from "../core/routeros";
+import {
+  yesno,
+  looksLikeError,
+  isEmpty,
+  commandUnsupported,
+  Cmd,
+  quoted,
+  quoteValue,
+} from "../core/routeros";
 
 const UNSUPPORTED =
   "Routing Router-ID is not available on this device (requires RouterOS v7 with the routing package).";
@@ -132,12 +140,12 @@ export const routingIdTools: ToolModule = [
       ctx.info(`Updating routing ID: ${a.name}`);
       const base = `/routing id set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base);
-      if (a.id !== undefined) cmd.raw(a.id === "" ? "!id" : `id=${a.id}`);
+      if (a.id !== undefined) cmd.raw(a.id === "" ? "!id" : `id=${quoteValue(a.id)}`);
       if (a.select_dynamic_id !== undefined) {
         cmd.raw(
           a.select_dynamic_id === ""
             ? "!select-dynamic-id"
-            : `select-dynamic-id=${a.select_dynamic_id}`,
+            : `select-dynamic-id=${quoteValue(a.select_dynamic_id)}`,
         );
       }
       if (a.comment !== undefined) cmd.set("comment", a.comment);

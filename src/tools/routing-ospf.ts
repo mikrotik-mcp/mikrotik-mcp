@@ -11,6 +11,7 @@ import {
   commandUnsupported,
   Cmd,
   quoted,
+  quoteValue,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -333,7 +334,7 @@ export const routingOspfTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing OSPF area range ${a.range_id}`);
       const result = await executeMikrotikCommand(
-        `/routing ospf area range remove ${a.range_id}`,
+        `/routing ospf area range remove ${quoteValue(a.range_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -478,7 +479,7 @@ export const routingOspfTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing OSPF interface template ${a.template_id}`);
       const result = await executeMikrotikCommand(
-        `/routing ospf interface-template remove ${a.template_id}`,
+        `/routing ospf interface-template remove ${quoteValue(a.template_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

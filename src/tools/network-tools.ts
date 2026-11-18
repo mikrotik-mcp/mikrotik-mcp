@@ -17,6 +17,7 @@ import {
   flattenLiveOutput,
   Cmd,
   quoted,
+  quoteValue,
 } from "../core/routeros";
 
 export const networkToolTools: ToolModule = [
@@ -45,7 +46,7 @@ export const networkToolTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Pinging ${a.address} (count=${a.count})`);
-      const cmd = new Cmd(`/ping ${a.address}`)
+      const cmd = new Cmd(`/ping ${quoteValue(a.address)}`)
         .set("count", a.count)
         .opt("interface", a.interface)
         .opt("src-address", a.src_address)
@@ -81,7 +82,7 @@ export const networkToolTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Tracerouting ${a.address} (count=${a.count})`);
-      const cmd = new Cmd(`/tool traceroute ${a.address}`)
+      const cmd = new Cmd(`/tool traceroute ${quoteValue(a.address)}`)
         .set("count", a.count)
         .flag("use-dns", a.use_dns)
         .build();
@@ -120,7 +121,7 @@ export const networkToolTools: ToolModule = [
       ctx.info(
         `Bandwidth test to ${a.address} (duration=${a.duration}s, direction=${a.direction})`,
       );
-      const cmd = new Cmd(`/tool bandwidth-test ${a.address}`)
+      const cmd = new Cmd(`/tool bandwidth-test ${quoteValue(a.address)}`)
         .set("duration", `${a.duration}s`)
         .set("direction", a.direction)
         .set("protocol", a.protocol)

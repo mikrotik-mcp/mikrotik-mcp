@@ -130,8 +130,8 @@ async function updateFilterRule(
     updates.push(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
   };
 
-  if (a.chain) updates.push(`chain=${a.chain}`);
-  if (a.action) updates.push(`action=${a.action}`);
+  if (a.chain) updates.push(`chain=${quoteValue(a.chain)}`);
+  if (a.action) updates.push(`action=${quoteValue(a.action)}`);
   put("src-address", a.src_address);
   put("dst-address", a.dst_address);
   put("src-port", a.src_port);
@@ -453,8 +453,8 @@ export const firewallFilterTools: ToolModule = [
       // (absent on any rule that doesn't match on them) were filtering
       // everything out instead of narrowing. Those run client-side below.
       const filters: string[] = [];
-      if (a.chain_filter) filters.push(`chain=${a.chain_filter}`);
-      if (a.action_filter) filters.push(`action=${a.action_filter}`);
+      if (a.chain_filter) filters.push(`chain=${quoteValue(a.chain_filter)}`);
+      if (a.action_filter) filters.push(`action=${quoteValue(a.action_filter)}`);
       if (a.src_address_filter) filters.push(`src-address~${quoted(a.src_address_filter)}`);
       if (a.dst_address_filter) filters.push(`dst-address~${quoted(a.dst_address_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");

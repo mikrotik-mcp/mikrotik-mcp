@@ -4,7 +4,14 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, commandUnsupported, Cmd, quoted } from "../core/routeros";
+import {
+  looksLikeError,
+  isEmpty,
+  commandUnsupported,
+  Cmd,
+  quoted,
+  quoteValue,
+} from "../core/routeros";
 
 const UNSUPPORTED =
   "RIP is not available on this device (requires RouterOS v7 with the routing package).";
@@ -231,7 +238,7 @@ export const routingRipTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing RIP interface template ${a.template_id}`);
       const result = await executeMikrotikCommand(
-        `/routing rip interface-template remove ${a.template_id}`,
+        `/routing rip interface-template remove ${quoteValue(a.template_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -307,7 +314,7 @@ export const routingRipTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing RIP static neighbor ${a.neighbor_id}`);
       const result = await executeMikrotikCommand(
-        `/routing rip static-neighbor remove ${a.neighbor_id}`,
+        `/routing rip static-neighbor remove ${quoteValue(a.neighbor_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

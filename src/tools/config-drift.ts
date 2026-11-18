@@ -19,7 +19,7 @@ import type { ToolContext } from "../core/context";
 import { diffLines } from "../core/diff";
 import { DANGEROUS, READ, WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, isEmpty, looksLikeError } from "../core/routeros";
+import { Cmd, isEmpty, looksLikeError, menuPath, durationArg } from "../core/routeros";
 import { resolveDeviceName, getDevice } from "../core/runtime";
 import { DEFAULT_SNAPSHOT_DB } from "../config";
 import { noteDriftResult } from "../drift/alert";
@@ -41,7 +41,7 @@ function store(): Promise<SnapshotStore> {
 // ── Inline helpers (same trivial Cmd.raw() pattern as config-snapshot.ts) ────
 
 function buildExport(opts: { section?: string; terse: boolean; showSensitive: boolean }): string {
-  const base = opts.section ? `/${opts.section} export` : "/export";
+  const base = opts.section ? `/${menuPath(opts.section)} export` : "/export";
   return new Cmd(base)
     .raw(opts.terse ? "terse" : undefined)
     .raw(opts.showSensitive ? "show-sensitive" : undefined)
@@ -197,7 +197,7 @@ export const configDriftTools: ToolModule = [
       // Change attribution from system logs
       if (a.include_logs && report.sections.length > 0) {
         try {
-          const logCmd = `/log print where topics~"system" and time > ([:timestamp] - ${a.log_duration})`;
+          const logCmd = `/log print where topics~"system" and time > ([:timestamp] - ${durationArg(a.log_duration)})`;
           const logText = await executeMikrotikCommand(logCmd, ctx);
           if (!isEmpty(logText) && !looksLikeError(logText)) {
             report.attributions = attributeChanges(report.sections, logText);

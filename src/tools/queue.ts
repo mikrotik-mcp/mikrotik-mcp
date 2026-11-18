@@ -11,7 +11,7 @@ import type { ToolContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
+import { looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 
 /**
  * Shared "create, then verify" flow: when RouterOS echoes a new `.id` (`*N` or a
@@ -211,7 +211,7 @@ export const queueTools: ToolModule = [
       ctx.info("Listing queue types");
       const filters: string[] = [];
       if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
-      if (a.kind_filter) filters.push(`kind=${a.kind_filter}`);
+      if (a.kind_filter) filters.push(`kind=${quoteValue(a.kind_filter)}`);
 
       let cmd = "/queue type print";
       if (filters.length) cmd += ` where ${filters.join(" ")}`;

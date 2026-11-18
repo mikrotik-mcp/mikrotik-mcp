@@ -14,7 +14,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { DANGEROUS, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError } from "../core/routeros";
+import { looksLikeError, quoteValue, quoted } from "../core/routeros";
 import { getDevice, resolveDeviceName } from "../core/runtime";
 import { getSafeModeManager } from "../ssh/safe-mode";
 
@@ -62,16 +62,24 @@ export const drDrillTools: ToolModule = [
       confirm: z.boolean().default(false).describe("Must be true to actually run the drill"),
     },
     async handler(a, ctx) {
-      const findExpr = a.target.startsWith("*") ? `.id=${a.target}` : a.target;
+      // A route target is an `.id`, or `key=value` terms of a find expression. Each
+      // term is checked: free text here would run on the router as commands.
+      if (
+        a.target_type === "route" &&
+        !a.target.startsWith("*") &&
+        !/^[\w.-]+=[\w.:/,*@!-]+(?: [\w.-]+=[\w.:/,*@!-]+)*$/.test(a.target)
+      )
+        return "Invalid route target. Use an .id (*1A) or key=value terms such as 'dst-address=0.0.0.0/0 gateway=10.0.0.1'.";
+      const findExpr = a.target.startsWith("*") ? `.id=${quoteValue(a.target)}` : a.target;
       const disableCmd =
         a.target_type === "interface"
-          ? `/interface disable "${a.target}"`
+          ? `/interface disable ${quoted(a.target)}`
           : `/ip route disable [find ${findExpr}]`;
       const enableCmd =
         a.target_type === "interface"
-          ? `/interface enable "${a.target}"`
+          ? `/interface enable ${quoted(a.target)}`
           : `/ip route enable [find ${findExpr}]`;
-      const pingCmd = `/ping address=${a.verify_host} count=${a.ping_count}`;
+      const pingCmd = `/ping address=${quoteValue(a.verify_host)} count=${a.ping_count}`;
 
       if (!a.confirm) {
         return (

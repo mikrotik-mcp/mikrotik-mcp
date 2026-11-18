@@ -13,7 +13,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, looksLikeError, quoted } from "../core/routeros";
+import { Cmd, looksLikeError, quoted, quoteValue } from "../core/routeros";
 
 /** Generate a WireGuard (Curve25519/X25519) keypair as base64 strings. */
 export function generateWireGuardKeypair(): { privateKey: string; publicKey: string } {
@@ -109,12 +109,12 @@ export const vpnOnboardTools: ToolModule = [
     inputSchema: { user: z.string().describe("The user label used at onboarding") },
     async handler(a, ctx) {
       const count = await executeMikrotikCommand(
-        `/interface wireguard peers print count-only where comment="vpn-user: ${a.user}"`,
+        `/interface wireguard peers print count-only where comment=${quoted(`vpn-user: ${quoteValue(a.user)}`)}`,
         ctx,
       );
       if (count.trim() === "0") return `No WireGuard peer found for user '${a.user}'.`;
       const r = await executeMikrotikCommand(
-        `/interface wireguard peers remove [find comment="vpn-user: ${a.user}"]`,
+        `/interface wireguard peers remove [find comment=${quoted(`vpn-user: ${quoteValue(a.user)}`)}]`,
         ctx,
       );
       if (looksLikeError(r)) return `Failed to revoke '${a.user}': ${r}`;

@@ -3,7 +3,14 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, commandUnsupported, Cmd, quoted } from "../core/routeros";
+import {
+  looksLikeError,
+  isEmpty,
+  commandUnsupported,
+  Cmd,
+  quoted,
+  quoteValue,
+} from "../core/routeros";
 
 const UNSUPPORTED =
   "PIM-SM is not available on this device (requires RouterOS v7 with the routing/multicast package).";
@@ -247,7 +254,7 @@ export const routingPimsmTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing PIM-SM interface template ${a.template_id}`);
       const result = await executeMikrotikCommand(
-        `/routing pimsm interface-template remove ${a.template_id}`,
+        `/routing pimsm interface-template remove ${quoteValue(a.template_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -325,7 +332,10 @@ export const routingPimsmTools: ToolModule = [
     inputSchema: { rp_id: z.string().describe('RP id, e.g. "*1"') },
     async handler(a, ctx) {
       ctx.info(`Removing PIM-SM RP ${a.rp_id}`);
-      const result = await executeMikrotikCommand(`/routing pimsm rp remove ${a.rp_id}`, ctx);
+      const result = await executeMikrotikCommand(
+        `/routing pimsm rp remove ${quoteValue(a.rp_id)}`,
+        ctx,
+      );
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to remove PIM-SM RP: ${result}`;
       return `PIM-SM RP '${a.rp_id}' removed successfully.`;

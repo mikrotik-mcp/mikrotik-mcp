@@ -10,7 +10,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError } from "../core/routeros";
+import { looksLikeError, quoteValue } from "../core/routeros";
 import { parseKeyValues } from "../core/routeros-parse";
 
 export interface Saturation {
@@ -62,7 +62,7 @@ export const bandwidthForecastTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Sampling ${a.interface} throughput`);
       const out = await executeMikrotikCommand(
-        `/interface monitor-traffic ${a.interface} once`,
+        `/interface monitor-traffic ${quoteValue(a.interface)} once`,
         ctx,
       );
       if (looksLikeError(out)) return `Could not sample ${a.interface}: ${out}`;

@@ -489,7 +489,7 @@ export async function setDeviceLimits(
 /** Count firewall drop rules currently blocking a MAC. */
 async function blockRuleCount(mac: string, ctx: ToolContext): Promise<number> {
   const out = await executeMikrotikCommand(
-    `/ip firewall filter print count-only where comment="${BLOCK_TAG}: ${mac}"`,
+    `/ip firewall filter print count-only where comment=${quoted(`${BLOCK_TAG}: ${mac}`)}`,
     ctx,
   );
   return parseLeadingNumber(out.trim()) ?? 0;
@@ -532,7 +532,7 @@ export async function allowDevice(ctx: ToolContext, macRaw: string): Promise<OpR
   const hadRules = (await blockRuleCount(mac, ctx)) > 0;
   if (hadRules) {
     const out = await executeMikrotikCommand(
-      `/ip firewall filter remove [find comment="${BLOCK_TAG}: ${mac}"]`,
+      `/ip firewall filter remove [find comment=${quoted(`${BLOCK_TAG}: ${mac}`)}]`,
       ctx,
     );
     if (looksLikeError(out)) return { ok: false, message: `Failed to remove block rules: ${out}` };

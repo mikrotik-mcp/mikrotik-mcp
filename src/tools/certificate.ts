@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 
 export const certificateTools: ToolModule = [
   defineTool({
@@ -172,7 +172,7 @@ export const certificateTools: ToolModule = [
         }
       }
 
-      const cmd = new Cmd("/certificate sign").raw(a.name).opt("ca", a.ca).build();
+      const cmd = new Cmd("/certificate sign").raw(quoteValue(a.name)).opt("ca", a.ca).build();
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to sign certificate: ${result}`;
       return `Signing certificate '${a.name}'${a.ca ? ` with CA '${a.ca}'` : " (self-signed)"}…\n\n${result}`;

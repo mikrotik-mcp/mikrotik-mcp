@@ -94,8 +94,8 @@ async function updateNatRule(
     updates.push(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
   };
 
-  if (a.chain) updates.push(`chain=${a.chain}`);
-  if (a.action) updates.push(`action=${a.action}`);
+  if (a.chain) updates.push(`chain=${quoteValue(a.chain)}`);
+  if (a.action) updates.push(`action=${quoteValue(a.action)}`);
   put("src-address", a.src_address);
   put("dst-address", a.dst_address);
   put("src-port", a.src_port);
@@ -397,11 +397,11 @@ export const firewallNatTools: ToolModule = [
       );
 
       const filters: string[] = [];
-      if (a.chain_filter) filters.push(`chain=${a.chain_filter}`);
-      if (a.action_filter) filters.push(`action=${a.action_filter}`);
+      if (a.chain_filter) filters.push(`chain=${quoteValue(a.chain_filter)}`);
+      if (a.action_filter) filters.push(`action=${quoteValue(a.action_filter)}`);
       if (a.src_address_filter) filters.push(`src-address~${quoted(a.src_address_filter)}`);
       if (a.dst_address_filter) filters.push(`dst-address~${quoted(a.dst_address_filter)}`);
-      if (a.protocol_filter) filters.push(`protocol=${a.protocol_filter}`);
+      if (a.protocol_filter) filters.push(`protocol=${quoteValue(a.protocol_filter)}`);
       if (a.interface_filter) {
         filters.push(
           `(in-interface~${quoted(a.interface_filter)} or out-interface~${quoted(a.interface_filter)})`,
@@ -567,7 +567,7 @@ export const firewallNatTools: ToolModule = [
       if (!id) return `NAT rule '${a.rule_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip firewall nat move ${id} destination=${a.destination}`,
+        `/ip firewall nat move ${id} destination=${quoteValue(a.destination)}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to move NAT rule: ${result}`;

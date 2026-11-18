@@ -9,7 +9,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, quoted } from "../core/routeros";
+import { looksLikeError, quoted, quoteValue } from "../core/routeros";
 
 /** The least-congested (freq, usage%) from `/interface wireless frequency-monitor`. */
 export function pickBestFrequency(monitor: string): { frequency: number; usePct: number } | null {
@@ -47,7 +47,7 @@ export const wifiOptimizerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Wi-Fi survey on ${a.interface} for ${a.duration}s`);
       const monitor = await executeMikrotikCommand(
-        `/interface wireless frequency-monitor ${a.interface} duration=${a.duration}`,
+        `/interface wireless frequency-monitor ${quoteValue(a.interface)} duration=${quoteValue(a.duration)}`,
         ctx,
       );
       if (looksLikeError(monitor)) return `Survey failed on ${a.interface}: ${monitor}`;

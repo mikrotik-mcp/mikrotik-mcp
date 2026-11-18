@@ -15,7 +15,7 @@ import {
 import { deviceDateStamp } from "../core/datestamp";
 import { WRITE, READ, defineTool, DANGEROUS } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, isEmpty, looksLikeError, quoted } from "../core/routeros";
+import { Cmd, isEmpty, looksLikeError, quoted, quoteValue, menuPath } from "../core/routeros";
 import { getDevice, resolveDeviceName } from "../core/runtime";
 import { deviceSlug } from "../core/slug";
 import { isMacTelnetDevice } from "../core/transport";
@@ -103,7 +103,7 @@ export const backupTools: ToolModule = [
       }
 
       const fileDetails = await executeMikrotikCommand(
-        `/file print detail where name=${name}.backup`,
+        `/file print detail where name=${quoteValue(`${name}.backup`)}`,
         ctx,
       );
       return fileDetails
@@ -213,7 +213,7 @@ export const backupTools: ToolModule = [
 
       if (result.trim() === "" || !result.toLowerCase().includes("failure:")) {
         const fileDetails = await executeMikrotikCommand(
-          `/file print detail where name=${fullName}`,
+          `/file print detail where name=${quoteValue(fullName)}`,
           ctx,
         );
         return fileDetails
@@ -257,7 +257,7 @@ export const backupTools: ToolModule = [
         ctx.info(
           `Low disk (${disk.usedPct?.toFixed(0)}%) — redirecting section export to local vault`,
         );
-        const cmd = new Cmd(`/${a.section} export`);
+        const cmd = new Cmd(`/${menuPath(a.section)} export`);
         cmd.raw(!a.hide_sensitive ? "show-sensitive" : null);
         cmd.raw(a.compact ? "compact" : null);
         // No file= parameter — output goes to stdout.
@@ -274,7 +274,7 @@ export const backupTools: ToolModule = [
         );
       }
 
-      const cmd = new Cmd(`/${a.section} export`).set("file", name);
+      const cmd = new Cmd(`/${menuPath(a.section)} export`).set("file", name);
       cmd.raw(!a.hide_sensitive ? "show-sensitive" : null);
       cmd.raw(a.compact ? "compact" : null);
 
@@ -282,7 +282,7 @@ export const backupTools: ToolModule = [
 
       if (result.trim() === "" || !result.toLowerCase().includes("failure:")) {
         const fileDetails = await executeMikrotikCommand(
-          `/file print detail where name=${name}.rsc`,
+          `/file print detail where name=${quoteValue(`${name}.rsc`)}`,
           ctx,
         );
         return fileDetails
@@ -315,7 +315,7 @@ export const backupTools: ToolModule = [
 
       // Verify file exists on device before attempting SFTP download.
       const count = await executeMikrotikCommand(
-        `/file print count-only where name=${a.filename}`,
+        `/file print count-only where name=${quoteValue(a.filename)}`,
         ctx,
       );
       if (count.trim() === "0") return `File '${a.filename}' not found on the device.`;
@@ -405,7 +405,7 @@ export const backupTools: ToolModule = [
       ctx.info(`Restoring backup: filename=${a.filename}`);
 
       const count = await executeMikrotikCommand(
-        `/file print count-only where name=${a.filename}`,
+        `/file print count-only where name=${quoteValue(a.filename)}`,
         ctx,
       );
       if (count.trim() === "0") return `Backup file '${a.filename}' not found.`;
@@ -444,7 +444,7 @@ export const backupTools: ToolModule = [
       ctx.info(`Importing configuration: filename=${a.filename}`);
 
       const count = await executeMikrotikCommand(
-        `/file print count-only where name=${a.filename}`,
+        `/file print count-only where name=${quoteValue(a.filename)}`,
         ctx,
       );
       if (count.trim() === "0") return `Configuration file '${a.filename}' not found.`;
@@ -480,12 +480,12 @@ export const backupTools: ToolModule = [
       ctx.info(`Removing file: filename=${a.filename}`);
 
       const count = await executeMikrotikCommand(
-        `/file print count-only where name=${a.filename}`,
+        `/file print count-only where name=${quoteValue(a.filename)}`,
         ctx,
       );
       if (count.trim() === "0") return `File '${a.filename}' not found.`;
 
-      const result = await executeMikrotikCommand(`/file remove ${a.filename}`, ctx);
+      const result = await executeMikrotikCommand(`/file remove ${quoteValue(a.filename)}`, ctx);
 
       if (result.trim() === "") return `File '${a.filename}' removed successfully.`;
       return `Failed to remove file: ${result}`;
@@ -508,7 +508,7 @@ export const backupTools: ToolModule = [
       ctx.info(`Getting backup info: filename=${a.filename}`);
 
       const result = await executeMikrotikCommand(
-        `/file print detail where name=${a.filename}`,
+        `/file print detail where name=${quoteValue(a.filename)}`,
         ctx,
       );
       if (isEmpty(result)) return `Backup file '${a.filename}' not found.`;

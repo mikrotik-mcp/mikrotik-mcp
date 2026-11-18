@@ -138,15 +138,15 @@ async function updateDnsStatic(a: UpdateDnsStaticArgs, ctx: ToolContext): Promis
     updates.push(
       a.address_list === "" ? "!address-list" : `address-list=${quoteValue(a.address_list)}`,
     );
-  if (a.mx_preference !== undefined) updates.push(`mx-preference=${a.mx_preference}`);
+  if (a.mx_preference !== undefined) updates.push(`mx-preference=${quoteValue(a.mx_preference)}`);
   if (a.mx_exchange !== undefined)
     updates.push(
       a.mx_exchange === "" ? "!mx-exchange" : `mx-exchange=${quoteValue(a.mx_exchange)}`,
     );
   if (a.text !== undefined) updates.push(a.text === "" ? "!text" : `text=${quoteValue(a.text)}`);
-  if (a.srv_priority !== undefined) updates.push(`srv-priority=${a.srv_priority}`);
-  if (a.srv_weight !== undefined) updates.push(`srv-weight=${a.srv_weight}`);
-  if (a.srv_port !== undefined) updates.push(`srv-port=${a.srv_port}`);
+  if (a.srv_priority !== undefined) updates.push(`srv-priority=${quoteValue(a.srv_priority)}`);
+  if (a.srv_weight !== undefined) updates.push(`srv-weight=${quoteValue(a.srv_weight)}`);
+  if (a.srv_port !== undefined) updates.push(`srv-port=${quoteValue(a.srv_port)}`);
   if (a.srv_target !== undefined)
     updates.push(a.srv_target === "" ? "!srv-target" : `srv-target=${quoteValue(a.srv_target)}`);
   if (a.ttl !== undefined) updates.push(a.ttl === "" ? "!ttl" : `ttl=${quoteValue(a.ttl)}`);
@@ -157,13 +157,13 @@ async function updateDnsStatic(a: UpdateDnsStaticArgs, ctx: ToolContext): Promis
 
   if (updates.length === 0) return "No updates specified.";
 
-  const cmd = `/ip dns static set ${a.entry_id} ${updates.join(" ")}`;
+  const cmd = `/ip dns static set ${quoteValue(a.entry_id)} ${updates.join(" ")}`;
   const result = await executeMikrotikCommand(cmd, ctx);
 
   if (looksLikeError(result)) return `Failed to update static DNS entry: ${result}`;
 
   const details = await executeMikrotikCommand(
-    `/ip dns static print detail where .id=${a.entry_id}`,
+    `/ip dns static print detail where .id=${quoteValue(a.entry_id)}`,
     ctx,
   );
   return `Static DNS entry updated successfully:\n\n${details}`;
@@ -364,7 +364,7 @@ export const dnsTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting static DNS entry details: entry_id=${a.entry_id}`);
       const result = await executeMikrotikCommand(
-        `/ip dns static print detail where .id=${a.entry_id}`,
+        `/ip dns static print detail where .id=${quoteValue(a.entry_id)}`,
         ctx,
       );
       return isEmpty(result)
@@ -433,12 +433,15 @@ export const dnsTools: ToolModule = [
       ctx.info(`Removing static DNS entry: entry_id=${a.entry_id}`);
 
       const count = await executeMikrotikCommand(
-        `/ip dns static print count-only where .id=${a.entry_id}`,
+        `/ip dns static print count-only where .id=${quoteValue(a.entry_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `Static DNS entry with ID '${a.entry_id}' not found.`;
 
-      const result = await executeMikrotikCommand(`/ip dns static remove ${a.entry_id}`, ctx);
+      const result = await executeMikrotikCommand(
+        `/ip dns static remove ${quoteValue(a.entry_id)}`,
+        ctx,
+      );
       if (looksLikeError(result)) return `Failed to remove static DNS entry: ${result}`;
 
       return `Static DNS entry with ID '${a.entry_id}' removed successfully.`;
@@ -625,7 +628,10 @@ export const dnsTools: ToolModule = [
       ctx.info("Exporting DNS configuration");
 
       const filename = a.filename || "dns_config";
-      const result = await executeMikrotikCommand(`/ip dns export file=${filename}`, ctx);
+      const result = await executeMikrotikCommand(
+        `/ip dns export file=${quoteValue(filename)}`,
+        ctx,
+      );
       return result.trim()
         ? `Export result: ${result}`
         : `DNS configuration exported to ${filename}.rsc`;

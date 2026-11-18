@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 import { redactSecrets } from "../utils";
 
 export const radiusTools: ToolModule = [
@@ -175,7 +175,7 @@ export const radiusTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating RADIUS server: radius_id=${a.radius_id}`);
-      const cmd = new Cmd(`/radius set ${a.radius_id}`)
+      const cmd = new Cmd(`/radius set ${quoteValue(a.radius_id)}`)
         .opt("address", a.address)
         .opt("secret", a.secret)
         .opt("service", a.service)

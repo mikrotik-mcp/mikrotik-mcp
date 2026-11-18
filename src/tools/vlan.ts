@@ -11,7 +11,7 @@ import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 
 const ArpMode = z.enum(["enabled", "disabled", "proxy-arp", "reply-only"]);
 const LoopProtect = z.enum(["default", "on", "off"]);
@@ -103,7 +103,7 @@ export const vlanTools: ToolModule = [
       ctx.info("Listing VLAN interfaces");
       const filters: string[] = [];
       if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
-      if (a.vlan_id_filter !== undefined) filters.push(`vlan-id=${a.vlan_id_filter}`);
+      if (a.vlan_id_filter !== undefined) filters.push(`vlan-id=${quoteValue(a.vlan_id_filter)}`);
       if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 

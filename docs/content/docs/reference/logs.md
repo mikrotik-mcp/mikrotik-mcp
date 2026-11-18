@@ -26,7 +26,7 @@ Fetch RouterOS log entries (`/log print`) with any combination of topic, severit
 | ---------------- | -------- | --------------------------------------------------------------------------- |
 | `topics`         | No       | `{"type":"string"}`                                                         |
 | `action`         | No       | `{"type":"string"}`                                                         |
-| `time_filter`    | No       | `{"type":"string"}`                                                         |
+| `time_filter`    | No       | `{"type":"string","pattern":"^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"}`          |
 | `message_filter` | No       | `{"type":"string"}`                                                         |
 | `prefix_filter`  | No       | `{"type":"string"}`                                                         |
 | `limit`          | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
@@ -42,7 +42,7 @@ Fetch RouterOS log entries (`/log print where topics~"<level>"`) filtered by sev
 | Parameter     | Required | Definition                                                                  |
 | ------------- | -------- | --------------------------------------------------------------------------- |
 | `severity`    | Yes      | `{"type":"string","enum":["debug","info","warning","error","critical"]}`    |
-| `time_filter` | No       | `{"type":"string"}`                                                         |
+| `time_filter` | No       | `{"type":"string","pattern":"^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"}`          |
 | `limit`       | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
 
 ## get_logs_by_topic
@@ -54,7 +54,7 @@ Fetch RouterOS log entries (`/log print where topics~"<topic>"`) for a single na
 | Parameter     | Required | Definition                                                                  |
 | ------------- | -------- | --------------------------------------------------------------------------- |
 | `topic`       | Yes      | `{"type":"string"}`                                                         |
-| `time_filter` | No       | `{"type":"string"}`                                                         |
+| `time_filter` | No       | `{"type":"string","pattern":"^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"}`          |
 | `limit`       | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
 
 ## search_logs
@@ -66,7 +66,7 @@ Search RouterOS log entries (`/log print where message~"<term>"`) for lines cont
 | Parameter        | Required | Definition                                                                  |
 | ---------------- | -------- | --------------------------------------------------------------------------- |
 | `search_term`    | Yes      | `{"type":"string"}`                                                         |
-| `time_filter`    | No       | `{"type":"string"}`                                                         |
+| `time_filter`    | No       | `{"type":"string","pattern":"^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"}`          |
 | `case_sensitive` | Yes      | `{"default":false,"type":"boolean"}`                                        |
 | `limit`          | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
 
@@ -79,7 +79,7 @@ Fetch RouterOS log entries (`/log print where topics~"system"`) for system-level
 | Parameter     | Required | Definition                                                                  |
 | ------------- | -------- | --------------------------------------------------------------------------- |
 | `event_type`  | No       | `{"type":"string"}`                                                         |
-| `time_filter` | No       | `{"type":"string"}`                                                         |
+| `time_filter` | No       | `{"type":"string","pattern":"^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"}`          |
 | `limit`       | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
 
 ## get_security_logs
@@ -90,7 +90,7 @@ Fetch RouterOS log entries (`/log print where (topics~"system" or topics~"firewa
 
 | Parameter     | Required | Definition                                                                  |
 | ------------- | -------- | --------------------------------------------------------------------------- |
-| `time_filter` | No       | `{"type":"string"}`                                                         |
+| `time_filter` | No       | `{"type":"string","pattern":"^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"}`          |
 | `limit`       | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
 
 ## clear_logs
@@ -115,12 +115,12 @@ No tool-specific parameters.
 
 Export RouterOS log entries to a file on the device filesystem (`/log print file=<name>`) with optional topic and time filters. Use when you need a persistent log file on the router for later retrieval (e.g. via FTP or SCP). For reading log entries directly to the MCP client use `get_logs`; for a quick count summary use `get_log_statistics`. `filename` defaults to `logs_export_<unix-timestamp>`; `time_filter` is a RouterOS duration string (e.g. `1h`); `topics` accepts a single RouterOS topic name. Returns the filename on success (file is written as `<filename>.txt` on the device).
 
-| Parameter     | Required | Definition                                                   |
-| ------------- | -------- | ------------------------------------------------------------ |
-| `filename`    | No       | `{"type":"string"}`                                          |
-| `topics`      | No       | `{"type":"string"}`                                          |
-| `time_filter` | No       | `{"type":"string"}`                                          |
-| `format`      | Yes      | `{"default":"plain","type":"string","enum":["plain","csv"]}` |
+| Parameter     | Required | Definition                                                         |
+| ------------- | -------- | ------------------------------------------------------------------ |
+| `filename`    | No       | `{"type":"string"}`                                                |
+| `topics`      | No       | `{"type":"string"}`                                                |
+| `time_filter` | No       | `{"type":"string","pattern":"^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"}` |
+| `format`      | Yes      | `{"default":"plain","type":"string","enum":["plain","csv"]}`       |
 
 ## monitor_logs
 

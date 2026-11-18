@@ -30,7 +30,7 @@ import { DANGEROUS, READ, WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { listDevices, resolveDeviceName } from "../core/runtime";
 import { invalidateCapabilities } from "../core/capability-cache";
-import { Cmd, isEmpty, looksLikeError, quoted } from "../core/routeros";
+import { Cmd, isEmpty, looksLikeError, quoted, quoteValue } from "../core/routeros";
 import { parseKeyValues, parseRecords } from "../core/routeros-parse";
 import { safe } from "../utils/safe-exec";
 
@@ -178,7 +178,10 @@ export const firmwareLifecycleTools: ToolModule = [
 
         // Optionally set channel
         if (a.channel) {
-          await executeMikrotikCommand(`/system package update set channel=${a.channel}`, ctx);
+          await executeMikrotikCommand(
+            `/system package update set channel=${quoteValue(a.channel)}`,
+            ctx,
+          );
         }
 
         // Trigger update check
@@ -221,7 +224,10 @@ export const firmwareLifecycleTools: ToolModule = [
         const dctx = createContext(undefined, deviceName);
         try {
           if (a.channel) {
-            await executeMikrotikCommand(`/system package update set channel=${a.channel}`, dctx);
+            await executeMikrotikCommand(
+              `/system package update set channel=${quoteValue(a.channel)}`,
+              dctx,
+            );
           }
           await executeMikrotikCommand("/system package update check-for-updates once", dctx);
           const state = await fetchFirmwareState(dctx);
@@ -263,7 +269,7 @@ export const firmwareLifecycleTools: ToolModule = [
       // Optionally set channel
       if (a.channel) {
         const chResult = await executeMikrotikCommand(
-          `/system package update set channel=${a.channel}`,
+          `/system package update set channel=${quoteValue(a.channel)}`,
           ctx,
         );
         if (looksLikeError(chResult)) return `Failed to set channel: ${chResult}`;

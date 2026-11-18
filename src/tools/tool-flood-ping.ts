@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, flattenLiveOutput, Cmd } from "../core/routeros";
+import { looksLikeError, isEmpty, flattenLiveOutput, Cmd, quoteValue } from "../core/routeros";
 
 export const floodPingTools: ToolModule = [
   defineTool({
@@ -33,7 +33,7 @@ export const floodPingTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Flood-pinging ${a.address} (count=${a.count})`);
-      const cmd = new Cmd(`/tool flood-ping ${a.address}`)
+      const cmd = new Cmd(`/tool flood-ping ${quoteValue(a.address)}`)
         .set("count", a.count)
         .opt("size", a.size)
         .opt("interface", a.interface)

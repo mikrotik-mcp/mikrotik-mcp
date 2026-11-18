@@ -11,6 +11,7 @@ import {
   isEmpty,
   Cmd,
   quoted,
+  quoteValue,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 
@@ -82,7 +83,7 @@ async function setIpv6RouteDisabled(
 ): Promise<string> {
   ctx.info(`Updating IPv6 route: route_id=${routeId}`);
   const result = await executeMikrotikCommand(
-    `/ipv6 route set ${routeId} disabled=${yesno(disabled)}`,
+    `/ipv6 route set ${quoteValue(routeId)} disabled=${yesno(disabled)}`,
     ctx,
   );
   if (looksLikeError(result)) return `Failed to update IPv6 route: ${result}`;

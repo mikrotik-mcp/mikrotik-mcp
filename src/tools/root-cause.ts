@@ -586,7 +586,7 @@ export const rootCauseTools: ToolModule = [
       // Build log query
       const filters: string[] = [];
       if (a.topics) {
-        filters.push(`topics~"${a.topics.replace(/,/g, "|")}"`);
+        filters.push(`topics~${quoted(a.topics.replace(/,/g, "|"))}`);
       } else {
         filters.push('topics~"error|warning|critical|firewall|system|interface|dhcp|ospf|bgp"');
       }

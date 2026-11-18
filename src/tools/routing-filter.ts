@@ -12,6 +12,7 @@ import {
   commandUnsupported,
   Cmd,
   quoted,
+  quoteValue,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -108,7 +109,7 @@ export const routingFilterTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating routing filter rule ${a.rule_id}`);
-      const base = `/routing filter rule set ${a.rule_id}`;
+      const base = `/routing filter rule set ${quoteValue(a.rule_id)}`;
       const cmd = new Cmd(base);
       if (a.chain !== undefined) cmd.set("chain", a.chain);
       if (a.rule !== undefined) cmd.set("rule", a.rule);
@@ -122,7 +123,7 @@ export const routingFilterTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update routing filter rule: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing filter rule print detail where .id=${a.rule_id}`,
+        `/routing filter rule print detail where .id=${quoteValue(a.rule_id)}`,
         ctx,
       );
       return `Routing filter rule updated successfully:\n\n${details}`;
@@ -141,7 +142,10 @@ export const routingFilterTools: ToolModule = [
     inputSchema: { rule_id: z.string().describe('Rule id, e.g. "*3"') },
     async handler(a, ctx) {
       ctx.info(`Removing routing filter rule ${a.rule_id}`);
-      const result = await executeMikrotikCommand(`/routing filter rule remove ${a.rule_id}`, ctx);
+      const result = await executeMikrotikCommand(
+        `/routing filter rule remove ${quoteValue(a.rule_id)}`,
+        ctx,
+      );
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to remove routing filter rule: ${result}`;
       return `Routing filter rule '${a.rule_id}' removed successfully.`;
@@ -165,7 +169,7 @@ export const routingFilterTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Setting routing filter rule ${a.rule_id} enabled=${a.enabled}`);
       const result = await executeMikrotikCommand(
-        `/routing filter rule set ${a.rule_id} disabled=${yesno(!a.enabled)}`,
+        `/routing filter rule set ${quoteValue(a.rule_id)} disabled=${yesno(!a.enabled)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -269,7 +273,7 @@ export const routingFilterTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing num-list entry ${a.entry_id}`);
       const result = await executeMikrotikCommand(
-        `/routing filter num-list remove ${a.entry_id}`,
+        `/routing filter num-list remove ${quoteValue(a.entry_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

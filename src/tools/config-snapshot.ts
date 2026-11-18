@@ -15,7 +15,7 @@ import { executeMikrotikCommand } from "../core/connector";
 import { diffLines } from "../core/diff";
 import { READ, WRITE, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { isEmpty, looksLikeError, Cmd } from "../core/routeros";
+import { isEmpty, looksLikeError, Cmd, menuPath } from "../core/routeros";
 import { resolveDeviceName } from "../core/runtime";
 import { DEFAULT_SNAPSHOT_DB } from "../config";
 import { contentSha, countLines, normalizeExport, parseExportMeta } from "../snapshots/format";
@@ -34,7 +34,7 @@ function snapshots(): Promise<SnapshotStore> {
 
 /** Build the `/export` command used for both capture and live diff. */
 function exportCommand(opts: { section?: string; terse: boolean; showSensitive: boolean }): string {
-  const base = opts.section ? `/${opts.section} export` : "/export";
+  const base = opts.section ? `/${menuPath(opts.section)} export` : "/export";
   // RouterOS `/export` flags are BARE words ("terse", "show-sensitive") — NOT
   // key=value. `/export terse=yes` is a parser error ("expected end of command"),
   // so emit raw fragments rather than Cmd.flag() (which appends `=yes`).

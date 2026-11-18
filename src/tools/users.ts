@@ -50,8 +50,9 @@ async function runUpdateUser(
   const updates: string[] = [];
   if (a.new_name) updates.push(`name=${quoteValue(a.new_name)}`);
   if (a.password) updates.push(`password=${quoteValue(a.password)}`);
-  if (a.group) updates.push(`group=${a.group}`);
-  if (a.address !== undefined) updates.push(a.address === "" ? "!address" : `address=${a.address}`);
+  if (a.group) updates.push(`group=${quoteValue(a.group)}`);
+  if (a.address !== undefined)
+    updates.push(a.address === "" ? "!address" : `address=${quoteValue(a.address)}`);
   if (a.comment !== undefined) updates.push(`comment=${quoteValue(a.comment)}`);
   if (a.disabled !== undefined) updates.push(`disabled=${a.disabled ? "yes" : "no"}`);
 
@@ -373,7 +374,7 @@ export const userTools: ToolModule = [
 
       const updates: string[] = [];
       if (a.new_name) updates.push(`name=${quoteValue(a.new_name)}`);
-      if (a.policy && a.policy.length) updates.push(`policy=${a.policy.join(",")}`);
+      if (a.policy && a.policy.length) updates.push(`policy=${quoteValue(a.policy.join(","))}`);
       if (a.skin !== undefined)
         updates.push(a.skin === "" ? "!skin" : `skin=${quoteValue(a.skin)}`);
       if (a.comment !== undefined) updates.push(`comment=${quoteValue(a.comment)}`);
@@ -459,7 +460,10 @@ export const userTools: ToolModule = [
     inputSchema: { user_id: z.string() },
     async handler(a, ctx) {
       ctx.info(`Disconnecting user: user_id=${a.user_id}`);
-      const result = await executeMikrotikCommand(`/user active remove ${a.user_id}`, ctx);
+      const result = await executeMikrotikCommand(
+        `/user active remove ${quoteValue(a.user_id)}`,
+        ctx,
+      );
       if (looksLikeError(result)) return `Failed to disconnect user: ${result}`;
       return `User session ${a.user_id} disconnected successfully.`;
     },
@@ -477,7 +481,7 @@ export const userTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Exporting user configuration");
       const filename = a.filename || "user_config";
-      const result = await executeMikrotikCommand(`/user export file=${filename}`, ctx);
+      const result = await executeMikrotikCommand(`/user export file=${quoteValue(filename)}`, ctx);
       if (!result.trim()) return `User configuration exported to ${filename}.rsc`;
       return `Export result: ${result}`;
     },
@@ -536,7 +540,10 @@ export const userTools: ToolModule = [
     inputSchema: { key_id: z.string() },
     async handler(a, ctx) {
       ctx.info(`Removing SSH key: key_id=${a.key_id}`);
-      const result = await executeMikrotikCommand(`/user ssh-keys remove ${a.key_id}`, ctx);
+      const result = await executeMikrotikCommand(
+        `/user ssh-keys remove ${quoteValue(a.key_id)}`,
+        ctx,
+      );
       if (looksLikeError(result)) return `Failed to remove SSH key: ${result}`;
       return `SSH key ${a.key_id} removed successfully.`;
     },

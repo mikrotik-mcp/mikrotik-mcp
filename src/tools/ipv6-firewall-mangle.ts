@@ -91,8 +91,8 @@ async function updateMangleRule(
     updates.push(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
   };
 
-  if (a.chain) updates.push(`chain=${a.chain}`);
-  if (a.action) updates.push(`action=${a.action}`);
+  if (a.chain) updates.push(`chain=${quoteValue(a.chain)}`);
+  if (a.action) updates.push(`action=${quoteValue(a.action)}`);
   put("src-address", a.src_address);
   put("dst-address", a.dst_address);
   put("src-port", a.src_port);
@@ -362,8 +362,8 @@ export const ipv6FirewallMangleTools: ToolModule = [
       ctx.info("Listing IPv6 firewall mangle rules");
 
       const filters: string[] = [];
-      if (a.chain_filter) filters.push(`chain=${a.chain_filter}`);
-      if (a.action_filter) filters.push(`action=${a.action_filter}`);
+      if (a.chain_filter) filters.push(`chain=${quoteValue(a.chain_filter)}`);
+      if (a.action_filter) filters.push(`action=${quoteValue(a.action_filter)}`);
       if (a.connection_mark_filter)
         filters.push(`connection-mark=${quoted(a.connection_mark_filter)}`);
       if (a.packet_mark_filter) filters.push(`packet-mark=${quoted(a.packet_mark_filter)}`);
@@ -529,7 +529,7 @@ export const ipv6FirewallMangleTools: ToolModule = [
       if (!id) return `IPv6 mangle rule '${a.rule_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ipv6 firewall mangle move ${id} destination=${a.destination}`,
+        `/ipv6 firewall mangle move ${id} destination=${quoteValue(a.destination)}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to move IPv6 firewall mangle rule: ${result}`;

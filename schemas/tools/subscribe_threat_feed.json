@@ -5,6 +5,7 @@
   "properties": {
     "name": {
       "type": "string",
+      "pattern": "^[A-Za-z0-9][\\w.-]{0,40}$",
       "description": "Short feed id, e.g. 'spamhaus-drop'"
     },
     "url": {

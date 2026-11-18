@@ -10,7 +10,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 
 export const ipsecTools: ToolModule = [
   // ── Profile (phase 1) — /ip ipsec profile ─────────────────────────────────
@@ -513,13 +513,13 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPsec identity: identity_id=${a.identity_id}`);
       const count = await executeMikrotikCommand(
-        `/ip ipsec identity print count-only where .id=${a.identity_id}`,
+        `/ip ipsec identity print count-only where .id=${quoteValue(a.identity_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPsec identity with ID '${a.identity_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip ipsec identity remove [find .id=${a.identity_id}]`,
+        `/ip ipsec identity remove [find .id=${quoteValue(a.identity_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPsec identity: ${result}`;
@@ -806,13 +806,13 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPsec policy: policy_id=${a.policy_id}`);
       const count = await executeMikrotikCommand(
-        `/ip ipsec policy print count-only where .id=${a.policy_id}`,
+        `/ip ipsec policy print count-only where .id=${quoteValue(a.policy_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPsec policy with ID '${a.policy_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip ipsec policy remove [find .id=${a.policy_id}]`,
+        `/ip ipsec policy remove [find .id=${quoteValue(a.policy_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPsec policy: ${result}`;

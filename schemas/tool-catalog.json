@@ -30966,6 +30966,7 @@
         "properties": {
           "name": {
             "type": "string",
+            "pattern": "^[A-Za-z0-9][\\w.-]{0,40}$",
             "description": "Short feed id, e.g. 'spamhaus-drop'"
           },
           "url": {
@@ -31013,6 +31014,7 @@
         "properties": {
           "name": {
             "type": "string",
+            "pattern": "^[A-Za-z0-9][\\w.-]{0,40}$",
             "description": "The feed id used when subscribing"
           }
         },
@@ -31506,7 +31508,8 @@
             "type": "string"
           },
           "time_filter": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
           },
           "message_filter": {
             "type": "string"
@@ -31552,7 +31555,8 @@
             "enum": ["debug", "info", "warning", "error", "critical"]
           },
           "time_filter": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
           },
           "limit": {
             "type": "integer",
@@ -31582,7 +31586,8 @@
             "type": "string"
           },
           "time_filter": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
           },
           "limit": {
             "type": "integer",
@@ -31612,7 +31617,8 @@
             "type": "string"
           },
           "time_filter": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
           },
           "case_sensitive": {
             "default": false,
@@ -31646,7 +31652,8 @@
             "type": "string"
           },
           "time_filter": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
           },
           "limit": {
             "type": "integer",
@@ -31672,7 +31679,8 @@
         "type": "object",
         "properties": {
           "time_filter": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
           },
           "limit": {
             "type": "integer",
@@ -31738,7 +31746,8 @@
             "type": "string"
           },
           "time_filter": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
           },
           "format": {
             "default": "plain",
