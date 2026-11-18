@@ -5,6 +5,7 @@
  * receiving them as parameters. With named multi-device support, the device a
  * call targets is carried on the ToolContext and resolved here.
  */
+import { setLogLevel } from "../logger";
 import type { MikrotikConfig, DeviceConfig } from "../config";
 import { MikrotikConfigSchema } from "../config";
 
@@ -27,6 +28,7 @@ export function onConfigChanged(fn: () => void): void {
 
 export function setConfig(cfg: MikrotikConfig): void {
   active = cfg;
+  setLogLevel(cfg.logLevel);
   for (const fn of configListeners) {
     try {
       fn();

@@ -1042,3 +1042,13 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
   "type": "boolean"
 }
 ```
+
+## logLevel
+
+```json
+{
+  "default": "error",
+  "type": "string",
+  "enum": ["error", "warn", "info", "debug"]
+}
+```

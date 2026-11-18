@@ -950,6 +950,11 @@
     "disableUpdateCheck": {
       "default": false,
       "type": "boolean"
+    },
+    "logLevel": {
+      "default": "error",
+      "type": "string",
+      "enum": ["error", "warn", "info", "debug"]
     }
   },
   "required": [
@@ -967,7 +972,8 @@
     "access",
     "tools",
     "memory",
-    "disableUpdateCheck"
+    "disableUpdateCheck",
+    "logLevel"
   ],
   "additionalProperties": false
 }

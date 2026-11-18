@@ -58,6 +58,21 @@ the GitHub release notes.
   `true`) turns the page off or on. It is a switch in **Config → Dashboard**,
   and a change applies with no restart.
 
+### Changed
+
+- **The Terminal page no longer needs a token or a loopback bind.** Like the
+  Files page, it is on by default and is turned off or on with
+  `dashboard.terminal`: a switch in **Config → Dashboard** (no restart) or
+  `--dashboard-terminal`. Anyone who can open the dashboard can then run any
+  command on the routers: set a dashboard token, or turn the page off, on a
+  network you do not trust.
+- **The default log level is `error`** (it was `info`). The server no longer
+  writes its informational lines unless you ask for them. Set the level with
+  `logLevel` in the config file, **Config → General → Log level** (applies at
+  once), `--log-level` or `MIKROTIK_LOG_LEVEL`.
+- The shared service and `docker-compose.yml` no longer set
+  `MIKROTIK_LOG_LEVEL`, so the setting in the config is the one in use.
+
 ### Fixed
 
 - **Terminal:** an idle Shell pane closed after about one minute. The SSH

@@ -271,6 +271,13 @@ export const CONFIG_SECTIONS: CfgSection[] = [
       { key: "captureBody", label: "Capture tool input/output", type: "bool" },
       { key: "redactInput", label: "Redact input bodies", type: "bool" },
       {
+        key: "terminal",
+        label: "Terminal page",
+        type: "bool",
+        defaultOn: true,
+        help: "Run RouterOS commands from the browser. It needs no token: anyone who can open this dashboard can run any command on your routers. Set an access token, or turn this off, on a network you do not trust.",
+      },
+      {
         key: "files",
         label: "Files page",
         type: "bool",
@@ -717,6 +724,13 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         key: "disableUpdateCheck",
         label: "Disable update check",
         type: "bool",
+      },
+      {
+        key: "logLevel",
+        label: "Log level",
+        type: "select",
+        options: ["error", "warn", "info", "debug"],
+        help: "What the server writes to its log (stderr). The default, error, keeps the log small. A change applies at once.",
       },
       {
         key: "backupDir",
