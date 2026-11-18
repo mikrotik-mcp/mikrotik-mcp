@@ -153,72 +153,436 @@
   font-size: 13px;
 }
 
-/* The rendered Markdown document. */
+/* The document: a contents rail and a page of numbered sections. */
 .explain-doc {
-  display: flex;
-  max-width: 760px;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 13.5px;
+  line-height: 22px;
 }
-.explain-doc h2 {
-  color: var(--foreground);
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 20px;
+/* `clip` hides overflow like the panel's own `hidden`, but makes no scroll
+   container, so the contents rail can stick while the page scrolls. */
+.monitor-panel:has(> .monitor-panel-body > .explain-doc) {
+  overflow: clip;
 }
-.explain-doc h2 + p {
+.explain-doc-toc {
+  position: sticky;
+  top: 76px;
+  display: grid;
+  gap: 2px;
+  border-left: 1px solid var(--line);
+  padding-left: 4px;
+}
+.explain-doc-toc-title {
+  padding: 0 10px 8px;
+  color: var(--text-faint);
+  font: 500 10.5px var(--font-mt);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.explain-doc-toc button {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-left: -5px;
+  border-left: 1px solid transparent;
+  border-radius: 0 8px 8px 0;
+  padding: 5px 10px;
   color: var(--muted-foreground);
-  font-family: var(--font-mt);
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 18px;
+  text-align: left;
+  transition:
+    background-color 140ms,
+    color 140ms,
+    border-color 140ms;
 }
-.explain-doc h2 + p em {
+.explain-doc-toc button:hover,
+.explain-doc-toc button:focus-visible {
+  border-left-color: var(--sig);
+  background: var(--glass-2);
+  color: var(--text-emphasis);
+}
+.explain-doc-toc i,
+.explain-doc-page h3 i {
+  color: var(--sig);
+  font: 500 11px var(--font-mt);
   font-style: normal;
 }
-.explain-doc h3,
-.explain-doc h4,
-.explain-doc h5 {
-  margin: 4px 0 0;
-  color: var(--foreground);
-  font-size: 14px;
+.explain-doc-page {
+  display: grid;
+  min-width: 0;
+  gap: 28px;
+}
+.explain-doc-page section {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+  scroll-margin-top: 76px;
+}
+.explain-doc-html {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+.explain-doc-html:empty {
+  display: none;
+}
+
+/* The title block: the device name, then one line of facts. */
+.explain-doc-head h2 {
+  color: var(--text-emphasis);
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 32px;
+}
+.explain-doc-head p {
+  color: var(--muted-foreground);
+  font: 400 12px/20px var(--font-mt);
+}
+.explain-doc-head em {
+  font-style: normal;
+}
+
+.explain-doc-page h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  color: var(--text-emphasis);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 24px;
+}
+.explain-doc-page h4,
+.explain-doc-page h5 {
+  margin-top: 6px;
+  color: var(--text-faint);
+  font: 500 11px var(--font-mt);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.explain-doc-page p {
+  max-width: 76ch;
+}
+.explain-doc-page strong,
+.explain-doc-page b {
+  color: var(--text-emphasis);
   font-weight: 600;
 }
-.explain-doc strong,
-.explain-doc b {
-  color: var(--foreground);
+.explain-doc-page em {
+  color: var(--muted-foreground);
 }
-.explain-doc code {
-  font-family: var(--font-mt);
-  font-size: 12px;
-}
-.explain-doc pre {
-  overflow-x: auto;
-  border-radius: 10px;
+.explain-doc-page code {
+  border-radius: 6px;
   background: var(--glass-2);
-  padding: 10px 12px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  padding: 1px 6px;
+  color: var(--text-emphasis);
+  font: 400 11.5px var(--font-mt);
 }
-.explain-doc ul {
-  padding-left: 18px;
-  list-style: disc;
-}
-.explain-doc .wn-table-wrap {
+.explain-doc-page pre {
   overflow-x: auto;
+  border-radius: 12px;
+  background: var(--glass-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  padding: 12px 14px;
+  font: 400 12px/19px var(--font-mt);
 }
-.explain-doc table {
+.explain-doc-page pre code {
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  color: var(--text-secondary);
+}
+
+/* Lists: a head item with its reasons hung under it. */
+.explain-doc-page ul,
+.explain-doc-page ol {
+  display: grid;
+  gap: 4px;
+}
+.explain-doc-page ol {
+  padding-left: 20px;
+  list-style: decimal;
+}
+.explain-doc-page ul > li {
+  position: relative;
+  padding-left: 16px;
+}
+.explain-doc-page ul > li::before {
+  position: absolute;
+  top: 9px;
+  left: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 2px;
+  background: var(--sig);
+  content: "";
+}
+.explain-doc-page ul > li.md-sub {
+  margin-left: 16px;
+  border-left: 1px solid var(--line-2);
+  padding-left: 14px;
+  color: var(--muted-foreground);
+}
+.explain-doc-page ul > li.md-sub::before {
+  content: none;
+}
+.explain-doc-page ul > li:not(.md-sub):not(:first-child):has(+ .md-sub) {
+  margin-top: 8px;
+}
+
+/* Tables: the full width of the page, in a frame. */
+.explain-doc-page .wn-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.explain-doc-page table {
+  width: 100%;
   border-collapse: collapse;
+  font-size: 12.5px;
+  line-height: 18px;
+}
+.explain-doc-page th,
+.explain-doc-page td {
+  padding: 9px 14px;
+  vertical-align: top;
+}
+.explain-doc-page th {
+  background: var(--glass-2);
+  color: var(--text-faint);
+  font: 500 10.5px var(--font-mt);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.explain-doc-page td {
+  border-top: 1px solid var(--line);
+}
+.explain-doc-page td:first-child {
+  color: var(--text-emphasis);
+  font-weight: 500;
+}
+.explain-doc-page td[style*="right"] {
+  color: var(--muted-foreground);
+  font-family: var(--font-mt);
+  font-variant-numeric: tabular-nums;
+}
+.explain-doc-page tbody tr:hover td {
+  background: var(--glass-2);
+}
+
+/* Severity: a chip in place of the coloured emoji. */
+.md-sev {
+  --sev: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sev) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--sev) 40%, transparent);
+  padding: 1px 9px 1px 7px;
+  color: var(--sev);
+  font: 500 11px/18px var(--font-mt);
+  white-space: nowrap;
+}
+.md-sev::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+.md-sev[data-sev="critical"] {
+  --sev: var(--destructive);
+}
+.md-sev[data-sev="high"] {
+  --sev: color-mix(in oklab, var(--destructive) 45%, var(--warning));
+}
+.md-sev[data-sev="medium"] {
+  --sev: var(--warning);
+}
+.md-sev[data-sev="low"] {
+  --sev: var(--sig);
+}
+
+/* The topology diagram, drawn from the Mermaid source. */
+.explain-flow {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+.explain-flow-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: var(--muted-foreground);
   font-size: 12px;
 }
-.explain-doc th,
-.explain-doc td {
-  border-top: 1px solid var(--line);
-  padding: 6px 12px 6px 0;
-  text-align: left;
+.explain-flow-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
-.explain-doc th {
-  color: var(--text-faint);
-  font-weight: 400;
+.explain-flow-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--k) 30%, transparent);
+  box-shadow: inset 0 0 0 1px var(--k);
+}
+.explain-flow-legend [data-kind="off"] i {
+  opacity: 0.45;
+}
+.explain-flow [data-kind] {
+  --k: var(--text-faint);
+}
+.explain-flow [data-kind="internet"],
+.explain-flow [data-kind="wan"] {
+  --k: var(--destructive);
+}
+.explain-flow [data-kind="router"],
+.explain-flow [data-kind="bridge"],
+.explain-flow [data-kind="vlan"] {
+  --k: var(--brand);
+}
+.explain-flow [data-kind="tunnel"],
+.explain-flow [data-kind="peer"] {
+  --k: var(--sig);
+}
+.explain-flow [data-kind="wireless"] {
+  --k: var(--warning);
+}
+.explain-flow-canvas {
+  overflow-x: auto;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 1px 1px, var(--line-2) 1px, transparent 1.5px) 0 0 / 22px 22px,
+    var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
+  padding: 10px;
+}
+.explain-flow-canvas svg {
+  display: block;
+}
+.explain-flow-edge {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 1.4;
+  transition:
+    stroke 160ms,
+    opacity 160ms;
+}
+.explain-flow-edge[data-dashed] {
+  stroke: color-mix(in oklab, var(--sig) 60%, transparent);
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+/* Traffic on the way in: the dashes run from the internet to the router. */
+.explain-flow-edge[data-flow] {
+  stroke: color-mix(in oklab, var(--destructive) 65%, transparent);
+  stroke-dasharray: 6 6;
+  animation: explain-flow-run 900ms linear infinite;
+}
+.explain-flow-edge[data-lit] {
+  stroke: var(--sig);
+  stroke-width: 1.9;
+}
+@keyframes explain-flow-run {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+.explain-flow-tag rect {
+  fill: var(--background);
+  stroke: var(--line-2);
+}
+.explain-flow-tag text {
+  fill: var(--muted-foreground);
+  font: 500 9.5px var(--font-mt);
+}
+.explain-flow-node {
+  cursor: default;
+  transition: opacity 160ms;
+}
+.explain-flow-node > rect:first-of-type {
+  fill: color-mix(in oklab, var(--k) 11%, var(--background));
+  stroke: color-mix(in oklab, var(--k) 42%, transparent);
+  transition:
+    fill 160ms,
+    stroke 160ms;
+}
+.explain-flow-node .bar {
+  fill: var(--k);
+}
+.explain-flow-node .nm {
+  fill: var(--text-emphasis);
+  font: 600 11.5px var(--font-mt);
+}
+.explain-flow-node .sub {
+  fill: var(--muted-foreground);
+  font: 400 10px var(--font-mt);
+}
+.explain-flow-node:hover > rect:first-of-type {
+  fill: color-mix(in oklab, var(--k) 22%, var(--background));
+  stroke: var(--k);
+}
+.explain-flow-node[data-kind="router"] > rect:first-of-type {
+  fill: color-mix(in oklab, var(--k) 24%, var(--background));
+  stroke: var(--k);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 10px color-mix(in oklab, var(--k) 45%, transparent));
+}
+.explain-flow-node[data-kind="router"] .nm {
+  font-size: 12.5px;
+}
+.explain-flow-node[data-kind="peer"] > rect:first-of-type {
+  stroke-dasharray: 4 3;
+}
+.explain-flow-node[data-off] {
+  opacity: 0.45;
+}
+.explain-flow-node[data-off] .nm {
+  text-decoration: line-through;
+}
+.explain-flow svg[data-hover] [data-dim] {
+  opacity: 0.18;
+}
+.explain-flow-src summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  font: 500 11px var(--font-mt);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.explain-flow-src summary:hover {
+  color: var(--text-emphasis);
+}
+.explain-flow-src pre {
+  margin-top: 10px;
+  max-height: 320px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .explain-flow-edge[data-flow] {
+    animation: none;
+  }
+}
+@media (max-width: 900px) {
+  .explain-doc {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .explain-doc-toc {
+    display: none;
+  }
 }
 
 @media (max-width: 1100px) {

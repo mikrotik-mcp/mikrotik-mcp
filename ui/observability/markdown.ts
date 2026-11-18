@@ -22,7 +22,17 @@
 /** Up to three spaces may precede a block marker (CommonMark §4). */
 const IND = " {0,3}";
 
-export function renderMarkdown(md: string): string {
+export interface MarkdownOptions {
+  /**
+   * A written document, not a release body: wrapped lines join into one
+   * paragraph, `_text_` is emphasis, and a list item indented by two spaces or
+   * more is a sub-item (`<li class="md-sub">`).
+   */
+  document?: boolean;
+}
+
+export function renderMarkdown(md: string, options: MarkdownOptions = {}): string {
+  const doc = options.document === true;
   // 0. Normalize line endings (the GitHub API returns \r\n).
   let html = md.replace(/\r\n?/g, "\n");
 
@@ -62,6 +72,8 @@ export function renderMarkdown(md: string): string {
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>");
+
+  if (doc) html = html.replace(/(?<![\w*])_([^_\n]+)_(?!\w)/g, "<em>$1</em>");
 
   // 7. Strikethrough
   html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
@@ -123,9 +135,10 @@ export function renderMarkdown(md: string): string {
   );
 
   // 13. Unordered lists (-, * or +)
+  if (doc) html = html.replace(/^ {2,}[-*+] (.+)$/gm, '<li class="md-sub">$1</li>');
   html = html.replace(new RegExp(`^${IND}[-*+] (.+)$`, "gm"), "<li>$1</li>");
   html = html.replace(/<\/li>\n\n+<li>/g, "</li>\n<li>");
-  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, (m) => `<ul>${m.trimEnd()}</ul>`);
+  html = html.replace(/((?:<li[^>]*>.*<\/li>\n?)+)/g, (m) => `<ul>${m.trimEnd()}</ul>`);
 
   // 14. Task lists
   html = html.replace(
@@ -139,14 +152,21 @@ export function renderMarkdown(md: string): string {
 
   // 15. Paragraphs for whatever is left.
   const block = /^<\/?(h[2-5]|ul|ol|li|pre|blockquote|hr|div|table|img)/;
-  html = html
-    .split("\n")
-    .map((line) => {
-      const t = line.trim();
-      if (!t) return "";
-      return block.test(t) ? t : `<p>${t}</p>`;
-    })
-    .join("\n");
+  const out: string[] = [];
+  let open = false; // the last entry of `out` is a paragraph that can take more text
+  for (const line of html.split("\n")) {
+    const t = line.trim();
+    if (!t || block.test(t) || (doc && t.startsWith("%%CB"))) {
+      out.push(t);
+      open = false;
+    } else if (doc && open) {
+      out[out.length - 1] = `${out.at(-1)!.slice(0, -4)} ${t}</p>`;
+    } else {
+      out.push(`<p>${t}</p>`);
+      open = true;
+    }
+  }
+  html = out.join("\n");
 
   // 16. Restore code blocks and inline code.
   html = html.replace(/%%CB(\d+)%%/g, (_, i: string) => codeBlocks[Number(i)]!);

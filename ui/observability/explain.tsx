@@ -31,7 +31,7 @@ import { api, postJson } from "./api";
 import { ExplainTopology } from "./explain-topology";
 import { DetailList, RowDrawer, RowMenu, RowMore, Select } from "./kit";
 import { LoadingState } from "./loading-state";
-import { renderMarkdown } from "./markdown";
+import { ExplainDoc } from "./explain-doc";
 import {
   Metric,
   MetricStrip,
@@ -712,12 +712,7 @@ export function ExplainView(): ReactNode {
               </div>
             }
           >
-            <div
-              className="explain-doc"
-              // renderMarkdown escapes HTML entities before doing anything else,
-              // so device-supplied config text cannot inject markup here.
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(payload.markdown) }}
-            />
+            <ExplainDoc markdown={payload.markdown} />
           </MonitorPanel>
         </>
       )}
