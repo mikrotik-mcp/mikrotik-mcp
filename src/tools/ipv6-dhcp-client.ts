@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 const Request = z.enum(["address", "prefix", "address,prefix"]);
 const AddDefaultRoute = z.enum(["yes", "no", "special-classless"]);
@@ -85,7 +85,7 @@ export const ipv6DhcpClientTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add DHCPv6 client: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ipv6 dhcp-client print detail where interface="${a.interface}"`,
+        `/ipv6 dhcp-client print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return details.trim()
@@ -114,8 +114,8 @@ export const ipv6DhcpClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing DHCPv6 clients");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
-      if (a.status_filter) filters.push(`status="${a.status_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
+      if (a.status_filter) filters.push(`status=${quoted(a.status_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
 
@@ -142,12 +142,12 @@ export const ipv6DhcpClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting DHCPv6 client details: client_id=${a.client_id}`);
       let result = await executeMikrotikCommand(
-        `/ipv6 dhcp-client print detail where .id="${a.client_id}"`,
+        `/ipv6 dhcp-client print detail where .id=${quoted(a.client_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/ipv6 dhcp-client print detail where interface="${a.client_id}"`,
+          `/ipv6 dhcp-client print detail where interface=${quoted(a.client_id)}`,
           ctx,
         );
       }
@@ -169,7 +169,7 @@ export const ipv6DhcpClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Releasing DHCPv6 client: client_id=${a.client_id}`);
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-client release [find interface="${a.client_id}" or .id="${a.client_id}"]`,
+        `/ipv6 dhcp-client release [find interface=${quoted(a.client_id)} or .id=${quoted(a.client_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to release DHCPv6 client: ${result}`;
@@ -189,7 +189,7 @@ export const ipv6DhcpClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Renewing DHCPv6 client: client_id=${a.client_id}`);
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-client renew [find interface="${a.client_id}" or .id="${a.client_id}"]`,
+        `/ipv6 dhcp-client renew [find interface=${quoted(a.client_id)} or .id=${quoted(a.client_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to renew DHCPv6 client: ${result}`;
@@ -210,18 +210,18 @@ export const ipv6DhcpClientTools: ToolModule = [
       ctx.info(`Removing DHCPv6 client: client_id=${a.client_id}`);
       let byId = true;
       let count = await executeMikrotikCommand(
-        `/ipv6 dhcp-client print count-only where .id="${a.client_id}"`,
+        `/ipv6 dhcp-client print count-only where .id=${quoted(a.client_id)}`,
         ctx,
       );
       if (count.trim() === "0") {
         byId = false;
         count = await executeMikrotikCommand(
-          `/ipv6 dhcp-client print count-only where interface="${a.client_id}"`,
+          `/ipv6 dhcp-client print count-only where interface=${quoted(a.client_id)}`,
           ctx,
         );
         if (count.trim() === "0") return `DHCPv6 client '${a.client_id}' not found.`;
       }
-      const selector = byId ? `.id="${a.client_id}"` : `interface="${a.client_id}"`;
+      const selector = byId ? `.id=${quoted(a.client_id)}` : `interface=${quoted(a.client_id)}`;
       const result = await executeMikrotikCommand(
         `/ipv6 dhcp-client remove [find ${selector}]`,
         ctx,

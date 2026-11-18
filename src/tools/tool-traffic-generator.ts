@@ -10,7 +10,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const trafficGeneratorTools: ToolModule = [
   // ── Ports ───────────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ export const trafficGeneratorTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add traffic-generator port: ${result}`;
       const details = await executeMikrotikCommand(
-        `/tool traffic-generator port print detail where name="${a.name}"`,
+        `/tool traffic-generator port print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -62,7 +62,7 @@ export const trafficGeneratorTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing traffic-generator ports");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
       const result = await executeMikrotikCommand(
         `/tool traffic-generator port print${whereClause(filters)}`,
         ctx,
@@ -87,7 +87,9 @@ export const trafficGeneratorTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Removing traffic-generator port: port_id=${a.port_id}`);
-      const selector = a.port_id.startsWith("*") ? `.id="${a.port_id}"` : `name="${a.port_id}"`;
+      const selector = a.port_id.startsWith("*")
+        ? `.id=${quoted(a.port_id)}`
+        : `name=${quoted(a.port_id)}`;
       const count = await executeMikrotikCommand(
         `/tool traffic-generator port print count-only where ${selector}`,
         ctx,
@@ -143,7 +145,7 @@ export const trafficGeneratorTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add traffic-generator stream: ${result}`;
       const details = await executeMikrotikCommand(
-        `/tool traffic-generator stream print detail where name="${a.name}"`,
+        `/tool traffic-generator stream print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -168,8 +170,8 @@ export const trafficGeneratorTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing traffic-generator streams");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.port_filter) filters.push(`port="${a.port_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.port_filter) filters.push(`port=${quoted(a.port_filter)}`);
       const result = await executeMikrotikCommand(
         `/tool traffic-generator stream print${whereClause(filters)}`,
         ctx,
@@ -195,8 +197,8 @@ export const trafficGeneratorTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing traffic-generator stream: stream_id=${a.stream_id}`);
       const selector = a.stream_id.startsWith("*")
-        ? `.id="${a.stream_id}"`
-        : `name="${a.stream_id}"`;
+        ? `.id=${quoted(a.stream_id)}`
+        : `name=${quoted(a.stream_id)}`;
       const count = await executeMikrotikCommand(
         `/tool traffic-generator stream print count-only where ${selector}`,
         ctx,

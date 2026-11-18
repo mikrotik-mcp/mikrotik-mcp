@@ -15,6 +15,7 @@ import {
   isEmpty,
   commandUnsupported,
   Cmd,
+  quoted,
 } from "../core/routeros";
 import { notFoundMessage, ruleResolver } from "./_resolve-rule-id";
 
@@ -108,7 +109,7 @@ async function addRoute(
     return `Failed to add route: ${result}`;
   }
   const details = await executeMikrotikCommand(
-    `/ip route print detail where dst-address="${a.dst_address}" and gateway="${a.gateway}"`,
+    `/ip route print detail where dst-address=${quoted(a.dst_address)} and gateway=${quoted(a.gateway)}`,
     ctx,
   );
   return details.trim()
@@ -126,7 +127,7 @@ async function setRouteDisabled(
   const id = await resolveRouteId(routeId, ctx);
   if (!id) return routeNotFound(routeId);
   const result = await executeMikrotikCommand(
-    `/ip route set ${id} disabled=${yesno(disabled)}`,
+    `/ip route set ${quoteValue(id)} disabled=${yesno(disabled)}`,
     ctx,
   );
   if (looksLikeError(result)) return `Failed to update route: ${result}`;
@@ -213,11 +214,12 @@ export const routeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Listing routes with filters: dst=${a.dst_filter}, gateway=${a.gateway_filter}`);
       const filters: string[] = [];
-      if (a.dst_filter) filters.push(`dst-address~"${a.dst_filter}"`);
-      if (a.gateway_filter) filters.push(`gateway~"${a.gateway_filter}"`);
+      if (a.dst_filter) filters.push(`dst-address~${quoted(a.dst_filter)}`);
+      if (a.gateway_filter) filters.push(`gateway~${quoted(a.gateway_filter)}`);
       const tableFilter = a.routing_table_filter ?? a.routing_mark_filter;
-      if (tableFilter) filters.push(`routing-table="${tableFilter}"`);
-      if (a.distance_filter !== undefined) filters.push(`distance=${a.distance_filter}`);
+      if (tableFilter) filters.push(`routing-table=${quoted(tableFilter)}`);
+      if (a.distance_filter !== undefined)
+        filters.push(`distance=${quoteValue(a.distance_filter)}`);
       if (a.active_only) filters.push("active=yes");
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");
@@ -295,7 +297,7 @@ export const routeTools: ToolModule = [
       ctx.info(`Updating route: route_id=${a.route_id}`);
       const id = await resolveRouteId(a.route_id, ctx);
       if (!id) return routeNotFound(a.route_id);
-      const base = `/ip route set ${id}`;
+      const base = `/ip route set ${quoteValue(id)}`;
       const cmd = new Cmd(base);
       if (a.dst_address) cmd.set("dst-address", a.dst_address);
       if (a.gateway) cmd.set("gateway", a.gateway);
@@ -421,8 +423,9 @@ export const routeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting routing table: table=${a.table_name}`);
       const filters: string[] = [];
-      if (a.table_name && a.table_name !== "main") filters.push(`routing-table="${a.table_name}"`);
-      if (a.protocol_filter) filters.push(`protocol="${a.protocol_filter}"`);
+      if (a.table_name && a.table_name !== "main")
+        filters.push(`routing-table=${quoted(a.table_name)}`);
+      if (a.protocol_filter) filters.push(`protocol=${quoted(a.protocol_filter)}`);
       if (a.active_only) filters.push("active=yes");
 
       const result = await executeMikrotikCommand(`/ip route print${whereClause(filters)}`, ctx);
@@ -463,7 +466,7 @@ export const routeTools: ToolModule = [
       // the print query below, which works on both.
       const major = (await getCapabilities(ctx.device).catch(() => undefined))?.version?.major;
       if (major !== undefined && major < 7) {
-        const v6Cmd = new Cmd(`/ip route check ${a.destination}`)
+        const v6Cmd = new Cmd(`/ip route check ${quoteValue(a.destination)}`)
           .opt("routing-mark", table)
           .build();
         const v6Result = await executeMikrotikCommand(v6Cmd, ctx);
@@ -480,7 +483,7 @@ export const routeTools: ToolModule = [
       // Routes in the default "main" table carry no explicit `routing-table`
       // property, so filtering by `routing-table=main` returns nothing —
       // omit the filter for "main" (same logic as get_routing_table).
-      const where = [`${a.destination} in dst-address`, "active=yes"];
+      const where = [`${quoteValue(a.destination)} in dst-address`, "active=yes"];
       if (table && table !== "main") where.push(`routing-table=${quoteValue(table)}`);
       const v7Cmd = `/ip route print detail where ${where.join(" ")}`;
       const v7Result = await executeMikrotikCommand(v7Cmd, ctx);

@@ -15,7 +15,7 @@ import { executeMikrotikCommand } from "../core/connector";
 import { deviceDateStamp } from "../core/datestamp";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, Cmd } from "../core/routeros";
+import { looksLikeError, Cmd, quoteValue } from "../core/routeros";
 import { resolveDeviceName } from "../core/runtime";
 import {
   s3Target,
@@ -97,7 +97,7 @@ export const s3BackupTools: ToolModule = [
 
       // Ensure the source file exists on the device first.
       const count = await executeMikrotikCommand(
-        `/file print count-only where name=${a.filename}`,
+        `/file print count-only where name=${quoteValue(a.filename)}`,
         ctx,
       );
       if (count.trim() === "0") return `File '${a.filename}' not found on the device.`;

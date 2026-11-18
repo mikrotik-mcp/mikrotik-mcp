@@ -127,7 +127,15 @@ async function runOnce(
  * connection. Deliberately narrow: anything it does not recognise keeps the old
  * routing, so a write can never skip an open Safe Mode session by mistake.
  */
-const READ_COMMAND_RE = /^\/(?:[^;[\]{}]*\s)?(?:print|export)(?:\s[^;[\]{}]*)?$/;
+function isPlainRead(command: string): boolean {
+  // No regular expression: the old one took quadratic time on a long command
+  // with many `print` words. This is one pass over the text.
+  if (!command.startsWith("/") || /[;[\]{}]/.test(command)) return false;
+  return command
+    .slice(1)
+    .split(/\s/)
+    .some((word) => word === "print" || word === "export");
+}
 
 /**
  * True when this command must NOT enter the device's Safe Mode shell.
@@ -141,7 +149,7 @@ const READ_COMMAND_RE = /^\/(?:[^;[\]{}]*\s)?(?:print|export)(?:\s[^;[\]{}]*)?$/
 export function bypassesSafeMode(command: string, ctx: Pick<ToolContext, "risk">): boolean {
   if (ctx.risk === "READ") return true;
   // Internal callers carry no risk: go by the command itself.
-  return ctx.risk === undefined && READ_COMMAND_RE.test(command.trim());
+  return ctx.risk === undefined && isPlainRead(command.trim());
 }
 
 /**

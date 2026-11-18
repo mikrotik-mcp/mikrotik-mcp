@@ -481,11 +481,17 @@ export const DashboardConfigSchema = z.object({
    */
   feedLimit: z.coerce.number().int().positive().max(10_000).default(200),
   /**
-   * Serve the dashboard terminal (raw RouterOS commands from the browser).
-   * Even when true, it is served only if the dashboard has a token or listens
-   * on loopback.
+   * Serve the dashboard terminal (raw RouterOS commands from the browser). It
+   * needs no token and no loopback bind: on an untrusted network, set `token`
+   * or turn this off.
    */
   terminal: z.boolean().default(true),
+  /**
+   * Serve the dashboard Files page (browse, upload, download and copy router
+   * files). It needs no token and no loopback bind: on an untrusted network,
+   * set `token` or turn this off.
+   */
+  files: z.boolean().default(true),
 });
 export type DashboardConfig = z.infer<typeof DashboardConfigSchema>;
 
@@ -637,6 +643,11 @@ export const MikrotikConfigSchema = z.object({
    * privacy-conscious deployments. Env: `MIKROTIK_DISABLE_UPDATE_CHECK`.
    */
   disableUpdateCheck: z.boolean().default(false),
+  /**
+   * What the server writes to its log (stderr). The default keeps the log
+   * small: errors only. Env: `MIKROTIK_LOG_LEVEL`; flag: `--log-level`.
+   */
+  logLevel: z.enum(["error", "warn", "info", "debug"]).default("error"),
 });
 export type MikrotikConfig = z.infer<typeof MikrotikConfigSchema>;
 
@@ -709,6 +720,7 @@ function parseDevicesSource(
   memory?: Record<string, unknown>;
   readOnly?: boolean;
   disableUpdateCheck?: boolean;
+  logLevel?: string;
   backupDir?: string;
   /** {@link PASSTHROUGH_BLOCKS} present in the file, handed to zod as-is. */
   blocks: Record<string, unknown>;
@@ -758,6 +770,7 @@ function parseDevicesSource(
   const readOnly = structured && typeof obj.readOnly === "boolean" ? obj.readOnly : undefined;
   const disableUpdateCheck =
     structured && typeof obj.disableUpdateCheck === "boolean" ? obj.disableUpdateCheck : undefined;
+  const logLevel = structured && typeof obj.logLevel === "string" ? obj.logLevel : undefined;
   const backupDir = structured && typeof obj.backupDir === "string" ? obj.backupDir : undefined;
   const blocks: Record<string, unknown> = {};
   if (structured) {
@@ -777,6 +790,7 @@ function parseDevicesSource(
     memory,
     readOnly,
     disableUpdateCheck,
+    logLevel,
     backupDir,
   };
 }
@@ -887,6 +901,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
   let fileMemory: Record<string, unknown> | undefined;
   let fileReadOnly: boolean | undefined;
   let fileDisableUpdateCheck: boolean | undefined;
+  let fileLogLevel: string | undefined;
   let fileBackupDir: string | undefined;
   let fileBlocks: Record<string, unknown> = {};
   if (configFile || devicesInline) {
@@ -904,6 +919,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     fileMemory = src.memory;
     fileReadOnly = src.readOnly;
     fileDisableUpdateCheck = src.disableUpdateCheck;
+    fileLogLevel = src.logLevel;
     fileBackupDir = src.backupDir;
     fileBlocks = src.blocks;
   }
@@ -961,6 +977,8 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
   );
   // Backup vault directory: `--backup-dir`/`MIKROTIK_BACKUP_DIR` wins over the
   // config-file value; both fall back to `DEFAULT_BACKUP_DIR` at read time (vault.ts).
+  // Log level: flag/env wins over the config file; zod applies `error` when unset.
+  const logLevel = (pick("log-level", "MIKROTIK_LOG_LEVEL") ?? fileLogLevel)?.toLowerCase();
   const backupDir = pick("backup-dir", "MIKROTIK_BACKUP_DIR") ?? fileBackupDir;
 
   // Tool-surface curation. Env/flags carry comma-separated lists; the config-file
@@ -999,6 +1017,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     token: pick("dashboard-token", "MIKROTIK_DASHBOARD__TOKEN"),
     feedLimit: pick("dashboard-feed-limit", "MIKROTIK_DASHBOARD__FEED_LIMIT"),
     terminal: boolOpt(pick("dashboard-terminal", "MIKROTIK_DASHBOARD__TERMINAL")),
+    files: boolOpt(pick("dashboard-files", "MIKROTIK_DASHBOARD__FILES")),
   });
 
   // 5) SSH connection pooling. Config-file block is the baseline; env/flags override.
@@ -1058,6 +1077,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     dashboard,
     readOnly,
     disableUpdateCheck,
+    logLevel,
     backupDir,
     tools,
     ssh,

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
+import { yesno, looksLikeError, isEmpty, commandUnsupported, Cmd, quoted } from "../core/routeros";
 
 const UNSUPPORTED =
   "Routing tables are not available on this device (requires RouterOS v7 with the routing package).";
@@ -56,7 +56,7 @@ export const routingTableTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info("Listing routing tables");
-      const where = a.name_filter ? ` where name~"${a.name_filter}"` : "";
+      const where = a.name_filter ? ` where name~${quoted(a.name_filter)}` : "";
       const result = await executeMikrotikCommand(`/routing table print detail${where}`, ctx);
       if (commandUnsupported(result)) return UNSUPPORTED;
       return isEmpty(result) ? "No routing tables found." : `ROUTING TABLES:\n\n${result}`;
@@ -77,7 +77,7 @@ export const routingTableTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting routing table: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing table print detail where name="${a.name}"`,
+        `/routing table print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -114,7 +114,7 @@ export const routingTableTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to add routing table: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing table print detail where name="${a.name}"`,
+        `/routing table print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Routing table '${a.name}' added successfully:\n\n${details}`;
@@ -140,7 +140,7 @@ export const routingTableTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating routing table: ${a.name}`);
-      const base = `/routing table set [find name="${a.name}"]`;
+      const base = `/routing table set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base);
       cmd.raw(fibToken(a.fib, true)); // value-less flag: `fib` / `!fib`, never `fib=yes`
       if (a.comment !== undefined) cmd.set("comment", a.comment);
@@ -153,7 +153,7 @@ export const routingTableTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update routing table: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing table print detail where name="${a.name}"`,
+        `/routing table print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Routing table '${a.name}' updated successfully:\n\n${details}`;
@@ -174,7 +174,7 @@ export const routingTableTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing routing table: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing table remove [find name="${a.name}"]`,
+        `/routing table remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -200,7 +200,7 @@ export const routingTableTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Setting routing table ${a.name} enabled=${a.enabled}`);
       const result = await executeMikrotikCommand(
-        `/routing table set [find name="${a.name}"] disabled=${yesno(!a.enabled)}`,
+        `/routing table set [find name=${quoted(a.name)}] disabled=${yesno(!a.enabled)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

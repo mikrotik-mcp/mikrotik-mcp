@@ -17,10 +17,11 @@
 import { readFileSync } from "node:fs";
 import type { Readable } from "node:stream";
 import { Client } from "ssh2";
-import type { ConnectConfig, ClientChannel } from "ssh2";
+import type { ConnectConfig, ClientChannel, SFTPWrapper } from "ssh2";
 import { logger } from "../logger";
 import type { EndpointOptions } from "../core/device-endpoints";
 import { endpointAddress } from "../core/device-endpoints";
+import { commandUnsupported } from "../core/routeros";
 
 /**
  * How long a one-shot `run()` may go with NO output and NO channel close before
@@ -492,9 +493,21 @@ export class MikroTikSSHClient {
             if (settled) return;
             // Exit status is optional in SSH; a normal close without it is valid.
             if ((typeof code === "number" && code !== 0) || signal) {
+              const text =
+                decodeOutput(Buffer.concat(stderrBuf)) || decodeOutput(Buffer.concat(stdout));
+              // Newer RouterOS exits non-zero when the parser does not know the
+              // menu ("bad command name"). Callers test for that text with
+              // commandUnsupported() to learn that a feature is absent, so it is
+              // an answer, not a failure: return it as older versions did.
+              if (!signal && commandUnsupported(text)) {
+                settled = true;
+                clearTimers();
+                resolve(text);
+                return;
+              }
               fail(
                 new Error(
-                  `MikroTik command failed (${signal ? `signal ${signal}` : `exit code ${code}`}): ${decodeOutput(Buffer.concat(stderrBuf)) || decodeOutput(Buffer.concat(stdout))}`,
+                  `MikroTik command failed (${signal ? `signal ${signal}` : `exit code ${code}`}): ${text}`,
                 ),
               );
             } else finish();
@@ -592,6 +605,22 @@ export class MikroTikSSHClient {
           else resolve(data);
         });
       });
+    });
+  }
+
+  /**
+   * Open the SFTP subsystem and keep it open, for callers that list, stream or
+   * rename files (the dashboard Files page). The caller ends it.
+   */
+  sftp(): Promise<SFTPWrapper> {
+    if (!this.client) {
+      return Promise.reject(new Error("Not connected to MikroTik device"));
+    }
+    const openSftp = this.client.sftp.bind(this.client);
+    return new Promise((resolve, reject) => {
+      openSftp((err, sftp) =>
+        err ? reject(new Error(`SFTP subsystem unavailable: ${err.message}`)) : resolve(sftp),
+      );
     });
   }
 

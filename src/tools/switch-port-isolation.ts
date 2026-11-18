@@ -4,11 +4,11 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 /** Build the RouterOS `[find ...]` selector for a port (by name) or `.id`. */
 function selectorFor(id: string): string {
-  return id.startsWith("*") ? `.id="${id}"` : `port="${id}"`;
+  return id.startsWith("*") ? `.id=${quoted(id)}` : `port=${quoted(id)}`;
 }
 
 export const switchPortIsolationTools: ToolModule = [
@@ -46,7 +46,7 @@ export const switchPortIsolationTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add switch port-isolation: ${result}`;
       const details = await executeMikrotikCommand(
-        `/interface ethernet switch port-isolation print detail where port="${a.port}"`,
+        `/interface ethernet switch port-isolation print detail where port=${quoted(a.port)}`,
         ctx,
       );
       return details.trim()
@@ -73,7 +73,7 @@ export const switchPortIsolationTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing switch port-isolation entries");
       const filters: string[] = [];
-      if (a.port_filter) filters.push(`port~"${a.port_filter}"`);
+      if (a.port_filter) filters.push(`port~${quoted(a.port_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface ethernet switch port-isolation print${whereClause(filters)}`,

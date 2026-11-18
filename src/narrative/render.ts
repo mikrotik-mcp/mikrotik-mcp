@@ -46,7 +46,7 @@ export const NARRATIVE_SECTIONS: NarrativeSection[] = [
 
 /** Escape a value for a Markdown table cell — a stray `|` breaks the row. */
 function cell(text: string | undefined): string {
-  return (text ?? "—").replace(/\|/g, "\\|").replace(/\n/g, " ");
+  return (text ?? "—").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
 
 const SEVERITY_MARK: Record<string, string> = {

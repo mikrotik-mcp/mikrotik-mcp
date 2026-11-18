@@ -10,6 +10,7 @@ import {
   isEmpty,
   containsRawParserError,
   Cmd,
+  quoted,
 } from "../core/routeros";
 import { redactSecrets } from "../utils";
 import {
@@ -198,7 +199,7 @@ export const openvpnTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add OpenVPN server: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface ovpn-server server print detail where name="${a.name}"`,
+        `/interface ovpn-server server print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -225,7 +226,7 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing OpenVPN servers");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
       const result = await executeMikrotikCommand(
         `/interface ovpn-server server print detail${whereClause(filters)}`,
         ctx,
@@ -266,7 +267,7 @@ export const openvpnTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating OpenVPN server: name=${a.name}`);
-      const base = `/interface ovpn-server server set [find name="${a.name}"]`;
+      const base = `/interface ovpn-server server set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("port", a.port)
         .opt("protocol", a.protocol)
@@ -287,7 +288,7 @@ export const openvpnTools: ToolModule = [
       if (cmd === base) return "No updates specified.";
 
       const count = await executeMikrotikCommand(
-        `/interface ovpn-server server print count-only where name="${a.name}"`,
+        `/interface ovpn-server server print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `OpenVPN server '${a.name}' not found.`;
@@ -296,7 +297,7 @@ export const openvpnTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to update OpenVPN server: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface ovpn-server server print detail where name="${a.name}"`,
+        `/interface ovpn-server server print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `OpenVPN server '${a.name}' updated successfully:\n\n${details}`;
@@ -318,13 +319,13 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing OpenVPN server: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface ovpn-server server print count-only where name="${a.name}"`,
+        `/interface ovpn-server server print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `OpenVPN server '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface ovpn-server server remove [find name="${a.name}"]`,
+        `/interface ovpn-server server remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove OpenVPN server: ${result}`;
@@ -346,13 +347,13 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling OpenVPN server: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface ovpn-server server print count-only where name="${a.name}"`,
+        `/interface ovpn-server server print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `OpenVPN server '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface ovpn-server server enable [find name="${a.name}"]`,
+        `/interface ovpn-server server enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable OpenVPN server: ${result}`;
@@ -374,13 +375,13 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling OpenVPN server: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface ovpn-server server print count-only where name="${a.name}"`,
+        `/interface ovpn-server server print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `OpenVPN server '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface ovpn-server server disable [find name="${a.name}"]`,
+        `/interface ovpn-server server disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable OpenVPN server: ${result}`;
@@ -455,7 +456,7 @@ export const openvpnTools: ToolModule = [
         return `Failed to create OpenVPN client: ${redactSecrets(result)}`;
 
       const details = await executeMikrotikCommand(
-        `/interface ovpn-client print detail where name="${a.name}"`,
+        `/interface ovpn-client print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -483,7 +484,7 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing OpenVPN clients");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface ovpn-client print${whereClause(filters)}`,
@@ -510,7 +511,7 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting OpenVPN client details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface ovpn-client print detail where name="${a.name}"`,
+        `/interface ovpn-client print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -533,13 +534,13 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing OpenVPN client: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface ovpn-client print count-only where name="${a.name}"`,
+        `/interface ovpn-client print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `OpenVPN client '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface ovpn-client remove [find name="${a.name}"]`,
+        `/interface ovpn-client remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove OpenVPN client: ${result}`;
@@ -561,7 +562,7 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling OpenVPN client: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface ovpn-client enable [find name="${a.name}"]`,
+        `/interface ovpn-client enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable OpenVPN client: ${result}`;
@@ -583,7 +584,7 @@ export const openvpnTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling OpenVPN client: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface ovpn-client disable [find name="${a.name}"]`,
+        `/interface ovpn-client disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable OpenVPN client: ${result}`;

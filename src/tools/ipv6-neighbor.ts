@@ -9,7 +9,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, quoted } from "../core/routeros";
 
 export const ipv6NeighborTools: ToolModule = [
   defineTool({
@@ -38,10 +38,10 @@ export const ipv6NeighborTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPv6 neighbors");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
-      if (a.mac_filter) filters.push(`mac-address~"${a.mac_filter}"`);
-      if (a.status_filter) filters.push(`status="${a.status_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
+      if (a.mac_filter) filters.push(`mac-address~${quoted(a.mac_filter)}`);
+      if (a.status_filter) filters.push(`status=${quoted(a.status_filter)}`);
       if (a.router_only) filters.push("router=yes");
 
       const result = await executeMikrotikCommand(
@@ -72,12 +72,12 @@ export const ipv6NeighborTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IPv6 neighbor: neighbor_id=${a.neighbor_id}`);
       let result = await executeMikrotikCommand(
-        `/ipv6 neighbor print detail where .id="${a.neighbor_id}"`,
+        `/ipv6 neighbor print detail where .id=${quoted(a.neighbor_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/ipv6 neighbor print detail where address="${a.neighbor_id}"`,
+          `/ipv6 neighbor print detail where address=${quoted(a.neighbor_id)}`,
           ctx,
         );
       }
@@ -107,18 +107,18 @@ export const ipv6NeighborTools: ToolModule = [
       ctx.info(`Removing IPv6 neighbor: neighbor_id=${a.neighbor_id}`);
       let byId = true;
       let count = await executeMikrotikCommand(
-        `/ipv6 neighbor print count-only where .id="${a.neighbor_id}"`,
+        `/ipv6 neighbor print count-only where .id=${quoted(a.neighbor_id)}`,
         ctx,
       );
       if (count.trim() === "0") {
         byId = false;
         count = await executeMikrotikCommand(
-          `/ipv6 neighbor print count-only where address="${a.neighbor_id}"`,
+          `/ipv6 neighbor print count-only where address=${quoted(a.neighbor_id)}`,
           ctx,
         );
         if (count.trim() === "0") return `IPv6 neighbor '${a.neighbor_id}' not found.`;
       }
-      const selector = byId ? `.id="${a.neighbor_id}"` : `address="${a.neighbor_id}"`;
+      const selector = byId ? `.id=${quoted(a.neighbor_id)}` : `address=${quoted(a.neighbor_id)}`;
       const result = await executeMikrotikCommand(`/ipv6 neighbor remove [find ${selector}]`, ctx);
       if (looksLikeError(result)) return `Failed to remove IPv6 neighbor: ${result}`;
       return `IPv6 neighbor '${a.neighbor_id}' removed successfully.`;

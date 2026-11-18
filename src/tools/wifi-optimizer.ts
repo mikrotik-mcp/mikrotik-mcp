@@ -9,7 +9,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError } from "../core/routeros";
+import { looksLikeError, quoted, quoteValue } from "../core/routeros";
 
 /** The least-congested (freq, usage%) from `/interface wireless frequency-monitor`. */
 export function pickBestFrequency(monitor: string): { frequency: number; usePct: number } | null {
@@ -47,7 +47,7 @@ export const wifiOptimizerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Wi-Fi survey on ${a.interface} for ${a.duration}s`);
       const monitor = await executeMikrotikCommand(
-        `/interface wireless frequency-monitor ${a.interface} duration=${a.duration}`,
+        `/interface wireless frequency-monitor ${quoteValue(a.interface)} duration=${quoteValue(a.duration)}`,
         ctx,
       );
       if (looksLikeError(monitor)) return `Survey failed on ${a.interface}: ${monitor}`;
@@ -60,7 +60,7 @@ export const wifiOptimizerTools: ToolModule = [
         return `RF SURVEY — best channel on ${a.interface} is ${best.frequency} MHz (${best.usePct}% busy). Set apply=true to tune the radio to it.`;
       }
       const set = await executeMikrotikCommand(
-        `/interface wireless set [find name="${a.interface}"] frequency=${best.frequency}`,
+        `/interface wireless set [find name=${quoted(a.interface)}] frequency=${best.frequency}`,
         ctx,
       );
       if (looksLikeError(set))

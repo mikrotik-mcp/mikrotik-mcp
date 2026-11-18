@@ -24,12 +24,11 @@ mikrotik-mcp serve --dashboard --dashboard-host 127.0.0.1
 
 Then open the dashboard and go to **Router configuration → Terminal** (`#terminal`).
 
-The terminal runs any command on a router. For that reason it is served only when one of these is true:
+The terminal is on by default. It does not need a dashboard token and it does not need a loopback bind.
 
-- the dashboard has a token (`--dashboard-token`), or
-- the dashboard listens on loopback (`--dashboard-host 127.0.0.1`).
+> **Warning:** The terminal runs any command on a router. Anyone who can open the dashboard can use it, and the dashboard listens on `0.0.0.0` by default. On a network that you do not trust, set a dashboard token (`--dashboard-token`), or turn the terminal off.
 
-On a dashboard that is open to the LAN without a token, the page shows **Terminal is locked** and every terminal route answers HTTP 403.
+To turn it off or on, use **Config → Dashboard → Terminal page** in the dashboard (the change applies at once, with no restart), or the flag below. When it is off, the page shows **Terminal is turned off** and every terminal route answers HTTP 403.
 
 | Env var                        | Flag                   | Default | Meaning                                                                        |
 | ------------------------------ | ---------------------- | ------- | ------------------------------------------------------------------------------ |
@@ -245,7 +244,7 @@ Scheduled commands and Safe Mode actions are audit events too. For a Shell pane,
 
 ## API
 
-The page uses these routes on the dashboard port. All of them need the dashboard token when one is set, and all except `state` answer 403 when the terminal is locked.
+The page uses these routes on the dashboard port. All of them need the dashboard token when one is set, and all except `state` answer 403 when the terminal is turned off.
 
 | Endpoint                                          | Does                                                                             |
 | ------------------------------------------------- | -------------------------------------------------------------------------------- |

@@ -20,6 +20,7 @@ import { buildFabricMap } from "../core/l2-fabric";
 import { listDevices } from "../core/runtime";
 import { collectFabric } from "../tools/l2-fabric";
 import { collectDeviceFacts } from "../tools/advisories";
+import { clientError } from "./http-error";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -38,7 +39,7 @@ export async function postureRoutes(req: Request, url: URL): Promise<Response | 
       const map = buildFabricMap(await collectFabric(device, ctx));
       return json(map);
     } catch (e) {
-      return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+      return json({ error: clientError(e) }, 502);
     }
   }
 
@@ -66,7 +67,7 @@ export async function postureRoutes(req: Request, url: URL): Promise<Response | 
         })),
       });
     } catch (e) {
-      return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+      return json({ error: clientError(e) }, 502);
     }
   }
 

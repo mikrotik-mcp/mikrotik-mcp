@@ -12,6 +12,7 @@ import {
   isEmpty,
   Cmd,
   unsetFragments,
+  quoted,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
@@ -102,8 +103,8 @@ async function updateMangleRule(
     updates.push(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
   };
 
-  if (a.chain) updates.push(`chain=${a.chain}`);
-  if (a.action) updates.push(`action=${a.action}`);
+  if (a.chain) updates.push(`chain=${quoteValue(a.chain)}`);
+  if (a.action) updates.push(`action=${quoteValue(a.action)}`);
   put("src-address", a.src_address);
   put("dst-address", a.dst_address);
   put("src-port", a.src_port);
@@ -430,10 +431,11 @@ export const firewallMangleTools: ToolModule = [
       ctx.info("Listing mangle rules");
 
       const filters: string[] = [];
-      if (a.chain_filter) filters.push(`chain=${a.chain_filter}`);
-      if (a.action_filter) filters.push(`action=${a.action_filter}`);
-      if (a.connection_mark_filter) filters.push(`connection-mark="${a.connection_mark_filter}"`);
-      if (a.packet_mark_filter) filters.push(`packet-mark="${a.packet_mark_filter}"`);
+      if (a.chain_filter) filters.push(`chain=${quoteValue(a.chain_filter)}`);
+      if (a.action_filter) filters.push(`action=${quoteValue(a.action_filter)}`);
+      if (a.connection_mark_filter)
+        filters.push(`connection-mark=${quoted(a.connection_mark_filter)}`);
+      if (a.packet_mark_filter) filters.push(`packet-mark=${quoted(a.packet_mark_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");
@@ -603,7 +605,7 @@ export const firewallMangleTools: ToolModule = [
       if (!id) return `Mangle rule '${a.rule_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip firewall mangle move ${id} destination=${a.destination}`,
+        `/ip firewall mangle move ${id} destination=${quoteValue(a.destination)}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to move mangle rule: ${result}`;

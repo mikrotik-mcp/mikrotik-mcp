@@ -400,7 +400,7 @@ function TerminalWorkspace(): ReactNode {
       <div className="term-page">
         <div className="term-locked">
           <ShieldAlert size={28} />
-          <h2>Terminal is locked</h2>
+          <h2>Terminal is turned off</h2>
           <p>{state.reason}</p>
         </div>
       </div>

@@ -17,6 +17,7 @@
  * ADVISORY (RouterOS has no force-move primitive — plan §1), so anything that
  * depends on client behaviour is `needs_live_verification`, never `proven`.
  */
+import { quoted } from "./routeros";
 
 // ── Result types ────────────────────────────────────────────────────────────
 
@@ -323,7 +324,7 @@ export function buildChannelPlanCommands(
     if (!radio || radio.channel === ch) continue; // already on target → no-op
     const freq = channelToFrequencyMhz(ch, bandOf(radio));
     if (freq == null) continue;
-    cmds.push(`${state.path} set [find name="${radioId}"] channel.frequency=${freq}`);
+    cmds.push(`${state.path} set [find name=${quoted(radioId)}] channel.frequency=${freq}`);
   }
   return cmds;
 }
@@ -722,7 +723,7 @@ export function buildFtCommands(
     if (want && !want.has(c.name)) continue;
     if (c.ft && c.ftMobilityDomain === domain) continue; // already correct → no-op
     cmds.push(
-      `${menu} set [find name="${c.name}"] ft=yes ft-over-ds=yes ft-mobility-domain=${domain}`,
+      `${menu} set [find name=${quoted(c.name)}] ft=yes ft-over-ds=yes ft-mobility-domain=${domain}`,
     );
   }
   return cmds;

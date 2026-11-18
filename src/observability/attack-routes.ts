@@ -21,6 +21,7 @@ import { buildGuards, policyFromConfig, sweep } from "../attack/session";
 import { attackStore } from "../attack/store";
 import { getDeviceGeo } from "./geo";
 import { getDeviceStatus } from "./health";
+import { clientError } from "./http-error";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -35,7 +36,7 @@ export async function attackRoutes(req: Request, url: URL): Promise<Response | n
   try {
     store = await attackStore();
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e), incidents: [] }, 503);
+    return json({ error: clientError(e), incidents: [] }, 503);
   }
 
   const cfg = getConfig().attacks;

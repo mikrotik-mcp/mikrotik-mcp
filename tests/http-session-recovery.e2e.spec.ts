@@ -40,6 +40,8 @@ async function startServer(port: number, home: string) {
       "--mcp-host=127.0.0.1",
       `--mcp-port=${port}`,
       "--dashboard=false",
+      // The test reads the session lines of the log, which are informational.
+      "--log-level=info",
       "--host=192.0.2.1",
     ],
     // A clean environment and an empty HOME: no real device config can load.

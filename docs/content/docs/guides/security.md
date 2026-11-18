@@ -96,6 +96,24 @@ form is in [`schemas/tool-catalog.json`](https://github.com/mikrotik-mcp/mikroti
 
 ## Dashboard terminal
 
-The dashboard's [Terminal](/docs/guides/terminal) page runs raw RouterOS commands from the browser. It is served only when the dashboard has a token (`--dashboard-token`) or listens on loopback, and `--dashboard-terminal=false` turns it off.
+The dashboard's [Terminal](/docs/guides/terminal) page runs raw RouterOS commands from the browser.
 
-Destructive commands ask for confirmation, a read-only server runs reads only, and every command is written to the audit feed. Automatic retry never repeats a change that may already have run. See [Safety](/docs/guides/terminal#safety).
+The page is on by default and needs no token and no loopback bind. Anyone who can reach the dashboard port can run any command on your routers. On a network that you do not trust, do one of these:
+
+- set a dashboard token (`--dashboard-token`);
+- bind the dashboard to loopback (`--dashboard-host 127.0.0.1`);
+- turn the page off: **Config → Dashboard → Terminal page**, or `--dashboard-terminal=false`.
+
+Destructive commands ask for confirmation, a read-only server runs reads only, and every command is written to the audit feed. Automatic retry never repeats a change that may already have run.
+
+## Dashboard files
+
+The dashboard's [Files](/docs/guides/files) page reads and writes router files from the browser, and files can hold secrets (backups, exports, keys).
+
+Like the terminal, the page is on by default and needs no token and no loopback bind. Anyone who can reach the dashboard port can use it. On a network that you do not trust, do one of these:
+
+- set a dashboard token (`--dashboard-token`);
+- bind the dashboard to loopback (`--dashboard-host 127.0.0.1`);
+- turn the page off: **Config → Dashboard → Files page**, or `--dashboard-files=false`.
+
+A read-only server lists, searches and downloads only. Paths that contain `..` are refused, uploads from another origin are refused, and every operation is written to the audit feed. File contents are not recorded.

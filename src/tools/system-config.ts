@@ -12,7 +12,14 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, defineTool, DANGEROUS } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  looksLikeError,
+  isEmpty,
+  commandUnsupported,
+  Cmd,
+  quoted,
+} from "../core/routeros";
 
 export const systemConfigTools: ToolModule = [
   // ── Console `/system console` ───────────────────────────────────────────
@@ -288,7 +295,7 @@ export const systemConfigTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing serial ports");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(`/port print${whereClause(filters)}`, ctx);
       return isEmpty(result)
@@ -311,7 +318,10 @@ export const systemConfigTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Getting serial port details: name=${a.name}`);
-      const result = await executeMikrotikCommand(`/port print detail where name="${a.name}"`, ctx);
+      const result = await executeMikrotikCommand(
+        `/port print detail where name=${quoted(a.name)}`,
+        ctx,
+      );
       return isEmpty(result)
         ? `Serial port '${a.name}' not found.`
         : `SERIAL PORT DETAILS:\n\n${result}`;
@@ -350,7 +360,7 @@ export const systemConfigTools: ToolModule = [
         return "No updates specified.";
       }
 
-      const cmd = new Cmd(`/port set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/port set [find name=${quoted(a.name)}]`)
         .opt("baud-rate", a.baud_rate)
         .opt("data-bits", a.data_bits)
         .opt("parity", a.parity)
@@ -361,7 +371,7 @@ export const systemConfigTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to set serial port: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/port print detail where name="${a.name}"`,
+        `/port print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Serial port updated successfully:\n\n${details}`;

@@ -11,7 +11,7 @@ import type { ToolContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 
 /**
  * Shared "create, then verify" flow: when RouterOS echoes a new `.id` (`*N` or a
@@ -33,7 +33,10 @@ async function verifyCreate(
     }
     if (looksLikeError(result)) return `Failed to create ${label.toLowerCase()}: ${result}`;
   }
-  const details = await executeMikrotikCommand(`${path} print detail where name="${name}"`, ctx);
+  const details = await executeMikrotikCommand(
+    `${path} print detail where name=${quoted(name)}`,
+    ctx,
+  );
   if (details.trim()) return `${label} created successfully:\n\n${details}`;
   return `${label} creation completed but unable to verify.`;
 }
@@ -207,8 +210,8 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing queue types");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.kind_filter) filters.push(`kind=${a.kind_filter}`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.kind_filter) filters.push(`kind=${quoteValue(a.kind_filter)}`);
 
       let cmd = "/queue type print";
       if (filters.length) cmd += ` where ${filters.join(" ")}`;
@@ -230,7 +233,7 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting queue type details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue type print detail where name="${a.name}"`,
+        `/queue type print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -276,7 +279,7 @@ export const queueTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating queue type: name=${a.name}`);
-      const cmd = new Cmd(`/queue type set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/queue type set [find name=${quoted(a.name)}]`)
         .opt("name", a.new_name)
         .opt("cake-flowmode", a.cake_flowmode)
         .bool("cake-nat", a.cake_nat)
@@ -312,7 +315,7 @@ export const queueTools: ToolModule = [
 
       const lookupName = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/queue type print detail where name="${lookupName}"`,
+        `/queue type print detail where name=${quoted(lookupName)}`,
         ctx,
       );
       return `Queue type updated successfully:\n\n${details}`;
@@ -329,7 +332,7 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing queue type: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue type remove [find name="${a.name}"]`,
+        `/queue type remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove queue type: ${result}`;
@@ -397,8 +400,8 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing queue trees");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.parent_filter) filters.push(`parent="${a.parent_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.parent_filter) filters.push(`parent=${quoted(a.parent_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
 
@@ -422,7 +425,7 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting queue tree details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue tree print detail where name="${a.name}"`,
+        `/queue tree print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -456,7 +459,7 @@ export const queueTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating queue tree: name=${a.name}`);
-      const cmd = new Cmd(`/queue tree set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/queue tree set [find name=${quoted(a.name)}]`)
         .opt("name", a.new_name)
         .opt("parent", a.parent)
         .opt("queue", a.queue)
@@ -480,7 +483,7 @@ export const queueTools: ToolModule = [
 
       const lookupName = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/queue tree print detail where name="${lookupName}"`,
+        `/queue tree print detail where name=${quoted(lookupName)}`,
         ctx,
       );
       return `Queue tree updated successfully:\n\n${details}`;
@@ -497,7 +500,7 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing queue tree: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue tree remove [find name="${a.name}"]`,
+        `/queue tree remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove queue tree: ${result}`;
@@ -515,13 +518,13 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling queue tree: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue tree set [find name="${a.name}"] disabled=no`,
+        `/queue tree set [find name=${quoted(a.name)}] disabled=no`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable queue tree: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/queue tree print detail where name="${a.name}"`,
+        `/queue tree print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Queue tree enabled:\n\n${details}`;
@@ -538,13 +541,13 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling queue tree: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue tree set [find name="${a.name}"] disabled=yes`,
+        `/queue tree set [find name=${quoted(a.name)}] disabled=yes`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable queue tree: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/queue tree print detail where name="${a.name}"`,
+        `/queue tree print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Queue tree disabled:\n\n${details}`;
@@ -640,8 +643,8 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing simple queues");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.target_filter) filters.push(`target~"${a.target_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.target_filter) filters.push(`target~${quoted(a.target_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
 
@@ -665,7 +668,7 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting simple queue details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue simple print detail where name="${a.name}"`,
+        `/queue simple print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -728,7 +731,7 @@ export const queueTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating simple queue: name=${a.name}`);
-      const cmd = new Cmd(`/queue simple set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/queue simple set [find name=${quoted(a.name)}]`)
         .opt("name", a.new_name)
         .opt("target", a.target)
         .opt("dst", a.dst)
@@ -755,7 +758,7 @@ export const queueTools: ToolModule = [
 
       const lookupName = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/queue simple print detail where name="${lookupName}"`,
+        `/queue simple print detail where name=${quoted(lookupName)}`,
         ctx,
       );
       return `Simple queue updated successfully:\n\n${details}`;
@@ -772,7 +775,7 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing simple queue: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue simple remove [find name="${a.name}"]`,
+        `/queue simple remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove simple queue: ${result}`;
@@ -790,13 +793,13 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling simple queue: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue simple set [find name="${a.name}"] disabled=no`,
+        `/queue simple set [find name=${quoted(a.name)}] disabled=no`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable simple queue: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/queue simple print detail where name="${a.name}"`,
+        `/queue simple print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Simple queue enabled:\n\n${details}`;
@@ -813,13 +816,13 @@ export const queueTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling simple queue: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/queue simple set [find name="${a.name}"] disabled=yes`,
+        `/queue simple set [find name=${quoted(a.name)}] disabled=yes`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable simple queue: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/queue simple print detail where name="${a.name}"`,
+        `/queue simple print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Simple queue disabled:\n\n${details}`;

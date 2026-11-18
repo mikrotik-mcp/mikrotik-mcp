@@ -191,12 +191,17 @@ Or in a JSON config file:
 
 | Setting       | Environment variable | Default | Values                           |
 | ------------- | -------------------- | ------- | -------------------------------- |
-| Log verbosity | `MIKROTIK_LOG_LEVEL` | `info`  | `debug`, `info`, `warn`, `error` |
+| Log verbosity | `MIKROTIK_LOG_LEVEL` | `error` | `debug`, `info`, `warn`, `error` |
 
 All log output is written to **stderr** (never stdout, which carries the
 JSON-RPC protocol stream on the stdio transport). Each line is prefixed with
 `[mikrotik-mcp]` and the level; color is added automatically when stderr is a
 TTY. Set `MIKROTIK_LOG_LEVEL=debug` to see every command the server issues.
+
+The default level is `error`, so the log holds only failures. You can also set
+the level with `logLevel` in the config file, with `--log-level`, or in the
+dashboard under **Config → General → Log level**, where a change applies at
+once. The environment variable and the flag win over the config file.
 
 ## Authentication: key file vs. password
 

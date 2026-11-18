@@ -168,8 +168,9 @@ export async function openShell(
   const client = new MikroTikSSHClient({
     ...sshOptionsOf(dc),
     jump: resolveJump(dc),
-    keepAliveInterval: 15_000,
-    keepAliveCountMax: 3,
+    // No SSH keepalive: RouterOS does not answer the keepalive request, so the
+    // client would close an idle shell after interval × count (about a minute).
+    // The session has its own idle limit below.
   });
   if (!(await client.connect()))
     return fail(502, `Could not connect to ${device}: ${client.lastError ?? "unknown error"}`);

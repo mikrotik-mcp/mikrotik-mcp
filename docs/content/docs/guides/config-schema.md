@@ -420,7 +420,8 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "redactInput": false,
     "maxBodyBytes": 16384,
     "feedLimit": 200,
-    "terminal": true
+    "terminal": true,
+    "files": true
   },
   "type": "object",
   "properties": {
@@ -474,6 +475,10 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "terminal": {
       "default": true,
       "type": "boolean"
+    },
+    "files": {
+      "default": true,
+      "type": "boolean"
     }
   },
   "required": [
@@ -486,7 +491,8 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "redactInput",
     "maxBodyBytes",
     "feedLimit",
-    "terminal"
+    "terminal",
+    "files"
   ],
   "additionalProperties": false
 }
@@ -1034,5 +1040,15 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
 {
   "default": false,
   "type": "boolean"
+}
+```
+
+## logLevel
+
+```json
+{
+  "default": "error",
+  "type": "string",
+  "enum": ["error", "warn", "info", "debug"]
 }
 ```

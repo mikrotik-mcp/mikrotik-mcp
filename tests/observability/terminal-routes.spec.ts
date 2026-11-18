@@ -55,7 +55,7 @@ vi.mock("../../src/core/runtime", () => ({
 
 const routes = (denied: string | null = null) =>
   createTerminalRoutes({
-    denied,
+    denied: () => denied,
     store: async () =>
       ({
         addHistory: (entry: Record<string, unknown>) => state.history.push(entry),
@@ -82,12 +82,11 @@ beforeEach(() => {
 });
 
 describe("terminal access", () => {
-  it("needs a dashboard token or a loopback bind, and honours the off switch", () => {
-    expect(terminalAccess({ host: "127.0.0.1" })).toBeNull();
-    expect(terminalAccess({ host: "0.0.0.0", token: "t" })).toBeNull();
-    expect(terminalAccess({ host: "0.0.0.0" })).toMatch(/token/);
-    expect(terminalAccess({ host: "192.0.2.5" })).toMatch(/127\.0\.0\.1/);
-    expect(terminalAccess({ host: "127.0.0.1", terminal: false })).toMatch(/turned off/);
+  it("is on without a token, and the setting turns it off", () => {
+    expect(terminalAccess({})).toBeNull();
+    expect(terminalAccess(undefined)).toBeNull();
+    expect(terminalAccess({ terminal: true })).toBeNull();
+    expect(terminalAccess({ terminal: false })).toMatch(/turned off/);
   });
 
   it("answers 403 on every route but state when denied", async () => {
@@ -164,7 +163,7 @@ describe("shared view", () => {
       { id: 1, ts: before, device: "lab", command: "/old print" },
     ];
     const route = createTerminalRoutes({
-      denied: null,
+      denied: () => null,
       store: async () => ({ listHistory: () => entries }) as never,
     });
     stopTerminalScheduler();
@@ -207,7 +206,7 @@ describe("scheduled commands", () => {
   };
   const post = async (store: unknown, body: unknown) => {
     const url = new URL("http://127.0.0.1:9090/api/terminal/schedules");
-    const route = createTerminalRoutes({ denied: null, store: async () => store as never });
+    const route = createTerminalRoutes({ denied: () => null, store: async () => store as never });
     stopTerminalScheduler();
     return route(new Request(url, { method: "POST", body: JSON.stringify(body) }), url);
   };

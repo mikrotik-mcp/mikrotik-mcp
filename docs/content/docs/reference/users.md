@@ -186,7 +186,7 @@ Forcibly terminate an active user session (`/user active remove <user_id>`). `us
 
 ## export_user_config
 
-**Export User Configuration to File** · Risk: **read**
+**Export User Configuration to File** · Risk: **write**
 
 Export the router's user accounts and user-group configuration as a RouterOS script (`/user export file=<filename>`). The file is saved on the router's flash storage as `<filename>.rsc`. If `filename` is omitted, defaults to `user_config`. The exported script can be used to restore user accounts on another device.
 

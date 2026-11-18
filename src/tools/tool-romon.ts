@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const romonTools: ToolModule = [
   defineTool({
@@ -91,7 +91,7 @@ export const romonTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add romon port: ${result}`;
       const details = await executeMikrotikCommand(
-        `/tool romon port print detail where interface="${a.interface}"`,
+        `/tool romon port print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return details.trim()
@@ -117,7 +117,7 @@ export const romonTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing romon ports");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/tool romon port print${whereClause(filters)}`,
@@ -146,8 +146,8 @@ export const romonTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing romon port: port_id=${a.port_id}`);
       const selector = a.port_id.startsWith("*")
-        ? `.id="${a.port_id}"`
-        : `interface="${a.port_id}"`;
+        ? `.id=${quoted(a.port_id)}`
+        : `interface=${quoted(a.port_id)}`;
       const count = await executeMikrotikCommand(
         `/tool romon port print count-only where ${selector}`,
         ctx,

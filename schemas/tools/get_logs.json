@@ -10,7 +10,8 @@
       "type": "string"
     },
     "time_filter": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
     },
     "message_filter": {
       "type": "string"

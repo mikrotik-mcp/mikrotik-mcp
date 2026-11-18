@@ -12,9 +12,21 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, looksLikeError } from "../core/routeros";
+import { Cmd, looksLikeError, quoted } from "../core/routeros";
 
 const FEED_TAG = "threat-feed";
+
+/**
+ * A feed name becomes part of a script name, a file name and the text of a
+ * stored script, which the router runs later. Only a plain identifier is safe
+ * in all of those, so anything else is refused.
+ */
+const FEED_NAME = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9][\w.-]{0,40}$/,
+    "Use letters, digits, '.', '_' and '-' (41 characters at most).",
+  );
 
 export const threatFeedTools: ToolModule = [
   defineTool({
@@ -30,7 +42,7 @@ export const threatFeedTools: ToolModule = [
       "`apply=true` to install. Script/scheduler/rule are named/tagged `threat-feed-<name>` so " +
       "remove_threat_feed can undo them. Returns the plan or a build report.",
     inputSchema: {
-      name: z.string().describe("Short feed id, e.g. 'spamhaus-drop'"),
+      name: FEED_NAME.describe("Short feed id, e.g. 'spamhaus-drop'"),
       url: z.string().describe("HTTPS URL of a RouterOS .rsc address-list file"),
       address_list: z.string().default("threat-blocklist").describe("Address-list to populate"),
       interval: z.string().default("1h").describe("How often to refresh the feed"),
@@ -40,7 +52,7 @@ export const threatFeedTools: ToolModule = [
     async handler(a, ctx) {
       const id = `${FEED_TAG}-${a.name}`;
       const rsc = `${id}.rsc`;
-      const source = `/tool fetch url="${a.url}" dst-path=${rsc}; :delay 5s; /import file-name=${rsc}`;
+      const source = `/tool fetch url=${quoted(a.url)} dst-path=${rsc}; :delay 5s; /import file-name=${rsc}`;
       const commands = [
         new Cmd("/system script add").set("name", id).set("source", source).build(),
         new Cmd("/system scheduler add")
@@ -87,14 +99,17 @@ export const threatFeedTools: ToolModule = [
       "Removes a threat feed installed by subscribe_threat_feed: deletes its `/system scheduler` and " +
       "`/system script` (named `threat-feed-<name>`) and any raw drop rule tagged for it. Does NOT " +
       "flush the address-list entries themselves. Returns what was removed.",
-    inputSchema: { name: z.string().describe("The feed id used when subscribing") },
+    inputSchema: { name: FEED_NAME.describe("The feed id used when subscribing") },
     async handler(a, ctx) {
       const id = `${FEED_TAG}-${a.name}`;
       ctx.info(`Removing threat feed ${id}`);
       const steps: [string, string][] = [
-        ["scheduler", `/system scheduler remove [find name="${id}"]`],
-        ["script", `/system script remove [find name="${id}"]`],
-        ["raw drop", `/ip firewall raw remove [find comment~"${FEED_TAG}: drop ${a.name}"]`],
+        ["scheduler", `/system scheduler remove [find name=${quoted(id)}]`],
+        ["script", `/system script remove [find name=${quoted(id)}]`],
+        [
+          "raw drop",
+          `/ip firewall raw remove [find comment~${quoted(`${FEED_TAG}: drop ${a.name}`)}]`,
+        ],
       ];
       const removed: string[] = [];
       for (const [label, cmd] of steps) {

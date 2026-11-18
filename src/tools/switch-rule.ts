@@ -11,6 +11,7 @@ import {
   isEmpty,
   Cmd,
   unsetFragments,
+  quoted,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { executeRuleCreate, readCreatedRule } from "./_create-rule";
@@ -89,12 +90,12 @@ async function updateSwitchRule(
 
   if (updates.length === 0) return "No updates specified.";
 
-  const cmd = `/interface ethernet switch rule set ${a.rule_id} ${updates.join(" ")}`;
+  const cmd = `/interface ethernet switch rule set ${quoteValue(a.rule_id)} ${updates.join(" ")}`;
   const result = await executeMikrotikCommand(cmd, ctx);
   if (looksLikeError(result)) return `Failed to update switch rule: ${result}`;
 
   const details = await executeMikrotikCommand(
-    `/interface ethernet switch rule print detail where .id=${a.rule_id}`,
+    `/interface ethernet switch rule print detail where .id=${quoteValue(a.rule_id)}`,
     ctx,
   );
   return `Switch rule updated successfully:\n\n${details}`;
@@ -217,8 +218,8 @@ export const switchRuleTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing switch rules");
       const filters: string[] = [];
-      if (a.switch_filter) filters.push(`switch="${a.switch_filter}"`);
-      if (a.ports_filter) filters.push(`ports~"${a.ports_filter}"`);
+      if (a.switch_filter) filters.push(`switch=${quoted(a.switch_filter)}`);
+      if (a.ports_filter) filters.push(`ports~${quoted(a.ports_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 
       const result = await executeMikrotikCommand(
@@ -248,7 +249,7 @@ export const switchRuleTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting switch rule: rule_id=${a.rule_id}`);
       const result = await executeMikrotikCommand(
-        `/interface ethernet switch rule print detail where .id=${a.rule_id}`,
+        `/interface ethernet switch rule print detail where .id=${quoteValue(a.rule_id)}`,
         ctx,
       );
       return isEmpty(result)
@@ -320,13 +321,13 @@ export const switchRuleTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing switch rule: rule_id=${a.rule_id}`);
       const count = await executeMikrotikCommand(
-        `/interface ethernet switch rule print count-only where .id=${a.rule_id}`,
+        `/interface ethernet switch rule print count-only where .id=${quoteValue(a.rule_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `Switch rule '${a.rule_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface ethernet switch rule remove ${a.rule_id}`,
+        `/interface ethernet switch rule remove ${quoteValue(a.rule_id)}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove switch rule: ${result}`;

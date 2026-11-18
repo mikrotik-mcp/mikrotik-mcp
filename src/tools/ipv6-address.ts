@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 import { findAddressConflicts } from "../utils/ip-overlap";
 
 export const ipv6AddressTools: ToolModule = [
@@ -71,7 +71,7 @@ export const ipv6AddressTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add IPv6 address: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ipv6 address print detail where address="${a.address}"`,
+        `/ipv6 address print detail where address=${quoted(a.address)}`,
         ctx,
       );
       return details.trim()
@@ -98,8 +98,8 @@ export const ipv6AddressTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPv6 addresses");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");
       if (a.link_local_only) filters.push("link-local=yes");
@@ -128,12 +128,12 @@ export const ipv6AddressTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IPv6 address details: address_id=${a.address_id}`);
       let result = await executeMikrotikCommand(
-        `/ipv6 address print detail where .id="${a.address_id}"`,
+        `/ipv6 address print detail where .id=${quoted(a.address_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/ipv6 address print detail where address="${a.address_id}"`,
+          `/ipv6 address print detail where address=${quoted(a.address_id)}`,
           ctx,
         );
       }
@@ -157,18 +157,18 @@ export const ipv6AddressTools: ToolModule = [
       ctx.info(`Removing IPv6 address: address_id=${a.address_id}`);
       let byId = true;
       let count = await executeMikrotikCommand(
-        `/ipv6 address print count-only where .id="${a.address_id}"`,
+        `/ipv6 address print count-only where .id=${quoted(a.address_id)}`,
         ctx,
       );
       if (count.trim() === "0") {
         byId = false;
         count = await executeMikrotikCommand(
-          `/ipv6 address print count-only where address="${a.address_id}"`,
+          `/ipv6 address print count-only where address=${quoted(a.address_id)}`,
           ctx,
         );
         if (count.trim() === "0") return `IPv6 address '${a.address_id}' not found.`;
       }
-      const selector = byId ? `.id="${a.address_id}"` : `address="${a.address_id}"`;
+      const selector = byId ? `.id=${quoted(a.address_id)}` : `address=${quoted(a.address_id)}`;
       const result = await executeMikrotikCommand(`/ipv6 address remove [find ${selector}]`, ctx);
       if (looksLikeError(result)) return `Failed to remove IPv6 address: ${result}`;
       return `IPv6 address '${a.address_id}' removed successfully.`;

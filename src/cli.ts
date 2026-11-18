@@ -29,6 +29,8 @@ import { runHttp } from "./transport/http";
 import { runStdio } from "./transport/stdio";
 import { VERSION, SERVER_NAME } from "./version";
 import { printBanner } from "./cli-logo";
+import { printStartSummary } from "./cli-summary";
+import { getDeviceStatus, probeAll } from "./observability/health";
 import { AlertEngine, setAlertEngine } from "./alerts/engine";
 import { startAlertSampler, stopAlertSampler } from "./alerts/sampler";
 import { startScheduler, stopScheduler } from "./schedule/session";
@@ -94,9 +96,14 @@ OBSERVABILITY DASHBOARD  (optional; real-time feed + analytics of every tool cal
   --dashboard-capture-body  Record redacted in/out bodies  (MIKROTIK_DASHBOARD__CAPTURE_BODY)
   --dashboard-token         Bearer token to protect the dashboard
                                                            (MIKROTIK_DASHBOARD__TOKEN)
-  --dashboard-terminal      Serve the Terminal page (default true). It also needs
-                            a dashboard token or a loopback bind
-                                                           (MIKROTIK_DASHBOARD__TERMINAL)
+  --dashboard-terminal      Serve the Terminal page (default true). It needs no
+                            token: set one, or turn this off, on an untrusted
+                            network                (MIKROTIK_DASHBOARD__TERMINAL)
+  --dashboard-files         Serve the Files page (default true). It needs no token:
+                            set one, or turn this off, on an untrusted network
+                                                           (MIKROTIK_DASHBOARD__FILES)
+  --log-level               error | warn | info | debug (default error)
+                                                           (MIKROTIK_LOG_LEVEL)
 `;
 
 function warnIfPlaintextPasswordInContainer(anyPassword: boolean): void {
@@ -327,6 +334,13 @@ async function main(): Promise<void> {
     }
   };
 
+  // On an interactive terminal: where the server answers, and the state of each
+  // router. The dashboard checks the routers itself; without it, check them once.
+  const summary = (): Promise<void> =>
+    printStartSummary(cfg, getDeviceStatus, cfg.dashboard.enabled ? undefined : probeAll).catch(
+      () => {},
+    );
+
   if (cfg.mcp.transport === "stdio") {
     // Connect the stdio transport FIRST so `initialize` is answered immediately
     // (Claude Desktop times out the handshake after ~60s). runStdio() resolves
@@ -335,9 +349,11 @@ async function main(): Promise<void> {
     // The recorder installs a beat later — tool calls never arrive that early.
     await runStdio();
     await startDashboard();
+    void summary();
   } else {
     // HTTP serves until exit, so start the dashboard before it.
     await startDashboard();
+    void summary();
     await runHttp(cfg.mcp);
   }
 }

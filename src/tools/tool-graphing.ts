@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 
 const Kind = z.enum(["interface", "queue", "resource"]);
 
@@ -127,7 +127,7 @@ export const graphingTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Listing ${a.kind} graphing rules`);
       const result = await executeMikrotikCommand(
-        `/tool graphing ${a.kind} print${whereClause([])}`,
+        `/tool graphing ${quoteValue(a.kind)} print${whereClause([])}`,
         ctx,
       );
       return isEmpty(result)
@@ -154,13 +154,13 @@ export const graphingTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing ${a.kind} graphing rule: entry_id=${a.entry_id}`);
       const count = await executeMikrotikCommand(
-        `/tool graphing ${a.kind} print count-only where .id="${a.entry_id}"`,
+        `/tool graphing ${quoteValue(a.kind)} print count-only where .id=${quoted(a.entry_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `${a.kind} graphing rule '${a.entry_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/tool graphing ${a.kind} remove [find .id="${a.entry_id}"]`,
+        `/tool graphing ${quoteValue(a.kind)} remove [find .id=${quoted(a.entry_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove ${a.kind} graphing rule: ${result}`;

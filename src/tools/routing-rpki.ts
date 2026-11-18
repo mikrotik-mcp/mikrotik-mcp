@@ -11,6 +11,8 @@ import {
   isEmpty,
   commandUnsupported,
   Cmd,
+  quoted,
+  quoteValue,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -33,7 +35,7 @@ export const routingRpkiTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing RPKI sessions");
       const filters: string[] = [];
-      if (a.group_filter) filters.push(`group="${a.group_filter}"`);
+      if (a.group_filter) filters.push(`group=${quoted(a.group_filter)}`);
       const result = await executeMikrotikCommand(
         `/routing rpki print detail${whereClause(filters)}`,
         ctx,
@@ -112,7 +114,7 @@ export const routingRpkiTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating RPKI session ${a.session_id}`);
-      const base = `/routing rpki set ${a.session_id}`;
+      const base = `/routing rpki set ${quoteValue(a.session_id)}`;
       const cmd = new Cmd(base)
         .opt("address", a.address)
         .opt("port", a.port)
@@ -129,7 +131,7 @@ export const routingRpkiTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update RPKI session: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing rpki print detail where .id=${a.session_id}`,
+        `/routing rpki print detail where .id=${quoteValue(a.session_id)}`,
         ctx,
       );
       return `RPKI session updated successfully:\n\n${details}`;
@@ -148,7 +150,10 @@ export const routingRpkiTools: ToolModule = [
     inputSchema: { session_id: z.string().describe('Session id, e.g. "*1"') },
     async handler(a, ctx) {
       ctx.info(`Removing RPKI session ${a.session_id}`);
-      const result = await executeMikrotikCommand(`/routing rpki remove ${a.session_id}`, ctx);
+      const result = await executeMikrotikCommand(
+        `/routing rpki remove ${quoteValue(a.session_id)}`,
+        ctx,
+      );
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to remove RPKI session: ${result}`;
       return `RPKI session '${a.session_id}' removed successfully.`;
@@ -172,7 +177,7 @@ export const routingRpkiTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Setting RPKI session ${a.session_id} enabled=${a.enabled}`);
       const result = await executeMikrotikCommand(
-        `/routing rpki set ${a.session_id} disabled=${yesno(!a.enabled)}`,
+        `/routing rpki set ${quoteValue(a.session_id)} disabled=${yesno(!a.enabled)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 import { findAddressConflicts } from "../utils/ip-overlap";
 
 export const ipAddressTools: ToolModule = [
@@ -58,7 +58,7 @@ export const ipAddressTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add IP address: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ip address print detail where address="${a.address}"`,
+        `/ip address print detail where address=${quoted(a.address)}`,
         ctx,
       );
       return `IP address added successfully:\n\n${details}`;
@@ -86,9 +86,9 @@ export const ipAddressTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IP addresses");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
-      if (a.network_filter) filters.push(`network="${a.network_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
+      if (a.network_filter) filters.push(`network=${quoted(a.network_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");
 
@@ -115,12 +115,12 @@ export const ipAddressTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IP address details: address_id=${a.address_id}`);
       let result = await executeMikrotikCommand(
-        `/ip address print detail where .id="${a.address_id}"`,
+        `/ip address print detail where .id=${quoted(a.address_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/ip address print detail where address="${a.address_id}"`,
+          `/ip address print detail where address=${quoted(a.address_id)}`,
           ctx,
         );
       }
@@ -145,18 +145,18 @@ export const ipAddressTools: ToolModule = [
       ctx.info(`Removing IP address: address_id=${a.address_id}`);
       let byId = true;
       let count = await executeMikrotikCommand(
-        `/ip address print count-only where .id="${a.address_id}"`,
+        `/ip address print count-only where .id=${quoted(a.address_id)}`,
         ctx,
       );
       if (count.trim() === "0") {
         byId = false;
         count = await executeMikrotikCommand(
-          `/ip address print count-only where address="${a.address_id}"`,
+          `/ip address print count-only where address=${quoted(a.address_id)}`,
           ctx,
         );
         if (count.trim() === "0") return `IP address '${a.address_id}' not found.`;
       }
-      const selector = byId ? `.id="${a.address_id}"` : `address="${a.address_id}"`;
+      const selector = byId ? `.id=${quoted(a.address_id)}` : `address=${quoted(a.address_id)}`;
       const result = await executeMikrotikCommand(`/ip address remove [find ${selector}]`, ctx);
       if (looksLikeError(result)) return `Failed to remove IP address: ${result}`;
       return `IP address '${a.address_id}' removed successfully.`;

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
+import { yesno, looksLikeError, isEmpty, commandUnsupported, Cmd, quoted } from "../core/routeros";
 
 const UNSUPPORTED =
   "IGMP proxy is not available on this device (requires RouterOS v7 with the routing/multicast package).";
@@ -152,7 +152,7 @@ export const routingIgmpProxyTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating IGMP proxy interface ${a.interface}`);
-      const base = `/routing igmp-proxy interface set [find interface="${a.interface}"]`;
+      const base = `/routing igmp-proxy interface set [find interface=${quoted(a.interface)}]`;
       const cmd = new Cmd(base)
         .opt("alternative-subnets", a.alternative_subnets)
         .opt("threshold", a.threshold);
@@ -167,7 +167,7 @@ export const routingIgmpProxyTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update IGMP proxy interface: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing igmp-proxy interface print detail where interface="${a.interface}"`,
+        `/routing igmp-proxy interface print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return `IGMP proxy interface '${a.interface}' updated successfully:\n\n${details}`;
@@ -190,7 +190,7 @@ export const routingIgmpProxyTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IGMP proxy interface ${a.interface}`);
       const result = await executeMikrotikCommand(
-        `/routing igmp-proxy interface remove [find interface="${a.interface}"]`,
+        `/routing igmp-proxy interface remove [find interface=${quoted(a.interface)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -216,7 +216,7 @@ export const routingIgmpProxyTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Setting IGMP proxy interface ${a.interface} enabled=${a.enabled}`);
       const result = await executeMikrotikCommand(
-        `/routing igmp-proxy interface set [find interface="${a.interface}"] disabled=${yesno(!a.enabled)}`,
+        `/routing igmp-proxy interface set [find interface=${quoted(a.interface)}] disabled=${yesno(!a.enabled)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

@@ -10,7 +10,15 @@ import { executeMikrotikCommand } from "../core/connector";
 import { dnsResolveCommand } from "../core/dns-resolve";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, flattenLiveOutput, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  looksLikeError,
+  isEmpty,
+  flattenLiveOutput,
+  Cmd,
+  quoted,
+  quoteValue,
+} from "../core/routeros";
 
 export const networkToolTools: ToolModule = [
   defineTool({
@@ -38,7 +46,7 @@ export const networkToolTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Pinging ${a.address} (count=${a.count})`);
-      const cmd = new Cmd(`/ping ${a.address}`)
+      const cmd = new Cmd(`/ping ${quoteValue(a.address)}`)
         .set("count", a.count)
         .opt("interface", a.interface)
         .opt("src-address", a.src_address)
@@ -74,7 +82,7 @@ export const networkToolTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Tracerouting ${a.address} (count=${a.count})`);
-      const cmd = new Cmd(`/tool traceroute ${a.address}`)
+      const cmd = new Cmd(`/tool traceroute ${quoteValue(a.address)}`)
         .set("count", a.count)
         .flag("use-dns", a.use_dns)
         .build();
@@ -113,7 +121,7 @@ export const networkToolTools: ToolModule = [
       ctx.info(
         `Bandwidth test to ${a.address} (duration=${a.duration}s, direction=${a.direction})`,
       );
-      const cmd = new Cmd(`/tool bandwidth-test ${a.address}`)
+      const cmd = new Cmd(`/tool bandwidth-test ${quoteValue(a.address)}`)
         .set("duration", `${a.duration}s`)
         .set("direction", a.direction)
         .set("protocol", a.protocol)
@@ -204,7 +212,7 @@ export const networkToolTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add netwatch: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/tool netwatch print detail where host="${a.host}"`,
+        `/tool netwatch print detail where host=${quoted(a.host)}`,
         ctx,
       );
       return details.trim()
@@ -228,7 +236,7 @@ export const networkToolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing netwatch entries");
       const filters: string[] = [];
-      if (a.host_filter) filters.push(`host~"${a.host_filter}"`);
+      if (a.host_filter) filters.push(`host~${quoted(a.host_filter)}`);
       const result = await executeMikrotikCommand(
         `/tool netwatch print${whereClause(filters)}`,
         ctx,
@@ -252,7 +260,7 @@ export const networkToolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting netwatch details for host ${a.host}`);
       const result = await executeMikrotikCommand(
-        `/tool netwatch print detail where host="${a.host}"`,
+        `/tool netwatch print detail where host=${quoted(a.host)}`,
         ctx,
       );
       return isEmpty(result)
@@ -274,13 +282,13 @@ export const networkToolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing netwatch for host ${a.host}`);
       const count = await executeMikrotikCommand(
-        `/tool netwatch print count-only where host="${a.host}"`,
+        `/tool netwatch print count-only where host=${quoted(a.host)}`,
         ctx,
       );
       if (count.trim() === "0") return `Netwatch entry for '${a.host}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/tool netwatch remove [find host="${a.host}"]`,
+        `/tool netwatch remove [find host=${quoted(a.host)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove netwatch: ${result}`;

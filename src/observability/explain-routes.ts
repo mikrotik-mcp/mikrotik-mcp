@@ -25,6 +25,7 @@ import { topologyMermaid } from "../narrative/mermaid";
 import { NARRATIVE_SECTIONS, renderNarrative } from "../narrative/render";
 import type { NarrativeSection } from "../narrative/render";
 import { openSnapshotStore } from "../snapshots/store";
+import { clientError } from "./http-error";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -123,7 +124,7 @@ export async function explainRoutes(req: Request, url: URL): Promise<Response | 
   try {
     config = await configFor(device, snapshotId);
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 502);
+    return json({ error: clientError(e) }, 502);
   }
   if ("error" in config) return json({ error: config.error }, config.status);
 

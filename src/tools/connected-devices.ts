@@ -22,7 +22,7 @@ import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import type { ToolContext } from "../core/context";
-import { isEmpty, looksLikeError, quoteValue, Cmd } from "../core/routeros";
+import { isEmpty, looksLikeError, quoteValue, Cmd, quoted } from "../core/routeros";
 import { isYes } from "../utils/yes";
 import { parseRecords, parseLeadingNumber, parseSize } from "../core/routeros-parse";
 import { uiViewUri } from "../core/ui-meta";
@@ -209,7 +209,7 @@ export async function fetchDevices(ctx: ToolContext): Promise<Device[]> {
 /** Sample a device's live download/upload from a matching `/queue simple` entry. */
 export async function sampleDeviceTraffic(ctx: ToolContext, ip: string): Promise<DeviceTraffic> {
   const q = await executeMikrotikCommand(
-    `/queue simple print stats detail where target~"${ip}"`,
+    `/queue simple print stats detail where target~${quoted(ip)}`,
     ctx,
   );
   if (isEmpty(q) || looksLikeError(q)) {
@@ -460,7 +460,7 @@ export async function setDeviceLimits(
   const maxLimit = `${up}/${down}`;
 
   const existing = await executeMikrotikCommand(
-    `/queue simple print count-only where target~"${ip}"`,
+    `/queue simple print count-only where target~${quoted(ip)}`,
     ctx,
   );
   const have = (parseLeadingNumber(existing.trim()) ?? 0) > 0;
@@ -470,7 +470,7 @@ export async function setDeviceLimits(
   }
 
   const cmd = have
-    ? new Cmd(`/queue simple set [find target~"${ip}"]`).set("max-limit", maxLimit).build()
+    ? new Cmd(`/queue simple set [find target~${quoted(ip)}]`).set("max-limit", maxLimit).build()
     : new Cmd("/queue simple add")
         .set("name", opts.name?.trim() || `client-${ip}`)
         .set("target", ip)
@@ -489,7 +489,7 @@ export async function setDeviceLimits(
 /** Count firewall drop rules currently blocking a MAC. */
 async function blockRuleCount(mac: string, ctx: ToolContext): Promise<number> {
   const out = await executeMikrotikCommand(
-    `/ip firewall filter print count-only where comment="${BLOCK_TAG}: ${mac}"`,
+    `/ip firewall filter print count-only where comment=${quoted(`${BLOCK_TAG}: ${mac}`)}`,
     ctx,
   );
   return parseLeadingNumber(out.trim()) ?? 0;
@@ -518,7 +518,7 @@ export async function blockDevice(
       return { ok: false, message: `Failed to add ${chain} block rule: ${out}` };
   }
   await executeMikrotikCommand(
-    `/ip dhcp-server lease set [find mac-address="${mac}"] block-access=yes`,
+    `/ip dhcp-server lease set [find mac-address=${quoted(mac)}] block-access=yes`,
     ctx,
   );
   return {
@@ -532,13 +532,13 @@ export async function allowDevice(ctx: ToolContext, macRaw: string): Promise<OpR
   const hadRules = (await blockRuleCount(mac, ctx)) > 0;
   if (hadRules) {
     const out = await executeMikrotikCommand(
-      `/ip firewall filter remove [find comment="${BLOCK_TAG}: ${mac}"]`,
+      `/ip firewall filter remove [find comment=${quoted(`${BLOCK_TAG}: ${mac}`)}]`,
       ctx,
     );
     if (looksLikeError(out)) return { ok: false, message: `Failed to remove block rules: ${out}` };
   }
   await executeMikrotikCommand(
-    `/ip dhcp-server lease set [find mac-address="${mac}"] block-access=no`,
+    `/ip dhcp-server lease set [find mac-address=${quoted(mac)}] block-access=no`,
     ctx,
   );
   return {
@@ -552,12 +552,12 @@ export async function allowDevice(ctx: ToolContext, macRaw: string): Promise<OpR
 export async function makeDeviceStatic(ctx: ToolContext, macRaw: string): Promise<OpResult> {
   const mac = normalizeMac(macRaw);
   const count = await executeMikrotikCommand(
-    `/ip dhcp-server lease print count-only where mac-address="${mac}"`,
+    `/ip dhcp-server lease print count-only where mac-address=${quoted(mac)}`,
     ctx,
   );
   if (count.trim() === "0") return { ok: false, message: `No DHCP lease found for ${mac}.` };
   const out = await executeMikrotikCommand(
-    `/ip dhcp-server lease make-static [find mac-address="${mac}"]`,
+    `/ip dhcp-server lease make-static [find mac-address=${quoted(mac)}]`,
     ctx,
   );
   if (looksLikeError(out)) return { ok: false, message: `Failed to make lease static: ${out}` };
@@ -567,19 +567,19 @@ export async function makeDeviceStatic(ctx: ToolContext, macRaw: string): Promis
 export async function setDeviceIp(ctx: ToolContext, macRaw: string, ip: string): Promise<OpResult> {
   const mac = normalizeMac(macRaw);
   const detail = await executeMikrotikCommand(
-    `/ip dhcp-server lease print detail where mac-address="${mac}"`,
+    `/ip dhcp-server lease print detail where mac-address=${quoted(mac)}`,
     ctx,
   );
   if (isEmpty(detail)) return { ok: false, message: `No DHCP lease found for ${mac}.` };
   if (/\bdynamic\b/.test(detail)) {
     const mk = await executeMikrotikCommand(
-      `/ip dhcp-server lease make-static [find mac-address="${mac}"]`,
+      `/ip dhcp-server lease make-static [find mac-address=${quoted(mac)}]`,
       ctx,
     );
     if (looksLikeError(mk))
       return { ok: false, message: `Failed to pin lease before setting IP: ${mk}` };
   }
-  const cmd = new Cmd(`/ip dhcp-server lease set [find mac-address="${mac}"]`)
+  const cmd = new Cmd(`/ip dhcp-server lease set [find mac-address=${quoted(mac)}]`)
     .set("address", ip)
     .build();
   const out = await executeMikrotikCommand(cmd, ctx);
@@ -594,12 +594,12 @@ export async function setDeviceLabel(
 ): Promise<OpResult> {
   const mac = normalizeMac(macRaw);
   const count = await executeMikrotikCommand(
-    `/ip dhcp-server lease print count-only where mac-address="${mac}"`,
+    `/ip dhcp-server lease print count-only where mac-address=${quoted(mac)}`,
     ctx,
   );
   if (count.trim() === "0") return { ok: false, message: `No DHCP lease found for ${mac}.` };
   const out = await executeMikrotikCommand(
-    `/ip dhcp-server lease set [find mac-address="${mac}"] comment=${quoteValue(label)}`,
+    `/ip dhcp-server lease set [find mac-address=${quoted(mac)}] comment=${quoteValue(label)}`,
     ctx,
   );
   if (looksLikeError(out)) return { ok: false, message: `Failed to label device: ${out}` };
@@ -609,12 +609,12 @@ export async function setDeviceLabel(
 export async function removeDeviceLease(ctx: ToolContext, macRaw: string): Promise<OpResult> {
   const mac = normalizeMac(macRaw);
   const count = await executeMikrotikCommand(
-    `/ip dhcp-server lease print count-only where mac-address="${mac}"`,
+    `/ip dhcp-server lease print count-only where mac-address=${quoted(mac)}`,
     ctx,
   );
   if (count.trim() === "0") return { ok: false, message: `No DHCP lease found for ${mac}.` };
   const out = await executeMikrotikCommand(
-    `/ip dhcp-server lease remove [find mac-address="${mac}"]`,
+    `/ip dhcp-server lease remove [find mac-address=${quoted(mac)}]`,
     ctx,
   );
   if (looksLikeError(out)) return { ok: false, message: `Failed to remove lease: ${out}` };
@@ -703,7 +703,9 @@ export const connectedDeviceTools: ToolModule = [
     },
     async handler(a, ctx) {
       if (!a.mac && !a.ip) return "Provide a device mac or ip.";
-      const where = a.mac ? `mac-address="${normalizeMac(a.mac)}"` : `address="${a.ip}"`;
+      const where = a.mac
+        ? `mac-address=${quoted(normalizeMac(a.mac))}`
+        : `address=${quoted(a.ip)}`;
       ctx.info(`Getting device detail: ${where}`);
       const lease = await executeMikrotikCommand(
         `/ip dhcp-server lease print detail where ${where}`,

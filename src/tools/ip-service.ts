@@ -9,7 +9,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, portConflictError, Cmd } from "../core/routeros";
+import { looksLikeError, isEmpty, portConflictError, Cmd, quoted } from "../core/routeros";
 
 /**
  * Select exactly the ONE configurable `/ip service` row for a name.
@@ -23,7 +23,7 @@ import { looksLikeError, isEmpty, portConflictError, Cmd } from "../core/routero
  * blocked hardening outright. `and !dynamic` narrows to the static row; when no
  * dynamic row exists it selects the same single row as before.
  */
-const staticService = (name: string): string => `[find name="${name}" and !dynamic]`;
+const staticService = (name: string): string => `[find name=${quoted(name)} and !dynamic]`;
 
 export const ipServiceTools: ToolModule = [
   defineTool({
@@ -51,7 +51,7 @@ export const ipServiceTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IP service details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ip service print detail where name="${a.name}"`,
+        `/ip service print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -93,7 +93,7 @@ export const ipServiceTools: ToolModule = [
       }
 
       const details = await executeMikrotikCommand(
-        `/ip service print detail where name="${a.name}"`,
+        `/ip service print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `IP service updated successfully:\n\n${details}`;

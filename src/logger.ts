@@ -18,8 +18,16 @@ const LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
-const ENV_LEVEL = (process.env.MIKROTIK_LOG_LEVEL ?? "info").toLowerCase() as LogLevel;
-const THRESHOLD = LEVELS[ENV_LEVEL] ?? LEVELS.info;
+/** The level in use until a configuration is loaded: the env var, or `error`. */
+export const DEFAULT_LOG_LEVEL: LogLevel = "error";
+let threshold =
+  LEVELS[(process.env.MIKROTIK_LOG_LEVEL ?? DEFAULT_LOG_LEVEL).toLowerCase() as LogLevel] ??
+  LEVELS[DEFAULT_LOG_LEVEL];
+
+/** Set the level; called when a configuration is installed (`logLevel`). */
+export function setLogLevel(level: LogLevel | undefined): void {
+  threshold = LEVELS[level ?? DEFAULT_LOG_LEVEL] ?? LEVELS[DEFAULT_LOG_LEVEL];
+}
 
 const COLORS: Record<LogLevel, string> = {
   debug: "\x1B[90m", // gray
@@ -43,7 +51,7 @@ export function formatLogMessage(message: string): string {
 }
 
 function emit(level: LogLevel, message: string): void {
-  if (LEVELS[level] < THRESHOLD) return;
+  if (LEVELS[level] < threshold) return;
   const tag = useColor ? `${COLORS[level]}${level.toUpperCase()}${RESET}` : level.toUpperCase();
   stderr.write(`[mikrotik-mcp] ${tag} ${formatLogMessage(message)}\n`);
 }

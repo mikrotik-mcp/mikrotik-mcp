@@ -3,7 +3,114 @@
 Notable changes to `@usex/mikrotik-mcp`. Releases before 6.14.1 are described in
 the GitHub release notes.
 
-## 6.15.0 — unreleased
+## 6.16.0 — unreleased
+
+### Added
+
+- **Dashboard Files page.** The files of every router, as the Files window of
+  WinBox, in dockable panes side by side.
+  - Each pane shows one folder of one router, with the storage of the router,
+    sorting, a name filter and multi-select.
+  - Upload by dropping files from the computer on a pane or on a folder row.
+    Download with a double-click or for a whole selection.
+  - Copy files from one router to another by dragging them between panes. The
+    server relays the copy over SFTP as one stream, so the routers do not need
+    to reach each other and neither learns the other's credentials.
+  - One transfer queue with progress, speed, time left, stop and try again.
+    Three transfers run at the same time.
+  - Search every open router at once: file names, or the text inside small text
+    files, with an optional regular expression. A result opens its folder in
+    the pane of its router.
+  - Rename, new folder and delete (with confirmation). A name that already
+    exists asks before it is replaced. A stopped or failed upload leaves no
+    partial file on the router.
+  - On by default, with no token and no loopback bind needed. Anyone who can
+    open the dashboard can use it: set a dashboard token, or turn the page off,
+    on a network you do not trust. A read-only server lists, searches and
+    downloads only. Every operation reaches the audit feed as
+    `dashboard_files`.
+  - View and edit text files in the browser, with RouterOS colours for `.rsc`,
+    and compare two files, also on two routers.
+  - Whole folders: drop a folder to upload it, drag a folder to copy it, and
+    download a selection as one ZIP archive.
+  - Upload to all: one file to the same folder on every open router.
+  - Compare folders: what two folders have and do not have, and copy what is
+    missing.
+  - A `.npk` for another architecture or RouterOS version is reported before
+    the upload.
+  - Backup now and Export now on the router, and Import of a `.rsc` file with
+    a dry run first.
+  - Direct copy: the destination router fetches a large file from the source
+    by itself, with a fall back to the relayed copy.
+  - SHA-256 for every relayed copy, Verify to read the copy back, and copies
+    over 8 MiB that continue after a failure. A retried download continues at
+    its offset.
+  - Recycle bin: files the page deleted or replaced are kept on the server for
+    7 days and can be put back.
+  - Vault and S3: save router files to the backup vault (and the bucket), and
+    send a vault file to a router.
+  - Scheduled collection of matching router files into the vault, with a
+    number of files to keep.
+  - Storage analysis with the largest files and what is usually safe to remove.
+  - A right-click menu on rows, folder bookmarks and saved workspaces.
+  - Follow (live tail) for a file that grows.
+- `dashboard.files` (`--dashboard-files`, `MIKROTIK_DASHBOARD__FILES`, default
+  `true`) turns the page off or on. It is a switch in **Config → Dashboard**,
+  and a change applies with no restart.
+
+- **Start summary.** `serve` on an interactive terminal now prints, under the
+  banner, where the server answers (the MCP endpoint and the dashboard, on
+  each address of the machine for a wildcard bind) and a table of the
+  routers: address, path (SSH, jump host or MAC-Telnet), online or offline,
+  latency, identity, RouterOS version, board and uptime. It shows at any log
+  level, and never prints a password or the dashboard token.
+
+### Security
+
+- **RouterOS command injection through tool arguments** (GHSA-63gj-jfjx-xf7g,
+  GHSA-r4cq-vhjf-mppv, GHSA-2g58-43c8-4w2m, GHSA-p524-m32j-hf32). A tool
+  argument was written into a device command without escaping, at about 800
+  places. A value with a `"`, or a space and a `;`, ran as RouterOS commands
+  on the router. READ tools did this too, so read-only mode and the READ risk
+  ceiling did not hold. Every argument is now written with `quoted()` or
+  `quoteValue()`, or checked when the console needs it bare (a duration, a
+  menu path). A test calls every tool of the catalog with a hostile value in
+  each free-text argument and reads the commands that reach the router.
+- **READ tools that changed the router** (GHSA-p524-m32j-hf32).
+  `firmware_check` no longer sets the update channel; use `firmware_stage`.
+  `create_export`, `export_section`, `export_logs`, `export_dns_config` and
+  `export_user_config` write a file on the router and are now WRITE tools, so
+  a read-only server does not offer them.
+- Log tools accept only a RouterOS time (`30m`, `1h`, `1d12h`) for
+  `time_filter`, and a threat feed name must be a plain identifier.
+- Dashboard routes send a sanitised, single-line error message.
+- Three regular expressions that took quadratic time on hostile input are
+  replaced, and two partial escapes are completed.
+- Vulnerable packages are updated in the Raycast lockfile and the docs site.
+
+### Changed
+
+- **The Terminal page no longer needs a token or a loopback bind.** Like the
+  Files page, it is on by default and is turned off or on with
+  `dashboard.terminal`: a switch in **Config → Dashboard** (no restart) or
+  `--dashboard-terminal`. Anyone who can open the dashboard can then run any
+  command on the routers: set a dashboard token, or turn the page off, on a
+  network you do not trust.
+- **The default log level is `error`** (it was `info`). The server no longer
+  writes its informational lines unless you ask for them. Set the level with
+  `logLevel` in the config file, **Config → General → Log level** (applies at
+  once), `--log-level` or `MIKROTIK_LOG_LEVEL`.
+- The shared service and `docker-compose.yml` no longer set
+  `MIKROTIK_LOG_LEVEL`, so the setting in the config is the one in use.
+
+### Fixed
+
+- **Terminal:** an idle Shell pane closed after about one minute. The SSH
+  library sent keepalive requests that RouterOS does not answer, and then
+  closed the session. The shell now uses no SSH keepalive; its own 30-minute
+  idle limit stays.
+
+## 6.15.0
 
 ### Added
 

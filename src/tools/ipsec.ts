@@ -10,7 +10,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 
 export const ipsecTools: ToolModule = [
   // ── Profile (phase 1) — /ip ipsec profile ─────────────────────────────────
@@ -54,7 +54,7 @@ export const ipsecTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create IPsec profile: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ip ipsec profile print detail where name="${a.name}"`,
+        `/ip ipsec profile print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -81,7 +81,7 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPsec profiles");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/ip ipsec profile print${whereClause(filters)}`,
@@ -104,7 +104,7 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IPsec profile details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ip ipsec profile print detail where name="${a.name}"`,
+        `/ip ipsec profile print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -138,7 +138,7 @@ export const ipsecTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating IPsec profile: name=${a.name}`);
-      const base = `/ip ipsec profile set [find name="${a.name}"]`;
+      const base = `/ip ipsec profile set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("name", a.new_name)
         .opt("dh-group", a.dh_group)
@@ -159,7 +159,7 @@ export const ipsecTools: ToolModule = [
 
       const target = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/ip ipsec profile print detail where name="${target}"`,
+        `/ip ipsec profile print detail where name=${quoted(target)}`,
         ctx,
       );
       return `IPsec profile updated successfully:\n\n${details}`;
@@ -180,13 +180,13 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPsec profile: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ip ipsec profile print count-only where name="${a.name}"`,
+        `/ip ipsec profile print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPsec profile '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip ipsec profile remove [find name="${a.name}"]`,
+        `/ip ipsec profile remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPsec profile: ${result}`;
@@ -246,7 +246,7 @@ export const ipsecTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create IPsec peer: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ip ipsec peer print detail where name="${a.name}"`,
+        `/ip ipsec peer print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -273,7 +273,7 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPsec peers");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/ip ipsec peer print${whereClause(filters)}`,
@@ -296,7 +296,7 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IPsec peer details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ip ipsec peer print detail where name="${a.name}"`,
+        `/ip ipsec peer print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -332,7 +332,7 @@ export const ipsecTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating IPsec peer: name=${a.name}`);
-      const base = `/ip ipsec peer set [find name="${a.name}"]`;
+      const base = `/ip ipsec peer set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("name", a.new_name)
         .opt("address", a.address)
@@ -353,7 +353,7 @@ export const ipsecTools: ToolModule = [
 
       const target = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/ip ipsec peer print detail where name="${target}"`,
+        `/ip ipsec peer print detail where name=${quoted(target)}`,
         ctx,
       );
       return `IPsec peer updated successfully:\n\n${details}`;
@@ -374,13 +374,13 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPsec peer: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ip ipsec peer print count-only where name="${a.name}"`,
+        `/ip ipsec peer print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPsec peer '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip ipsec peer remove [find name="${a.name}"]`,
+        `/ip ipsec peer remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPsec peer: ${result}`;
@@ -458,7 +458,7 @@ export const ipsecTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create IPsec identity: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ip ipsec identity print detail where peer="${a.peer}"`,
+        `/ip ipsec identity print detail where peer=${quoted(a.peer)}`,
         ctx,
       );
       return details.trim()
@@ -485,7 +485,7 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPsec identities");
       const filters: string[] = [];
-      if (a.peer_filter) filters.push(`peer~"${a.peer_filter}"`);
+      if (a.peer_filter) filters.push(`peer~${quoted(a.peer_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/ip ipsec identity print${whereClause(filters)}`,
@@ -513,13 +513,13 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPsec identity: identity_id=${a.identity_id}`);
       const count = await executeMikrotikCommand(
-        `/ip ipsec identity print count-only where .id=${a.identity_id}`,
+        `/ip ipsec identity print count-only where .id=${quoteValue(a.identity_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPsec identity with ID '${a.identity_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip ipsec identity remove [find .id=${a.identity_id}]`,
+        `/ip ipsec identity remove [find .id=${quoteValue(a.identity_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPsec identity: ${result}`;
@@ -570,7 +570,7 @@ export const ipsecTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create IPsec proposal: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ip ipsec proposal print detail where name="${a.name}"`,
+        `/ip ipsec proposal print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -596,7 +596,7 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPsec proposals");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/ip ipsec proposal print${whereClause(filters)}`,
@@ -619,7 +619,7 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IPsec proposal details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ip ipsec proposal print detail where name="${a.name}"`,
+        `/ip ipsec proposal print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -651,7 +651,7 @@ export const ipsecTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating IPsec proposal: name=${a.name}`);
-      const base = `/ip ipsec proposal set [find name="${a.name}"]`;
+      const base = `/ip ipsec proposal set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("name", a.new_name)
         .opt("auth-algorithms", a.auth_algorithms)
@@ -669,7 +669,7 @@ export const ipsecTools: ToolModule = [
 
       const target = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/ip ipsec proposal print detail where name="${target}"`,
+        `/ip ipsec proposal print detail where name=${quoted(target)}`,
         ctx,
       );
       return `IPsec proposal updated successfully:\n\n${details}`;
@@ -690,13 +690,13 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPsec proposal: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ip ipsec proposal print count-only where name="${a.name}"`,
+        `/ip ipsec proposal print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPsec proposal '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip ipsec proposal remove [find name="${a.name}"]`,
+        `/ip ipsec proposal remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPsec proposal: ${result}`;
@@ -806,13 +806,13 @@ export const ipsecTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPsec policy: policy_id=${a.policy_id}`);
       const count = await executeMikrotikCommand(
-        `/ip ipsec policy print count-only where .id=${a.policy_id}`,
+        `/ip ipsec policy print count-only where .id=${quoteValue(a.policy_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPsec policy with ID '${a.policy_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip ipsec policy remove [find .id=${a.policy_id}]`,
+        `/ip ipsec policy remove [find .id=${quoteValue(a.policy_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPsec policy: ${result}`;

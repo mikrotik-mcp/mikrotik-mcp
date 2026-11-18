@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const ipv6PoolTools: ToolModule = [
   defineTool({
@@ -43,7 +43,7 @@ export const ipv6PoolTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to create IPv6 pool: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ipv6 pool print detail where name="${a.name}"`,
+        `/ipv6 pool print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `IPv6 pool created successfully:\n\n${details}`;
@@ -68,8 +68,8 @@ export const ipv6PoolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPv6 pools");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.prefix_filter) filters.push(`prefix~"${a.prefix_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.prefix_filter) filters.push(`prefix~${quoted(a.prefix_filter)}`);
 
       const result = await executeMikrotikCommand(`/ipv6 pool print${whereClause(filters)}`, ctx);
       return isEmpty(result)
@@ -92,7 +92,7 @@ export const ipv6PoolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IPv6 pool details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ipv6 pool print detail where name="${a.name}"`,
+        `/ipv6 pool print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -118,7 +118,7 @@ export const ipv6PoolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPv6 pool usage");
       const filters: string[] = [];
-      if (a.pool_filter) filters.push(`pool~"${a.pool_filter}"`);
+      if (a.pool_filter) filters.push(`pool~${quoted(a.pool_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/ipv6 pool used print${whereClause(filters)}`,
@@ -150,7 +150,7 @@ export const ipv6PoolTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating IPv6 pool: name=${a.name}`);
-      const base = `/ipv6 pool set [find name="${a.name}"]`;
+      const base = `/ipv6 pool set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base);
       if (a.new_name) cmd.set("name", a.new_name);
       if (a.prefix) cmd.set("prefix", a.prefix);
@@ -163,7 +163,7 @@ export const ipv6PoolTools: ToolModule = [
       const result = await executeMikrotikCommand(built, ctx);
       if (looksLikeError(result)) return `Failed to update IPv6 pool: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ipv6 pool print detail where name="${a.new_name || a.name}"`,
+        `/ipv6 pool print detail where name=${quoted(a.new_name || a.name)}`,
         ctx,
       );
       return `IPv6 pool updated successfully:\n\n${details}`;
@@ -184,12 +184,15 @@ export const ipv6PoolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPv6 pool: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ipv6 pool print count-only where name="${a.name}"`,
+        `/ipv6 pool print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPv6 pool '${a.name}' not found.`;
 
-      const result = await executeMikrotikCommand(`/ipv6 pool remove [find name="${a.name}"]`, ctx);
+      const result = await executeMikrotikCommand(
+        `/ipv6 pool remove [find name=${quoted(a.name)}]`,
+        ctx,
+      );
       if (looksLikeError(result)) return `Failed to remove IPv6 pool: ${result}`;
       return `IPv6 pool '${a.name}' removed successfully.`;
     },

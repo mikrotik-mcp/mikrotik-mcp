@@ -14,7 +14,6 @@ services:
         required: false
     environment:
       MIKROTIK_CONFIG_FILE: /home/bun/.mikrotik-mcp/devices.json
-      MIKROTIK_LOG_LEVEL: ${MIKROTIK_LOG_LEVEL:-info}
     ports:
       - "127.0.0.1:${MCP_PORT:-8000}:${MCP_PORT:-8000}"
       - "127.0.0.1:${DASHBOARD_PORT:-9090}:${DASHBOARD_PORT:-9090}"

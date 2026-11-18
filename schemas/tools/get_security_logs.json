@@ -4,7 +4,8 @@
   "type": "object",
   "properties": {
     "time_filter": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^\\d+(?:[wdhms](?:\\d+[wdhms])*)?$"
     },
     "limit": {
       "type": "integer",

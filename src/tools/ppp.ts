@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 import { redactSecrets } from "../utils";
 
 const UseEncryption = z.enum(["default", "yes", "no", "required"]);
@@ -84,7 +84,7 @@ export const pppTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create PPP profile: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ppp profile print detail where name="${a.name}"`,
+        `/ppp profile print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -108,7 +108,7 @@ export const pppTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing PPP profiles");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(`/ppp profile print${whereClause(filters)}`, ctx);
       return isEmpty(result)
@@ -130,7 +130,7 @@ export const pppTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting PPP profile details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ppp profile print detail where name="${a.name}"`,
+        `/ppp profile print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -178,7 +178,7 @@ export const pppTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating PPP profile: name=${a.name}`);
-      const cmd = new Cmd(`/ppp profile set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/ppp profile set [find name=${quoted(a.name)}]`)
         .opt("name", a.new_name)
         .opt("local-address", a.local_address)
         .opt("remote-address", a.remote_address)
@@ -213,7 +213,7 @@ export const pppTools: ToolModule = [
 
       const target = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/ppp profile print detail where name="${target}"`,
+        `/ppp profile print detail where name=${quoted(target)}`,
         ctx,
       );
       return `PPP profile updated successfully:\n\n${details}`;
@@ -233,13 +233,13 @@ export const pppTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing PPP profile: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ppp profile print count-only where name="${a.name}"`,
+        `/ppp profile print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `PPP profile '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ppp profile remove [find name="${a.name}"]`,
+        `/ppp profile remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove PPP profile: ${result}`;
@@ -293,7 +293,7 @@ export const pppTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create PPP secret: ${redactSecrets(result)}`;
 
       const details = await executeMikrotikCommand(
-        `/ppp secret print detail where name="${a.name}"`,
+        `/ppp secret print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -318,8 +318,8 @@ export const pppTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing PPP secrets");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.service_filter) filters.push(`service="${a.service_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.service_filter) filters.push(`service=${quoted(a.service_filter)}`);
 
       const result = await executeMikrotikCommand(`/ppp secret print${whereClause(filters)}`, ctx);
       return isEmpty(result)
@@ -342,7 +342,7 @@ export const pppTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting PPP secret details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ppp secret print detail where name="${a.name}"`,
+        `/ppp secret print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -378,7 +378,7 @@ export const pppTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating PPP secret: name=${a.name}`);
-      const cmd = new Cmd(`/ppp secret set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/ppp secret set [find name=${quoted(a.name)}]`)
         .opt("name", a.new_name)
         .opt("password", a.password)
         .opt("service", a.service)
@@ -401,7 +401,7 @@ export const pppTools: ToolModule = [
 
       const target = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/ppp secret print detail where name="${target}"`,
+        `/ppp secret print detail where name=${quoted(target)}`,
         ctx,
       );
       return `PPP secret updated successfully:\n\n${redactSecrets(details)}`;
@@ -421,13 +421,13 @@ export const pppTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing PPP secret: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ppp secret print count-only where name="${a.name}"`,
+        `/ppp secret print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `PPP secret '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ppp secret remove [find name="${a.name}"]`,
+        `/ppp secret remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove PPP secret: ${result}`;
@@ -451,7 +451,7 @@ export const pppTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing active PPP sessions");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(`/ppp active print${whereClause(filters)}`, ctx);
       return isEmpty(result)
@@ -475,7 +475,7 @@ export const pppTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disconnecting PPP session: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ppp active remove [find name="${a.name}"]`,
+        `/ppp active remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disconnect PPP session: ${result}`;

@@ -11,6 +11,7 @@ import {
   isEmpty,
   Cmd,
   unsetFragments,
+  quoted,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
@@ -83,8 +84,8 @@ async function updateNatRule(
     updates.push(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
   };
 
-  if (a.chain) updates.push(`chain=${a.chain}`);
-  if (a.action) updates.push(`action=${a.action}`);
+  if (a.chain) updates.push(`chain=${quoteValue(a.chain)}`);
+  if (a.action) updates.push(`action=${quoteValue(a.action)}`);
   put("src-address", a.src_address);
   put("dst-address", a.dst_address);
   put("src-port", a.src_port);
@@ -343,10 +344,10 @@ export const ipv6FirewallNatTools: ToolModule = [
       ctx.info("Listing IPv6 firewall NAT rules");
 
       const filters: string[] = [];
-      if (a.chain_filter) filters.push(`chain=${a.chain_filter}`);
-      if (a.action_filter) filters.push(`action=${a.action_filter}`);
-      if (a.src_address_filter) filters.push(`src-address~"${a.src_address_filter}"`);
-      if (a.dst_address_filter) filters.push(`dst-address~"${a.dst_address_filter}"`);
+      if (a.chain_filter) filters.push(`chain=${quoteValue(a.chain_filter)}`);
+      if (a.action_filter) filters.push(`action=${quoteValue(a.action_filter)}`);
+      if (a.src_address_filter) filters.push(`src-address~${quoted(a.src_address_filter)}`);
+      if (a.dst_address_filter) filters.push(`dst-address~${quoted(a.dst_address_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");
@@ -502,7 +503,7 @@ export const ipv6FirewallNatTools: ToolModule = [
       if (!id) return `IPv6 firewall NAT rule '${a.rule_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ipv6 firewall nat move ${id} destination=${a.destination}`,
+        `/ipv6 firewall nat move ${id} destination=${quoteValue(a.destination)}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to move IPv6 firewall NAT rule: ${result}`;

@@ -24,7 +24,7 @@
  */
 import { executeMikrotikCommand } from "../core/connector";
 import type { ToolContext } from "../core/context";
-import { looksLikeError } from "../core/routeros";
+import { looksLikeError, quoted } from "../core/routeros";
 import { resolveDeviceName } from "../core/runtime";
 import { captureSnapshot } from "../snapshots/capture";
 import { getSafeModeManager } from "../ssh/safe-mode";
@@ -297,7 +297,7 @@ export async function runAssertion(
       }
       case "wireguard-peer-handshake": {
         const out = await executeMikrotikCommand(
-          `/interface wireguard peers print detail where public-key="${assertion.peer}"`,
+          `/interface wireguard peers print detail where public-key=${quoted(assertion.peer)}`,
           on(ctx, assertion.device),
         );
         if (looksLikeError(out)) return fail(out.trim());
@@ -306,7 +306,7 @@ export async function runAssertion(
       }
       case "route-present": {
         const out = await executeMikrotikCommand(
-          `/ip route print count-only where dst-address="${assertion.dst}"`,
+          `/ip route print count-only where dst-address=${quoted(assertion.dst)}`,
           on(ctx, assertion.device),
         );
         if (looksLikeError(out)) return fail(out.trim());

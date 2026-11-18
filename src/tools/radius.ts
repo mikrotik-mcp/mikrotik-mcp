@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted, quoteValue } from "../core/routeros";
 import { redactSecrets } from "../utils";
 
 export const radiusTools: ToolModule = [
@@ -73,7 +73,7 @@ export const radiusTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add RADIUS server: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/radius print detail where address="${a.address}"`,
+        `/radius print detail where address=${quoted(a.address)}`,
         ctx,
       );
       return details.trim()
@@ -99,8 +99,8 @@ export const radiusTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing RADIUS servers");
       const filters: string[] = [];
-      if (a.service_filter) filters.push(`service~"${a.service_filter}"`);
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
+      if (a.service_filter) filters.push(`service~${quoted(a.service_filter)}`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
 
       const result = await executeMikrotikCommand(`/radius print${whereClause(filters)}`, ctx);
       return isEmpty(result)
@@ -125,7 +125,7 @@ export const radiusTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting RADIUS server details: radius_id=${a.radius_id}`);
       const result = await executeMikrotikCommand(
-        `/radius print detail where .id="${a.radius_id}"`,
+        `/radius print detail where .id=${quoted(a.radius_id)}`,
         ctx,
       );
       return isEmpty(result)
@@ -175,7 +175,7 @@ export const radiusTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating RADIUS server: radius_id=${a.radius_id}`);
-      const cmd = new Cmd(`/radius set ${a.radius_id}`)
+      const cmd = new Cmd(`/radius set ${quoteValue(a.radius_id)}`)
         .opt("address", a.address)
         .opt("secret", a.secret)
         .opt("service", a.service)
@@ -201,7 +201,7 @@ export const radiusTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to update RADIUS server: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/radius print detail where .id="${a.radius_id}"`,
+        `/radius print detail where .id=${quoted(a.radius_id)}`,
         ctx,
       );
       return `RADIUS server updated successfully:\n\n${redactSecrets(details)}`;
@@ -224,13 +224,13 @@ export const radiusTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing RADIUS server: radius_id=${a.radius_id}`);
       const count = await executeMikrotikCommand(
-        `/radius print count-only where .id="${a.radius_id}"`,
+        `/radius print count-only where .id=${quoted(a.radius_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `RADIUS server '${a.radius_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/radius remove [find .id="${a.radius_id}"]`,
+        `/radius remove [find .id=${quoted(a.radius_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove RADIUS server: ${result}`;
@@ -254,7 +254,7 @@ export const radiusTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling RADIUS server: radius_id=${a.radius_id}`);
       const result = await executeMikrotikCommand(
-        `/radius enable [find .id="${a.radius_id}"]`,
+        `/radius enable [find .id=${quoted(a.radius_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable RADIUS server: ${result}`;
@@ -278,7 +278,7 @@ export const radiusTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling RADIUS server: radius_id=${a.radius_id}`);
       const result = await executeMikrotikCommand(
-        `/radius disable [find .id="${a.radius_id}"]`,
+        `/radius disable [find .id=${quoted(a.radius_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable RADIUS server: ${result}`;

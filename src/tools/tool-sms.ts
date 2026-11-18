@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const smsTools: ToolModule = [
   defineTool({
@@ -113,7 +113,7 @@ export const smsTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing sms inbox");
       const filters: string[] = [];
-      if (a.phone_filter) filters.push(`phone~"${a.phone_filter}"`);
+      if (a.phone_filter) filters.push(`phone~${quoted(a.phone_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/tool sms inbox print${whereClause(filters)}`,

@@ -187,7 +187,7 @@ export function psQuote(value: string): string {
 
 /** Render a per-user Linux unit with loopback listeners and restart supervision. */
 export function linuxUnit(state: ServiceState): string {
-  return `[Unit]\nDescription=MikroTik MCP shared service\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${systemdQuote(state.cwd)}\nExecStart=${[state.bun, state.cli, ...state.args].map((arg) => systemdQuote(arg, true)).join(" ")}\nRestart=always\nRestartSec=5\nTimeoutStopSec=30\nUMask=0077\nEnvironment=MIKROTIK_LOG_LEVEL=warn\n\n[Install]\nWantedBy=default.target\n`;
+  return `[Unit]\nDescription=MikroTik MCP shared service\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=${systemdQuote(state.cwd)}\nExecStart=${[state.bun, state.cli, ...state.args].map((arg) => systemdQuote(arg, true)).join(" ")}\nRestart=always\nRestartSec=5\nTimeoutStopSec=30\nUMask=0077\n\n[Install]\nWantedBy=default.target\n`;
 }
 
 /** Create a password-free, current-user Windows logon task with bounded restart retries. */
@@ -512,7 +512,7 @@ async function inspect(state: ServiceState): Promise<ServiceReport> {
   };
   const latest = async (): Promise<string | undefined> => {
     const response = await fetch(
-      `https://registry.npmjs.org/${PACKAGE.replace("/", "%2f")}/latest`,
+      `https://registry.npmjs.org/${PACKAGE.replaceAll("/", "%2f")}/latest`,
       {
         signal: AbortSignal.timeout(2500),
       },
@@ -814,7 +814,6 @@ async function register(state: ServiceState): Promise<void> {
         ExitTimeOut: 30,
         ThrottleInterval: 10,
         Umask: 63,
-        EnvironmentVariables: { MIKROTIK_LOG_LEVEL: "warn" },
         StandardOutPath: join(state.cwd, "service.stdout.log"),
         StandardErrorPath: join(state.cwd, "service.stderr.log"),
       }),

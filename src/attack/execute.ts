@@ -14,7 +14,7 @@
 import { executeMikrotikCommand } from "../core/connector";
 import { createContext } from "../core/context";
 import type { ToolContext } from "../core/context";
-import { Cmd, looksLikeError } from "../core/routeros";
+import { Cmd, looksLikeError, quoted } from "../core/routeros";
 import { logger } from "../logger";
 import { BLOCK_LIST } from "./respond";
 import type { ResponsePlan } from "./respond";
@@ -37,7 +37,7 @@ export interface ExecutionResult {
  */
 async function ensureDropRule(ctx: ToolContext, list: string): Promise<boolean> {
   const existing = await executeMikrotikCommand(
-    `/ip firewall raw print count-only where src-address-list="${list}"`,
+    `/ip firewall raw print count-only where src-address-list=${quoted(list)}`,
     ctx,
   );
   if (!looksLikeError(existing) && Number(existing.trim()) > 0) return true;
@@ -82,7 +82,7 @@ export async function executePlan(plan: ResponsePlan): Promise<ExecutionResult[]
       // Idempotent: an address already listed is left alone rather than
       // duplicated, so a repeated poll cannot fill the list with one attacker.
       const present = await executeMikrotikCommand(
-        `/ip firewall address-list print count-only where list="${list}" address="${plan.source}"`,
+        `/ip firewall address-list print count-only where list=${quoted(list)} address=${quoted(plan.source)}`,
         ctx,
       );
       if (!looksLikeError(present) && Number(present.trim()) > 0) {
@@ -127,7 +127,7 @@ export async function revokeBlock(
     const ctx = createContext(undefined, device);
     try {
       const count = await executeMikrotikCommand(
-        `/ip firewall address-list print count-only where list="${list}" address="${source}"`,
+        `/ip firewall address-list print count-only where list=${quoted(list)} address=${quoted(source)}`,
         ctx,
       );
       if (looksLikeError(count) || Number(count.trim()) === 0) {
@@ -135,7 +135,7 @@ export async function revokeBlock(
         continue;
       }
       const result = await executeMikrotikCommand(
-        `/ip firewall address-list remove [find list="${list}" address="${source}"]`,
+        `/ip firewall address-list remove [find list=${quoted(list)} address=${quoted(source)}]`,
         ctx,
       );
       results.push(
@@ -153,7 +153,7 @@ export async function revokeBlock(
 /** Read the addresses the device's own port-scan detector has tagged. */
 export async function readScanList(ctx: ToolContext, list = "port-scanners"): Promise<string[]> {
   const raw = await executeMikrotikCommand(
-    `/ip firewall address-list print terse where list="${list}"`,
+    `/ip firewall address-list print terse where list=${quoted(list)}`,
     ctx,
   );
   if (looksLikeError(raw)) return [];

@@ -4,7 +4,14 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
+import {
+  looksLikeError,
+  isEmpty,
+  commandUnsupported,
+  Cmd,
+  quoted,
+  quoteValue,
+} from "../core/routeros";
 
 const UNSUPPORTED =
   "RIP is not available on this device (requires RouterOS v7 with the routing package).";
@@ -72,7 +79,7 @@ export const routingRipTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to add RIP instance: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing rip instance print detail where name="${a.name}"`,
+        `/routing rip instance print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `RIP instance '${a.name}' added successfully:\n\n${details}`;
@@ -103,7 +110,7 @@ export const routingRipTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating RIP instance: ${a.name}`);
-      const base = `/routing rip instance set [find name="${a.name}"]`;
+      const base = `/routing rip instance set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("router-id", a.router_id)
         .opt("routing-table", a.routing_table)
@@ -121,7 +128,7 @@ export const routingRipTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update RIP instance: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing rip instance print detail where name="${a.name}"`,
+        `/routing rip instance print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `RIP instance '${a.name}' updated successfully:\n\n${details}`;
@@ -141,7 +148,7 @@ export const routingRipTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing RIP instance: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing rip instance remove [find name="${a.name}"]`,
+        `/routing rip instance remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -231,7 +238,7 @@ export const routingRipTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing RIP interface template ${a.template_id}`);
       const result = await executeMikrotikCommand(
-        `/routing rip interface-template remove ${a.template_id}`,
+        `/routing rip interface-template remove ${quoteValue(a.template_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -307,7 +314,7 @@ export const routingRipTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing RIP static neighbor ${a.neighbor_id}`);
       const result = await executeMikrotikCommand(
-        `/routing rip static-neighbor remove ${a.neighbor_id}`,
+        `/routing rip static-neighbor remove ${quoteValue(a.neighbor_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

@@ -4,7 +4,15 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
+import {
+  yesno,
+  looksLikeError,
+  isEmpty,
+  commandUnsupported,
+  Cmd,
+  quoted,
+  quoteValue,
+} from "../core/routeros";
 
 const UNSUPPORTED =
   "Routing Router-ID is not available on this device (requires RouterOS v7 with the routing package).";
@@ -28,7 +36,7 @@ export const routingIdTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info("Listing routing IDs");
-      const where = a.name_filter ? ` where name~"${a.name_filter}"` : "";
+      const where = a.name_filter ? ` where name~${quoted(a.name_filter)}` : "";
       const result = await executeMikrotikCommand(`/routing id print detail${where}`, ctx);
       if (commandUnsupported(result)) return UNSUPPORTED;
       return isEmpty(result) ? "No routing IDs found." : `ROUTING IDs:\n\n${result}`;
@@ -52,7 +60,7 @@ export const routingIdTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting routing ID: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing id print detail where name="${a.name}"`,
+        `/routing id print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -100,7 +108,7 @@ export const routingIdTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to add routing ID: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing id print detail where name="${a.name}"`,
+        `/routing id print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Routing ID '${a.name}' added successfully:\n\n${details}`;
@@ -130,14 +138,14 @@ export const routingIdTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating routing ID: ${a.name}`);
-      const base = `/routing id set [find name="${a.name}"]`;
+      const base = `/routing id set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base);
-      if (a.id !== undefined) cmd.raw(a.id === "" ? "!id" : `id=${a.id}`);
+      if (a.id !== undefined) cmd.raw(a.id === "" ? "!id" : `id=${quoteValue(a.id)}`);
       if (a.select_dynamic_id !== undefined) {
         cmd.raw(
           a.select_dynamic_id === ""
             ? "!select-dynamic-id"
-            : `select-dynamic-id=${a.select_dynamic_id}`,
+            : `select-dynamic-id=${quoteValue(a.select_dynamic_id)}`,
         );
       }
       if (a.comment !== undefined) cmd.set("comment", a.comment);
@@ -150,7 +158,7 @@ export const routingIdTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update routing ID: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing id print detail where name="${a.name}"`,
+        `/routing id print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Routing ID '${a.name}' updated successfully:\n\n${details}`;
@@ -175,7 +183,7 @@ export const routingIdTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing routing ID: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing id remove [find name="${a.name}"]`,
+        `/routing id remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -203,7 +211,7 @@ export const routingIdTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Setting routing ID ${a.name} enabled=${a.enabled}`);
       const result = await executeMikrotikCommand(
-        `/routing id set [find name="${a.name}"] disabled=${yesno(!a.enabled)}`,
+        `/routing id set [find name=${quoted(a.name)}] disabled=${yesno(!a.enabled)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

@@ -32,6 +32,7 @@ vi.mock("../../src/attack/store", () => ({ attackStore: rig.store }));
 vi.mock("../../src/alerts/engine", () => ({ emitAlertEvent: rig.alert }));
 vi.mock("../../src/logger", () => ({
   logger: { warn: rig.warn, error: rig.error, info: rig.info },
+  setLogLevel: () => {},
 }));
 
 const original = getConfig();

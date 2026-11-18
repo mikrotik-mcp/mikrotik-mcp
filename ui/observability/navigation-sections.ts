@@ -65,7 +65,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
     id: "configuration",
     label: "Router configuration",
     description: "Understand, plan and audit router changes",
-    views: ["terminal", "explain", "plan", "txn", "drift"],
+    views: ["terminal", "files", "explain", "plan", "txn", "drift"],
   },
   {
     id: "recovery",
@@ -83,6 +83,8 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
 
 /** Common operator vocabulary for pages whose product names are less obvious. */
 export const PAGE_SEARCH_TERMS: Partial<Record<ViewId, string>> = {
+  files:
+    "files file manager winbox upload download drag drop sftp backup rsc npk copy transfer search disk storage",
   terminal: "terminal console cli shell winbox command run ssh routeros script history favourites",
   bandwidth: "tunnel speed throughput bandwidth test tcp udp transmit receive",
   "ip-intelligence":

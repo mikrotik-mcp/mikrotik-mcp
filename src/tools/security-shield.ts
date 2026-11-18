@@ -23,7 +23,7 @@ import { DANGEROUS, DESTRUCTIVE, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { getDevice, resolveDeviceName } from "../core/runtime";
 import { getSafeModeManager } from "../ssh/safe-mode";
-import { Cmd, looksLikeError } from "../core/routeros";
+import { Cmd, looksLikeError, quoted } from "../core/routeros";
 
 /** Comment prefix that tags (and later identifies/removes) every rule we add. */
 export const SHIELD_TAG = "security-shield";
@@ -491,13 +491,13 @@ export const securityShieldTools: ToolModule = [
       let removed = 0;
       for (const table of ["filter", "raw"]) {
         const before = await executeMikrotikCommand(
-          `/ip firewall ${table} print count-only where comment~"${SHIELD_TAG}"`,
+          `/ip firewall ${table} print count-only where comment~${quoted(SHIELD_TAG)}`,
           ctx,
         );
         const n = Number.parseInt(before.trim(), 10);
         if (Number.isFinite(n) && n > 0) {
           const r = await executeMikrotikCommand(
-            `/ip firewall ${table} remove [find comment~"${SHIELD_TAG}"]`,
+            `/ip firewall ${table} remove [find comment~${quoted(SHIELD_TAG)}]`,
             ctx,
           );
           if (looksLikeError(r))

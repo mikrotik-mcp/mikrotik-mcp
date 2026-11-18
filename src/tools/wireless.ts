@@ -12,7 +12,14 @@ import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, Cmd, quoteValue, commandUnsupported } from "../core/routeros";
+import {
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  quoteValue,
+  commandUnsupported,
+  quoted,
+} from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { redactSecrets } from "../utils/redact-secrets";
 
@@ -221,7 +228,7 @@ export const wirelessTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create wireless interface: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `${interfaceType} print detail where name="${a.name}"`,
+        `${interfaceType} print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Wireless interface created successfully using ${interfaceType}:\n\n${details}`;
@@ -383,13 +390,13 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
       if (!interfaceType) return "Error: No wireless interface support detected on this device.";
 
       const count = await executeMikrotikCommand(
-        `${interfaceType} print count-only where name="${a.name}"`,
+        `${interfaceType} print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `Wireless interface '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `${interfaceType} remove [find name="${a.name}"]`,
+        `${interfaceType} remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove wireless interface: ${result}`;
@@ -415,7 +422,7 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
       if (!interfaceType) return "Error: No wireless interface support detected on this device.";
 
       const result = await executeMikrotikCommand(
-        `${interfaceType} enable [find name="${a.name}"]`,
+        `${interfaceType} enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable wireless interface: ${result}`;
@@ -441,7 +448,7 @@ NOTE: If you see wireless interfaces above, they might be using a different comm
       if (!interfaceType) return "Error: No wireless interface support detected on this device.";
 
       const result = await executeMikrotikCommand(
-        `${interfaceType} disable [find name="${a.name}"]`,
+        `${interfaceType} disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable wireless interface: ${result}`;
@@ -838,12 +845,12 @@ For legacy systems:
       if (!interfaceType) return "Error: No wireless interface support detected on this device.";
 
       const count = await executeMikrotikCommand(
-        `${interfaceType} print count-only where name="${a.name}"`,
+        `${interfaceType} print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `Wireless interface '${a.name}' not found.`;
 
-      const cmd = new Cmd(`${interfaceType} set [find name="${a.name}"]`)
+      const cmd = new Cmd(`${interfaceType} set [find name=${quoted(a.name)}]`)
         .opt("name", a.new_name)
         .opt("ssid", a.ssid)
         .bool("disabled", a.disabled)
@@ -879,7 +886,7 @@ For legacy systems:
 
       const targetName = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `${interfaceType} print detail where name="${targetName}"`,
+        `${interfaceType} print detail where name=${quoted(targetName)}`,
         ctx,
       );
       return `Wireless interface updated successfully:\n\n${details}`;

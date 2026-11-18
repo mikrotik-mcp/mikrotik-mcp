@@ -4,7 +4,15 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  yesno,
+  whereClause,
+  quoteValue,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  quoted,
+} from "../core/routeros";
 
 const Traffic = z.enum(["received", "transmitted"]);
 const Trigger = z.enum(["above", "below", "always"]);
@@ -53,7 +61,7 @@ export const trafficMonitorTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add traffic-monitor: ${result}`;
       const details = await executeMikrotikCommand(
-        `/tool traffic-monitor print detail where name="${a.name}"`,
+        `/tool traffic-monitor print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -81,8 +89,8 @@ export const trafficMonitorTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing traffic monitors");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       const result = await executeMikrotikCommand(
         `/tool traffic-monitor print${whereClause(filters)}`,
@@ -108,7 +116,7 @@ export const trafficMonitorTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting traffic-monitor: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/tool traffic-monitor print detail where name="${a.name}"`,
+        `/tool traffic-monitor print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -142,7 +150,7 @@ export const trafficMonitorTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating traffic-monitor: name=${a.name}`);
-      const base = `/tool traffic-monitor set [find name="${a.name}"]`;
+      const base = `/tool traffic-monitor set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("interface", a.interface)
         .opt("traffic", a.traffic)
@@ -158,7 +166,7 @@ export const trafficMonitorTools: ToolModule = [
       const result = await executeMikrotikCommand(built, ctx);
       if (looksLikeError(result)) return `Failed to update traffic-monitor: ${result}`;
       const details = await executeMikrotikCommand(
-        `/tool traffic-monitor print detail where name="${a.name}"`,
+        `/tool traffic-monitor print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `Traffic monitor updated successfully:\n\n${details}`;
@@ -178,12 +186,12 @@ export const trafficMonitorTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing traffic-monitor: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/tool traffic-monitor print count-only where name="${a.name}"`,
+        `/tool traffic-monitor print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `Traffic monitor '${a.name}' not found.`;
       const result = await executeMikrotikCommand(
-        `/tool traffic-monitor remove [find name="${a.name}"]`,
+        `/tool traffic-monitor remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove traffic-monitor: ${result}`;
@@ -204,7 +212,7 @@ export const trafficMonitorTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling traffic-monitor: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/tool traffic-monitor enable [find name="${a.name}"]`,
+        `/tool traffic-monitor enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable traffic-monitor: ${result}`;
@@ -225,7 +233,7 @@ export const trafficMonitorTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling traffic-monitor: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/tool traffic-monitor disable [find name="${a.name}"]`,
+        `/tool traffic-monitor disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable traffic-monitor: ${result}`;

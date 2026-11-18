@@ -218,7 +218,7 @@ Resolves a hostname using the router's own DNS resolver (`:put [:resolve ...]`) 
 
 ## export_dns_config
 
-**Export DNS Configuration to File** · Risk: **read**
+**Export DNS Configuration to File** · Risk: **write**
 
 Exports the full DNS configuration (resolver settings and static records) to a RouterOS script file on the router's flash storage (`/ip dns export file=<filename>`). The router appends `.rsc` to the filename automatically; defaults to `dns_config.rsc`. The exported file can be imported on another RouterOS device to replicate DNS configuration. To read current settings as structured output without writing a file use get_dns_settings. To list static records use list_dns_static. Returns the filename of the exported `.rsc` file on the router.
 

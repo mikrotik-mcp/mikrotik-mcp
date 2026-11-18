@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const snifferTools: ToolModule = [
   defineTool({
@@ -155,7 +155,7 @@ export const snifferTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Saving sniffer capture to ${a.file_name}`);
       const result = await executeMikrotikCommand(
-        `/tool sniffer save file-name="${a.file_name}"`,
+        `/tool sniffer save file-name=${quoted(a.file_name)}`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to save sniffer capture: ${result}`;
@@ -182,8 +182,10 @@ export const snifferTools: ToolModule = [
       ctx.info("Listing sniffer packets");
       const filters: string[] = [];
       if (a.address_filter)
-        filters.push(`(src-address~"${a.address_filter}" or dst-address~"${a.address_filter}")`);
-      if (a.protocol_filter) filters.push(`protocol~"${a.protocol_filter}"`);
+        filters.push(
+          `(src-address~${quoted(a.address_filter)} or dst-address~${quoted(a.address_filter)})`,
+        );
+      if (a.protocol_filter) filters.push(`protocol~${quoted(a.protocol_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/tool sniffer packet print${whereClause(filters)}`,
@@ -212,7 +214,7 @@ export const snifferTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing sniffer hosts");
       const filters: string[] = [];
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/tool sniffer host print${whereClause(filters)}`,

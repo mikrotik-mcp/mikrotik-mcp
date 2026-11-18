@@ -58,6 +58,57 @@ export function quoteValue(value: string | number | boolean): string {
   return `"${escaped}"`;
 }
 
+/**
+ * A value as a RouterOS string literal, ALWAYS in double quotes: for the places
+ * where the console grammar needs a string, such as a `where name="…"` filter,
+ * a `[find comment~"…"]` match or a `key="…"` argument written by hand.
+ *
+ * Never write `name="${value}"` in a command. A `"` in the value would close
+ * the string there, and the rest of the value would run as RouterOS commands.
+ * Write `name=${quoted(value)}`.
+ *
+ * It escapes the same characters as {@link quoteValue}. A `$` becomes `\$`,
+ * so `$[…]` and `$(…)` inside the value are text, not command substitution.
+ */
+export function quoted(value: string | number | boolean): string {
+  const escaped = String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/\t/g, "\\t");
+  // The sanitizer for the ssh2 exec channel: see the note in quoteValue.
+  // codeql[js/shell-command-constructed-from-input]
+  return `"${escaped}"`;
+}
+
+/**
+ * A RouterOS time value such as `30m` or `1d12h`, for the places where the
+ * console needs it bare (an expression like `[:timestamp] - 1h`). Anything
+ * else throws: it would be read as commands.
+ */
+export function durationArg(value: string | number): string {
+  const text = String(value).trim();
+  if (!/^\d+(?:[wdhms](?:\d+[wdhms])*)?$/.test(text))
+    throw new Error(`Invalid duration '${text}'. Use a RouterOS time such as 30m, 1h or 1d12h.`);
+  return text;
+}
+
+/**
+ * A RouterOS menu path such as `ip firewall filter`, for the one place a
+ * command path comes from a caller. Anything else throws: the path is the
+ * command itself, so it cannot be quoted, only checked.
+ */
+export function menuPath(value: string): string {
+  const text = value.trim().replace(/^\/+/, "");
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*(?:[ /][a-z0-9]+(?:-[a-z0-9]+)*)*$/i.test(text))
+    throw new Error(
+      `Invalid RouterOS menu path '${text}'. Use a path such as 'ip firewall filter'.`,
+    );
+  return text;
+}
+
 export function yesno(value: boolean): "yes" | "no" {
   return value ? "yes" : "no";
 }

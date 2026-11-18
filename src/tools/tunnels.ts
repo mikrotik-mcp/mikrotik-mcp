@@ -10,7 +10,7 @@ import { interfaceName } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 const DontFragment = z.enum(["inherit", "no"]);
 const Arp = z.enum(["disabled", "enabled", "local-proxy-arp", "proxy-arp", "reply-only"]);
@@ -68,7 +68,7 @@ export const tunnelTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create GRE tunnel: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface gre print detail where name="${a.name}"`,
+        `/interface gre print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -94,7 +94,7 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing GRE tunnels");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface gre print${whereClause(filters)}`,
@@ -120,7 +120,7 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting GRE tunnel details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface gre print detail where name="${a.name}"`,
+        `/interface gre print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -142,13 +142,13 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing GRE tunnel: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface gre print count-only where name="${a.name}"`,
+        `/interface gre print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `GRE tunnel '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface gre remove [find name="${a.name}"]`,
+        `/interface gre remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove GRE tunnel: ${result}`;
@@ -206,7 +206,7 @@ export const tunnelTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create IPIP tunnel: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface ipip print detail where name="${a.name}"`,
+        `/interface ipip print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -232,7 +232,7 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPIP tunnels");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface ipip print${whereClause(filters)}`,
@@ -258,7 +258,7 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IPIP tunnel details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface ipip print detail where name="${a.name}"`,
+        `/interface ipip print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -280,13 +280,13 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPIP tunnel: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface ipip print count-only where name="${a.name}"`,
+        `/interface ipip print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPIP tunnel '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface ipip remove [find name="${a.name}"]`,
+        `/interface ipip remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPIP tunnel: ${result}`;
@@ -355,7 +355,7 @@ export const tunnelTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create EoIP tunnel: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface eoip print detail where name="${a.name}"`,
+        `/interface eoip print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -381,7 +381,7 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing EoIP tunnels");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface eoip print${whereClause(filters)}`,
@@ -407,7 +407,7 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting EoIP tunnel details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface eoip print detail where name="${a.name}"`,
+        `/interface eoip print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -429,13 +429,13 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing EoIP tunnel: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface eoip print count-only where name="${a.name}"`,
+        `/interface eoip print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `EoIP tunnel '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface eoip remove [find name="${a.name}"]`,
+        `/interface eoip remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove EoIP tunnel: ${result}`;
@@ -502,7 +502,7 @@ export const tunnelTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create VXLAN tunnel: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface vxlan print detail where name="${a.name}"`,
+        `/interface vxlan print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -528,7 +528,7 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing VXLAN tunnels");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface vxlan print${whereClause(filters)}`,
@@ -554,7 +554,7 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting VXLAN tunnel details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface vxlan print detail where name="${a.name}"`,
+        `/interface vxlan print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -576,13 +576,13 @@ export const tunnelTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing VXLAN tunnel: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface vxlan print count-only where name="${a.name}"`,
+        `/interface vxlan print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `VXLAN tunnel '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface vxlan remove [find name="${a.name}"]`,
+        `/interface vxlan remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove VXLAN tunnel: ${result}`;

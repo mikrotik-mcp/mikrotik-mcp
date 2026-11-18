@@ -4,7 +4,7 @@ import { interfaceName } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, splitHostPort, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, splitHostPort, Cmd, quoted } from "../core/routeros";
 import { redactSecrets } from "../utils";
 
 export const sstpTools: ToolModule = [
@@ -169,7 +169,7 @@ export const sstpTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create SSTP client: ${redactSecrets(result)}`;
 
       const details = await executeMikrotikCommand(
-        `/interface sstp-client print detail where name="${a.name}"`,
+        `/interface sstp-client print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -195,7 +195,7 @@ export const sstpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing SSTP clients");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface sstp-client print${whereClause(filters)}`,
@@ -221,7 +221,7 @@ export const sstpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting SSTP client details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface sstp-client print detail where name="${a.name}"`,
+        `/interface sstp-client print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -245,13 +245,13 @@ export const sstpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing SSTP client: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface sstp-client print count-only where name="${a.name}"`,
+        `/interface sstp-client print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `SSTP client '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface sstp-client remove [find name="${a.name}"]`,
+        `/interface sstp-client remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove SSTP client: ${result}`;
@@ -273,12 +273,12 @@ export const sstpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling SSTP client: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface sstp-client print count-only where name="${a.name}"`,
+        `/interface sstp-client print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `SSTP client '${a.name}' not found.`;
       const result = await executeMikrotikCommand(
-        `/interface sstp-client enable [find name="${a.name}"]`,
+        `/interface sstp-client enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable SSTP client: ${result}`;
@@ -299,12 +299,12 @@ export const sstpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling SSTP client: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface sstp-client print count-only where name="${a.name}"`,
+        `/interface sstp-client print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `SSTP client '${a.name}' not found.`;
       const result = await executeMikrotikCommand(
-        `/interface sstp-client disable [find name="${a.name}"]`,
+        `/interface sstp-client disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable SSTP client: ${result}`;

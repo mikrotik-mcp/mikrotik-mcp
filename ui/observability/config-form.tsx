@@ -103,7 +103,7 @@ function FieldRow({
       <Switch
         id={id}
         aria-label={field.label}
-        checked={value === true}
+        checked={(value ?? field.defaultOn) === true}
         onCheckedChange={onChange}
       />
     );

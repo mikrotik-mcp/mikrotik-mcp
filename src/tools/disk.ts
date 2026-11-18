@@ -27,6 +27,7 @@ import {
   commandUnsupported,
   quoteValue,
   Cmd,
+  quoted,
 } from "../core/routeros";
 import { redactSecrets } from "../utils";
 
@@ -74,9 +75,9 @@ export const diskTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing disks");
       const filters: string[] = [];
-      if (a.slot_filter) filters.push(`slot~"${a.slot_filter}"`);
-      if (a.type_filter) filters.push(`type~"${a.type_filter}"`);
-      if (a.interface_filter) filters.push(`interface~"${a.interface_filter}"`);
+      if (a.slot_filter) filters.push(`slot~${quoted(a.slot_filter)}`);
+      if (a.type_filter) filters.push(`type~${quoted(a.type_filter)}`);
+      if (a.interface_filter) filters.push(`interface~${quoted(a.interface_filter)}`);
       const result = await executeMikrotikCommand(
         `/disk print${a.detail ? " detail" : ""}${whereClause(filters)}`,
         ctx,
@@ -98,7 +99,10 @@ export const diskTools: ToolModule = [
     inputSchema: { slot: z.string().describe("Disk slot, e.g. 'nvme1', 'usb1'") },
     async handler(a, ctx) {
       ctx.info(`Getting disk details: slot=${a.slot}`);
-      const result = await executeMikrotikCommand(`/disk print detail where slot="${a.slot}"`, ctx);
+      const result = await executeMikrotikCommand(
+        `/disk print detail where slot=${quoted(a.slot)}`,
+        ctx,
+      );
       if (commandUnsupported(result)) return NOT_AVAILABLE;
       return isEmpty(result) ? `Disk '${a.slot}' not found.` : `DISK DETAILS:\n\n${result}`;
     },
@@ -172,7 +176,7 @@ export const diskTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Setting disk properties: slot=${a.slot}`);
-      const cmd = new Cmd(`/disk set [find slot="${a.slot}"]`)
+      const cmd = new Cmd(`/disk set [find slot=${quoted(a.slot)}]`)
         .opt("label", a.label)
         .opt("comment", a.comment)
         .opt("raid-master", a.raid_master)
@@ -184,7 +188,10 @@ export const diskTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (commandUnsupported(result)) return NOT_AVAILABLE;
       if (looksLikeError(result)) return `Failed to update disk: ${result}`;
-      const detail = await executeMikrotikCommand(`/disk print detail where slot="${a.slot}"`, ctx);
+      const detail = await executeMikrotikCommand(
+        `/disk print detail where slot=${quoted(a.slot)}`,
+        ctx,
+      );
       return `Disk '${a.slot}' updated.\n\n${detail}`;
     },
   }),
@@ -211,7 +218,7 @@ export const diskTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Configuring disk sharing: slot=${a.slot}`);
-      const cmd = new Cmd(`/disk set [find slot="${a.slot}"]`)
+      const cmd = new Cmd(`/disk set [find slot=${quoted(a.slot)}]`)
         .bool("smb-sharing", a.smb_sharing)
         .opt("smb-share-name", a.smb_share_name)
         .opt("smb-users", a.smb_users)
@@ -222,7 +229,10 @@ export const diskTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (commandUnsupported(result)) return NOT_AVAILABLE;
       if (looksLikeError(result)) return `Failed to configure disk sharing: ${result}`;
-      const detail = await executeMikrotikCommand(`/disk print detail where slot="${a.slot}"`, ctx);
+      const detail = await executeMikrotikCommand(
+        `/disk print detail where slot=${quoted(a.slot)}`,
+        ctx,
+      );
       return `Sharing for disk '${a.slot}' updated.\n\n${detail}`;
     },
   }),
@@ -283,12 +293,12 @@ export const diskTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Ejecting disk: slot=${a.slot}`);
       const count = await executeMikrotikCommand(
-        `/disk print count-only where slot="${a.slot}"`,
+        `/disk print count-only where slot=${quoted(a.slot)}`,
         ctx,
       );
       if (commandUnsupported(count)) return NOT_AVAILABLE;
       if (count.trim() === "0") return `Disk '${a.slot}' not found.`;
-      const result = await executeMikrotikCommand(`/disk eject [find slot="${a.slot}"]`, ctx);
+      const result = await executeMikrotikCommand(`/disk eject [find slot=${quoted(a.slot)}]`, ctx);
       if (commandUnsupported(result)) return NOT_AVAILABLE;
       if (looksLikeError(result)) return `Failed to eject disk: ${result}`;
       return `Disk '${a.slot}' ejected — safe to remove.`;
@@ -308,12 +318,15 @@ export const diskTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing virtual disk: slot=${a.slot}`);
       const count = await executeMikrotikCommand(
-        `/disk print count-only where slot="${a.slot}"`,
+        `/disk print count-only where slot=${quoted(a.slot)}`,
         ctx,
       );
       if (commandUnsupported(count)) return NOT_AVAILABLE;
       if (count.trim() === "0") return `Disk '${a.slot}' not found.`;
-      const result = await executeMikrotikCommand(`/disk remove [find slot="${a.slot}"]`, ctx);
+      const result = await executeMikrotikCommand(
+        `/disk remove [find slot=${quoted(a.slot)}]`,
+        ctx,
+      );
       if (looksLikeError(result)) return `Failed to remove disk: ${result}`;
       return `Disk '${a.slot}' removed.`;
     },

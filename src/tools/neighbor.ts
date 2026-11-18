@@ -15,7 +15,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, WRITE_IDEMPOTENT, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, isEmpty, looksLikeError, Cmd } from "../core/routeros";
+import { whereClause, isEmpty, looksLikeError, Cmd, quoted } from "../core/routeros";
 
 export const neighborTools: ToolModule = [
   defineTool({
@@ -46,10 +46,10 @@ export const neighborTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing discovered neighbours (/ip neighbor)");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface~"${a.interface_filter}"`);
-      if (a.identity_filter) filters.push(`identity~"${a.identity_filter}"`);
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
-      if (a.mac_filter) filters.push(`mac-address~"${a.mac_filter}"`);
+      if (a.interface_filter) filters.push(`interface~${quoted(a.interface_filter)}`);
+      if (a.identity_filter) filters.push(`identity~${quoted(a.identity_filter)}`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
+      if (a.mac_filter) filters.push(`mac-address~${quoted(a.mac_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/ip neighbor print detail${whereClause(filters)}`,

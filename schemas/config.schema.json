@@ -390,7 +390,8 @@
         "redactInput": false,
         "maxBodyBytes": 16384,
         "feedLimit": 200,
-        "terminal": true
+        "terminal": true,
+        "files": true
       },
       "type": "object",
       "properties": {
@@ -444,6 +445,10 @@
         "terminal": {
           "default": true,
           "type": "boolean"
+        },
+        "files": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -456,7 +461,8 @@
         "redactInput",
         "maxBodyBytes",
         "feedLimit",
-        "terminal"
+        "terminal",
+        "files"
       ],
       "additionalProperties": false
     },
@@ -944,6 +950,11 @@
     "disableUpdateCheck": {
       "default": false,
       "type": "boolean"
+    },
+    "logLevel": {
+      "default": "error",
+      "type": "string",
+      "enum": ["error", "warn", "info", "debug"]
     }
   },
   "required": [
@@ -961,7 +972,8 @@
     "access",
     "tools",
     "memory",
-    "disableUpdateCheck"
+    "disableUpdateCheck",
+    "logLevel"
   ],
   "additionalProperties": false
 }

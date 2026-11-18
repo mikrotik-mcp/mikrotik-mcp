@@ -11,6 +11,8 @@ import {
   isEmpty,
   commandUnsupported,
   Cmd,
+  quoted,
+  quoteValue,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -37,7 +39,7 @@ export const routingRuleTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing routing rules");
       const filters: string[] = [];
-      if (a.table_filter) filters.push(`table="${a.table_filter}"`);
+      if (a.table_filter) filters.push(`table=${quoted(a.table_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       const result = await executeMikrotikCommand(
         `/routing rule print detail${whereClause(filters)}`,
@@ -63,7 +65,7 @@ export const routingRuleTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting routing rule: ${a.rule_id}`);
       const result = await executeMikrotikCommand(
-        `/routing rule print detail where .id=${a.rule_id}`,
+        `/routing rule print detail where .id=${quoteValue(a.rule_id)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -147,7 +149,7 @@ export const routingRuleTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating routing rule: ${a.rule_id}`);
-      const base = `/routing rule set ${a.rule_id}`;
+      const base = `/routing rule set ${quoteValue(a.rule_id)}`;
       const cmd = new Cmd(base);
       if (a.action !== undefined) cmd.set("action", a.action);
       const clearable: Array<[string, string | undefined]> = [
@@ -158,7 +160,7 @@ export const routingRuleTools: ToolModule = [
         ["interface", a.interface],
       ];
       for (const [key, val] of clearable) {
-        if (val !== undefined) cmd.raw(val === "" ? `!${key}` : `${key}=${val}`);
+        if (val !== undefined) cmd.raw(val === "" ? `!${key}` : `${key}=${quoteValue(val)}`);
       }
       cmd.opt("min-prefix", a.min_prefix);
       if (a.comment !== undefined) cmd.set("comment", a.comment);
@@ -171,7 +173,7 @@ export const routingRuleTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update routing rule: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing rule print detail where .id=${a.rule_id}`,
+        `/routing rule print detail where .id=${quoteValue(a.rule_id)}`,
         ctx,
       );
       return `Routing rule updated successfully:\n\n${details}`;
@@ -189,7 +191,10 @@ export const routingRuleTools: ToolModule = [
     inputSchema: { rule_id: z.string().describe('Rule id, e.g. "*3"') },
     async handler(a, ctx) {
       ctx.info(`Removing routing rule: ${a.rule_id}`);
-      const result = await executeMikrotikCommand(`/routing rule remove ${a.rule_id}`, ctx);
+      const result = await executeMikrotikCommand(
+        `/routing rule remove ${quoteValue(a.rule_id)}`,
+        ctx,
+      );
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to remove routing rule: ${result}`;
       return `Routing rule '${a.rule_id}' removed successfully.`;
@@ -212,7 +217,7 @@ export const routingRuleTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Setting routing rule ${a.rule_id} enabled=${a.enabled}`);
       const result = await executeMikrotikCommand(
-        `/routing rule set ${a.rule_id} disabled=${yesno(!a.enabled)}`,
+        `/routing rule set ${quoteValue(a.rule_id)} disabled=${yesno(!a.enabled)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
