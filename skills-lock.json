@@ -6,6 +6,13 @@
       "sourceType": "github",
       "computedHash": "3da45f65d7b979edaf3d9ec755856c92522e7d7d57d60a9fb4782ac8d2570ca6"
     },
+    "asciicn": {
+      "source": "asciicn.dev",
+      "sourceUrl": "https://asciicn.dev",
+      "sourceType": "well-known",
+      "computedHash": "0eeaaaec93e3336ca2b0bf164c5940bb1c5d17c8daf2516d6617bb84cdd2a2b4",
+      "wellKnownDigest": "sha256:9561ed7395fae894506d1340e31813150a31cbbe74e76a46d849f627724ac08c"
+    },
     "asd-ste100": {
       "source": "danyuchn/asd-ste100-skill",
       "sourceType": "github",
