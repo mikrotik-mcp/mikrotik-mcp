@@ -66,8 +66,6 @@ import { DashboardRefresh } from "./dashboard-refresh";
 import type { ViewId } from "./navigation";
 import { parseViewHash, viewGroup, VIEWS } from "./navigation";
 import { BackupsView } from "./backups";
-import { AaaView } from "./aaa";
-import { OpenVpnView } from "./openvpn";
 import { ChangePlanView } from "./change-plan";
 import { OverviewView } from "./overview";
 import { FeedInspector } from "./feed-inspector";
@@ -1786,10 +1784,10 @@ function App(): ReactNode {
                 {view === "recovery-lab" && <RecoveryLabView />}
                 {view === "round-trip" && <RoundTripView />}
 
-              {/* ── Drift Guard ── */}
-              {view === "terminal" && <TerminalView />}
+                {view === "terminal" && <TerminalView />}
 
-              {view === "drift" && <DriftView />}
+                {/* ── Drift Guard ── */}
+                {view === "drift" && <DriftView />}
 
                 {/* ── Topology ── */}
                 {view === "topology" && (
