@@ -204,3 +204,4 @@ docs/tasks
 .mcpb-cache/
 dist-mcpb/
 *.mcpb
+.playwright-mcp/
