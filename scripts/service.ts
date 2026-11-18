@@ -512,7 +512,7 @@ async function inspect(state: ServiceState): Promise<ServiceReport> {
   };
   const latest = async (): Promise<string | undefined> => {
     const response = await fetch(
-      `https://registry.npmjs.org/${PACKAGE.replace("/", "%2f")}/latest`,
+      `https://registry.npmjs.org/${PACKAGE.replaceAll("/", "%2f")}/latest`,
       {
         signal: AbortSignal.timeout(2500),
       },
