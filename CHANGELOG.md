@@ -58,6 +58,13 @@ the GitHub release notes.
   `true`) turns the page off or on. It is a switch in **Config → Dashboard**,
   and a change applies with no restart.
 
+- **Start summary.** `serve` on an interactive terminal now prints, under the
+  banner, where the server answers (the MCP endpoint and the dashboard, on
+  each address of the machine for a wildcard bind) and a table of the
+  routers: address, path (SSH, jump host or MAC-Telnet), online or offline,
+  latency, identity, RouterOS version, board and uptime. It shows at any log
+  level, and never prints a password or the dashboard token.
+
 ### Changed
 
 - **The Terminal page no longer needs a token or a loopback bind.** Like the
