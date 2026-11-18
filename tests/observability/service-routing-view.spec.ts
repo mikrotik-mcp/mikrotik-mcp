@@ -171,14 +171,12 @@ test("saves an explicit domain without a probe and requires consent for a wildca
   const exit = [...document.querySelectorAll("fieldset label")].find((e) =>
     e.textContent?.startsWith("main"),
   )!;
-  await act(async () => (exit.querySelector('input[type="checkbox"]') as HTMLInputElement).click());
+  await act(async () => (exit.querySelector('[role="checkbox"]') as HTMLButtonElement).click());
   const save = [...document.querySelectorAll("button")].find(
     (b) => b.textContent === "Save draft",
   )!;
   expect(save.disabled).toBe(true);
-  const consent = document.querySelector(
-    '.route-domain input[type="checkbox"]',
-  ) as HTMLInputElement;
+  const consent = document.querySelector('.route-domain [role="checkbox"]') as HTMLButtonElement;
   await act(async () => consent.click());
   expect(save.disabled).toBe(false);
   await act(async () => save.click());

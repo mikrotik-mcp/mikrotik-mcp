@@ -15,6 +15,7 @@ import {
   StatusBadge,
   StatusDot,
 } from "./monitoring-ui";
+import { Checkbox, NumberInput, TextInput } from "./kit";
 
 const ipv4 = (value: string): boolean =>
   /^\d{1,3}(\.\d{1,3}){3}$/.test(value) && value.split(".").every((n) => Number(n) <= 255);
@@ -182,22 +183,21 @@ export function InvestigationFlowPath({
     set: (v: string) => void,
     placeholder?: string,
   ): ReactNode => (
-    <label className="monitor-fl">
+    <div className="monitor-fl">
       <span className="monitor-label">{label}</span>
-      <input
-        className="monitor-input inv-input inv-mono"
-        type="number"
+      <NumberInput
+        label={label}
+        allowEmpty
         min={1}
         max={65535}
-        required
-        value={value}
+        value={value === "" ? null : Number(value)}
         placeholder={placeholder}
-        onChange={(e) => {
-          set(e.target.value);
+        onChange={(n) => {
+          set(n == null ? "" : String(n));
           change();
         }}
       />
-    </label>
+    </div>
   );
 
   return (
@@ -224,12 +224,13 @@ export function InvestigationFlowPath({
             <div className="inv-flow-find">
               <label className="monitor-fl">
                 <span className="monitor-label">Client IPv4</span>
-                <input
-                  className="monitor-input inv-input inv-mono"
+                <TextInput
+                  mono
+                  label="Client IPv4"
                   required
                   value={client}
-                  onChange={(e) => {
-                    setClient(e.target.value);
+                  onChange={(v) => {
+                    setClient(v);
                     setCandidates([]);
                     setCandidateNote("");
                     change();
@@ -274,13 +275,14 @@ export function InvestigationFlowPath({
             <div className="inv-flow-fields">
               <label className="monitor-fl">
                 <span className="monitor-label">Actual destination IPv4</span>
-                <input
-                  className="monitor-input inv-input inv-mono"
+                <TextInput
+                  mono
+                  label="Actual destination IPv4"
                   required
                   value={destination}
                   placeholder={`IP used for ${c.target}`}
-                  onChange={(e) => {
-                    setDestination(e.target.value);
+                  onChange={(v) => {
+                    setDestination(v);
                     change();
                   }}
                 />
@@ -316,19 +318,17 @@ export function InvestigationFlowPath({
                   </p>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                     {names.map((name) => (
-                      <label key={name} className="monitor-check min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(name)}
-                          disabled={busy || (!selected.includes(name) && selected.length >= 8)}
-                          onChange={(e) => {
-                            const on = e.target.checked;
-                            setSelected((s) => (on ? [...s, name] : s.filter((n) => n !== name)));
-                            change();
-                          }}
-                        />
-                        <span className="inv-mono break-all">{name}</span>
-                      </label>
+                      <Checkbox
+                        key={name}
+                        className="min-w-0"
+                        label={<span className="inv-mono break-all">{name}</span>}
+                        checked={selected.includes(name)}
+                        disabled={busy || (!selected.includes(name) && selected.length >= 8)}
+                        onCheckedChange={(on) => {
+                          setSelected((s) => (on ? [...s, name] : s.filter((n) => n !== name)));
+                          change();
+                        }}
+                      />
                     ))}
                   </div>
                 </div>

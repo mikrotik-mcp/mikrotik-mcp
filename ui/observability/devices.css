@@ -43,7 +43,7 @@
   width: 280px;
 }
 .dv-cols {
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.25fr) 104px 104px 64px 84px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.25fr) 104px 104px 64px 84px 26px;
 }
 
 /* ── Router details ───────────────────────────────────────────────────────── */
@@ -104,7 +104,7 @@
 
 /* ── SSH connection pool ──────────────────────────────────────────────────── */
 .dv-pool-cols {
-  grid-template-columns: minmax(0, 1.4fr) 120px 120px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) 120px 120px minmax(0, 1fr) 26px;
 }
 
 /* ── Manage routers ───────────────────────────────────────────────────────── */

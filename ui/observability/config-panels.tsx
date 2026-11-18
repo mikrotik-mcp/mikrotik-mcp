@@ -3,11 +3,11 @@
  * Split out of `main.tsx` to keep each concern in its own component module.
  */
 import { LoadingState } from "./loading-state";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { api, postJson } from "./api";
-import { Input } from "./geist";
+import { DetailList, RowDrawer, RowMenu, RowMore, SearchInput, TextInput } from "./kit";
 import { MonitorButton, MonitorEmpty, StatusBadge } from "./monitoring-ui";
 import { JsonDiffView } from "./highlight";
 import { toast } from "./toast-action";
@@ -80,18 +80,25 @@ export function ConfigHistoryPanel({ onRestored }: { onRestored: () => void }): 
       toast.error(r.error ?? "Checkpoint failed");
     }
   };
-  const showDiff = async (id: string): Promise<void> => {
-    if (diffFor === id) {
-      setDiffFor(null);
-      setDiff(null);
-      return;
-    }
+  // The drawer shows one version's diff; a late answer for another version is dropped.
+  const asked = useRef<string | null>(null);
+  const openDiff = async (id: string): Promise<void> => {
+    asked.current = id;
     setDiffFor(id);
     setDiff(null);
     const d = await api<{ summary: { added: number; removed: number }; unified: string }>(
       `/api/config/history/diff?id=${encodeURIComponent(id)}`,
     ).catch(() => null);
-    setDiff(d);
+    if (asked.current === id) setDiff(d);
+  };
+  const closeDiff = (): void => {
+    asked.current = null;
+    setDiffFor(null);
+    setDiff(null);
+  };
+  const showDiff = async (id: string): Promise<void> => {
+    if (diffFor === id) closeDiff();
+    else await openDiff(id);
   };
   const restore = async (id: string): Promise<void> => {
     setConfirmRestore(null);
@@ -166,25 +173,82 @@ export function ConfigHistoryPanel({ onRestored }: { onRestored: () => void }): 
             const changed = v.drift.added + v.drift.removed;
             const share = (n: number): number => Math.min((n / Math.max(changed, 1)) * 60, 60);
             return (
-              <div key={v.id}>
-                <div className="monitor-row config-history-row" data-selected={latest || undefined}>
-                  <span className="truncate font-mono text-xs text-foreground">{when(v.ts)}</span>
-                  <span>
+              <RowMenu
+                key={v.id}
+                title={v.label ?? when(v.ts)}
+                sub={`${v.kind} · ${fmtBytes(v.bytes)}`}
+                onOpen={() => void openDiff(v.id)}
+                cells={{
+                  saved: { value: when(v.ts), kind: "time" },
+                  kind: { value: v.kind },
+                  label: { value: v.label ?? "" },
+                  size: { value: fmtBytes(v.bytes) },
+                  drift: {
+                    value: latest
+                      ? "Current config"
+                      : changed === 0
+                        ? "Identical to current"
+                        : `+${v.drift.added} −${v.drift.removed}`,
+                  },
+                }}
+                copies={[{ label: "Version ID", value: v.id }]}
+                row={v}
+                actions={
+                  latest
+                    ? []
+                    : [
+                        {
+                          label: "Restore this version",
+                          disabled: busy,
+                          onSelect: () => setConfirmRestore(v.id),
+                        },
+                        ...(v.kind === "checkpoint"
+                          ? [
+                              {
+                                label: "Delete checkpoint",
+                                icon: <Trash2 aria-hidden="true" />,
+                                danger: true,
+                                onSelect: () => void del(v.id),
+                              },
+                            ]
+                          : []),
+                      ]
+                }
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="monitor-row config-history-row cursor-pointer"
+                  data-selected={diffFor === v.id || (diffFor == null && latest) || undefined}
+                  aria-label={`Version ${v.label ?? when(v.ts)}, ${v.kind}`}
+                  onClick={() => void openDiff(v.id)}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void openDiff(v.id);
+                    }
+                  }}
+                >
+                  <span data-col="saved" className="truncate font-mono text-xs text-foreground">
+                    {when(v.ts)}
+                  </span>
+                  <span data-col="kind">
                     <StatusBadge tone={v.kind === "checkpoint" ? "brand" : "default"} dot={false}>
                       {v.kind}
                     </StatusBadge>
                   </span>
-                  <span className="truncate">
+                  <span data-col="label" className="truncate">
                     {v.label ? (
                       <span className="text-fg-secondary">{v.label}</span>
                     ) : (
                       <span className="text-faint">—</span>
                     )}
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span data-col="size" className="font-mono text-xs text-muted-foreground">
                     {fmtBytes(v.bytes)}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span data-col="drift" className="text-xs text-muted-foreground">
                     {latest ? (
                       "Current config"
                     ) : changed === 0 ? (
@@ -200,7 +264,11 @@ export function ConfigHistoryPanel({ onRestored }: { onRestored: () => void }): 
                       </span>
                     )}
                   </span>
-                  <span className="flex items-center justify-end gap-1">
+                  <span
+                    className="flex items-center justify-end gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     {latest ? (
                       <StatusBadge tone="good" dot={false}>
                         latest
@@ -253,41 +321,147 @@ export function ConfigHistoryPanel({ onRestored }: { onRestored: () => void }): 
                       </>
                     )}
                   </span>
+                  <RowMore />
                 </div>
-                {diffFor === v.id && (
-                  <div className="border-t border-line px-[18px] py-3">
-                    {diff ? (
-                      diff.unified.trim() ? (
-                        <JsonDiffView unified={diff.unified} maxHeight={280} />
-                      ) : (
-                        <span className="monitor-hint">
-                          No differences from the current config.
-                        </span>
-                      )
-                    ) : (
-                      <span className="monitor-hint">Computing diff…</span>
-                    )}
-                  </div>
-                )}
-              </div>
+              </RowMenu>
             );
           })}
         </div>
       )}
-      <div className="monitor-foot">
-        <label className="monitor-field config-checkpoint">
-          <Plus aria-hidden="true" />
-          <input
-            aria-label="Checkpoint name"
-            placeholder="checkpoint name, e.g. pre-upgrade"
-            value={labelDraft ?? ""}
-            onChange={(e) => setLabelDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void saveCheckpoint();
-              if (e.key === "Escape") setLabelDraft(null);
-            }}
+      {(() => {
+        const idx = diffFor ? data.versions.findIndex((x) => x.id === diffFor) : -1;
+        const v = idx >= 0 ? data.versions[idx] : undefined;
+        const latest = idx === 0;
+        const go = (k: number): (() => void) | undefined => {
+          const next = data.versions[k];
+          return next ? () => void openDiff(next.id) : undefined;
+        };
+        return (
+          <RowDrawer
+            open={Boolean(v)}
+            onClose={closeDiff}
+            label={`Version details: ${v ? (v.label ?? when(v.ts)) : ""}`}
+            status={
+              v ? { tone: v.kind === "checkpoint" ? "acc" : "off", label: v.kind } : undefined
+            }
+            title={v ? (v.label ?? when(v.ts)) : ""}
+            meta={v ? `${when(v.ts)} · ${fmtBytes(v.bytes)}` : undefined}
+            nav={
+              v
+                ? {
+                    index: idx,
+                    total: data.versions.length,
+                    onPrev: go(idx - 1),
+                    onNext: go(idx + 1),
+                  }
+                : undefined
+            }
+            rowKey={diffFor ?? undefined}
+            storageKey="config-history"
+            tabs={
+              v
+                ? [
+                    {
+                      id: "diff",
+                      label: "Diff",
+                      content: diff ? (
+                        diff.unified.trim() ? (
+                          <JsonDiffView unified={diff.unified} maxHeight={480} />
+                        ) : (
+                          <span className="monitor-hint">
+                            No differences from the current config.
+                          </span>
+                        )
+                      ) : (
+                        <span className="monitor-hint">Computing diff…</span>
+                      ),
+                    },
+                    {
+                      id: "details",
+                      label: "Details",
+                      content: (
+                        <DetailList
+                          items={[
+                            { label: "Saved", value: fmtWhen(v.ts), mono: true },
+                            { label: "Kind", value: v.kind },
+                            { label: "Label", value: v.label ?? "—" },
+                            { label: "Size", value: fmtBytes(v.bytes), mono: true },
+                            {
+                              label: "Drift vs current",
+                              value: latest
+                                ? "Current config"
+                                : `+${v.drift.added} / −${v.drift.removed}`,
+                              mono: true,
+                            },
+                            { label: "ID", value: v.id, mono: true },
+                          ]}
+                        />
+                      ),
+                    },
+                  ]
+                : undefined
+            }
+            actions={
+              v &&
+              !latest &&
+              v.kind === "checkpoint" && (
+                <MonitorButton
+                  size="sm"
+                  variant="ghost"
+                  icon={<Trash2 aria-hidden="true" />}
+                  aria-label={`Delete checkpoint ${v.label ?? when(v.ts)}`}
+                  onClick={() => {
+                    closeDiff();
+                    void del(v.id);
+                  }}
+                >
+                  Delete
+                </MonitorButton>
+              )
+            }
+            primary={
+              v &&
+              (latest ? (
+                <StatusBadge tone="good" dot={false}>
+                  latest
+                </StatusBadge>
+              ) : confirmRestore === v.id ? (
+                <>
+                  <MonitorButton size="sm" variant="ghost" onClick={() => setConfirmRestore(null)}>
+                    Cancel
+                  </MonitorButton>
+                  <MonitorButton
+                    size="sm"
+                    variant="primary"
+                    disabled={busy}
+                    onClick={() => void restore(v.id)}
+                  >
+                    Confirm restore
+                  </MonitorButton>
+                </>
+              ) : (
+                <MonitorButton size="sm" onClick={() => setConfirmRestore(v.id)}>
+                  Restore
+                </MonitorButton>
+              ))
+            }
           />
-        </label>
+        );
+      })()}
+      <div className="monitor-foot">
+        <TextInput
+          label="Checkpoint name"
+          size="sm"
+          icon={<Plus aria-hidden="true" />}
+          wrapClassName="config-checkpoint"
+          placeholder="checkpoint name, e.g. pre-upgrade"
+          value={labelDraft ?? ""}
+          onChange={setLabelDraft}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void saveCheckpoint();
+            if (e.key === "Escape") setLabelDraft(null);
+          }}
+        />
         <MonitorButton size="sm" onClick={() => void saveCheckpoint()}>
           Save checkpoint
         </MonitorButton>
@@ -384,11 +558,12 @@ export function FieldGuidePanel(): ReactNode {
   return (
     <>
       <div className="flex flex-wrap items-center gap-2" style={{ marginBottom: 12 }}>
-        <Input
-          className="w-[min(360px,60vw)]"
+        <SearchInput
+          label="Search fields"
+          wrapClassName="w-[min(360px,60vw)]"
           placeholder="Search fields & descriptions…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={setQ}
         />
         <span className="flex-1" />
         <span className="text-muted-foreground text-[11px]">{filtered.length} options</span>

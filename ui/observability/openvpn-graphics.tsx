@@ -9,6 +9,8 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, stagger } from "animejs";
 import type { Scope } from "animejs";
+import { EASE, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 
@@ -63,14 +65,45 @@ export function OpenVpnRadar({
   }, [key]);
 
   const extra = nodes.length > SLOTS.length ? nodes.length - SLOTS.length + 1 : 0;
-  const shown: { label: string; title: string; status: OvpnRadarStatus | "faint" }[] = (
-    extra ? nodes.slice(0, SLOTS.length - 1) : nodes
-  ).map((n) => ({
+  const shown: {
+    label: string;
+    title: string;
+    status: OvpnRadarStatus | "faint";
+    card: TipCard;
+  }[] = (extra ? nodes.slice(0, SLOTS.length - 1) : nodes).map((n) => ({
     label: n.sessions > 1 ? `${short(n.label)} ×${n.sessions}` : short(n.label),
     title: n.sessions > 1 ? `${n.label} · ${n.sessions} sessions` : n.label,
     status: n.status,
+    card: {
+      title: n.label,
+      led: n.status === "warn" ? "warn" : "ok",
+      rows: [
+        { label: "Sessions", value: n.sessions.toLocaleString() },
+        {
+          label: "Traffic counters",
+          value: n.status === "warn" ? "Not reported" : "Reported",
+          color: STATUS_COLOR[n.status],
+        },
+      ],
+    },
   }));
-  if (extra) shown.push({ label: `+${extra} more`, title: `${extra} more users`, status: "faint" });
+  if (extra) {
+    const rest = nodes.slice(SLOTS.length - 1);
+    shown.push({
+      label: `+${extra} more`,
+      title: `${extra} more users`,
+      status: "faint",
+      card: {
+        title: `${extra} more users`,
+        rows: [
+          {
+            label: "Sessions",
+            value: rest.reduce((sum, n) => sum + n.sessions, 0).toLocaleString(),
+          },
+        ],
+      },
+    });
+  }
   const cx = RADAR_W / 2;
   const cy = RADAR_H / 2;
   const placed = shown.map((n, i) => {
@@ -85,7 +118,7 @@ export function OpenVpnRadar({
   return (
     <svg
       ref={root}
-      className="ovpn-radar"
+      className="ovpn-radar kit-tips"
       viewBox={`0 0 ${RADAR_W} ${RADAR_H}`}
       width="100%"
       height={RADAR_H}
@@ -141,8 +174,8 @@ export function OpenVpnRadar({
           key={n.label}
           className="ovpn-radar-node"
           style={{ transformOrigin: `${n.x}px ${n.y}px` }}
+          {...tipProps(n.card)}
         >
-          <title>{n.title}</title>
           <circle
             cx={n.x}
             cy={n.y}
@@ -192,7 +225,7 @@ export function OpenVpnBars({ days }: { days: { day: string; count: number }[] }
         scaleY: [0, 1],
         duration: 420,
         delay: stagger(6),
-        ease: "outQuart",
+        ease: EASE.enter,
       });
     });
     return () => scope.current?.revert();
@@ -216,6 +249,7 @@ export function OpenVpnBars({ days }: { days: { day: string; count: number }[] }
         width="100%"
         height={BAR_H}
         preserveAspectRatio="none"
+        className="kit-tips"
         role="img"
         aria-label={`Daily connection starts, ${days[0]?.day ?? ""} to ${days[n - 1]?.day ?? ""}, up to ${max} a day`}
       >
@@ -246,9 +280,31 @@ export function OpenVpnBars({ days }: { days: { day: string; count: number }[] }
               fill="var(--brand)"
               opacity={0.85}
               style={{ transformOrigin: `${x}px ${BAR_H}px` }}
-            >
-              <title>{`${dayLabel(d.day)} · ${d.count.toLocaleString()} connections`}</title>
-            </rect>
+              {...tipProps((): TipCard => {
+                const prev = i > 0 ? d.count - days[i - 1]!.count : null;
+                return {
+                  title: dayLabel(d.day),
+                  sub: d.day,
+                  rows: [
+                    {
+                      label: "Connections started",
+                      value: d.count.toLocaleString(),
+                      color: "var(--brand)",
+                    },
+                    { label: "Busiest day", value: max.toLocaleString() },
+                  ],
+                  ...(prev != null
+                    ? {
+                        foot: {
+                          label: "vs the day before",
+                          value: `${prev >= 0 ? "+" : ""}${prev.toLocaleString()}`,
+                          tone: prev >= 0 ? ("up" as const) : ("down" as const),
+                        },
+                      }
+                    : {}),
+                };
+              })}
+            />
           );
         })}
       </svg>
@@ -290,7 +346,7 @@ export function OpenVpnTreemap({
           ? "acc"
           : "rest";
   return (
-    <div className="ovpn-treemap" role="list" aria-label="Share of connections">
+    <div className="ovpn-treemap kit-tips" role="list" aria-label="Share of connections">
       {rows.map((row, r) => (
         <div key={r} className="ovpn-treemap-row" data-row={r}>
           {row.map((tile, i) => {
@@ -303,7 +359,15 @@ export function OpenVpnTreemap({
                 className="ovpn-treemap-tile"
                 data-tone={tone(tile, index)}
                 style={{ flexGrow: Math.max(1, tile.value) }}
-                title={`${tile.name}${tile.detail && tile.detail !== tile.name ? ` · ${tile.detail}` : ""} · ${tile.value.toLocaleString()} connections · ${share}%`}
+                {...tipProps({
+                  title: tile.name,
+                  sub: tile.detail && tile.detail !== tile.name ? tile.detail : undefined,
+                  rows: [
+                    { label: "Connections", value: tile.value.toLocaleString() },
+                    { label: "Share", value: `${share}%` },
+                    { label: "All connections", value: total.toLocaleString() },
+                  ],
+                })}
               >
                 <span className="ovpn-treemap-name">{tile.name}</span>
                 <span className="ovpn-treemap-n">

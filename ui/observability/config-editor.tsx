@@ -777,6 +777,14 @@ export function ConfigEditor({
               stroke={5}
               tone="warn"
               label="Time left"
+              tip={{
+                title: "Auto-revert",
+                led: "warn",
+                rows: [
+                  { label: "Time left", value: `${countdown} s` },
+                  { label: "Window", value: `${windowSec} s` },
+                ],
+              }}
             >
               {`${countdown}s`}
             </Ring>

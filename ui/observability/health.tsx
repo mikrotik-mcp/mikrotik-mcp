@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import type { ReactNode } from "react";
 import { Sparkline } from "./signal-charts";
 import { bytes } from "./format";
+import { tipProps } from "./kit";
 import type { DeviceInfo } from "./types";
 
 /** The boards' bar colours: teal, amber from 60 %, red from 85 %. */
@@ -68,11 +69,39 @@ export function DeviceResources({
   const peak = Math.max(...hist.map((h) => h.cpuLoad ?? 0));
   const state = !hasReadings ? "awaiting readings" : stale ? "last known, not live" : "live";
   const meters = (
-    <div className="dv-res-grid">
+    <div className="dv-res-grid kit-tips">
       {rows.map(([label, value, detail]) => (
         <Fragment key={label}>
           <span className="text-muted-foreground">{label}</span>
-          <span className="monitor-meter" title={detail}>
+          <span
+            className="monitor-meter"
+            // The card shows this text; tests read it here.
+            data-detail={detail}
+            {...tipProps(() => ({
+              title: label,
+              sub: d.name,
+              rows: [
+                { label: "Used", value: value != null ? `${value.toFixed(1)}%` : "No reading" },
+                ...(label === "CPU"
+                  ? s.cpuCount != null
+                    ? [{ label: "Cores", value: String(s.cpuCount) }]
+                    : []
+                  : [{ label: label === "Disk" ? "Free" : "In use", value: detail }]),
+              ],
+              foot: {
+                label: state,
+                value:
+                  value == null
+                    ? "—"
+                    : value >= 85
+                      ? "over 85%"
+                      : value >= 60
+                        ? "over 60%"
+                        : "normal",
+                tone: value != null && value >= 60 ? "down" : "up",
+              },
+            }))}
+          >
             <MeterBar value={value} label={label} />
             <span className="w-8 flex-none text-right">
               {value != null ? `${Math.round(value)}%` : "—"}
@@ -108,6 +137,15 @@ export function DeviceResources({
         >
           <Sparkline
             values={hist.map((h) => h.cpuLoad ?? 0)}
+            labels={hist.map((h) =>
+              new Date(h.ts).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              }),
+            )}
+            name="CPU"
+            format={(v) => `${Math.round(v)}%`}
             width={300}
             height={40}
             fill

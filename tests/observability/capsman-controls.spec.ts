@@ -5,6 +5,7 @@ import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { CapsmanView } from "../../ui/observability/capsman";
 import { api, postJson } from "../../ui/observability/api";
+import { choose, kitControl } from "../_stubs/kit";
 
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
 vi.mock("../../ui/observability/toast-action", () => ({
@@ -69,13 +70,7 @@ const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (el) => el.textContent === label,
   )!;
-const chooseRemote = async () => {
-  const select = host.querySelector<HTMLSelectElement>('select[aria-label="CAPsMAN router"]')!;
-  await act(async () => {
-    select.value = "remote";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-};
+const chooseRemote = () => choose("CAPsMAN router", "remote", host);
 test("scopes all data to the selected router and confirms enable/disable without optimistic status", async () => {
   await open();
   await chooseRemote();
@@ -127,9 +122,7 @@ test("locks selection while applying and keeps an uncertain outcome visible unti
   );
   await click(button("Enable"));
   await click(button("Enable manager"));
-  expect(
-    host.querySelector<HTMLSelectElement>('select[aria-label="CAPsMAN router"]')?.disabled,
-  ).toBe(true);
+  expect((kitControl("CAPsMAN router", host) as HTMLButtonElement).disabled).toBe(true);
   expect(button("Cancel").disabled).toBe(true);
   await act(async () =>
     finish({ ok: false, error: "Final status unknown. Refresh before trying again." }),

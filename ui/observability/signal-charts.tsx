@@ -5,9 +5,11 @@
  * value. Nothing moves when the user asks for reduced motion.
  */
 import { useEffect, useRef } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 import { animate, createScope, svg } from "animejs";
 import type { Scope } from "animejs";
+import { LineHover, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 
@@ -46,6 +48,10 @@ export function Sparkline({
   tone = "good",
   fill = false,
   className = "monitor-spark",
+  labels,
+  format = (v) => v.toLocaleString("en-US"),
+  name = "Value",
+  tip = true,
 }: {
   values: number[];
   width?: number;
@@ -54,6 +60,13 @@ export function Sparkline({
   /** Shade the area under the line. */
   fill?: boolean;
   className?: string;
+  /** What each point is, for the tooltip: "09:00", "Mon". */
+  labels?: readonly string[];
+  format?: (v: number) => string;
+  /** What the values measure, for the tooltip: "Calls". */
+  name?: string;
+  /** false: no tooltip (decorative sparklines). */
+  tip?: boolean;
 }): ReactNode {
   const root = useRef<SVGSVGElement>(null);
   const scope = useRef<Scope | null>(null);
@@ -77,6 +90,19 @@ export function Sparkline({
   const points = sparkPoints(values, width, height);
   const d = `M${points.map(([x, y]) => `${x},${y}`).join(" L")}`;
   const color = TONE_COLOR[tone];
+  const card = (i: number): TipCard => ({
+    title: labels?.[i] ?? `Point ${i + 1} of ${values.length}`,
+    rows: [{ label: name, value: format(values[i] ?? 0), color }],
+    ...(i > 0
+      ? {
+          foot: {
+            label: "vs the point before",
+            value: `${(values[i] ?? 0) - (values[i - 1] ?? 0) >= 0 ? "+" : ""}${format((values[i] ?? 0) - (values[i - 1] ?? 0))}`,
+            tone: (values[i] ?? 0) >= (values[i - 1] ?? 0) ? ("up" as const) : ("down" as const),
+          },
+        }
+      : {}),
+  });
   return (
     <svg
       ref={root}
@@ -84,7 +110,8 @@ export function Sparkline({
       viewBox={`0 0 ${width} ${height}`}
       width={width}
       height={height}
-      aria-hidden="true"
+      overflow="visible"
+      aria-hidden={tip ? undefined : "true"}
     >
       {fill && (
         <path d={`${d} L${width},${height} L0,${height} Z`} fill="var(--sig-fill)" stroke="none" />
@@ -98,6 +125,17 @@ export function Sparkline({
         strokeLinejoin="round"
         strokeLinecap="round"
       />
+      {tip && (
+        <LineHover
+          width={width}
+          height={height}
+          points={points}
+          card={card}
+          label={`${name} trend, ${values.length} points`}
+          band={Math.max(6, width / values.length)}
+          color={color}
+        />
+      )}
     </svg>
   );
 }
@@ -132,6 +170,7 @@ export function Ring({
   tone = "good",
   label,
   children,
+  tip,
 }: {
   /** 0 to 100. */
   value: number;
@@ -142,6 +181,8 @@ export function Ring({
   label: string;
   /** Replaces the default "42%" in the middle. */
   children?: ReactNode;
+  /** The hover card; defaults to the label and the percentage. */
+  tip?: TipCard;
 }): ReactNode {
   const root = useRef<SVGSVGElement>(null);
   const pct = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
@@ -158,6 +199,13 @@ export function Ring({
       height={size}
       role="img"
       aria-label={`${label} ${Math.round(pct)}%`}
+      {...tipProps(
+        () =>
+          tip ?? {
+            title: label,
+            rows: [{ label: "Value", value: `${Math.round(pct)}%`, color: TONE_COLOR[tone] }],
+          },
+      )}
     >
       <circle cx={c} cy={c} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
       <circle
@@ -200,6 +248,8 @@ export function Donut({
   center,
   sub,
   label = "Breakdown",
+  noun = "items",
+  partAction,
 }: {
   parts: DonutPart[];
   size?: number;
@@ -209,6 +259,10 @@ export function Donut({
   /** The small word under it, e.g. "calls". */
   sub?: ReactNode;
   label?: string;
+  /** What the parts count, for the tooltip: "calls". */
+  noun?: string;
+  /** One action on a segment's card, e.g. "Show these calls in Live Feed". */
+  partAction?: (p: DonutPart) => { label: string; onClick: () => void } | undefined;
 }): ReactNode {
   const root = useRef<SVGSVGElement>(null);
   useSweep(root, parts.map((p) => p.value).join(","));
@@ -236,15 +290,27 @@ export function Donut({
         strokeDashoffset={(-starts[i]).toFixed(1)}
         transform={`rotate(-90 ${c} ${c})`}
         strokeLinecap="round"
-      >
-        <title>{`${p.label}: ${p.value}`}</title>
-      </circle>
+        className="signal-donut-arc"
+        style={{ "--w": `${stroke}px` } as CSSProperties}
+        {...tipProps(() => ({
+          title: p.label,
+          rows: [
+            {
+              label: noun.replace(/^./, (ch) => ch.toUpperCase()),
+              value: `${p.value.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,
+              color: TONE_COLOR[p.tone],
+            },
+            { label: "Share", value: `${((p.value / total) * 100).toFixed(1)}%` },
+          ],
+          action: partAction?.(p),
+        }))}
+      />
     );
   });
   return (
     <svg
       ref={root}
-      className="signal-donut"
+      className="signal-donut kit-tips"
       viewBox={`0 0 ${size} ${size}`}
       width={size}
       height={size}

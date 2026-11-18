@@ -10,8 +10,10 @@
  * Live updates ride the shared `/api/stream` socket (message type `txn`).
  */
 import "./transactions.css";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { RowDrawer, RowMenu, RowMore } from "./kit";
+import type { Tone as KitTone } from "./kit";
 import { Clock, Copy, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { api, postJson } from "./api";
 import { onTxnUpdate } from "./hooks";
@@ -45,6 +47,23 @@ function ago(ms: number): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
+
+/** Enter or Space on a focused row acts like a click. */
+function onRowKey(run: () => void): (e: KeyboardEvent<HTMLElement>) => void {
+  return (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      run();
+    }
+  };
+}
+
+const KIT_STATE: Record<TxnTerminalState, KitTone> = {
+  COMMITTED: "ok",
+  ABORTED: "off",
+  PARTIAL: "bad",
+};
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -239,97 +258,116 @@ function useTxn(id: string): {
   return { txn, events, load };
 }
 
-// ── Detail (a finished transaction) ─────────────────────────────────────────
+// ── Detail (a finished transaction, in its row drawer) ─────────────────────
 
-function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode {
-  const { txn, events } = useTxn(id);
-  if (!txn) return <LoadingState label="Loading transaction" layout="cards" />;
-  const state = txn.state;
-  const needsHand = txn.participants.filter(
-    (p) => p.stage === "committed" || p.stage === "rollback-failed",
-  );
-  const restored = txn.participants.filter((p) => p.stage === "restored");
-  const lost = txn.participants.filter((p) => p.sessionLost);
+function Detail({
+  id,
+  onClose,
+  nav,
+}: {
+  id: string;
+  onClose: () => void;
+  nav?: { index: number; total: number; onPrev?: () => void; onNext?: () => void };
+}): ReactNode {
+  const loaded = useTxn(id);
+  // After J or K the previous transaction is still loaded for a moment; do not show it.
+  const txn = loaded.txn?.id === id ? loaded.txn : null;
+  const events = loaded.events;
+  const state = txn?.state;
+  const needsHand =
+    txn?.participants.filter((p) => p.stage === "committed" || p.stage === "rollback-failed") ?? [];
+  const restored = txn?.participants.filter((p) => p.stage === "restored") ?? [];
+  const lost = txn?.participants.filter((p) => p.sessionLost) ?? [];
   return (
-    <MonitorPanel
-      tone={state === "PARTIAL" ? "bad" : undefined}
+    <RowDrawer
+      open
+      onClose={onClose}
+      label={`Transaction details: ${txn?.label ?? id}`}
+      storageKey="transactions"
+      rowKey={id}
+      nav={nav}
+      status={state ? { tone: KIT_STATE[state], label: state } : undefined}
       title={
         <span className="txn-detail-title">
-          {txn.label ?? txn.id} {txn.label && <span className="mono">· {txn.id}</span>}
+          {txn?.label ?? id} {txn?.label && <span className="mono">· {txn.id}</span>}
         </span>
       }
-      description={`Started ${ago(txn.ts)} · ${plural(txn.devices.length, "participant")} · commit order ${list(txn.commitOrder)}`}
-      extra={
-        <MonitorButton variant="ghost" size="sm" icon={<X aria-hidden="true" />} onClick={onClose}>
-          Close
-        </MonitorButton>
+      meta={
+        txn
+          ? `Started ${ago(txn.ts)} · ${plural(txn.devices.length, "participant")} · commit order ${list(txn.commitOrder)}`
+          : undefined
       }
-      flush
     >
-      {state && (
-        <div className="px-[18px] pb-1.5">
-          <MonitorNote
-            tone={state === "PARTIAL" ? "bad" : state === "COMMITTED" ? "good" : undefined}
-            icon={state === "PARTIAL" ? <TriangleAlert aria-hidden="true" /> : undefined}
-          >
-            <b>{state}.</b> {STATE_MEANING[state]}
-          </MonitorNote>
+      {!txn ? (
+        <LoadingState label="Loading transaction" layout="cards" />
+      ) : (
+        <div className="txn-review txn-drawer flex flex-col gap-4">
+          {state && (
+            <MonitorNote
+              tone={state === "PARTIAL" ? "bad" : state === "COMMITTED" ? "good" : undefined}
+              icon={state === "PARTIAL" ? <TriangleAlert aria-hidden="true" /> : undefined}
+            >
+              <b>{state}.</b> {STATE_MEANING[state]}
+            </MonitorNote>
+          )}
+          <div className="glass txn-review-lanes">
+            <Swimlane txn={txn} events={events} />
+          </div>
+          <div className="txn-foot">
+            <div className="monitor-fl">
+              <span className="monitor-label">Recovery</span>
+              {state === "PARTIAL" && needsHand.length > 0 ? (
+                <pre className="monitor-pre">
+                  {needsHand
+                    .map(
+                      (p) =>
+                        `${p.device}: diff_config_snapshots ${p.snapshotId ?? "<no snapshot>"} live`,
+                    )
+                    .join("\n")}
+                </pre>
+              ) : (
+                <span className="monitor-hint">Nothing to restore by hand.</span>
+              )}
+              {restored.map((p) => (
+                <span key={p.device} className="monitor-hint">
+                  {p.device} was restored from {p.snapshotId ?? "its snapshot"} automatically.
+                </span>
+              ))}
+              {lost.map((p) => (
+                <span key={`lost-${p.device}`} className="monitor-hint text-warning">
+                  ! {p.device} lost its SSH session during commit.
+                </span>
+              ))}
+              {txn.warnings.map((w) => (
+                <span key={w} className="monitor-hint text-warning">
+                  ! {w}
+                </span>
+              ))}
+            </div>
+            <div className="monitor-fl">
+              <span className="monitor-label">Assertions</span>
+              {txn.results.length === 0 ? (
+                <span className="monitor-hint">
+                  None declared. This transaction committed on faith, not on evidence.
+                </span>
+              ) : (
+                txn.results.map((r, i) => (
+                  <div key={`${r.assertion.kind}-${i}`} className="txn-assert">
+                    <StatusBadge tone={r.ok ? "good" : "bad"} dot={false}>
+                      {r.ok ? "PASS" : "FAIL"}
+                    </StatusBadge>
+                    <span className="trunc" title={r.detail}>
+                      <span className="mono">{r.assertion.kind}</span> @ {assertionTarget(r)}{" "}
+                      <span className="text-muted-foreground">· {r.detail}</span>
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
-      <Swimlane txn={txn} events={events} />
-      <div className="txn-foot">
-        <div className="monitor-fl">
-          <span className="monitor-label">Recovery</span>
-          {state === "PARTIAL" && needsHand.length > 0 ? (
-            <pre className="monitor-pre">
-              {needsHand
-                .map(
-                  (p) =>
-                    `${p.device}: diff_config_snapshots ${p.snapshotId ?? "<no snapshot>"} live`,
-                )
-                .join("\n")}
-            </pre>
-          ) : (
-            <span className="monitor-hint">Nothing to restore by hand.</span>
-          )}
-          {restored.map((p) => (
-            <span key={p.device} className="monitor-hint">
-              {p.device} was restored from {p.snapshotId ?? "its snapshot"} automatically.
-            </span>
-          ))}
-          {lost.map((p) => (
-            <span key={`lost-${p.device}`} className="monitor-hint text-warning">
-              ! {p.device} lost its SSH session during commit.
-            </span>
-          ))}
-          {txn.warnings.map((w) => (
-            <span key={w} className="monitor-hint text-warning">
-              ! {w}
-            </span>
-          ))}
-        </div>
-        <div className="monitor-fl">
-          <span className="monitor-label">Assertions</span>
-          {txn.results.length === 0 ? (
-            <span className="monitor-hint">
-              None declared. This transaction committed on faith, not on evidence.
-            </span>
-          ) : (
-            txn.results.map((r, i) => (
-              <div key={`${r.assertion.kind}-${i}`} className="txn-assert">
-                <StatusBadge tone={r.ok ? "good" : "bad"} dot={false}>
-                  {r.ok ? "PASS" : "FAIL"}
-                </StatusBadge>
-                <span className="trunc" title={r.detail}>
-                  <span className="mono">{r.assertion.kind}</span> @ {assertionTarget(r)}{" "}
-                  <span className="text-muted-foreground">· {r.detail}</span>
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </MonitorPanel>
+    </RowDrawer>
   );
 }
 
@@ -478,6 +516,9 @@ export function TransactionsView(): ReactNode {
   const [loaded, setLoaded] = useState(false);
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [autoOpen] = useState(
+    () => !(typeof matchMedia === "function" && matchMedia("(max-width: 640px)").matches),
+  );
 
   const load = useCallback(() => {
     return api<{ transactions: TxnRecord[]; error?: string }>("/api/txn")
@@ -500,9 +541,22 @@ export function TransactionsView(): ReactNode {
   const partial = rows.filter((r) => r.state === "PARTIAL");
   const committed = rows.filter((r) => r.state === "COMMITTED");
   // Until someone picks a row, open the newest partial: it is the one that needs a human.
-  const selected = picked === undefined ? (partial[0]?.id ?? null) : picked;
+  // On a phone the drawer is a full-screen sheet, so it does not open by itself there.
+  const selected = picked === undefined ? (autoOpen ? (partial[0]?.id ?? null) : null) : picked;
   const selectedRow = rows.find((r) => r.id === selected);
   const reviewing = selectedRow !== undefined && selectedRow.state === undefined;
+  // The drawer walks the finished transactions; a live one opens its review instead.
+  const finished = rows.filter((r) => r.state !== undefined);
+  const at = finished.findIndex((r) => r.id === selected);
+  const drawerNav =
+    at < 0
+      ? undefined
+      : {
+          index: at,
+          total: finished.length,
+          onPrev: at > 0 ? () => setPicked(finished[at - 1]!.id) : undefined,
+          onNext: at < finished.length - 1 ? () => setPicked(finished[at + 1]!.id) : undefined,
+        };
 
   const worst = partial[0];
   const done = worst?.participants.filter((p) => p.stage === "committed" || p.stage === "restored");
@@ -574,7 +628,7 @@ export function TransactionsView(): ReactNode {
       )}
 
       {selected && !reviewing && (
-        <Detail key={selected} id={selected} onClose={() => setPicked(null)} />
+        <Detail id={selected} onClose={() => setPicked(null)} nav={drawerNav} />
       )}
       {selected && reviewing && (
         <Review key={selected} id={selected} onClose={() => setPicked(null)} />
@@ -609,39 +663,60 @@ export function TransactionsView(): ReactNode {
               <span>Transaction</span>
               <span>Participants</span>
               <span>When</span>
+              <span />
             </div>
             {rows.map((r) => (
-              <button
+              <RowMenu
                 key={r.id}
-                type="button"
-                className="monitor-row txn-hist"
-                data-selected={r.id === selected || undefined}
-                aria-pressed={r.id === selected}
-                onClick={() => setPicked(r.id)}
+                title={r.label ?? r.id}
+                sub={`${r.state ?? "LIVE"} · ${ago(r.ts)}`}
+                onOpen={() => setPicked(r.id)}
+                cells={{
+                  state: { value: r.state ?? "LIVE" },
+                  txn: { value: r.label ?? r.id, kind: "id" },
+                  participants: { value: r.devices.join(" → ") },
+                  when: { value: clock(r.ts), kind: "time" },
+                }}
+                copies={[
+                  { label: "Transaction ID", value: r.id },
+                  { label: "Participants", value: r.devices.join(", ") },
+                ]}
+                row={r}
               >
-                <span className="trunc">
-                  {r.state ? (
-                    <StatusBadge
-                      tone={STATE_TONE[r.state]}
-                      dot={false}
-                      quiet={r.state === "ABORTED"}
-                    >
-                      {r.state}
-                    </StatusBadge>
-                  ) : (
-                    <StatusBadge tone="warn">LIVE</StatusBadge>
-                  )}
-                </span>
-                <span className="trunc">
-                  <span className="mono p">{r.label ?? r.id}</span>
-                </span>
-                <span className="trunc">
-                  <span className="mono text-fg-secondary">{r.devices.join(" → ")}</span>
-                </span>
-                <span className="trunc" title={clock(r.ts)}>
-                  <span className="mono text-muted-foreground">{ago(r.ts)}</span>
-                </span>
-              </button>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="monitor-row txn-hist"
+                  data-selected={r.id === selected || undefined}
+                  aria-pressed={r.id === selected}
+                  onClick={() => setPicked(r.id)}
+                  onKeyDown={onRowKey(() => setPicked(r.id))}
+                >
+                  <span data-col="state" className="trunc">
+                    {r.state ? (
+                      <StatusBadge
+                        tone={STATE_TONE[r.state]}
+                        dot={false}
+                        quiet={r.state === "ABORTED"}
+                      >
+                        {r.state}
+                      </StatusBadge>
+                    ) : (
+                      <StatusBadge tone="warn">LIVE</StatusBadge>
+                    )}
+                  </span>
+                  <span data-col="txn" className="trunc">
+                    <span className="mono p">{r.label ?? r.id}</span>
+                  </span>
+                  <span data-col="participants" className="trunc">
+                    <span className="mono text-fg-secondary">{r.devices.join(" → ")}</span>
+                  </span>
+                  <span data-col="when" className="trunc" title={clock(r.ts)}>
+                    <span className="mono text-muted-foreground">{ago(r.ts)}</span>
+                  </span>
+                  <RowMore />
+                </div>
+              </RowMenu>
             ))}
           </>
         )}

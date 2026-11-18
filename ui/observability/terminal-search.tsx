@@ -6,9 +6,10 @@
  * Matches are painted with the CSS Custom Highlight API, which marks text
  * ranges without changing the DOM, so the panes render exactly as before.
  */
-import { ArrowDown, ArrowUp, Filter, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Filter, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SearchInput } from "./kit";
 import { workspace } from "./terminal-lib";
 
 export interface FindOptions {
@@ -111,7 +112,7 @@ export function FindBar({
   const [invalid, setInvalid] = useState(false);
   const ranges = useRef<Range[]>([]);
   const position = useRef(0);
-  const field = useRef<HTMLInputElement>(null);
+  const field = useRef<HTMLDivElement>(null);
 
   const paint = useCallback((at: number, reveal: boolean): void => {
     const all = ranges.current;
@@ -175,8 +176,9 @@ export function FindBar({
     };
   }, [search]);
   useEffect(() => {
-    field.current?.focus();
-    field.current?.select();
+    const input = field.current?.querySelector("input");
+    input?.focus();
+    input?.select();
   }, [focus]);
   useEffect(() => clearMarks, []);
 
@@ -192,47 +194,58 @@ export function FindBar({
 
   return (
     <div className="term-find" role="search" data-invalid={invalid}>
-      <label className="term-find-field">
-        <Search size={14} />
-        <input
-          ref={field}
+      <div ref={field} className="min-w-0 flex-[0_1_420px]">
+        <SearchInput
+          size="sm"
+          mono
+          invalid={invalid}
           value={query}
           placeholder="Find in terminal output…"
           spellCheck={false}
+          label="Find in terminals"
           aria-label="Find in terminals"
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={setQuery}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
               step(event.shiftKey ? -1 : 1);
             } else if (event.key === "Escape") onClose();
           }}
+          end={
+            <>
+              {query && (
+                <button type="button" onClick={() => setQuery("")} aria-label="Clear" title="Clear">
+                  <X size={13} />
+                </button>
+              )}
+              <button
+                type="button"
+                data-on={options.matchCase}
+                onClick={() => toggle("matchCase")}
+                title="Match case"
+              >
+                Cc
+              </button>
+              <button
+                type="button"
+                data-on={options.words}
+                onClick={() => toggle("words")}
+                title="Words"
+              >
+                W
+              </button>
+              <button
+                type="button"
+                data-on={options.regex}
+                onClick={() => toggle("regex")}
+                title="Regular expression"
+              >
+                .*
+              </button>
+            </>
+          }
         />
-        {query && (
-          <button type="button" onClick={() => setQuery("")} aria-label="Clear" title="Clear">
-            <X size={13} />
-          </button>
-        )}
-        <button
-          type="button"
-          data-on={options.matchCase}
-          onClick={() => toggle("matchCase")}
-          title="Match case"
-        >
-          Cc
-        </button>
-        <button type="button" data-on={options.words} onClick={() => toggle("words")} title="Words">
-          W
-        </button>
-        <button
-          type="button"
-          data-on={options.regex}
-          onClick={() => toggle("regex")}
-          title="Regular expression"
-        >
-          .*
-        </button>
-      </label>
+      </div>
       <span className="term-find-count" data-empty={Boolean(query) && total === 0}>
         {invalid
           ? "bad pattern"

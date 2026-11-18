@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { AaaView } from "../../ui/observability/aaa";
 import { api } from "../../ui/observability/api";
 import type { UmUserCounters } from "../../src/observability/um-reports";
+import { choose } from "../_stubs/kit";
 
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
 vi.mock("../../ui/observability/um-reports", () => ({
@@ -182,11 +183,7 @@ test("aborts old-device reads and ignores late responses after switching routers
       : Promise.resolve(counters(device, 4096));
   await open();
   const oldSignal = reads()[0][1]!;
-  const router = host.querySelector<HTMLSelectElement>('select[aria-label="Router"]')!;
-  await act(async () => {
-    router.value = "remote";
-    router.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await choose(/^Router$/, "remote", host);
   expect(oldSignal.aborted).toBe(true);
   expect(row("alice").textContent).toContain("4.1 KB");
   await act(async () => finish(counters("home")));

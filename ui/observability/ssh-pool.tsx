@@ -1,5 +1,8 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
-import { MonitorPanel, StatusBadge, StatusDot, formatMs } from "./monitoring-ui";
+import { DetailList, RowDrawer, RowMenu, RowMore } from "./kit";
+import type { Tone as KitTone } from "./kit";
+import { MonitorButton, MonitorPanel, StatusBadge, StatusDot, formatMs } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 import { deviceState, jumpOf } from "./device-card";
 import { cn } from "@/lib/utils";
@@ -29,9 +32,30 @@ const STATE_TONE: Record<ReturnType<typeof deviceState>, Tone> = {
   disabled: "default",
 };
 
+const KIT_TONE: Record<Tone, KitTone> = {
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  brand: "acc",
+  default: "off",
+};
+
 /** "a", "a and b", "a, b and c". */
 function names(list: string[]): string {
   return list.length < 2 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list.at(-1)}`;
+}
+
+/** What one pooled router's row shows. */
+function poolRow(d: DeviceInfo) {
+  const info = poolState(d.pool);
+  const open = !!d.pool?.pooled && !d.pool.dead;
+  const jump = jumpOf(d);
+  return {
+    info,
+    transport: jump ? `SSH · via ${jump}` : `SSH · ${d.host}:${d.port}`,
+    busy: d.pool ? String(open ? d.pool.inflight : 0) : "—",
+    idle: d.pool ? String(open && d.pool.inflight === 0 ? 1 : 0) : "—",
+  };
 }
 
 /**
@@ -41,10 +65,14 @@ function names(list: string[]): string {
 export function SSHPoolPanel({
   devices,
   poolPayload,
+  onSelectRouter,
 }: {
   devices: DeviceInfo[];
   poolPayload?: SSHPoolPayload | null;
+  /** Selects the router in the Routers table. */
+  onSelectRouter?: (name: string) => void;
 }): ReactNode {
+  const [openName, setOpenName] = useState<string | null>(null);
   const cfg = poolPayload?.config;
   const ssh = devices.filter((d) => !d.mac);
   const mac = devices.filter((d) => d.mac).map((d) => d.name);
@@ -58,6 +86,9 @@ export function SSHPoolPanel({
   ) : (
     <StatusBadge>Pooling off</StatusBadge>
   );
+  const at = ssh.findIndex((d) => d.name === openName);
+  const current = at >= 0 ? ssh[at] : undefined;
+  const currentRow = current ? poolRow(current) : null;
   return (
     <MonitorPanel
       className="dv-pool"
@@ -78,42 +109,75 @@ export function SSHPoolPanel({
             <span>Busy channels</span>
             <span>Idle</span>
             <span>State</span>
+            <span />
           </div>
           {ssh.map((d) => {
-            const info = poolState(d.pool);
-            const open = !!d.pool?.pooled && !d.pool.dead;
+            const { info, transport, busy, idle } = poolRow(d);
             const state = deviceState(d);
-            const jump = jumpOf(d);
             return (
-              <div
+              <RowMenu
                 key={d.name}
-                className="monitor-row dv-pool-row dv-pool-cols"
-                data-state={info.label}
-                data-failed={state === "offline" || undefined}
+                title={d.name}
+                sub={`${transport} · ${info.label}`}
+                onOpen={() => setOpenName(d.name)}
+                cells={{
+                  router: {
+                    value: d.name,
+                    kind: "router",
+                    open: onSelectRouter
+                      ? { label: "Show in Routers", run: () => onSelectRouter(d.name) }
+                      : undefined,
+                  },
+                  busy: { value: busy },
+                  idle: { value: idle },
+                  state: { value: info.label },
+                }}
+                copies={[{ label: "Router name", value: d.name }]}
+                row={{ router: d.name, transport, busy, idle, state: info.label }}
               >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <StatusDot tone={STATE_TONE[state]} />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="p truncate font-mono text-[13px]">{d.name}</span>
-                    <span
-                      className={cn(
-                        "truncate text-[12px] leading-[17px]",
-                        state === "offline" ? "text-destructive" : "text-muted-foreground",
-                      )}
-                    >
-                      {jump ? `SSH · via ${jump}` : `SSH · ${d.host}:${d.port}`}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${d.name}, ${info.label}`}
+                  className="monitor-row dv-pool-row dv-pool-cols"
+                  data-state={info.label}
+                  data-failed={state === "offline" || undefined}
+                  data-selected={openName === d.name || undefined}
+                  onClick={() => setOpenName(d.name)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setOpenName(d.name);
+                    }
+                  }}
+                >
+                  <span data-col="router" className="flex min-w-0 items-center gap-2.5">
+                    <StatusDot tone={STATE_TONE[state]} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="p truncate font-mono text-[13px]">{d.name}</span>
+                      <span
+                        className={cn(
+                          "truncate text-[12px] leading-[17px]",
+                          state === "offline" ? "text-destructive" : "text-muted-foreground",
+                        )}
+                      >
+                        {transport}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <span className="tabular-nums">{d.pool ? (open ? d.pool.inflight : 0) : "—"}</span>
-                <span className="tabular-nums">
-                  {d.pool ? (open && d.pool.inflight === 0 ? 1 : 0) : "—"}
-                </span>
-                <span className="flex min-w-0 items-center gap-2">
-                  <StatusDot tone={info.tone} />
-                  <span className="truncate">{info.label}</span>
-                </span>
-              </div>
+                  <span data-col="busy" className="tabular-nums">
+                    {busy}
+                  </span>
+                  <span data-col="idle" className="tabular-nums">
+                    {idle}
+                  </span>
+                  <span data-col="state" className="flex min-w-0 items-center gap-2">
+                    <StatusDot tone={info.tone} />
+                    <span className="truncate">{info.label}</span>
+                  </span>
+                  <RowMore />
+                </div>
+              </RowMenu>
             );
           })}
           <div className="monitor-foot">
@@ -130,6 +194,41 @@ export function SSHPoolPanel({
             )}
           </div>
         </>
+      )}
+      {current && currentRow && (
+        <RowDrawer
+          open
+          onClose={() => setOpenName(null)}
+          label={`Pool details: ${current.name}`}
+          status={{ tone: KIT_TONE[currentRow.info.tone], label: currentRow.info.label }}
+          title={current.name}
+          meta={currentRow.transport}
+          rowKey={current.name}
+          nav={{
+            index: at,
+            total: ssh.length,
+            onPrev: at > 0 ? () => setOpenName(ssh[at - 1]!.name) : undefined,
+            onNext: at < ssh.length - 1 ? () => setOpenName(ssh[at + 1]!.name) : undefined,
+          }}
+          storageKey="ssh-pool"
+          primary={
+            onSelectRouter ? (
+              <MonitorButton size="sm" onClick={() => onSelectRouter(current.name)}>
+                Show in Routers
+              </MonitorButton>
+            ) : undefined
+          }
+        >
+          <DetailList
+            items={[
+              { label: "Router", value: current.name, mono: true },
+              { label: "Path", value: currentRow.transport, mono: true },
+              { label: "Busy channels", value: currentRow.busy },
+              { label: "Idle", value: currentRow.idle },
+              { label: "State", value: currentRow.info.label },
+            ]}
+          />
+        </RowDrawer>
       )}
     </MonitorPanel>
   );

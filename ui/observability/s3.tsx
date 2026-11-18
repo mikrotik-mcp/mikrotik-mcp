@@ -20,6 +20,7 @@ import {
   PageIntro,
   StatusBadge,
 } from "./monitoring-ui";
+import { DetailList, RowDrawer, RowMenu, RowMore } from "./kit";
 import { toast } from "./toast-action";
 
 interface S3Object {
@@ -78,6 +79,7 @@ export function S3Manage(): ReactNode {
   const [data, setData] = useState<S3List | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
 
   const load = useCallback(() => {
@@ -139,6 +141,14 @@ export function S3Manage(): ReactNode {
   // The chart: the most recent uploads, oldest on the left.
   const chart = dated.slice(0, 12).reverse();
   const n = objects.length;
+  const openIndex = open ? objects.findIndex((o) => o.key === open) : -1;
+  const opened = openIndex >= 0 ? objects[openIndex] : undefined;
+  const step = (d: 1 | -1): (() => void) | undefined => {
+    const next = objects[openIndex + d];
+    return next ? () => setOpen(next.key) : undefined;
+  };
+  const modified = (o: S3Object): string =>
+    o.lastModified ? stamp(Date.parse(o.lastModified)) : "—";
 
   return (
     <section className="s3 grid content-start gap-[18px]">
@@ -172,7 +182,26 @@ export function S3Manage(): ReactNode {
                 label="Object size by upload date"
                 values={chart.map((o) => o.size)}
                 labels={chart.map((o) => day(Date.parse(o.lastModified!)))}
-                titles={chart.map((o) => `${o.key} · ${size(o.size)}`)}
+                cards={(i) => {
+                  const o = chart[i]!;
+                  const prev = chart[i - 1];
+                  const at = Date.parse(o.lastModified!);
+                  const delta = prev ? o.size - prev.size : 0;
+                  return {
+                    title: `${day(at)} ${hhmm(at)}`,
+                    sub: router(o.key),
+                    rows: [
+                      { label: "Size", value: size(o.size), color: "var(--brand)" },
+                      { label: "Key", value: o.key.split("/").at(-1) ?? o.key },
+                    ],
+                    foot: prev
+                      ? {
+                          label: "vs previous upload",
+                          value: `${delta >= 0 ? "+" : "−"}${size(Math.abs(delta))}`,
+                        }
+                      : undefined,
+                  };
+                }}
               />
             </div>
           )
@@ -226,62 +255,161 @@ export function S3Manage(): ReactNode {
               <span>Size</span>
               <span>Modified</span>
               <span />
+              <span />
             </div>
             {objects.map((o) => {
               const asking = confirm === o.key;
               return (
-                <div key={o.key} className="monitor-row s3-table" data-failed={asking || undefined}>
-                  <span className="mono p trunc" title={o.key}>
-                    {o.key}
-                  </span>
-                  <span className="mono">{size(o.size)}</span>
-                  <span className="mono text-muted-foreground">
-                    {o.lastModified ? stamp(Date.parse(o.lastModified)) : "—"}
-                  </span>
-                  <span className="s3-actions">
-                    {asking ? (
-                      <>
-                        <span className="s3-ask">Delete from the bucket?</span>
-                        <MonitorButton
-                          variant="danger"
-                          size="sm"
-                          icon={<Check aria-hidden="true" />}
-                          disabled={busy === o.key}
-                          onClick={() => void del(o.key)}
-                        >
-                          Confirm
-                        </MonitorButton>
-                        <MonitorButton variant="ghost" size="sm" onClick={() => setConfirm(null)}>
-                          Cancel
-                        </MonitorButton>
-                      </>
-                    ) : (
-                      <>
-                        <MonitorButton
-                          variant="ghost"
-                          size="sm"
-                          icon={<Download aria-hidden="true" />}
-                          onClick={() => download(o.key)}
-                        >
-                          Download
-                        </MonitorButton>
-                        <MonitorButton
-                          variant="ghost"
-                          size="sm"
-                          icon={<Trash2 aria-hidden="true" />}
-                          onClick={() => setConfirm(o.key)}
-                        >
-                          Delete
-                        </MonitorButton>
-                      </>
-                    )}
-                  </span>
-                </div>
+                <RowMenu
+                  key={o.key}
+                  title={o.key.split("/").at(-1) ?? o.key}
+                  sub={`${router(o.key)} · ${size(o.size)} · ${modified(o)}`}
+                  onOpen={() => setOpen(o.key)}
+                  cells={{
+                    key: { value: o.key },
+                    size: { value: size(o.size) },
+                    modified: { value: o.lastModified ? modified(o) : "", kind: "time" },
+                  }}
+                  copies={[{ label: "Object key", value: o.key }]}
+                  row={o}
+                  actions={[
+                    {
+                      label: "Download",
+                      icon: <Download aria-hidden="true" />,
+                      onSelect: () => download(o.key),
+                    },
+                    {
+                      label: "Delete",
+                      icon: <Trash2 aria-hidden="true" />,
+                      danger: true,
+                      onSelect: () => setConfirm(o.key),
+                    },
+                  ]}
+                >
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${o.key}, ${size(o.size)}`}
+                    className="monitor-row s3-table cursor-pointer"
+                    data-failed={asking || undefined}
+                    data-selected={open === o.key || undefined}
+                    onClick={() => setOpen(o.key)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setOpen(o.key);
+                      }
+                    }}
+                  >
+                    <span data-col="key" className="mono p trunc" title={o.key}>
+                      {o.key}
+                    </span>
+                    <span data-col="size" className="mono">
+                      {size(o.size)}
+                    </span>
+                    <span data-col="modified" className="mono text-muted-foreground">
+                      {modified(o)}
+                    </span>
+                    <span
+                      className="s3-actions"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      {asking ? (
+                        <>
+                          <span className="s3-ask">Delete from the bucket?</span>
+                          <MonitorButton
+                            variant="danger"
+                            size="sm"
+                            icon={<Check aria-hidden="true" />}
+                            disabled={busy === o.key}
+                            onClick={() => void del(o.key)}
+                          >
+                            Confirm
+                          </MonitorButton>
+                          <MonitorButton variant="ghost" size="sm" onClick={() => setConfirm(null)}>
+                            Cancel
+                          </MonitorButton>
+                        </>
+                      ) : (
+                        <>
+                          <MonitorButton
+                            variant="ghost"
+                            size="sm"
+                            icon={<Download aria-hidden="true" />}
+                            onClick={() => download(o.key)}
+                          >
+                            Download
+                          </MonitorButton>
+                          <MonitorButton
+                            variant="ghost"
+                            size="sm"
+                            icon={<Trash2 aria-hidden="true" />}
+                            onClick={() => setConfirm(o.key)}
+                          >
+                            Delete
+                          </MonitorButton>
+                        </>
+                      )}
+                    </span>
+                    <RowMore />
+                  </div>
+                </RowMenu>
               );
             })}
           </>
         )}
       </MonitorPanel>
+
+      <RowDrawer
+        open={Boolean(opened)}
+        onClose={() => setOpen(null)}
+        label={`Object details: ${opened?.key ?? ""}`}
+        title={opened ? (opened.key.split("/").at(-1) ?? opened.key) : ""}
+        meta={opened ? `${router(opened.key)} · ${size(opened.size)}` : undefined}
+        nav={
+          openIndex >= 0
+            ? { index: openIndex, total: objects.length, onPrev: step(-1), onNext: step(1) }
+            : undefined
+        }
+        rowKey={opened?.key}
+        storageKey="s3"
+        actions={
+          opened && (
+            <MonitorButton
+              variant="ghost"
+              size="sm"
+              icon={<Trash2 aria-hidden="true" />}
+              onClick={() => setConfirm(opened.key)}
+            >
+              Delete
+            </MonitorButton>
+          )
+        }
+        primary={
+          opened && (
+            <MonitorButton
+              size="sm"
+              icon={<Download aria-hidden="true" />}
+              onClick={() => download(opened.key)}
+            >
+              Download
+            </MonitorButton>
+          )
+        }
+      >
+        {opened && (
+          <DetailList
+            items={[
+              { label: "Key", value: opened.key, mono: true },
+              { label: "Router", value: router(opened.key), mono: true },
+              { label: "Size", value: size(opened.size) },
+              { label: "Modified", value: modified(opened), mono: true },
+            ]}
+          />
+        )}
+      </RowDrawer>
 
       <MonitorNote tone="warn" icon={<TriangleAlert aria-hidden="true" />}>
         Deleting removes the object from the bucket for good. Local backups in the vault are not

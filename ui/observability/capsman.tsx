@@ -41,6 +41,8 @@ import {
   useLineDraw,
 } from "./monitoring-ui";
 import { sparkPoints } from "./signal-charts";
+import { DetailList, LineHover, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 
@@ -260,13 +262,20 @@ function WriteButton({
   icon,
   dialog,
   run,
+  open: openProp,
+  onOpenChange,
 }: {
   label: string;
   icon?: ReactNode;
   dialog: Omit<Parameters<typeof ConfirmWrite>[0], "open" | "onOpenChange" | "onConfirm">;
   run: () => void;
+  /** Set both to open the dialog from elsewhere too (a row menu). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }): ReactNode {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  const setOpen = onOpenChange ?? setOwnOpen;
   return (
     <>
       <MonitorButton size="sm" icon={icon} onClick={() => setOpen(true)}>
@@ -615,6 +624,9 @@ function CapsmanFabric({
   const [weak, setWeak] = useState<WeakClient[]>([]);
   const [audit, setAudit] = useState<AuditPayload | null>(null);
   const [trends, setTrends] = useState<TrendsPayload | null>(null);
+  // Weak-client row drawer and the Steer confirm, by client MAC.
+  const [weakOpen, setWeakOpen] = useState<string | null>(null);
+  const [steer, setSteer] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -841,7 +853,7 @@ function CapsmanFabric({
                   </span>
                   <span className="monitor-hint">clients</span>
                 </div>
-                <div className="capsman-tiles">
+                <div className="capsman-tiles kit-tips">
                   {radios.map((r) => (
                     <RadioTile
                       key={r.radioId}
@@ -946,56 +958,115 @@ function CapsmanFabric({
                   <span>Current AP</span>
                   <span>Better AP</span>
                   <span />
+                  <span />
                 </div>
-                {weak.map((w) => (
-                  <div key={w.mac} className="monitor-row capsman-weak-cols">
-                    <span className="p truncate font-mono text-[12px]">{w.mac}</span>
-                    <span
-                      className={cn(
-                        "text-right font-mono text-[12px] whitespace-nowrap",
-                        w.signal < -75 ? "text-destructive" : "text-warning",
-                      )}
+                {weak.map((w) => {
+                  const better = w.recommendCap
+                    ? `${w.recommendCap} +${w.gainDb ?? 0} dB`
+                    : "Coverage gap";
+                  return (
+                    <RowMenu
+                      key={w.mac}
+                      title={w.mac}
+                      sub={`${dbm(w.signal)} · ${w.currentCap}`}
+                      onOpen={() => setWeakOpen(w.mac)}
+                      cells={{
+                        client: { value: w.mac, kind: "id" },
+                        signal: { value: dbm(w.signal) },
+                        band: { value: bandLabel(w.band) },
+                        current: { value: w.currentCap, kind: "router" },
+                        better: { value: better, copy: !!w.recommendCap },
+                      }}
+                      copies={[{ label: "Client MAC", value: w.mac }]}
+                      row={w}
+                      actions={
+                        w.recommendCap
+                          ? [
+                              {
+                                label: `Steer to ${w.recommendCap}…`,
+                                onSelect: () => setSteer(w.mac),
+                              },
+                            ]
+                          : undefined
+                      }
                     >
-                      {dbm(w.signal)}
-                    </span>
-                    <span>
-                      <span className="monitor-chip">{bandLabel(w.band)}</span>
-                    </span>
-                    <span className="text-fg-secondary truncate font-mono text-[12px]">
-                      {w.currentCap}
-                    </span>
-                    <span
-                      className={cn(
-                        "truncate text-[12px]",
-                        w.recommendCap ? "text-success" : "text-warning",
-                      )}
-                    >
-                      {w.recommendCap ? `${w.recommendCap} +${w.gainDb ?? 0} dB` : "Coverage gap"}
-                    </span>
-                    <span>
-                      {w.recommendCap && (
-                        <WriteButton
-                          label="Steer"
-                          run={() =>
-                            void runApply(
-                              "/api/capsman/apply/steer",
-                              { device, mac: w.mac, mode: "hard" },
-                              `Steer ${w.mac}`,
-                              reload,
-                            )
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${w.mac}, ${dbm(w.signal)}`}
+                        className="monitor-row capsman-weak-cols"
+                        data-selected={weakOpen === w.mac || undefined}
+                        onClick={() => setWeakOpen(w.mac)}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setWeakOpen(w.mac);
                           }
-                          dialog={{
-                            title: `Steer ${w.mac} to ${w.recommendCap}?`,
-                            description:
-                              "Rejects the client on its current radio so it reconnects to the stronger one.",
-                            note: "The client may drop for a moment. It decides where to go; RouterOS can only ask.",
-                            action: "Steer client",
-                          }}
-                        />
-                      )}
-                    </span>
-                  </div>
-                ))}
+                        }}
+                      >
+                        <span data-col="client" className="p truncate font-mono text-[12px]">
+                          {w.mac}
+                        </span>
+                        <span
+                          data-col="signal"
+                          className={cn(
+                            "text-right font-mono text-[12px] whitespace-nowrap",
+                            w.signal < -75 ? "text-destructive" : "text-warning",
+                          )}
+                        >
+                          {dbm(w.signal)}
+                        </span>
+                        <span data-col="band">
+                          <span className="monitor-chip">{bandLabel(w.band)}</span>
+                        </span>
+                        <span
+                          data-col="current"
+                          className="text-fg-secondary truncate font-mono text-[12px]"
+                        >
+                          {w.currentCap}
+                        </span>
+                        <span
+                          data-col="better"
+                          className={cn(
+                            "truncate text-[12px]",
+                            w.recommendCap ? "text-success" : "text-warning",
+                          )}
+                        >
+                          {better}
+                        </span>
+                        <span
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {w.recommendCap && (
+                            <WriteButton
+                              label="Steer"
+                              open={steer === w.mac}
+                              onOpenChange={(o) => setSteer(o ? w.mac : null)}
+                              run={() =>
+                                void runApply(
+                                  "/api/capsman/apply/steer",
+                                  { device, mac: w.mac, mode: "hard" },
+                                  `Steer ${w.mac}`,
+                                  reload,
+                                )
+                              }
+                              dialog={{
+                                title: `Steer ${w.mac} to ${w.recommendCap}?`,
+                                description:
+                                  "Rejects the client on its current radio so it reconnects to the stronger one.",
+                                note: "The client may drop for a moment. It decides where to go; RouterOS can only ask.",
+                                action: "Steer client",
+                              }}
+                            />
+                          )}
+                        </span>
+                        <RowMore />
+                      </div>
+                    </RowMenu>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1006,6 +1077,55 @@ function CapsmanFabric({
             </span>
           </div>
         </MonitorPanel>
+        {(() => {
+          const at = weak.findIndex((w) => w.mac === weakOpen);
+          const w = at >= 0 ? weak[at]! : null;
+          if (!w) return null;
+          return (
+            <RowDrawer
+              open
+              onClose={() => setWeakOpen(null)}
+              label={`Client details: ${w.mac}`}
+              status={{
+                tone: w.signal < -75 ? "bad" : "warn",
+                label: `Weak signal · ${dbm(w.signal)}`,
+              }}
+              title={w.mac}
+              meta={`${w.currentCap} · ${bandLabel(w.band)}`}
+              rowKey={w.mac}
+              nav={{
+                index: at,
+                total: weak.length,
+                onPrev: at > 0 ? () => setWeakOpen(weak[at - 1]!.mac) : undefined,
+                onNext: at < weak.length - 1 ? () => setWeakOpen(weak[at + 1]!.mac) : undefined,
+              }}
+              storageKey="capsman-weak"
+              primary={
+                w.recommendCap ? (
+                  <MonitorButton size="sm" onClick={() => setSteer(w.mac)}>
+                    Steer
+                  </MonitorButton>
+                ) : undefined
+              }
+            >
+              <DetailList
+                items={[
+                  { label: "Client", value: w.mac, mono: true },
+                  { label: "Signal", value: dbm(w.signal), mono: true },
+                  { label: "Band", value: bandLabel(w.band) },
+                  { label: "Current AP", value: w.currentCap, mono: true },
+                  { label: "Radio", value: w.currentRadio, mono: true },
+                  {
+                    label: "Better AP",
+                    value: w.recommendCap
+                      ? `${w.recommendCap} +${w.gainDb ?? 0} dB`
+                      : "Coverage gap",
+                  },
+                ]}
+              />
+            </RowDrawer>
+          );
+        })()}
       </div>
 
       {series.length > 0 && (
@@ -1069,7 +1189,29 @@ function RadioTile({
     <div
       className="capsman-tile"
       style={style}
-      title={`${r.cap} · ${plural(r.adjacent.length, "neighbour", "neighbours")}`}
+      aria-label={`${r.cap} · ${plural(r.adjacent.length, "neighbour", "neighbours")}`}
+      {...tipProps(() => ({
+        title: `${r.cap}/${r.radioId}`,
+        sub: bandLabel(r.band),
+        led: co ? "bad" : load > 0.6 || busy ? "warn" : "ok",
+        rows: [
+          {
+            label: "Channel",
+            value:
+              to != null && to !== r.channel
+                ? `${r.channel ?? "?"} → ${to}`
+                : String(r.channel ?? "?"),
+          },
+          { label: "Clients", value: r.clientCount },
+          { label: "CPU", value: cpu != null ? `${cpu}%` : "—" },
+          ...(r.memUsedPct != null ? [{ label: "Memory", value: `${r.memUsedPct}%` }] : []),
+          { label: "Neighbours", value: r.adjacent.length },
+          { label: "Load", value: `${Math.round(load * 100)}%`, color: tint },
+        ],
+        foot: co
+          ? { label: "Overlaps", value: overlaps.join(", ") }
+          : { label: "Overlaps", value: "none" },
+      }))}
     >
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="text-foreground truncate font-mono text-[13px] font-medium">{r.cap}</span>
@@ -1140,13 +1282,7 @@ function RadioSpark({ s }: { s: RadioSeries }): ReactNode {
           peak {s.peak} · avg {s.avg}
         </span>
       </div>
-      <svg
-        viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-        width="100%"
-        height={SPARK_H}
-        role="img"
-        aria-label={`Clients on ${name} over time`}
-      >
+      <svg viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} width="100%" height={SPARK_H}>
         {line && (
           <>
             <path d={`${line} L${SPARK_W},${SPARK_H} L0,${SPARK_H} Z`} fill={fill} />
@@ -1157,6 +1293,40 @@ function RadioSpark({ s }: { s: RadioSeries }): ReactNode {
               stroke={color}
               strokeWidth={1.5}
               strokeLinejoin="round"
+            />
+            <LineHover
+              width={SPARK_W}
+              height={SPARK_H}
+              points={points}
+              band={12}
+              color={color}
+              label={`Clients on ${name} over time`}
+              card={(i): TipCard => {
+                const p = s.points[i]!;
+                const before = s.points[i - 1];
+                const d = before ? p.clients - before.clients : null;
+                return {
+                  title: new Date(p.ts).toLocaleString(undefined, {
+                    weekday: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                  }),
+                  sub: name,
+                  rows: [
+                    { label: "Clients", value: p.clients, color },
+                    { label: "Channel", value: p.channel ?? "—" },
+                  ],
+                  foot:
+                    d == null
+                      ? { label: "Peak", value: s.peak }
+                      : {
+                          label: "vs previous sample",
+                          value: d === 0 ? "no change" : `${d > 0 ? "+" : "−"}${Math.abs(d)}`,
+                          tone: d > 0 ? "up" : d < 0 ? "down" : undefined,
+                        },
+                };
+              }}
             />
           </>
         )}

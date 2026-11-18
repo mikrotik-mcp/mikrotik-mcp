@@ -47,8 +47,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Switch } from "@/components/ui/switch";
 import { Select } from "./geist";
+import { Field, LineHover, Switch, TextInput, tipProps } from "./kit";
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
 import type {
@@ -198,14 +198,39 @@ function SeriesChart({ values }: { values: number[] }): ReactNode {
   const high = Math.max(...values);
   const span = high - low || 1;
   const step = 600 / (values.length - 1);
-  const points = values
-    .map((v, i) => `${(i * step).toFixed(1)},${(58 - ((v - low) / span) * 52).toFixed(1)}`)
-    .join(" ");
+  const xy = values.map((v, i): [number, number] => [i * step, 58 - ((v - low) / span) * 52]);
+  const points = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   return (
     <figure className="term-chart">
-      <svg viewBox="0 0 600 64" preserveAspectRatio="none" aria-hidden="true">
+      <svg viewBox="0 0 600 64" preserveAspectRatio="none">
         <polygon points={`0,64 ${points} 600,64`} />
         <polyline points={points} />
+        <LineHover
+          width={600}
+          height={64}
+          points={xy}
+          band={Math.max(8, Math.min(32, step))}
+          color="var(--term-accent)"
+          label={`Watched value over ${values.length} runs`}
+          card={(i) => {
+            const prev = values[i - 1];
+            const delta = prev === undefined ? 0 : values[i]! - prev;
+            return {
+              title: `Run ${i + 1} of ${values.length}`,
+              rows: [
+                { label: "Value", value: String(values[i]), color: "var(--term-accent)" },
+                { label: "Range", value: `${low} – ${high}` },
+              ],
+              foot:
+                prev === undefined
+                  ? undefined
+                  : {
+                      label: "vs previous run",
+                      value: `${delta >= 0 ? "+" : "−"}${Math.abs(Number(delta.toFixed(3)))}`,
+                    },
+            };
+          }}
+        />
       </svg>
       <figcaption>
         <span>min {low}</span>
@@ -1389,7 +1414,30 @@ export function TerminalPane(
         <span
           className="term-stat"
           data-tone={latencyTone(last)}
-          title={`Round trip of the last probe${conn.transport ? ` over ${conn.transport}` : ""}`}
+          {...tipProps(() => {
+            const l = conn.latency;
+            const prev = l.at(-2);
+            const avg = l.length ? Math.round(l.reduce((a, b) => a + b, 0) / l.length) : undefined;
+            return {
+              title: "Round trip",
+              sub: conn.transport,
+              rows: [
+                { label: "Last probe", value: last === undefined ? "—" : `${last} ms` },
+                { label: "Average", value: avg === undefined ? "—" : `${avg} ms` },
+                { label: "Lowest", value: l.length ? `${Math.min(...l)} ms` : "—" },
+                { label: "Highest", value: l.length ? `${Math.max(...l)} ms` : "—" },
+              ],
+              foot:
+                last !== undefined && prev !== undefined
+                  ? {
+                      label: `vs previous probe · last ${l.length}`,
+                      value: `${last - prev >= 0 ? "+" : "−"}${Math.abs(last - prev)} ms`,
+                      // Slower is worse: a rise shows in pink.
+                      tone: last > prev ? "down" : last < prev ? "up" : undefined,
+                    }
+                  : { label: "Probes", value: String(l.length) },
+            };
+          })}
         >
           {last === undefined ? "— ms" : `${last} ms`}
           <Sparkline values={conn.latency} />
@@ -1496,28 +1544,40 @@ export function TerminalPane(
                 options={WATCH_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
               />
             </div>
-            <label className="term-pop-field">
-              <span>
-                <ChartLine size={12} /> Chart a number of the watched block
-              </span>
-              <input
+            <Field
+              className="p-2"
+              label={
+                <>
+                  <ChartLine size={12} /> Chart a number of the watched block
+                </>
+              }
+            >
+              <TextInput
+                size="sm"
+                mono
                 value={chartKey}
                 placeholder="cpu-load"
                 spellCheck={false}
-                onChange={(event) => setChartKey(event.target.value)}
+                onChange={setChartKey}
               />
-            </label>
-            <label className="term-pop-field">
-              <span>
-                <BellRing size={12} /> Alert when the watched block…
-              </span>
-              <input
+            </Field>
+            <Field
+              className="p-2"
+              label={
+                <>
+                  <BellRing size={12} /> Alert when the watched block…
+                </>
+              }
+            >
+              <TextInput
+                size="sm"
+                mono
                 value={alertRule}
                 placeholder="changed · cpu-load > 80 · /down|error/"
                 spellCheck={false}
-                onChange={(event) => setAlertRule(event.target.value)}
+                onChange={setAlertRule}
               />
-            </label>
+            </Field>
             <p className="term-pop-foot">
               {conn.transport ?? "not connected"} · {stats.total} command
               {stats.total === 1 ? "" : "s"}
@@ -1758,6 +1818,7 @@ export function TerminalPane(
             {snippetFields(fill.command).map((item, i) => (
               <label key={item.name}>
                 {item.name}
+                {/* kit-exempt: snippet placeholder in the command line flow; terminal.css .term-fill input styles it */}
                 <input
                   // eslint-disable-next-line jsx-a11y/no-autofocus -- the form opens on a key press
                   autoFocus={i === 0}
@@ -1815,6 +1876,7 @@ export function TerminalPane(
             {ghost && <span className="term-ghost">{ghost.slice(input.length)}</span>}
             {"​"}
           </pre>
+          {/* kit-exempt: the terminal command line, not a form field */}
           <textarea
             ref={field}
             value={input}

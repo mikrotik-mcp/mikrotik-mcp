@@ -73,12 +73,22 @@
    step's risk colour runs down the left edge. */
 .plan-step {
   display: grid;
-  grid-template-columns: 28px 22px minmax(0, 1fr) auto 70px;
+  grid-template-columns: 28px 22px minmax(0, 1fr) auto 70px 26px;
   align-items: center;
   gap: 10px;
   border-top: 1px solid var(--line);
   padding: 10px 18px;
   box-shadow: inset 3px 0 0 var(--plan-bar, var(--sig));
+}
+.plan-step:hover {
+  background: var(--overlay-03);
+}
+.plan-step:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.plan-step[data-selected] {
+  background: linear-gradient(90deg, var(--sig-soft), transparent 70%);
 }
 .plan-step[data-risk="medium"] {
   --plan-bar: var(--warning);
@@ -156,7 +166,7 @@
 }
 
 .plan-hist {
-  grid-template-columns: 140px minmax(0, 1fr) 110px 70px;
+  grid-template-columns: 140px minmax(0, 1fr) 110px 70px 26px;
 }
 
 .plan-notes {
@@ -181,16 +191,20 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .plan-step {
-    grid-template-columns: 24px 18px minmax(0, 1fr) auto;
+    grid-template-columns: 24px 18px minmax(0, 1fr) auto 26px;
   }
   .plan-step > :nth-child(4):empty {
     display: none;
   }
-  .plan-step > :last-child {
-    grid-column: 3 / -1;
+  .plan-step > :nth-child(5) {
+    grid-column: 3 / 5;
+  }
+  .plan-step > .kit-row-more {
+    grid-row: 1;
+    grid-column: 5;
   }
   .plan-hist {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px 26px;
   }
   .plan-hist > :nth-child(3) {
     display: none;

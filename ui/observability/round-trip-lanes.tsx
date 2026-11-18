@@ -7,6 +7,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { HopEvidence, PathLeg, PathStatus } from "../../src/paths/types";
+import { tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import { useLineDraw } from "./monitoring-ui";
 
 const H = 196;
@@ -30,6 +32,7 @@ const TITLE_COLOR: Record<PathStatus, string> = {
   unknown: "var(--warning)",
 };
 const FAINT = "var(--text-faint)";
+const LED = { modelled: "ok", blocked: "bad", unknown: "warn" } as const;
 const MONO = { fontFamily: "var(--font-mt)" };
 
 /** "forward #7 · drop": the rule that stopped the packet, when the trace has one. */
@@ -77,15 +80,17 @@ function Node({
   y,
   color,
   hop,
+  card,
 }: {
   x: number;
   y: number;
   color: string;
   hop: HopEvidence | null;
+  card: () => TipCard;
 }) {
   if (hop?.status === "blocked" && color !== FAINT)
     return (
-      <g transform={`translate(${x} ${y})`}>
+      <g transform={`translate(${x} ${y})`} {...tipProps(card)}>
         <circle r={15} fill="var(--bad-soft)" stroke="var(--destructive)" strokeWidth={1.6} />
         <path
           d="M-5 -5 L5 5 M5 -5 L-5 5"
@@ -96,14 +101,53 @@ function Node({
       </g>
     );
   return (
-    <g>
+    <g {...tipProps(card)}>
       <circle cx={x} cy={y} r={15} fill="var(--surface-2)" stroke={color} strokeWidth={1.6} />
       <circle cx={x} cy={y} r={4} fill={color} />
     </g>
   );
 }
 
-function Lane({ nodes, y, arrows }: { nodes: LaneNode[]; y: number; arrows: boolean }): ReactNode {
+/** The card for one router (or an end of the path) on a lane. */
+function nodeCard(n: LaneNode, name: string, lane: string, reached: boolean): TipCard {
+  const hop = n.hop;
+  if (!hop) return { title: name, sub: lane, led: "acc", rows: [{ label: "End", value: lane }] };
+  const rule = stoppingRule(hop);
+  const route = hop.trace?.route;
+  return {
+    title: hop.device,
+    sub: lane,
+    led: reached ? LED[hop.status] : "off",
+    rows: [
+      { label: "In", value: hop.ingress || "—" },
+      { label: "Out", value: hop.egress || "—" },
+      {
+        label: "Verdict",
+        value: reached ? PATH_LABEL[hop.status] : "Not reached",
+        color: reached ? STATUS_COLOR[hop.status] : FAINT,
+      },
+      ...(rule ? [{ label: "Stopped by", value: rule }] : []),
+      ...(route?.table ? [{ label: "Route table", value: route.table }] : []),
+      ...(route?.gateway ? [{ label: "Gateway", value: route.gateway }] : []),
+      ...(hop.reason ? [{ label: "Why", value: hop.reason }] : []),
+    ],
+  };
+}
+
+function Lane({
+  nodes,
+  y,
+  arrows,
+  names,
+  lane,
+}: {
+  nodes: LaneNode[];
+  y: number;
+  arrows: boolean;
+  /** Display name of each node, in lane order. */
+  names: string[];
+  lane: string;
+}): ReactNode {
   const { segments, colors } = walk(nodes);
   return (
     <>
@@ -111,8 +155,23 @@ function Lane({ nodes, y, arrows }: { nodes: LaneNode[]; y: number; arrows: bool
         const dir = s.to > s.from ? 1 : -1;
         const a = s.from + 16 * dir;
         const b = s.to - 16 * dir;
+        const next = nodes[i + 1]!;
+        const segCard = (): TipCard => ({
+          title: `${names[i]} → ${names[i + 1]}`,
+          sub: lane,
+          led: s.dashed ? "off" : next.hop ? LED[next.hop.status] : "ok",
+          rows: [
+            {
+              label: "Packet",
+              value: s.dashed ? "Not reached" : next.hop ? PATH_LABEL[next.hop.status] : "Arrives",
+              color: s.color,
+            },
+            ...(next.hop ? [{ label: "Enters on", value: next.hop.ingress || "—" }] : []),
+          ],
+        });
         return (
-          <g key={i}>
+          <g key={i} {...tipProps(segCard)}>
+            <path d={`M${a} ${y} L${b} ${y}`} stroke="transparent" strokeWidth={14} fill="none" />
             <path
               data-draw={s.dashed ? undefined : true}
               d={`M${a} ${y} L${b} ${y}`}
@@ -134,7 +193,14 @@ function Lane({ nodes, y, arrows }: { nodes: LaneNode[]; y: number; arrows: bool
         );
       })}
       {nodes.map((n, i) => (
-        <Node key={i} x={n.x} y={y} color={colors[i]} hop={n.hop} />
+        <Node
+          key={i}
+          x={n.x}
+          y={y}
+          color={colors[i]}
+          hop={n.hop}
+          card={() => nodeCard(n, names[i]!, lane, colors[i] !== FAINT)}
+        />
       ))}
     </>
   );
@@ -200,7 +266,7 @@ export function RoundTripLanes({
           height={H}
           role="img"
           aria-label="Request and reply paths"
-          className="block overflow-visible"
+          className="kit-tips block overflow-visible"
         >
           <text
             x={0}
@@ -221,9 +287,17 @@ export function RoundTripLanes({
             REPLY → CLIENT ·{" "}
             {reverse.hops.length ? PATH_LABEL[reverse.status].toUpperCase() : "NOT EVALUATED"}
           </text>
-          <Lane nodes={request} y={Y_REQ} arrows />
+          <Lane nodes={request} y={Y_REQ} arrows names={labels.map((l) => l.name)} lane="Request" />
           {reverse.hops.length ? (
-            <Lane nodes={reply} y={Y_REP} arrows={false} />
+            <Lane
+              nodes={reply}
+              y={Y_REP}
+              arrows={false}
+              names={reply.map((n, i) =>
+                i === 0 ? destination : i === reply.length - 1 ? client : (n.hop?.device ?? ""),
+              )}
+              lane="Reply"
+            />
           ) : (
             <path
               d={`M${EDGE} ${Y_REP} L${width - EDGE} ${Y_REP}`}

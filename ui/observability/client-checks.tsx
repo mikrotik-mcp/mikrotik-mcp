@@ -16,6 +16,7 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { Field, TextInput } from "./kit";
 import type { DevicesPayload } from "./types";
 import { useWorkspaceClock, workspacePost } from "./workspace-ui";
 import {
@@ -421,15 +422,9 @@ function Checks({ device }: { device: string }) {
                 address below.
               </MonitorNote>
             )}
-            <label className="monitor-fl">
-              <span className="monitor-label">Session name</span>
-              <input
-                className="monitor-input"
-                value={label}
-                maxLength={80}
-                onChange={(e) => setLabel(e.target.value)}
-              />
-            </label>
+            <Field label="Session name" className="monitor-fl">
+              <TextInput value={label} maxLength={80} onChange={setLabel} />
+            </Field>
             <div className="monitor-fl">
               <span className="monitor-label">This server’s reachable address</span>
               {candidates.length > 0 && (
@@ -449,11 +444,11 @@ function Checks({ device }: { device: string }) {
                 </div>
               )}
               {!knownOrigin && (
-                <input
-                  className="monitor-input cc-mono"
-                  aria-label="Test server origin"
+                <TextInput
+                  className="cc-mono"
+                  label="Test server origin"
                   value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
+                  onChange={setOrigin}
                   placeholder="http://192.168.1.10:9091"
                 />
               )}
@@ -497,15 +492,15 @@ function Checks({ device }: { device: string }) {
                   />
                 </div>
                 <div className="cc-invite-side">
-                  <label className="monitor-fl">
-                    <span className="monitor-label">Private invitation URL</span>
-                    <input
-                      className="monitor-input cc-mono"
+                  <Field label="Private invitation URL" className="monitor-fl">
+                    <TextInput
+                      className="cc-mono"
                       aria-label="Private invitation URL"
                       readOnly
                       value={link}
+                      onChange={() => {}}
                     />
-                  </label>
+                  </Field>
                   <div className="flex flex-wrap items-center gap-2">
                     <MonitorButton
                       size="sm"

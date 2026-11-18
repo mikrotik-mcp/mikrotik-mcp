@@ -8,6 +8,8 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { animate, createScope, stagger } from "animejs";
 import type { Scope } from "animejs";
+import { tipProps } from "./kit";
+import type { TipCard } from "./kit";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 const DAY = 86_400_000;
@@ -70,6 +72,44 @@ export function SnapshotTimeline({
     return () => scope.current?.revert();
   }, [snaps.length]);
 
+  /** "3 h", "2 d 4 h": the time between two snapshots. */
+  const gap = (ms: number): string => {
+    const hours = Math.round(Math.abs(ms) / 3_600_000);
+    if (hours < 1) return `${Math.max(1, Math.round(Math.abs(ms) / 60_000))} min`;
+    if (hours < 24) return `${hours} h`;
+    return `${Math.floor(hours / 24)} d${hours % 24 ? ` ${hours % 24} h` : ""}`;
+  };
+  const card = (snap: TimelineSnap): TipCard => {
+    const prev = recent
+      .filter((o) => o.device === snap.device && o.ts < snap.ts)
+      .reduce<TimelineSnap | undefined>(
+        (best, o) => (!best || o.ts > best.ts ? o : best),
+        undefined,
+      );
+    const role = snap.id === a?.id ? "From" : snap.id === b?.id ? "To" : null;
+    return {
+      title: snap.device,
+      sub: new Date(snap.ts).toLocaleDateString([], { month: "short", day: "numeric" }),
+      led: role ? "acc" : "ok",
+      rows: [
+        { label: "Taken", value: new Date(snap.ts).toLocaleString() },
+        { label: "Snapshot", value: snap.id },
+        ...(role
+          ? [
+              {
+                label: "In compare",
+                value: role,
+                color: role === "From" ? "var(--brand)" : "var(--sig)",
+              },
+            ]
+          : []),
+      ],
+      ...(prev
+        ? { foot: { label: "After the snapshot before", value: gap(snap.ts - prev.ts) } }
+        : {}),
+    };
+  };
+
   const ticks = Array.from({ length: 8 }, (_, j) => {
     const t = startOfDay(now) - (7 - j) * DAY;
     const label =
@@ -86,6 +126,7 @@ export function SnapshotTimeline({
       role="img"
       aria-label="Snapshots over the last week"
       preserveAspectRatio="xMinYMid meet"
+      className="kit-tips"
     >
       {devices.map((d) => (
         <g key={d}>
@@ -113,7 +154,7 @@ export function SnapshotTimeline({
         const cx = x(s.ts);
         const cy = lane(s.device);
         return (
-          <g key={s.id}>
+          <g key={s.id} {...tipProps(() => card(s))}>
             {hi && (
               <circle
                 cx={cx}
@@ -131,9 +172,7 @@ export function SnapshotTimeline({
               r={hi ? 6 : 4.5}
               fill="var(--sig)"
               style={{ transformOrigin: `${cx}px ${cy}px` }}
-            >
-              <title>{`${s.device} · ${new Date(s.ts).toLocaleString()}`}</title>
-            </circle>
+            />
           </g>
         );
       })}
@@ -144,6 +183,15 @@ export function SnapshotTimeline({
           stroke="var(--brand)"
           strokeWidth="1.5"
           strokeDasharray="4 4"
+          {...tipProps((): TipCard => ({
+            title: `${a.device} → ${b.device}`,
+            sub: "compare",
+            rows: [
+              { label: "From", value: new Date(a.ts).toLocaleString(), color: "var(--brand)" },
+              { label: "To", value: new Date(b.ts).toLocaleString(), color: "var(--sig)" },
+            ],
+            foot: { label: "Time between", value: gap(b.ts - a.ts) },
+          }))}
         />
       )}
       {ticks.map((t) => (

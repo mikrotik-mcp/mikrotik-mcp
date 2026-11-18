@@ -6,7 +6,7 @@
  * the same schema the config file uses.
  */
 import { useMemo, useState } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { postJson } from "./api";
 import { CHANNELS, parseDuration } from "../../src/alerts/model";
 import type { Trigger } from "../../src/alerts/model";
@@ -17,6 +17,7 @@ import {
   MonitorSelect,
   Segmented,
 } from "./monitoring-ui";
+import { Checkbox, Field, MultiSelect, TextInput } from "./kit";
 import { toast } from "./toast-action";
 import { Check, Clock, Eye, Loader2, TriangleAlert, X } from "lucide-react";
 import "./alerts.css";
@@ -78,82 +79,15 @@ function ChipField({
   placeholder: string;
   upper?: boolean;
 }): ReactNode {
-  const [text, setText] = useState("");
-  const listId = `chips-${label.toLowerCase().replace(/\W+/g, "-")}`;
-  const add = (raw: string): void => {
-    const v = upper ? raw.trim().toUpperCase() : raw.trim();
-    if (v && !values.includes(v)) onChange([...values, v]);
-    setText("");
-  };
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      add(text);
-    } else if (e.key === "Backspace" && text === "" && values.length > 0) {
-      onChange(values.slice(0, -1));
-    }
-  };
   return (
-    <span className="monitor-input alerts-chips">
-      {values.map((v) => (
-        <span key={v} className="monitor-chip">
-          {v}
-          <button
-            type="button"
-            className="alerts-chip-x"
-            aria-label={`Remove ${v}`}
-            onClick={() => onChange(values.filter((x) => x !== v))}
-          >
-            ×
-          </button>
-        </span>
-      ))}
-      <input
-        aria-label={label}
-        list={listId}
-        value={text}
-        placeholder={values.length === 0 ? placeholder : undefined}
-        onChange={(e) => {
-          const v = e.target.value;
-          // Picking from the list fills the whole value at once: take it as a chip.
-          if (suggestions.includes(upper ? v.toUpperCase() : v)) add(v);
-          else setText(v);
-        }}
-        onKeyDown={onKeyDown}
-        onBlur={() => text && add(text)}
-      />
-      <datalist id={listId}>
-        {suggestions
-          .filter((s) => !values.includes(s))
-          .map((s) => (
-            <option key={s} value={s} />
-          ))}
-      </datalist>
-    </span>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  error,
-  children,
-}: {
-  label: string;
-  hint?: ReactNode;
-  error?: string | null;
-  children: ReactNode;
-}): ReactNode {
-  return (
-    <div className="monitor-fl">
-      <span className="monitor-label">{label}</span>
-      {children}
-      {error ? (
-        <span className="monitor-err">{error}</span>
-      ) : (
-        hint != null && <span className="monitor-hint">{hint}</span>
-      )}
-    </div>
+    <MultiSelect
+      label={label}
+      value={values}
+      onChange={(next) => onChange([...new Set(upper ? next.map((v) => v.toUpperCase()) : next)])}
+      options={suggestions.map((s) => ({ value: s, label: s }))}
+      placeholder={placeholder}
+      allowCustom
+    />
   );
 }
 
@@ -422,25 +356,23 @@ function AlertRuleEditorForm({
         }}
       >
         <div className="alerts-form-grid" data-cols="id">
-          <Field label="Rule ID" hint="Letters, digits and hyphens." error={shown(errors.id)}>
-            <input
-              className="monitor-input alerts-mono"
-              aria-label="Rule ID"
-              aria-invalid={!!shown(errors.id) || undefined}
+          <Field label="Rule ID" help="Letters, digits and hyphens." error={shown(errors.id)}>
+            <TextInput
+              label="Rule ID"
+              mono
               placeholder="lab-write-errors"
               value={id}
-              onChange={(e) => setId(e.target.value)}
+              onChange={setId}
               autoComplete="off"
               spellCheck={false}
             />
           </Field>
           <Field label="Description">
-            <input
-              className="monitor-input"
-              aria-label="Description"
+            <TextInput
+              label="Description"
               placeholder="What it means, in a sentence"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
             />
           </Field>
         </div>
@@ -518,15 +450,9 @@ function AlertRuleEditorForm({
             ) : (
               <Field
                 label="State"
-                hint="For device_state the state entered, for drift detected or resolved."
+                help="For device_state the state entered, for drift detected or resolved."
               >
-                <input
-                  className="monitor-input alerts-mono"
-                  aria-label="State"
-                  placeholder="Any"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                />
+                <TextInput label="State" mono placeholder="Any" value={to} onChange={setTo} />
               </Field>
             )}
           </div>
@@ -545,16 +471,14 @@ function AlertRuleEditorForm({
               </span>
             </Field>
             <Field label="Window" error={shown(errors.window)}>
-              <label className="monitor-input">
-                <Clock aria-hidden="true" className="alerts-field-icon" />
-                <input
-                  className="alerts-bare alerts-mono"
-                  aria-label="Window"
-                  placeholder="10m"
-                  value={windowText}
-                  onChange={(e) => setWindowText(e.target.value)}
-                />
-              </label>
+              <TextInput
+                label="Window"
+                mono
+                icon={<Clock aria-hidden="true" />}
+                placeholder="10m"
+                value={windowText}
+                onChange={setWindowText}
+              />
             </Field>
             <Field label="Fire when" error={shown(errors.threshold)}>
               <span className="alerts-inline">
@@ -567,24 +491,25 @@ function AlertRuleEditorForm({
                     { value: "below", label: "Below" },
                   ]}
                 />
-                <input
-                  className="monitor-input alerts-mono min-w-0 flex-1"
+                <TextInput
                   aria-label="Threshold"
+                  mono
+                  wrapClassName="min-w-0 flex-1"
                   inputMode="decimal"
                   placeholder="0.05"
                   value={threshold}
-                  onChange={(e) => setThreshold(e.target.value)}
+                  onChange={setThreshold}
                 />
               </span>
             </Field>
-            <Field label="Min calls" hint="Stops one failure on an idle server from firing.">
-              <input
-                className="monitor-input alerts-mono"
-                aria-label="Min calls"
+            <Field label="Min calls" help="Stops one failure on an idle server from firing.">
+              <TextInput
+                label="Min calls"
+                mono
                 inputMode="numeric"
                 placeholder="0"
                 value={minCalls}
-                onChange={(e) => setMinCalls(e.target.value.replace(/\D/g, ""))}
+                onChange={(v) => setMinCalls(v.replace(/\D/g, ""))}
               />
             </Field>
           </div>
@@ -603,16 +528,14 @@ function AlertRuleEditorForm({
               </span>
             </Field>
             <Field label="Within" error={shown(errors.within)}>
-              <label className="monitor-input">
-                <Clock aria-hidden="true" className="alerts-field-icon" />
-                <input
-                  className="alerts-bare alerts-mono"
-                  aria-label="Within"
-                  placeholder="24h"
-                  value={within}
-                  onChange={(e) => setWithin(e.target.value)}
-                />
-              </label>
+              <TextInput
+                label="Within"
+                mono
+                icon={<Clock aria-hidden="true" />}
+                placeholder="24h"
+                value={within}
+                onChange={setWithin}
+              />
             </Field>
             <Field label="Device">
               <ChipField
@@ -638,29 +561,25 @@ function AlertRuleEditorForm({
               }))}
             />
           </Field>
-          <Field label="Hold for" hint="Fire only if it lasts." error={shown(errors.holdFor)}>
-            <label className="monitor-input">
-              <Clock aria-hidden="true" className="alerts-field-icon" />
-              <input
-                className="alerts-bare alerts-mono"
-                aria-label="Hold for"
-                placeholder="0s"
-                value={holdFor}
-                onChange={(e) => setHoldFor(e.target.value)}
-              />
-            </label>
+          <Field label="Hold for" help="Fire only if it lasts." error={shown(errors.holdFor)}>
+            <TextInput
+              label="Hold for"
+              mono
+              icon={<Clock aria-hidden="true" />}
+              placeholder="0s"
+              value={holdFor}
+              onChange={setHoldFor}
+            />
           </Field>
-          <Field label="Cooldown" hint="No repeat inside this." error={shown(errors.cooldown)}>
-            <label className="monitor-input">
-              <Clock aria-hidden="true" className="alerts-field-icon" />
-              <input
-                className="alerts-bare alerts-mono"
-                aria-label="Cooldown"
-                placeholder="15m"
-                value={cooldown}
-                onChange={(e) => setCooldown(e.target.value)}
-              />
-            </label>
+          <Field label="Cooldown" help="No repeat inside this." error={shown(errors.cooldown)}>
+            <TextInput
+              label="Cooldown"
+              mono
+              icon={<Clock aria-hidden="true" />}
+              placeholder="15m"
+              value={cooldown}
+              onChange={setCooldown}
+            />
           </Field>
         </div>
 
@@ -669,20 +588,18 @@ function AlertRuleEditorForm({
             {channelNames.map((name) => {
               const ready = channels[name]?.configured === true;
               return (
-                <label key={name} className="monitor-check">
-                  <input
-                    type="checkbox"
-                    checked={sendTo.includes(name)}
-                    onChange={(e) =>
-                      setSendTo(
-                        e.target.checked ? [...sendTo, name] : sendTo.filter((c) => c !== name),
-                      )
-                    }
-                  />
-                  <span className={ready ? undefined : "text-muted-foreground"}>
-                    {ready ? name : `${name} · not set up`}
-                  </span>
-                </label>
+                <Checkbox
+                  key={name}
+                  checked={sendTo.includes(name)}
+                  onCheckedChange={(on) =>
+                    setSendTo(on ? [...sendTo, name] : sendTo.filter((c) => c !== name))
+                  }
+                  label={
+                    <span className={ready ? undefined : "text-muted-foreground"}>
+                      {ready ? name : `${name} · not set up`}
+                    </span>
+                  }
+                />
               );
             })}
           </div>

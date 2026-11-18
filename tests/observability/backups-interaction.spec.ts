@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.mocked(api).mockImplementation(async (path) => {
     if (path === "/api/backups") return structuredClone(data);
+    if (path === "/api/devices") return { devices: [] };
     if (path === "/api/backups/get?name=safe.rsc")
       return { name: "safe.rsc", content: "/ip address print" };
     throw new Error(`Unexpected read: ${path}`);
@@ -63,7 +64,9 @@ test("vault shows device-scoped host backups and loads body only on request", as
   expect(api).toHaveBeenCalledWith("/api/backups");
   expect(api).not.toHaveBeenCalledWith("/api/backups/get?name=safe.rsc");
   await act(async () => button("View")!.click());
-  expect(host.textContent).toContain("/ip address print");
+  // The export opens in the row drawer, which renders in a portal.
+  const drawer = document.querySelector('[role="dialog"][aria-label="Backup details: safe.rsc"]');
+  expect(drawer?.textContent).toContain("/ip address print");
   expect(postJson).not.toHaveBeenCalled();
 });
 

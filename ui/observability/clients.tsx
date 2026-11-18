@@ -15,23 +15,13 @@
 import "./clients.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  Check,
-  ChevronDown,
-  Lock,
-  MoreHorizontal,
-  Pin,
-  RefreshCw,
-  Search,
-  Wifi,
-} from "lucide-react";
+import { Check, ChevronDown, Lock, Pin, RefreshCw, Search, Wifi } from "lucide-react";
 import { api, postJson, withToken } from "./api";
 import { LoadingState } from "./loading-state";
 import {
   Metric,
   MetricStrip,
   MonitorButton,
-  MonitorDialog,
   MonitorEmpty,
   MonitorNote,
   MonitorPanel,
@@ -43,6 +33,8 @@ import {
   StatusDot,
   Ticker,
 } from "./monitoring-ui";
+import { RowDrawer, RowMenu, RowMore, TextInput } from "./kit";
+import type { RowAction, TipCard } from "./kit";
 import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 import { LineChart, RowSpark, TalkerBars } from "./clients-charts";
@@ -173,6 +165,26 @@ export function TrafficChart({
         { values: history.map((p) => p.tx), color: "var(--warning)" },
       ]}
       labels={labels ? [time(history[0]?.ts), "", "", time(history.at(-1)?.ts)] : undefined}
+      card={(i) => {
+        const p = history[i]!;
+        const before = history[i - 1];
+        const d = before ? p.rx - before.rx : null;
+        return {
+          title: time(p.ts),
+          rows: [
+            { label: "Download", value: rate(p.rx), color: "var(--sig)" },
+            { label: "Upload", value: rate(p.tx), color: "var(--warning)" },
+          ],
+          foot:
+            d == null
+              ? undefined
+              : {
+                  label: "Download vs previous",
+                  value: d === 0 ? "no change" : `${d > 0 ? "+" : "−"}${rate(Math.abs(d))}`,
+                  tone: d > 0 ? "up" : d < 0 ? "down" : undefined,
+                },
+        };
+      }}
     />
   );
 }
@@ -354,6 +366,8 @@ interface UsageSummary {
   rx: number[];
   tx: number[];
   labels: string[];
+  /** The day of each point, "2026-11-18". */
+  days: string[];
   totalRx: number;
   totalTx: number;
   peak: number;
@@ -375,10 +389,27 @@ function summarize(data: UsagePayload): UsageSummary {
     rx: days.map((d) => d.rx),
     tx: days.map((d) => d.tx),
     labels: [at(0), at(1 / 3), at(2 / 3), at(1)],
+    days: days.map((d) => d.day),
     totalRx: data.totalRx,
     totalTx: data.totalTx,
     peak: Math.max(0, ...data.series.map((d) => d.rx + d.tx)),
     recorded: data.series.length,
+  };
+}
+
+/** The hover card for day i of a usage chart. */
+function usageCard(summary: UsageSummary): (i: number) => TipCard {
+  return (i) => {
+    const rx = summary.rx[i] ?? 0;
+    const tx = summary.tx[i] ?? 0;
+    return {
+      title: shortDay(summary.days[i]!),
+      rows: [
+        { label: "Download", value: bytes(rx), color: "var(--sig)" },
+        { label: "Upload", value: bytes(tx), color: "var(--warning)" },
+      ],
+      foot: { label: "Peak day", value: bytes(summary.peak) },
+    };
   };
 }
 
@@ -428,6 +459,7 @@ function ClientDrawer({
   busy,
   onClose,
   act,
+  nav,
 }: {
   device: Device;
   deviceName: string;
@@ -437,6 +469,7 @@ function ClientDrawer({
   busy: boolean;
   onClose: () => void;
   act: (path: string, mac: string, extra?: Record<string, unknown>) => Promise<void>;
+  nav?: { index: number; total: number; onPrev?: () => void; onNext?: () => void };
 }): ReactNode {
   const [ip, setIp] = useState(device.ip);
   const [label, setLabel] = useState(device.comment || device.host);
@@ -445,6 +478,17 @@ function ClientDrawer({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // J/K moves to another client: start its fields fresh.
+  const [forMac, setForMac] = useState(device.mac);
+  if (forMac !== device.mac) {
+    setForMac(device.mac);
+    setIp(device.ip);
+    setLabel(device.comment || device.host);
+    setDl(limits.download);
+    setUl(limits.upload);
+    setDirty(false);
+    setMsg(null);
+  }
 
   // Adopt the live (fetched) limits until the user starts editing.
   if (!dirty && (dl !== limits.download || ul !== limits.upload)) {
@@ -484,40 +528,44 @@ function ClientDrawer({
     usage.state === "ready" && usage.data.series.length > 0 ? summarize(usage.data) : null;
 
   return (
-    <MonitorDialog
+    <RowDrawer
       open
-      onOpenChange={(open) => !open && onClose()}
-      variant="drawer"
+      onClose={onClose}
+      label={`Client details: ${name}`}
       title="Client"
-      description={`Actions apply to ${deviceName || "the router"} as soon as you press them.`}
-      footer={
+      meta={`Actions apply to ${deviceName || "the router"} as soon as you press them.`}
+      nav={nav}
+      rowKey={device.mac}
+      storageKey="clients"
+      actions={
         device.ip ? (
-          <>
-            <MonitorButton
-              variant="ghost"
-              disabled={saving || !hasLimit}
-              onClick={() => {
-                setDl("");
-                setUl("");
-                void applyLimits("", "");
-              }}
-            >
-              Remove limit
-            </MonitorButton>
-            <span className="flex-1" />
-            <MonitorButton
-              variant="primary"
-              icon={<Check aria-hidden="true" />}
-              disabled={saving}
-              onClick={() => void applyLimits(dl, ul)}
-            >
-              Apply limits
-            </MonitorButton>
-          </>
+          <MonitorButton
+            variant="ghost"
+            disabled={saving || !hasLimit}
+            onClick={() => {
+              setDl("");
+              setUl("");
+              void applyLimits("", "");
+            }}
+          >
+            Remove limit
+          </MonitorButton>
+        ) : undefined
+      }
+      primary={
+        device.ip ? (
+          <MonitorButton
+            variant="primary"
+            icon={<Check aria-hidden="true" />}
+            disabled={saving}
+            onClick={() => void applyLimits(dl, ul)}
+          >
+            Apply limits
+          </MonitorButton>
         ) : undefined
       }
     >
-      <div className="monitor-dialog-body clients-drawer">
+      <div className="clients-drawer">
         <div className="clients-who">
           <span className="clients-avatar" data-tone={tone} data-size="lg" aria-hidden="true">
             {initials(nameOf(device)) || "?"}
@@ -621,12 +669,13 @@ function ClientDrawer({
               if (ip.trim()) void act("set-ip", device.mac, { ip: ip.trim() });
             }}
           >
-            <input
-              className="monitor-input clients-mono flex-1"
-              aria-label="Reserved IP"
+            <TextInput
+              wrapClassName="flex-1"
+              className="clients-mono"
+              label="Reserved IP"
               placeholder="e.g. 192.168.88.50"
               value={ip}
-              onChange={(e) => setIp(e.target.value)}
+              onChange={setIp}
             />
             <MonitorButton type="submit" variant="primary" disabled={busy || !ip.trim()}>
               Save
@@ -646,12 +695,12 @@ function ClientDrawer({
               void act("label", device.mac, { label: label.trim() });
             }}
           >
-            <input
-              className="monitor-input flex-1"
-              aria-label="Label"
+            <TextInput
+              wrapClassName="flex-1"
+              label="Label"
               placeholder="e.g. Ali phone"
               value={label}
-              onChange={(e) => setLabel(e.target.value)}
+              onChange={setLabel}
             />
             <MonitorButton type="submit" disabled={busy}>
               Save
@@ -671,25 +720,23 @@ function ClientDrawer({
             <div className="clients-two">
               <label className="clients-fl">
                 <span className="clients-label">↓ Download</span>
-                <input
-                  className="monitor-input"
+                <TextInput
                   placeholder="10M · blank = unlimited"
                   value={dl}
-                  onChange={(e) => {
+                  onChange={(value) => {
                     setDirty(true);
-                    setDl(e.target.value);
+                    setDl(value);
                   }}
                 />
               </label>
               <label className="clients-fl">
                 <span className="clients-label">↑ Upload</span>
-                <input
-                  className="monitor-input"
+                <TextInput
                   placeholder="2M · blank = unlimited"
                   value={ul}
-                  onChange={(e) => {
+                  onChange={(value) => {
                     setDirty(true);
-                    setUl(e.target.value);
+                    setUl(value);
                   }}
                 />
               </label>
@@ -720,6 +767,7 @@ function ClientDrawer({
                     { values: summary.rx, color: "var(--sig)" },
                     { values: summary.tx, color: "var(--warning)" },
                   ]}
+                  card={usageCard(summary)}
                 />
                 <span className="clients-hint">
                   {summary.recorded} recorded days · peak day {bytes(summary.peak)}
@@ -736,7 +784,7 @@ function ClientDrawer({
           Investigate this client and service
         </a>
       </div>
-    </MonitorDialog>
+    </RowDrawer>
   );
 }
 
@@ -918,13 +966,27 @@ export function ClientsView(): ReactNode {
       .sort((a, b) => b.v - a.v)
       .slice(0, 5);
     const top = list[0]?.v ?? 1;
-    return list.map((x) => ({
-      key: x.ip,
-      label: x.label,
-      pct: (x.v / top) * 100,
-      value: `${shortRate(x.v)}${x.up ? " ↑" : ""}`,
-      tone: x.up ? "warn" : "good",
-    }));
+    return list.map((x) => {
+      const t = trafficMap.get(x.ip);
+      const mac = devices.find((d) => d.ip === x.ip)?.mac;
+      return {
+        key: x.ip,
+        label: x.label,
+        pct: (x.v / top) * 100,
+        value: `${shortRate(x.v)}${x.up ? " ↑" : ""}`,
+        tone: x.up ? "warn" : "good",
+        tip: {
+          title: x.label,
+          sub: x.ip,
+          rows: [
+            { label: "Download", value: rate(t?.rxRate), color: "var(--sig)" },
+            { label: "Upload", value: rate(t?.txRate), color: "var(--warning)" },
+          ],
+          foot: { label: "Share of the busiest", value: `${Math.round((x.v / top) * 100)}%` },
+          action: mac ? { label: "Select client", onClick: () => setSelected(mac) } : undefined,
+        },
+      };
+    });
   })();
 
   const routerNames = routers?.devices.map((d) => d.name) ?? [];
@@ -1155,139 +1217,227 @@ export function ClientsView(): ReactNode {
               const t = d.ip ? trafficMap.get(d.ip) : undefined;
               const name = nameOf(d);
               const moving = t != null && ((t.rxRate ?? 0) > 0 || (t.txRate ?? 0) > 0);
-              return (
-                <div
-                  key={d.mac}
-                  role="row"
-                  tabIndex={0}
-                  aria-selected={isSel}
-                  className="monitor-row clients-grid clients-row"
-                  data-selected={isSel || undefined}
-                  data-failed={d.blocked || undefined}
-                  data-blocked={d.blocked || undefined}
-                  onClick={() => (phone ? openDrawer(d) : setSelected(d.mac))}
-                  onKeyDown={(e) => {
-                    if (e.target !== e.currentTarget) return;
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      if (phone) openDrawer(d);
-                      else setSelected(d.mac);
+              const statusValue = d.blocked ? "blocked" : d.static ? "static" : d.status;
+              const rowActions: RowAction[] = [
+                d.blocked
+                  ? {
+                      label: "Allow",
+                      icon: <Check aria-hidden="true" />,
+                      disabled: isBusy,
+                      onSelect: () => void act("allow", d.mac),
                     }
+                  : {
+                      label: "Block",
+                      icon: <Lock aria-hidden="true" />,
+                      danger: true,
+                      disabled: isBusy,
+                      onSelect: () => void act("block", d.mac),
+                    },
+              ];
+              if (!d.static)
+                rowActions.unshift({
+                  label: "Pin IP",
+                  icon: <Pin aria-hidden="true" />,
+                  disabled: isBusy,
+                  onSelect: () => void act("pin", d.mac),
+                });
+              return (
+                <RowMenu
+                  key={d.mac}
+                  title={name || d.ip || d.mac}
+                  sub={`${d.ip || "no IP"} · ${d.mac}`}
+                  onOpen={() => openDrawer(d)}
+                  opens={[
+                    {
+                      label: "Investigate this client",
+                      onSelect: () => location.assign(investigateHref(deviceName, d)),
+                    },
+                  ]}
+                  cells={{
+                    client: {
+                      value: name || d.ip,
+                      search: () => {
+                        setFilter(d.ip || name);
+                        setShowAll(false);
+                      },
+                    },
+                    mac: {
+                      value: d.mac,
+                      kind: "id",
+                      search: () => {
+                        setFilter(d.mac);
+                        setShowAll(false);
+                      },
+                    },
+                    iface: { value: d.iface },
+                    status: {
+                      value: statusValue,
+                      filter:
+                        d.blocked || d.static
+                          ? () => {
+                              setShow(d.blocked ? "blocked" : "static");
+                              setShowAll(false);
+                            }
+                          : undefined,
+                      clearFilter: show !== "all" ? () => setShow("all") : undefined,
+                    },
+                    traffic: {
+                      value: t ? `↓ ${rate(t.rxRate)} ↑ ${rate(t.txRate)}` : "",
+                    },
                   }}
+                  copies={[
+                    { label: "MAC address", value: d.mac },
+                    ...(d.ip ? [{ label: "IP address", value: d.ip }] : []),
+                  ]}
+                  row={d}
+                  actions={rowActions}
                 >
-                  <span role="cell" className="clients-client">
-                    <StatusDot tone={d.blocked ? "bad" : moving ? "good" : "default"} />
-                    <span className="clients-stack">
-                      <span className="clients-name">
-                        <span
-                          className={name ? "p clients-trunc" : "clients-unknown clients-trunc"}
-                        >
-                          {name || "(unknown)"}
-                        </span>
-                        {d.static && (
-                          <span className="clients-phone-inline">
-                            <StatusBadge tone="brand" dot={false}>
-                              static
-                            </StatusBadge>
+                  <div
+                    role="row"
+                    tabIndex={0}
+                    aria-selected={isSel}
+                    className="monitor-row clients-grid clients-row"
+                    data-selected={isSel || undefined}
+                    data-failed={d.blocked || undefined}
+                    data-blocked={d.blocked || undefined}
+                    onClick={() => (phone ? openDrawer(d) : setSelected(d.mac))}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        if (phone) openDrawer(d);
+                        else setSelected(d.mac);
+                      }
+                    }}
+                  >
+                    <span role="cell" data-col="client" className="clients-client">
+                      <StatusDot tone={d.blocked ? "bad" : moving ? "good" : "default"} />
+                      <span className="clients-stack">
+                        <span className="clients-name">
+                          <span
+                            className={name ? "p clients-trunc" : "clients-unknown clients-trunc"}
+                          >
+                            {name || "(unknown)"}
                           </span>
-                        )}
-                      </span>
-                      <span className="clients-mono clients-sub clients-trunc">
-                        {d.ip || "no IP"}
-                        <span className="clients-phone-inline"> · {d.iface || "?"}</span>
+                          {d.static && (
+                            <span className="clients-phone-inline">
+                              <StatusBadge tone="brand" dot={false}>
+                                static
+                              </StatusBadge>
+                            </span>
+                          )}
+                        </span>
+                        <span className="clients-mono clients-sub clients-trunc">
+                          {d.ip || "no IP"}
+                          <span className="clients-phone-inline"> · {d.iface || "?"}</span>
+                        </span>
                       </span>
                     </span>
-                  </span>
-                  <span
-                    role="cell"
-                    className="clients-mono text-fg-secondary clients-trunc clients-wide-cell"
-                  >
-                    {d.mac}
-                  </span>
-                  <span
-                    role="cell"
-                    className="clients-mono text-muted-foreground clients-trunc clients-wide-cell"
-                  >
-                    {d.iface || ""}
-                  </span>
-                  <span role="cell" className="clients-status clients-wide-cell">
-                    {d.static && (
-                      <StatusBadge tone="brand" dot={false}>
-                        static
-                      </StatusBadge>
-                    )}
-                    {d.blocked ? (
-                      <StatusBadge tone="bad">blocked</StatusBadge>
-                    ) : (
-                      <span className="clients-sub">{d.status}</span>
-                    )}
-                  </span>
-                  <span role="cell" className="clients-traffic">
-                    {t ? (
-                      <>
-                        <Rates t={t} />
-                        <RowSpark
-                          className="clients-wide-inline"
-                          values={t.history.map((p) => p.rx)}
-                        />
-                      </>
-                    ) : d.blocked ? (
-                      <>
-                        <span className="text-faint clients-wide-inline">—</span>
-                        <span className="clients-phone-inline">
-                          <StatusBadge tone="bad">blocked</StatusBadge>
-                        </span>
-                      </>
-                    ) : (
-                      <span className="clients-sub">{d.ip ? "No counter" : ""}</span>
-                    )}
-                  </span>
-                  {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- stops row selection; the buttons inside handle keys */}
-                  <span
-                    role="cell"
-                    className="clients-actions clients-wide-flex"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {d.blocked ? (
-                      <MonitorButton
-                        size="sm"
-                        icon={<Check aria-hidden="true" />}
-                        disabled={isBusy}
-                        onClick={() => void act("allow", d.mac)}
-                      >
-                        Allow
-                      </MonitorButton>
-                    ) : (
-                      <MonitorButton
-                        size="sm"
-                        variant="danger"
-                        disabled={isBusy}
-                        onClick={() => void act("block", d.mac)}
-                      >
-                        Block
-                      </MonitorButton>
-                    )}
-                    {!d.static && (
-                      <MonitorButton
-                        size="sm"
-                        icon={<Pin aria-hidden="true" />}
-                        disabled={isBusy}
-                        onClick={() => void act("pin", d.mac)}
-                      >
-                        Pin IP
-                      </MonitorButton>
-                    )}
-                    <button
-                      type="button"
-                      className="monitor-icon-btn"
-                      aria-label="More actions"
-                      title="More actions"
-                      onClick={() => openDrawer(d)}
+                    <span
+                      role="cell"
+                      data-col="mac"
+                      className="clients-mono text-fg-secondary clients-trunc clients-wide-cell"
                     >
-                      <MoreHorizontal aria-hidden="true" />
-                    </button>
-                  </span>
-                </div>
+                      {d.mac}
+                    </span>
+                    <span
+                      role="cell"
+                      data-col="iface"
+                      className="clients-mono text-muted-foreground clients-trunc clients-wide-cell"
+                    >
+                      {d.iface || ""}
+                    </span>
+                    <span
+                      role="cell"
+                      data-col="status"
+                      className="clients-status clients-wide-cell"
+                    >
+                      {d.static && (
+                        <StatusBadge tone="brand" dot={false}>
+                          static
+                        </StatusBadge>
+                      )}
+                      {d.blocked ? (
+                        <StatusBadge tone="bad">blocked</StatusBadge>
+                      ) : (
+                        <span className="clients-sub">{d.status}</span>
+                      )}
+                    </span>
+                    <span role="cell" data-col="traffic" className="clients-traffic">
+                      {t ? (
+                        <>
+                          <Rates t={t} />
+                          <RowSpark
+                            className="clients-wide-inline"
+                            values={t.history.map((p) => p.rx)}
+                            tip={() => {
+                              const rx = t.history.map((p) => p.rx);
+                              return {
+                                title: name || d.ip,
+                                sub: `last ${rx.length} samples`,
+                                rows: [
+                                  { label: "Download", value: rate(t.rxRate), color: "var(--sig)" },
+                                  {
+                                    label: "Upload",
+                                    value: rate(t.txRate),
+                                    color: "var(--warning)",
+                                  },
+                                  { label: "Peak download", value: rate(Math.max(...rx)) },
+                                ],
+                              };
+                            }}
+                          />
+                        </>
+                      ) : d.blocked ? (
+                        <>
+                          <span className="text-faint clients-wide-inline">—</span>
+                          <span className="clients-phone-inline">
+                            <StatusBadge tone="bad">blocked</StatusBadge>
+                          </span>
+                        </>
+                      ) : (
+                        <span className="clients-sub">{d.ip ? "No counter" : ""}</span>
+                      )}
+                    </span>
+                    {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- stops row selection; the buttons inside handle keys */}
+                    <span
+                      role="cell"
+                      className="clients-actions clients-wide-flex"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {d.blocked ? (
+                        <MonitorButton
+                          size="sm"
+                          icon={<Check aria-hidden="true" />}
+                          disabled={isBusy}
+                          onClick={() => void act("allow", d.mac)}
+                        >
+                          Allow
+                        </MonitorButton>
+                      ) : (
+                        <MonitorButton
+                          size="sm"
+                          variant="danger"
+                          disabled={isBusy}
+                          onClick={() => void act("block", d.mac)}
+                        >
+                          Block
+                        </MonitorButton>
+                      )}
+                      {!d.static && (
+                        <MonitorButton
+                          size="sm"
+                          icon={<Pin aria-hidden="true" />}
+                          disabled={isBusy}
+                          onClick={() => void act("pin", d.mac)}
+                        >
+                          Pin IP
+                        </MonitorButton>
+                      )}
+                      <RowMore />
+                    </span>
+                  </div>
+                </RowMenu>
               );
             })}
             <div className="monitor-foot">
@@ -1408,6 +1558,7 @@ export function ClientsView(): ReactNode {
                     { values: usageSummary.rx, color: "var(--sig)" },
                     { values: usageSummary.tx, color: "var(--warning)" },
                   ]}
+                  card={usageCard(usageSummary)}
                 />
               </>
             ) : selectedDevice.ip ? (
@@ -1421,7 +1572,6 @@ export function ClientsView(): ReactNode {
 
       {drawerDevice && (
         <ClientDrawer
-          key={drawerDevice.mac}
           device={drawerDevice}
           deviceName={deviceName}
           traffic={drawerDevice.ip ? trafficMap.get(drawerDevice.ip) : undefined}
@@ -1433,6 +1583,16 @@ export function ClientsView(): ReactNode {
           busy={busy === drawerDevice.mac}
           onClose={() => setDrawer(null)}
           act={act}
+          nav={(() => {
+            const at = rows.findIndex((x) => x.mac === drawerDevice.mac);
+            if (at < 0) return undefined;
+            return {
+              index: at,
+              total: rows.length,
+              onPrev: at > 0 ? () => openDrawer(rows[at - 1]!) : undefined,
+              onNext: at < rows.length - 1 ? () => openDrawer(rows[at + 1]!) : undefined,
+            };
+          })()}
         />
       )}
     </div>

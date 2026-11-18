@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { DeviceEditor } from "../../ui/observability/device-editor";
 import { mergeConfigDraft } from "../../src/config-write";
 import { jumpHostIssue } from "../../ui/observability/device-jump-host";
+import { typeInto } from "../_stubs/kit";
 
 vi.hoisted(() => {
   Reflect.deleteProperty(Element.prototype, "animate");
@@ -140,29 +141,39 @@ test("tags suggest the whole fleet, create and remove chips, and only change the
   await render(config);
   const tags = document.querySelector<HTMLInputElement>('[aria-label="Tags"]')!;
   const options = () => [
-    ...document.querySelectorAll('[aria-label="Available tags"] [role="option"]'),
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="listbox"][aria-label="Tags"] [role="option"]',
+    ),
   ];
-  await act(async () => tags.focus());
-  expect(options().map((el) => el.textContent?.trim())).toEqual(["europe", "production"]);
+  // The kit lists every fleet tag and marks the chosen ones; the rest are the suggestions.
+  const suggested = () =>
+    options()
+      .filter((el) => el.getAttribute("aria-selected") !== "true")
+      .map((el) => el.textContent?.trim());
+  const pickTag = async (text: string) => {
+    const el = options().find((o) => o.textContent?.trim() === text);
+    expect(el).toBeTruthy();
+    await act(async () => el!.click());
+  };
+  await act(async () => tags.click());
+  expect(suggested()).toEqual(["europe", "production"]);
   expect(
-    document
-      .querySelector('[aria-label="Available tags"]')
-      ?.closest('[data-slot="scroll-area-viewport"]'),
+    document.querySelector('[role="listbox"][aria-label="Tags"]')?.closest(".kit-menu"),
   ).toBeTruthy();
-  await input(tags.id, "EURO");
-  await click("europe");
-  expect(button("Remove tag europe")).toBeTruthy();
+  await typeInto(tags, "EURO");
+  await pickTag("europe");
+  expect(button("Remove europe")).toBeTruthy();
   await act(async () => tags.click());
-  await input(tags.id, "  gaming  ");
-  await click("Create “gaming”");
-  expect(button("Remove tag gaming")).toBeTruthy();
+  await typeInto(tags, "  gaming  ");
+  await pickTag("Add “gaming”");
+  expect(button("Remove gaming")).toBeTruthy();
   await act(async () => tags.click());
-  await input(tags.id, "gaming");
+  await typeInto(tags, "gaming");
   expect(options()).toHaveLength(0);
   expect(document.body.textContent).toContain("This tag is already selected.");
-  await input(tags.id, "   ");
-  expect(options().some((el) => el.textContent?.includes("Create"))).toBe(false);
-  await click("Remove tag home");
+  await typeInto(tags, "   ");
+  expect(options().some((el) => el.textContent?.includes("Add"))).toBe(false);
+  await click("Remove home");
   expect(config.devices.edge.tags).toEqual(["home"]);
   expect(applied).not.toHaveBeenCalled();
   expect(saved).not.toHaveBeenCalled();
@@ -217,20 +228,20 @@ test("tag keyboard entry handles Enter, comma, Backspace and IME without advanci
       );
     });
   await act(async () => tags.focus());
-  await input(tags.id, "خانه");
+  await typeInto(tags, "خانه");
   await key("Enter", true);
-  expect(button("Remove tag خانه")).toBeUndefined();
+  expect(button("Remove خانه")).toBeUndefined();
   await key("Enter");
-  expect(button("Remove tag خانه")).toBeTruthy();
+  expect(button("Remove خانه")).toBeTruthy();
   await act(async () => tags.click());
-  await input(tags.id, "office");
+  await typeInto(tags, "office");
   await key(",");
-  expect(button("Remove tag office")).toBeTruthy();
+  expect(button("Remove office")).toBeTruthy();
   await key("Backspace");
-  expect(button("Remove tag office")).toBeUndefined();
+  expect(button("Remove office")).toBeUndefined();
   await key("Escape");
   expect(tags.getAttribute("aria-expanded")).toBe("false");
-  expect(document.querySelector('[data-slot="tags-input"]')).toBeTruthy();
+  expect(tags.closest(".kit-tags")).toBeTruthy();
   expect(cancelled).not.toHaveBeenCalled();
   expect(saved).not.toHaveBeenCalled();
   await click("Cancel");

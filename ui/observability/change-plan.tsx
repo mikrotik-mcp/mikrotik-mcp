@@ -12,6 +12,8 @@ import type { ReactNode } from "react";
 import { Check, Info, Play, TriangleAlert } from "lucide-react";
 import { postJson } from "./api";
 import { ScoreRing } from "./config-charts";
+import { DetailList, RowDrawer, RowMenu, RowMore, TextArea } from "./kit";
+import type { Tone as KitTone } from "./kit";
 import { LoadingState } from "./loading-state";
 import {
   MonitorButton,
@@ -61,6 +63,7 @@ const OP_TONE: Record<string, string> = {
   remove: "text-destructive",
 };
 const RISK_KIND: Record<string, string> = { low: "read", medium: "write", high: "destructive" };
+const RISK_LED: Record<string, KitTone> = { low: "ok", medium: "warn", high: "bad" };
 
 function gradeTone(grade: string): ChartTone {
   if (grade === "critical" || grade === "high") return "bad";
@@ -130,6 +133,15 @@ function Summary({ plan }: { plan: ChangePlan | null }): ReactNode {
             fontSize={18}
             tone={tone}
             label={`Risk score ${plan.riskScore} of 100`}
+            tip={() => ({
+              title: "Risk score",
+              sub: plan.grade,
+              rows: [
+                { label: "Score", value: `${plan.riskScore} of 100` },
+                { label: "Steps", value: String(plan.steps.length) },
+                { label: "Lock-out risks", value: String(lockouts.length) },
+              ],
+            })}
           />
           <div className="flex flex-col gap-1">
             <span className="monitor-label">Risk score</span>
@@ -174,6 +186,9 @@ function Summary({ plan }: { plan: ChangePlan | null }): ReactNode {
 }
 
 function Steps({ plan }: { plan: ChangePlan }): ReactNode {
+  const [open, setOpen] = useState<number | null>(null);
+  const cur = open != null ? plan.steps[open] : undefined;
+  const go = (i: number): void => setOpen(i);
   return (
     <MonitorPanel
       title="Plan"
@@ -197,28 +212,63 @@ function Steps({ plan }: { plan: ChangePlan }): ReactNode {
       }
     >
       {plan.steps.map((s, i) => (
-        <div key={s.index} className="plan-step" data-risk={s.risk}>
-          <span className="mono text-faint">{pad(i + 1)}</span>
-          <span className={`plan-op ${OP_TONE[s.op] ?? "text-faint"}`}>{OP_MARK[s.op] ?? "•"}</span>
-          <code className="trunc" title={s.command}>
-            {s.command}
-          </code>
-          {s.lockoutRisk ? (
-            <span className="plan-lock" title={s.lockoutRisk}>
-              <StatusBadge tone="bad" dot={false}>
-                <TriangleAlert aria-hidden="true" />
-                lock-out
-              </StatusBadge>
+        <RowMenu
+          key={s.index}
+          title={`Step ${pad(i + 1)}`}
+          sub={`${s.op} · ${s.risk} risk`}
+          onOpen={() => go(i)}
+          cells={{
+            step: { value: pad(i + 1), copy: false },
+            op: { value: s.op },
+            command: { value: s.command },
+            lock: { value: s.lockoutRisk ?? "" },
+            risk: { value: s.risk, kind: "risk" },
+          }}
+          copies={[{ label: "Command", value: s.command, hint: "" }]}
+          row={s}
+        >
+          <div
+            role="button"
+            tabIndex={0}
+            className="plan-step cursor-pointer"
+            data-risk={s.risk}
+            data-selected={open === i || undefined}
+            aria-label={`Step ${pad(i + 1)}: ${s.command}`}
+            onClick={() => go(i)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                go(i);
+              }
+            }}
+          >
+            <span data-col="step" className="mono text-faint">
+              {pad(i + 1)}
             </span>
-          ) : (
-            <span />
-          )}
-          <span className="justify-self-start">
-            <span className="monitor-risk" data-risk={RISK_KIND[s.risk] ?? "read"}>
-              {s.risk.toUpperCase()}
+            <span data-col="op" className={`plan-op ${OP_TONE[s.op] ?? "text-faint"}`}>
+              {OP_MARK[s.op] ?? "•"}
             </span>
-          </span>
-        </div>
+            <code data-col="command" className="trunc" title={s.command}>
+              {s.command}
+            </code>
+            {s.lockoutRisk ? (
+              <span data-col="lock" className="plan-lock" title={s.lockoutRisk}>
+                <StatusBadge tone="bad" dot={false}>
+                  <TriangleAlert aria-hidden="true" />
+                  lock-out
+                </StatusBadge>
+              </span>
+            ) : (
+              <span />
+            )}
+            <span data-col="risk" className="justify-self-start">
+              <span className="monitor-risk" data-risk={RISK_KIND[s.risk] ?? "read"}>
+                {s.risk.toUpperCase()}
+              </span>
+            </span>
+            <RowMore />
+          </div>
+        </RowMenu>
       ))}
       <div className="monitor-foot">
         <Info aria-hidden="true" className="size-4 shrink-0" />
@@ -227,6 +277,47 @@ function Steps({ plan }: { plan: ChangePlan }): ReactNode {
           <span className="mono">begin_transaction</span>.
         </span>
       </div>
+      <RowDrawer
+        open={Boolean(cur)}
+        onClose={() => setOpen(null)}
+        label={`Step details: ${open != null ? pad(open + 1) : ""}`}
+        status={cur ? { tone: RISK_LED[cur.risk] ?? "ok", label: `${cur.risk} risk` } : undefined}
+        title={cur ? `Step ${pad(open! + 1)}` : ""}
+        meta={cur ? `${cur.op} · ${cur.path}` : undefined}
+        chips={
+          cur?.lockoutRisk ? (
+            <StatusBadge tone="bad" dot={false}>
+              <TriangleAlert aria-hidden="true" />
+              lock-out
+            </StatusBadge>
+          ) : undefined
+        }
+        nav={
+          open != null
+            ? {
+                index: open,
+                total: plan.steps.length,
+                onPrev: open > 0 ? () => go(open - 1) : undefined,
+                onNext: open < plan.steps.length - 1 ? () => go(open + 1) : undefined,
+              }
+            : undefined
+        }
+        rowKey={open ?? undefined}
+        storageKey="change-plan"
+      >
+        {cur && (
+          <DetailList
+            items={[
+              { label: "Command", value: cur.command, mono: true },
+              { label: "Operation", value: cur.op },
+              { label: "Path", value: cur.path, mono: true },
+              { label: "Risk", value: cur.risk },
+              { label: "Summary", value: cur.summary },
+              ...(cur.lockoutRisk ? [{ label: "Lock-out", value: cur.lockoutRisk }] : []),
+            ]}
+          />
+        )}
+      </RowDrawer>
     </MonitorPanel>
   );
 }
@@ -293,15 +384,15 @@ export function ChangePlanView(): ReactNode {
           extra={<StatusBadge tone="good">never touches a router</StatusBadge>}
           bodyClassName="flex flex-col gap-3"
         >
-          <textarea
-            className="plan-script"
-            aria-label="Intended commands"
-            spellCheck={false}
+          <TextArea
+            label="Intended commands"
+            mono
+            rows={16}
             placeholder={
               "/ip firewall filter add chain=input action=drop in-interface=ether1\n/ip address add address=10.0.0.1/24 interface=ether2\n/ip address remove [find address=192.168.88.1/24]"
             }
             value={script}
-            onChange={(e) => setScript(e.target.value)}
+            onChange={setScript}
           />
           <div className="flex flex-wrap items-center gap-2">
             <MonitorButton

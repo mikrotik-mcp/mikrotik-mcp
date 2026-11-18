@@ -10,10 +10,12 @@
  * (no chart dependency, so the bundle still inlines to one self-contained HTML).
  */
 import { LoadingState } from "./loading-state";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { api } from "./api";
 import { bytes } from "./format";
+import { LineHover, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DAY_MS = 86_400_000;
@@ -153,6 +155,19 @@ export function UsageHistoryChart({
     const last = x(filled.length - 1).toFixed(1);
     return `${first},${(H - pad).toFixed(1)} ${path(pick)} ${last},${(H - pad).toFixed(1)}`;
   };
+  // The hover snaps to each day at the taller of the two lines.
+  const points = filled.map((d, i): [number, number] => [x(i), y(Math.max(d.rx, d.tx))]);
+  const card = (i: number): TipCard => {
+    const d = filled[i]!;
+    return {
+      title: fmtFullDate(d.day),
+      rows: [
+        { label: "Download", value: bytes(d.rx), color: "var(--chart-3)" },
+        { label: "Upload", value: bytes(d.tx), color: "var(--chart-4)" },
+      ],
+      foot: { label: "Busiest day in the window", value: bytes(peak) },
+    };
+  };
 
   return (
     <div>
@@ -180,6 +195,15 @@ export function UsageHistoryChart({
         <polyline
           className="fill-none stroke-chart-4 stroke-2 [vector-effect:non-scaling-stroke]"
           points={path((d) => d.tx)}
+        />
+        <LineHover
+          width={W}
+          height={H}
+          points={points}
+          card={card}
+          label="Daily usage. Use the arrow keys to read each day."
+          band={Math.max(6, (W - 2 * pad) / filled.length)}
+          color="var(--chart-3)"
         />
       </svg>
     </div>
@@ -209,18 +233,8 @@ interface Cell {
   ms: number;
 }
 
-interface Tip {
-  left: number;
-  top: number;
-  day: string;
-  count: number;
-  lvl: number;
-}
-
 export function Heatmap({ endpoint, label }: { endpoint: string; label?: string }): ReactNode {
   const [data, setData] = useState<HeatmapPayload | null>(null);
-  const [tip, setTip] = useState<Tip | null>(null);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -275,38 +289,23 @@ export function Heatmap({ endpoint, label }: { endpoint: string; label?: string 
   const topPad = 16;
   const H = topPad + 7 * (CELL + GAP);
 
-  // Position the custom tooltip above the hovered cell, in coordinates local to
-  // the wrapper (so it survives the grid being horizontally scrolled).
-  const onEnter = (e: ReactMouseEvent<SVGRectElement>, c: Cell): void => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const cell = e.currentTarget.getBoundingClientRect();
-    const box = wrap.getBoundingClientRect();
-    setTip({
-      left: cell.left - box.left + cell.width / 2,
-      top: cell.top - box.top,
-      day: c.day,
-      count: c.count,
-      lvl: level(c.count),
-    });
-  };
-
   return (
-    <div className="relative" ref={wrapRef}>
+    <div className="relative">
       <div className="mb-1.5 flex items-baseline gap-2.5">
         <span className="text-[12.5px] font-semibold">{label ?? "Connections"}</span>
         <span className="text-[11px] text-muted-foreground">
           {data ? `${data.total} total` : "…"}
         </span>
       </div>
-      <div className="overflow-x-auto pb-1" onMouseLeave={() => setTip(null)}>
+      <div className="overflow-x-auto pb-1">
         <svg
-          className="block"
+          className="kit-tips block"
           viewBox={`0 0 ${leftPad + gridW} ${H}`}
           width={leftPad + gridW}
           height={H}
           xmlns={SVG_NS}
           role="img"
+          aria-label={`${label ?? "Connections"} per day over the last year`}
         >
           {monthLabels.map((m) => (
             <text
@@ -331,43 +330,30 @@ export function Heatmap({ endpoint, label }: { endpoint: string; label?: string 
           {cells.map((c) => (
             <rect
               key={c.day}
-              className={`cursor-pointer stroke-1 [transition:stroke_0.1s_ease] ${
-                tip?.day === c.day ? "stroke-foreground stroke-[1.5px]" : "stroke-border/60"
-              }`}
+              className="cursor-pointer stroke-border/60 stroke-1 [transition:stroke_0.1s_ease] hover:stroke-foreground hover:stroke-[1.5px]"
               style={{ fill: HEAT[level(c.count)] }}
               x={leftPad + c.col * (CELL + GAP)}
               y={topPad + c.row * (CELL + GAP)}
               width={CELL}
               height={CELL}
               rx={2}
-              onMouseEnter={(e) => onEnter(e, c)}
+              {...tipProps((): TipCard => ({
+                title: fmtFullDate(c.day),
+                rows: [
+                  {
+                    label: label ?? "Connections",
+                    value: c.count.toLocaleString(),
+                    color: HEAT[level(c.count)],
+                  },
+                  { label: "Busiest day", value: (data?.max ?? 0).toLocaleString() },
+                ],
+              }))}
+              // Only days with connections take a tab stop; a year of empty days would not.
+              tabIndex={c.count > 0 ? 0 : -1}
             />
           ))}
         </svg>
       </div>
-      {tip && (
-        <div
-          className="pointer-events-none absolute z-30 min-w-[150px] -translate-x-1/2 translate-y-[calc(-100%-9px)] rounded-[10px] border border-chart-3/35 bg-popover px-2.5 py-2 shadow-xl"
-          style={{ left: tip.left, top: tip.top }}
-          role="tooltip"
-        >
-          <span className="absolute -bottom-1.5 left-1/2 size-[11px] -translate-x-1/2 rotate-45 border-r border-b border-chart-3/35 bg-popover" />
-          <div className="flex items-center gap-1.5 text-[13px]">
-            <span
-              className="inline-block size-[12px] rounded-[2px]"
-              style={{ background: HEAT[tip.lvl] }}
-            />
-            <b className="font-semibold">
-              {tip.count === 0
-                ? "No connections"
-                : `${tip.count} connection${tip.count === 1 ? "" : "s"}`}
-            </b>
-          </div>
-          <div className="mt-[3px] text-[11.5px] text-muted-foreground tabular-nums">
-            {fmtFullDate(tip.day)}
-          </div>
-        </div>
-      )}
       <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
         Less
         {[0, 1, 2, 3, 4].map((l) => (

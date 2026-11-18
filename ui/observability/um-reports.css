@@ -104,7 +104,7 @@
 .um-user-button {
   display: grid;
   width: 100%;
-  grid-template-columns: 26px minmax(0, 1fr) 80px;
+  grid-template-columns: 26px minmax(0, 1fr) 80px 26px;
   align-items: center;
   gap: 10px;
   border: 0;
@@ -202,11 +202,23 @@
 
 /* Access points of entry */
 .um-nas-row {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 10px;
   border-top: 1px solid var(--line);
   padding: 9px 0;
+  cursor: pointer;
+}
+.um-nas-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.um-nas-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
 }
 .um-nas-top {
   display: flex;
@@ -337,6 +349,21 @@
   color: var(--text-secondary);
   font-family: var(--font-mt);
   white-space: nowrap;
+}
+/* The row menu column and clickable rows */
+.um-table-scroll :is(th, td).um-more {
+  width: 26px;
+  padding: 2px 4px;
+}
+.um-table-scroll tbody tr {
+  cursor: pointer;
+}
+.um-table-scroll tbody tr:hover td {
+  background: var(--glass-2);
+}
+.um-table-scroll tbody tr:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 
 /* ── First collection ──────────────────────────────────────────────────────── */

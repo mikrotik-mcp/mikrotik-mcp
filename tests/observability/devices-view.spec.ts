@@ -111,7 +111,7 @@ const filter = async (name: string) =>
       b.textContent?.startsWith(name),
     )!,
   );
-const rows = () => [...host.querySelectorAll<HTMLButtonElement>(".dv-routers button.dv-cols")];
+const rows = () => [...host.querySelectorAll<HTMLElement>('.dv-routers [role="button"].dv-cols')];
 const names = () => rows().map((el) => el.querySelector(".dv-name")?.textContent);
 const select = async (name: string) =>
   click(rows().find((r) => r.querySelector(".dv-name")?.textContent === name)!);
@@ -688,7 +688,9 @@ test("zero free memory and disk space are retained in the resource details", asy
   d.status.freeMemory = 0;
   d.status.freeHdd = 0;
   await act(async () => root.render(h(DeviceResources, { d })));
-  const titles = [...host.querySelectorAll("[title]")].map((el) => el.getAttribute("title"));
+  const titles = [...host.querySelectorAll("[data-detail]")].map((el) =>
+    el.getAttribute("data-detail"),
+  );
   expect(titles).toContain("1.0 KiB / 1.0 KiB used");
   expect(titles).toContain("0 B / — free");
 });

@@ -8,7 +8,14 @@ import {
   updateProbeTarget,
 } from "./service-probe-draft";
 import type { ProbeDraft } from "./service-probe-draft";
-import { MonitorButton, MonitorDialog, MonitorEmpty, StatusBadge } from "./monitoring-ui";
+import {
+  MonitorButton,
+  MonitorDialog,
+  MonitorEmpty,
+  MonitorSearch,
+  StatusBadge,
+} from "./monitoring-ui";
+import { Field, NumberInput, TextArea, TextInput } from "./kit";
 import { cn } from "@/lib/utils";
 
 const protocols = {
@@ -45,45 +52,31 @@ export function ServiceProbesEditor({ cfg, onChange }: { cfg: Cfg; onChange: (cf
         <span className="monitor-chip">{httpsCount} usable for routing</span>
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="monitor-field flex-[1_1_320px]">
-          <Search aria-hidden="true" />
-          <input
-            type="search"
-            aria-label="Search service probes"
-            placeholder="Search services"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+        <MonitorSearch
+          label="Search service probes"
+          placeholder="Search services"
+          value={search}
+          onChange={setSearch}
+          className="flex-[1_1_320px]"
+        />
+        <Field label="Probe timeout" id={`${id}-timeout`} className="w-[160px]">
+          <NumberInput
+            min={100}
+            max={10000}
+            unit="ms"
+            allowEmpty
+            value={
+              typeof probes.timeoutMs === "number"
+                ? probes.timeoutMs
+                : typeof probes.timeoutMs === "string" && probes.timeoutMs !== ""
+                  ? Number(probes.timeoutMs)
+                  : probes.timeoutMs === ""
+                    ? null
+                    : 5000
+            }
+            onChange={(n) => onChange({ ...cfg, serviceProbes: { ...probes, timeoutMs: n ?? "" } })}
           />
-        </label>
-        <div className="monitor-fl w-[160px]">
-          <label className="monitor-label" htmlFor={`${id}-timeout`}>
-            Probe timeout
-          </label>
-          <span className="monitor-input justify-between">
-            <input
-              id={`${id}-timeout`}
-              type="number"
-              min={100}
-              max={10000}
-              className="w-full min-w-0 bg-transparent tabular-nums outline-none"
-              value={
-                typeof probes.timeoutMs === "number" || typeof probes.timeoutMs === "string"
-                  ? probes.timeoutMs
-                  : 5000
-              }
-              onChange={(e) =>
-                onChange({
-                  ...cfg,
-                  serviceProbes: {
-                    ...probes,
-                    timeoutMs: e.target.value === "" ? "" : Number(e.target.value),
-                  },
-                })
-              }
-            />
-            <span className="text-muted-foreground">ms</span>
-          </span>
-        </div>
+        </Field>
         <MonitorButton
           size="sm"
           icon={<Plus />}
@@ -243,17 +236,7 @@ export function ProbeTargetEditor({
     setDiscard(false);
   };
   const close = () => (dirty ? setDiscard(true) : onClose());
-  const error = (key: keyof ProbeDraft) =>
-    submitted && parsed.errors[key] ? (
-      <span id={`${id}-${key}-error`} role="alert" className="monitor-err">
-        {parsed.errors[key]}
-      </span>
-    ) : null;
-  const a11y = (key: keyof ProbeDraft) => ({
-    id: `${id}-${key}`,
-    "aria-invalid": submitted && !!parsed.errors[key],
-    "aria-describedby": submitted && parsed.errors[key] ? `${id}-${key}-error` : undefined,
-  });
+  const error = (key: keyof ProbeDraft) => (submitted ? parsed.errors[key] : undefined);
   const url = `${draft.kind === "https" ? "https://" : ""}${draft.host || "your.host"}${
     draft.kind !== "dns" ? `:${draft.port || "…"}` : ""
   }${draft.kind === "https" ? draft.path : ""}`;
@@ -287,34 +270,26 @@ export function ProbeTargetEditor({
       }
     >
       <div className="monitor-dialog-body grid gap-4">
-        <div className="monitor-fl">
-          <label className="monitor-label" htmlFor={`${id}-alias`}>
-            Service ID
-          </label>
-          <span className="relative flex">
-            <input
-              {...a11y("alias")}
-              className="monitor-input w-full font-mono disabled:text-muted-foreground"
-              value={draft.alias}
-              disabled={original !== undefined}
-              autoComplete="off"
-              placeholder="my-service"
-              onChange={(e) => field("alias", e.target.value)}
-            />
-            {original !== undefined && (
-              <LockKeyhole
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
-              />
-            )}
-          </span>
-          {error("alias")}
-          <span className="monitor-hint">
-            {original
+        <Field
+          label="Service ID"
+          id={`${id}-alias`}
+          error={error("alias")}
+          help={
+            original
               ? "The ID can't change once a policy uses it."
-              : "A unique name that policies and health checks use."}
-          </span>
-        </div>
+              : "A unique name that policies and health checks use."
+          }
+        >
+          <TextInput
+            mono
+            value={draft.alias}
+            disabled={original !== undefined}
+            autoComplete="off"
+            placeholder="my-service"
+            onChange={(v) => field("alias", v)}
+            end={original !== undefined ? <LockKeyhole aria-hidden="true" /> : undefined}
+          />
+        </Field>
         <div className="monitor-fl">
           <span className="monitor-label" id={`${id}-kind`}>
             Protocol
@@ -345,84 +320,65 @@ export function ProbeTargetEditor({
                 : "grid-cols-[minmax(0,1fr)_96px]",
           )}
         >
-          <div className="monitor-fl">
-            <label className="monitor-label" htmlFor={`${id}-host`}>
-              Host name
-            </label>
-            <input
-              {...a11y("host")}
-              className="monitor-input font-mono"
+          <Field label="Host name" id={`${id}-host`} error={error("host")}>
+            <TextInput
+              mono
               value={draft.host}
               dir="ltr"
               autoComplete="off"
               placeholder="api.example.com"
-              onChange={(e) => field("host", e.target.value)}
+              onChange={(v) => field("host", v)}
             />
-            {error("host")}
-          </div>
+          </Field>
           {draft.kind !== "dns" && (
-            <div className="monitor-fl">
-              <label className="monitor-label" htmlFor={`${id}-port`}>
-                Port
-              </label>
-              <input
-                {...a11y("port")}
-                className="monitor-input font-mono"
-                type="number"
+            <Field label="Port" id={`${id}-port`} error={error("port")}>
+              <NumberInput
                 min={1}
                 max={65535}
-                value={draft.port}
-                onChange={(e) => field("port", e.target.value)}
+                allowEmpty
+                value={
+                  draft.port === "" || !Number.isFinite(Number(draft.port))
+                    ? null
+                    : Number(draft.port)
+                }
+                onChange={(n) => field("port", n == null ? "" : String(n))}
               />
-              {error("port")}
-            </div>
+            </Field>
           )}
           {draft.kind === "https" && (
-            <div className="monitor-fl">
-              <label className="monitor-label" htmlFor={`${id}-path`}>
-                HTTPS path
-              </label>
-              <input
-                {...a11y("path")}
-                className="monitor-input font-mono"
+            <Field label="HTTPS path" id={`${id}-path`} error={error("path")}>
+              <TextInput
+                mono
                 value={draft.path}
                 dir="ltr"
                 placeholder="/health"
-                onChange={(e) => field("path", e.target.value)}
+                onChange={(v) => field("path", v)}
               />
-              {error("path")}
-            </div>
+            </Field>
           )}
         </div>
-        <div className="monitor-fl">
-          <span className="flex">
-            <label className="monitor-label flex-1" htmlFor={`${id}-addresses`}>
-              Allowed IPs and ranges
-            </label>
-            <span className="text-[12px] text-muted-foreground tabular-nums">
-              {parsed.addresses.length} / 32
-            </span>
-          </span>
-          <textarea
-            {...a11y("addresses")}
+        <Field
+          label="Allowed IPs and ranges"
+          optional={<span className="tabular-nums">{parsed.addresses.length} / 32</span>}
+          id={`${id}-addresses`}
+          error={error("addresses")}
+          help="The probe counts as passed only when the host resolves to one of these."
+        >
+          <TextArea
             aria-label="Allowed IPs or CIDRs"
-            className="monitor-input font-mono"
+            mono
             value={draft.addresses}
             rows={3}
             dir="ltr"
             placeholder={"203.0.113.10/32\n2001:db8::10/128"}
-            onChange={(e) => field("addresses", e.target.value)}
+            onChange={(v) => field("addresses", v)}
           />
-          {error("addresses")}
-          <span className="monitor-hint">
-            The probe counts as passed only when the host resolves to one of these.
-          </span>
           {parsed.addresses.some((s) => s.endsWith("/0")) && (
             <span role="alert" className="monitor-err">
               A /0 range allows a whole IP family. Use single addresses or narrow ranges.
             </span>
           )}
-        </div>
+        </Field>
         <div className="monitor-note flex-wrap items-center">
           <StatusBadge tone={draft.kind === "https" ? "good" : "default"}>
             {draft.kind === "https" ? "Routing + health" : "Health only"}

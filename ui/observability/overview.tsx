@@ -3,12 +3,15 @@
  * the router map, four KPIs, calls over time beside the risk mix, then the
  * routers beside the latest calls.
  */
-import type { ReactNode } from "react";
+import { useState } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import "./overview.css";
-import { ChevronRight, CircleCheck, Filter, RefreshCw, Server } from "lucide-react";
+import { ChevronRight, CircleCheck, Filter, List, RefreshCw, Server } from "lucide-react";
 import { num, WINDOWS } from "./format";
 import { LoadingState } from "./loading-state";
 import { CallsLine, RouterRadar } from "./overview-charts";
+import { DetailList, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
+import type { TipCard, Tone as KitTone } from "./kit";
 import type { RadarTone } from "./overview-charts";
 import {
   Donut,
@@ -97,6 +100,41 @@ function latency(msValue: number): ReactNode {
   );
 }
 
+function ago(t: number | null | undefined): string {
+  if (!t) return "not checked yet";
+  const m = Math.round((Date.now() - t) / 60_000);
+  return m < 1
+    ? "checked just now"
+    : m < 60
+      ? `checked ${m} min ago`
+      : `checked ${Math.round(m / 60)} h ago`;
+}
+
+function mb(bytes: number): string {
+  return bytes >= 1024 ** 3
+    ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
+    : `${Math.round(bytes / 1024 ** 2)} MB`;
+}
+
+/** Hover card for a router's CPU or memory bar. */
+function meterCard(what: "CPU" | "Memory", r: Router, pct: number | null | undefined): TipCard {
+  const s = r.status;
+  const rows: TipCard["rows"] = [{ label: "Used", value: `${(pct ?? 0).toFixed(1)}%` }];
+  if (what === "Memory" && s.freeMemory != null && s.totalMemory)
+    rows.push({ label: "Free", value: `${mb(s.freeMemory)} of ${mb(s.totalMemory)}` });
+  if (what === "CPU" && s.cpuCount) rows.push({ label: "Cores", value: String(s.cpuCount) });
+  return {
+    title: what,
+    sub: r.name,
+    rows,
+    foot: {
+      label: ago(s.checkedAt),
+      value: (pct ?? 0) >= 90 ? "over 90%" : (pct ?? 0) >= 70 ? "over 70%" : "normal",
+      tone: (pct ?? 0) >= 70 ? "down" : "up",
+    },
+  };
+}
+
 function formatLatency(msValue: number): string {
   if (msValue < 1) return "<1 ms";
   if (msValue < 1000) return `${Math.round(msValue)} ms`;
@@ -119,6 +157,31 @@ const LED_TONE: Record<RadarTone, Tone> = {
   bad: "bad",
   unknown: "default",
 };
+
+const KIT_TONE: Record<RadarTone, KitTone> = {
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  unknown: "off",
+};
+
+const STATE_LABEL: Record<RadarTone, string> = {
+  good: "Healthy",
+  warn: "Strain",
+  bad: "Offline",
+  unknown: "Not checked",
+};
+
+/** Enter or Space on a focused row acts like a click. */
+function onRowKey(run: () => void): (e: KeyboardEvent<HTMLElement>) => void {
+  return (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      run();
+    }
+  };
+}
 
 /** A bar's colour for a CPU or memory percentage. */
 function loadTone(pct: number): "warn" | "bad" | undefined {
@@ -184,8 +247,8 @@ function verdict(
   };
 }
 
-const ROUTERS_GRID = "grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_64px_52px]";
-const CALLS_GRID = "grid-cols-[48px_minmax(0,1fr)_140px]";
+const ROUTERS_GRID = "grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_64px_52px_26px]";
+const CALLS_GRID = "grid-cols-[48px_minmax(0,1fr)_140px_26px]";
 
 export function OverviewView({
   stats,
@@ -196,6 +259,8 @@ export function OverviewView({
   devices,
   onOpen,
   onRefresh,
+  onShowCalls,
+  onOpenRouter,
 }: {
   stats: Stats | null;
   windowMs: number;
@@ -209,8 +274,13 @@ export function OverviewView({
   devices?: DeviceInfo[];
   onOpen: (e: ToolEvent) => void;
   onRefresh: () => void;
+  /** Opens Live Feed filtered to these calls (a chart's tooltip action). */
+  onShowCalls?: (filter: { risk?: string; device?: string }) => void;
+  /** Opens a router's page (a radar node's tooltip action). */
+  onOpenRouter?: (name: string) => void;
 }): ReactNode {
   const phrase = windowPhrase(windowMs);
+  const [openRouter, setOpenRouter] = useState<string | null>(null);
   // Without the health list, fall back to the routers that took calls.
   const routers: Router[] =
     devices ??
@@ -247,7 +317,31 @@ export function OverviewView({
         lead={v?.lead}
         aside={
           <div className="glass h-[300px] overflow-hidden">
-            <RouterRadar nodes={routers.map((r) => ({ name: r.name, tone: routerTone(r) }))} />
+            <RouterRadar
+              nodes={routers.map((r) => ({
+                name: r.name,
+                tone: routerTone(r),
+                detail: {
+                  state: STATE_LABEL[routerTone(r)],
+                  rows: [
+                    ...(r.status.memUsedPct != null
+                      ? [{ label: "Memory", value: `${Math.round(r.status.memUsedPct)}%` }]
+                      : []),
+                    ...(r.status.cpuLoad != null
+                      ? [{ label: "CPU", value: `${Math.round(r.status.cpuLoad)}%` }]
+                      : []),
+                    ...(r.activity.avgMs
+                      ? [{ label: "Average call", value: formatLatency(r.activity.avgMs) }]
+                      : []),
+                    {
+                      label: `Calls ${phrase}`,
+                      value: num(callsByDevice.get(r.name) ?? r.activity.calls),
+                    },
+                  ],
+                  onOpen: onOpenRouter ? () => onOpenRouter(r.name) : undefined,
+                },
+              }))}
+            />
           </div>
         }
         actions={
@@ -352,6 +446,8 @@ export function OverviewView({
               values={series.map((b) => b.ok + b.error)}
               failed={series.map((b) => b.error)}
               labels={labels}
+              times={series.map((b) => b.t)}
+              bucketMs={bucketMs}
             />
           ) : (
             <LoadingState label="Loading calls over time" layout="chart" />
@@ -367,6 +463,15 @@ export function OverviewView({
                 label="Risk mix"
                 center={num(riskTotal)}
                 sub="calls"
+                noun="calls"
+                partAction={
+                  onShowCalls
+                    ? (p) => ({
+                        label: "Show these calls in Live Feed",
+                        onClick: () => onShowCalls({ risk: p.label }),
+                      })
+                    : undefined
+                }
                 parts={riskShown.map((r) => ({
                   value: stats.byRisk[r],
                   tone: RISK_TONE[r],
@@ -412,49 +517,126 @@ export function OverviewView({
                 <span>Health</span>
                 <span>Avg</span>
                 <span>Calls</span>
+                <span />
               </div>
               {routers.map((r) => {
                 const tone = routerTone(r);
                 const cpu = r.status.cpuLoad;
                 const mem = r.status.memUsedPct;
+                const health =
+                  tone === "bad"
+                    ? r.status.error
+                      ? `${r.status.error} · offline`
+                      : "Offline"
+                    : cpu == null && mem == null
+                      ? "Not checked yet"
+                      : `CPU ${Math.round(cpu ?? 0)}% · memory ${Math.round(mem ?? 0)}%`;
+                const avg =
+                  tone === "bad" || !r.activity.avgMs ? "—" : formatLatency(r.activity.avgMs);
+                const calls = num(callsByDevice.get(r.name) ?? 0);
                 return (
-                  <div
+                  <RowMenu
                     key={r.name}
-                    className={`monitor-row ${ROUTERS_GRID}`}
-                    data-failed={tone === "bad" || undefined}
+                    title={r.name}
+                    sub={`${STATE_LABEL[tone]} · ${ago(r.status.checkedAt)}`}
+                    onOpen={() => setOpenRouter(r.name)}
+                    opens={
+                      onOpenRouter
+                        ? [{ label: "Open router page", onSelect: () => onOpenRouter(r.name) }]
+                        : undefined
+                    }
+                    cells={{
+                      router: {
+                        value: r.name,
+                        kind: "router",
+                        open: onOpenRouter
+                          ? { label: "Open router", run: () => onOpenRouter(r.name) }
+                          : undefined,
+                      },
+                      health: { value: health },
+                      avg: { value: avg === "—" ? "" : avg, kind: "duration" },
+                      calls: {
+                        value: calls,
+                        open: onShowCalls
+                          ? {
+                              label: "Show these calls in Live Feed",
+                              run: () => onShowCalls({ device: r.name }),
+                            }
+                          : undefined,
+                      },
+                    }}
+                    copies={[{ label: "Router name", value: r.name }]}
+                    row={r}
+                    actions={
+                      onShowCalls
+                        ? [
+                            {
+                              label: "Show calls in Live Feed",
+                              icon: <List aria-hidden="true" />,
+                              onSelect: () => onShowCalls({ device: r.name }),
+                            },
+                          ]
+                        : undefined
+                    }
                   >
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <StatusDot tone={LED_TONE[tone]} />
-                      <span className="p truncate font-mono text-[12px]">{r.name}</span>
-                    </span>
-                    {tone === "bad" ? (
-                      <span className="text-destructive truncate text-[12px]">
-                        {r.status.error ? `${r.status.error} · offline` : "Offline"}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${r.name}, ${STATE_LABEL[tone].toLowerCase()}`}
+                      className={`monitor-row ${ROUTERS_GRID}`}
+                      data-failed={tone === "bad" || undefined}
+                      data-selected={openRouter === r.name || undefined}
+                      onClick={() => setOpenRouter(r.name)}
+                      onKeyDown={onRowKey(() => setOpenRouter(r.name))}
+                    >
+                      <span data-col="router" className="flex min-w-0 items-center gap-2.5">
+                        <StatusDot tone={LED_TONE[tone]} />
+                        <span className="p truncate font-mono text-[12px]">{r.name}</span>
                       </span>
-                    ) : cpu == null && mem == null ? (
-                      <span className="text-muted-foreground truncate text-[12px]">
-                        Not checked yet
-                      </span>
-                    ) : (
-                      <span
-                        className="monitor-meter min-w-0"
-                        title={`CPU ${cpu ?? "?"}% · memory ${mem ?? "?"}%`}
-                      >
-                        <span className="monitor-bar" aria-label={`CPU ${cpu ?? 0}%`}>
-                          <span data-tone={loadTone(cpu ?? 0)} style={{ width: `${cpu ?? 0}%` }} />
+                      {tone === "bad" ? (
+                        <span data-col="health" className="text-destructive truncate text-[12px]">
+                          {health}
                         </span>
-                        <span className="monitor-bar" aria-label={`Memory ${mem ?? 0}%`}>
-                          <span data-tone={loadTone(mem ?? 0)} style={{ width: `${mem ?? 0}%` }} />
+                      ) : cpu == null && mem == null ? (
+                        <span
+                          data-col="health"
+                          className="text-muted-foreground truncate text-[12px]"
+                        >
+                          {health}
                         </span>
+                      ) : (
+                        <span data-col="health" className="monitor-meter kit-tips min-w-0">
+                          <span
+                            className="monitor-bar"
+                            aria-label={`CPU ${cpu ?? 0}%`}
+                            {...tipProps(() => meterCard("CPU", r, cpu))}
+                          >
+                            <span
+                              data-tone={loadTone(cpu ?? 0)}
+                              style={{ width: `${cpu ?? 0}%` }}
+                            />
+                          </span>
+                          <span
+                            className="monitor-bar"
+                            aria-label={`Memory ${mem ?? 0}%`}
+                            {...tipProps(() => meterCard("Memory", r, mem))}
+                          >
+                            <span
+                              data-tone={loadTone(mem ?? 0)}
+                              style={{ width: `${mem ?? 0}%` }}
+                            />
+                          </span>
+                        </span>
+                      )}
+                      <span data-col="avg" className="truncate font-mono text-[12px]">
+                        {avg}
                       </span>
-                    )}
-                    <span className="truncate font-mono text-[12px]">
-                      {tone === "bad" || !r.activity.avgMs ? "—" : formatLatency(r.activity.avgMs)}
-                    </span>
-                    <span className="truncate tabular-nums">
-                      {num(callsByDevice.get(r.name) ?? 0)}
-                    </span>
-                  </div>
+                      <span data-col="calls" className="truncate tabular-nums">
+                        {calls}
+                      </span>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
                 );
               })}
             </>
@@ -486,28 +668,66 @@ export function OverviewView({
                 <span>Time</span>
                 <span>Tool</span>
                 <span>Result</span>
+                <span />
               </div>
               {latest.map((e) => (
-                <button
+                <RowMenu
                   key={e.id}
-                  type="button"
-                  className={`monitor-row ${CALLS_GRID}`}
-                  data-failed={e.isError || undefined}
-                  onClick={() => onOpen(e)}
+                  title={e.tool}
+                  sub={`${hhmm(e.ts)} · ${e.device ?? "no router"} · ${formatLatency(e.durationMs)}`}
+                  onOpen={() => onOpen(e)}
+                  cells={{
+                    time: { value: hhmm(e.ts), kind: "time" },
+                    tool: { value: e.tool, kind: "tool" },
+                    result: {
+                      value: e.isError ? (e.error ?? "Failed") : formatLatency(e.durationMs),
+                    },
+                  }}
+                  copies={[{ label: "Call ID", value: e.id }]}
+                  row={e}
+                  actions={
+                    e.device && onShowCalls
+                      ? [
+                          {
+                            label: `Show calls from ${e.device}`,
+                            icon: <List aria-hidden="true" />,
+                            onSelect: () => onShowCalls({ device: e.device! }),
+                          },
+                        ]
+                      : undefined
+                  }
                 >
-                  <span className="text-muted-foreground truncate font-mono text-[12px]">
-                    {hhmm(e.ts)}
-                  </span>
-                  <span className="p truncate font-mono text-[12px]">{e.tool}</span>
-                  {e.isError ? (
-                    <span className="text-destructive truncate">{e.error ?? "Failed"}</span>
-                  ) : (
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <StatusDot tone="good" />
-                      {formatLatency(e.durationMs)}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${e.tool}, ${e.isError ? "failed" : "ok"}, ${hhmm(e.ts)}`}
+                    className={`monitor-row ${CALLS_GRID}`}
+                    data-failed={e.isError || undefined}
+                    onClick={() => onOpen(e)}
+                    onKeyDown={onRowKey(() => onOpen(e))}
+                  >
+                    <span
+                      data-col="time"
+                      className="text-muted-foreground truncate font-mono text-[12px]"
+                    >
+                      {hhmm(e.ts)}
                     </span>
-                  )}
-                </button>
+                    <span data-col="tool" className="p truncate font-mono text-[12px]">
+                      {e.tool}
+                    </span>
+                    {e.isError ? (
+                      <span data-col="result" className="text-destructive truncate">
+                        {e.error ?? "Failed"}
+                      </span>
+                    ) : (
+                      <span data-col="result" className="flex min-w-0 items-center gap-1.5">
+                        <StatusDot tone="good" />
+                        {formatLatency(e.durationMs)}
+                      </span>
+                    )}
+                    <RowMore />
+                  </div>
+                </RowMenu>
               ))}
             </>
           ) : (
@@ -517,6 +737,78 @@ export function OverviewView({
           )}
         </MonitorPanel>
       </div>
+      {(() => {
+        const at = routers.findIndex((x) => x.name === openRouter);
+        const r = at >= 0 ? routers[at] : undefined;
+        if (!r) return null;
+        const tone = routerTone(r);
+        const s = r.status;
+        return (
+          <RowDrawer
+            open
+            onClose={() => setOpenRouter(null)}
+            label={`Router details: ${r.name}`}
+            storageKey="overview-routers"
+            rowKey={r.name}
+            status={{ tone: KIT_TONE[tone], label: STATE_LABEL[tone] }}
+            title={r.name}
+            meta={capital(ago(s.checkedAt))}
+            nav={{
+              index: at,
+              total: routers.length,
+              onPrev: at > 0 ? () => setOpenRouter(routers[at - 1]!.name) : undefined,
+              onNext:
+                at < routers.length - 1 ? () => setOpenRouter(routers[at + 1]!.name) : undefined,
+            }}
+            onOpenFull={onOpenRouter ? () => onOpenRouter(r.name) : undefined}
+            actions={
+              onShowCalls ? (
+                <MonitorButton
+                  size="sm"
+                  icon={<List aria-hidden="true" />}
+                  onClick={() => onShowCalls({ device: r.name })}
+                >
+                  Show calls in Live Feed
+                </MonitorButton>
+              ) : undefined
+            }
+            primary={
+              onOpenRouter ? (
+                <MonitorButton
+                  size="sm"
+                  variant="primary"
+                  icon={<ChevronRight aria-hidden="true" />}
+                  onClick={() => onOpenRouter(r.name)}
+                >
+                  Open router
+                </MonitorButton>
+              ) : undefined
+            }
+          >
+            <DetailList
+              items={[
+                { label: "State", value: STATE_LABEL[tone] },
+                ...(s.error ? [{ label: "Error", value: s.error }] : []),
+                ...(s.cpuLoad != null ? [{ label: "CPU", value: `${s.cpuLoad.toFixed(1)}%` }] : []),
+                ...(s.cpuCount ? [{ label: "Cores", value: String(s.cpuCount) }] : []),
+                ...(s.memUsedPct != null
+                  ? [{ label: "Memory", value: `${s.memUsedPct.toFixed(1)}%` }]
+                  : []),
+                ...(s.freeMemory != null && s.totalMemory
+                  ? [{ label: "Free memory", value: `${mb(s.freeMemory)} of ${mb(s.totalMemory)}` }]
+                  : []),
+                ...(s.latencyMs != null
+                  ? [{ label: "Check latency", value: formatLatency(s.latencyMs), mono: true }]
+                  : []),
+                ...(r.activity.avgMs
+                  ? [{ label: "Average call", value: formatLatency(r.activity.avgMs), mono: true }]
+                  : []),
+                { label: `Calls ${phrase}`, value: num(callsByDevice.get(r.name) ?? 0) },
+              ]}
+            />
+          </RowDrawer>
+        );
+      })()}
     </section>
   );
 }

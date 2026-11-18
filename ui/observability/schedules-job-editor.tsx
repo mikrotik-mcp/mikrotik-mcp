@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { postJson } from "./api";
 import { describeCron, isValidCron, nextRun } from "../../src/schedule/model";
 import { MonitorButton, MonitorDialog, MonitorNote, RiskBadge, Segmented } from "./monitoring-ui";
+import { Checkbox, Field, TextInput } from "./kit";
 import { toast } from "./toast-action";
 import { Check, Clock, Loader2, X } from "lucide-react";
 import "./schedules.css";
@@ -41,30 +42,6 @@ export function runTime(ms: number, now: number): string {
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function Field({
-  label,
-  hint,
-  error,
-  children,
-}: {
-  label: string;
-  hint?: ReactNode;
-  error?: string | null;
-  children: ReactNode;
-}): ReactNode {
-  return (
-    <div className="monitor-fl">
-      <span className="monitor-label">{label}</span>
-      {children}
-      {error ? (
-        <span className="monitor-err">{error}</span>
-      ) : (
-        hint != null && <span className="monitor-hint">{hint}</span>
-      )}
-    </div>
-  );
 }
 
 /** Mounted only while open, so every open starts from a clean form. */
@@ -198,38 +175,35 @@ function ScheduleJobEditorForm({
         <div className="sched-form-grid" data-cols="2">
           <Field
             label="Job ID"
-            hint="Letters, digits and hyphens. An existing ID is replaced."
+            help="Letters, digits and hyphens. An existing ID is replaced."
             error={shown(errors.id)}
           >
-            <input
-              className="monitor-input sched-mono"
-              aria-label="Job ID"
-              aria-invalid={!!shown(errors.id) || undefined}
+            <TextInput
+              label="Job ID"
+              mono
               placeholder="nightly-firewall"
               value={id}
-              onChange={(e) => setId(e.target.value)}
+              onChange={setId}
               autoComplete="off"
               spellCheck={false}
             />
           </Field>
-          <Field label="When" hint={cronHint} error={shown(errors.cron)}>
-            <label className="monitor-input" aria-invalid={!!shown(errors.cron) || undefined}>
-              <Clock aria-hidden="true" className="sched-field-icon" />
-              <input
-                className="sched-bare sched-mono"
-                aria-label="When (cron)"
-                placeholder="30 3 * * *"
-                value={cron}
-                onChange={(e) => setCron(e.target.value)}
-                spellCheck={false}
-              />
-            </label>
+          <Field label="When" help={cronHint} error={shown(errors.cron)}>
+            <TextInput
+              aria-label="When (cron)"
+              mono
+              icon={<Clock aria-hidden="true" />}
+              placeholder="30 3 * * *"
+              value={cron}
+              onChange={setCron}
+              spellCheck={false}
+            />
           </Field>
         </div>
 
         <Field
           label="Auditor"
-          hint="Only READ auditors can be scheduled."
+          help="Only READ auditors can be scheduled."
           error={shown(errors.tool)}
         >
           <div className="sched-auditors" role="radiogroup" aria-label="Auditor">
@@ -277,54 +251,41 @@ function ScheduleJobEditorForm({
               ) : (
                 <div className="sched-picks" role="group" aria-label="Devices to audit">
                   {devices.map((d) => (
-                    <label key={d} className="monitor-check">
-                      <input
-                        type="checkbox"
-                        checked={picked.includes(d)}
-                        onChange={(e) =>
-                          setPicked(
-                            e.target.checked ? [...picked, d] : picked.filter((x) => x !== d),
-                          )
-                        }
-                      />
-                      <span className="sched-mono">{d}</span>
-                    </label>
+                    <Checkbox
+                      key={d}
+                      checked={picked.includes(d)}
+                      onCheckedChange={(on) =>
+                        setPicked(on ? [...picked, d] : picked.filter((x) => x !== d))
+                      }
+                      label={<span className="sched-mono">{d}</span>}
+                    />
                   ))}
                 </div>
               )}
             </div>
           </Field>
           <Field label="Keep history" error={shown(errors.retain)}>
-            <label className="monitor-input">
-              <input
-                className="sched-bare sched-retain"
-                aria-label="Keep history, in days"
-                inputMode="numeric"
-                value={retain}
-                onChange={(e) => setRetain(e.target.value.replace(/\D/g, ""))}
-              />
-              <span className="text-muted-foreground">days</span>
-            </label>
+            <TextInput
+              aria-label="Keep history, in days"
+              inputMode="numeric"
+              unit="days"
+              value={retain}
+              onChange={(v) => setRetain(v.replace(/\D/g, ""))}
+            />
           </Field>
         </div>
 
-        <Field label="Alert on" hint="Unchanged findings stay quiet.">
+        <Field label="Alert on" help="Unchanged findings stay quiet.">
           <div className="sched-notify" role="group" aria-label="Alert on">
             {NOTIFY.map((n) => (
-              <label key={n.value} className="monitor-check">
-                <input
-                  type="checkbox"
-                  checked={notifyOn.includes(n.value)}
-                  onChange={(e) =>
-                    setNotifyOn(
-                      e.target.checked
-                        ? [...notifyOn, n.value]
-                        : notifyOn.filter((x) => x !== n.value),
-                    )
-                  }
-                />
-                <span>{n.label}</span>
-              </label>
+              <Checkbox
+                key={n.value}
+                checked={notifyOn.includes(n.value)}
+                onCheckedChange={(on) =>
+                  setNotifyOn(on ? [...notifyOn, n.value] : notifyOn.filter((x) => x !== n.value))
+                }
+                label={n.label}
+              />
             ))}
           </div>
         </Field>

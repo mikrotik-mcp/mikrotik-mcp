@@ -9,7 +9,7 @@
  * tells them apart.
  */
 import { LoadingState } from "./loading-state";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight, Clock, Radio, TriangleAlert } from "lucide-react";
 import { api } from "./api";
@@ -28,6 +28,7 @@ import {
 } from "./monitoring-ui";
 import type { ChartTone, Tone } from "./monitoring-ui";
 import { FlowLines, FlowRadar } from "./flows-graphics";
+import { DetailList, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
 import type { RadarStatus } from "./flows-graphics";
 import type { FlowConversation, FlowHealth, FlowTimelinePayload, FlowTopPayload } from "./types";
 import "./flows.css";
@@ -156,6 +157,19 @@ function CompactValue({ value }: { value: number }): ReactNode {
   );
 }
 
+/** Enter or Space on a focused row acts like a click. */
+function onRowKey(run: () => void): (e: KeyboardEvent<HTMLElement>) => void {
+  return (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      run();
+    }
+  };
+}
+
+type Picked = { t: "talker" | "exporter" | "conv"; key: string } | null;
+
 // ── View ────────────────────────────────────────────────────────────────────
 
 export function FlowsView(): ReactNode {
@@ -171,6 +185,7 @@ export function FlowsView(): ReactNode {
   const [loadedKey, setLoadedKey] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const talkersRef = useRef<HTMLDivElement>(null);
+  const [picked, setPicked] = useState<Picked>(null);
 
   const load = useCallback(() => {
     return Promise.all([
@@ -331,6 +346,147 @@ export function FlowsView(): ReactNode {
   );
 
   const radarStatus = (stale: boolean): RadarStatus => (!running ? "faint" : stale ? "warn" : "ok");
+
+  const exporterKey = (e: { exporter: string; version: number; domain: number }): string =>
+    `${e.exporter}/${e.version}/${e.domain}`;
+  const convKey = (t: FlowConversation): string => `${t.src}-${t.dst}`;
+  const exporterStatus = (e: { stale: boolean }): string =>
+    !running ? "Stopped" : e.stale ? "Silent over 5 min" : "Sending";
+
+  /** The drawer for the picked row, with next and previous over the same table. */
+  const drawer = ((): ReactNode => {
+    if (!picked) return null;
+    const close = (): void => setPicked(null);
+    const navOver = (keys: string[]) => {
+      const at = keys.indexOf(picked.key);
+      return {
+        index: at,
+        total: keys.length,
+        onPrev: at > 0 ? () => setPicked({ t: picked.t, key: keys[at - 1]! }) : undefined,
+        onNext:
+          at < keys.length - 1 ? () => setPicked({ t: picked.t, key: keys[at + 1]! }) : undefined,
+      };
+    };
+    if (picked.t === "talker") {
+      const r = rows.find((x) => x.key === picked.key);
+      if (!r) return null;
+      return (
+        <RowDrawer
+          open
+          onClose={close}
+          label={`${dim.label} details: ${r.key}`}
+          storageKey="flows"
+          rowKey={`talker:${r.key}`}
+          title={<span className="flows-mono">{r.key}</span>}
+          meta={`${dim.label} · ${WINDOW_PHRASE[window]}`}
+          nav={navOver(rows.map((x) => x.key))}
+        >
+          <DetailList
+            items={[
+              { label: "Bytes", value: humanBytes(r.bytes) },
+              { label: "Share of bytes", value: pct(r.share) },
+              { label: "Flows", value: num(r.flows) },
+              { label: "Packets", value: num(r.packets) },
+            ]}
+          />
+        </RowDrawer>
+      );
+    }
+    if (picked.t === "conv") {
+      const t = talks.find((x) => convKey(x) === picked.key);
+      if (!t) return null;
+      return (
+        <RowDrawer
+          open
+          onClose={close}
+          label={`Conversation details: ${t.src} to ${t.dst}`}
+          storageKey="flows"
+          rowKey={`conv:${picked.key}`}
+          title={
+            <span className="flows-mono">
+              {t.src} → {t.dst}
+            </span>
+          }
+          meta="Source to destination"
+          nav={navOver(talks.map(convKey))}
+        >
+          <DetailList
+            items={[
+              { label: "Source", value: t.src, mono: true },
+              { label: "Destination", value: t.dst, mono: true },
+              {
+                label: "Ports",
+                value: t.applications.length ? t.applications.join(", ") : "—",
+                mono: true,
+              },
+              { label: "Bytes", value: humanBytes(t.bytes) },
+              { label: "Flows", value: num(t.flows) },
+              { label: "Packets", value: num(t.packets) },
+            ]}
+          />
+        </RowDrawer>
+      );
+    }
+    if (exporterHealth.length) {
+      const at = exporterHealth.findIndex((x) => exporterKey(x) === picked.key);
+      const e = exporterHealth[at];
+      if (!e) return null;
+      return (
+        <RowDrawer
+          open
+          onClose={close}
+          label={`Exporter details: ${e.exporter}`}
+          storageKey="flows"
+          rowKey={`exporter:${picked.key}`}
+          status={{ tone: !running ? "off" : e.stale ? "warn" : "ok", label: exporterStatus(e) }}
+          title={<span className="flows-mono">{e.exporter}</span>}
+          meta={`${protocolName(e.version)} · last packet ${ago(e.lastSeen, now)}`}
+          nav={navOver(exporterHealth.map(exporterKey))}
+        >
+          <DetailList
+            items={[
+              { label: "Protocol", value: protocolName(e.version) },
+              { label: "Last packet", value: ago(e.lastSeen, now) },
+              { label: "Domain", value: String(e.domain), mono: true },
+              { label: "Records", value: num(e.records) },
+              {
+                label: "Sequence gaps",
+                value: e.version === 9 ? num(e.sequenceGaps) : "Not measured",
+              },
+              ...(e.reordered ? [{ label: "Reordered or reset", value: num(e.reordered) }] : []),
+              ...(e.templateChanges
+                ? [{ label: "Template changes", value: num(e.templateChanges) }]
+                : []),
+              ...(e.pending ? [{ label: "Pending", value: num(e.pending) }] : []),
+              ...(e.errors ? [{ label: "Errors", value: num(e.errors) }] : []),
+            ]}
+          />
+        </RowDrawer>
+      );
+    }
+    const addrs = Object.keys(c?.exporters ?? {});
+    const packets = c?.exporters[picked.key];
+    if (packets == null) return null;
+    return (
+      <RowDrawer
+        open
+        onClose={close}
+        label={`Exporter details: ${picked.key}`}
+        storageKey="flows"
+        rowKey={`exporter:${picked.key}`}
+        status={{ tone: running ? "ok" : "off", label: running ? "Sending" : "Stopped" }}
+        title={<span className="flows-mono">{picked.key}</span>}
+        nav={navOver(addrs)}
+      >
+        <DetailList
+          items={[
+            { label: "Address", value: picked.key, mono: true },
+            { label: "Packets", value: num(packets) },
+          ]}
+        />
+      </RowDrawer>
+    );
+  })();
 
   return (
     <section className="flows-page">
@@ -514,7 +670,7 @@ export function FlowsView(): ReactNode {
               }
               flush
             >
-              <div ref={talkersRef}>
+              <div ref={talkersRef} className="kit-tips">
                 {rows.length === 0 ? (
                   <MonitorEmpty compact title="No flows in this window">
                     Try a longer window, or check that an exporter is sending.
@@ -526,26 +682,71 @@ export function FlowsView(): ReactNode {
                       <span>Share of bytes</span>
                       <span>Bytes</span>
                       <span>Share</span>
+                      <span />
                     </div>
                     {rows.map((r) => (
-                      <div key={r.key} className="monitor-row flows-talker-grid">
-                        <span
-                          className="p flows-mono truncate"
-                          title={`${r.key} · ${num(r.flows)} flows · ${compact(r.packets)} packets`}
+                      <RowMenu
+                        key={r.key}
+                        title={r.key}
+                        sub={`${dim.label} · ${humanBytes(r.bytes)} · ${pct(r.share)} of bytes`}
+                        onOpen={() => setPicked({ t: "talker", key: r.key })}
+                        cells={{
+                          key: { value: r.key },
+                          bytes: { value: humanBytes(r.bytes) },
+                          share: { value: pct(r.share) },
+                        }}
+                        copies={[{ label: dim.label, value: r.key }]}
+                        row={r}
+                      >
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${r.key}, ${humanBytes(r.bytes)}`}
+                          className="monitor-row flows-talker-grid"
+                          data-selected={
+                            (picked?.t === "talker" && picked.key === r.key) || undefined
+                          }
+                          onClick={() => setPicked({ t: "talker", key: r.key })}
+                          onKeyDown={onRowKey(() => setPicked({ t: "talker", key: r.key }))}
                         >
-                          {r.key}
-                        </span>
-                        <span className="monitor-bar flows-bar">
+                          <span data-col="key" className="p flows-mono truncate">
+                            {r.key}
+                          </span>
                           <span
-                            data-tone="good"
-                            style={{ width: `${(r.bytes / maxBytes) * 100}%` }}
-                          />
-                        </span>
-                        <span className="truncate tabular-nums">{humanBytes(r.bytes)}</span>
-                        <span className="truncate text-muted-foreground tabular-nums">
-                          {pct(r.share)}
-                        </span>
-                      </div>
+                            className="monitor-bar flows-bar"
+                            aria-label={`${pct(r.share)} of bytes`}
+                            {...tipProps(() => ({
+                              title: r.key,
+                              sub: dim.label,
+                              rows: [
+                                { label: "Bytes", value: humanBytes(r.bytes), color: "var(--sig)" },
+                                { label: "Share of bytes", value: pct(r.share) },
+                                { label: "Flows", value: num(r.flows) },
+                                { label: "Packets", value: compact(r.packets) },
+                              ],
+                              foot: {
+                                label: `Against the top ${dim.label.toLowerCase()}`,
+                                value: `${Math.round((r.bytes / maxBytes) * 100)}%`,
+                              },
+                            }))}
+                          >
+                            <span
+                              data-tone="good"
+                              style={{ width: `${(r.bytes / maxBytes) * 100}%` }}
+                            />
+                          </span>
+                          <span data-col="bytes" className="truncate tabular-nums">
+                            {humanBytes(r.bytes)}
+                          </span>
+                          <span
+                            data-col="share"
+                            className="truncate text-muted-foreground tabular-nums"
+                          >
+                            {pct(r.share)}
+                          </span>
+                          <RowMore />
+                        </div>
+                      </RowMenu>
                     ))}
                   </>
                 )}
@@ -564,6 +765,7 @@ export function FlowsView(): ReactNode {
                       label="Share of bytes by protocol"
                       center={byteNumber(totals?.bytes ?? 0, trafficUnit.div)}
                       sub={trafficUnit.unit}
+                      noun="bytes"
                       parts={protocols.map((p, i) => ({
                         value: p.bytes,
                         tone: toneOf(i, p.protocol),
@@ -591,62 +793,109 @@ export function FlowsView(): ReactNode {
                   <div className="monitor-thead flows-exporter-grid">
                     <span>Router</span>
                     <span>Status</span>
+                    <span />
                   </div>
                 ) : null}
                 {exporterHealth.length ? (
                   exporterHealth.map((e, i) => {
                     const tone: Tone = !running ? "default" : e.stale ? "warn" : "good";
+                    const key = exporterKey(e);
                     return (
-                      <div
-                        key={`${e.exporter}/${e.version}/${e.domain}`}
-                        className="monitor-row flows-exporter-grid"
+                      <RowMenu
+                        key={key}
+                        title={e.exporter}
+                        sub={`${exporterStatus(e)} · ${protocolName(e.version)} · ${ago(e.lastSeen, now)}`}
+                        onOpen={() => setPicked({ t: "exporter", key })}
+                        cells={{
+                          router: { value: e.exporter, kind: "router" },
+                          status: { value: `${exporterStatus(e)} · ${protocolName(e.version)}` },
+                        }}
+                        copies={[{ label: "Exporter", value: e.exporter }]}
+                        row={e}
                       >
-                        <span className="flows-exporter-name">
-                          <StatusDot tone={tone} />
-                          <span className="p flows-mono truncate">{e.exporter}</span>
-                        </span>
-                        <span className="flows-exporter-status">
-                          <span
-                            className={
-                              tone === "warn"
-                                ? "truncate text-warning"
-                                : "truncate text-fg-secondary"
-                            }
-                          >
-                            {!running ? "Stopped · " : e.stale ? "Silent over 5 min · " : ""}
-                            {protocolName(e.version)} · {i === 0 ? "last packet " : ""}
-                            {ago(e.lastSeen, now)}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${e.exporter}, ${exporterStatus(e).toLowerCase()}`}
+                          className="monitor-row flows-exporter-grid"
+                          data-selected={
+                            (picked?.t === "exporter" && picked.key === key) || undefined
+                          }
+                          onClick={() => setPicked({ t: "exporter", key })}
+                          onKeyDown={onRowKey(() => setPicked({ t: "exporter", key }))}
+                        >
+                          <span data-col="router" className="flows-exporter-name">
+                            <StatusDot tone={tone} />
+                            <span className="p flows-mono truncate">{e.exporter}</span>
                           </span>
-                          <span className="truncate text-muted-foreground">
-                            {[
-                              `Domain ${e.domain}`,
-                              `${compact(e.records)} records`,
-                              e.version === 9
-                                ? `${num(e.sequenceGaps)} sequence gaps`
-                                : "gaps not measured",
-                              ...(e.reordered ? [`${num(e.reordered)} reordered or reset`] : []),
-                              ...(e.templateChanges
-                                ? [`${num(e.templateChanges)} template changes`]
-                                : []),
-                              ...(e.pending ? [`${num(e.pending)} pending`] : []),
-                              ...(e.errors ? [`${num(e.errors)} errors`] : []),
-                            ].join(" · ")}
+                          <span data-col="status" className="flows-exporter-status">
+                            <span
+                              className={
+                                tone === "warn"
+                                  ? "truncate text-warning"
+                                  : "truncate text-fg-secondary"
+                              }
+                            >
+                              {!running ? "Stopped · " : e.stale ? "Silent over 5 min · " : ""}
+                              {protocolName(e.version)} · {i === 0 ? "last packet " : ""}
+                              {ago(e.lastSeen, now)}
+                            </span>
+                            <span className="truncate text-muted-foreground">
+                              {[
+                                `Domain ${e.domain}`,
+                                `${compact(e.records)} records`,
+                                e.version === 9
+                                  ? `${num(e.sequenceGaps)} sequence gaps`
+                                  : "gaps not measured",
+                                ...(e.reordered ? [`${num(e.reordered)} reordered or reset`] : []),
+                                ...(e.templateChanges
+                                  ? [`${num(e.templateChanges)} template changes`]
+                                  : []),
+                                ...(e.pending ? [`${num(e.pending)} pending`] : []),
+                                ...(e.errors ? [`${num(e.errors)} errors`] : []),
+                              ].join(" · ")}
+                            </span>
                           </span>
-                        </span>
-                      </div>
+                          <RowMore />
+                        </div>
+                      </RowMenu>
                     );
                   })
                 ) : Object.keys(c?.exporters ?? {}).length ? (
                   Object.entries(c?.exporters ?? {}).map(([addr, packets]) => (
-                    <div key={addr} className="monitor-row flows-exporter-grid">
-                      <span className="flows-exporter-name">
-                        <StatusDot tone={running ? "good" : "default"} />
-                        <span className="p flows-mono truncate">{addr}</span>
-                      </span>
-                      <span className="flows-exporter-status">
-                        <span className="truncate text-fg-secondary">{num(packets)} packets</span>
-                      </span>
-                    </div>
+                    <RowMenu
+                      key={addr}
+                      title={addr}
+                      sub={`${num(packets)} packets`}
+                      onOpen={() => setPicked({ t: "exporter", key: addr })}
+                      cells={{
+                        router: { value: addr, kind: "ip" },
+                        status: { value: `${num(packets)} packets` },
+                      }}
+                      copies={[{ label: "Address", value: addr }]}
+                      row={{ address: addr, packets }}
+                    >
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${addr}, ${num(packets)} packets`}
+                        className="monitor-row flows-exporter-grid"
+                        data-selected={
+                          (picked?.t === "exporter" && picked.key === addr) || undefined
+                        }
+                        onClick={() => setPicked({ t: "exporter", key: addr })}
+                        onKeyDown={onRowKey(() => setPicked({ t: "exporter", key: addr }))}
+                      >
+                        <span data-col="router" className="flows-exporter-name">
+                          <StatusDot tone={running ? "good" : "default"} />
+                          <span className="p flows-mono truncate">{addr}</span>
+                        </span>
+                        <span data-col="status" className="flows-exporter-status">
+                          <span className="truncate text-fg-secondary">{num(packets)} packets</span>
+                        </span>
+                        <RowMore />
+                      </div>
+                    </RowMenu>
                   ))
                 ) : (
                   <MonitorEmpty compact title="No exporters yet">
@@ -672,32 +921,66 @@ export function FlowsView(): ReactNode {
                   <span>Destination</span>
                   <span>Port</span>
                   <span>Bytes</span>
+                  <span />
                 </div>
                 {talks.map((t) => (
-                  <div key={`${t.src}-${t.dst}`} className="monitor-row flows-conv-grid">
-                    <span className="p flows-mono truncate" title={t.src}>
-                      {t.src}
-                    </span>
-                    <span className="truncate text-success">
-                      <ChevronRight className="flows-arrow" strokeWidth={1.6} aria-label="to" />
-                    </span>
-                    <span className="flows-mono truncate" title={t.dst}>
-                      {t.dst}
-                    </span>
-                    <span
-                      className="flows-mono truncate text-muted-foreground"
-                      title={t.applications.join(", ")}
+                  <RowMenu
+                    key={convKey(t)}
+                    title={`${t.src} → ${t.dst}`}
+                    sub={`${humanBytes(t.bytes)} · ${num(t.flows)} flows`}
+                    onOpen={() => setPicked({ t: "conv", key: convKey(t) })}
+                    cells={{
+                      src: { value: t.src, kind: "ip" },
+                      dst: { value: t.dst, kind: "ip" },
+                      port: { value: t.applications.join(", ") },
+                      bytes: { value: humanBytes(t.bytes) },
+                    }}
+                    copies={[
+                      { label: "Source", value: t.src },
+                      { label: "Destination", value: t.dst },
+                    ]}
+                    row={t}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${t.src} to ${t.dst}, ${humanBytes(t.bytes)}`}
+                      className="monitor-row flows-conv-grid"
+                      data-selected={
+                        (picked?.t === "conv" && picked.key === convKey(t)) || undefined
+                      }
+                      onClick={() => setPicked({ t: "conv", key: convKey(t) })}
+                      onKeyDown={onRowKey(() => setPicked({ t: "conv", key: convKey(t) }))}
                     >
-                      {t.applications[0] ?? "—"}
-                    </span>
-                    <span className="truncate tabular-nums">{humanBytes(t.bytes)}</span>
-                  </div>
+                      <span data-col="src" className="p flows-mono truncate" title={t.src}>
+                        {t.src}
+                      </span>
+                      <span className="truncate text-success">
+                        <ChevronRight className="flows-arrow" strokeWidth={1.6} aria-label="to" />
+                      </span>
+                      <span data-col="dst" className="flows-mono truncate" title={t.dst}>
+                        {t.dst}
+                      </span>
+                      <span
+                        data-col="port"
+                        className="flows-mono truncate text-muted-foreground"
+                        title={t.applications.join(", ")}
+                      >
+                        {t.applications[0] ?? "—"}
+                      </span>
+                      <span data-col="bytes" className="truncate tabular-nums">
+                        {humanBytes(t.bytes)}
+                      </span>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
                 ))}
               </>
             )}
           </MonitorPanel>
         </>
       )}
+      {drawer}
     </section>
   );
 }

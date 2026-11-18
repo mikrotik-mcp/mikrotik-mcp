@@ -7,8 +7,10 @@
  * history. "New job" opens the job editor (schedules-job-editor.tsx).
  */
 import { LoadingState } from "./loading-state";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DetailList, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
+import type { RowAction, TipCard, Tone as KitTone } from "./kit";
 import { api, postJson } from "./api";
 import { useNow } from "./use-now";
 import {
@@ -43,7 +45,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { CalendarClock, Ellipsis, Loader2, Plus, Trash2, TriangleAlert } from "lucide-react";
+import {
+  CalendarClock,
+  Ellipsis,
+  Filter,
+  Loader2,
+  Play,
+  Plus,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import "./monitoring.css";
 import "./schedules.css";
 
@@ -63,6 +74,35 @@ const OUTCOME_TONE: Record<ScheduleOutcome, Tone> = {
   timeout: "warn",
   skipped: "default",
 };
+
+/** The bar colours of the posture chart, for the tooltip swatches. */
+const SEVERITY_COLOR: Record<string, string> = {
+  critical: "var(--destructive)",
+  high: "var(--warning)",
+  medium: "var(--brand)",
+  low: "var(--text-faint)",
+  info: "var(--text-faint)",
+};
+
+const KIT_OUTCOME: Record<ScheduleOutcome, KitTone> = {
+  ok: "ok",
+  failed: "bad",
+  timeout: "warn",
+  skipped: "off",
+};
+
+/** Enter or Space on a focused row acts like a click. */
+function onRowKey(run: () => void): (e: KeyboardEvent<HTMLElement>) => void {
+  return (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      run();
+    }
+  };
+}
+
+const runKey = (p: SchedulePoint): string => `${p.jobId}-${p.device ?? ""}-${p.at}`;
 
 const DAY_MS = 86_400_000;
 /** Bars in the posture chart; older runs drop off the left. */
@@ -179,9 +219,30 @@ function PostureBars({ runs, scopeKey }: { runs: SchedulePoint[]; scopeKey: stri
   const ticks = [...new Set([0, 1, 2, 3, 4].map((i) => Math.round((i * (n - 1)) / 4)))].map((i) =>
     new Date(runs[i].at).toDateString() === today ? "today" : dateOnly(runs[i].at),
   );
+  const card = (i: number): TipCard => {
+    const p = runs[i];
+    const prev = i > 0 ? runs[i - 1] : undefined;
+    const delta = prev ? p.total - prev.total : 0;
+    return {
+      title: stamp(p.at),
+      sub: p.device ? `${p.jobId} · ${p.device}` : p.jobId,
+      rows: STACK.filter((s) => (p.bySeverity[s] ?? 0) > 0).map((s) => ({
+        label: capitalize(s),
+        value: String(p.bySeverity[s] ?? 0),
+        color: SEVERITY_COLOR[s],
+      })),
+      foot: prev
+        ? {
+            label: "Against the run before",
+            value: delta === 0 ? "no change" : `${delta > 0 ? "+" : ""}${delta}`,
+            tone: delta > 0 ? "down" : delta < 0 ? "up" : undefined,
+          }
+        : { label: "Findings", value: String(p.total) },
+    };
+  };
 
   return (
-    <div ref={ref}>
+    <div ref={ref} className="kit-tips">
       <svg
         className="sched-posture-svg"
         viewBox={`0 0 ${W} ${H}`}
@@ -206,8 +267,12 @@ function PostureBars({ runs, scopeKey }: { runs: SchedulePoint[]; scopeKey: stri
           const x = i * (bw + GAP);
           let y = H;
           return (
-            <g key={`${p.jobId}-${p.device ?? ""}-${p.at}`} data-bar="">
-              <title>{`${stamp(p.at)} · ${p.jobId}${p.device ? ` · ${p.device}` : ""} · ${plural(p.total, "finding")}`}</title>
+            <g
+              key={runKey(p)}
+              data-bar=""
+              aria-label={`${stamp(p.at)} · ${p.jobId}${p.device ? ` · ${p.device}` : ""} · ${plural(p.total, "finding")}`}
+              {...tipProps(() => card(i))}
+            >
               {STACK.map((s) => {
                 const v = p.bySeverity[s] ?? 0;
                 if (v === 0) return null;
@@ -271,8 +336,20 @@ function DayGrid({ points }: { points: SchedulePoint[] }): ReactNode {
         : day.state === "more"
           ? `${label}: new or worse findings, ${plural(day.total, "finding")}`
           : `${label}: nothing new, ${plural(day.total, "finding")}`;
-    return { key, at, state: day?.state ?? "none", title };
+    return { key, at, state: day?.state ?? "none", title, total: day?.total ?? 0 };
   });
+  const stateText: Record<DayState, string> = {
+    none: "No run",
+    clean: "Nothing new",
+    more: "New or worse findings",
+    failed: "A run failed",
+  };
+  const stateLed: Record<DayState, KitTone> = {
+    none: "off",
+    clean: "ok",
+    more: "warn",
+    failed: "bad",
+  };
 
   return (
     <div className="glass sched-calendar">
@@ -280,7 +357,11 @@ function DayGrid({ points }: { points: SchedulePoint[] }): ReactNode {
         <span className="sched-calendar-label">Last 5 weeks</span>
         <span className="sched-small">One square per day</span>
       </div>
-      <div className="sched-days" role="img" aria-label="Daily run results for the last 5 weeks">
+      <div
+        className="sched-days kit-tips"
+        role="group"
+        aria-label="Daily run results for the last 5 weeks"
+      >
         {cells.slice(0, 7).map((c) => (
           <span key={`h-${c.key}`} className="sched-weekday">
             {new Date(c.at).toLocaleDateString(undefined, { weekday: "short" })}
@@ -292,7 +373,16 @@ function DayGrid({ points }: { points: SchedulePoint[] }): ReactNode {
             className="sched-day"
             data-state={c.state}
             data-today={i === GRID_DAYS - 1 || undefined}
-            title={c.title}
+            aria-label={c.title}
+            {...tipProps(() => ({
+              title: dateOnly(c.at),
+              sub: i === GRID_DAYS - 1 ? "today" : undefined,
+              led: stateLed[c.state],
+              rows: [
+                { label: "Result", value: stateText[c.state] },
+                ...(c.state === "none" ? [] : [{ label: "Findings", value: String(c.total) }]),
+              ],
+            }))}
           />
         ))}
       </div>
@@ -382,49 +472,89 @@ function flattenRegressions(regressions: ScheduleRegression[]): RegressionItem[]
   });
 }
 
-/** A regression row; a click opens the finding's detail under it. */
-function RegressionRow({ item }: { item: RegressionItem }): ReactNode {
-  const [open, setOpen] = useState(false);
+/** A regression row; a click opens the finding's detail in the row drawer. */
+function RegressionRow({
+  item,
+  open,
+  onOpen,
+  onScope,
+}: {
+  item: RegressionItem;
+  open: boolean;
+  onOpen: () => void;
+  onScope: () => void;
+}): ReactNode {
   const device = item.finding?.device ?? item.run.device;
   return (
-    <div className="sched-reg" data-open={open || undefined}>
-      <button
-        type="button"
-        className="monitor-row sched-reg-grid"
+    <RowMenu
+      title={item.title}
+      sub={`${item.change} · ${device} · ${item.run.jobId}`}
+      onOpen={onOpen}
+      cells={{
+        severity: { value: item.severity ? capitalize(item.severity) : "Change" },
+        finding: {
+          value: item.title,
+        },
+        job: { value: item.run.jobId, filter: onScope },
+        change: { value: item.change },
+      }}
+      copies={[
+        ...(item.finding ? [{ label: "Finding ID", value: item.finding.id }] : []),
+        { label: "Device", value: device },
+      ]}
+      row={item.finding ?? item.run}
+    >
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${item.title}, ${item.change}`}
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        className="monitor-row sched-reg-grid"
+        data-selected={open || undefined}
+        onClick={onOpen}
+        onKeyDown={onRowKey(onOpen)}
       >
-        <span className="min-w-0">
+        <span data-col="severity" className="min-w-0">
           <StatusBadge tone={SEVERITY_TONE[item.severity ?? ""] ?? "default"} dot={false}>
             {item.severity ? capitalize(item.severity) : "Change"}
           </StatusBadge>
         </span>
-        <span className="flex min-w-0 flex-col gap-px">
+        <span data-col="finding" className="flex min-w-0 flex-col gap-px">
           <span className="p truncate">{item.title}</span>
-          <span className="sched-mono text-muted-foreground truncate">
+          <span data-col="job" className="sched-mono text-muted-foreground truncate">
             {device} · {item.run.jobId}
           </span>
         </span>
-        <span className={cn("truncate text-[12px] font-medium", CHANGE_CLASS[item.change])}>
+        <span
+          data-col="change"
+          className={cn("truncate text-[12px] font-medium", CHANGE_CLASS[item.change])}
+        >
           {item.change}
         </span>
-      </button>
-      {open && (
-        <div className="sched-reg-detail">
-          {item.change === "Worse" && (
-            <p>
-              Went from {item.from} to {item.to}.
-            </p>
-          )}
-          {item.finding?.detail && <p>{item.finding.detail}</p>}
-          <p className="text-muted-foreground">
-            {item.run.summary} · run {stamp(item.run.at)}
-          </p>
-        </div>
+        <RowMore />
+      </div>
+    </RowMenu>
+  );
+}
+
+/** The regression's detail: what the expanded row used to show. */
+function RegressionDetail({ item }: { item: RegressionItem }): ReactNode {
+  return (
+    <div className="sched-reg-detail">
+      {item.change === "Worse" && (
+        <p>
+          Went from {item.from} to {item.to}.
+        </p>
       )}
+      {item.finding?.detail && <p>{item.finding.detail}</p>}
+      <p className="text-muted-foreground">
+        {item.run.summary} · run {stamp(item.run.at)}
+      </p>
     </div>
   );
 }
+
+type Picked = { t: "job" | "reg" | "run"; key: string } | null;
 
 export function SchedulesView(): ReactNode {
   const [initialLoading, setInitialLoading] = useState(true);
@@ -438,6 +568,7 @@ export function SchedulesView(): ReactNode {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [devices, setDevices] = useState<string[]>([]);
+  const [picked, setPicked] = useState<Picked>(null);
   const jobsRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback((job?: string | null): Promise<void> => {
@@ -609,6 +740,186 @@ export function SchedulesView(): ReactNode {
 
   const enabled = jobs.filter((j) => j.enabled).length;
   const runs = postureRuns(points);
+
+  const jobActions = (id: string): RowAction[] => [
+    {
+      label: "Run now",
+      icon: <Play aria-hidden="true" />,
+      disabled: running !== null,
+      onSelect: () => void runNow(id),
+    },
+    {
+      label: "Remove",
+      icon: <Trash2 aria-hidden="true" />,
+      danger: true,
+      onSelect: () => setConfirmRemove(id),
+    },
+  ];
+  const navOver = (keys: string[]) => {
+    if (!picked) return undefined;
+    const at = keys.indexOf(picked.key);
+    if (at < 0) return undefined;
+    return {
+      index: at,
+      total: keys.length,
+      onPrev: at > 0 ? () => setPicked({ t: picked.t, key: keys[at - 1]! }) : undefined,
+      onNext:
+        at < keys.length - 1 ? () => setPicked({ t: picked.t, key: keys[at + 1]! }) : undefined,
+    };
+  };
+  const drawer = ((): ReactNode => {
+    if (!picked) return null;
+    const close = (): void => setPicked(null);
+    if (picked.t === "job") {
+      const job = jobs.find((j) => j.id === picked.key);
+      if (!job) return null;
+      const last = job.lastRun;
+      const tone: KitTone = !job.enabled ? "off" : KIT_OUTCOME[last?.outcome ?? "skipped"];
+      return (
+        <RowDrawer
+          open
+          onClose={close}
+          label={`Job details: ${job.id}`}
+          storageKey="schedules"
+          rowKey={`job:${job.id}`}
+          status={{
+            tone,
+            label: !job.enabled ? "Paused" : last ? `Last run ${last.outcome}` : "Never run",
+          }}
+          title={<span className="sched-mono">{job.tool}</span>}
+          meta={job.cronText}
+          nav={navOver(jobs.map((j) => j.id))}
+          actions={
+            <>
+              <MonitorButton
+                size="sm"
+                variant="danger"
+                icon={<Trash2 aria-hidden="true" />}
+                onClick={() => setConfirmRemove(job.id)}
+              >
+                Remove
+              </MonitorButton>
+              <MonitorButton
+                size="sm"
+                icon={<Filter aria-hidden="true" />}
+                aria-pressed={selected === job.id}
+                onClick={() => setSelected(selected === job.id ? null : job.id)}
+              >
+                {selected === job.id ? "Show all" : "Scope the charts"}
+              </MonitorButton>
+            </>
+          }
+          primary={
+            <MonitorButton
+              size="sm"
+              variant="primary"
+              disabled={running !== null}
+              icon={
+                running === job.id ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Play aria-hidden="true" />
+                )
+              }
+              onClick={() => void runNow(job.id)}
+            >
+              Run now
+            </MonitorButton>
+          }
+        >
+          <DetailList
+            items={[
+              { label: "Job", value: job.id, mono: true },
+              { label: "Tool", value: job.tool, mono: true },
+              { label: "Schedule", value: job.cronText },
+              { label: "Enabled", value: job.enabled ? "Yes" : "No, paused" },
+              {
+                label: "Next run",
+                value: !job.enabled || job.nextRun === null ? "None" : relative(job.nextRun, now),
+              },
+              ...(last
+                ? [
+                    { label: "Last run", value: `${stamp(last.startedAt)} · ${last.outcome}` },
+                    ...(last.error ? [{ label: "Error", value: last.error }] : []),
+                  ]
+                : [{ label: "Last run", value: "Never run" }]),
+              { label: "Open findings", value: String(job.posture.total) },
+            ]}
+          />
+        </RowDrawer>
+      );
+    }
+    if (picked.t === "reg") {
+      const item = changes.find((x) => x.key === picked.key);
+      if (!item) return null;
+      const device = item.finding?.device ?? item.run.device;
+      return (
+        <RowDrawer
+          open
+          onClose={close}
+          label={`Regression details: ${item.title}`}
+          storageKey="schedules"
+          rowKey={`reg:${item.key}`}
+          status={{
+            tone:
+              item.change === "New"
+                ? "bad"
+                : item.change === "Worse"
+                  ? "warn"
+                  : item.change === "Resolved"
+                    ? "ok"
+                    : "off",
+            label: item.change,
+          }}
+          title={item.title}
+          meta={`${device} · ${item.run.jobId}`}
+          nav={navOver(changes.map((x) => x.key))}
+        >
+          <RegressionDetail item={item} />
+          <DetailList
+            items={[
+              { label: "Severity", value: item.severity ? capitalize(item.severity) : "Change" },
+              { label: "Device", value: device, mono: true },
+              { label: "Job", value: item.run.jobId, mono: true },
+            ]}
+          />
+        </RowDrawer>
+      );
+    }
+    const p = history.find((x) => runKey(x) === picked.key);
+    if (!p) return null;
+    return (
+      <RowDrawer
+        open
+        onClose={close}
+        label={`Run details: ${p.jobId}`}
+        storageKey="schedules"
+        rowKey={`run:${picked.key}`}
+        status={{ tone: KIT_OUTCOME[p.outcome], label: capitalize(p.outcome) }}
+        title={<span className="sched-mono">{p.jobId}</span>}
+        meta={`${stamp(p.at)} · ${p.device ?? "fleet"}`}
+        nav={navOver(history.map(runKey))}
+      >
+        <DetailList
+          items={[
+            { label: "Job", value: p.jobId, mono: true },
+            { label: "Device", value: p.device ?? "fleet", mono: true },
+            { label: "Started", value: stamp(p.at) },
+            { label: "Took", value: `${(p.durationMs / 1000).toFixed(1)} s` },
+            { label: "Result", value: p.outcome },
+            ...(p.outcome === "ok"
+              ? [
+                  { label: "Findings", value: String(p.total) },
+                  { label: "New", value: String(p.added) },
+                  { label: "Worse", value: String(p.worsened) },
+                  { label: "Resolved", value: String(p.resolved) },
+                ]
+              : []),
+          ]}
+        />
+      </RowDrawer>
+    );
+  })();
   const scope = selected ?? "All jobs";
   const scopeTool = selected ? toolOf(selected) : "All jobs";
 
@@ -745,70 +1056,91 @@ export function SchedulesView(): ReactNode {
                 .join(" · ");
               const isSelected = selected === job.id;
               return (
-                <div
+                <RowMenu
                   key={job.id}
-                  className="monitor-row sched-job-grid"
-                  data-selected={isSelected || undefined}
+                  title={job.tool}
+                  sub={meta}
+                  onOpen={() => setPicked({ t: "job", key: job.id })}
+                  cells={{
+                    job: {
+                      value: job.id,
+                      filter: () => setSelected(job.id),
+                      clearFilter: selected ? () => setSelected(null) : undefined,
+                    },
+                  }}
+                  copies={[
+                    { label: "Job ID", value: job.id },
+                    { label: "Tool", value: job.tool },
+                  ]}
+                  row={job}
+                  actions={jobActions(job.id)}
                 >
-                  <button
-                    type="button"
-                    className="sched-job-main"
-                    aria-pressed={isSelected}
-                    onClick={() => setSelected(isSelected ? null : job.id)}
+                  <div
+                    className="monitor-row sched-job-grid"
+                    data-selected={isSelected || undefined}
                   >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <StatusDot
-                        tone={
-                          !job.enabled
-                            ? "default"
-                            : last?.outcome === "ok" && freshJobs.has(job.id)
-                              ? "warn"
-                              : OUTCOME_TONE[last?.outcome ?? "skipped"]
-                        }
-                      />
-                      <span className="sched-mono p truncate">{job.tool}</span>
-                    </span>
-                    <span
-                      className={cn(
-                        "sched-meta truncate",
-                        lastFailed && job.enabled ? "text-destructive" : "text-muted-foreground",
-                      )}
-                      title={meta}
+                    <button
+                      data-col="job"
+                      type="button"
+                      className="sched-job-main"
+                      aria-pressed={isSelected}
+                      onClick={() => setSelected(isSelected ? null : job.id)}
                     >
-                      {meta}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <StatusDot
+                          tone={
+                            !job.enabled
+                              ? "default"
+                              : last?.outcome === "ok" && freshJobs.has(job.id)
+                                ? "warn"
+                                : OUTCOME_TONE[last?.outcome ?? "skipped"]
+                          }
+                        />
+                        <span className="sched-mono p truncate">{job.tool}</span>
+                      </span>
+                      <span
+                        className={cn(
+                          "sched-meta truncate",
+                          lastFailed && job.enabled ? "text-destructive" : "text-muted-foreground",
+                        )}
+                        title={meta}
+                      >
+                        {meta}
+                      </span>
+                    </button>
+                    <span className="flex items-center gap-1">
+                      <MonitorButton
+                        variant="ghost"
+                        size="sm"
+                        disabled={running !== null}
+                        icon={running === job.id ? <Loader2 className="animate-spin" /> : undefined}
+                        onClick={() => void runNow(job.id)}
+                      >
+                        Run now
+                      </MonitorButton>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="monitor-icon-btn"
+                            aria-label={`More actions for ${job.id}`}
+                          >
+                            <Ellipsis aria-hidden="true" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => setConfirmRemove(job.id)}
+                          >
+                            <Trash2 /> Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </span>
-                  </button>
-                  <span className="flex items-center gap-1">
-                    <MonitorButton
-                      variant="ghost"
-                      size="sm"
-                      disabled={running !== null}
-                      icon={running === job.id ? <Loader2 className="animate-spin" /> : undefined}
-                      onClick={() => void runNow(job.id)}
-                    >
-                      Run now
-                    </MonitorButton>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="monitor-icon-btn"
-                          aria-label={`More actions for ${job.id}`}
-                        >
-                          <Ellipsis aria-hidden="true" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={() => setConfirmRemove(job.id)}
-                        >
-                          <Trash2 /> Remove
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </span>
-                </div>
+                    <RowMore />
+                  </div>
+                </RowMenu>
               );
             })}
           </div>
@@ -835,9 +1167,16 @@ export function SchedulesView(): ReactNode {
                 <span>Severity</span>
                 <span>Finding</span>
                 <span>Change</span>
+                <span />
               </div>
               {changes.map((item) => (
-                <RegressionRow key={item.key} item={item} />
+                <RegressionRow
+                  key={item.key}
+                  item={item}
+                  open={picked?.t === "reg" && picked.key === item.key}
+                  onOpen={() => setPicked({ t: "reg", key: item.key })}
+                  onScope={() => setSelected(item.run.jobId)}
+                />
               ))}
             </>
           )}
@@ -856,41 +1195,79 @@ export function SchedulesView(): ReactNode {
                 <span>Started</span>
                 <span>Took</span>
                 <span>Result</span>
+                <span />
               </div>
               {history.map((p) => {
                 const bad = p.outcome === "failed" || p.outcome === "timeout";
+                const key = runKey(p);
+                const result = p.outcome === "ok" ? plural(p.total, "finding") : p.outcome;
                 return (
-                  <div
-                    key={`${p.jobId}-${p.device ?? ""}-${p.at}`}
-                    className="monitor-row sched-run-grid"
-                    data-failed={bad || undefined}
+                  <RowMenu
+                    key={key}
+                    title={p.jobId}
+                    sub={`${stamp(p.at)} · ${p.device ?? "fleet"} · ${result}`}
+                    onOpen={() => setPicked({ t: "run", key })}
+                    cells={{
+                      job: {
+                        value: p.jobId,
+                        filter: jobs.some((j) => j.id === p.jobId)
+                          ? () => setSelected(p.jobId)
+                          : undefined,
+                        clearFilter: selected ? () => setSelected(null) : undefined,
+                      },
+                      device: { value: p.device ?? "fleet", kind: "router" },
+                      started: { value: stamp(p.at), kind: "time" },
+                      took: { value: `${(p.durationMs / 1000).toFixed(1)} s`, kind: "duration" },
+                      result: { value: result },
+                    }}
+                    copies={[{ label: "Job ID", value: p.jobId }]}
+                    row={p}
                   >
-                    <span className="sched-mono p truncate">{p.jobId}</span>
-                    <span className="sched-mono text-muted-foreground truncate">
-                      {p.device ?? "fleet"}
-                    </span>
-                    <span className="text-muted-foreground truncate" title={stamp(p.at)}>
-                      {runTime(p.at, now)}
-                    </span>
-                    <span className="truncate tabular-nums">
-                      {(p.durationMs / 1000).toFixed(1)} s
-                    </span>
-                    <span
-                      className="flex min-w-0 items-center gap-1.5"
-                      title={
-                        p.outcome === "ok"
-                          ? `${p.added} new, ${p.worsened} worse, ${p.resolved} resolved`
-                          : undefined
-                      }
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${p.jobId}, ${result}, ${runTime(p.at, now)}`}
+                      className="monitor-row sched-run-grid"
+                      data-failed={bad || undefined}
+                      data-selected={(picked?.t === "run" && picked.key === key) || undefined}
+                      onClick={() => setPicked({ t: "run", key })}
+                      onKeyDown={onRowKey(() => setPicked({ t: "run", key }))}
                     >
-                      <StatusDot tone={OUTCOME_TONE[p.outcome]} />
-                      <span
-                        className={cn("truncate", bad ? "text-destructive" : "text-fg-secondary")}
-                      >
-                        {p.outcome === "ok" ? plural(p.total, "finding") : p.outcome}
+                      <span data-col="job" className="sched-mono p truncate">
+                        {p.jobId}
                       </span>
-                    </span>
-                  </div>
+                      <span data-col="device" className="sched-mono text-muted-foreground truncate">
+                        {p.device ?? "fleet"}
+                      </span>
+                      <span
+                        data-col="started"
+                        className="text-muted-foreground truncate"
+                        title={stamp(p.at)}
+                      >
+                        {runTime(p.at, now)}
+                      </span>
+                      <span data-col="took" className="truncate tabular-nums">
+                        {(p.durationMs / 1000).toFixed(1)} s
+                      </span>
+                      <span
+                        data-col="result"
+                        className="flex min-w-0 items-center gap-1.5"
+                        title={
+                          p.outcome === "ok"
+                            ? `${p.added} new, ${p.worsened} worse, ${p.resolved} resolved`
+                            : undefined
+                        }
+                      >
+                        <StatusDot tone={OUTCOME_TONE[p.outcome]} />
+                        <span
+                          className={cn("truncate", bad ? "text-destructive" : "text-fg-secondary")}
+                        >
+                          {result}
+                        </span>
+                      </span>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
                 );
               })}
               {points.length > HISTORY_LIMIT && (
@@ -933,6 +1310,7 @@ export function SchedulesView(): ReactNode {
         {null}
       </MonitorDialog>
 
+      {drawer}
       {editor}
     </div>
   );

@@ -5,6 +5,8 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { LineHover } from "./kit";
+import type { TipCard } from "./kit";
 import { useLineDraw } from "./monitoring-ui";
 
 export interface ThroughputPoint {
@@ -84,6 +86,45 @@ export function ThroughputChart({
     if (current.length) runs.push(current);
     return { key, runs, color: key === "tx" ? "var(--sig)" : "var(--brand)" };
   });
+  // One hover stop per run, on the TX dot (or RX, or the baseline for a failed run).
+  const stops = points.map((p): [number, number] => [
+    x(p.at),
+    p.tx !== null ? y(p.tx) : p.rx !== null ? y(p.rx) : HEIGHT - PAD,
+  ]);
+  const mbps = (v: number | null) =>
+    v === null ? "No result" : `${v.toLocaleString("en-US")} Mbps`;
+  const card = (i: number): TipCard => {
+    const p = points[i]!;
+    const prev = points
+      .slice(0, i)
+      .reverse()
+      .find((q) => q.tx !== null);
+    const delta = p.tx !== null && prev?.tx != null ? Math.round((p.tx - prev.tx) * 10) / 10 : null;
+    return {
+      title: new Date(p.at).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      sub: `Run ${i + 1} of ${points.length}`,
+      led: p.failed ? "bad" : "ok",
+      rows: [
+        { label: "Source TX", value: mbps(p.tx), color: "var(--sig)" },
+        { label: "Source RX", value: mbps(p.rx), color: "var(--brand)" },
+        ...(p.failed ? [{ label: "Run", value: "Failed or interrupted" }] : []),
+      ],
+      ...(delta !== null
+        ? {
+            foot: {
+              label: "TX vs the run before",
+              value: `${delta >= 0 ? "+" : ""}${delta.toLocaleString("en-US")} Mbps`,
+              tone: delta >= 0 ? ("up" as const) : ("down" as const),
+            },
+          }
+        : {}),
+    };
+  };
 
   return (
     <div>
@@ -145,6 +186,16 @@ export function ThroughputChart({
                 ))}
               </g>
             )),
+          )}
+          {stops.length > 0 && (
+            <LineHover
+              width={width}
+              height={HEIGHT}
+              points={stops}
+              card={card}
+              label="Throughput per run. Use the arrow keys to read each run."
+              band={Math.max(12, Math.min(40, width / Math.max(1, points.length)))}
+            />
           )}
         </svg>
         <span className="absolute top-[-4px] left-1 font-mono text-[10px] text-faint">

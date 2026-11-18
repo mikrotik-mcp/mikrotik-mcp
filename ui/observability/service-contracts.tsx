@@ -23,6 +23,18 @@ import {
   useStaggerIn,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import {
+  Checkbox,
+  DetailList,
+  Field,
+  NumberInput,
+  RowDrawer,
+  RowMenu,
+  RowMore,
+  TextInput,
+  tipProps,
+} from "./kit";
+import type { Tone as KitTone } from "./kit";
 import "./service-contracts.css";
 
 type RunStatus = ContractRun["status"];
@@ -38,6 +50,13 @@ const RESULT_WORD: Record<ContractCheckResult["status"], string> = {
   unknown: "Unknown",
 };
 const TONE: Record<RunStatus, Tone> = { pass: "good", fail: "bad", unknown: "warn" };
+const KIT_TONE: Record<Tone, KitTone> = {
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  brand: "acc",
+  default: "off",
+};
 const NOTE_TONE: Record<RunStatus, "good" | "warn" | "bad"> = {
   pass: "good",
   fail: "bad",
@@ -129,7 +148,7 @@ function RunStrip({
     .map(([s, n]) => `${n} ${s === "pass" ? "passed" : s === "fail" ? "failed" : "unknown"}`);
   return (
     <span
-      className={className ?? "sc-strip"}
+      className={`${className ?? "sc-strip"} kit-tips`}
       style={{ "--bar-h": `${height}px`, "--bar-w": `${width}px` } as CSSProperties}
       role="img"
       aria-label={
@@ -141,13 +160,29 @@ function RunStrip({
       {Array.from({ length: empty }, (_, i) => (
         <i key={`empty-${i}`} data-status="none" />
       ))}
-      {shown.map((r) => (
-        <i
-          key={r.id}
-          data-status={r.status}
-          title={`${STATUS_WORD[r.status]} · ${new Date(r.startedAt).toLocaleString()}`}
-        />
-      ))}
+      {shown.map((r) => {
+        const failed = r.checks.filter((k) => k.status === "fail").length;
+        const unknown = r.checks.filter((k) => k.status === "unknown").length;
+        return (
+          <i
+            key={r.id}
+            data-status={r.status}
+            {...tipProps(() => ({
+              title: STATUS_WORD[r.status],
+              sub: new Date(r.startedAt).toLocaleString(),
+              led: KIT_TONE[TONE[r.status]],
+              rows: [
+                { label: "Checks", value: num(r.checks.length) },
+                { label: "Passed", value: num(r.checks.length - failed - unknown) },
+                ...(failed ? [{ label: "Failed", value: num(failed) }] : []),
+                ...(unknown ? [{ label: "No answer", value: num(unknown) }] : []),
+              ],
+              foot: { label: "Took", value: `${num(r.finishedAt - r.startedAt)} ms` },
+            }))}
+            tabIndex={-1}
+          />
+        );
+      })}
     </span>
   );
 }
@@ -494,33 +529,70 @@ export function ServiceContractsView(): ReactNode {
                 contracts.map((c) => {
                   const last = lastOf(c);
                   const on = c.id === contract?.id;
+                  const word = last ? STATUS_WORD[last.status] : c.id in history ? "Not run" : "…";
                   return (
-                    <button
+                    <RowMenu
                       key={c.id}
-                      type="button"
-                      className="monitor-row sc-contract-row"
-                      data-selected={on || undefined}
-                      aria-pressed={on}
-                      onClick={() => setSelected(c.id)}
+                      title={c.name}
+                      sub={`${plural(c.checks.length, "endpoint")} · ${word}`}
+                      onOpen={() => setSelected(c.id)}
+                      cells={{ name: { value: c.name }, status: { value: word, copy: false } }}
+                      copies={[{ label: "Contract ID", value: c.id }]}
+                      row={c}
+                      actions={[
+                        {
+                          label: "Run checks",
+                          icon: <Play aria-hidden="true" />,
+                          disabled: busy,
+                          onSelect: () => void show(c.id, true),
+                        },
+                        {
+                          label: "History",
+                          icon: <Clock aria-hidden="true" />,
+                          disabled: busy,
+                          onSelect: () => {
+                            setHistoryOpen(true);
+                            void show(c.id);
+                          },
+                        },
+                      ]}
                     >
-                      <span className="sc-contract-cell">
-                        <span className="sc-contract-name">
-                          <StatusDot tone={last ? TONE[last.status] : "default"} />
-                          <span className="p truncate">{c.name}</span>
-                        </span>
-                        <span className="sc-contract-meta truncate">
-                          {plural(c.checks.length, "endpoint")} · max {num(maxLatency(c))} ms
-                          {c.packetSuiteId ? " · packet suite" : ""}
-                        </span>
-                      </span>
-                      <span
-                        className={
-                          last ? `sc-word ${TEXT[last.status]}` : "sc-word text-muted-foreground"
-                        }
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="monitor-row sc-contract-row"
+                        data-selected={on || undefined}
+                        aria-pressed={on}
+                        onClick={() => setSelected(c.id)}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelected(c.id);
+                          }
+                        }}
                       >
-                        {last ? STATUS_WORD[last.status] : c.id in history ? "Not run" : "…"}
-                      </span>
-                    </button>
+                        <span data-col="name" className="sc-contract-cell">
+                          <span className="sc-contract-name">
+                            <StatusDot tone={last ? TONE[last.status] : "default"} />
+                            <span className="p truncate">{c.name}</span>
+                          </span>
+                          <span className="sc-contract-meta truncate">
+                            {plural(c.checks.length, "endpoint")} · max {num(maxLatency(c))} ms
+                            {c.packetSuiteId ? " · packet suite" : ""}
+                          </span>
+                        </span>
+                        <span
+                          data-col="status"
+                          className={
+                            last ? `sc-word ${TEXT[last.status]}` : "sc-word text-muted-foreground"
+                          }
+                        >
+                          {word}
+                        </span>
+                        <RowMore />
+                      </div>
+                    </RowMenu>
                   );
                 })
               )}
@@ -586,31 +658,25 @@ export function ServiceContractsView(): ReactNode {
               {error}
             </MonitorNote>
           )}
-          <label className="monitor-fl">
-            <span className="monitor-label">Contract name</span>
-            <input
-              className="monitor-input"
+          <Field label="Contract name">
+            <TextInput
               value={name}
               maxLength={120}
               required
               disabled={busy}
-              onChange={(e) => setName(e.target.value)}
+              onChange={setName}
               placeholder="Branch checkout availability"
             />
-          </label>
-          <label className="monitor-fl">
-            <span className="monitor-label">Maximum latency (ms)</span>
-            <input
-              className="monitor-input"
-              type="number"
+          </Field>
+          <Field label="Maximum latency (ms)">
+            <NumberInput
               min={1}
               max={10000}
               value={latency}
-              required
               disabled={busy}
-              onChange={(e) => setLatency(Number(e.target.value))}
+              onChange={(n) => setLatency(n ?? 1)}
             />
-          </label>
+          </Field>
           <fieldset className="monitor-fl">
             <legend className="monitor-label">Approved endpoints · choose up to ten</legend>
             {!targets.length ? (
@@ -621,37 +687,39 @@ export function ServiceContractsView(): ReactNode {
             ) : (
               <div className="sc-targets">
                 {targets.map((t) => (
-                  <label key={t.name} className="monitor-check sc-target">
-                    <input
-                      type="checkbox"
-                      aria-label={t.name}
-                      checked={selectedTargets.includes(t.name)}
-                      disabled={
-                        busy || (!selectedTargets.includes(t.name) && selectedTargets.length >= 10)
-                      }
-                      onChange={(e) =>
-                        setSelectedTargets((v) =>
-                          e.target.checked ? [...v, t.name] : v.filter((n) => n !== t.name),
-                        )
-                      }
-                    />
-                    <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                    <span className="font-mono text-[12px] text-muted-foreground">{t.kind}</span>
-                  </label>
+                  <Checkbox
+                    key={t.name}
+                    className="sc-target"
+                    checked={selectedTargets.includes(t.name)}
+                    disabled={
+                      busy || (!selectedTargets.includes(t.name) && selectedTargets.length >= 10)
+                    }
+                    onCheckedChange={(on) =>
+                      setSelectedTargets((v) =>
+                        on ? [...v, t.name] : v.filter((n) => n !== t.name),
+                      )
+                    }
+                    label={
+                      <>
+                        <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                        <span className="font-mono text-[12px] text-muted-foreground">
+                          {t.kind}
+                        </span>
+                      </>
+                    }
+                  />
                 ))}
               </div>
             )}
           </fieldset>
-          <label className="monitor-fl">
-            <span className="monitor-label">Saved packet suite ID · optional</span>
-            <input
-              className="monitor-input"
+          <Field label="Saved packet suite ID" optional="optional">
+            <TextInput
               value={suite}
               disabled={busy}
-              onChange={(e) => setSuite(e.target.value)}
+              onChange={setSuite}
               placeholder="Fresh-export simulation, not live packet proof"
             />
-          </label>
+          </Field>
           <p className="monitor-hint">
             HTTPS checks made here expect status 200; MCP supports other explicit codes. Scheduled
             runs are an administrator choice.
@@ -723,6 +791,8 @@ function CheckRow({
   durationMs,
   limit,
   detail,
+  selected = false,
+  onOpen,
 }: {
   target: string;
   kind: string;
@@ -731,6 +801,9 @@ function CheckRow({
   durationMs?: number;
   limit?: number;
   detail: string;
+  selected?: boolean;
+  /** Opens the check in the row drawer. */
+  onOpen: () => void;
 }): ReactNode {
   const timed = status != null && durationMs != null && durationMs > 0 && kind !== "simulation";
   const over = timed && limit != null && durationMs > limit;
@@ -742,28 +815,91 @@ function CheckRow({
       : kind === "simulation" && status !== "fail"
         ? "brand"
         : TONE[status];
+  const time = timed ? `${num(durationMs)} ms` : "—";
   return (
-    <div className="monitor-row sc-check-grid" data-failed={status === "fail" || undefined}>
-      <StatusDot tone={tone} />
-      <span className="sc-endpoint">
-        <span className="p truncate" title={target}>
-          <span className="font-mono">{target}</span>
+    <RowMenu
+      title={target}
+      sub={`${kind} · ${status ? RESULT_WORD[status] : "Not run"}`}
+      onOpen={onOpen}
+      cells={{
+        endpoint: { value: target },
+        result: { value: status ? RESULT_WORD[status] : "Not run", copy: false },
+        time: { value: timed ? time : "", kind: "duration" },
+        detail: { value: detail },
+      }}
+      copies={[{ label: "Endpoint", value: target }]}
+      row={{ target, kind, status, durationMs, limit, detail }}
+    >
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${target}, ${status ? RESULT_WORD[status] : "Not run"}`}
+        className="monitor-row sc-check-grid"
+        data-failed={status === "fail" || undefined}
+        data-selected={selected || undefined}
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+      >
+        <StatusDot tone={tone} />
+        <span data-col="endpoint" className="sc-endpoint">
+          <span className="p truncate" title={target}>
+            <span className="font-mono">{target}</span>
+          </span>
+          <span className="truncate text-[12px] text-muted-foreground">{kind}</span>
         </span>
-        <span className="truncate text-[12px] text-muted-foreground">{kind}</span>
-      </span>
-      <span className={status ? `font-medium ${TEXT[status]}` : "text-muted-foreground"}>
-        {status ? RESULT_WORD[status] : "Not run"}
-      </span>
-      <span className="monitor-meter">
-        <span className="monitor-bar">
-          <span data-tone={over ? "bad" : "good"} style={{ width: `${width}%` }} />
+        <span
+          data-col="result"
+          className={status ? `font-medium ${TEXT[status]}` : "text-muted-foreground"}
+        >
+          {status ? RESULT_WORD[status] : "Not run"}
         </span>
-        <span className="sc-ms">{timed ? `${num(durationMs)} ms` : "—"}</span>
-      </span>
-      <span className="truncate text-[12px] text-muted-foreground" title={detail}>
-        {detail}
-      </span>
-    </div>
+        <span
+          data-col="time"
+          className="monitor-meter"
+          {...(timed
+            ? {
+                ...tipProps(() => ({
+                  title: target,
+                  sub: kind,
+                  led: over ? ("bad" as const) : ("ok" as const),
+                  rows: [
+                    { label: "Time", value: time },
+                    { label: "Limit", value: limit != null ? `${num(limit)} ms` : "—" },
+                  ],
+                  foot:
+                    limit != null
+                      ? {
+                          label: over ? "Over the limit by" : "Under the limit by",
+                          value: `${num(Math.abs(durationMs - limit))} ms`,
+                          tone: over ? ("up" as const) : ("down" as const),
+                        }
+                      : undefined,
+                })),
+                tabIndex: -1,
+              }
+            : {})}
+        >
+          <span className="monitor-bar">
+            <span data-tone={over ? "bad" : "good"} style={{ width: `${width}%` }} />
+          </span>
+          <span className="sc-ms">{time}</span>
+        </span>
+        <span
+          data-col="detail"
+          className="truncate text-[12px] text-muted-foreground"
+          title={detail}
+        >
+          {detail}
+        </span>
+        <RowMore />
+      </div>
+    </RowMenu>
   );
 }
 
@@ -788,6 +924,27 @@ function ContractPanel({
 }): ReactNode {
   const rowsRef = useRef<HTMLDivElement>(null);
   useStaggerIn(rowsRef, ".monitor-row", latest?.id ?? contract.id);
+  // The check drawer, by row index; it closes when the contract or run changes.
+  const [open, setOpen] = useState<{ key: string; i: number } | null>(null);
+  const viewKey = `${contract.id}:${latest?.id ?? ""}`;
+  const openIndex = open?.key === viewKey ? open.i : null;
+  const checkRows = latest
+    ? latest.checks.map((k) => ({
+        target: k.target,
+        kind: k.kind,
+        status: k.status as RunStatus | undefined,
+        durationMs: k.durationMs as number | undefined,
+        detail: k.detail,
+      }))
+    : contract.checks.map((k) => ({
+        target: k.target,
+        kind: kinds[k.target] ?? "check",
+        status: undefined as RunStatus | undefined,
+        durationMs: undefined as number | undefined,
+        detail: `Limit ${num(k.maxLatencyMs)} ms${
+          kinds[k.target] === "https" ? ` · expects ${k.expectedStatus.join(", ")}` : ""
+        }`,
+      }));
   const strip = runs.slice(0, STRIP_RUNS);
   const count = (s: RunStatus): number => strip.filter((r) => r.status === s).length;
   const counts = [
@@ -872,30 +1029,77 @@ function ContractPanel({
           <span>Result</span>
           <span>Time vs limit</span>
           <span>Detail</span>
+          <span />
         </div>
-        {latest
-          ? latest.checks.map((k, i) => (
-              <CheckRow
-                key={`${k.target}-${i}`}
-                target={k.target}
-                kind={k.kind}
-                status={k.status}
-                durationMs={k.durationMs}
-                limit={limitOf(k.target)}
-                detail={k.detail}
-              />
-            ))
-          : contract.checks.map((k, i) => (
-              <CheckRow
-                key={`${k.target}-${i}`}
-                target={k.target}
-                kind={kinds[k.target] ?? "check"}
-                detail={`Limit ${num(k.maxLatencyMs)} ms${
-                  kinds[k.target] === "https" ? ` · expects ${k.expectedStatus.join(", ")}` : ""
-                }`}
-              />
-            ))}
+        {checkRows.map((k, i) => (
+          <CheckRow
+            key={`${k.target}-${i}`}
+            target={k.target}
+            kind={k.kind}
+            status={k.status}
+            durationMs={k.durationMs}
+            limit={latest ? limitOf(k.target) : undefined}
+            detail={k.detail}
+            selected={openIndex === i}
+            onOpen={() => setOpen({ key: viewKey, i })}
+          />
+        ))}
       </div>
+      {openIndex != null &&
+        checkRows[openIndex] &&
+        (() => {
+          const k = checkRows[openIndex]!;
+          const limit = limitOf(k.target);
+          const timed =
+            k.status != null && k.durationMs != null && k.durationMs > 0 && k.kind !== "simulation";
+          const go = (i: number) => setOpen({ key: viewKey, i });
+          return (
+            <RowDrawer
+              open
+              onClose={() => setOpen(null)}
+              label={`Check details: ${k.target}`}
+              status={
+                k.status
+                  ? { tone: KIT_TONE[TONE[k.status]], label: RESULT_WORD[k.status] }
+                  : { tone: "off", label: "Not run" }
+              }
+              title={<span className="font-mono">{k.target}</span>}
+              meta={`${contract.name} · ${k.kind}`}
+              rowKey={`${viewKey}:${openIndex}`}
+              nav={{
+                index: openIndex,
+                total: checkRows.length,
+                onPrev: openIndex > 0 ? () => go(openIndex - 1) : undefined,
+                onNext: openIndex < checkRows.length - 1 ? () => go(openIndex + 1) : undefined,
+              }}
+              storageKey="service-contracts"
+              primary={
+                <MonitorButton
+                  size="sm"
+                  icon={<Play aria-hidden="true" />}
+                  disabled={busy}
+                  onClick={onRun}
+                >
+                  Run checks
+                </MonitorButton>
+              }
+            >
+              <DetailList
+                items={[
+                  { label: "Endpoint", value: k.target, mono: true },
+                  { label: "Kind", value: k.kind },
+                  { label: "Result", value: k.status ? RESULT_WORD[k.status] : "Not run" },
+                  { label: "Time", value: timed ? `${num(k.durationMs!)} ms` : "—", mono: true },
+                  { label: "Limit", value: limit != null ? `${num(limit)} ms` : "—", mono: true },
+                  { label: "Detail", value: k.detail },
+                  ...(latest
+                    ? [{ label: "Run", value: new Date(latest.startedAt).toLocaleString() }]
+                    : []),
+                ]}
+              />
+            </RowDrawer>
+          );
+        })()}
 
       {strip.length > 0 && (
         <div className="monitor-foot sc-runs">

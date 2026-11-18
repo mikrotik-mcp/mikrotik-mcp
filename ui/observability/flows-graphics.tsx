@@ -9,6 +9,8 @@ import type { ReactNode } from "react";
 import { animate, createScope, stagger } from "animejs";
 import type { Scope } from "animejs";
 import { useLineDraw } from "./monitoring-ui";
+import { LineHover, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 
@@ -81,7 +83,7 @@ export function FlowRadar({
   return (
     <svg
       ref={root}
-      className="flows-radar"
+      className="flows-radar kit-tips"
       viewBox={`0 0 ${RADAR_W} ${RADAR_H}`}
       width="100%"
       height={RADAR_H}
@@ -140,8 +142,24 @@ export function FlowRadar({
           key={n.label}
           className="flows-radar-node"
           style={{ transformOrigin: `${n.x}px ${n.y}px` }}
+          {...tipProps({
+            title: n.label,
+            sub: `to UDP ${hub}`,
+            led: n.status === "faint" ? "off" : n.status,
+            rows: [
+              {
+                label: "Status",
+                value:
+                  n.status === "ok"
+                    ? "Sending"
+                    : n.status === "faint"
+                      ? "Collector stopped"
+                      : "Silent",
+                color: STATUS_COLOR[n.status],
+              },
+            ],
+          })}
         >
-          <title>{n.label}</title>
           <circle
             cx={n.x}
             cy={n.y}
@@ -171,8 +189,8 @@ const LINE_COLORS = ["var(--sig)", "var(--brand)"];
 
 /**
  * The board's line chart: dashed quarter lines, one line per series (the
- * first one shaded), and time labels under it. `hits` adds an invisible
- * column per point with a tooltip.
+ * first one shaded), and time labels under it. Hovering snaps to the nearest
+ * point and shows its `hits` text as a card.
  */
 export function FlowLines({
   series,
@@ -185,7 +203,7 @@ export function FlowLines({
 }: {
   series: number[][];
   labels: string[];
-  /** One tooltip per point. */
+  /** One line per point, "time · total", shown in the card. */
   hits?: string[];
   drawKey: string;
   label: string;
@@ -202,7 +220,22 @@ export function FlowLines({
     const values = s.length === 1 ? [s[0], s[0]] : s;
     return `M${values.map((v, i) => `${x(i)},${y(v)}`).join(" L")}`;
   });
-  const step = width / (n - 1);
+  const main = series[0] ?? [];
+  const points = main.map((v, i): [number, number] => [x(i), y(v)]);
+  // `hits` reads "12:30 · 4.1 MB": the time, then the total for that point.
+  const card = (i: number): TipCard => {
+    const [when, total] = (hits?.[i] ?? "").split(" · ");
+    if (when && total)
+      return { title: when, rows: [{ label: "Bytes", value: total, color: LINE_COLORS[0] }] };
+    return {
+      title: `Point ${i + 1} of ${main.length}`,
+      rows: series.map((s, k) => ({
+        label: `Series ${k + 1}`,
+        value: (s[i] ?? 0).toLocaleString(),
+        color: LINE_COLORS[k % LINE_COLORS.length],
+      })),
+    };
+  };
   return (
     <div ref={ref}>
       <svg
@@ -241,18 +274,16 @@ export function FlowLines({
             />
           </g>
         ))}
-        {hits?.map((t, i) => (
-          <rect
-            key={i}
-            x={Math.max(0, i * step - step / 2)}
-            y="0"
-            width={Math.min(width, i * step + step / 2) - Math.max(0, i * step - step / 2)}
+        {points.length > 0 && (
+          <LineHover
+            width={width}
             height={height}
-            fill="transparent"
-          >
-            <title>{t}</title>
-          </rect>
-        ))}
+            points={points}
+            card={card}
+            label={`${label}. Use the arrow keys to read each point.`}
+            band={Math.max(12, width / n)}
+          />
+        )}
       </svg>
       <div className="flows-chart-axis">
         {labels.map((l, i) => (

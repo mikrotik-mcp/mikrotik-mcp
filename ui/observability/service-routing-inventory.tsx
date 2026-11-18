@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Network,
   Route,
-  X,
 } from "lucide-react";
 import type { RoutingInventory, RoutingSectionKey } from "../../src/service-routing/inventory";
 import type { Row, RoutingPolicy } from "../../src/service-routing/model";
@@ -24,7 +23,17 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { RowDrawer, RowMenu, RowMore } from "./kit";
+import type { Tone as KitTone } from "./kit";
 import { cn } from "@/lib/utils";
+
+const KIT_TONE: Record<Tone, KitTone> = {
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  brand: "acc",
+  default: "off",
+};
 
 export function useRoutingInventory(device: string, paused: boolean) {
   const [data, setData] = useState<RoutingInventory>();
@@ -167,7 +176,7 @@ const groups = {
 >;
 type Group = keyof typeof groups;
 type Entry = { row: Row; section: RoutingSectionKey; family: string };
-const COLS = "grid-cols-[48px_minmax(0,1fr)_minmax(0,1.1fr)_84px_76px_70px]";
+const COLS = "grid-cols-[48px_minmax(0,1fr)_minmax(0,1.1fr)_84px_76px_70px_26px]";
 
 const familyOf = (key: RoutingSectionKey, row: Row) =>
   key.endsWith("4")
@@ -569,7 +578,7 @@ export function RouterRoutingInventory({
             <RoutingAddressBrowser key={data.device} device={data.device} />
           </div>
         ) : (
-          <div className="sr-inventory" data-inspecting={selected ? "" : undefined}>
+          <div className="sr-inventory">
             <div className="flex min-w-0 flex-col">
               <div className="overflow-x-auto" role="table" aria-label={groups[group].label}>
                 <div className={cn("monitor-thead min-w-[600px]", COLS)} role="row">
@@ -583,6 +592,7 @@ export function RouterRoutingInventory({
                   <span role="columnheader">
                     <span className="sr-only">Details</span>
                   </span>
+                  <span role="columnheader" />
                 </div>
                 {filtered.slice(currentPage * 40, (currentPage + 1) * 40).map((entry) => {
                   const r = entry.row,
@@ -594,71 +604,138 @@ export function RouterRoutingInventory({
                     selected?.section === entry.section &&
                     (selected.row === entry.row ||
                       (!!r[".id"] && selected.row[".id"] === r[".id"]));
+                  const tableName = entry.section.startsWith("routes")
+                    ? r["routing-table"] || "main"
+                    : entry.section.startsWith("mangle")
+                      ? r.chain || "—"
+                      : entry.section === "rules"
+                        ? r.table || "—"
+                        : "—";
+                  const tableFilter =
+                    tableName !== "—" && tableNames.includes(tableName)
+                      ? () => {
+                          resetPage();
+                          setTable(tableName);
+                        }
+                      : undefined;
                   return (
-                    <div
+                    <RowMenu
                       key={`${entry.section}-${r[".id"] || r["#"]}`}
-                      role="row"
-                      className={cn("monitor-row min-w-[600px]", COLS)}
-                      data-selected={isSelected || undefined}
-                      data-failed={state.tone === "bad" || undefined}
+                      title={match}
+                      sub={`${KIND[entry.section] ?? "rule"} #${r["#"]} · ${entry.family} · ${state.label}`}
+                      onOpen={() => inspect(entry)}
+                      cells={{
+                        order: { value: `#${r["#"]}` },
+                        match: {
+                          value: match,
+                          search: () => {
+                            resetPage();
+                            setQuery(match);
+                          },
+                        },
+                        action: { value: target },
+                        table: {
+                          value: tableName === "—" ? "" : tableName,
+                          filter: entry.section.startsWith("mangle") ? undefined : tableFilter,
+                          clearFilter:
+                            table !== "all"
+                              ? () => {
+                                  resetPage();
+                                  setTable("all");
+                                }
+                              : undefined,
+                        },
+                        state: { value: state.label, copy: false },
+                      }}
+                      copies={[
+                        { label: "Match", value: match },
+                        ...(r[".id"] ? [{ label: "Router ID", value: r[".id"] }] : []),
+                      ]}
+                      row={r}
                     >
-                      <span role="cell" className="flex min-w-0 flex-col">
-                        <span className="font-mono text-[13px] text-fg-secondary">#{r["#"]}</span>
-                        <span className="text-[12px] leading-[17px] text-faint">
-                          {entry.family}
-                        </span>
-                      </span>
-                      <span role="cell" className="flex min-w-0 flex-col items-start gap-0.5">
-                        <span
-                          className="max-w-full truncate font-mono text-[12px] font-medium text-foreground"
-                          title={match}
-                        >
-                          {match}
-                        </span>
-                        {r.dynamic === "yes" ? (
-                          <span className="monitor-chip">Dynamic</span>
-                        ) : (
-                          comment && (
-                            <span className="max-w-full truncate text-[12px] text-muted-foreground">
-                              {comment}
-                            </span>
-                          )
-                        )}
-                      </span>
-                      <span role="cell" className="min-w-0">
-                        <ActionCell
-                          entry={entry}
-                          target={entry.section.startsWith("rules") ? "" : target}
-                        />
-                      </span>
-                      <span
-                        role="cell"
-                        className="truncate font-mono text-[12px] text-fg-secondary"
+                      <div
+                        role="row"
+                        tabIndex={0}
+                        className={cn("monitor-row min-w-[600px]", COLS)}
+                        data-selected={isSelected || undefined}
+                        data-failed={state.tone === "bad" || undefined}
+                        onClick={() => inspect(entry)}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            inspect(entry);
+                          }
+                        }}
                       >
-                        {entry.section.startsWith("routes")
-                          ? r["routing-table"] || "main"
-                          : entry.section.startsWith("mangle")
-                            ? r.chain || "—"
-                            : entry.section === "rules"
-                              ? r.table || "—"
-                              : "—"}
-                      </span>
-                      <span role="cell" className="flex items-center gap-1.5 text-[12px]">
-                        <StatusDot tone={state.tone} />
-                        {state.label}
-                      </span>
-                      <span role="cell" className="min-w-0">
-                        <MonitorButton
-                          size="sm"
-                          variant="ghost"
-                          aria-label={`Inspect ${match}`}
-                          aria-expanded={isSelected}
-                          onClick={() => (isSelected ? setSelected(undefined) : inspect(entry))}
+                        <span role="cell" data-col="order" className="flex min-w-0 flex-col">
+                          <span className="font-mono text-[13px] text-fg-secondary">#{r["#"]}</span>
+                          <span className="text-[12px] leading-[17px] text-faint">
+                            {entry.family}
+                          </span>
+                        </span>
+                        <span
+                          role="cell"
+                          data-col="match"
+                          className="flex min-w-0 flex-col items-start gap-0.5"
                         >
-                          Inspect
-                        </MonitorButton>
-                      </span>
-                    </div>
+                          <span
+                            className="max-w-full truncate font-mono text-[12px] font-medium text-foreground"
+                            title={match}
+                          >
+                            {match}
+                          </span>
+                          {r.dynamic === "yes" ? (
+                            <span className="monitor-chip">Dynamic</span>
+                          ) : (
+                            comment && (
+                              <span className="max-w-full truncate text-[12px] text-muted-foreground">
+                                {comment}
+                              </span>
+                            )
+                          )}
+                        </span>
+                        <span role="cell" data-col="action" className="min-w-0">
+                          <ActionCell
+                            entry={entry}
+                            target={entry.section.startsWith("rules") ? "" : target}
+                          />
+                        </span>
+                        <span
+                          role="cell"
+                          data-col="table"
+                          className="truncate font-mono text-[12px] text-fg-secondary"
+                        >
+                          {tableName}
+                        </span>
+                        <span
+                          role="cell"
+                          data-col="state"
+                          className="flex items-center gap-1.5 text-[12px]"
+                        >
+                          <StatusDot tone={state.tone} />
+                          {state.label}
+                        </span>
+                        <span role="cell" className="min-w-0">
+                          <MonitorButton
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Inspect ${match}`}
+                            aria-expanded={isSelected}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isSelected) setSelected(undefined);
+                              else inspect(entry);
+                            }}
+                          >
+                            Inspect
+                          </MonitorButton>
+                        </span>
+                        <span role="cell">
+                          <RowMore />
+                        </span>
+                      </div>
+                    </RowMenu>
                   );
                 })}
               </div>
@@ -709,79 +786,100 @@ export function RouterRoutingInventory({
               </div>
             </div>
 
-            {selected && selectedSummary && (
-              <aside
-                className="sr-inspect flex min-w-0 flex-col"
-                aria-label={`Inspect ${KIND[selected.section] ?? "rule"} ${selected.row["#"]}`}
-              >
-                <div className="flex flex-col gap-1.5 border-b border-line px-[18px] pt-3.5 pb-3">
-                  <div className="flex items-center">
-                    <span className="sr-eyebrow flex-1">
-                      Inspect · {KIND[selected.section] ?? "rule"} #{selected.row["#"]}
-                    </span>
-                    <button
-                      type="button"
-                      className="monitor-icon-btn"
-                      aria-label="Close"
-                      onClick={() => setSelected(undefined)}
-                    >
-                      <X aria-hidden="true" />
-                    </button>
-                  </div>
-                  <h3 className="font-mono text-[15px] font-semibold break-words text-emphasis">
-                    {selectedSummary.match}
-                    {selectedSummary.target &&
-                      ` → ${(selected.section.startsWith("routes") && selected.row.gateway) || selectedSummary.target}`}
-                  </h3>
-                  <p className="text-[12px] text-muted-foreground">
-                    <span className="font-mono">{data.sections[selected.section].path}</span> ·{" "}
-                    {data.device} · read-only
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2.5 px-[18px] py-3">
-                  {linkedLists.length > 0 && (
-                    <RoutingAddressBrowser
-                      key={`${data.device}:${selected.section}:${selected.row[".id"]}`}
-                      device={data.device}
-                      references={linkedLists}
-                      referenceFamily={selected.family === "IPv6" ? "ipv6" : "ipv4"}
-                    />
-                  )}
-                  <div
-                    className={cn(
-                      "flex flex-col gap-2.5",
-                      linkedLists.length > 0 && "border-t border-line pt-3",
-                    )}
+            {selected &&
+              selectedSummary &&
+              (() => {
+                const pageRows = filtered.slice(currentPage * 40, (currentPage + 1) * 40);
+                const at = pageRows.findIndex(
+                  (e) =>
+                    e.section === selected.section &&
+                    (e.row === selected.row ||
+                      (!!e.row[".id"] && e.row[".id"] === selected.row[".id"])),
+                );
+                const state = stateOf(selected);
+                return (
+                  <RowDrawer
+                    open
+                    onClose={() => setSelected(undefined)}
+                    label={`Inspect ${KIND[selected.section] ?? "rule"} ${selected.row["#"]}`}
+                    status={{ tone: KIT_TONE[state.tone], label: state.label }}
+                    chips={
+                      <span className="sr-eyebrow">
+                        Inspect · {KIND[selected.section] ?? "rule"} #{selected.row["#"]}
+                      </span>
+                    }
+                    title={
+                      <span className="font-mono break-words">
+                        {selectedSummary.match}
+                        {selectedSummary.target &&
+                          ` → ${(selected.section.startsWith("routes") && selected.row.gateway) || selectedSummary.target}`}
+                      </span>
+                    }
+                    meta={
+                      <>
+                        <span className="font-mono">{data.sections[selected.section].path}</span> ·{" "}
+                        {data.device} · read-only
+                      </>
+                    }
+                    rowKey={`${selected.section}-${selected.row[".id"] || selected.row["#"]}`}
+                    nav={
+                      at >= 0
+                        ? {
+                            index: at,
+                            total: pageRows.length,
+                            onPrev: at > 0 ? () => inspect(pageRows[at - 1]!) : undefined,
+                            onNext:
+                              at < pageRows.length - 1
+                                ? () => inspect(pageRows[at + 1]!)
+                                : undefined,
+                          }
+                        : undefined
+                    }
+                    storageKey="service-routing-inventory"
                   >
-                    <button
-                      type="button"
-                      aria-expanded={fieldsOpen}
-                      onClick={() => setFieldsOpen((v) => !v)}
-                      className="flex cursor-pointer items-center gap-1.5 text-[13px] text-foreground [&_svg]:size-4"
-                    >
-                      {fieldsOpen ? (
-                        <ChevronDown aria-hidden="true" />
-                      ) : (
-                        <ChevronRight aria-hidden="true" />
-                      )}
-                      Router fields · {Object.keys(selected.row).length}
-                    </button>
-                    {fieldsOpen && (
-                      <dl className="monitor-facts grid-cols-[110px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5">
-                        {Object.entries(selected.row).map(([key, value]) => (
-                          <div key={key} className="contents">
-                            <dt className="truncate font-mono text-[12px]">{key}</dt>
-                            <dd className="font-mono text-[12px] break-all">
-                              {value || "(empty)"}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
+                    {linkedLists.length > 0 && (
+                      <RoutingAddressBrowser
+                        key={`${data.device}:${selected.section}:${selected.row[".id"]}`}
+                        device={data.device}
+                        references={linkedLists}
+                        referenceFamily={selected.family === "IPv6" ? "ipv6" : "ipv4"}
+                      />
                     )}
-                  </div>
-                </div>
-              </aside>
-            )}
+                    <div
+                      className={cn(
+                        "flex flex-col gap-2.5",
+                        linkedLists.length > 0 && "border-t border-line pt-3",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        aria-expanded={fieldsOpen}
+                        onClick={() => setFieldsOpen((v) => !v)}
+                        className="flex cursor-pointer items-center gap-1.5 text-[13px] text-foreground [&_svg]:size-4"
+                      >
+                        {fieldsOpen ? (
+                          <ChevronDown aria-hidden="true" />
+                        ) : (
+                          <ChevronRight aria-hidden="true" />
+                        )}
+                        Router fields · {Object.keys(selected.row).length}
+                      </button>
+                      {fieldsOpen && (
+                        <dl className="monitor-facts grid-cols-[110px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5">
+                          {Object.entries(selected.row).map(([key, value]) => (
+                            <div key={key} className="contents">
+                              <dt className="truncate font-mono text-[12px]">{key}</dt>
+                              <dd className="font-mono text-[12px] break-all">
+                                {value || "(empty)"}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+                  </RowDrawer>
+                );
+              })()}
           </div>
         )}
       </section>

@@ -17,6 +17,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Copy,
   Eye,
   EyeOff,
   Pencil,
@@ -30,11 +31,10 @@ import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 import { UmReports } from "./um-reports";
 import { clock, limitationRate } from "./format";
+import { cn } from "@/lib/utils";
 import { generateUserPassword, UserCreatedDialog } from "./aaa-user-credentials";
 import type { CreatedUserReceipt } from "./aaa-user-credentials";
 import { UserProfileField } from "./aaa-user-profile";
-import { ActionRow, UserActionRow } from "./aaa-user-actions";
-import type { RowAction } from "./aaa-user-actions";
 import { AaaSelect, compactBytes } from "./aaa-ui";
 import {
   MonitorButton,
@@ -49,6 +49,18 @@ import {
   StatusBadge,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import {
+  DetailBlock,
+  DetailList,
+  Field as KitField,
+  NumberInput,
+  RowDrawer,
+  RowMenu,
+  RowMore,
+  SecretInput,
+  TextInput,
+} from "./kit";
+import type { RowAction } from "./kit";
 import type { OpResult } from "../../src/tools/aaa-data";
 import type { UmUserCounters } from "../../src/observability/um-reports";
 
@@ -244,26 +256,37 @@ function FormField({
         />
       </div>
     );
+  const placeholder =
+    (!creating ? field.editPlaceholder : undefined) ??
+    field.placeholder ??
+    (field.type === "password" ? "(unchanged)" : "");
   return (
-    <div className="monitor-fl">
-      <label className="monitor-label" htmlFor={id}>
-        {label}
-      </label>
-      <input
-        id={id}
-        className="monitor-input"
-        disabled={disabled}
-        type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
-        autoComplete={field.type === "password" ? "off" : undefined}
-        placeholder={
-          (!creating ? field.editPlaceholder : undefined) ??
-          field.placeholder ??
-          (field.type === "password" ? "(unchanged)" : "")
-        }
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
+    <KitField label={label} className="monitor-fl" id={id}>
+      {field.type === "number" ? (
+        <NumberInput
+          allowEmpty
+          disabled={disabled}
+          placeholder={placeholder}
+          value={value === "" || !Number.isFinite(Number(value)) ? null : Number(value)}
+          onChange={(n) => onChange(n == null ? "" : String(n))}
+        />
+      ) : field.type === "password" ? (
+        <SecretInput
+          disabled={disabled}
+          autoComplete="off"
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+        />
+      ) : (
+        <TextInput
+          disabled={disabled}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+        />
+      )}
+    </KitField>
   );
 }
 
@@ -294,6 +317,8 @@ function EntityManager({
   const [profileReady, setProfileReady] = useState(false);
   const [createdUser, setCreatedUser] = useState<CreatedUserReceipt | null>(null);
   const [cloneNotice, setCloneNotice] = useState("");
+  // The row drawer, by row id.
+  const [inspect, setInspect] = useState<string | null>(null);
   const addButton = useRef<HTMLSpanElement>(null);
   const cloneRequest = useRef<AbortController | null>(null);
   useEffect(() => () => cloneRequest.current?.abort(), [device]);
@@ -317,6 +342,7 @@ function EntityManager({
     setData(null);
     setError(null);
     setEditing(null);
+    setInspect(null);
   }
   useEffect(() => {
     void load();
@@ -581,6 +607,173 @@ function EntityManager({
           ? { tone: "good", text: "Live · 5s refresh", pulse: true }
           : { tone: "default", text: "Reading counters…" };
   const grid = { gridTemplateColumns: config.grid } as CSSProperties;
+  /** The same actions the row menu always had, in the same order. */
+  const rowActions = (r: Row): RowAction[] => {
+    const id = r[config.idKey];
+    const off = isDisabled(r);
+    if (showCounters)
+      return [
+        {
+          label: "Edit",
+          icon: <Pencil aria-hidden="true" />,
+          disabled: busy,
+          onSelect: () => openEdit(r),
+        },
+        {
+          label: "Duplicate",
+          icon: <Copy aria-hidden="true" />,
+          disabled: busy,
+          onSelect: () => void duplicateUser(r),
+        },
+        {
+          label: off ? "Enable" : "Disable",
+          icon: <Power aria-hidden="true" />,
+          disabled: busy,
+          onSelect: () => void post("toggle", { id, enable: off }),
+        },
+        {
+          label: "Remove",
+          icon: <Trash2 aria-hidden="true" />,
+          danger: true,
+          disabled: busy,
+          onSelect: () => void post("remove", { id }),
+        },
+      ];
+    return [
+      ...(!config.addOnly
+        ? [
+            {
+              label: "Edit",
+              icon: <Pencil aria-hidden="true" />,
+              disabled: busy,
+              onSelect: () => openEdit(r),
+            },
+          ]
+        : []),
+      ...(config.toggle
+        ? [
+            {
+              label: off ? "Enable" : "Disable",
+              icon: <Power aria-hidden="true" />,
+              disabled: busy,
+              onSelect: () => void post("toggle", { id, enable: off }),
+            },
+          ]
+        : []),
+      {
+        label: "Remove",
+        icon: <Trash2 aria-hidden="true" />,
+        danger: true,
+        disabled: busy,
+        onSelect: () => void post("remove", { id }),
+      },
+    ];
+  };
+  const drawer = (() => {
+    const keyOf = (r: Row) => r[config.idKey] || rowLabel(r, config);
+    const at = shown.findIndex((r) => keyOf(r) === inspect);
+    const r = at >= 0 ? shown[at]! : null;
+    if (!r) return null;
+    const off = isDisabled(r);
+    const counter = counters.rows.get(r.name);
+    const actions = rowActions(r);
+    const label = showCounters ? r.name : rowLabel(r, config);
+    return (
+      <RowDrawer
+        open
+        onClose={() => setInspect(null)}
+        label={`${singular[0]!.toUpperCase()}${singular.slice(1)} details: ${label}`}
+        status={
+          config.toggle || showCounters
+            ? { tone: off ? "off" : "ok", label: off ? "disabled" : "enabled" }
+            : undefined
+        }
+        title={label}
+        meta={`${config.panel} · ${device}`}
+        rowKey={keyOf(r)}
+        nav={{
+          index: at,
+          total: shown.length,
+          onPrev: at > 0 ? () => setInspect(keyOf(shown[at - 1]!)) : undefined,
+          onNext: at < shown.length - 1 ? () => setInspect(keyOf(shown[at + 1]!)) : undefined,
+        }}
+        storageKey={`aaa-${config.slug}`}
+        actions={actions
+          .filter((a) => a.label !== "Edit")
+          .map((a, i) => (
+            <MonitorButton
+              key={i}
+              size="sm"
+              variant={a.danger ? "danger" : "ghost"}
+              disabled={a.disabled}
+              onClick={a.onSelect}
+            >
+              {a.label}
+            </MonitorButton>
+          ))}
+        primary={
+          actions.some((a) => a.label === "Edit") ? (
+            <MonitorButton
+              size="sm"
+              variant="primary"
+              icon={<Pencil aria-hidden="true" />}
+              disabled={busy}
+              onClick={() => openEdit(r)}
+            >
+              Edit
+            </MonitorButton>
+          ) : undefined
+        }
+      >
+        <DetailList
+          items={config.columns
+            .filter((c) => c.key !== "_status")
+            .map((c) => ({
+              label: c.label,
+              value:
+                config.slug === "um-limitations" &&
+                (c.key === "rate-limit-rx" || c.key === "rate-limit-tx")
+                  ? limitationRate(r[c.key])
+                  : r[c.key] || "—",
+            }))}
+        />
+        {showCounters && (
+          <DetailBlock label="Usage" aside="User Manager totals">
+            <DetailList
+              items={[
+                {
+                  label: "Active connections",
+                  value: counter?.active == null ? "Connection count unknown" : counter.active,
+                },
+                {
+                  label: "Total connected",
+                  value: counter?.seconds == null ? "—" : connectionTime(counter.seconds),
+                  mono: true,
+                },
+                {
+                  label: "Last connection",
+                  value: counter?.lastConnection
+                    ? lastConnection(counter.lastConnection).join(" ")
+                    : "Unknown",
+                  mono: true,
+                },
+                {
+                  label: "↓ Download",
+                  value: counter?.download == null ? "—" : compactBytes(counter.download),
+                  mono: true,
+                },
+                {
+                  label: "↑ Upload",
+                  value: counter?.upload == null ? "—" : compactBytes(counter.upload),
+                  mono: true,
+                },
+              ]}
+            />
+          </DetailBlock>
+        )}
+      </RowDrawer>
+    );
+  })();
   const creating = editing === "new";
   const fields = config.fields.filter((fd) => fd.key !== "comment");
   const comment = config.fields.find((fd) => fd.key === "comment");
@@ -698,6 +891,7 @@ function EntityManager({
                         {config.columns.map((c) => (
                           <td
                             key={c.key}
+                            data-col={c.key}
                             title={c.key === "_status" ? undefined : (r[c.key] ?? "")}
                             className={
                               c.key === config.columns[0].key ? "aaa-cell-main" : undefined
@@ -770,55 +964,51 @@ function EntityManager({
                         )}
                       </>
                     );
-                    if (showCounters) {
-                      return (
-                        <UserActionRow
-                          key={`${device}:${id}`}
-                          name={r.name}
-                          busy={busy}
-                          disabled={off}
+                    const actions = rowActions(r);
+                    const label = rowLabel(r, config);
+                    return (
+                      <RowMenu
+                        key={showCounters ? `${device}:${id}` : id || label}
+                        title={showCounters ? r.name : label}
+                        sub={
+                          off ? "disabled" : config.toggle || showCounters ? "enabled" : undefined
+                        }
+                        onOpen={() => setInspect(id || label)}
+                        cells={Object.fromEntries(
+                          config.columns
+                            .filter((c) => c.key !== "_status")
+                            .map((c) => [
+                              c.key,
+                              {
+                                value: r[c.key] ?? "",
+                                search: r[c.key] ? () => setFilter(r[c.key]!) : undefined,
+                              },
+                            ]),
+                        )}
+                        copies={[{ label: "Name", value: label }]}
+                        row={r}
+                        actions={actions}
+                      >
+                        <tr
+                          className={cn("monitor-row", off && "aaa-off")}
                           style={grid}
-                          className={off ? "aaa-off" : undefined}
-                          onDuplicate={() => void duplicateUser(r)}
-                          onEdit={() => openEdit(r)}
-                          onToggle={() => void post("toggle", { id, enable: off })}
-                          onRemove={() => void post("remove", { id })}
+                          tabIndex={0}
+                          data-selected={inspect === (id || label) || undefined}
+                          onClick={() => setInspect(id || label)}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setInspect(id || label);
+                            }
+                          }}
                         >
                           {cells}
-                        </UserActionRow>
-                      );
-                    }
-                    const actions: RowAction[] = [
-                      ...(!config.addOnly
-                        ? [{ label: "Edit", icon: Pencil, onSelect: () => openEdit(r) }]
-                        : []),
-                      ...(config.toggle
-                        ? [
-                            {
-                              label: off ? "Enable" : "Disable",
-                              icon: Power,
-                              onSelect: () => void post("toggle", { id, enable: off }),
-                            },
-                          ]
-                        : []),
-                      {
-                        label: "Remove",
-                        icon: Trash2,
-                        destructive: true,
-                        onSelect: () => void post("remove", { id }),
-                      },
-                    ];
-                    return (
-                      <ActionRow
-                        key={id || rowLabel(r, config)}
-                        name={rowLabel(r, config)}
-                        busy={busy}
-                        actions={actions}
-                        style={grid}
-                        className={off ? "aaa-off" : undefined}
-                      >
-                        {cells}
-                      </ActionRow>
+                          <td className="aaa-cell-action">
+                            <RowMore />
+                          </td>
+                        </tr>
+                      </RowMenu>
                     );
                   })}
                 </tbody>
@@ -846,6 +1036,8 @@ function EntityManager({
           </>
         )}
       </MonitorPanel>
+
+      {drawer}
 
       <MonitorDialog
         open={editing != null}
@@ -919,55 +1111,60 @@ function EntityManager({
           <div className="aaa-grid">
             {fields.map((fd) =>
               showCounters && fd.key === "password" ? (
-                <div key={fd.key} className="monitor-fl">
-                  <label className="monitor-label" htmlFor={passwordId}>
-                    {`Password${creating ? " *" : ""}`}
-                  </label>
-                  <div className="monitor-input aaa-password">
-                    <input
-                      id={passwordId}
-                      type={passwordVisible ? "text" : "password"}
-                      autoComplete="new-password"
-                      disabled={busy}
-                      placeholder={creating ? "Enter or generate a password" : "(unchanged)"}
-                      value={form.password ?? ""}
-                      onChange={(e) => {
-                        const password = e.target.value;
-                        setForm((current) => ({ ...current, password }));
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="aaa-ib"
-                      disabled={busy}
-                      aria-label={passwordVisible ? "Hide password" : "Show password"}
-                      aria-pressed={passwordVisible}
-                      title={passwordVisible ? "Hide password" : "Show password"}
-                      onClick={() => setPasswordVisible((visible) => !visible)}
-                    >
-                      {passwordVisible ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
-                    </button>
-                    <button
-                      type="button"
-                      className="aaa-ib"
-                      disabled={busy}
-                      aria-label="Generate 8-character password"
-                      title="Generate 8 characters: uppercase, lowercase, number and symbol"
-                      onClick={() => {
-                        try {
-                          const password = generateUserPassword();
-                          setForm((current) => ({ ...current, password }));
-                        } catch {
-                          setError(
-                            "Secure password generation is unavailable. Enter a password manually.",
-                          );
-                        }
-                      }}
-                    >
-                      <RefreshCw aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
+                <KitField
+                  key={fd.key}
+                  className="monitor-fl"
+                  id={passwordId}
+                  label={`Password${creating ? " *" : ""}`}
+                >
+                  <TextInput
+                    wrapClassName="aaa-password"
+                    type={passwordVisible ? "text" : "password"}
+                    autoComplete="new-password"
+                    disabled={busy}
+                    placeholder={creating ? "Enter or generate a password" : "(unchanged)"}
+                    value={form.password ?? ""}
+                    onChange={(password) => setForm((current) => ({ ...current, password }))}
+                    end={
+                      <>
+                        <button
+                          type="button"
+                          className="aaa-ib"
+                          disabled={busy}
+                          aria-label={passwordVisible ? "Hide password" : "Show password"}
+                          aria-pressed={passwordVisible}
+                          title={passwordVisible ? "Hide password" : "Show password"}
+                          onClick={() => setPasswordVisible((visible) => !visible)}
+                        >
+                          {passwordVisible ? (
+                            <Eye aria-hidden="true" />
+                          ) : (
+                            <EyeOff aria-hidden="true" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="aaa-ib"
+                          disabled={busy}
+                          aria-label="Generate 8-character password"
+                          title="Generate 8 characters: uppercase, lowercase, number and symbol"
+                          onClick={() => {
+                            try {
+                              const password = generateUserPassword();
+                              setForm((current) => ({ ...current, password }));
+                            } catch {
+                              setError(
+                                "Secure password generation is unavailable. Enter a password manually.",
+                              );
+                            }
+                          }}
+                        >
+                          <RefreshCw aria-hidden="true" />
+                        </button>
+                      </>
+                    }
+                  />
+                </KitField>
               ) : (
                 <FormField
                   key={fd.key}
@@ -1450,21 +1647,16 @@ function SamplerSettings(): ReactNode {
       description={`How often client traffic and User Manager sessions are written to the usage history. Now: ${current == null ? "…" : fmtInterval(current)} · default 1 min · 30 s to 6 h.`}
     >
       <div className="aaa-settings-grid">
-        <div className="monitor-fl">
-          <label className="monitor-label" htmlFor={id}>
-            Interval (minutes)
-          </label>
-          <input
-            id={id}
-            className="monitor-input"
-            type="number"
-            step="0.5"
-            min="0.5"
+        <KitField label="Interval (minutes)" className="monitor-fl" id={id}>
+          <NumberInput
+            allowEmpty
+            step={0.5}
+            min={0.5}
             placeholder={current ? String(current / 60_000) : "1"}
-            value={minutes}
-            onChange={(e) => setMinutes(e.target.value)}
+            value={minutes === "" || !Number.isFinite(Number(minutes)) ? null : Number(minutes)}
+            onChange={(n) => setMinutes(n == null ? "" : String(n))}
           />
-        </div>
+        </KitField>
       </div>
       <div className="aaa-settings-actions">
         <MonitorButton

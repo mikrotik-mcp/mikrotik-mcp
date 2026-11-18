@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Shield } from "lucide-react";
 import type { VerificationReport } from "../../src/sim/verify";
 import { postJson } from "./api";
+import { Field, TextArea, TextInput } from "./kit";
 import { MonitorButton, MonitorPanel, MonitorSelect, StatusBadge } from "./monitoring-ui";
 
 const STATUS: Record<
@@ -80,15 +81,14 @@ export function PolicyVerifier(): ReactNode {
               ["out_interface", "Egress interface"],
             ] as const
           ).map(([key, label]) => (
-            <label key={key} className="monitor-fl">
-              <span className="monitor-label">{label}</span>
-              <input
-                className="monitor-input sim-input"
+            <Field key={key} label={label}>
+              <TextInput
+                mono
                 value={form[key]}
                 spellCheck={false}
-                onChange={(e) => update(key, e.target.value)}
+                onChange={(value) => update(key, value)}
               />
-            </label>
+            </Field>
           ))}
         </div>
         <div className="sim-verify-selects">
@@ -113,20 +113,20 @@ export function PolicyVerifier(): ReactNode {
             </div>
           ))}
         </div>
-        <label className="monitor-fl">
-          <span className="monitor-label">Static RouterOS export</span>
-          <textarea
-            className="monitor-input min-h-[60px]"
+        <Field
+          label="Static RouterOS export"
+          help="Use a full export without secrets. No router is contacted."
+        >
+          <TextArea
+            mono
+            rows={2}
             placeholder={"/ip firewall filter\nadd chain=forward action=drop"}
             value={form.config_text}
             maxLength={200000}
-            spellCheck={false}
-            onChange={(e) => update("config_text", e.target.value)}
+            showCount={false}
+            onChange={(value) => update("config_text", value)}
           />
-          <span className="monitor-hint">
-            Use a full export without secrets. No router is contacted.
-          </span>
-        </label>
+        </Field>
         <div className="flex flex-wrap items-center gap-2">
           <MonitorButton
             variant="primary"

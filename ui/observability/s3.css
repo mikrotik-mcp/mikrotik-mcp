@@ -24,7 +24,7 @@
 }
 
 .s3-table {
-  grid-template-columns: minmax(0, 1fr) 80px 140px 320px;
+  grid-template-columns: minmax(0, 1fr) 80px 140px 320px 26px;
 }
 .s3-actions {
   display: flex;
@@ -45,7 +45,12 @@
 
 @media (max-width: 900px) {
   .s3-table {
-    grid-template-columns: minmax(0, 1fr) 72px;
+    grid-template-columns: minmax(0, 1fr) 72px 26px;
+  }
+  /* The ⋯ button stays on the first line, after the size. */
+  .s3-table > :nth-child(5) {
+    grid-row: 1;
+    grid-column: 3;
   }
   .s3-table > :nth-child(3) {
     display: none;

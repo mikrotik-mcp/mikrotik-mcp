@@ -10,12 +10,10 @@ import type { ReactNode } from "react";
 import {
   ArrowRight,
   Check,
-  ChevronDown,
   Clock,
   Download,
   Play,
   RefreshCw,
-  Server,
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
@@ -33,6 +31,7 @@ import {
   StatusBadge,
   StatusDot,
 } from "./monitoring-ui";
+import { Checkbox, Select } from "./kit";
 import type { DevicesPayload } from "./types";
 import { saveDownload, useWorkspaceClock, workspacePost } from "./workspace-ui";
 import { MIGRATION_SECTIONS } from "../../src/migration/sections";
@@ -41,41 +40,6 @@ import type { MigrationPlan, MigrationSection, RouterInventory } from "../../src
 type Inventory = Omit<RouterInventory, "export">;
 
 const STEPS = ["Inspect & map", "Review exact plan", "Rehearse / stage", "Manual cutover"];
-
-function Picker({
-  value,
-  onChange,
-  options,
-  label,
-  icon,
-  mono = false,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-  label: string;
-  icon?: ReactNode;
-  mono?: boolean;
-}): ReactNode {
-  return (
-    <span className="monitor-select mig-select" data-icon={icon ? true : undefined}>
-      {icon}
-      <select
-        aria-label={label}
-        className={mono && value ? "mono" : undefined}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown aria-hidden="true" />
-    </span>
-  );
-}
 
 function HardwareCard({ side, r }: { side: string; r: Inventory }): ReactNode {
   return (
@@ -288,16 +252,15 @@ function Migration({ target, devices }: { target: string; devices: string[] }): 
       <section className="glass mig-pair">
         <div className="monitor-fl">
           <span className="monitor-label">Source · read only</span>
-          <Picker
+          <RouterPicker
             label="Source router"
-            icon={<Server aria-hidden="true" className="mig-icon" />}
             value={source}
             onChange={(v) => {
               setSource(v);
               setInventory(null);
               edit();
             }}
-            options={devices.filter((d) => d !== target).map((d) => ({ value: d, label: d }))}
+            routers={devices.filter((d) => d !== target)}
           />
         </div>
         <span className="mig-pair-arrow" aria-hidden="true">
@@ -335,18 +298,15 @@ function Migration({ target, devices }: { target: string; devices: string[] }): 
               </div>
               <div className="monitor-fl">
                 <span className="monitor-label">Protected target management port</span>
-                <Picker
+                <Select
                   label="Protected management interface"
-                  mono
+                  placeholder="Choose a dedicated management interface"
                   value={management}
                   onChange={(v) => {
                     setManagement(v);
                     edit();
                   }}
-                  options={[
-                    { value: "", label: "Choose a dedicated management interface" },
-                    ...targetEther.map((i) => ({ value: i.name, label: i.name })),
-                  ]}
+                  options={targetEther.map((i) => ({ value: i.name, label: i.name }))}
                 />
                 <span className="monitor-hint">
                   This port stays outside the transfer. Keep an independent management connection
@@ -364,9 +324,9 @@ function Migration({ target, devices }: { target: string; devices: string[] }): 
                     <span className="mig-arrow" aria-hidden="true">
                       <ArrowRight />
                     </span>
-                    <Picker
+                    <Select
                       label={`Map ${i.name}`}
-                      mono
+                      size="sm"
                       value={mapping[i.name] ?? ""}
                       onChange={(v) => {
                         setMapping((m) => {
@@ -397,18 +357,16 @@ function Migration({ target, devices }: { target: string; devices: string[] }): 
         >
           <div className="mig-sections">
             {allSections.map((path) => (
-              <label key={path} className="monitor-check">
-                <input
-                  type="checkbox"
-                  checked={sections.includes(path)}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setSections((s) => (on ? [...s, path] : s.filter((p) => p !== path)));
-                    edit();
-                  }}
-                />
-                <span>{path}</span>
-              </label>
+              <Checkbox
+                key={path}
+                className="mig-section"
+                label={path}
+                checked={sections.includes(path)}
+                onCheckedChange={(on) => {
+                  setSections((s) => (on ? [...s, path] : s.filter((p) => p !== path)));
+                  edit();
+                }}
+              />
             ))}
           </div>
           <MonitorNote>
@@ -425,22 +383,21 @@ function Migration({ target, devices }: { target: string; devices: string[] }): 
               Build migration preview
             </MonitorButton>
             <span className="flex-1" />
-            <Picker
+            <Select
               label="Saved migration"
-              icon={<Clock aria-hidden="true" className="mig-icon" />}
+              placeholder="Saved plans"
+              leading={<Clock aria-hidden="true" />}
+              className="mig-saved"
               value={plan?.id ?? ""}
               onChange={(id) => {
                 setPlan(plans.find((p) => p.id === id) ?? null);
                 setConfirm(false);
                 setManual(false);
               }}
-              options={[
-                { value: "", label: "Saved plans" },
-                ...plans.map((p) => ({
-                  value: p.id,
-                  label: `${p.input.source} → ${p.device} · ${p.status} · ${new Date(p.createdAt).toLocaleString()}`,
-                })),
-              ]}
+              options={plans.map((p) => ({
+                value: p.id,
+                label: `${p.input.source} → ${p.device} · ${p.status} · ${new Date(p.createdAt).toLocaleString()}`,
+              }))}
             />
           </div>
         </MonitorPanel>
@@ -568,26 +525,19 @@ function Migration({ target, devices }: { target: string; devices: string[] }): 
               )}
               {plan.status === "preview" && (
                 <>
-                  <label className="monitor-check">
-                    <input
-                      type="checkbox"
-                      checked={confirm}
-                      onChange={(e) => setConfirm(e.target.checked)}
-                    />
-                    <span>
-                      I reviewed the exact target commands and approve this rehearsal or staging. No
-                      one else will change either router meanwhile.
-                    </span>
-                  </label>
+                  <Checkbox
+                    tone="warn"
+                    checked={confirm}
+                    onCheckedChange={setConfirm}
+                    label="I reviewed the exact target commands and approve this rehearsal or staging. No one else will change either router meanwhile."
+                  />
                   {!!plan.manual.length && (
-                    <label className="monitor-check">
-                      <input
-                        type="checkbox"
-                        checked={manual}
-                        onChange={(e) => setManual(e.target.checked)}
-                      />
-                      <span>I understand the listed manual sections will not be transferred.</span>
-                    </label>
+                    <Checkbox
+                      tone="warn"
+                      checked={manual}
+                      onCheckedChange={setManual}
+                      label="I understand the listed manual sections will not be transferred."
+                    />
                   )}
                   <div className="flex flex-wrap items-center gap-2">
                     <MonitorButton

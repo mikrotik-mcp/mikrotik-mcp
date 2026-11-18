@@ -98,7 +98,7 @@
   flex: 1 1 220px;
 }
 .ovpn-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr) 130px 200px 116px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr) 130px 200px 116px 26px;
 }
 .ovpn-thead {
   height: 34px;
@@ -220,18 +220,6 @@
   gap: 12px;
   padding: 14px 18px;
 }
-.ovpn-user-field input {
-  min-width: 0;
-  flex: 1;
-  border: 0;
-  background: transparent;
-  color: var(--foreground);
-  font: inherit;
-  outline: none;
-}
-.ovpn-user-field input::placeholder {
-  color: var(--muted-foreground);
-}
 .ovpn-field-icon {
   display: grid;
   flex: none;
@@ -252,34 +240,6 @@
 }
 .ovpn-user-field {
   color: var(--muted-foreground);
-}
-.ovpn-date.monitor-input {
-  width: 100%;
-  height: 36px;
-  justify-content: flex-start;
-  border: 0;
-  border-radius: 10px;
-  background: var(--glass);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  padding: 0 12px;
-  color: var(--foreground);
-  font-size: 13px;
-  font-weight: 400;
-}
-.ovpn-date.monitor-input:hover {
-  background: var(--glass-2);
-}
-.ovpn-date.monitor-input[data-empty="true"] {
-  color: var(--muted-foreground);
-}
-.ovpn-date.monitor-input svg {
-  width: 16px;
-  height: 16px;
-  color: var(--muted-foreground);
-}
-.ovpn-date.monitor-input > span {
-  font-family: inherit;
-  font-size: 13px;
 }
 .ovpn-range {
   display: flex;
@@ -416,7 +376,7 @@
   min-width: 960px;
 }
 .ovpn-journal-grid {
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 230px 120px 180px 90px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 230px 120px 180px 90px 26px;
 }
 .ovpn-history-user-link {
   width: fit-content;
@@ -488,6 +448,10 @@
   }
   .ovpn-grid > .ovpn-path {
     grid-column: 1 / -1;
+  }
+  /* A long-press opens the row menu here, so the menu button goes. */
+  .ovpn-grid > .ovpn-more {
+    display: none;
   }
   .ovpn-path {
     grid-template-columns: minmax(0, 1fr) 36px minmax(0, 0.8fr);

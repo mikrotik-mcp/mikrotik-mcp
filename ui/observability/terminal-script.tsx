@@ -5,7 +5,7 @@
 import { FileCode2, Play, ShieldCheck, TriangleAlert, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef, useState, useSyncExternalStore } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox, TextArea } from "./kit";
 import { hasSyntaxError } from "./terminal-highlight";
 import {
   destructiveWord,
@@ -104,7 +104,8 @@ export function ScriptDialog(): ReactNode {
             <X size={16} />
           </button>
         </header>
-        <textarea
+        <TextArea
+          mono
           value={text}
           spellCheck={false}
           placeholder={
@@ -112,8 +113,8 @@ export function ScriptDialog(): ReactNode {
           }
           aria-label="Script"
           disabled={busy}
-          onChange={(event) => {
-            setText(event.target.value);
+          onChange={(value) => {
+            setText(value);
             setStates([]);
             setReviewed(false);
           }}
@@ -137,7 +138,7 @@ export function ScriptDialog(): ReactNode {
             <Checkbox
               aria-label="I reviewed the lines that change or remove configuration"
               checked={reviewed}
-              onCheckedChange={(value) => setReviewed(value === true)}
+              onCheckedChange={setReviewed}
             />
             <TriangleAlert size={14} />
             {risky.length} line{risky.length > 1 ? "s" : ""} change or remove configuration (
@@ -149,7 +150,7 @@ export function ScriptDialog(): ReactNode {
             <Checkbox
               aria-label="Stop at the first error"
               checked={stopOnError}
-              onCheckedChange={(value) => setStopOnError(value === true)}
+              onCheckedChange={setStopOnError}
             />
             Stop at the first error
           </label>

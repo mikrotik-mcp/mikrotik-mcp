@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { PenLine, RotateCw, TriangleAlert, X, Zap } from "lucide-react";
 import { DeviceAddressStatus } from "./device-address-status";
 import { DeviceResources, MeterBar } from "./health";
@@ -100,26 +100,45 @@ export function RouterRow({
   capabilities,
   selected,
   onSelect,
+  more,
+  ref,
+  ...rest
 }: {
   d: DeviceInfo;
   capabilities: CapabilitiesJson | null;
   selected: boolean;
   onSelect: () => void;
-}): ReactNode {
+  /** The row's ⋯ menu button (RowMore), drawn in the last column. */
+  more?: ReactNode;
+  ref?: Ref<HTMLDivElement>;
+} & Omit<HTMLAttributes<HTMLDivElement>, "onSelect">): ReactNode {
   const state = deviceState(d);
   const sub = routerSub(d, capabilities);
   const calls = callsLine(d);
   return (
-    <button
-      type="button"
+    <div
+      {...rest}
+      ref={ref}
+      role="button"
+      tabIndex={0}
       className="monitor-row dv-cols"
       data-selected={selected || undefined}
       data-failed={state === "offline" || undefined}
       aria-pressed={selected}
       aria-label={`${d.name}, ${state === "pending" ? "unchecked" : state}`}
-      onClick={onSelect}
+      onClick={(e) => {
+        rest.onClick?.(e);
+        onSelect();
+      }}
+      onKeyDown={(e) => {
+        rest.onKeyDown?.(e);
+        if (!e.defaultPrevented && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
-      <span className="flex min-w-0 items-center gap-2.5">
+      <span data-col="name" className="flex min-w-0 items-center gap-2.5">
         <StatusDot tone={STATE_TONE[state]} />
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 items-center gap-1.5">
@@ -136,7 +155,7 @@ export function RouterRow({
           </span>
         </span>
       </span>
-      <span className="flex min-w-0 flex-col">
+      <span data-col="address" className="flex min-w-0 flex-col">
         <span className="text-fg-secondary truncate font-mono text-[13px]" dir="ltr">
           {addressOf(d)}
         </span>
@@ -146,10 +165,10 @@ export function RouterRow({
       </span>
       <RowMeter value={d.status.cpuLoad} label="CPU" />
       <RowMeter value={d.status.memUsedPct} label="Memory" />
-      <span className="truncate text-right font-mono text-[12px]">
+      <span data-col="latency" className="truncate text-right font-mono text-[12px]">
         {d.status.latencyMs != null && state === "online" ? formatMs(d.status.latencyMs) : "—"}
       </span>
-      <span className="flex flex-col items-end">
+      <span data-col="calls" className="flex flex-col items-end">
         <span className="text-foreground tabular-nums">{num(d.activity.calls)}</span>
         <span
           className={cn("text-[12px]", calls.bad ? "text-destructive" : "text-muted-foreground")}
@@ -157,7 +176,8 @@ export function RouterRow({
           {calls.text}
         </span>
       </span>
-    </button>
+      {more}
+    </div>
   );
 }
 

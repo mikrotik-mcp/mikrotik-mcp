@@ -133,13 +133,6 @@
   font-size: 11px;
 }
 
-/* Text inputs show their value in mono, like the board's `inp(…, mono=True)`. */
-.sim-page input.sim-input.monitor-input {
-  font-family: var(--font-mt);
-  font-size: 12px;
-  line-height: 21px;
-}
-
 .sim-mono {
   font-family: var(--font-mt);
   font-size: 12px;

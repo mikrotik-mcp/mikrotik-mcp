@@ -105,6 +105,11 @@
     box-shadow: inset 0 0 0 1px var(--line);
     padding: 14px 16px;
   }
+  .memory-fact:hover .kit-row-more,
+  .memory-fact:focus-within .kit-row-more {
+    opacity: 1;
+    background: var(--glass-3);
+  }
   .memory-fact[data-selected] {
     background: var(--sig-soft);
     box-shadow: inset 0 0 0 1px var(--sig);
@@ -184,12 +189,19 @@
   }
 
   .memory-activity-row {
-    grid-template-columns: 170px 140px minmax(0, 1fr);
+    grid-template-columns: 170px 140px minmax(0, 1fr) 26px;
   }
   @media (max-width: 639px) {
     .memory-activity-row {
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) 26px;
       gap: 4px;
+    }
+    .memory-activity-row > [data-col] {
+      grid-column: 1;
+    }
+    .memory-activity-row > .kit-row-more {
+      grid-column: 2;
+      grid-row: 1;
     }
   }
 
@@ -242,23 +254,6 @@
     font-size: 12px;
     cursor: pointer;
   }
-  .memory-bare {
-    min-width: 0;
-    flex: 1;
-    border: 0;
-    background: transparent;
-    color: var(--foreground);
-    outline: none;
-  }
-  .memory-bare::placeholder {
-    color: var(--muted-foreground);
-  }
-  textarea.monitor-input.memory-textarea {
-    color: var(--foreground);
-    font-family: inherit;
-    font-size: 13px;
-    line-height: 20px;
-  }
 
   /* Shared by the Shared memory tab. */
   .memory-inline-actions,
@@ -310,9 +305,5 @@
     color: var(--success);
     font-size: 12px;
     font-weight: 500;
-  }
-  .memory-fl-select > .monitor-select,
-  .memory-fl-select > .monitor-select select {
-    width: 100%;
   }
 }

@@ -1,25 +1,11 @@
 /* Form pieces shared by the Tunnel Bandwidth and Round-trip pages. Tokens only. */
 
-.pf-select.monitor-select {
-  display: flex;
-  width: 100%;
-  min-width: 0;
+/* The boards' `.select` is 34px and fills its cell. */
+.kit-trigger.pf-select {
+  height: 34px;
   flex: 1 1 auto;
 }
-.pf-select select {
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pf-select[data-mono] select {
+.kit-trigger.pf-mono {
   font-family: var(--font-mt);
   font-size: 12px;
-}
-.pf-select select:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-.pf-check input:disabled + span {
-  opacity: 0.5;
 }

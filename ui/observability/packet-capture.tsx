@@ -5,7 +5,7 @@
  */
 import "./monitoring.css";
 import "./packets.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Download, Pause } from "lucide-react";
 import { api, postJson, withToken } from "./api";
@@ -25,8 +25,9 @@ import {
   Ticker,
 } from "./monitoring-ui";
 import type { ChartTone } from "./monitoring-ui";
+import { DetailList, RowDrawer, RowMenu, RowMore, arrive, tipProps } from "./kit";
 import { toast } from "./toast-action";
-import type { CapturePayload } from "./types";
+import type { CapturePayload, PacketSummary } from "./types";
 
 const EYEBROW = "Packets · live TZSP capture";
 
@@ -50,6 +51,10 @@ const stamp = (ts: number): string => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 };
 
+/** One packet's identity across polls: the list keeps the newest 150, so indexes shift. */
+const packetKey = (p: PacketSummary): string =>
+  `${p.ts}|${p.len}|${p.src ?? ""}|${p.dst ?? ""}|${p.info}`;
+
 /** "9.4 MB" as 9.4 with the unit in <small>, the way the KPI cards write units. */
 function sizeValue(n: number): ReactNode {
   const [value, unit] = formatBytes(n).split(" ");
@@ -68,6 +73,9 @@ export function PacketCapture(): ReactNode {
   const [busy, setBusy] = useState(false);
   // Packet totals from recent polls; their differences draw the KPI sparkline.
   const [totals, setTotals] = useState<number[]>([]);
+  const [opened, setOpened] = useState<PacketSummary | null>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const seen = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     const load = (): void =>
@@ -85,6 +93,16 @@ export function PacketCapture(): ReactNode {
 
   const stats = data?.stats;
   const packets = data?.packets ?? [];
+
+  // Rows that arrived since the last poll slide in; the first load does not.
+  useEffect(() => {
+    const keys = (data?.packets ?? []).map(packetKey);
+    const before = seen.current;
+    seen.current = new Set(keys);
+    if (!before || !list.current) return;
+    for (const row of list.current.querySelectorAll<HTMLElement>("[data-pk]"))
+      if (!before.has(row.dataset.pk!)) arrive(row);
+  }, [data]);
   const stop = async (): Promise<void> => {
     setBusy(true);
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/capture/stop", {}).catch(
@@ -195,17 +213,36 @@ export function PacketCapture(): ReactNode {
       <div className="pkt-grid">
         <div className="pkt-side">
           <MonitorPanel title="Protocols">
-            <div className="pkt-protocols">
+            <div className="pkt-protocols kit-tips">
               <Donut
                 size={148}
                 stroke={14}
                 label="Packets by protocol"
                 center={num(protoTotal)}
                 sub="packets"
+                noun="packets"
                 parts={protocols.map(([p, n]) => ({ label: p, value: n, tone: proto(p).tone }))}
               />
               {protocols.map(([p, n]) => (
-                <div key={p} className="pkt-bar-row" style={protoStyle(p)}>
+                <div
+                  key={p}
+                  className="pkt-bar-row"
+                  style={protoStyle(p)}
+                  {...tipProps(() => ({
+                    title: p,
+                    rows: [
+                      {
+                        label: "Packets",
+                        value: `${num(n)} of ${num(protoTotal)}`,
+                        color: proto(p).color,
+                      },
+                      {
+                        label: "Share",
+                        value: `${Math.round((n / Math.max(1, protoTotal)) * 100)}%`,
+                      },
+                    ],
+                  }))}
+                >
                   <span className="pkt-mono" style={{ color: proto(p).color }}>
                     {p}
                   </span>
@@ -246,23 +283,61 @@ export function PacketCapture(): ReactNode {
             <span>Proto</span>
             <span className="pkt-right">Len</span>
             <span>Summary</span>
+            <span />
           </div>
           {packets.length === 0 ? (
             <p className="pkt-waiting">Waiting for packets…</p>
           ) : (
-            <div className="pkt-list">
-              {packets.map((p, i) => (
-                <div
-                  key={`${p.ts}-${i}`}
-                  className="pkt-cols pkt-line"
-                  style={protoStyle(p.protocol)}
-                >
-                  <span>{stamp(p.ts)}</span>
-                  <span>{p.protocol ?? p.ethType}</span>
-                  <span className="pkt-right">{p.len}</span>
-                  <span title={p.info}>{p.info}</span>
-                </div>
-              ))}
+            <div ref={list} className="pkt-list">
+              {packets.map((p, i) => {
+                const name = p.protocol ?? p.ethType;
+                const open = (): void => setOpened(p);
+                return (
+                  <RowMenu
+                    key={`${p.ts}-${i}`}
+                    title={`${name} · ${p.len} bytes`}
+                    sub={stamp(p.ts)}
+                    onOpen={open}
+                    cells={{
+                      time: { value: stamp(p.ts), kind: "time" },
+                      proto: { value: name },
+                      len: { value: String(p.len) },
+                      info: { value: p.info },
+                    }}
+                    copies={[
+                      ...(p.src ? [{ label: "Source", value: p.src }] : []),
+                      ...(p.dst ? [{ label: "Destination", value: p.dst }] : []),
+                      { label: "Summary", value: p.info, hint: "" },
+                    ]}
+                    row={p}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${name}, ${p.len} bytes, ${stamp(p.ts)}`}
+                      data-pk={packetKey(p)}
+                      data-selected={(opened && packetKey(opened) === packetKey(p)) || undefined}
+                      className="pkt-cols pkt-line"
+                      style={protoStyle(p.protocol)}
+                      onClick={open}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "Enter") {
+                          ev.preventDefault();
+                          open();
+                        }
+                      }}
+                    >
+                      <span data-col="time">{stamp(p.ts)}</span>
+                      <span data-col="proto">{name}</span>
+                      <span data-col="len" className="pkt-right">
+                        {p.len}
+                      </span>
+                      <span data-col="info">{p.info}</span>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
+                );
+              })}
             </div>
           )}
           <div className="monitor-foot">
@@ -271,6 +346,71 @@ export function PacketCapture(): ReactNode {
           </div>
         </MonitorPanel>
       </div>
+      {opened && (
+        <PacketDrawer
+          packet={opened}
+          packets={packets}
+          onPick={setOpened}
+          onClose={() => setOpened(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/** One decoded packet. The list keeps moving, so the drawer holds the packet it opened. */
+function PacketDrawer({
+  packet: p,
+  packets,
+  onPick,
+  onClose,
+}: {
+  packet: PacketSummary;
+  packets: PacketSummary[];
+  onPick: (p: PacketSummary) => void;
+  onClose: () => void;
+}): ReactNode {
+  const key = packetKey(p);
+  const index = packets.findIndex((x) => packetKey(x) === key);
+  const name = p.protocol ?? p.ethType;
+  return (
+    <RowDrawer
+      open
+      onClose={onClose}
+      label={`Packet details: ${name}`}
+      storageKey="packets"
+      rowKey={key}
+      nav={
+        index >= 0
+          ? {
+              index,
+              total: packets.length,
+              onPrev: index > 0 ? () => onPick(packets[index - 1]!) : undefined,
+              onNext: index < packets.length - 1 ? () => onPick(packets[index + 1]!) : undefined,
+            }
+          : undefined
+      }
+      title={p.info}
+      meta={`${stamp(p.ts)} · ${name} · ${p.len} bytes`}
+    >
+      <DetailList
+        items={[
+          { label: "Time", value: stamp(p.ts), mono: true },
+          {
+            label: "Protocol",
+            value: <span style={{ color: proto(p.protocol).color }}>{name}</span>,
+            mono: true,
+          },
+          { label: "EtherType", value: p.ethType, mono: true },
+          ...(p.src ? [{ label: "Source", value: p.src, mono: true }] : []),
+          ...(p.dst ? [{ label: "Destination", value: p.dst, mono: true }] : []),
+          { label: "Length", value: `${p.len} bytes`, mono: true },
+          { label: "Summary", value: p.info, mono: true },
+        ]}
+      />
+      {index < 0 && (
+        <MonitorNote>This packet is no longer in the last 150 the page keeps.</MonitorNote>
+      )}
+    </RowDrawer>
   );
 }

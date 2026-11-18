@@ -5,6 +5,8 @@ import type { Investigation } from "../../src/investigations/model";
 import { parseIp } from "../../src/sim/ip";
 import { journeyModel } from "./investigation-journey-model";
 import { JsonView } from "./highlight";
+import { TextInput, tipProps } from "./kit";
+import type { TipCard, TipRow } from "./kit";
 import { MonitorPanel, MonitorSelect, StatusBadge, useLineDraw } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 
@@ -26,6 +28,24 @@ interface JourneyNode {
   title: string;
   sub: string;
   tone: NodeTone;
+  /** Saved values behind this stop, for its card. */
+  rows?: TipRow[];
+}
+
+const LED: Record<NodeTone, "ok" | "warn" | "acc" | "off"> = {
+  ok: "ok",
+  warn: "warn",
+  acc: "acc",
+  faint: "off",
+};
+
+function nodeCard(n: JourneyNode, i: number): TipCard {
+  return {
+    title: n.title,
+    sub: i === 0 ? "start" : `step ${i}`,
+    led: LED[n.tone],
+    rows: [{ label: "Status", value: n.sub, color: NODE_COLOR[n.tone] }, ...(n.rows ?? [])],
+  };
 }
 
 /** The board's path diagram: five stops on one line, numbered steps above. */
@@ -55,7 +75,7 @@ function JourneyPath({ nodes, drawKey }: { nodes: JourneyNode[]; drawKey: string
   return (
     <div ref={box} className="min-w-0">
       <svg
-        className="inv-journey-svg"
+        className="inv-journey-svg kit-tips"
         viewBox={`0 0 ${w} ${h}`}
         width="100%"
         height={h}
@@ -66,7 +86,24 @@ function JourneyPath({ nodes, drawKey }: { nodes: JourneyNode[]; drawKey: string
           const x1 = xs[i] + 18;
           const x2 = xs[j] - 18;
           return (
-            <g key={`${i}-${j}`}>
+            <g
+              key={`${i}-${j}`}
+              {...tipProps((): TipCard => ({
+                title: `${nodes[i].title} → ${nodes[j].title}`,
+                sub: `step ${i} to ${j}`,
+                led: dashed ? "off" : "ok",
+                rows: [
+                  { label: "From", value: nodes[i].title },
+                  { label: "To", value: nodes[j].title },
+                  {
+                    label: "Hop",
+                    value: dashed ? "Not observed" : "In saved records",
+                    color: NODE_COLOR[tone],
+                  },
+                ],
+              }))}
+            >
+              <path d={`M${x1} ${y}H${x2}`} stroke="transparent" strokeWidth={14} fill="none" />
               <path
                 data-draw
                 d={`M${x1} ${y}H${x2}`}
@@ -81,7 +118,7 @@ function JourneyPath({ nodes, drawKey }: { nodes: JourneyNode[]; drawKey: string
           );
         })}
         {nodes.map((n, i) => (
-          <g key={i}>
+          <g key={i} {...tipProps(() => nodeCard(n, i))}>
             {i > 0 && (
               <text
                 x={xs[i]}
@@ -166,14 +203,48 @@ export function InvestigationJourney({
   const unknownPolicy = m.policySources.filter((s) => !s.captured).map((s) => s.source);
 
   const nodes: JourneyNode[] = [
-    { title: c.client, sub: "client", tone: "ok" },
+    { title: c.client, sub: "client", tone: "ok", rows: [{ label: "Router", value: c.device }] },
     attachment
-      ? { title: attachment, sub: `enters ${c.device}`, tone: "ok" }
+      ? {
+          title: attachment,
+          sub: `enters ${c.device}`,
+          tone: "ok",
+          rows: lease ? [{ label: "Lease MAC", value: lease }] : [],
+        }
       : { title: "ingress unknown", sub: `on ${c.device}`, tone: "faint" },
-    { title: `table ${table}`, sub: "firewall decision not observed", tone: "warn" },
+    {
+      title: `table ${table}`,
+      sub: "firewall decision not observed",
+      tone: "warn",
+      rows: [
+        { label: "Candidate routes", value: String(branches.length) },
+        { label: "Excluded", value: String(excluded.length) },
+        ...(unknownPolicy.length
+          ? [{ label: "Unknown evidence", value: unknownPolicy.join(", ") }]
+          : []),
+      ],
+    },
     bestExit
-      ? { title: bestExit, sub: "best recorded exit", tone: "acc" }
-      : { title: "no ranked exit", sub: "exit not named", tone: "faint" },
+      ? {
+          title: bestExit,
+          sub: "best recorded exit",
+          tone: "acc",
+          rows: [
+            ...(best?.row["dst-address"]
+              ? [{ label: "Prefix", value: String(best.row["dst-address"]) }]
+              : []),
+            ...(best?.row.gateway ? [{ label: "Gateway", value: String(best.row.gateway) }] : []),
+            ...(best?.distance != null
+              ? [{ label: "Distance", value: String(best.distance) }]
+              : []),
+          ],
+        }
+      : {
+          title: "no ranked exit",
+          sub: "exit not named",
+          tone: "faint",
+          rows: m.best.length > 1 ? [{ label: "Equal routes", value: String(m.best.length) }] : [],
+        },
     { title: c.target, sub: "return path unverified", tone: "faint" },
   ];
 
@@ -263,14 +334,14 @@ export function InvestigationJourney({
       }
       extra={
         <div className="inv-controls inv-journey-desk">
-          <input
-            className="monitor-input inv-input inv-mono"
-            aria-label="Destination IPv4 used by the client"
+          <TextInput
+            mono
+            label="Destination IPv4 used by the client"
             aria-describedby={`${fieldId}-help`}
             value={destination}
-            onChange={(e) => setDestination(e.target.value.trim())}
+            onChange={(v) => setDestination(v.trim())}
             placeholder={parseIp(c.target) === null ? `IP for ${c.target}` : "Destination IPv4"}
-            aria-invalid={destination !== "" && !m.destinationValid}
+            invalid={destination !== "" && !m.destinationValid}
           />
           <MonitorSelect
             label="Assumed routing table"

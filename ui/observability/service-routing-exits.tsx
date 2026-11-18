@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import type { RoutingInventory } from "../../src/service-routing/inventory";
 import type { Row } from "../../src/service-routing/model";
 import { MonitorPanel, StatusDot, useLineDraw } from "./monitoring-ui";
+import { tipProps } from "./kit";
 
 interface Exit {
   table: string;
@@ -15,6 +16,9 @@ interface Exit {
   iface?: string;
   active: boolean;
   detail: string;
+  state: string;
+  distance?: string;
+  vrf: boolean;
 }
 
 /** One default route per table: the active one if RouterOS picked one, else the first. */
@@ -50,6 +54,9 @@ export function defaultExits(data: RoutingInventory): Exit[] {
         gateway,
         iface,
         active,
+        state,
+        distance: r.distance || undefined,
+        vrf: vrfs.has(table),
         detail: [state, r.distance && `distance ${r.distance}`, vrfs.has(table) && "VRF"]
           .filter(Boolean)
           .join(" · "),
@@ -64,7 +71,7 @@ function ExitMap({ device, exits }: { device: string; exits: Exit[] }): ReactNod
   const mid = H / 2;
   return (
     <svg
-      className="sr-exits-map"
+      className="sr-exits-map kit-tips"
       viewBox={`0 0 1100 ${H}`}
       width="100%"
       height={H}
@@ -100,7 +107,21 @@ function ExitMap({ device, exits }: { device: string; exits: Exit[] }): ReactNod
         const dash = e.active ? undefined : "4 5";
         const via = e.iface ? ` (${e.iface})` : "";
         return (
-          <g key={e.table}>
+          <g
+            key={e.table}
+            {...tipProps({
+              title: e.table,
+              sub: "0.0.0.0/0",
+              led: e.active ? "ok" : "off",
+              rows: [
+                { label: "Gateway", value: e.gateway, color: col },
+                ...(e.iface ? [{ label: "Interface", value: e.iface }] : []),
+                { label: "State", value: e.state },
+                ...(e.distance ? [{ label: "Distance", value: e.distance }] : []),
+                ...(e.vrf ? [{ label: "VRF", value: "Yes" }] : []),
+              ],
+            })}
+          >
             <path
               data-draw
               d={`M210 ${mid} C330 ${mid} 330 ${cy} 450 ${cy}`}

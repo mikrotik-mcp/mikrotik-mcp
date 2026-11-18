@@ -9,14 +9,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Check,
-  ChevronDown,
   Download,
   Ellipsis,
   Pencil,
   Play,
   Plus,
   RefreshCw,
-  Server,
   Trash2,
   TriangleAlert,
   Upload,
@@ -33,8 +31,11 @@ import {
   MonitorNote,
   MonitorPanel,
   PageIntro,
+  RouterPicker,
   StatusDot,
 } from "./monitoring-ui";
+import { DetailList, RowDrawer, RowMenu, RowMore, TextInput, tipProps } from "./kit";
+import type { Tone as LedTone } from "./kit";
 import type { Tone } from "./monitoring-ui";
 import { toast } from "./toast-action";
 
@@ -102,38 +103,32 @@ function labelOf(b: BackupItem): string {
   return n || b.name;
 }
 
+const LED: Record<Tone, LedTone> = {
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  default: "off",
+  brand: "acc",
+};
+
+function rawHref(name: string): string {
+  return withToken(`/api/backups/raw?name=${encodeURIComponent(name)}`);
+}
+
+/** The same download the row's link starts, for the row menu. */
+function download(name: string): void {
+  const a = document.createElement("a");
+  a.href = rawHref(name);
+  a.download = name;
+  a.click();
+}
+
 const OPTIONS: [keyof Opts, string, string][] = [
   ["show_sensitive", "show-sensitive", "Include secrets (keys, passwords)"],
   ["verbose", "verbose", "Include every parameter, even defaults"],
   ["compact", "compact", "Only non-default values (ignored with verbose)"],
   ["terse", "terse", "One machine-readable line per item"],
 ];
-
-function IconSelect({
-  value,
-  onChange,
-  options,
-  label,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-  label: string;
-}): ReactNode {
-  return (
-    <span className="monitor-select bk-select">
-      <Server aria-hidden="true" className="bk-icon" />
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown aria-hidden="true" />
-    </span>
-  );
-}
 
 function RestoreDialog({
   backup,
@@ -226,11 +221,11 @@ function RestoreDialog({
         </dl>
         <div className="monitor-fl">
           <span className="monitor-label">Restore onto</span>
-          <IconSelect
+          <RouterPicker
             value={target}
             onChange={setTarget}
             label="Restore target device"
-            options={devices.map((d) => ({ value: d, label: d }))}
+            routers={devices}
           />
           <span className="monitor-hint">
             Pick the same router unless you are moving a config on purpose.
@@ -409,13 +404,15 @@ export function BackupsView(): ReactNode {
   const n = backups.length;
   const count = `${n} backup${n === 1 ? "" : "s"}.`;
 
+  const bodyIndex = body ? backups.findIndex((b) => b.name === body.name) : -1;
+  const bodyItem = bodyIndex >= 0 ? backups[bodyIndex] : undefined;
+  const stepBody = (d: 1 | -1): (() => void) | undefined => {
+    const next = backups[bodyIndex + d];
+    return next ? () => viewBody(next.name) : undefined;
+  };
+
   const lastText =
     stalestAt === undefined ? "has never been saved" : `last saved ${daysAgo(stalestAt)}`;
-
-  const deviceOptions =
-    data.devices.length === 0
-      ? [{ value: "", label: "no devices" }]
-      : data.devices.map((d) => ({ value: d, label: d }));
 
   const rowActions = (b: BackupItem): ReactNode =>
     confirmDel === b.name ? (
@@ -440,12 +437,13 @@ export function BackupsView(): ReactNode {
       </>
     ) : renaming?.name === b.name ? (
       <>
-        <input
-          className="monitor-input"
-          aria-label="New name"
+        <TextInput
+          label="New name"
+          size="sm"
+          mono
           value={renaming.value}
           autoFocus
-          onChange={(e) => setRenaming({ name: b.name, value: e.target.value })}
+          onChange={(value) => setRenaming({ name: b.name, value })}
           onKeyDown={(e) => {
             if (e.key === "Enter") void rename();
             if (e.key === "Escape") setRenaming(null);
@@ -475,7 +473,7 @@ export function BackupsView(): ReactNode {
         </MonitorButton>
         <a
           className="monitor-icon-btn"
-          href={withToken(`/api/backups/raw?name=${encodeURIComponent(b.name)}`)}
+          href={rawHref(b.name)}
           download={b.name}
           aria-label="Download"
           title="Download"
@@ -551,14 +549,15 @@ export function BackupsView(): ReactNode {
                 </>
               ) : (
                 <>
-                  <input
-                    className="monitor-input"
-                    aria-label="Backup directory"
+                  <TextInput
+                    label="Backup directory"
+                    size="sm"
+                    mono
                     value={dirEdit}
                     autoFocus
                     spellCheck={false}
                     placeholder="~/.mikrotik-mcp/backups"
-                    onChange={(e) => setDirEdit(e.target.value)}
+                    onChange={setDirEdit}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") void saveDir();
                       if (e.key === "Escape") setDirEdit(null);
@@ -637,23 +636,20 @@ export function BackupsView(): ReactNode {
           bodyClassName="flex flex-col gap-3.5"
         >
           <div className="bk-create-row">
-            <IconSelect
+            <RouterPicker
               value={device}
               onChange={setDevice}
               label="Device"
-              options={deviceOptions}
+              routers={data.devices}
             />
-            <label className="bk-field">
-              <Pencil aria-hidden="true" />
-              <input
-                className="monitor-input"
-                aria-label="Label"
-                value={label}
-                spellCheck={false}
-                placeholder="label (optional), e.g. pre-upgrade"
-                onChange={(e) => setLabel(e.target.value)}
-              />
-            </label>
+            <TextInput
+              label="Label"
+              icon={<Pencil aria-hidden="true" />}
+              value={label}
+              spellCheck={false}
+              placeholder="label (optional), e.g. pre-upgrade"
+              onChange={setLabel}
+            />
           </div>
           <div className="monitor-fl">
             <span className="monitor-label bk-hide-phone">Export options</span>
@@ -725,27 +721,43 @@ export function BackupsView(): ReactNode {
             {routers.length === 0 ? (
               <MonitorEmpty compact title="No routers yet" />
             ) : (
-              routers.map((d) => {
-                const at = lastBy.get(d);
-                const tone = ageTone(at);
-                const pct = ((countBy.get(d) ?? 0) / maxCount) * 100;
-                return (
-                  <div key={d} className="bk-cover">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <StatusDot tone={tone} />
-                      <span className="mono p trunc text-foreground">{d}</span>
-                    </span>
-                    <span className="monitor-bar">
-                      <span data-tone={tone} style={{ width: `${pct}%` }} />
-                    </span>
-                    <span
-                      className={`mono text-right ${tone === "bad" ? "text-destructive" : "text-muted-foreground"}`}
-                    >
-                      {at === undefined ? "never" : ago(at)}
-                    </span>
-                  </div>
-                );
-              })
+              <div className="kit-tips">
+                {routers.map((d) => {
+                  const at = lastBy.get(d);
+                  const tone = ageTone(at);
+                  const kept = countBy.get(d) ?? 0;
+                  const pct = (kept / maxCount) * 100;
+                  return (
+                    <div key={d} className="bk-cover">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <StatusDot tone={tone} />
+                        <span className="mono p trunc text-foreground">{d}</span>
+                      </span>
+                      <span
+                        className="monitor-bar"
+                        {...tipProps(() => ({
+                          title: d,
+                          sub: "backups kept",
+                          led: LED[tone],
+                          rows: [
+                            { label: "Backups kept", value: String(kept), color: "var(--sig)" },
+                            { label: "Last backup", value: at === undefined ? "never" : stamp(at) },
+                            { label: "Age", value: at === undefined ? "—" : ago(at) },
+                          ],
+                          foot: { label: "Most kept by one router", value: String(maxCount) },
+                        }))}
+                      >
+                        <span data-tone={tone} style={{ width: `${pct}%` }} />
+                      </span>
+                      <span
+                        className={`mono text-right ${tone === "bad" ? "text-destructive" : "text-muted-foreground"}`}
+                      >
+                        {at === undefined ? "never" : ago(at)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </MonitorPanel>
         </div>
@@ -765,28 +777,91 @@ export function BackupsView(): ReactNode {
                 <span>Size</span>
                 <span>Captured</span>
                 <span />
+                <span />
               </div>
               {backups.map((b) => (
-                <div
+                <RowMenu
                   key={b.name}
-                  className="monitor-row bk-table"
-                  data-failed={confirmDel === b.name || undefined}
+                  title={b.name}
+                  sub={`${b.device ?? "uploaded"} · ${size(b.bytes)} · ${stamp(b.modified)}`}
+                  onOpen={() => viewBody(b.name)}
+                  cells={{
+                    name: { value: b.name },
+                    device: { value: b.device ?? "", kind: "router" },
+                    size: { value: size(b.bytes) },
+                    captured: { value: stamp(b.modified), kind: "time" },
+                  }}
+                  copies={[{ label: "File name", value: b.name }]}
+                  row={b}
+                  actions={[
+                    {
+                      label: "Download",
+                      icon: <Download aria-hidden="true" />,
+                      onSelect: () => download(b.name),
+                    },
+                    {
+                      label: "Rename",
+                      icon: <Pencil aria-hidden="true" />,
+                      onSelect: () => setRenaming({ name: b.name, value: b.name }),
+                    },
+                    {
+                      label: "Restore",
+                      icon: <Upload aria-hidden="true" />,
+                      onSelect: () => setRestoreName(b.name),
+                    },
+                    {
+                      label: "Delete",
+                      icon: <Trash2 aria-hidden="true" />,
+                      danger: true,
+                      onSelect: () => setConfirmDel(b.name),
+                    },
+                  ]}
                 >
-                  <span className="mono p trunc" title={b.name}>
-                    {b.name}
-                  </span>
-                  {b.device ? (
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <StatusDot tone={ageTone(lastBy.get(b.device))} />
-                      <span className="mono p trunc">{b.device}</span>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${b.name}, ${size(b.bytes)}`}
+                    className="monitor-row bk-table cursor-pointer"
+                    data-failed={confirmDel === b.name || undefined}
+                    data-selected={body?.name === b.name || undefined}
+                    onClick={() => viewBody(b.name)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        viewBody(b.name);
+                      }
+                    }}
+                  >
+                    <span data-col="name" className="mono p trunc" title={b.name}>
+                      {b.name}
                     </span>
-                  ) : (
-                    <span className="text-faint">—</span>
-                  )}
-                  <span className="mono">{size(b.bytes)}</span>
-                  <span className="mono text-muted-foreground">{stamp(b.modified)}</span>
-                  <span className="bk-actions">{rowActions(b)}</span>
-                </div>
+                    {b.device ? (
+                      <span data-col="device" className="flex min-w-0 items-center gap-2.5">
+                        <StatusDot tone={ageTone(lastBy.get(b.device))} />
+                        <span className="mono p trunc">{b.device}</span>
+                      </span>
+                    ) : (
+                      <span data-col="device" className="text-faint">
+                        —
+                      </span>
+                    )}
+                    <span data-col="size" className="mono">
+                      {size(b.bytes)}
+                    </span>
+                    <span data-col="captured" className="mono text-muted-foreground">
+                      {stamp(b.modified)}
+                    </span>
+                    <span
+                      className="bk-actions"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      {rowActions(b)}
+                    </span>
+                    <RowMore />
+                  </div>
+                </RowMenu>
               ))}
             </>
           )}
@@ -845,27 +920,94 @@ export function BackupsView(): ReactNode {
         ))}
       </div>
 
-      {body && (
-        <MonitorPanel
-          title={`Backup · ${body.name}`}
-          description={(() => {
-            const b = backups.find((x) => x.name === body.name);
-            return b ? `${size(b.bytes)} · captured ${stamp(b.modified)}` : undefined;
-          })()}
-          extra={
+      <RowDrawer
+        open={Boolean(body)}
+        onClose={() => setBody(null)}
+        label={`Backup details: ${body?.name ?? ""}`}
+        title={`Backup · ${body?.name ?? ""}`}
+        meta={
+          bodyItem ? `${size(bodyItem.bytes)} · captured ${stamp(bodyItem.modified)}` : undefined
+        }
+        nav={
+          bodyIndex >= 0
+            ? { index: bodyIndex, total: backups.length, onPrev: stepBody(-1), onNext: stepBody(1) }
+            : undefined
+        }
+        rowKey={body?.name}
+        storageKey="backups"
+        tabs={
+          body
+            ? [
+                {
+                  id: "export",
+                  label: "Export",
+                  content: <pre className="monitor-pre bk-export">{body.content || "(empty)"}</pre>,
+                },
+                {
+                  id: "details",
+                  label: "Details",
+                  content: (
+                    <DetailList
+                      items={[
+                        { label: "Name", value: body.name, mono: true },
+                        { label: "Device", value: bodyItem?.device ?? "uploaded", mono: true },
+                        { label: "Size", value: bodyItem ? size(bodyItem.bytes) : "—" },
+                        {
+                          label: "Captured",
+                          value: bodyItem ? stamp(bodyItem.modified) : "—",
+                          mono: true,
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ]
+            : undefined
+        }
+        actions={
+          body && (
+            <>
+              <a
+                className="monitor-icon-btn"
+                href={rawHref(body.name)}
+                download={body.name}
+                aria-label="Download"
+                title="Download"
+              >
+                <Download aria-hidden="true" />
+              </a>
+              <button
+                type="button"
+                className="monitor-icon-btn"
+                aria-label="Delete"
+                title="Delete"
+                onClick={() => setConfirmDel(body.name)}
+              >
+                <Trash2 aria-hidden="true" />
+              </button>
+              <MonitorButton
+                variant="ghost"
+                size="sm"
+                icon={<X aria-hidden="true" />}
+                onClick={() => setBody(null)}
+              >
+                Close
+              </MonitorButton>
+            </>
+          )
+        }
+        primary={
+          body && (
             <MonitorButton
-              variant="ghost"
               size="sm"
-              icon={<X aria-hidden="true" />}
-              onClick={() => setBody(null)}
+              icon={<Upload aria-hidden="true" />}
+              onClick={() => setRestoreName(body.name)}
             >
-              Close
+              Restore
             </MonitorButton>
-          }
-        >
-          <pre className="monitor-pre bk-export">{body.content || "(empty)"}</pre>
-        </MonitorPanel>
-      )}
+          )
+        }
+      />
 
       {restoring && (
         <RestoreDialog

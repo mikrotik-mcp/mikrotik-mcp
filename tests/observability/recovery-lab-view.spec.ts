@@ -77,7 +77,7 @@ test("starting a prepared run requires transfer consent", async () => {
       new Error("Runner unavailable; verify this run before retrying."),
     );
     await act(async () => {
-      document.querySelector<HTMLInputElement>('[role="dialog"] input[type="checkbox"]')!.click();
+      document.querySelector<HTMLButtonElement>('[role="dialog"] [role="checkbox"]')!.click();
     });
     expect((submit as HTMLButtonElement).disabled).toBe(false);
     await act(async () => submit.click());

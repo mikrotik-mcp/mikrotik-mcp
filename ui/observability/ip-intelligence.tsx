@@ -14,6 +14,7 @@ import {
   StatusBadge,
 } from "./monitoring-ui";
 import { PerspectiveGraphic } from "./ip-perspective";
+import { TextInput } from "./kit";
 import type { PerspectiveSource } from "./ip-perspective";
 import "./ip-intelligence.css";
 
@@ -236,17 +237,17 @@ export function IpIntelligenceView() {
               IP address <span className="text-faint">· IPv4 or IPv6</span>
             </label>
             <div className="ipi-lookup-row">
-              <input
+              <TextInput
                 id="ipi-address"
-                className="monitor-input"
+                mono
                 placeholder="e.g. 1.1.1.1 or 2606:4700::1111"
                 required
                 maxLength={64}
                 autoComplete="off"
                 spellCheck={false}
                 value={ip}
-                onChange={(event) => {
-                  setIp(event.target.value);
+                onChange={(value) => {
+                  setIp(value);
                   generation.current++;
                   setBusy(false);
                   setResult(null);

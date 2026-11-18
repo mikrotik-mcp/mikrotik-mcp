@@ -15,6 +15,7 @@ import {
   PageIntro,
   RouterPicker,
 } from "./monitoring-ui";
+import { Checkbox, TextInput } from "./kit";
 import "./monitoring.css";
 import "./investigations.css";
 
@@ -330,10 +331,11 @@ export function InvestigationsView(): ReactNode {
             </div>
             <label className="monitor-fl">
               <span className="monitor-label">Client IPv4 or MAC</span>
-              <input
-                className="monitor-input inv-input inv-mono"
+              <TextInput
+                mono
+                label="Client IPv4 or MAC"
                 value={client}
-                onChange={(e) => setClient(e.target.value)}
+                onChange={setClient}
                 placeholder="Pick below or type an IPv4 or MAC"
                 required
                 disabled={busy}
@@ -350,10 +352,11 @@ export function InvestigationsView(): ReactNode {
           <div className="inv-two">
             <label className="monitor-fl">
               <span className="monitor-label">Destination hostname or IPv4</span>
-              <input
-                className="monitor-input inv-input inv-mono"
+              <TextInput
+                mono
+                label="Destination hostname or IPv4"
                 value={target}
-                onChange={(e) => setTarget(e.target.value)}
+                onChange={setTarget}
                 placeholder="payments.example.com"
                 required
                 disabled={busy}
@@ -361,10 +364,10 @@ export function InvestigationsView(): ReactNode {
             </label>
             <label className="monitor-fl">
               <span className="monitor-label">Service label</span>
-              <input
-                className="monitor-input inv-input"
+              <TextInput
+                label="Service label"
                 value={service}
-                onChange={(e) => setService(e.target.value)}
+                onChange={setService}
                 placeholder="Branch payment service"
                 maxLength={120}
                 required
@@ -407,22 +410,18 @@ export function InvestigationsView(): ReactNode {
                               : "Add another perspective"}
                         </small>
                       </span>
-                      <span className="monitor-check">
-                        <input
-                          type="checkbox"
-                          aria-label={`Include ${d} as an additional router`}
-                          checked={checked}
-                          disabled={off}
-                          onChange={(e) => {
-                            const next = e.target.checked;
-                            setVantages((current) => {
-                              if (!next) return current.filter((name) => name !== d);
-                              if (current.includes(d) || current.length >= 2) return current;
-                              return [...current, d];
-                            });
-                          }}
-                        />
-                      </span>
+                      <Checkbox
+                        aria-label={`Include ${d} as an additional router`}
+                        checked={checked}
+                        disabled={off}
+                        onCheckedChange={(next) => {
+                          setVantages((current) => {
+                            if (!next) return current.filter((name) => name !== d);
+                            if (current.includes(d) || current.length >= 2) return current;
+                            return [...current, d];
+                          });
+                        }}
+                      />
                     </label>
                   );
                 })}

@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Router, RefreshCw, AlertTriangle, ShieldCheck } from "lucide-react";
+import { RefreshCw, AlertTriangle, ShieldCheck } from "lucide-react";
+import { RouterPicker } from "./kit";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { api, postJson } from "./api";
 import "./operations.css";
 
@@ -148,19 +142,13 @@ export function WorkspaceHeader({
         <p className="ops-description">{description}</p>
       </div>
       <div className="ops-toolbar">
-        <Select value={device} onValueChange={onDevice} disabled={busy || !devices.length}>
-          <SelectTrigger aria-label="Workspace router">
-            <Router size={16} />
-            <SelectValue placeholder="Select router" />
-          </SelectTrigger>
-          <SelectContent>
-            {devices.map((d) => (
-              <SelectItem value={d} key={d}>
-                {d}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <RouterPicker
+          value={device}
+          onChange={onDevice}
+          routers={devices}
+          disabled={busy || !devices.length}
+          label="Workspace router"
+        />
         <Button
           variant="outline"
           onClick={onRefresh}

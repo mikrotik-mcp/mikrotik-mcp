@@ -14,7 +14,7 @@
 import "./monitoring.css";
 import "./security.css";
 import { LoadingState } from "./loading-state";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, ChevronUp, Play } from "lucide-react";
 import { api, postJson } from "./api";
@@ -41,6 +41,9 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { DetailBlock, DetailList, RowDrawer, RowMenu, RowMore, TextArea, tipProps } from "./kit";
+import type { Tone as KitTone, TipCard } from "./kit";
+import { TONE_COLOR } from "./signal-charts";
 import type { ChartTone } from "./signal-charts";
 
 const SEVERITY_ORDER: PolicySeverity[] = ["critical", "high", "medium", "low", "info"];
@@ -71,59 +74,123 @@ function stamp(ms: number): string {
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-function FindingRow({ finding }: { finding: PolicyFinding }): ReactNode {
-  const [open, setOpen] = useState(false);
+const KIT_TONE: Record<Tone, KitTone> = {
+  default: "off",
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  brand: "acc",
+};
+
+/** "/ip/ssh:12": where a finding sits in the exported config. */
+const where = (f: PolicyFinding): string => `${f.section}${f.line ? `:${f.line}` : ""}`;
+
+/** Enter on a focused row opens its details. */
+const enterOpens =
+  (open: () => void) =>
+  (e: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === "Enter" && e.target === e.currentTarget) {
+      e.preventDefault();
+      open();
+    }
+  };
+
+/** The reason, the offending config line and the fix: the finding drawer's body. */
+function FindingDetail({ finding }: { finding: PolicyFinding }): ReactNode {
   return (
-    <>
-      <button
-        type="button"
-        className="monitor-row sec-fd-cols"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <span className="sec-mut">
-          {open ? (
-            <ChevronDown aria-hidden="true" className="size-4" />
-          ) : (
-            <ChevronRight aria-hidden="true" className="size-4" />
-          )}
+    <div className="sec-drawer-stack sec-fd-detail">
+      <p>{finding.reason}</p>
+      {finding.evidence && (
+        <DetailBlock label="Config" aside={where(finding)}>
+          <pre className="monitor-pre">{finding.evidence}</pre>
+        </DetailBlock>
+      )}
+      {finding.remediation && (
+        <span className="sec-mono sec-fd-fix">
+          <span className="sec-ok">Fix:</span> {finding.remediation}
         </span>
-        <span>
+      )}
+    </div>
+  );
+}
+
+function FindingRow({
+  finding,
+  open,
+  onOpen,
+}: {
+  finding: PolicyFinding;
+  open: boolean;
+  onOpen: () => void;
+}): ReactNode {
+  return (
+    <RowMenu
+      title={finding.ruleId}
+      sub={`${finding.severity} · ${finding.device} · ${where(finding)}`}
+      onOpen={onOpen}
+      cells={{
+        severity: { value: finding.severity, kind: "risk" },
+        rule: { value: finding.ruleId, kind: "id" },
+        device: { value: finding.device ?? "", kind: "router" },
+      }}
+      copies={[
+        { label: "Rule ID", value: finding.ruleId },
+        ...(finding.evidence ? [{ label: "Config line", value: finding.evidence, hint: "" }] : []),
+      ]}
+      row={finding}
+    >
+      <div
+        className="monitor-row sec-fd-cols sec-inc-row"
+        data-selected={open || undefined}
+        tabIndex={0}
+        onClick={onOpen}
+        onKeyDown={enterOpens(onOpen)}
+      >
+        <button
+          type="button"
+          className="sec-caret"
+          aria-expanded={open}
+          aria-label={`${open ? "Hide" : "Show"} details: ${finding.ruleId} on ${finding.device}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+        >
+          <ChevronRight aria-hidden="true" />
+        </button>
+        <span data-col="severity">
           <StatusBadge tone={severityTone(finding.severity)} dot={false}>
             {finding.severity}
           </StatusBadge>
         </span>
-        <span className="sec-col">
+        <span data-col="rule" className="sec-col">
           <span className="sec-mono p">{finding.ruleId}</span>
           <span className="sec-trunc sec-mut text-[12px]">
             {finding.description ?? finding.reason}
           </span>
         </span>
-        <span className="sec-col items-end">
+        <span data-col="device" className="sec-col items-end">
           <span className="sec-mono sec-tx2 sec-trunc">{finding.device}</span>
-          <span className="sec-mono sec-faint sec-trunc">
-            {finding.section}
-            {finding.line ? `:${finding.line}` : ""}
-          </span>
+          <span className="sec-mono sec-faint sec-trunc">{where(finding)}</span>
         </span>
-      </button>
-      {open && (
-        <div className="sec-fd-open">
-          <p>{finding.reason}</p>
-          {finding.evidence && <pre className="monitor-pre">{finding.evidence}</pre>}
-          {finding.remediation && (
-            <span className="sec-mono sec-fd-fix">
-              <span className="sec-ok">Fix:</span> {finding.remediation}
-            </span>
-          )}
-        </div>
-      )}
-    </>
+        <RowMore />
+      </div>
+    </RowMenu>
   );
 }
 
 /** rules × routers: a systemic gap versus one broken router. */
-function FleetMatrix({ reports }: { reports: PolicyRunReport[] }): ReactNode {
+function FleetMatrix({
+  reports,
+  openRule,
+  onOpenRule,
+  onOpenFinding,
+}: {
+  reports: PolicyRunReport[];
+  openRule: string | null;
+  onOpenRule: (ruleId: string) => void;
+  onOpenFinding: (finding: PolicyFinding) => void;
+}): ReactNode {
   const withData = reports.filter((r) => r.findings);
   const failed = (r: PolicyRunReport, ruleId: string): boolean =>
     (r.findings ?? []).some((f) => f.ruleId === ruleId && f.status === "fail");
@@ -155,24 +222,75 @@ function FleetMatrix({ reports }: { reports: PolicyRunReport[] }): ReactNode {
             {r.device}
           </span>
         ))}
+        <span />
       </div>
-      {ruleIds.map((ruleId) => (
-        <div key={ruleId} className="monitor-row sec-matrix-cols sec-matrix-row" style={cols}>
-          <span className="sec-mono sec-tx2 sec-trunc">{ruleId}</span>
-          {withData.map((report) => {
-            const finding = cell(report, ruleId);
-            const status = finding?.status ?? "pass";
-            return (
-              <span
-                key={report.device}
-                className="sec-cell"
-                data-status={status}
-                title={`${report.device}: ${finding?.reason ?? "pass"}`}
-              />
-            );
-          })}
-        </div>
-      ))}
+      {ruleIds.map((ruleId) => {
+        const fails = withData.filter((r) => failed(r, ruleId)).length;
+        return (
+          <RowMenu
+            key={ruleId}
+            title={ruleId}
+            sub={`fails on ${fails} of ${plural(withData.length, "router")}`}
+            onOpen={() => onOpenRule(ruleId)}
+            cells={{ rule: { value: ruleId, kind: "id" } }}
+            copies={[{ label: "Rule ID", value: ruleId }]}
+          >
+            <div
+              className="monitor-row sec-matrix-cols sec-matrix-row sec-inc-row kit-tips"
+              style={cols}
+              data-selected={openRule === ruleId || undefined}
+              tabIndex={0}
+              onClick={() => onOpenRule(ruleId)}
+              onKeyDown={enterOpens(() => onOpenRule(ruleId))}
+            >
+              <span data-col="rule" className="sec-mono sec-tx2 sec-trunc">
+                {ruleId}
+              </span>
+              {withData.map((report) => {
+                const finding = cell(report, ruleId);
+                const status = finding?.status ?? "pass";
+                const failing = finding?.status === "fail" ? finding : undefined;
+                return (
+                  <span
+                    key={report.device}
+                    className="sec-cell"
+                    data-status={status}
+                    {...tipProps((): TipCard => ({
+                      title: ruleId,
+                      sub: report.device,
+                      led: status === "fail" ? "bad" : status === "pass" ? "ok" : "off",
+                      rows: [
+                        {
+                          label: "Result",
+                          value:
+                            status === "fail"
+                              ? "fail"
+                              : status === "pass"
+                                ? "pass"
+                                : "not applicable",
+                        },
+                        ...(finding ? [{ label: "Reason", value: finding.reason }] : []),
+                        ...(finding?.section ? [{ label: "Where", value: where(finding) }] : []),
+                      ],
+                      action: failing
+                        ? {
+                            label: "Open finding",
+                            onClick: () =>
+                              onOpenFinding({
+                                ...failing,
+                                device: failing.device ?? report.device,
+                              }),
+                          }
+                        : undefined,
+                    }))}
+                  />
+                );
+              })}
+              <RowMore />
+            </div>
+          </RowMenu>
+        );
+      })}
       <div className="monitor-foot">
         <span className="monitor-legend">
           <span>
@@ -262,12 +380,12 @@ function Validator(): ReactNode {
       description="Paste a rule file to check it. Nothing is saved."
       className="sec-validator"
     >
-      <textarea
-        className="monitor-input"
-        aria-label="Rule file"
+      <TextArea
+        label="Rule file"
+        mono
+        rows={9}
         value={text}
-        spellCheck={false}
-        onChange={(e) => setText(e.target.value)}
+        onChange={setText}
         placeholder={`version: 1\npolicies:\n  - id: ssh-strong-crypto\n    severity: high\n    match: { section: /ip/ssh, settings: true }\n    assert: { field: strong-crypto, equals: "yes" }`}
       />
       <div className="sec-validator-foot">
@@ -306,6 +424,8 @@ export function PoliciesView(): ReactNode {
   const [reports, setReports] = useState<PolicyRunReport[]>([]);
   const [running, setRunning] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  /** The finding (by key) or matrix rule open in the drawer. */
+  const [detail, setDetail] = useState<{ kind: "finding" | "rule"; key: string } | null>(null);
 
   const load = useCallback(() => {
     return Promise.all([
@@ -352,6 +472,11 @@ export function PoliciesView(): ReactNode {
         .slice(0, 12)
         .map((r) => r.score)
         .reverse(),
+      historyLabels: rows
+        .slice(0, 12)
+        .map((r) => stamp(r.ts))
+        .reverse(),
+      previous: rows[1],
     };
   });
 
@@ -364,6 +489,9 @@ export function PoliciesView(): ReactNode {
     severity: s,
     items: failing.filter((f) => f.severity === s),
   })).filter((x) => x.items.length > 0);
+  // Findings in the order the list shows them, for the drawer's next / previous.
+  const shownFindings = bySeverity.flatMap((x) => x.items);
+  const findingKey = (f: PolicyFinding): string => `${f.device}-${f.ruleId}-${f.line ?? 0}`;
 
   if (initialLoading) return <LoadingState label="Loading workspace records" />;
 
@@ -436,11 +564,39 @@ export function PoliciesView(): ReactNode {
           </MonitorEmpty>
         ) : (
           <div className="sec-comp">
-            {latest.map(({ device, current, history }) => {
+            {latest.map(({ device, current, history, historyLabels, previous }) => {
               const tone = scoreTone(current.score);
+              const delta = previous ? current.score - previous.score : 0;
               return (
                 <div key={device} className="glass sec-comp-card">
-                  <Ring value={current.score} size={72} stroke={6} tone={tone} label="compliance" />
+                  <Ring
+                    value={current.score}
+                    size={72}
+                    stroke={6}
+                    tone={tone}
+                    label="compliance"
+                    tip={{
+                      title: device,
+                      sub: stamp(current.ts),
+                      rows: [
+                        {
+                          label: "Score",
+                          value: `${Math.round(current.score)}%`,
+                          color: TONE_COLOR[tone],
+                        },
+                        { label: "Pass", value: current.passed },
+                        { label: "Fail", value: current.failed },
+                        { label: "Not applicable", value: current.notApplicable },
+                      ],
+                      foot: previous
+                        ? {
+                            label: `vs ${stamp(previous.ts)}`,
+                            value: `${delta >= 0 ? "+" : ""}${Math.round(delta)} pts`,
+                            tone: delta > 0 ? "up" : delta < 0 ? "down" : undefined,
+                          }
+                        : undefined,
+                    }}
+                  />
                   <span className="sec-col">
                     <span className="sec-mono sec-tx sec-trunc sec-comp-name">{device}</span>
                     <span className="sec-mut text-[12px]">
@@ -453,6 +609,9 @@ export function PoliciesView(): ReactNode {
                     {history.length > 1 ? (
                       <Sparkline
                         values={history}
+                        labels={historyLabels}
+                        name="Score"
+                        format={(v) => `${Math.round(v)}%`}
                         width={120}
                         height={22}
                         tone={tone === "bad" ? "bad" : "good"}
@@ -480,7 +639,12 @@ export function PoliciesView(): ReactNode {
               description="Rules that failed somewhere, by router."
               flush
             >
-              <FleetMatrix reports={reports} />
+              <FleetMatrix
+                reports={reports}
+                openRule={detail?.kind === "rule" ? detail.key : null}
+                onOpenRule={(ruleId) => setDetail({ kind: "rule", key: ruleId })}
+                onOpenFinding={(f) => setDetail({ kind: "finding", key: findingKey(f) })}
+              />
             </MonitorPanel>
           )}
           <MonitorPanel
@@ -537,7 +701,12 @@ export function PoliciesView(): ReactNode {
                       {s.severity} · {s.items.length}
                     </div>
                     {s.items.map((f) => (
-                      <FindingRow key={`${f.device}-${f.ruleId}-${f.line ?? 0}`} finding={f} />
+                      <FindingRow
+                        key={findingKey(f)}
+                        finding={f}
+                        open={detail?.kind === "finding" && detail.key === findingKey(f)}
+                        onOpen={() => setDetail({ kind: "finding", key: findingKey(f) })}
+                      />
                     ))}
                   </div>
                 ))
@@ -547,6 +716,107 @@ export function PoliciesView(): ReactNode {
           <Validator />
         </div>
       </section>
+      <PolicyDrawer
+        detail={detail}
+        onMove={setDetail}
+        onClose={() => setDetail(null)}
+        findings={shownFindings}
+        findingKey={findingKey}
+        reports={reports}
+      />
     </div>
+  );
+}
+
+/** Rules that failed somewhere, in the matrix's order. */
+function matrixRules(reports: PolicyRunReport[]): string[] {
+  const withData = reports.filter((r) => r.findings);
+  return [...new Set(withData.flatMap((r) => (r.findings ?? []).map((f) => f.ruleId)))]
+    .filter((id) =>
+      withData.some((r) => (r.findings ?? []).some((f) => f.ruleId === id && f.status === "fail")),
+    )
+    .sort();
+}
+
+function PolicyDrawer({
+  detail,
+  onMove,
+  onClose,
+  findings,
+  findingKey,
+  reports,
+}: {
+  detail: { kind: "finding" | "rule"; key: string } | null;
+  onMove: (d: { kind: "finding" | "rule"; key: string }) => void;
+  onClose: () => void;
+  findings: PolicyFinding[];
+  findingKey: (f: PolicyFinding) => string;
+  reports: PolicyRunReport[];
+}): ReactNode {
+  if (!detail) return null;
+  const keys = detail.kind === "finding" ? findings.map(findingKey) : matrixRules(reports);
+  const index = keys.indexOf(detail.key);
+  if (index < 0) return null;
+  const nav = {
+    index,
+    total: keys.length,
+    onPrev: index > 0 ? () => onMove({ kind: detail.kind, key: keys[index - 1]! }) : undefined,
+    onNext:
+      index < keys.length - 1
+        ? () => onMove({ kind: detail.kind, key: keys[index + 1]! })
+        : undefined,
+  };
+  if (detail.kind === "finding") {
+    const f = findings[index]!;
+    return (
+      <RowDrawer
+        open
+        onClose={onClose}
+        label={`Finding details: ${f.ruleId}`}
+        storageKey="policies"
+        rowKey={detail.key}
+        nav={nav}
+        status={{ tone: KIT_TONE[severityTone(f.severity)], label: f.severity }}
+        title={<span className="sec-mono">{f.ruleId}</span>}
+        meta={`${f.device} · ${where(f)}`}
+        chips={f.description ? <span className="monitor-chip">{f.description}</span> : undefined}
+      >
+        <FindingDetail finding={f} />
+      </RowDrawer>
+    );
+  }
+  const ruleId = detail.key;
+  const withData = reports.filter((r) => r.findings);
+  const rows = withData.map((r) => {
+    const all = (r.findings ?? []).filter((f) => f.ruleId === ruleId);
+    const fail = all.find((f) => f.status === "fail");
+    return { device: r.device, finding: fail ?? all[0] };
+  });
+  const fails = rows.filter((r) => r.finding?.status === "fail").length;
+  return (
+    <RowDrawer
+      open
+      onClose={onClose}
+      label={`Rule details: ${ruleId}`}
+      storageKey="policies"
+      rowKey={`rule:${ruleId}`}
+      nav={nav}
+      status={{ tone: "bad", label: `fails on ${fails} of ${plural(withData.length, "router")}` }}
+      title={<span className="sec-mono">{ruleId}</span>}
+    >
+      <DetailList
+        items={rows.map((r) => ({
+          label: <span className="sec-mono">{r.device}</span>,
+          value:
+            r.finding == null
+              ? "pass"
+              : r.finding.status === "fail"
+                ? `fail · ${r.finding.reason}`
+                : r.finding.status === "pass"
+                  ? "pass"
+                  : "not applicable",
+        }))}
+      />
+    </RowDrawer>
   );
 }

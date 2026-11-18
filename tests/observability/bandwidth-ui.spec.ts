@@ -9,6 +9,7 @@ import {
   bandwidthStatistics,
 } from "../../ui/observability/bandwidth";
 import { navigationGroups, parseViewHash } from "../../ui/observability/navigation";
+import { kitControl, optionsOf } from "../_stubs/kit";
 
 // Happy DOM rejects cancelled WAAPI animations; exercise the real controls with Motion's JS fallback.
 const animateDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, "animate");
@@ -72,9 +73,9 @@ test("new test form is disabled by default with bounded inputs and explicit live
       [...form.querySelectorAll("button")].some((b) => b.textContent === "Check readiness"),
     ).toBe(true);
     expect(form.querySelector('input[type="password"]')).toBeNull();
-    const boxes = [...form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    const boxes = [...form.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')];
     expect(boxes).toHaveLength(2);
-    expect(boxes.filter((box) => box.checked)).toHaveLength(0);
+    expect(boxes.filter((box) => box.getAttribute("aria-checked") === "true")).toHaveLength(0);
     expect(
       form
         .querySelector('[role="switch"][aria-label="Enable recurring traffic"]')
@@ -88,13 +89,15 @@ test("new test form is disabled by default with bounded inputs and explicit live
     expect(advancedContent.hidden).toBe(true);
     const generatedId = advancedContent.querySelector<HTMLInputElement>("input[readonly]")!;
     expect(generatedId.value).toMatch(/^[a-f0-9-]{36}$/);
-    expect(advancedContent.querySelectorAll('input[type="number"]')).toHaveLength(4);
-    const visibleNumbers = [...form.querySelectorAll('input[type="number"]')].filter(
+    expect(advancedContent.querySelectorAll('[role="spinbutton"]')).toHaveLength(4);
+    const visibleNumbers = [...form.querySelectorAll('[role="spinbutton"]')].filter(
       (input) => !input.closest("[hidden]"),
     );
     expect(visibleNumbers).toHaveLength(4);
-    const numberInputs = [...form.querySelectorAll<HTMLInputElement>('input[type="number"]')];
-    expect(numberInputs.map((i) => [i.min, i.max])).toEqual([
+    const numberInputs = [...form.querySelectorAll<HTMLInputElement>('[role="spinbutton"]')];
+    expect(
+      numberInputs.map((i) => [i.getAttribute("aria-valuemin"), i.getAttribute("aria-valuemax")]),
+    ).toEqual([
       ["5", "60"],
       ["300", "604800"],
       ["1", "100000000000"],
@@ -105,9 +108,18 @@ test("new test form is disabled by default with bounded inputs and explicit live
       ["0.02", "5"],
     ]);
     const report = numberInputs.at(-1)!;
-    expect(report.step).toBe("0.001");
-    expect(report.min).toBe("0.02");
-    expect(report.max).toBe("5");
+    expect(report.getAttribute("aria-valuemin")).toBe("0.02");
+    expect(report.getAttribute("aria-valuemax")).toBe("5");
+    // The report interval steps in milliseconds.
+    expect(report.getAttribute("aria-valuenow")).toBe("1");
+    await act(async () => {
+      form
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Increase Report interval · seconds"]',
+        )!
+        .click();
+    });
+    expect(report.getAttribute("aria-valuenow")).toBe("1.001");
     expect(
       [...document.querySelectorAll("button")].find((b) => b.textContent === "Save test")?.disabled,
     ).toBe(true);
@@ -244,16 +256,16 @@ test("manual traffic waits for impact confirmation and sends no credentials or b
       advanced.click();
     });
     expect(advanced.getAttribute("aria-expanded")).toBe("true");
-    const randomData = document.querySelector<HTMLInputElement>(
-      'input[type="checkbox"][aria-label="Generate random data"]',
+    const randomData = document.querySelector<HTMLButtonElement>(
+      '[role="checkbox"][aria-label="Generate random data"]',
     )!;
     await act(async () => {
       randomData.click();
     });
-    expect(randomData.checked).toBe(true);
-    const report = [...document.querySelectorAll("label")]
-      .find((label) => label.textContent?.includes("Report interval · seconds"))!
-      .querySelector("input")!;
+    expect(randomData.getAttribute("aria-checked")).toBe("true");
+    const report = document.querySelector<HTMLInputElement>(
+      '[role="spinbutton"][aria-label="Report interval · seconds"]',
+    )!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
         report,
@@ -271,19 +283,19 @@ test("manual traffic waits for impact confirmation and sends no credentials or b
     const recurring = document.querySelector<HTMLButtonElement>(
       '[role="switch"][aria-label="Enable recurring traffic"]',
     )!;
-    const acknowledgement = document.querySelector<HTMLInputElement>(
-      'input[type="checkbox"][aria-label="I acknowledge the traffic impact"]',
+    const acknowledgement = document.querySelector<HTMLButtonElement>(
+      '[role="checkbox"][aria-label="I acknowledge the traffic impact"]',
     )!;
     await act(async () => {
       acknowledgement.click();
     });
-    expect(acknowledgement.checked).toBe(true);
+    expect(acknowledgement.getAttribute("aria-checked")).toBe("true");
     await act(async () => {
       recurring.click();
     });
     expect(recurring.getAttribute("aria-checked")).toBe("true");
     // Changing the test withdraws the acknowledgement.
-    expect(acknowledgement.checked).toBe(false);
+    expect(acknowledgement.getAttribute("aria-checked")).toBe("false");
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
     await act(async () => {
       [...document.querySelectorAll("button")]
@@ -404,13 +416,13 @@ test("comparison respects selected jobs and excludes runs outside the time windo
       "2",
       "2",
     ]);
-    const alpha = history.querySelector<HTMLInputElement>(
-      'input[type="checkbox"][aria-label="Alpha (deleted)"]',
+    const alpha = history.querySelector<HTMLButtonElement>(
+      '[role="checkbox"][aria-label="Alpha (deleted)"]',
     )!;
     await act(async () => {
       alpha.click();
     });
-    expect(alpha.checked).toBe(true);
+    expect(alpha.getAttribute("aria-checked")).toBe("true");
     expect(articles()).toHaveLength(1);
     expect(articles()[0].textContent).toContain("Alpha");
     expect(articles()[0].textContent).not.toContain("Beta");
@@ -495,10 +507,10 @@ test("router changes load inventory automatically, cancel stale reads and expose
     [...document.querySelectorAll("button")].find(
       (b) => b.textContent === name || b.getAttribute("aria-label") === name,
     )!;
-  const select = (label: string) =>
-    document.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
-  const sourceOptions = () =>
-    [...select("Expected source interface").options].map((option) => option.value);
+  const select = (label: string) => kitControl(label) as HTMLButtonElement;
+  // Option text is "name" or "name — reason"; the name is the value.
+  const sourceOptions = async () =>
+    (await optionsOf("Expected source interface")).map((text) => text.split(" — ")[0]);
   try {
     await act(async () => {
       root.render(createElement(BandwidthView));
@@ -513,7 +525,7 @@ test("router changes load inventory automatically, cancel stale reads and expose
       button("Edit Second").click();
     });
     expect(slowSignal?.aborted).toBe(true);
-    expect(sourceOptions()).toEqual(expect.arrayContaining(["wg1", "ether2"]));
+    expect(await sourceOptions()).toEqual(expect.arrayContaining(["wg1", "ether2"]));
     await act(async () => {
       resolveSlow(
         new Response(
@@ -524,8 +536,8 @@ test("router changes load inventory automatically, cancel stale reads and expose
         ),
       );
     });
-    expect(sourceOptions()).not.toContain("stale");
-    expect(sourceOptions()).toEqual(expect.arrayContaining(["wg1", "ether2"]));
+    expect(await sourceOptions()).not.toContain("stale");
+    expect(await sourceOptions()).toEqual(expect.arrayContaining(["wg1", "ether2"]));
     failDestination = false;
     await act(async () => {
       button("Retry inventory").click();

@@ -45,10 +45,8 @@
   width: 14px;
   height: 14px;
 }
-.bk-path .monitor-input {
+.bk-path .kit-input {
   width: min(48vw, 380px);
-  font-family: var(--font-mt);
-  font-size: 12px;
 }
 
 .bk-cols {
@@ -60,39 +58,6 @@
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 10px;
-}
-
-/* A select or a field with an icon on the left (the boards' .select/.field). */
-.bk-select {
-  display: flex;
-  width: 100%;
-}
-.bk-select select {
-  width: 100%;
-  padding-left: 34px;
-}
-.bk-select .bk-icon {
-  right: auto;
-  left: 12px;
-}
-.bk-field {
-  position: relative;
-  display: flex;
-  min-width: 0;
-}
-.bk-field .monitor-input {
-  width: 100%;
-  padding-left: 34px;
-  line-height: 21px;
-}
-.bk-field > svg {
-  position: absolute;
-  top: 10px;
-  left: 12px;
-  width: 16px;
-  height: 16px;
-  color: var(--muted-foreground);
-  pointer-events: none;
 }
 
 /* Export options: pill toggles. */
@@ -148,7 +113,7 @@
 }
 
 .bk-table {
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.9fr) 72px 130px 330px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.9fr) 72px 130px 330px 26px;
 }
 .bk-actions {
   display: flex;
@@ -156,11 +121,9 @@
   justify-content: flex-end;
   gap: 4px;
 }
-.bk-actions .monitor-input {
+.bk-actions .kit-input {
   width: 140px;
   height: 28px;
-  font-family: var(--font-mt);
-  font-size: 12px;
 }
 .bk-ask {
   color: var(--destructive);
@@ -168,7 +131,7 @@
 }
 
 .bk-export {
-  max-height: 192px;
+  max-height: 460px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-all;

@@ -11,6 +11,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { setDraftField } from "../../src/config-device-draft";
+import { Field, NumberInput, SecretInput, TextInput } from "./kit";
 
 type Draft = Record<string, unknown>;
 const text = (value: unknown) =>
@@ -99,26 +100,41 @@ export function DeviceJumpHost({
   };
   const field = (key: string, label: string, fallback = "", secret = false) => {
     const stored = host[key] === "«redacted»";
+    const value = stored || (!manual && secret) ? "" : text(host[key] ?? fallback);
+    const placeholder =
+      stored || (!manual && secret && host[key])
+        ? "Stored securely · reused automatically"
+        : secret
+          ? "Optional"
+          : "Not set";
     return (
-      <label key={key} className="monitor-fl">
-        <span className="monitor-label">{label}</span>
-        <input
-          id={`jump_${key}`}
-          className={cn("monitor-input", !secret && "font-mono")}
-          readOnly={!manual}
-          type={secret ? "password" : key === "port" ? "number" : "text"}
-          value={stored || (!manual && secret) ? "" : text(host[key] ?? fallback)}
-          placeholder={
-            stored || (!manual && secret && host[key])
-              ? "Stored securely · reused automatically"
-              : secret
-                ? "Optional"
-                : "Not set"
-          }
-          autoComplete={secret ? "new-password" : "off"}
-          onChange={(e) => update(key, e.target.value)}
-        />
-      </label>
+      <Field key={key} label={label} className="monitor-fl" id={`jump_${key}`}>
+        {secret ? (
+          <SecretInput
+            readOnly={!manual}
+            value={value}
+            placeholder={placeholder}
+            autoComplete="new-password"
+            onChange={(next) => update(key, next)}
+          />
+        ) : key === "port" ? (
+          <NumberInput
+            allowEmpty
+            value={value === "" ? null : Number(value)}
+            placeholder={placeholder}
+            onChange={(next) => update(key, next == null ? "" : String(next))}
+          />
+        ) : (
+          <TextInput
+            mono
+            readOnly={!manual}
+            value={value}
+            placeholder={placeholder}
+            autoComplete="off"
+            onChange={(next) => update(key, next)}
+          />
+        )}
+      </Field>
     );
   };
   const summary = selected

@@ -85,4 +85,74 @@ describe("observability dashboard", () => {
     const tw = readFileSync(join(UI_DIR, "tailwind.css"), "utf8");
     expect(tw).toContain(".js-motion .reveal");
   });
+
+  /**
+   * Every page uses the Signal UI kit (ui/observability/kit) for its controls.
+   * A raw text <input> or <textarea> is allowed only with a `kit-exempt:` reason
+   * on the same line or the line above (the terminal's command line, for one);
+   * file and hidden inputs are always allowed.
+   */
+  test("pages use the kit instead of raw form controls", () => {
+    const offenders: string[] = [];
+    const BANNED =
+      /<select\b|<datalist\b|type="(checkbox|radio|range|number|date|time|datetime-local|month|week)"/;
+    const OLD_UI =
+      /from "@\/components\/ui\/(select|checkbox|switch|date-time-picker|tags-input|textarea|input|calendar)"/;
+    for (const [name, src] of sourceFiles) {
+      const lines = src.split("\n");
+      lines.forEach((line, i) => {
+        const where = `${name}:${i + 1}`;
+        if (BANNED.test(line) && !/PolarAngleAxis|XAxis|YAxis/.test(line))
+          offenders.push(`${where} ${line.trim()}`);
+        if (OLD_UI.test(line)) offenders.push(`${where} ${line.trim()}`);
+        if (/<(input|textarea)\b/.test(line)) {
+          const near = `${lines[i - 1] ?? ""} ${line} ${lines[i + 1] ?? ""} ${lines[i + 2] ?? ""}`;
+          if (
+            !/kit-exempt:/.test(`${lines[i - 1] ?? ""} ${line}`) &&
+            !/type="(file|hidden)"/.test(near)
+          )
+            offenders.push(`${where} ${line.trim()}`);
+        }
+      });
+    }
+    expect(
+      offenders,
+      `use the kit (ui/observability/kit) instead:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * Every table opens a row menu and a row drawer, and every chart answers a
+   * hover with the kit's tooltip (Kit-Data boards). A file that draws a picture,
+   * not a chart, says so with a `chart-exempt:` comment.
+   */
+  test("tables use the row menu and drawer; charts use the kit tooltip", () => {
+    const offenders: string[] = [];
+    for (const [name, src] of sourceFiles) {
+      // Only components draw tables; markdown.ts writes table HTML as text.
+      if (!name.endsWith(".tsx")) continue;
+      const table = /className="monitor-thead|<table\b|role="grid"/.test(src);
+      if (table && !src.includes("<RowMenu")) offenders.push(`${name}: table without RowMenu`);
+      if (table && !/<RowDrawer|<FeedInspector|RowDrawer\b/.test(src))
+        offenders.push(`${name}: table without a row drawer`);
+      const chart = /<svg[^>]*role="img"/.test(src) || /from "recharts"/.test(src);
+      if (
+        chart &&
+        !/chart-exempt:/.test(src) &&
+        !/LineHover|tipProps|TipTarget|ChartTooltip|<Sparkline|<Ring\b|<Donut\b/.test(src)
+      )
+        offenders.push(`${name}: chart without a tooltip`);
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+
+  /** Every page in the sidebar is rendered by main.tsx; a lost mount leaves a blank page. */
+  test("every navigation page is mounted", () => {
+    const main = readFileSync(join(UI_DIR, "main.tsx"), "utf8");
+    const nav = readFileSync(join(UI_DIR, "navigation.ts"), "utf8");
+    const ids = [...nav.matchAll(/\{\s*id:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!);
+    expect(ids.length).toBeGreaterThan(30);
+    const missing = ids.filter((id) => !main.includes(`view === "${id}"`));
+    expect(missing, `pages with no render in main.tsx: ${missing.join(", ")}`).toEqual([]);
+  });
 });

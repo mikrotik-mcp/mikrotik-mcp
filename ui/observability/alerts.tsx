@@ -8,8 +8,10 @@
  */
 import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { api, postJson } from "./api";
+import { DetailBlock, DetailList, RowDrawer, RowMenu, RowMore } from "./kit";
+import type { RowAction } from "./kit";
 import type { DevicesPayload } from "./types";
 import { useNow } from "./use-now";
 import {
@@ -160,6 +162,19 @@ function rowKey(r: AlertRuleRow): string {
   return `${r.id}\u0000${r.subject}`;
 }
 
+/** Enter or Space on a focused row acts like a click. */
+function onRowKey(run: () => void): (e: KeyboardEvent<HTMLElement>) => void {
+  return (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      run();
+    }
+  };
+}
+
+type Picked = { t: "rule" | "channel" | "send"; key: string } | null;
+
 function deliveryError(d: Delivery): string {
   if (d.status) return `HTTP ${d.status}`;
   return d.error ?? "error";
@@ -190,6 +205,7 @@ export function AlertsView(): ReactNode {
   const [confirmRemove, setConfirmRemove] = useState<{ id: string } | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [devices, setDevices] = useState<string[]>([]);
+  const [picked, setPicked] = useState<Picked>(null);
   const now = useNow(10_000);
 
   const firingRef = useRef<HTMLDivElement>(null);
@@ -419,6 +435,224 @@ export function AlertsView(): ReactNode {
     uniqueRules.filter((r) => r.channels.includes(name)).length;
   const count = (n: number): string => String(Math.round(n));
 
+  /** The row menu's and the drawer's actions for a rule: the same ones the row offers. */
+  const ruleActions = (r: AlertRuleRow): RowAction[] => {
+    const isMuted = !!r.mutedUntil;
+    return [
+      {
+        label: isMuted ? "Unmute" : "Mute 1 h",
+        icon: <BellOff aria-hidden="true" />,
+        disabled: busy !== null,
+        onSelect: () => void mute(r.id, isMuted ? "0s" : "1h"),
+      },
+      {
+        label: r.enabled ? "Disable" : "Enable",
+        icon: <Power aria-hidden="true" />,
+        disabled: busy !== null,
+        onSelect: () => void toggle(r),
+      },
+      {
+        label: "Remove",
+        icon: <Trash2 aria-hidden="true" />,
+        danger: true,
+        disabled: busy !== null,
+        onSelect: () => setConfirmRemove({ id: r.id }),
+      },
+    ];
+  };
+  const channelText = (c: AlertsPayload["channels"][string]): string =>
+    c.configured ? (c.url?.replace(/^[a-z]+:\/\//i, "") ?? "Set up") : "Not set up";
+  const lastText = (last: { ts: number; d: Delivery } | undefined): string =>
+    !last
+      ? "Nothing sent"
+      : last.d.ok
+        ? `sent ${span(now - last.ts)} ago`
+        : `failed ${span(now - last.ts)} ago`;
+  const sendResult = (d: Delivery | null): string =>
+    !d ? "Not sent" : d.ok ? "Delivered" : `Failed · ${deliveryError(d)}`;
+  const shownSends = sends.slice(0, HISTORY_LIMIT);
+  const channelNames = Object.keys(data.channels);
+  const togglePick = (t: "rule" | "channel" | "send", key: string): void => setPicked({ t, key });
+  const navOver = (keys: string[]) => {
+    if (!picked) return undefined;
+    const at = keys.indexOf(picked.key);
+    if (at < 0) return undefined;
+    return {
+      index: at,
+      total: keys.length,
+      onPrev: at > 0 ? () => setPicked({ t: picked.t, key: keys[at - 1]! }) : undefined,
+      onNext:
+        at < keys.length - 1 ? () => setPicked({ t: picked.t, key: keys[at + 1]! }) : undefined,
+    };
+  };
+  const actionButtons = (list: RowAction[]): ReactNode =>
+    list.map((a, i) => (
+      <MonitorButton
+        key={i}
+        size="sm"
+        variant={a.danger ? "danger" : undefined}
+        icon={a.icon}
+        disabled={a.disabled}
+        onClick={a.onSelect}
+      >
+        {a.label}
+      </MonitorButton>
+    ));
+
+  const drawer = ((): ReactNode => {
+    if (!picked) return null;
+    const close = (): void => setPicked(null);
+    if (picked.t === "rule") {
+      const r = ordered.find((x) => rowKey(x) === picked.key);
+      if (!r) return null;
+      const status = STATUS_VIEW[r.status];
+      const tone =
+        status.tone === "bad"
+          ? "bad"
+          : status.tone === "warn"
+            ? "warn"
+            : status.tone === "good"
+              ? "ok"
+              : "off";
+      return (
+        <RowDrawer
+          open
+          onClose={close}
+          label={`Rule details: ${r.id}`}
+          storageKey="alerts"
+          rowKey={`rule:${picked.key}`}
+          status={{
+            tone,
+            label:
+              r.status === "muted" && r.mutedUntil
+                ? `Muted to ${clock(r.mutedUntil)}`
+                : status.label,
+          }}
+          title={<span className="alerts-mono">{r.id}</span>}
+          meta={STATUS_HINT[r.status]}
+          nav={navOver(ordered.map(rowKey))}
+          actions={actionButtons(ruleActions(r))}
+        >
+          {r.description && <p className="text-fg-secondary text-[13px]">{r.description}</p>}
+          <DetailList
+            items={[
+              { label: "When", value: describeTrigger(r.when), mono: true },
+              ...(r.subject !== "*" ? [{ label: "Device", value: r.subject, mono: true }] : []),
+              { label: "Severity", value: r.severity },
+              { label: "Holds for", value: r.for ?? "Fires immediately" },
+              { label: "Cooldown", value: r.cooldown },
+              { label: "Channels", value: r.channels.join(", ") || "No channels" },
+              ...(r.status !== "clear" && r.status !== "disabled"
+                ? [{ label: "Since", value: `${clock(r.since)} (${span(now - r.since)} ago)` }]
+                : []),
+              ...(r.mutedUntil ? [{ label: "Muted until", value: clock(r.mutedUntil) }] : []),
+              { label: "Enabled", value: r.enabled ? "Yes" : "No" },
+            ]}
+          />
+          {(r.warnings ?? []).length > 0 && (
+            <DetailBlock label="Warnings">
+              {(r.warnings ?? []).map((w) => (
+                <span key={w} className="alerts-warning">
+                  <TriangleAlert aria-hidden="true" /> {w}
+                </span>
+              ))}
+            </DetailBlock>
+          )}
+        </RowDrawer>
+      );
+    }
+    if (picked.t === "channel") {
+      const c = data.channels[picked.key];
+      if (!c) return null;
+      const last = lastByChannel.get(picked.key);
+      const tone = !c.configured ? "warn" : last && !last.d.ok ? "bad" : "ok";
+      const n = rulesPerChannel(picked.key);
+      return (
+        <RowDrawer
+          open
+          onClose={close}
+          label={`Channel details: ${picked.key}`}
+          storageKey="alerts"
+          rowKey={`channel:${picked.key}`}
+          status={{
+            tone,
+            label: !c.configured
+              ? "Not set up"
+              : last && !last.d.ok
+                ? "Last send failed"
+                : "Set up",
+          }}
+          title={picked.key}
+          meta={`${n} rule${n === 1 ? "" : "s"}`}
+          nav={navOver(channelNames)}
+          primary={
+            <MonitorButton
+              size="sm"
+              variant="primary"
+              disabled={busy !== null}
+              icon={
+                busy === `test:${picked.key}` ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Send aria-hidden="true" />
+                )
+              }
+              onClick={() => void testChannel(picked.key)}
+            >
+              Send test
+            </MonitorButton>
+          }
+        >
+          <DetailList
+            items={[
+              // Never the full URL: the path is the credential.
+              { label: "Address", value: channelText(c), mono: true },
+              ...(c.method ? [{ label: "Method", value: c.method, mono: true }] : []),
+              { label: "Rules", value: String(n) },
+              { label: "Last send", value: lastText(last) },
+              ...(last && !last.d.ok ? [{ label: "Error", value: deliveryError(last.d) }] : []),
+            ]}
+          />
+        </RowDrawer>
+      );
+    }
+    const s = shownSends.find((x) => x.key === picked.key);
+    if (!s) return null;
+    const { h, d } = s;
+    return (
+      <RowDrawer
+        open
+        onClose={close}
+        label={`Delivery details: ${h.ruleId}`}
+        storageKey="alerts"
+        rowKey={`send:${picked.key}`}
+        status={{ tone: !d ? "off" : d.ok ? "ok" : "bad", label: sendResult(d) }}
+        title={h.title || h.ruleId}
+        meta={`${new Date(h.ts).toLocaleString(undefined, { hour12: false })} · ${d?.channel ?? "No channel"}`}
+        nav={navOver(shownSends.map((x) => x.key))}
+      >
+        <DetailList
+          items={[
+            { label: "Rule", value: h.ruleId, mono: true },
+            ...(h.device ? [{ label: "Device", value: h.device, mono: true }] : []),
+            { label: "Kind", value: h.kind === "resolve" ? "Resolved" : "Fired" },
+            { label: "Severity", value: h.severity },
+            { label: "Channel", value: d?.channel ?? "No channel" },
+            ...(d ? [{ label: "Attempts", value: String(d.attempts) }] : []),
+            ...(d?.status != null
+              ? [{ label: "HTTP status", value: String(d.status), mono: true }]
+              : []),
+          ]}
+        />
+        {h.body && (
+          <DetailBlock label="Message">
+            <pre className="monitor-pre break-words">{h.body}</pre>
+          </DetailBlock>
+        )}
+      </RowDrawer>
+    );
+  })();
+
   const verdict =
     firing.length > 0 ? (
       <>
@@ -555,6 +789,7 @@ export function AlertsView(): ReactNode {
               <span>When</span>
               <span>Status</span>
               <span />
+              <span />
             </div>
             {ordered.map((r) => {
               const status = STATUS_VIEW[r.status];
@@ -583,87 +818,122 @@ export function AlertsView(): ReactNode {
               const toggles = primary === "enable" || primary === "disable";
               const primaryBusy = busy === (toggles ? `toggle:${r.id}` : `mute:${r.id}`);
               const loud = status.tone === "bad" || status.tone === "warn";
+              const key = rowKey(r);
               return (
-                <div key={rowKey(r)} className="monitor-row alerts-rule-grid">
-                  <span className="alerts-rail" data-tone={SEV_TONE[r.severity]} />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span
-                      className="alerts-mono text-foreground truncate font-medium"
-                      title={r.description}
-                    >
-                      {r.id}
-                    </span>
-                    <span className="alerts-small truncate">{meta}</span>
-                    {/* A rule that can never resolve looks healthy until it has been
-                        stuck red for a week, so say so here. */}
-                    {(r.warnings ?? []).map((w) => (
-                      <span key={w} className="alerts-warning">
-                        <TriangleAlert aria-hidden="true" /> {w}
-                      </span>
-                    ))}
-                  </span>
-                  <span
-                    className="alerts-mono text-fg-secondary truncate"
-                    title={describeTrigger(r.when)}
+                <RowMenu
+                  key={key}
+                  title={r.id}
+                  sub={`${label} · ${r.severity}`}
+                  onOpen={() => togglePick("rule", key)}
+                  cells={{
+                    rule: { value: r.id },
+                    when: { value: describeTrigger(r.when) },
+                    status: { value: label },
+                  }}
+                  copies={[{ label: "Rule ID", value: r.id }]}
+                  row={r}
+                  actions={ruleActions(r)}
+                >
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${r.id}, ${label}`}
+                    className="monitor-row alerts-rule-grid"
+                    data-selected={(picked?.t === "rule" && picked.key === key) || undefined}
+                    onClick={() => togglePick("rule", key)}
+                    onKeyDown={onRowKey(() => togglePick("rule", key))}
                   >
-                    {describeTrigger(r.when)}
-                  </span>
-                  <span title={STATUS_HINT[r.status]}>
-                    <StatusBadge tone={status.tone} dot={loud}>
-                      {label}
-                    </StatusBadge>
-                  </span>
-                  <span className="alerts-rule-actions">
-                    <MonitorButton
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy !== null}
-                      icon={primaryBusy ? <Loader2 className="animate-spin" /> : undefined}
-                      onClick={() =>
-                        void (toggles ? toggle(r) : mute(r.id, primary === "unmute" ? "0s" : "1h"))
-                      }
+                    <span className="alerts-rail" data-tone={SEV_TONE[r.severity]} />
+                    <span data-col="rule" className="flex min-w-0 flex-col gap-0.5">
+                      <span
+                        className="alerts-mono text-foreground truncate font-medium"
+                        title={r.description}
+                      >
+                        {r.id}
+                      </span>
+                      <span className="alerts-small truncate">{meta}</span>
+                      {/* A rule that can never resolve looks healthy until it has been
+                        stuck red for a week, so say so here. */}
+                      {(r.warnings ?? []).map((w) => (
+                        <span key={w} className="alerts-warning">
+                          <TriangleAlert aria-hidden="true" /> {w}
+                        </span>
+                      ))}
+                    </span>
+                    <span
+                      data-col="when"
+                      className="alerts-mono text-fg-secondary truncate"
+                      title={describeTrigger(r.when)}
                     >
-                      {primary === "enable"
-                        ? "Enable"
-                        : primary === "disable"
-                          ? "Disable"
-                          : primary === "unmute"
-                            ? "Unmute"
-                            : "Mute"}
-                    </MonitorButton>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="monitor-icon-btn"
-                          disabled={busy !== null}
-                          aria-label={`More actions for ${r.id}`}
-                        >
-                          <Ellipsis aria-hidden="true" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {!(primary === "mute" || primary === "unmute") && (
-                          <DropdownMenuItem onSelect={() => void mute(r.id, isMuted ? "0s" : "1h")}>
-                            <BellOff /> {isMuted ? "Unmute" : "Mute 1 h"}
+                      {describeTrigger(r.when)}
+                    </span>
+                    <span data-col="status" title={STATUS_HINT[r.status]}>
+                      <StatusBadge tone={status.tone} dot={loud}>
+                        {label}
+                      </StatusBadge>
+                    </span>
+                    {/* The row's own buttons act here; they do not open the details. */}
+                    <span
+                      className="alerts-rule-actions"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <MonitorButton
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy !== null}
+                        icon={primaryBusy ? <Loader2 className="animate-spin" /> : undefined}
+                        onClick={() =>
+                          void (toggles
+                            ? toggle(r)
+                            : mute(r.id, primary === "unmute" ? "0s" : "1h"))
+                        }
+                      >
+                        {primary === "enable"
+                          ? "Enable"
+                          : primary === "disable"
+                            ? "Disable"
+                            : primary === "unmute"
+                              ? "Unmute"
+                              : "Mute"}
+                      </MonitorButton>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="monitor-icon-btn"
+                            disabled={busy !== null}
+                            aria-label={`More actions for ${r.id}`}
+                          >
+                            <Ellipsis aria-hidden="true" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {!(primary === "mute" || primary === "unmute") && (
+                            <DropdownMenuItem
+                              onSelect={() => void mute(r.id, isMuted ? "0s" : "1h")}
+                            >
+                              <BellOff /> {isMuted ? "Unmute" : "Mute 1 h"}
+                            </DropdownMenuItem>
+                          )}
+                          {!toggles && (
+                            <DropdownMenuItem onSelect={() => void toggle(r)}>
+                              <Power /> {r.enabled ? "Disable" : "Enable"}
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => setConfirmRemove({ id: r.id })}
+                          >
+                            <Trash2 /> Remove
                           </DropdownMenuItem>
-                        )}
-                        {!toggles && (
-                          <DropdownMenuItem onSelect={() => void toggle(r)}>
-                            <Power /> {r.enabled ? "Disable" : "Enable"}
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={() => setConfirmRemove({ id: r.id })}
-                        >
-                          <Trash2 /> Remove
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </span>
-                </div>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </span>
+                    <RowMore />
+                  </div>
+                </RowMenu>
               );
             })}
           </div>
@@ -682,47 +952,74 @@ export function AlertsView(): ReactNode {
                 <span>Channel</span>
                 <span>Last</span>
                 <span />
+                <span />
               </div>
               {Object.entries(data.channels).map(([name, c]) => {
                 const last = lastByChannel.get(name);
                 const tone: Tone = !c.configured ? "warn" : last && !last.d.ok ? "bad" : "good";
                 const n = rulesPerChannel(name);
                 return (
-                  <div key={name} className="monitor-row alerts-channel-grid">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <StatusDot tone={tone} />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="p truncate">{name}</span>
-                        {/* Never the full URL: the path is the credential. */}
-                        <span className="alerts-small truncate">
-                          {c.configured
-                            ? (c.url?.replace(/^[a-z]+:\/\//i, "") ?? "Set up")
-                            : "Not set up"}{" "}
-                          · {n} rule
-                          {n === 1 ? "" : "s"}
+                  <RowMenu
+                    key={name}
+                    title={name}
+                    sub={`${channelText(c)} · ${n} rule${n === 1 ? "" : "s"}`}
+                    onOpen={() => togglePick("channel", name)}
+                    cells={{
+                      channel: { value: name },
+                      last: { value: lastText(last) },
+                    }}
+                    copies={[{ label: "Channel name", value: name }]}
+                    actions={[
+                      {
+                        label: "Send test",
+                        icon: <Send aria-hidden="true" />,
+                        disabled: busy !== null,
+                        onSelect: () => void testChannel(name),
+                      },
+                    ]}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${name}, ${lastText(last)}`}
+                      className="monitor-row alerts-channel-grid"
+                      data-selected={(picked?.t === "channel" && picked.key === name) || undefined}
+                      onClick={() => togglePick("channel", name)}
+                      onKeyDown={onRowKey(() => togglePick("channel", name))}
+                    >
+                      <span data-col="channel" className="flex min-w-0 items-center gap-2.5">
+                        <StatusDot tone={tone} />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="p truncate">{name}</span>
+                          {/* Never the full URL: the path is the credential. */}
+                          <span className="alerts-small truncate">
+                            {channelText(c)} · {n} rule
+                            {n === 1 ? "" : "s"}
+                          </span>
                         </span>
                       </span>
-                    </span>
-                    <span className="alerts-small truncate">
-                      {!last
-                        ? "Nothing sent"
-                        : last.d.ok
-                          ? `sent ${span(now - last.ts)} ago`
-                          : `failed ${span(now - last.ts)} ago`}
-                    </span>
-                    <MonitorButton
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy !== null}
-                      icon={
-                        busy === `test:${name}` ? <Loader2 className="animate-spin" /> : undefined
-                      }
-                      onClick={() => void testChannel(name)}
-                      title="Send a real test message to this channel"
-                    >
-                      Send test
-                    </MonitorButton>
-                  </div>
+                      <span data-col="last" className="alerts-small truncate">
+                        {lastText(last)}
+                      </span>
+                      <MonitorButton
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy !== null}
+                        icon={
+                          busy === `test:${name}` ? <Loader2 className="animate-spin" /> : undefined
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void testChannel(name);
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        title="Send a real test message to this channel"
+                      >
+                        Send test
+                      </MonitorButton>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
                 );
               })}
             </>
@@ -753,37 +1050,64 @@ export function AlertsView(): ReactNode {
                 <span>Alert</span>
                 <span>Channel</span>
                 <span>Result</span>
+                <span />
               </div>
-              {sends.slice(0, HISTORY_LIMIT).map(({ key, h, d }) => (
-                <div
+              {shownSends.map(({ key, h, d }) => (
+                <RowMenu
                   key={key}
-                  className="monitor-row alerts-history-grid"
-                  data-failed={(d && !d.ok) || undefined}
+                  title={h.ruleId}
+                  sub={`${span(now - h.ts)} ago · ${d?.channel ?? "No channel"}`}
+                  onOpen={() => togglePick("send", key)}
+                  cells={{
+                    when: {
+                      value: new Date(h.ts).toLocaleString(undefined, { hour12: false }),
+                      kind: "time",
+                    },
+                    alert: { value: h.ruleId },
+                    channel: { value: d?.channel ?? "" },
+                    result: { value: sendResult(d) },
+                  }}
+                  copies={[{ label: "Rule ID", value: h.ruleId }]}
+                  row={{ ...h, deliveries: d ? [d] : [] }}
                 >
-                  <span
-                    className="alerts-mono text-muted-foreground truncate"
-                    title={new Date(h.ts).toLocaleString(undefined, { hour12: false })}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${h.ruleId}, ${sendResult(d)}, ${span(now - h.ts)} ago`}
+                    className="monitor-row alerts-history-grid"
+                    data-failed={(d && !d.ok) || undefined}
+                    data-selected={(picked?.t === "send" && picked.key === key) || undefined}
+                    onClick={() => togglePick("send", key)}
+                    onKeyDown={onRowKey(() => togglePick("send", key))}
                   >
-                    {span(now - h.ts)}
-                  </span>
-                  <span className="p truncate">
-                    {h.ruleId}
-                    {h.device ? ` · ${h.device}` : ""}
-                    {h.kind === "resolve" ? " · resolved" : ""}
-                  </span>
-                  <span className="text-muted-foreground truncate">
-                    {d?.channel ?? "No channel"}
-                  </span>
-                  <span
-                    className={cn(
-                      "truncate text-[12px] font-medium",
-                      !d ? "text-muted-foreground" : d.ok ? "text-success" : "text-destructive",
-                    )}
-                    title={d ? `${d.attempts} attempt${d.attempts === 1 ? "" : "s"}` : undefined}
-                  >
-                    {!d ? "Not sent" : d.ok ? "Delivered" : `Failed · ${deliveryError(d)}`}
-                  </span>
-                </div>
+                    <span
+                      data-col="when"
+                      className="alerts-mono text-muted-foreground truncate"
+                      title={new Date(h.ts).toLocaleString(undefined, { hour12: false })}
+                    >
+                      {span(now - h.ts)}
+                    </span>
+                    <span data-col="alert" className="p truncate">
+                      {h.ruleId}
+                      {h.device ? ` · ${h.device}` : ""}
+                      {h.kind === "resolve" ? " · resolved" : ""}
+                    </span>
+                    <span data-col="channel" className="text-muted-foreground truncate">
+                      {d?.channel ?? "No channel"}
+                    </span>
+                    <span
+                      data-col="result"
+                      className={cn(
+                        "truncate text-[12px] font-medium",
+                        !d ? "text-muted-foreground" : d.ok ? "text-success" : "text-destructive",
+                      )}
+                      title={d ? `${d.attempts} attempt${d.attempts === 1 ? "" : "s"}` : undefined}
+                    >
+                      {sendResult(d)}
+                    </span>
+                    <RowMore />
+                  </div>
+                </RowMenu>
               ))}
               {sends.length > HISTORY_LIMIT && (
                 <div className="monitor-foot">
@@ -824,6 +1148,8 @@ export function AlertsView(): ReactNode {
       >
         {null}
       </MonitorDialog>
+
+      {drawer}
 
       <AlertRuleEditor
         open={editorOpen}

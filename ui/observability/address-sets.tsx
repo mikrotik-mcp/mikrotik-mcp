@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ReactNode } from "react";
-import { AlertTriangle, Check, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, Check, RefreshCw } from "lucide-react";
 import type { AddressSetRevision, SetReference } from "../../src/address-sets/model";
 import type { RouterRoutingSnapshot } from "../../src/service-routing/inventory";
 import { api, postJson } from "./api";
-import { MonitorButton, MonitorEmpty, MonitorPanel, StatusBadge } from "./monitoring-ui";
+import { Field, TextArea, TextInput } from "./kit";
+import {
+  MonitorButton,
+  MonitorEmpty,
+  MonitorPanel,
+  MonitorSearch,
+  StatusBadge,
+} from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 import { CheckRow, FieldSelect, hhmm } from "./service-routing-ui";
 
@@ -35,24 +41,6 @@ function prefixSize(cidr: string): string {
 }
 function short(sum: string): string {
   return sum.length > 14 ? `${sum.slice(0, 8)}…${sum.slice(-4)}` : sum;
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: ReactNode;
-  hint?: ReactNode;
-  children: ReactNode;
-}): ReactNode {
-  return (
-    <label className="monitor-fl">
-      <span className="monitor-label">{label}</span>
-      {children}
-      {hint != null && <span className="monitor-hint">{hint}</span>}
-    </label>
-  );
 }
 
 export function AddressSets({
@@ -215,12 +203,11 @@ export function AddressSets({
         >
           <fieldset disabled={busy} className="m-0 grid min-w-0 gap-4 border-0 p-0">
             <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-3 max-sm:grid-cols-1">
-              <Field label="Set name">
-                <input
-                  className="monitor-input"
+              <Field label="Set name" className="monitor-fl">
+                <TextInput
                   value={form.name}
                   placeholder="trusted-services"
-                  onChange={(e) => update("name", e.target.value)}
+                  onChange={(v) => update("name", v)}
                 />
               </Field>
               <div className="monitor-fl">
@@ -240,13 +227,13 @@ export function AddressSets({
             <div className="grid grid-cols-[minmax(0,1fr)_180px] gap-3 max-sm:grid-cols-1">
               <Field
                 label="Source"
-                hint="Where these addresses came from. Saved with the revision."
+                className="monitor-fl"
+                help="Where these addresses came from. Saved with the revision."
               >
-                <input
-                  className="monitor-input"
+                <TextInput
                   value={form.source}
                   placeholder="Vendor list, Nov 2026"
-                  onChange={(e) => update("source", e.target.value)}
+                  onChange={(v) => update("source", v)}
                 />
               </Field>
               <div className="monitor-fl">
@@ -268,21 +255,15 @@ export function AddressSets({
             {(["left", "right"] as const).map((key, index) => (
               <Field
                 key={key}
-                label={
-                  index ? (
-                    <>
-                      Set B <span className="font-normal text-muted-foreground">· optional</span>
-                    </>
-                  ) : (
-                    "Set A"
-                  )
-                }
+                className="monitor-fl"
+                label={index ? "Set B" : "Set A"}
+                optional={index ? "· optional" : undefined}
               >
-                <textarea
-                  className="monitor-input font-mono"
+                <TextArea
+                  mono
                   rows={4}
                   value={form[key]}
-                  onChange={(e) => update(key, e.target.value)}
+                  onChange={(v) => update(key, v)}
                   placeholder={index ? "10.0.0.128/25" : "10.0.0.0/24"}
                 />
               </Field>
@@ -455,16 +436,12 @@ export function AddressSets({
               )}
 
               <div className="flex flex-col gap-2">
-                <label className="monitor-field">
-                  <Search aria-hidden="true" />
-                  <input
-                    type="search"
-                    aria-label="Search prefixes"
-                    placeholder="Find a prefix"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </label>
+                <MonitorSearch
+                  label="Search prefixes"
+                  placeholder="Find a prefix"
+                  value={search}
+                  onChange={setSearch}
+                />
                 <div
                   className="flex max-h-[216px] flex-col overflow-y-auto rounded-[10px] shadow-[inset_0_0_0_1px_var(--line)]"
                   tabIndex={0}

@@ -24,3 +24,24 @@
     width: auto;
   }
 }
+
+/* Host rows under an open port open the host drawer. */
+.fabric-host {
+  cursor: pointer;
+  transition: background-color 140ms;
+}
+.fabric-host:hover {
+  background: var(--overlay-03);
+}
+.fabric-host:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.fabric-host[data-selected] {
+  background: linear-gradient(90deg, var(--sig-soft), transparent 70%);
+  box-shadow: inset 2px 0 0 var(--sig);
+}
+.fabric-host:is(:hover, :focus-within) .kit-row-more {
+  opacity: 1;
+  background: var(--glass-3);
+}

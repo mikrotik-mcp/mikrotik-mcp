@@ -2,6 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
+import { ChartTipLayer, hideTip } from "../../ui/observability/kit";
 import { TopologyMap } from "../../ui/observability/topology";
 import type { TopologyPayload } from "../../ui/observability/types";
 
@@ -61,8 +62,25 @@ afterEach(async () => {
 });
 
 test("topology renders the MCP hub, managed device and discovered neighbor separately", async () => {
-  await act(async () => root.render(createElement(TopologyMap, { topo, onOnboard })));
-  expect(host.textContent).toContain("fixture-host");
+  await act(async () =>
+    root.render(
+      createElement(
+        "div",
+        null,
+        createElement(TopologyMap, { topo, onOnboard }),
+        createElement(ChartTipLayer),
+      ),
+    ),
+  );
+  // The hub names the MCP server in its card.
+  const hub = [...host.querySelectorAll<SVGGElement>("svg g[data-tip]")].find(
+    (g) => !g.classList.contains("cursor-pointer"),
+  )!;
+  await act(async () => hub.dispatchEvent(new FocusEvent("focusin", { bubbles: true })));
+  expect(document.querySelector('[role="tooltip"].kit-ctip')?.textContent).toContain(
+    "fixture-host",
+  );
+  await act(async () => hideTip(true));
   expect(host.textContent).toContain("Can be added (1)");
   expect(host.textContent).toContain("Edge Router");
   expect(host.textContent).toContain("Access Point");

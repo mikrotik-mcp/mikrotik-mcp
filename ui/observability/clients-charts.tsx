@@ -9,6 +9,8 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, svg } from "animejs";
 import type { Scope } from "animejs";
+import { DUR, EASE, LineHover, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 const W = 520;
@@ -31,6 +33,7 @@ export function LineChart({
   labels,
   label,
   drawKey,
+  card,
 }: {
   series: LineSeries[];
   xs?: number[];
@@ -39,6 +42,8 @@ export function LineChart({
   labels?: string[];
   label: string;
   drawKey?: unknown;
+  /** The hover card for point i; adds the crosshair. */
+  card?: (i: number) => TipCard;
 }): ReactNode {
   const root = useRef<SVGSVGElement>(null);
   const scope = useRef<Scope | null>(null);
@@ -48,7 +53,11 @@ export function LineChart({
       if (self?.matches.reduceMotion) return;
       const lines = root.current?.querySelectorAll<SVGPathElement>("path[data-line]");
       if (!lines?.length) return;
-      animate(svg.createDrawable(lines), { draw: ["0 0", "0 1"], duration: 700, ease: "outQuart" });
+      animate(svg.createDrawable(lines), {
+        draw: ["0 0", "0 1"],
+        duration: DUR.draw,
+        ease: EASE.enter,
+      });
     });
     return () => scope.current?.revert();
   }, [drawKey]);
@@ -69,7 +78,7 @@ export function LineChart({
         width="100%"
         height={h}
         preserveAspectRatio="none"
-        role="img"
+        role={card ? undefined : "img"}
         aria-label={label}
         className="block w-full"
       >
@@ -105,6 +114,16 @@ export function LineChart({
               </g>
             );
           })}
+        {card && n > 1 && (
+          <LineHover
+            width={W}
+            height={h}
+            points={(series[0]?.values ?? []).map((v, i) => [x(i), y(v)] as [number, number])}
+            card={card}
+            label={label}
+            color={series[0]?.color}
+          />
+        )}
       </svg>
       {labels != null && (
         <div className="clients-chart-labels">
@@ -121,9 +140,12 @@ export function LineChart({
 export function RowSpark({
   values,
   className,
+  tip,
 }: {
   values: number[];
   className?: string;
+  /** Card on hover. The row stays the focus stop. */
+  tip?: () => TipCard;
 }): ReactNode {
   const w = 64;
   const h = 18;
@@ -141,7 +163,14 @@ export function RowSpark({
   );
   const d = `M${pts.join(" L")}`;
   return (
-    <svg className={cls} viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true">
+    <svg
+      className={cls}
+      viewBox={`0 0 ${w} ${h}`}
+      width={w}
+      height={h}
+      {...(tip ? { ...tipProps(tip), tabIndex: -1 } : {})}
+      aria-hidden="true"
+    >
       <path d={`${d} L${w},${h} L0,${h} Z`} fill="var(--sig-fill)" />
       <path d={d} fill="none" stroke="var(--sig)" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
@@ -154,14 +183,16 @@ export interface TalkerBar {
   pct: number;
   value: string;
   tone: "good" | "warn";
+  /** Card on hover or focus. */
+  tip?: TipCard;
 }
 
 /** "Busiest right now": a name, a bar and a value per client. Bars ease to new widths in CSS. */
 export function TalkerBars({ items }: { items: TalkerBar[] }): ReactNode {
   return (
-    <div className="clients-talkers">
+    <div className="clients-talkers kit-tips">
       {items.map((it) => (
-        <div key={it.key} className="clients-talker">
+        <div key={it.key} className="clients-talker" {...(it.tip ? tipProps(it.tip) : {})}>
           <span className="clients-mono clients-trunc text-fg-secondary">{it.label}</span>
           <span className="monitor-bar">
             <span data-tone={it.tone} style={{ width: `${Math.max(0, Math.min(100, it.pct))}%` }} />

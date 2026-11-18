@@ -6,6 +6,8 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { LineHover } from "./kit";
+import type { TipCard } from "./kit";
 import { useLineDraw } from "./monitoring-ui";
 import type { FlightSample } from "../../src/flight-recorder/model";
 
@@ -78,6 +80,54 @@ export function FlightSignal({
   const ticks = samples.length ? Array.from({ length: 7 }, (_, i) => start + (span * i) / 6) : [];
   const fx = frozenAt !== undefined && frozenAt >= start && frozenAt <= end ? x(frozenAt) : null;
 
+  // One hover stop per sample: on the CPU line, or on its observation dot.
+  const stops = samples.map((s): [number, number] => [
+    x(s.at),
+    s.cpu !== undefined ? cpuY(s.cpu) : H - 16,
+  ]);
+  const card = (i: number): TipCard => {
+    const s = samples[i]!;
+    const up = s.interfaces.filter((f) => f.running).length;
+    const prev = samples[i - 1];
+    const delta = s.cpu !== undefined && prev?.cpu !== undefined ? s.cpu - prev.cpu : null;
+    return {
+      title: hhmm(s.at),
+      sub: `Sample ${i + 1} of ${samples.length}`,
+      led: s.reachable === true ? "ok" : s.reachable === false ? "bad" : "off",
+      rows: [
+        {
+          label: "Management",
+          value:
+            s.reachable === true ? "Answered" : s.reachable === false ? "No answer" : "Not checked",
+          color:
+            s.reachable === true
+              ? "var(--sig)"
+              : s.reachable === false
+                ? "var(--destructive)"
+                : "var(--text-faint)",
+        },
+        {
+          label: "CPU",
+          value: s.cpu !== undefined ? `${s.cpu}%` : "Not read",
+          color: "var(--brand)",
+        },
+        ...(s.memory !== undefined ? [{ label: "Memory", value: `${s.memory}%` }] : []),
+        ...(s.interfaces.length
+          ? [{ label: "Interfaces running", value: `${up} of ${s.interfaces.length}` }]
+          : []),
+        ...(s.gaps.length ? [{ label: "Missing", value: s.gaps.join(", ") }] : []),
+      ],
+      ...(delta !== null
+        ? {
+            foot: {
+              label: "CPU vs the sample before",
+              value: `${delta >= 0 ? "+" : ""}${delta} pts`,
+              tone: delta > 0 ? ("up" as const) : ("down" as const),
+            },
+          }
+        : {}),
+    };
+  };
   return (
     <div ref={root} className="flight-chart">
       <svg
@@ -137,6 +187,17 @@ export function FlightSignal({
               stroke="var(--text-faint)"
             />
           ),
+        )}
+        {stops.length > 0 && (
+          <LineHover
+            width={w}
+            height={H}
+            points={stops}
+            card={card}
+            label="CPU and management answers over time. Use the arrow keys to read each sample."
+            band={Math.max(8, Math.min(32, step))}
+            color="var(--brand)"
+          />
         )}
       </svg>
       <div className="flight-axis">

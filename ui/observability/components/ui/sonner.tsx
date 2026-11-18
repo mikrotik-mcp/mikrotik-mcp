@@ -5,7 +5,8 @@ import { useTheme } from "@/theme";
 type ToasterProps = ComponentProps<typeof Sonner>;
 
 /**
- * Sonner toaster wired to the dashboard's own light/dark theme and design tokens.
+ * Sonner toaster in the Signal kit's toast style (Kit-Overlays 03): bottom
+ * right, newest on top, at most three, with a timer line that pauses on hover.
  * Mounted once at the app root; call `toast(...)` from anywhere.
  */
 function Toaster(props: ToasterProps): React.ReactNode {
@@ -13,17 +14,22 @@ function Toaster(props: ToasterProps): React.ReactNode {
   return (
     <Sonner
       theme={theme}
-      className="toaster group"
+      className="kit-toaster"
       position="bottom-right"
+      visibleToasts={3}
+      gap={10}
       toastOptions={{
+        unstyled: true,
+        duration: 4000,
         classNames: {
-          toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-muted-foreground",
-          actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-          cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
-          error: "group-[.toast]:text-destructive",
-          success: "group-[.toast]:text-foreground",
+          toast: "kit-toast",
+          icon: "ic",
+          content: "tx",
+          title: "kit-toast-title",
+          description: "kit-toast-desc",
+          actionButton: "kit-btn",
+          cancelButton: "kit-btn",
+          closeButton: "kit-ib",
         },
       }}
       {...props}

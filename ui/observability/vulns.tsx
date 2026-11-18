@@ -32,6 +32,8 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { Checkbox, DetailList, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import type { ChartTone } from "./signal-charts";
 import { ExposurePath, ScoreRing } from "./security-charts";
 
@@ -215,6 +217,8 @@ export function AdvisoryView(): ReactNode {
   const [busy, setBusy] = useState(true);
   const [fleet, setFleet] = useState(false);
   const [showMitigated, setShowMitigated] = useState(false);
+  /** The router row open in the drawer. */
+  const [openDevice, setOpenDevice] = useState<number | null>(null);
 
   const load = useCallback(() => {
     void api<AdvisoryReport>(`/api/advisories${fleet ? "?all=1" : ""}`)
@@ -266,25 +270,13 @@ export function AdvisoryView(): ReactNode {
         lead="Published RouterOS advisories matched to the version each router runs, then ranked by whether the affected service is on and reachable."
         actions={
           <div className="sec-checks">
-            <label className="monitor-check">
-              <input
-                type="checkbox"
-                aria-label="Whole fleet"
-                checked={fleet}
-                onChange={(e) => setFleet(e.target.checked)}
-              />
-              Whole fleet
-            </label>
+            <Checkbox checked={fleet} onCheckedChange={setFleet} label="Whole fleet" />
             <span className="w-1.5" aria-hidden="true" />
-            <label className="monitor-check">
-              <input
-                type="checkbox"
-                aria-label="Show mitigated"
-                checked={showMitigated}
-                onChange={(e) => setShowMitigated(e.target.checked)}
-              />
-              Show mitigated
-            </label>
+            <Checkbox
+              checked={showMitigated}
+              onCheckedChange={setShowMitigated}
+              label="Show mitigated"
+            />
             <MonitorButton
               icon={<RefreshCw aria-hidden="true" />}
               disabled={busy}
@@ -335,33 +327,88 @@ export function AdvisoryView(): ReactNode {
             description="Version, board and how many services are on. Unrestricted means no source-address limit."
             flush
           >
-            {data.devices.map((d) => (
-              <div key={d.device ?? "default"} className="monitor-row sec-dev-cols">
-                <StatusDot tone={d.unrestrictedServices > 0 ? "warn" : "good"} />
-                <span className="sec-mono p sec-trunc">{d.device ?? "default"}</span>
-                <span className="sec-mono sec-tx">RouterOS {d.version || "(unreadable)"}</span>
-                <span className="sec-mut sec-trunc">{d.board ?? "—"}</span>
-                <span className="monitor-meter">
-                  <span className="monitor-bar">
+            {data.devices.map((d, i) => {
+              const name = d.device ?? "default";
+              const restricted = d.enabledServices - d.unrestrictedServices;
+              const matched = all.filter((f) => (f.device ?? "default") === name).length;
+              return (
+                <RowMenu
+                  key={name}
+                  title={name}
+                  sub={`RouterOS ${d.version || "(unreadable)"} · ${d.board ?? "no board"}`}
+                  onOpen={() => setOpenDevice(i)}
+                  cells={{
+                    device: { value: name, kind: "router" },
+                    version: { value: d.version },
+                    board: { value: d.board ?? "" },
+                    services: {
+                      value: `${d.enabledServices} on, ${d.unrestrictedServices} unrestricted`,
+                    },
+                  }}
+                  copies={[{ label: "Router name", value: name }]}
+                  row={d}
+                >
+                  <div
+                    className="monitor-row sec-dev-cols sec-inc-row"
+                    data-selected={openDevice === i || undefined}
+                    tabIndex={0}
+                    onClick={() => setOpenDevice(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && e.target === e.currentTarget) {
+                        e.preventDefault();
+                        setOpenDevice(i);
+                      }
+                    }}
+                  >
+                    <StatusDot tone={d.unrestrictedServices > 0 ? "warn" : "good"} />
+                    <span data-col="device" className="sec-mono p sec-trunc">
+                      {name}
+                    </span>
+                    <span data-col="version" className="sec-mono sec-tx">
+                      RouterOS {d.version || "(unreadable)"}
+                    </span>
+                    <span data-col="board" className="sec-mut sec-trunc">
+                      {d.board ?? "—"}
+                    </span>
                     <span
-                      data-tone="good"
-                      style={{
-                        width: `${
-                          d.enabledServices > 0
-                            ? ((d.enabledServices - d.unrestrictedServices) / d.enabledServices) *
-                              100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </span>
-                  <span>{d.enabledServices} on</span>
-                  <span className={d.unrestrictedServices > 0 ? "sec-warn" : "sec-mut"}>
-                    {d.unrestrictedServices} unrestricted
-                  </span>
-                </span>
-              </div>
-            ))}
+                      data-col="services"
+                      className="monitor-meter"
+                      {...tipProps((): TipCard => ({
+                        title: name,
+                        sub: "services",
+                        led: d.unrestrictedServices > 0 ? "warn" : "ok",
+                        rows: [
+                          { label: "On", value: d.enabledServices },
+                          { label: "Restricted", value: restricted, color: "var(--success)" },
+                          {
+                            label: "Unrestricted",
+                            value: d.unrestrictedServices,
+                            color: "var(--warning)",
+                          },
+                        ],
+                        foot: { label: "Advisories matched", value: matched },
+                      }))}
+                    >
+                      <span className="monitor-bar">
+                        <span
+                          data-tone="good"
+                          style={{
+                            width: `${
+                              d.enabledServices > 0 ? (restricted / d.enabledServices) * 100 : 0
+                            }%`,
+                          }}
+                        />
+                      </span>
+                      <span>{d.enabledServices} on</span>
+                      <span className={d.unrestrictedServices > 0 ? "sec-warn" : "sec-mut"}>
+                        {d.unrestrictedServices} unrestricted
+                      </span>
+                    </span>
+                    <RowMore />
+                  </div>
+                </RowMenu>
+              );
+            })}
             {data.unreadable.length > 0 && (
               <div className="monitor-foot sec-warn">
                 <AlertTriangle aria-hidden="true" className="size-4 flex-none" />
@@ -391,6 +438,17 @@ export function AdvisoryView(): ReactNode {
             </div>
           )}
 
+          {openDevice != null && data.devices[openDevice] && (
+            <DeviceDrawer
+              device={data.devices[openDevice]}
+              findings={all}
+              index={openDevice}
+              total={data.devices.length}
+              onMove={setOpenDevice}
+              onClose={() => setOpenDevice(null)}
+            />
+          )}
+
           <MonitorNote icon={<Info aria-hidden="true" />}>
             Dataset reviewed <b>{datasetDay(data.datasetDate)}</b> · {data.datasetSize} advisories.
             A clean result means nothing in this dataset matched, not that no vulnerability exists.
@@ -399,5 +457,65 @@ export function AdvisoryView(): ReactNode {
         </>
       )}
     </div>
+  );
+}
+
+/** One router from "Routers checked", with the advisories matched to it. */
+function DeviceDrawer({
+  device: d,
+  findings,
+  index,
+  total,
+  onMove,
+  onClose,
+}: {
+  device: AdvisoryReport["devices"][number];
+  findings: Finding[];
+  index: number;
+  total: number;
+  onMove: (i: number) => void;
+  onClose: () => void;
+}): ReactNode {
+  const name = d.device ?? "default";
+  const matched = findings.filter((f) => (f.device ?? "default") === name);
+  return (
+    <RowDrawer
+      open
+      onClose={onClose}
+      label={`Router details: ${name}`}
+      storageKey="vulns"
+      rowKey={name}
+      nav={{
+        index,
+        total,
+        onPrev: index > 0 ? () => onMove(index - 1) : undefined,
+        onNext: index < total - 1 ? () => onMove(index + 1) : undefined,
+      }}
+      status={
+        d.unrestrictedServices > 0
+          ? { tone: "warn", label: `${d.unrestrictedServices} unrestricted` }
+          : { tone: "ok", label: "No unrestricted services" }
+      }
+      title={<span className="sec-mono">{name}</span>}
+      meta={`RouterOS ${d.version || "(unreadable)"} · ${d.board ?? "no board"}`}
+    >
+      <DetailList
+        items={[
+          { label: "Version", value: d.version || "(unreadable)", mono: true },
+          { label: "Board", value: d.board ?? "—" },
+          { label: "Services on", value: d.enabledServices },
+          { label: "Restricted", value: d.enabledServices - d.unrestrictedServices },
+          { label: "Unrestricted", value: d.unrestrictedServices },
+          {
+            label: "Advisories",
+            value:
+              matched.length === 0
+                ? "none matched"
+                : matched.map((f) => `${f.advisory.id} (${f.advisory.severity})`).join(", "),
+            mono: matched.length > 0,
+          },
+        ]}
+      />
+    </RowDrawer>
   );
 }

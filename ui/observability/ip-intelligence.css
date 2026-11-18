@@ -23,13 +23,10 @@
   display: flex;
   gap: 8px;
 }
-.ipi-page .ipi-lookup-row input.monitor-input {
+.ipi-page .ipi-lookup-row .kit-input {
   flex: 1;
-  font-family: var(--font-mt);
-  font-size: 12px;
-  line-height: 21px;
 }
-.ipi-page .ipi-lookup-row input.monitor-input::placeholder {
+.ipi-page .ipi-lookup-row .kit-input input::placeholder {
   font-family: var(--font-sans);
   font-size: 13px;
 }

@@ -65,7 +65,7 @@
   gap: 14px;
 }
 .flows-talker-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 70px 44px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 70px 44px 26px;
 }
 .flows-bar.monitor-bar {
   width: 100%;
@@ -102,7 +102,7 @@
 
 /* Exporters. */
 .flows-exporter-grid {
-  grid-template-columns: 150px minmax(0, 1fr);
+  grid-template-columns: 150px minmax(0, 1fr) 26px;
 }
 .flows-exporter-name {
   display: flex;
@@ -122,7 +122,7 @@
 
 /* Busiest conversations. */
 .flows-conv-grid {
-  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr) 150px 80px;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr) 150px 80px 26px;
 }
 .flows-arrow {
   display: inline;
@@ -144,7 +144,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .flows-exporter-grid {
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) 26px;
   }
   /* The group-by control is wider than a phone panel; it scrolls sideways. */
   .flows-page .monitor-panel-extra {
@@ -158,14 +158,14 @@
   .flows-page .monitor-panel-extra .monitor-seg-item {
     flex: none;
   }
-  /* On a phone the port column folds away; the tooltip keeps it. */
+  /* On a phone the port column folds away; the row's details keep it. */
   .flows-conv-grid {
-    grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 64px;
+    grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 64px 26px;
   }
   .flows-conv-grid > :nth-child(4) {
     display: none;
   }
   .flows-talker-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 64px 40px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 64px 40px 26px;
   }
 }

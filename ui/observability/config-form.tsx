@@ -17,8 +17,8 @@ import {
 } from "../../src/config-device-draft";
 import type { DeviceTest } from "./config-editor";
 import { api } from "./api";
-import { Input, Select } from "./geist";
 import { DeviceEditor } from "./device-editor";
+import { NumberInput, SearchInput, SecretInput, Select, Switch, TextInput } from "./kit";
 import { ServiceProbesEditor } from "./service-probes-editor";
 import { CONFIG_SECTIONS, DEVICE_FIELDS } from "./config-spec";
 import type { CfgField, CfgSection } from "./config-spec";
@@ -32,7 +32,6 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 type Cfg = Record<string, unknown>;
@@ -84,12 +83,14 @@ function FieldRow({
   let control: ReactNode;
   if (field.type === "list") {
     control = (
-      <Input
+      <TextInput
         id={id}
+        label={field.label}
+        mono
         placeholder={field.placeholder}
         value={arr(value).join(", ")}
-        onChange={(e) => {
-          const items = e.target.value
+        onChange={(text) => {
+          const items = text
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean);
@@ -98,33 +99,55 @@ function FieldRow({
       />
     );
   } else if (field.type === "bool") {
-    control = <Switch checked={value === true} onCheckedChange={onChange} />;
+    control = (
+      <Switch
+        id={id}
+        aria-label={field.label}
+        checked={value === true}
+        onCheckedChange={onChange}
+      />
+    );
   } else if (field.type === "select") {
     control = (
       <Select
+        id={id}
+        label={field.label}
         value={str(value ?? field.options?.[0] ?? "")}
-        onValueChange={onChange}
+        onChange={onChange}
         options={(field.options ?? []).map((o) => ({ value: o, label: o }))}
       />
     );
   } else if (field.type === "number") {
     control = (
-      <Input
+      <NumberInput
         id={id}
-        type="number"
+        label={field.label}
+        allowEmpty
         placeholder={field.placeholder}
+        value={typeof value === "number" ? value : null}
+        onChange={(n) => onChange(n ?? undefined)}
+      />
+    );
+  } else if (field.type === "password") {
+    control = (
+      <SecretInput
+        id={id}
+        label={field.label}
+        mono
+        placeholder={field.secret && value === REDACTED ? "•••• unchanged" : field.placeholder}
         value={value == null ? "" : str(value)}
-        onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+        onChange={onChange}
       />
     );
   } else {
     control = (
-      <Input
+      <TextInput
         id={id}
-        type={field.type === "password" ? "password" : "text"}
+        label={field.label}
+        mono
         placeholder={field.secret && value === REDACTED ? "•••• unchanged" : field.placeholder}
         value={value == null ? "" : str(value)}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
       />
     );
   }
@@ -684,14 +707,15 @@ function ServerFieldRow({
     );
   } else if (field.type === "list") {
     control = (
-      <input
+      <TextInput
         id={id}
-        className="monitor-input font-mono text-xs"
-        data-changed={changed || undefined}
+        label={field.label}
+        mono
+        wrapClassName={changed ? "config-changed" : undefined}
         placeholder={field.placeholder}
         value={arr(value).join(", ")}
-        onChange={(e) => {
-          const items = e.target.value
+        onChange={(text) => {
+          const items = text
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean);
@@ -699,24 +723,40 @@ function ServerFieldRow({
         }}
       />
     );
-  } else {
+  } else if (field.type === "number") {
     control = (
-      <input
+      <NumberInput
         id={id}
-        className="monitor-input font-mono text-xs"
-        data-changed={changed || undefined}
-        type={field.type === "number" ? "number" : field.type === "password" ? "password" : "text"}
+        label={field.label}
+        allowEmpty
+        className={changed ? "config-changed" : undefined}
+        placeholder={field.placeholder}
+        value={typeof value === "number" ? value : null}
+        onChange={(n) => onChange(n ?? undefined)}
+      />
+    );
+  } else if (field.type === "password") {
+    control = (
+      <SecretInput
+        id={id}
+        label={field.label}
+        mono
+        wrapClassName={changed ? "config-changed" : undefined}
         placeholder={field.secret && value === REDACTED ? "•••• unchanged" : field.placeholder}
         value={value == null ? "" : str(value)}
-        onChange={(e) =>
-          onChange(
-            field.type === "number"
-              ? e.target.value === ""
-                ? undefined
-                : Number(e.target.value)
-              : e.target.value,
-          )
-        }
+        onChange={onChange}
+      />
+    );
+  } else {
+    control = (
+      <TextInput
+        id={id}
+        label={field.label}
+        mono
+        wrapClassName={changed ? "config-changed" : undefined}
+        placeholder={field.secret && value === REDACTED ? "•••• unchanged" : field.placeholder}
+        value={value == null ? "" : str(value)}
+        onChange={onChange}
       />
     );
   }
@@ -948,12 +988,11 @@ function ModulesCard({
       <p className="monitor-hint">
         {catalog ? `${enabledCount}/${catalog.length} modules on` : "Loading…"} · applied on Save
       </p>
-      <input
-        className="monitor-input"
-        aria-label="Filter modules"
+      <SearchInput
+        label="Filter modules"
         placeholder="Filter modules…"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={setQuery}
       />
       <div className="flex max-h-[440px] flex-col gap-3.5 overflow-auto">
         {[...groups.entries()].map(([group, items]) => (

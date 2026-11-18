@@ -25,6 +25,8 @@ import {
   useStaggerIn,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { DetailBlock, DetailList, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
+import type { Tone as KitTone } from "./kit";
 
 interface DevicesPayload {
   defaultDevice: string;
@@ -77,8 +79,23 @@ const ROLE_COLOR: Record<FabricPort["role"], string> = {
   hybrid: "var(--warning)",
   empty: "var(--text-faint)",
 };
-const PORT_COLS = "grid-cols-[minmax(0,1.2fr)_112px_minmax(0,1fr)_96px]";
-const HOST_COLS = "grid-cols-[16px_minmax(0,240px)_170px_130px_minmax(0,1fr)]";
+const PORT_COLS = "grid-cols-[minmax(0,1.2fr)_112px_minmax(0,1fr)_96px_26px]";
+const HOST_COLS = "grid-cols-[16px_minmax(0,240px)_170px_130px_minmax(0,1fr)_26px]";
+const KIT_TONE: Record<Tone, KitTone> = {
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  brand: "acc",
+  default: "off",
+};
+/** Where a host's name came from, as the drawer writes it. */
+const SOURCE: Record<string, string> = {
+  dhcp: "DHCP lease",
+  arp: "ARP",
+  neighbor: "Neighbour",
+  vendor: "Vendor only",
+  none: "Nothing",
+};
 /** Hosts shown under an open port before "Show N more hosts". */
 const HOSTS_SHOWN = 5;
 const LEAD =
@@ -104,6 +121,8 @@ export function FabricView(): ReactNode {
   // Ports the user opened or closed, against the default (first port, or search hits).
   const [toggled, setToggled] = useState<Set<string>>(() => new Set());
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  // The row drawer: a port (by interface) or a host (by MAC).
+  const [drawer, setDrawer] = useState<{ port: string } | { mac: string } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -171,6 +190,18 @@ export function FabricView(): ReactNode {
     setQuery(value);
     setToggled(new Set());
   };
+  const openPort = (name: string) => {
+    if (!openPorts.has(name)) toggle(name);
+  };
+  // Hosts the table shows right now, in order: what the host drawer walks.
+  const shownHosts = ports.flatMap((p, i) =>
+    isOpen(p, i)
+      ? (expanded.has(p.interface) ? p.hosts : p.hosts.slice(0, HOSTS_SHOWN)).map((h) => ({
+          h,
+          port: p,
+        }))
+      : [],
+  );
 
   const names = routers?.devices.map((d) => d.name) ?? [];
   const bridges = [...new Set((data?.ports ?? []).map((p) => p.bridge).filter(Boolean))];
@@ -273,7 +304,13 @@ export function FabricView(): ReactNode {
                 </span>
               }
             >
-              <Faceplate device={data.device} ports={data.ports} readAt={readAt} open={openPorts} />
+              <Faceplate
+                device={data.device}
+                ports={data.ports}
+                readAt={readAt}
+                open={openPorts}
+                onOpen={openPort}
+              />
             </MonitorPanel>
           )}
 
@@ -315,6 +352,7 @@ export function FabricView(): ReactNode {
                     <span>Role</span>
                     <span>Bridge</span>
                     <span className="text-right">Hosts</span>
+                    <span />
                   </div>
                   {ports.map((p, i) => {
                     const open = isOpen(p, i);
@@ -324,90 +362,190 @@ export function FabricView(): ReactNode {
                     const panelId = `fabric-hosts-${i}`;
                     return (
                       <Fragment key={p.interface}>
-                        <button
-                          type="button"
-                          className={`monitor-row fabric-port ${PORT_COLS}`}
-                          data-selected={open || undefined}
-                          aria-expanded={open}
-                          aria-controls={open ? panelId : undefined}
-                          onClick={() => toggle(p.interface)}
+                        <RowMenu
+                          title={p.interface}
+                          sub={`${roleName(p.role)} · ${plural(p.hostCount, "host", "hosts")}`}
+                          onOpen={() => setDrawer({ port: p.interface })}
+                          cells={{
+                            port: { value: p.interface, search: () => onSearch(p.interface) },
+                            role: { value: roleName(p.role) },
+                            bridge: { value: p.bridge ?? "", copy: p.bridge != null },
+                            hosts: { value: String(p.hostCount) },
+                          }}
+                          copies={[{ label: "Port name", value: p.interface }]}
+                          row={p}
+                          actions={[
+                            {
+                              label: open ? "Hide hosts" : "Show hosts",
+                              icon: open ? (
+                                <ChevronDown aria-hidden="true" />
+                              ) : (
+                                <ChevronRight aria-hidden="true" />
+                              ),
+                              onSelect: () => toggle(p.interface),
+                            },
+                            ...(more > 0
+                              ? [
+                                  {
+                                    label: `Show ${more} more hosts`,
+                                    onSelect: () => {
+                                      openPort(p.interface);
+                                      setExpanded(new Set(expanded).add(p.interface));
+                                    },
+                                  },
+                                ]
+                              : []),
+                          ]}
                         >
-                          <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                            {open ? (
-                              <ChevronDown aria-hidden="true" className="size-4 shrink-0" />
-                            ) : (
-                              <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
-                            )}
-                            <span className="p truncate font-mono text-[12px]">{p.interface}</span>
-                            {p.peerIdentity != null && (
-                              <span className="truncate text-[12px] text-faint">
-                                ↔ {p.peerIdentity}
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className={`monitor-row fabric-port ${PORT_COLS}`}
+                            data-selected={open || undefined}
+                            aria-expanded={open}
+                            aria-controls={open ? panelId : undefined}
+                            onClick={() => toggle(p.interface)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                toggle(p.interface);
+                              }
+                            }}
+                          >
+                            <span
+                              data-col="port"
+                              className="flex min-w-0 items-center gap-2 text-muted-foreground"
+                            >
+                              {open ? (
+                                <ChevronDown aria-hidden="true" className="size-4 shrink-0" />
+                              ) : (
+                                <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
+                              )}
+                              <span className="p truncate font-mono text-[12px]">
+                                {p.interface}
                               </span>
-                            )}
-                          </span>
-                          <span>
-                            <StatusBadge tone={ROLE_TONE[p.role]}>{roleName(p.role)}</StatusBadge>
-                          </span>
-                          <span className="truncate font-mono text-[12px] text-fg-secondary">
-                            {p.bridge ?? "—"}
-                          </span>
-                          <span className="text-right text-foreground tabular-nums">
-                            {p.hostCount}
-                          </span>
-                        </button>
+                              {p.peerIdentity != null && (
+                                <span className="truncate text-[12px] text-faint">
+                                  ↔ {p.peerIdentity}
+                                </span>
+                              )}
+                            </span>
+                            <span data-col="role">
+                              <StatusBadge tone={ROLE_TONE[p.role]}>{roleName(p.role)}</StatusBadge>
+                            </span>
+                            <span
+                              data-col="bridge"
+                              className="truncate font-mono text-[12px] text-fg-secondary"
+                            >
+                              {p.bridge ?? "—"}
+                            </span>
+                            <span
+                              data-col="hosts"
+                              className="text-right text-foreground tabular-nums"
+                            >
+                              {p.hostCount}
+                            </span>
+                            <RowMore />
+                          </div>
+                        </RowMenu>
                         {open && (
                           <div id={panelId} className="bg-glass">
                             {hosts.map((h) => {
                               const unknown = unidentified(h);
                               return (
-                                <div
+                                <RowMenu
                                   key={h.mac}
-                                  className={`grid ${HOST_COLS} items-center gap-3 border-t border-line py-[7px] pr-[18px] pl-[44px] text-[13px]`}
+                                  title={h.label}
+                                  sub={`${h.mac} · ${p.interface}`}
+                                  onOpen={() => setDrawer({ mac: h.mac })}
+                                  cells={{
+                                    name: { value: h.label, search: () => onSearch(h.label) },
+                                    mac: {
+                                      value: h.mac,
+                                      kind: "id",
+                                      search: () => onSearch(h.mac),
+                                    },
+                                    ip: h.ip
+                                      ? { value: h.ip, kind: "ip", search: () => onSearch(h.ip!) }
+                                      : { value: "" },
+                                    vendor: { value: h.vendor ?? "" },
+                                  }}
+                                  copies={[
+                                    { label: "MAC address", value: h.mac },
+                                    ...(h.ip ? [{ label: "IP address", value: h.ip }] : []),
+                                  ]}
+                                  row={h}
                                 >
-                                  <span className="grid place-items-center text-brand">
-                                    {h.isNetworkDevice && (
-                                      <svg
-                                        viewBox="0 0 24 24"
-                                        className="size-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={1.5}
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        role="img"
-                                        aria-label="Network device"
-                                      >
-                                        <rect x="3" y="8" width="18" height="8" rx="2" />
-                                        <path d="M7 12h.01M11 12h.01M15 12h.01" />
-                                      </svg>
-                                    )}
-                                  </span>
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <span
-                                      className={`truncate ${unknown ? "text-warning" : "text-foreground"}`}
-                                    >
-                                      {h.label}
-                                    </span>
-                                    {unknown && (
-                                      <span className="monitor-badge h-5" data-tone="warn">
-                                        Unidentified
-                                      </span>
-                                    )}
-                                  </span>
-                                  <span className="truncate font-mono text-[12px] text-fg-secondary">
-                                    {h.mac}
-                                  </span>
-                                  <span
-                                    className={`truncate font-mono text-[12px] ${h.ip ? "text-fg-secondary" : "text-faint"}`}
+                                  <div
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-label={`${h.label}, ${h.mac}`}
+                                    data-selected={
+                                      (drawer && "mac" in drawer && drawer.mac === h.mac) ||
+                                      undefined
+                                    }
+                                    className={`fabric-host grid ${HOST_COLS} items-center gap-3 border-t border-line py-[7px] pr-[18px] pl-[44px] text-[13px]`}
+                                    onClick={() => setDrawer({ mac: h.mac })}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        setDrawer({ mac: h.mac });
+                                      }
+                                    }}
                                   >
-                                    {h.ip ?? "—"}
-                                  </span>
-                                  <span className="min-w-0">
-                                    {h.vendor != null && (
-                                      <span className="monitor-chip">{h.vendor}</span>
-                                    )}
-                                  </span>
-                                </div>
+                                    <span className="grid place-items-center text-brand">
+                                      {h.isNetworkDevice && (
+                                        <svg
+                                          viewBox="0 0 24 24"
+                                          className="size-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth={1.5}
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          role="img"
+                                          aria-label="Network device"
+                                        >
+                                          <rect x="3" y="8" width="18" height="8" rx="2" />
+                                          <path d="M7 12h.01M11 12h.01M15 12h.01" />
+                                        </svg>
+                                      )}
+                                    </span>
+                                    <span
+                                      data-col="name"
+                                      className="flex min-w-0 items-center gap-2"
+                                    >
+                                      <span
+                                        className={`truncate ${unknown ? "text-warning" : "text-foreground"}`}
+                                      >
+                                        {h.label}
+                                      </span>
+                                      {unknown && (
+                                        <span className="monitor-badge h-5" data-tone="warn">
+                                          Unidentified
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span
+                                      data-col="mac"
+                                      className="truncate font-mono text-[12px] text-fg-secondary"
+                                    >
+                                      {h.mac}
+                                    </span>
+                                    <span
+                                      data-col="ip"
+                                      className={`truncate font-mono text-[12px] ${h.ip ? "text-fg-secondary" : "text-faint"}`}
+                                    >
+                                      {h.ip ?? "—"}
+                                    </span>
+                                    <span data-col="vendor" className="min-w-0">
+                                      {h.vendor != null && (
+                                        <span className="monitor-chip">{h.vendor}</span>
+                                      )}
+                                    </span>
+                                    <RowMore />
+                                  </div>
+                                </RowMenu>
                               );
                             })}
                             {more > 0 && (
@@ -439,9 +577,122 @@ export function FabricView(): ReactNode {
               </span>
             </div>
           </MonitorPanel>
+          <FabricDrawer
+            drawer={drawer}
+            onDrawer={setDrawer}
+            ports={ports}
+            hosts={shownHosts}
+            open={openPorts}
+            onToggle={toggle}
+          />
         </>
       )}
     </section>
+  );
+}
+
+/** The row drawer for a port or a host: what the row holds, in full. */
+function FabricDrawer({
+  drawer,
+  onDrawer,
+  ports,
+  hosts,
+  open,
+  onToggle,
+}: {
+  drawer: { port: string } | { mac: string } | null;
+  onDrawer: (next: { port: string } | { mac: string } | null) => void;
+  ports: FabricPort[];
+  hosts: { h: FabricHost; port: FabricPort }[];
+  open: Set<string>;
+  onToggle: (name: string) => void;
+}): ReactNode {
+  if (!drawer) return null;
+  const close = () => onDrawer(null);
+  if ("port" in drawer) {
+    const at = ports.findIndex((p) => p.interface === drawer.port);
+    const p = at >= 0 ? ports[at]! : null;
+    if (!p) return null;
+    return (
+      <RowDrawer
+        open
+        onClose={close}
+        label={`Port details: ${p.interface}`}
+        status={{ tone: KIT_TONE[ROLE_TONE[p.role]], label: roleName(p.role) }}
+        title={p.interface}
+        meta={[p.bridge, p.peerIdentity ? `↔ ${p.peerIdentity}` : ""].filter(Boolean).join(" · ")}
+        rowKey={p.interface}
+        nav={{
+          index: at,
+          total: ports.length,
+          onPrev: at > 0 ? () => onDrawer({ port: ports[at - 1]!.interface }) : undefined,
+          onNext:
+            at < ports.length - 1 ? () => onDrawer({ port: ports[at + 1]!.interface }) : undefined,
+        }}
+        storageKey="fabric"
+        primary={
+          <MonitorButton size="sm" onClick={() => onToggle(p.interface)}>
+            {open.has(p.interface) ? "Hide hosts" : "Show hosts"}
+          </MonitorButton>
+        }
+      >
+        <DetailList
+          items={[
+            { label: "Port", value: p.interface, mono: true },
+            { label: "Role", value: roleName(p.role) },
+            { label: "Bridge", value: p.bridge ?? "—", mono: true },
+            { label: "Hosts", value: p.hostCount },
+            ...(p.peerIdentity ? [{ label: "Neighbour", value: p.peerIdentity, mono: true }] : []),
+          ]}
+        />
+        {p.hosts.length > 0 && (
+          <DetailBlock label="Hosts" aside={plural(p.hosts.length, "host", "hosts")}>
+            <DetailList
+              items={p.hosts.map((h) => ({ label: h.label, value: h.ip ?? h.mac, mono: true }))}
+            />
+          </DetailBlock>
+        )}
+      </RowDrawer>
+    );
+  }
+  const at = hosts.findIndex((x) => x.h.mac === drawer.mac);
+  const row = at >= 0 ? hosts[at]! : null;
+  if (!row) return null;
+  const { h, port } = row;
+  const unknown = unidentified(h);
+  return (
+    <RowDrawer
+      open
+      onClose={close}
+      label={`Host details: ${h.label}`}
+      status={unknown ? { tone: "warn", label: "Unidentified" } : undefined}
+      title={h.label}
+      meta={`${port.interface} · ${h.mac}`}
+      rowKey={h.mac}
+      nav={{
+        index: at,
+        total: hosts.length,
+        onPrev: at > 0 ? () => onDrawer({ mac: hosts[at - 1]!.h.mac }) : undefined,
+        onNext: at < hosts.length - 1 ? () => onDrawer({ mac: hosts[at + 1]!.h.mac }) : undefined,
+      }}
+      storageKey="fabric"
+    >
+      <DetailList
+        items={[
+          { label: "Name", value: h.label },
+          { label: "Name from", value: SOURCE[h.nameSource] ?? h.nameSource },
+          { label: "MAC address", value: h.mac, mono: true },
+          { label: "IP address", value: h.ip ?? "—", mono: true },
+          ...(h.hostname ? [{ label: "Host name", value: h.hostname, mono: true }] : []),
+          ...(h.identity ? [{ label: "Identity", value: h.identity, mono: true }] : []),
+          { label: "Vendor", value: h.vendor ?? "—" },
+          { label: "DHCP lease", value: h.hasLease ? "Yes" : "No" },
+          { label: "Network device", value: h.isNetworkDevice ? "Yes" : "No" },
+          { label: "Port", value: port.interface, mono: true },
+          { label: "Bridge", value: port.bridge ?? "—", mono: true },
+        ]}
+      />
+    </RowDrawer>
   );
 }
 
@@ -458,11 +709,14 @@ function Faceplate({
   ports,
   readAt,
   open,
+  onOpen,
 }: {
   device: string;
   ports: FabricPort[];
   readAt: number | null;
   open: Set<string>;
+  /** Opens the port's hosts in the table. */
+  onOpen?: (name: string) => void;
 }): ReactNode {
   const ref = useRef<HTMLDivElement>(null);
   useStaggerIn(ref, ".fabric-plate-port", `${device}|${readAt ?? 0}`);
@@ -473,9 +727,9 @@ function Faceplate({
         viewBox={`0 0 ${w} ${PLATE_H}`}
         width="100%"
         height={PLATE_H}
-        className="inline align-baseline"
+        className="kit-tips inline align-baseline"
         style={{ minWidth: w > 1100 ? w * 0.75 : 640 }}
-        role="img"
+        role="group"
         aria-label="Occupied bridge ports and how many hosts sit behind each"
       >
         <rect
@@ -511,8 +765,29 @@ function Faceplate({
           const lit = open.has(p.interface);
           const n = p.hostCount;
           return (
-            <g key={p.interface} className="fabric-plate-port">
-              <title>{`${p.interface}: ${roleName(p.role)}, ${plural(n, "host", "hosts")}`}</title>
+            <g
+              key={p.interface}
+              className="fabric-plate-port"
+              aria-label={`${p.interface}: ${roleName(p.role)}, ${plural(n, "host", "hosts")}`}
+              {...tipProps(() => ({
+                title: p.interface,
+                sub: p.bridge,
+                led: KIT_TONE[ROLE_TONE[p.role]],
+                rows: [
+                  { label: "Role", value: roleName(p.role), color: col },
+                  { label: "Hosts", value: n },
+                  ...(p.peerIdentity ? [{ label: "Neighbour", value: p.peerIdentity }] : []),
+                  {
+                    label: "Unidentified",
+                    value: p.hosts.filter(unidentified).length,
+                  },
+                ],
+                action:
+                  onOpen && !lit
+                    ? { label: "Show hosts", onClick: () => onOpen(p.interface) }
+                    : undefined,
+              }))}
+            >
               <rect
                 x={x}
                 y="46"

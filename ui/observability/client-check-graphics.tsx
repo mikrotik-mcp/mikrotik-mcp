@@ -8,6 +8,8 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, svg } from "animejs";
 import type { Scope } from "animejs";
+import { DUR, EASE, LineHover } from "./kit";
+import type { TipCard } from "./kit";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
 
@@ -165,16 +167,22 @@ export function LinkScene({
 const W = 520;
 const H = 120;
 
-function tracePath(values: number[], maximum: number): string {
+function tracePoints(values: number[], maximum: number): [number, number][] {
   const n = values.length;
-  return `M${values
-    .map((v, i) => {
-      const x = n > 1 ? (i * W) / (n - 1) : 0;
-      const y = H - 8 - (Math.max(0, v) / maximum) * (H - 20);
-      return `${Math.round(x * 10) / 10},${Math.round(y * 10) / 10}`;
-    })
+  return values.map((v, i) => {
+    const x = n > 1 ? (i * W) / (n - 1) : 0;
+    const y = H - 8 - (Math.max(0, v) / maximum) * (H - 20);
+    return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+  });
+}
+
+function tracePath(values: number[], maximum: number): string {
+  return `M${tracePoints(values, maximum)
+    .map(([x, y]) => `${x},${y}`)
     .join(" L")}`;
 }
+
+const ms = (v: number): string => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
 
 /** Idle and loaded HTTP latency for one run, on a scale shared with its pair. */
 export function LatencyTrace({
@@ -199,13 +207,37 @@ export function LatencyTrace({
       if (paths?.length)
         animate(svg.createDrawable(paths), {
           draw: ["0 0", "0 1"],
-          duration: 700,
-          ease: "outQuart",
+          duration: DUR.draw,
+          ease: EASE.enter,
         });
     });
     return () => scope.current?.revert();
   }, [key]);
   const scale = maximum < 10 ? maximum.toFixed(1) : Math.round(maximum).toString();
+  // The hover follows the longer series; the card reads both at that sample.
+  const main = idleMs.length >= loadedMs.length ? idleMs : loadedMs;
+  const points = tracePoints(main, maximum);
+  const card = (i: number): TipCard => {
+    const idle = idleMs[i];
+    const loaded = loadedMs[i];
+    return {
+      title: `Sample ${i + 1} of ${main.length}`,
+      sub: label,
+      rows: [
+        ...(idle != null ? [{ label: "Idle", value: ms(idle), color: "var(--sig)" }] : []),
+        ...(loaded != null ? [{ label: "Loaded", value: ms(loaded), color: "var(--brand)" }] : []),
+      ],
+      ...(idle != null && loaded != null
+        ? {
+            foot: {
+              label: "Loaded vs idle",
+              value: `${loaded >= idle ? "+" : "−"}${ms(Math.abs(loaded - idle))}`,
+              tone: loaded > idle ? ("down" as const) : ("up" as const),
+            },
+          }
+        : {}),
+    };
+  };
   return (
     <figure ref={root} className="cc-trace glass">
       <figcaption>{label} · HTTP latency samples</figcaption>
@@ -240,6 +272,17 @@ export function LatencyTrace({
             strokeWidth="2"
             strokeLinejoin="round"
             strokeLinecap="round"
+          />
+        )}
+        {points.length > 0 && (
+          <LineHover
+            width={W}
+            height={H}
+            points={points}
+            card={card}
+            label={`${label} latency samples. Use the arrow keys to read each sample.`}
+            band={Math.max(8, W / main.length)}
+            color={main === idleMs ? "var(--sig)" : "var(--brand)"}
           />
         )}
       </svg>

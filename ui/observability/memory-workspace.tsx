@@ -34,6 +34,8 @@ import type { Entity, Relation } from "../../src/memory/types";
 import type { MemoryActivityEntry, MemoryConfig, MemoryStats } from "./types";
 import { api, deleteJson } from "./api";
 import { CopyButton } from "./atoms";
+import { DetailList, Field, RowDrawer, RowMenu, RowMore, TextInput } from "./kit";
+import type { RowDrawerProps, RowMenuProps } from "./kit";
 import { EntityEditor, MemoryEditor, MemorySelect, saveMemory } from "./memory-editors";
 import { GRAPH_LIMIT, RelationGraph } from "./memory-graph";
 import { MemorySharing, MemoryScopeBadge, scopeLabel } from "./memory-sharing";
@@ -121,71 +123,85 @@ function FactCard({
   onOpen,
   onRevise,
   busy,
+  menu,
 }: {
   fact: MemoryFact;
   selected: boolean;
   onOpen: () => void;
   onRevise: (patch: object) => void;
   busy: boolean;
+  /** The card's row menu: cells, copies and actions. */
+  menu: Omit<RowMenuProps, "children" | "title" | "onOpen">;
 }) {
   const reasons = reviewReasons(fact);
   const pct = Math.round(fact.confidence * 100);
   const confTone = pct >= 70 ? "good" : pct >= 40 ? "warn" : "bad";
   return (
-    <article className="memory-fact" data-kind={fact.kind} data-selected={selected || undefined}>
-      <header className="flex min-w-0 flex-wrap items-center gap-2">
-        <KindBadge kind={fact.kind} />
-        <MemoryScopeBadge scope={fact.scope} />
-        {fact.key && <span className="monitor-chip">{fact.key}</span>}
-        <span className="flex-1" />
-        {fact.status === "archived" ? (
-          <StatusBadge dot={false}>Archived</StatusBadge>
-        ) : (
-          reasons.length > 0 && (
-            <StatusBadge tone="warn" dot={false}>
-              Needs review · {reasons[0].toLowerCase()}
-            </StatusBadge>
-          )
-        )}
-        <button
-          type="button"
-          className="memory-pin"
-          data-pinned={fact.pinned || undefined}
-          title={fact.pinned ? "Unpin memory" : "Pin memory"}
-          aria-label={fact.pinned ? "Unpin memory" : "Pin memory"}
-          aria-pressed={fact.pinned}
-          disabled={busy}
-          onClick={() => onRevise({ pinned: !fact.pinned })}
-        >
-          <Pin aria-hidden="true" />
-          {fact.pinned && "Pinned"}
-        </button>
-      </header>
-      <button type="button" className="memory-fact-content" onClick={onOpen}>
-        <span dir="auto">
-          {fact.content.length > 360 ? `${fact.content.slice(0, 360)}…` : fact.content}
-        </span>
-        <span className="sr-only">Open memory {fact.id}</span>
-      </button>
-      <div className="memory-fact-meta">
-        <span className="truncate" title={fact.source}>
-          Source <span className="font-mono text-fg-secondary">{fact.source}</span>
-        </span>
-        <span className="monitor-meter">
-          Confidence
-          <span className="monitor-bar" aria-hidden="true">
-            <span data-tone={confTone} style={{ width: `${pct}%` }} />
+    <RowMenu title={`Memory #${fact.id}`} onOpen={onOpen} {...menu}>
+      <article className="memory-fact" data-kind={fact.kind} data-selected={selected || undefined}>
+        <header className="flex min-w-0 flex-wrap items-center gap-2">
+          <span data-col="kind" className="contents">
+            <KindBadge kind={fact.kind} />
           </span>
-          <span>{pct}%</span>
-        </span>
-        <span>
-          Verified <span className="text-fg-secondary">{ago(fact.verifiedAt)}</span>
-        </span>
-        <span>
-          Expires <span className="text-fg-secondary">{until(fact.expiresAt)}</span>
-        </span>
-      </div>
-    </article>
+          <span data-col="scope" className="contents">
+            <MemoryScopeBadge scope={fact.scope} />
+          </span>
+          {fact.key && (
+            <span data-col="key" className="monitor-chip">
+              {fact.key}
+            </span>
+          )}
+          <span className="flex-1" />
+          {fact.status === "archived" ? (
+            <StatusBadge dot={false}>Archived</StatusBadge>
+          ) : (
+            reasons.length > 0 && (
+              <StatusBadge tone="warn" dot={false}>
+                Needs review · {reasons[0].toLowerCase()}
+              </StatusBadge>
+            )
+          )}
+          <button
+            type="button"
+            className="memory-pin"
+            data-pinned={fact.pinned || undefined}
+            title={fact.pinned ? "Unpin memory" : "Pin memory"}
+            aria-label={fact.pinned ? "Unpin memory" : "Pin memory"}
+            aria-pressed={fact.pinned}
+            disabled={busy}
+            onClick={() => onRevise({ pinned: !fact.pinned })}
+          >
+            <Pin aria-hidden="true" />
+            {fact.pinned && "Pinned"}
+          </button>
+          <RowMore />
+        </header>
+        <button type="button" className="memory-fact-content" onClick={onOpen}>
+          <span dir="auto">
+            {fact.content.length > 360 ? `${fact.content.slice(0, 360)}…` : fact.content}
+          </span>
+          <span className="sr-only">Open memory {fact.id}</span>
+        </button>
+        <div className="memory-fact-meta">
+          <span data-col="source" className="truncate" title={fact.source}>
+            Source <span className="font-mono text-fg-secondary">{fact.source}</span>
+          </span>
+          <span className="monitor-meter">
+            Confidence
+            <span className="monitor-bar" aria-hidden="true">
+              <span data-tone={confTone} style={{ width: `${pct}%` }} />
+            </span>
+            <span>{pct}%</span>
+          </span>
+          <span>
+            Verified <span className="text-fg-secondary">{ago(fact.verifiedAt)}</span>
+          </span>
+          <span>
+            Expires <span className="text-fg-secondary">{until(fact.expiresAt)}</span>
+          </span>
+        </div>
+      </article>
+    </RowMenu>
   );
 }
 
@@ -196,8 +212,11 @@ function FactDetail({
   onRevise,
   onNextReview,
   busy,
+  nav,
 }: {
   fact: MemoryFact;
+  /** Previous and next memory on this page. */
+  nav?: RowDrawerProps["nav"];
   onClose: () => void;
   onEdit: () => void;
   onRevise: (patch: object) => Promise<MemoryFact | undefined>;
@@ -276,20 +295,27 @@ function FactDetail({
     return () => abort.abort();
   }, [fact.id, fact.revision]);
   return (
-    <MonitorDialog
+    <RowDrawer
       open
-      onOpenChange={(open) => {
-        if (!open && !working) onClose();
+      onClose={() => {
+        if (!working) onClose();
       }}
-      width={620}
-      closeDisabled={working}
-      eyebrow={`${fact.entityName} / ${fact.kind}`}
+      label={`Memory details: #${fact.id}`}
+      status={
+        fact.status === "archived"
+          ? { tone: "off", label: "Archived" }
+          : reviewReasons(fact).length
+            ? { tone: "warn", label: "Needs review" }
+            : { tone: "ok", label: "Ready for recall" }
+      }
       title="Memory & evidence"
-      description="Review the source before relying on this knowledge. Verification is an explicit human or agent assessment."
-      footer={
+      meta={`${fact.entityName} / ${fact.kind}`}
+      nav={working ? undefined : nav}
+      rowKey={fact.id}
+      storageKey="memory-facts"
+      actions={<CopyButton text={fact.content} />}
+      primary={
         <>
-          <CopyButton text={fact.content} />
-          <span className="flex-1" />
           <MonitorButton variant="ghost" disabled={working} onClick={onClose}>
             Close
           </MonitorButton>
@@ -304,7 +330,11 @@ function FactDetail({
         </>
       }
     >
-      <div key={fact.id} className="monitor-dialog-body memory-detail">
+      <div key={fact.id} className="memory-detail">
+        <p className="monitor-hint">
+          Review the source before relying on this knowledge. Verification is an explicit human or
+          agent assessment.
+        </p>
         {onNextReview && (
           <p className="monitor-hint" role="status">
             {reviewedIds.length} verified this round · Next memory opens automatically.
@@ -392,7 +422,7 @@ function FactDetail({
           </ol>
         )}
       </div>
-    </MonitorDialog>
+    </RowDrawer>
   );
 }
 
@@ -432,19 +462,18 @@ function RecallLab({ entity }: { entity: string }) {
             }
           }}
         >
-          <label className="monitor-fl">
-            <span className="monitor-label">Task or search terms</span>
-            <input
-              className="monitor-input"
+          <Field label="Task or search terms">
+            <TextInput
+              label="Task or search terms"
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
+              onChange={(v) => {
+                setQuery(v);
                 setResult(null);
               }}
               maxLength={500}
               placeholder="WireGuard MTU, WAN, backup policy…"
             />
-          </label>
+          </Field>
           <MonitorNote icon={<Server aria-hidden="true" />}>
             <b>{entity || "All knowledge"}.</b>{" "}
             {entity
@@ -651,16 +680,16 @@ function MemorySettings({ config, onSaved }: { config: MemoryConfig; onSaved: ()
           onChange={setEnabled}
           disabled={busy}
         />
-        <label className="monitor-fl">
-          <span className="monitor-label">Database path</span>
-          <input
-            className="monitor-input font-mono"
+        <Field label="Database path">
+          <TextInput
+            label="Database path"
+            mono
             required
             value={path}
             disabled={busy}
-            onChange={(e) => setPath(e.target.value)}
+            onChange={setPath}
           />
-        </label>
+        </Field>
         <MonitorNote tone="warn">
           Changing the path opens a different database; it does not move your existing knowledge.
           Reconnect MCP clients after changing enablement so their instructions refresh.
@@ -729,6 +758,7 @@ export function MemoryView() {
   const [entityEditor, setEntityEditor] = useState<"new" | "relation" | null>(null);
   const [creatingPolicy, setCreatingPolicy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [activityOpen, setActivityOpen] = useState<number>();
   const search = useDelayedText(query);
   const subjectSearch = useDelayedText(entitySearch);
   const requestKey = JSON.stringify([
@@ -911,6 +941,21 @@ export function MemoryView() {
     },
   ];
   const total = health ? health.active + health.review + health.archived : 0;
+  const factItems = page?.items ?? [];
+  const factIndex = detail ? factItems.findIndex((f) => f.id === detail.id) : -1;
+  const factNav =
+    factIndex >= 0
+      ? {
+          index: factIndex,
+          total: factItems.length,
+          onPrev: factIndex > 0 ? () => setDetail(factItems[factIndex - 1]) : undefined,
+          onNext:
+            factIndex < factItems.length - 1
+              ? () => setDetail(factItems[factIndex + 1])
+              : undefined,
+        }
+      : undefined;
+  const activityRow = activityOpen === undefined ? undefined : activity[activityOpen];
   const changeTab = (next: string) => {
     if (!enabled && next !== "library" && next !== "settings") return;
     setTab(next);
@@ -1176,6 +1221,72 @@ export function MemoryView() {
               busy={busy || loading}
               onOpen={() => setDetail(fact)}
               onRevise={(patch) => void revise(fact, patch)}
+              menu={{
+                sub: `${fact.entityName} · ${fact.kind}`,
+                cells: {
+                  kind: {
+                    value: fact.kind,
+                    filter: () => {
+                      setKind(fact.kind);
+                      setOffset(0);
+                    },
+                    clearFilter:
+                      kind !== "all"
+                        ? () => {
+                            setKind("all");
+                            setOffset(0);
+                          }
+                        : undefined,
+                  },
+                  scope: fact.scope
+                    ? {
+                        value: fact.scope,
+                        filter: () => {
+                          setScopeFilter(fact.scope);
+                          setOffset(0);
+                        },
+                        clearFilter:
+                          scopeFilter !== "all"
+                            ? () => {
+                                setScopeFilter("all");
+                                setOffset(0);
+                              }
+                            : undefined,
+                      }
+                    : { value: "" },
+                  key: { value: fact.key ?? "" },
+                  source: { value: fact.source },
+                },
+                copies: [
+                  { label: "Memory ID", value: String(fact.id) },
+                  { label: "Content", value: fact.content, hint: "" },
+                ],
+                row: fact,
+                actions: [
+                  {
+                    label: fact.pinned ? "Unpin memory" : "Pin memory",
+                    icon: <Pin aria-hidden="true" />,
+                    disabled: busy || loading,
+                    onSelect: () => void revise(fact, { pinned: !fact.pinned }),
+                  },
+                  {
+                    label: "Edit memory",
+                    onSelect: () => {
+                      setEditor(fact);
+                      setDetail(null);
+                    },
+                  },
+                  {
+                    label: fact.status === "archived" ? "Restore memory" : "Archive memory",
+                    icon: <Archive aria-hidden="true" />,
+                    disabled: busy || loading,
+                    onSelect: () =>
+                      void revise(fact, {
+                        status: fact.status === "archived" ? "active" : "archived",
+                      }),
+                  },
+                ],
+              }}
             />
           ))
         )}
@@ -1274,6 +1385,23 @@ export function MemoryView() {
                 center={total}
                 sub="memories"
                 label="Memory status"
+                noun="memories"
+                partAction={(p) => {
+                  const next: StateFilter | undefined =
+                    p.label === "Ready"
+                      ? "active"
+                      : p.label === "Review"
+                        ? "review"
+                        : p.label === "Archived"
+                          ? "archived"
+                          : undefined;
+                  return next
+                    ? {
+                        label: `Show ${p.label.toLowerCase()} memories`,
+                        onClick: () => showState(next),
+                      }
+                    : undefined;
+                }}
                 parts={[
                   { value: health.active, tone: "good", label: "Ready" },
                   { value: health.review, tone: "warn", label: "Review" },
@@ -1378,12 +1506,46 @@ export function MemoryView() {
         >
           {activity.length ? (
             <div className="max-h-[640px] overflow-y-auto">
-              {activity.map((entry) => (
-                <div key={entry.id} className="monitor-row memory-activity-row">
-                  <span className="font-mono text-xs text-muted-foreground">{date(entry.ts)}</span>
-                  <span className="monitor-chip w-fit">{entry.action.replaceAll("_", " ")}</span>
-                  <span className="p min-w-0 truncate">{entry.subject}</span>
-                </div>
+              {activity.map((entry, i) => (
+                <RowMenu
+                  key={entry.id}
+                  title={entry.subject}
+                  sub={`${entry.action.replaceAll("_", " ")} · ${date(entry.ts)}`}
+                  onOpen={() => setActivityOpen(i)}
+                  cells={{
+                    time: { value: date(entry.ts), kind: "time" },
+                    action: { value: entry.action.replaceAll("_", " ") },
+                    subject: { value: entry.subject },
+                  }}
+                  copies={[{ label: "Subject", value: entry.subject }]}
+                  row={entry}
+                >
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${entry.action.replaceAll("_", " ")}: ${entry.subject}`}
+                    className="monitor-row memory-activity-row cursor-pointer"
+                    data-selected={activityOpen === i || undefined}
+                    onClick={() => setActivityOpen(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setActivityOpen(i);
+                      }
+                    }}
+                  >
+                    <span data-col="time" className="font-mono text-xs text-muted-foreground">
+                      {date(entry.ts)}
+                    </span>
+                    <span data-col="action" className="monitor-chip w-fit">
+                      {entry.action.replaceAll("_", " ")}
+                    </span>
+                    <span data-col="subject" className="p min-w-0 truncate">
+                      {entry.subject}
+                    </span>
+                    <RowMore />
+                  </div>
+                </RowMenu>
               ))}
             </div>
           ) : (
@@ -1391,6 +1553,43 @@ export function MemoryView() {
           )}
         </MonitorPanel>
       )}
+      <RowDrawer
+        open={tab === "activity" && Boolean(activityRow)}
+        onClose={() => setActivityOpen(undefined)}
+        label={`Change details: ${activityRow?.subject ?? ""}`}
+        title={activityRow?.subject ?? ""}
+        meta={
+          activityRow
+            ? `${activityRow.action.replaceAll("_", " ")} · ${date(activityRow.ts)}`
+            : undefined
+        }
+        nav={
+          activityOpen !== undefined && activityRow
+            ? {
+                index: activityOpen,
+                total: activity.length,
+                onPrev: activityOpen > 0 ? () => setActivityOpen(activityOpen - 1) : undefined,
+                onNext:
+                  activityOpen < activity.length - 1
+                    ? () => setActivityOpen(activityOpen + 1)
+                    : undefined,
+              }
+            : undefined
+        }
+        rowKey={activityRow?.id}
+        storageKey="memory-activity"
+      >
+        {activityRow && (
+          <DetailList
+            items={[
+              { label: "Time", value: date(activityRow.ts), mono: true },
+              { label: "Action", value: activityRow.action.replaceAll("_", " ") },
+              { label: "Subject", value: activityRow.subject },
+              ...(activityRow.detail ? [{ label: "Detail", value: activityRow.detail }] : []),
+            ]}
+          />
+        )}
+      </RowDrawer>
       {tab === "settings" &&
         (config ? (
           <MemorySettings
@@ -1424,6 +1623,7 @@ export function MemoryView() {
           onRevise={(patch) => revise(detail, patch)}
           onNextReview={state === "review" ? nextReview : undefined}
           busy={busy}
+          nav={factNav}
         />
       )}
       {entityEditor && (

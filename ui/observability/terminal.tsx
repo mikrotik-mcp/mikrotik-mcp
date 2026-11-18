@@ -27,8 +27,8 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select } from "./geist";
+import { Checkbox, SearchInput, TextInput } from "./kit";
 import { api } from "./api";
 import { loadHighlighter, staticSpans } from "./terminal-highlight";
 import type {
@@ -129,7 +129,7 @@ function TerminalWorkspace(): ReactNode {
   const [findFocus, setFindFocus] = useState(0);
   const [, setGrammarReady] = useState(false);
   const dock = useRef<DockviewApi | null>(null);
-  const search = useRef<HTMLInputElement>(null);
+  const search = useRef<HTMLDivElement>(null);
   const favorites = useSyncExternalStore(favoritesStore.subscribe, favoritesStore.get);
   const paneCount = useSyncExternalStore(paneRegistry.subscribe, () => paneRegistry.all().length);
   const starred = useMemo(() => new Set(favorites.map((f) => f.command)), [favorites]);
@@ -200,7 +200,7 @@ function TerminalWorkspace(): ReactNode {
       if (event.key.toLowerCase() !== "k") return;
       event.preventDefault();
       setDrawer((open) => open ?? "history");
-      requestAnimationFrame(() => search.current?.focus());
+      requestAnimationFrame(() => search.current?.querySelector("input")?.focus());
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -508,11 +508,13 @@ function TerminalWorkspace(): ReactNode {
                   saveWorkspace();
                 }}
               >
-                <input
+                <TextInput
+                  size="sm"
                   value={workspaceName}
                   placeholder="Name for the current layout"
+                  label="Workspace name"
                   aria-label="Workspace name"
-                  onChange={(event) => setWorkspaceName(event.target.value)}
+                  onChange={setWorkspaceName}
                 />
                 <button type="submit" disabled={!workspaceName.trim()}>
                   Save current layout
@@ -581,11 +583,13 @@ function TerminalWorkspace(): ReactNode {
                     setDraft(null);
                   }}
                 >
-                  <input
+                  <TextInput
+                    size="sm"
                     value={draft.name}
                     placeholder="Group name"
+                    label="Group name"
                     aria-label="Group name"
-                    onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                    onChange={(name) => setDraft({ ...draft, name })}
                   />
                   {names.map((name) => (
                     <label key={name}>
@@ -595,10 +599,9 @@ function TerminalWorkspace(): ReactNode {
                         onCheckedChange={(value) =>
                           setDraft({
                             ...draft,
-                            devices:
-                              value === true
-                                ? [...draft.devices, name]
-                                : draft.devices.filter((d) => d !== name),
+                            devices: value
+                              ? [...draft.devices, name]
+                              : draft.devices.filter((d) => d !== name),
                           })
                         }
                       />
@@ -717,16 +720,17 @@ function TerminalWorkspace(): ReactNode {
                 <X size={14} />
               </button>
             </header>
-            <label className="term-search">
-              <Search size={13} />
-              <input
-                ref={search}
+            <div ref={search} className="mx-2.5">
+              <SearchInput
+                size="sm"
+                mono
+                label="Search commands"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={setQuery}
                 placeholder="Search commands…"
                 spellCheck={false}
               />
-            </label>
+            </div>
             <div className="term-drawer-filters">
               {drawer === "history" && (
                 <span className="term-field">

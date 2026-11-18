@@ -18,6 +18,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { api, deleteEvents, postJson } from "./api";
 import {
   Check,
+  Copy,
   Globe2,
   HelpCircle,
   Moon,
@@ -91,7 +92,9 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import type { MonitorPageInfo } from "./monitoring-ui";
+import { AaaView } from "./aaa";
 import { ClientsView } from "./clients";
+import { OpenVpnView } from "./openvpn";
 import { InterfacesView } from "./interfaces";
 import { PromptsView } from "./prompts";
 import { ClientChecksView } from "./client-checks";
@@ -139,6 +142,15 @@ import { TopologyView } from "./topology";
 import { AdvisoryView, FabricView } from "./posture";
 import { AccessView } from "./access-view";
 import { useWhatsNew, WhatsNewModal } from "./whats-new";
+import {
+  ChartTipLayer,
+  Checkbox,
+  enter,
+  RowMenu,
+  RowMore,
+  SelectionBar,
+  TitleTooltips,
+} from "./kit";
 import type {
   CapabilitiesJson,
   CapabilitiesPayload,
@@ -1100,6 +1112,14 @@ function App(): ReactNode {
   // The active page is mirrored in the URL hash + localStorage so it survives a
   // refresh and follows browser back/forward (see initialView / setView below).
   const [view, setViewState] = useState<ViewId>(initialView);
+  // Page entrance (Kit-Data-Motion): the page's sections rise in, in reading order.
+  const contentRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const page = contentRef.current?.querySelector<HTMLElement>(
+      ":scope > section, :scope > div > section",
+    );
+    return enter(page ?? null);
+  }, [view]);
   const setView = useCallback((next: ViewId): void => {
     setViewState(next);
     // The Field Guide sheet only renders under the Config view; without this it
@@ -1690,6 +1710,7 @@ function App(): ReactNode {
         />
         {/* main content */}
         <main
+          ref={contentRef}
           id="dashboard-content"
           tabIndex={-1}
           className="shell-main flex min-w-0 flex-col"
@@ -1739,6 +1760,11 @@ function App(): ReactNode {
                     devices={devices?.devices}
                     onOpen={(e) => void openDetail(e)}
                     onRefresh={() => void refreshDashboard()}
+                    onShowCalls={(f) => {
+                      setFilter((x) => ({ ...x, ...f }));
+                      setView("feed");
+                    }}
+                    onOpenRouter={() => setView("devices")}
                   />
                 )}
 
@@ -1769,6 +1795,8 @@ function App(): ReactNode {
 
                 {/* ── Clients ── */}
                 {view === "clients" && <ClientsView />}
+                {view === "aaa" && <AaaView />}
+                {view === "openvpn" && <OpenVpnView />}
                 {view === "interfaces" && <InterfacesView />}
                 {view === "prompts" && <PromptsView />}
                 {view === "client-checks" && <ClientChecksView />}
@@ -1806,9 +1834,6 @@ function App(): ReactNode {
 
                 {/* ── Snapshots ── */}
                 {view === "snapshots" && <SnapshotsView />}
-
-                {/* ── Drift Guard ── */}
-                {view === "drift" && <DriftView />}
 
                 {/* ── L2 Fabric: hosts by physical port ── */}
                 {view === "fabric" && <FabricView />}
@@ -2187,14 +2212,12 @@ function App(): ReactNode {
                                 <div className="feed-table max-h-[64vh] overflow-y-auto">
                                   <div className="monitor-thead live-feed-grid">
                                     <span className="monitor-check">
-                                      <input
-                                        type="checkbox"
+                                      <Checkbox
                                         aria-label="Select all shown calls"
-                                        checked={allShownSelected}
-                                        ref={(el) => {
-                                          if (el) el.indeterminate = someShownSelected;
-                                        }}
-                                        onChange={toggleSelectAll}
+                                        checked={
+                                          someShownSelected ? "indeterminate" : allShownSelected
+                                        }
+                                        onCheckedChange={toggleSelectAll}
                                       />
                                     </span>
                                     <span>Time</span>
@@ -2205,68 +2228,188 @@ function App(): ReactNode {
                                     <span>Result</span>
                                   </div>
                                   {shownRows.map((e) => (
-                                    <div
+                                    <RowMenu
                                       key={e.id}
-                                      role="button"
-                                      tabIndex={0}
-                                      aria-label={`${e.tool}, ${e.isError ? "failed" : "ok"}, ${clock(e.ts)}`}
-                                      className="monitor-row live-feed-grid"
-                                      data-failed={
-                                        (e.isError && inspected?.id !== e.id) || undefined
-                                      }
-                                      data-selected={inspected?.id === e.id || undefined}
-                                      onClick={() => void inspect(e)}
-                                      onKeyDown={(ev) => {
-                                        if (ev.key === "Enter" || ev.key === " ") {
-                                          ev.preventDefault();
-                                          void inspect(e);
-                                        }
+                                      title={e.tool}
+                                      sub={`${clock(e.ts)} · ${e.device ?? "no router"} · ${formatMs(e.durationMs)}`}
+                                      onOpen={() => void inspect(e)}
+                                      opens={[
+                                        {
+                                          label: "Open full record",
+                                          onSelect: () => void openDetail(e),
+                                        },
+                                      ]}
+                                      cells={{
+                                        tool: {
+                                          value: e.tool,
+                                          kind: "tool",
+                                          filter: () => setFilter((f) => ({ ...f, tool: e.tool })),
+                                          clearFilter: filter.tool
+                                            ? () => setFilter((f) => ({ ...f, tool: "" }))
+                                            : undefined,
+                                          search: () => setFilter((f) => ({ ...f, q: e.tool })),
+                                        },
+                                        risk: {
+                                          value: e.risk,
+                                          kind: "risk",
+                                          filter: () => setFilter((f) => ({ ...f, risk: e.risk })),
+                                          clearFilter: filter.risk
+                                            ? () => setFilter((f) => ({ ...f, risk: "" }))
+                                            : undefined,
+                                        },
+                                        device: e.device
+                                          ? {
+                                              value: e.device,
+                                              kind: "router",
+                                              filter: () =>
+                                                setFilter((f) => ({ ...f, device: e.device! })),
+                                              clearFilter: filter.device
+                                                ? () => setFilter((f) => ({ ...f, device: "" }))
+                                                : undefined,
+                                              open: {
+                                                label: "Open router",
+                                                run: () => setView("devices"),
+                                              },
+                                            }
+                                          : { value: "" },
+                                        time: { value: clock(e.ts), kind: "time" },
+                                        duration: {
+                                          value: formatMs(e.durationMs),
+                                          kind: "duration",
+                                        },
+                                        result: {
+                                          value: e.isError
+                                            ? (e.error ?? "Failed")
+                                            : e.reason || e.output || "OK",
+                                          filter: () =>
+                                            setFilter((f) => ({
+                                              ...f,
+                                              status: e.isError ? "error" : "ok",
+                                            })),
+                                        },
+                                      }}
+                                      copies={[
+                                        { label: "Call ID", value: e.id },
+                                        { label: "Input", value: e.input, hint: "" },
+                                      ]}
+                                      row={e}
+                                      select={{
+                                        selected: selectedIds.has(e.id),
+                                        toggle: () => selectRow(e.id),
+                                        similar: e.device
+                                          ? {
+                                              label: `Select all from ${e.device}`,
+                                              run: () =>
+                                                setSelectedIds(
+                                                  (prev) =>
+                                                    new Set([
+                                                      ...prev,
+                                                      ...shownRows
+                                                        .filter((x) => x.device === e.device)
+                                                        .map((x) => x.id),
+                                                    ]),
+                                                ),
+                                            }
+                                          : undefined,
+                                      }}
+                                      selection={{
+                                        count: selectedIds.size,
+                                        summary: "Export, copy or clear them",
+                                        actions: [
+                                          {
+                                            label: `Export ${selectedIds.size} as CSV`,
+                                            icon: <Download aria-hidden="true" />,
+                                            onSelect: () => exportRows("csv"),
+                                          },
+                                          {
+                                            label: `Copy ${selectedIds.size} call IDs`,
+                                            icon: <Copy aria-hidden="true" />,
+                                            onSelect: () =>
+                                              void navigator.clipboard?.writeText(
+                                                [...selectedIds].join("\n"),
+                                              ),
+                                          },
+                                        ],
+                                        clear: () => setSelectedIds(new Set()),
                                       }}
                                     >
-                                      <span className="monitor-check">
-                                        <input
-                                          type="checkbox"
-                                          aria-label="Select call (Shift-click selects a range)"
-                                          checked={selectedIds.has(e.id)}
+                                      <div
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`${e.tool}, ${e.isError ? "failed" : "ok"}, ${clock(e.ts)}`}
+                                        className="monitor-row live-feed-grid"
+                                        data-failed={
+                                          (e.isError && inspected?.id !== e.id) || undefined
+                                        }
+                                        data-selected={inspected?.id === e.id || undefined}
+                                        onClick={() => void inspect(e)}
+                                        onKeyDown={(ev) => {
+                                          if (ev.key === "Enter" || ev.key === " ") {
+                                            ev.preventDefault();
+                                            void inspect(e);
+                                          }
+                                        }}
+                                      >
+                                        <span
+                                          className="monitor-check"
                                           onPointerDown={(ev) => {
                                             shiftHeldRef.current = ev.shiftKey;
                                           }}
                                           onClick={(ev) => ev.stopPropagation()}
-                                          onChange={() => selectRow(e.id)}
-                                        />
-                                      </span>
-                                      <span className="text-muted-foreground font-mono text-[12px]">
-                                        {hhmm(e.ts)}
-                                      </span>
-                                      <span
-                                        className="p truncate font-mono text-[12px]"
-                                        title={`${e.tool} · call ID ${e.id}`}
-                                      >
-                                        {e.tool}
-                                      </span>
-                                      <span>
-                                        <RiskBadge risk={e.risk} short />
-                                      </span>
-                                      <span className="text-muted-foreground truncate font-mono text-[12px]">
-                                        {e.device ?? "—"}
-                                      </span>
-                                      <span className="text-fg-secondary text-right tabular-nums">
-                                        {formatMs(e.durationMs)}
-                                      </span>
-                                      <span className="flex min-w-0 items-center gap-2">
-                                        <StatusDot tone={e.isError ? "bad" : "good"} />
-                                        <span
-                                          className={cn(
-                                            "truncate",
-                                            e.isError ? "text-destructive" : "text-fg-secondary",
-                                          )}
                                         >
-                                          {e.isError
-                                            ? (e.error ?? "Failed")
-                                            : e.reason || e.output || "OK"}
+                                          <Checkbox
+                                            aria-label="Select call (Shift-click selects a range)"
+                                            checked={selectedIds.has(e.id)}
+                                            onCheckedChange={() => selectRow(e.id)}
+                                          />
                                         </span>
-                                      </span>
-                                    </div>
+                                        <span
+                                          data-col="time"
+                                          className="text-muted-foreground font-mono text-[12px]"
+                                        >
+                                          {hhmm(e.ts)}
+                                        </span>
+                                        <span
+                                          data-col="tool"
+                                          className="p truncate font-mono text-[12px]"
+                                          title={`${e.tool} · call ID ${e.id}`}
+                                        >
+                                          {e.tool}
+                                        </span>
+                                        <span data-col="risk">
+                                          <RiskBadge risk={e.risk} short />
+                                        </span>
+                                        <span
+                                          data-col="device"
+                                          className="text-muted-foreground truncate font-mono text-[12px]"
+                                        >
+                                          {e.device ?? "—"}
+                                        </span>
+                                        <span
+                                          data-col="duration"
+                                          className="text-fg-secondary text-right tabular-nums"
+                                        >
+                                          {formatMs(e.durationMs)}
+                                        </span>
+                                        <span
+                                          data-col="result"
+                                          className="flex min-w-0 items-center gap-2"
+                                        >
+                                          <StatusDot tone={e.isError ? "bad" : "good"} />
+                                          <span
+                                            className={cn(
+                                              "truncate",
+                                              e.isError ? "text-destructive" : "text-fg-secondary",
+                                            )}
+                                          >
+                                            {e.isError
+                                              ? (e.error ?? "Failed")
+                                              : e.reason || e.output || "OK"}
+                                          </span>
+                                        </span>
+                                        <RowMore />
+                                      </div>
+                                    </RowMenu>
                                   ))}
                                 </div>
                               </PhoneSwitch>
@@ -2305,8 +2448,47 @@ function App(): ReactNode {
                               event={inspected}
                               onClose={() => setInspected(null)}
                               onOpenFull={() => setSelected(inspected)}
+                              nav={(() => {
+                                const at = shownRows.findIndex((x) => x.id === inspected.id);
+                                if (at < 0) return undefined;
+                                return {
+                                  index: at,
+                                  total: shownRows.length,
+                                  onPrev:
+                                    at > 0 ? () => void inspect(shownRows[at - 1]!) : undefined,
+                                  onNext:
+                                    at < shownRows.length - 1
+                                      ? () => void inspect(shownRows[at + 1]!)
+                                      : undefined,
+                                };
+                              })()}
+                              p95={
+                                stats?.byTool.find((t) => t.tool === inspected.tool)?.p95Ms ?? null
+                              }
+                              sameTool={feed.filter(
+                                (x) => x.tool === inspected.tool && x.id !== inspected.id,
+                              )}
+                              onPick={(x) => void inspect(x)}
                             />
                           )}
+                          <SelectionBar
+                            count={selectedIds.size}
+                            noun={selectedIds.size === 1 ? "call" : "calls"}
+                            actions={[
+                              {
+                                label: "Export CSV",
+                                icon: <Download aria-hidden="true" />,
+                                onSelect: () => exportRows("csv"),
+                              },
+                              {
+                                label: "Copy IDs",
+                                icon: <Copy aria-hidden="true" />,
+                                onSelect: () =>
+                                  void navigator.clipboard?.writeText([...selectedIds].join("\n")),
+                              },
+                            ]}
+                            onClear={() => setSelectedIds(new Set())}
+                          />
                         </div>
                       </section>
                     )}
@@ -2330,6 +2512,8 @@ function App(): ReactNode {
       )}
       {selected && <DetailDrawer event={selected} onClose={() => setSelected(null)} />}
       <Toaster />
+      <TitleTooltips />
+      <ChartTipLayer />
     </div>
   );
 }

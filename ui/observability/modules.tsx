@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { animate, createScope } from "animejs";
 import type { Scope } from "animejs";
+import type { TipCard } from "./kit";
 import { Check, ChevronDown, Ellipsis, RefreshCw, X } from "lucide-react";
 import { api, postJson } from "./api";
 import {
@@ -18,6 +19,7 @@ import {
   StatusBadge,
 } from "./monitoring-ui";
 import { toast } from "./toast-action";
+import { DUR, DetailList, EASE, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
 import "./monitoring.css";
 import "./modules.css";
 
@@ -94,18 +96,34 @@ function SurfaceMeter({ exposed, total }: { exposed: number; total: number }): R
       mediaQueries: { reduceMotion: "(prefers-reduced-motion: reduce)" },
     }).add((self) => {
       if (self?.matches.reduceMotion) return;
-      animate("[data-fill]", { width: [0, fill], duration: 700, ease: "outQuart" });
+      animate("[data-fill]", { width: [0, fill], duration: DUR.draw, ease: EASE.enter });
     });
     return () => scope.current?.revert();
   }, [fill]);
   const label = Math.max(fill, 70);
+  const over = exposed > TARGET_HIGH;
+  const card = (): TipCard => ({
+    title: "Exposed tools",
+    sub: `of ${total} in the catalog`,
+    led: over ? "warn" : "ok",
+    rows: [
+      { label: "Exposed", value: `${exposed} tools`, color: "var(--sig)" },
+      { label: "Catalog", value: `${total} tools` },
+      { label: "Target", value: `${TARGET_LOW}–${TARGET_HIGH} tools`, color: "var(--brand)" },
+    ],
+    foot: over
+      ? { label: "Over the target by", value: `${exposed - TARGET_HIGH} tools`, tone: "down" }
+      : { label: "Room left", value: `${TARGET_HIGH - exposed} tools`, tone: "up" },
+  });
   return (
     <svg
       ref={root}
+      className="kit-tips"
       viewBox={`0 -6 ${w} 54`}
       width="100%"
       role="img"
       aria-label={`${exposed} of ${total} tools exposed`}
+      {...tipProps(card)}
     >
       <rect x="0" y="14" width={w} height="12" rx="6" fill="var(--line)" />
       <rect
@@ -201,6 +219,11 @@ export function ModulesView(): ReactNode {
   // is the honest default: capabilities are per-device and may not be probed yet.
   const [capDevice, setCapDevice] = useState("");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  // The open "unavailable" row, kept per device so a new device starts closed.
+  const [unavailSel, setUnavailSel] = useState<{ device: string; i: number }>();
+  const unavailRow = unavailSel?.device === capDevice ? unavailSel.i : undefined;
+  const setUnavailRow = (i: number | undefined): void =>
+    setUnavailSel(i === undefined ? undefined : { device: capDevice, i });
   const phone = useNarrow();
   // Only devices that some module reports on are offerable — a device with no
   // resolved probe contributes no `unsupported` entries, so selecting it would
@@ -346,6 +369,10 @@ export function ModulesView(): ReactNode {
           .map((u) => ({ slug: m.slug, reason: u.reason })),
       )
     : [];
+  const unavailItem = unavailRow === undefined ? undefined : unavailable[unavailRow];
+  const unavailModule = unavailItem
+    ? data.modules.find((m) => m.slug === unavailItem.slug)
+    : undefined;
   const enableAll = (): void =>
     void bulk(
       data.modules.filter((m) => !m.enabled).map((m) => m.slug),
@@ -477,9 +504,23 @@ export function ModulesView(): ReactNode {
               title="Modules on, by group"
               description="Where the tool surface comes from."
             >
-              <div className="flex flex-col gap-[11px]">
+              <div className="kit-tips flex flex-col gap-[11px]">
                 {groupBars.slice(0, GROUP_BARS).map((g) => (
-                  <div key={g.group} className="modules-bar-row">
+                  <div
+                    key={g.group}
+                    className="modules-bar-row"
+                    {...tipProps(() => ({
+                      title: g.group,
+                      sub: "modules",
+                      rows: [
+                        { label: "On", value: g.on, color: "var(--sig)" },
+                        { label: "Off", value: g.n - g.on },
+                        { label: "Total", value: g.n },
+                      ],
+                      foot: { label: "Share on", value: `${Math.round((g.on / g.n) * 100)}%` },
+                      action: { label: `Show only ${g.group}`, onClick: () => setQuery(g.group) },
+                    }))}
+                  >
                     <span className="truncate text-fg-secondary">{g.group}</span>
                     <span className="modules-bar" aria-hidden="true">
                       <i style={{ width: `${(g.on / g.n) * 100}%` }} />
@@ -505,12 +546,44 @@ export function ModulesView(): ReactNode {
                 <div className="monitor-thead modules-unavail">
                   <span>Module</span>
                   <span>Reason</span>
+                  <span />
                 </div>
-                {unavailable.map((u) => (
-                  <div key={u.slug} className="monitor-row modules-unavail">
-                    <span className="p truncate font-mono text-xs">{u.slug}</span>
-                    <span className="truncate text-warning">{u.reason}</span>
-                  </div>
+                {unavailable.map((u, i) => (
+                  <RowMenu
+                    key={u.slug}
+                    title={u.slug}
+                    sub={`Unavailable on ${capDevice}`}
+                    onOpen={() => setUnavailRow(i)}
+                    cells={{
+                      module: { value: u.slug, kind: "id", search: () => setQuery(u.slug) },
+                      reason: { value: u.reason },
+                    }}
+                    copies={[{ label: "Module slug", value: u.slug }]}
+                    row={u}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${u.slug}, ${u.reason}`}
+                      className="monitor-row modules-unavail cursor-pointer"
+                      data-selected={unavailRow === i || undefined}
+                      onClick={() => setUnavailRow(i)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setUnavailRow(i);
+                        }
+                      }}
+                    >
+                      <span data-col="module" className="p truncate font-mono text-xs">
+                        {u.slug}
+                      </span>
+                      <span data-col="reason" className="truncate text-warning">
+                        {u.reason}
+                      </span>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
                 ))}
               </MonitorPanel>
             )}
@@ -612,7 +685,18 @@ export function ModulesView(): ReactNode {
                         {on}/{modules.length} on
                       </span>
                       {!phone && (
-                        <span className="modules-bar w-20 flex-none" aria-hidden="true">
+                        <span
+                          className="modules-bar w-20 flex-none"
+                          aria-label={`${on} of ${modules.length} modules on`}
+                          {...tipProps(() => ({
+                            title: group,
+                            sub: "modules",
+                            rows: [
+                              { label: "On", value: on, color: "var(--sig)" },
+                              { label: "Off", value: modules.length - on },
+                            ],
+                          }))}
+                        >
                           <i style={{ width: `${(on / modules.length) * 100}%` }} />
                         </span>
                       )}
@@ -685,6 +769,54 @@ export function ModulesView(): ReactNode {
           </div>
         </MonitorPanel>
       </div>
+      <RowDrawer
+        open={Boolean(unavailItem)}
+        onClose={() => setUnavailRow(undefined)}
+        label={`Module details: ${unavailItem?.slug ?? ""}`}
+        status={{ tone: "warn", label: `Unavailable on ${capDevice}` }}
+        title={unavailModule?.label ?? unavailItem?.slug ?? ""}
+        meta={unavailModule ? `${unavailModule.group} · ${unavailModule.slug}` : unavailItem?.slug}
+        nav={
+          unavailRow !== undefined && unavailItem
+            ? {
+                index: unavailRow,
+                total: unavailable.length,
+                onPrev: unavailRow > 0 ? () => setUnavailRow(unavailRow - 1) : undefined,
+                onNext:
+                  unavailRow < unavailable.length - 1
+                    ? () => setUnavailRow(unavailRow + 1)
+                    : undefined,
+              }
+            : undefined
+        }
+        rowKey={unavailItem?.slug}
+        storageKey="modules-unavailable"
+        actions={
+          unavailItem && (
+            <MonitorButton size="sm" variant="ghost" onClick={() => setQuery(unavailItem.slug)}>
+              Show in list
+            </MonitorButton>
+          )
+        }
+      >
+        {unavailItem && (
+          <DetailList
+            items={[
+              { label: "Module", value: unavailItem.slug, mono: true },
+              ...(unavailModule
+                ? [
+                    { label: "Name", value: unavailModule.label },
+                    { label: "Group", value: unavailModule.group },
+                    { label: "Tools", value: unavailModule.toolCount },
+                    { label: "State", value: unavailModule.enabled ? "On" : "Off" },
+                  ]
+                : []),
+              { label: "Router", value: capDevice, mono: true },
+              { label: "Reason", value: unavailItem.reason },
+            ]}
+          />
+        )}
+      </RowDrawer>
     </div>
   );
 }

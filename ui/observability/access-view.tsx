@@ -40,6 +40,7 @@ import {
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 import { AccessToolPicker } from "./access-tool-picker";
+import { DetailList, RowDrawer, RowMenu, RowMore, TextInput } from "./kit";
 import "./monitoring.css";
 import "./access-view.css";
 
@@ -91,6 +92,8 @@ export function AccessView(): ReactNode {
   const [saving, setSaving] = useState(false);
   const [review, setReview] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [routerOpen, setRouterOpen] = useState<string>();
+  const [denialOpen, setDenialOpen] = useState<number>();
   const alive = useRef(true);
   const loadController = useRef<AbortController | null>(null);
   const accept = useCallback((next: AccessSettings) => {
@@ -346,6 +349,36 @@ export function AccessView(): ReactNode {
     return out;
   })();
   const routerRows = deviceNames.filter((name) => name.toLowerCase().includes(query.toLowerCase()));
+  const routerState = (
+    name: string,
+  ): { tone: Tone; state: string; denied: boolean; allowPressed: boolean; known: boolean } => {
+    const device = data?.devices.find((d) => d.name === name);
+    const denied = (draft?.denyDevices ?? []).includes(name);
+    const listed = (draft?.devices ?? []).includes(name);
+    const allowed = !denied && !device?.disabled && (deviceMode === "all" || listed);
+    const tone: Tone = denied ? "bad" : allowed ? "good" : "default";
+    const state = !device
+      ? "No longer configured · remove from rules"
+      : device.disabled
+        ? "Disabled in server config"
+        : denied
+          ? "Explicitly blocked"
+          : deviceMode === "all" || listed
+            ? "Inside allowed group"
+            : "Outside allowed group";
+    const allowPressed =
+      deviceMode === "selected" ? listed && !denied : !denied && !device?.disabled;
+    return { tone, state, denied, allowPressed, known: !!device };
+  };
+  const allowRouter = (name: string): void => {
+    const denied = (draft?.denyDevices ?? []).includes(name);
+    if (denied) toggle("denyDevices", name, false);
+    if (deviceMode === "selected")
+      toggle("devices", name, denied || !(draft?.devices ?? []).includes(name));
+  };
+  const routerIndex = routerOpen === undefined ? -1 : routerRows.indexOf(routerOpen);
+  const routerInfo = routerOpen === undefined ? undefined : routerState(routerOpen);
+  const denialRow = denialOpen === undefined ? undefined : data?.denials[denialOpen];
 
   return (
     <div className="access-workspace flex min-w-0 flex-col gap-[18px]">
@@ -484,6 +517,15 @@ export function AccessView(): ReactNode {
                   stroke={5}
                   tone="warn"
                   label="Time left"
+                  tip={{
+                    title: "Safety window",
+                    sub: "auto-revert",
+                    led: "warn",
+                    rows: [
+                      { label: "Time left", value: `${seconds} s`, color: "var(--warning)" },
+                      { label: "Window", value: "60 s" },
+                    ],
+                  }}
                 >
                   {`${seconds}s`}
                 </Ring>
@@ -551,13 +593,12 @@ export function AccessView(): ReactNode {
                   <div className="grid gap-3.5 sm:grid-cols-2">
                     <label className="monitor-fl">
                       <span className="monitor-label">Policy label · optional</span>
-                      <input
-                        className="monitor-input"
-                        aria-label="Policy label"
+                      <TextInput
+                        label="Policy label"
                         value={draft.label ?? ""}
                         maxLength={200}
                         placeholder="e.g. Production maintenance"
-                        onChange={(e) => update({ label: e.target.value || undefined })}
+                        onChange={(v) => update({ label: v || undefined })}
                       />
                     </label>
                     <div className="monitor-fl">
@@ -625,63 +666,79 @@ export function AccessView(): ReactNode {
                   </div>
                   <div className="access-router-list">
                     {routerRows.map((name) => {
-                      const device = data.devices.find((d) => d.name === name);
-                      const denied = draft.denyDevices.includes(name);
-                      const allowed =
-                        !denied &&
-                        !device?.disabled &&
-                        (deviceMode === "all" || draft.devices.includes(name));
-                      const tone: Tone = denied ? "bad" : allowed ? "good" : "default";
+                      const r = routerState(name);
                       return (
-                        <div key={name} className="access-router" data-tone={tone}>
-                          <span className="flex min-w-0 items-center gap-2.5">
-                            <StatusDot tone={tone} />
-                            <span className="truncate font-mono text-xs font-medium text-foreground">
-                              {name}
+                        <RowMenu
+                          key={name}
+                          title={name}
+                          sub={r.state}
+                          onOpen={() => setRouterOpen(name)}
+                          cells={{
+                            router: { value: name, kind: "router", search: () => setQuery(name) },
+                            state: { value: r.state },
+                          }}
+                          copies={[{ label: "Router name", value: name }]}
+                          actions={
+                            locked
+                              ? []
+                              : [
+                                  { label: `Allow ${name}`, onSelect: () => allowRouter(name) },
+                                  {
+                                    label: `Block ${name}`,
+                                    onSelect: () => toggle("denyDevices", name, !r.denied),
+                                  },
+                                ]
+                          }
+                        >
+                          <div
+                            className="access-router cursor-pointer"
+                            data-tone={r.tone}
+                            data-selected={routerOpen === name || undefined}
+                            onClick={() => setRouterOpen(name)}
+                          >
+                            <span data-col="router" className="flex min-w-0 items-center gap-2.5">
+                              <StatusDot tone={r.tone} />
+                              <span className="truncate font-mono text-xs font-medium text-foreground">
+                                {name}
+                              </span>
                             </span>
-                          </span>
-                          <span className="access-router-state text-xs" data-tone={tone}>
-                            {!device
-                              ? "No longer configured · remove from rules"
-                              : device.disabled
-                                ? "Disabled in server config"
-                                : denied
-                                  ? "Explicitly blocked"
-                                  : deviceMode === "all" || draft.devices.includes(name)
-                                    ? "Inside allowed group"
-                                    : "Outside allowed group"}
-                          </span>
-                          <span className="monitor-seg w-fit" role="group" aria-label={name}>
-                            <button
-                              type="button"
-                              className="monitor-seg-item"
-                              aria-label={`Allow ${name}`}
-                              aria-pressed={
-                                deviceMode === "selected"
-                                  ? draft.devices.includes(name) && !denied
-                                  : !denied && !device?.disabled
-                              }
-                              disabled={locked}
-                              onClick={() => {
-                                if (denied) toggle("denyDevices", name, false);
-                                if (deviceMode === "selected")
-                                  toggle("devices", name, denied || !draft.devices.includes(name));
-                              }}
+                            <span
+                              data-col="state"
+                              className="access-router-state text-xs"
+                              data-tone={r.tone}
                             >
-                              Allow
-                            </button>
-                            <button
-                              type="button"
-                              className="monitor-seg-item"
-                              aria-label={`Block ${name}`}
-                              aria-pressed={denied}
-                              disabled={locked}
-                              onClick={() => toggle("denyDevices", name, !denied)}
+                              {r.state}
+                            </span>
+                            <span
+                              className="monitor-seg w-fit"
+                              role="group"
+                              aria-label={name}
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              Block
-                            </button>
-                          </span>
-                        </div>
+                              <button
+                                type="button"
+                                className="monitor-seg-item"
+                                aria-label={`Allow ${name}`}
+                                aria-pressed={r.allowPressed}
+                                disabled={locked}
+                                onClick={() => allowRouter(name)}
+                              >
+                                Allow
+                              </button>
+                              <button
+                                type="button"
+                                className="monitor-seg-item"
+                                aria-label={`Block ${name}`}
+                                aria-pressed={r.denied}
+                                disabled={locked}
+                                onClick={() => toggle("denyDevices", name, !r.denied)}
+                              >
+                                Block
+                              </button>
+                            </span>
+                            <RowMore />
+                          </div>
+                        </RowMenu>
                       );
                     })}
                     {!deviceNames.length && (
@@ -1001,28 +1058,182 @@ export function AccessView(): ReactNode {
                   <span>Tool</span>
                   <span>Reason</span>
                   <span>Router · risk · rule</span>
+                  <span />
                 </div>
                 {data.denials.map((d, i) => (
-                  <div key={`${d.ts}-${i}`} className="monitor-row access-denial-grid" data-failed>
-                    <time
-                      className="font-mono text-xs text-muted-foreground"
-                      dateTime={new Date(d.ts).toISOString()}
+                  <RowMenu
+                    key={`${d.ts}-${i}`}
+                    title={d.tool}
+                    sub={`${clockTime(d.ts)} · ${d.device ?? "No device"} · ${d.rule}`}
+                    onOpen={() => setDenialOpen(i)}
+                    cells={{
+                      time: { value: clockTime(d.ts), kind: "time" },
+                      tool: { value: d.tool, kind: "tool" },
+                      reason: { value: d.reason },
+                      meta: d.device ? { value: d.device, kind: "router" } : { value: "" },
+                    }}
+                    copies={[
+                      { label: "Tool", value: d.tool },
+                      { label: "Reason", value: d.reason, hint: "" },
+                    ]}
+                    row={d}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${d.tool} blocked at ${clockTime(d.ts)}`}
+                      className="monitor-row access-denial-grid cursor-pointer"
+                      data-failed
+                      data-selected={denialOpen === i || undefined}
+                      onClick={() => setDenialOpen(i)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setDenialOpen(i);
+                        }
+                      }}
                     >
-                      {new Date(d.ts).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </time>
-                    <span className="p truncate font-mono text-xs">{d.tool}</span>
-                    <span className="truncate text-destructive">{d.reason}</span>
-                    <span className="truncate font-mono text-xs text-muted-foreground">
-                      {d.device ?? "No device"} · {d.risk} · {d.rule}
-                    </span>
-                  </div>
+                      <time
+                        data-col="time"
+                        className="font-mono text-xs text-muted-foreground"
+                        dateTime={new Date(d.ts).toISOString()}
+                      >
+                        {clockTime(d.ts)}
+                      </time>
+                      <span data-col="tool" className="p truncate font-mono text-xs">
+                        {d.tool}
+                      </span>
+                      <span data-col="reason" className="truncate text-destructive">
+                        {d.reason}
+                      </span>
+                      <span
+                        data-col="meta"
+                        className="truncate font-mono text-xs text-muted-foreground"
+                      >
+                        {d.device ?? "No device"} · {d.risk} · {d.rule}
+                      </span>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
                 ))}
               </div>
             )}
           </MonitorPanel>
+
+          <RowDrawer
+            open={Boolean(denialRow)}
+            onClose={() => setDenialOpen(undefined)}
+            label={`Blocked call details: ${denialRow?.tool ?? ""}`}
+            status={{ tone: "bad", label: "Blocked" }}
+            title={denialRow?.tool ?? ""}
+            meta={
+              denialRow
+                ? `${new Date(denialRow.ts).toLocaleString()} · ${denialRow.device ?? "No device"}`
+                : undefined
+            }
+            nav={
+              denialOpen !== undefined && denialRow
+                ? {
+                    index: denialOpen,
+                    total: data.denials.length,
+                    onPrev: denialOpen > 0 ? () => setDenialOpen(denialOpen - 1) : undefined,
+                    onNext:
+                      denialOpen < data.denials.length - 1
+                        ? () => setDenialOpen(denialOpen + 1)
+                        : undefined,
+                  }
+                : undefined
+            }
+            rowKey={denialRow ? `${denialRow.ts}-${denialOpen}` : undefined}
+            storageKey="access-denials"
+          >
+            {denialRow && (
+              <DetailList
+                items={[
+                  { label: "Time", value: new Date(denialRow.ts).toLocaleString(), mono: true },
+                  { label: "Tool", value: denialRow.tool, mono: true },
+                  { label: "Reason", value: denialRow.reason },
+                  { label: "Router", value: denialRow.device ?? "No device", mono: true },
+                  { label: "Risk", value: <RiskBadge risk={denialRow.risk} short /> },
+                  { label: "Rule", value: denialRow.rule, mono: true },
+                ]}
+              />
+            )}
+          </RowDrawer>
+
+          <RowDrawer
+            open={Boolean(routerInfo)}
+            onClose={() => setRouterOpen(undefined)}
+            label={`Router details: ${routerOpen ?? ""}`}
+            status={
+              routerInfo
+                ? {
+                    tone:
+                      routerInfo.tone === "bad" ? "bad" : routerInfo.tone === "good" ? "ok" : "off",
+                    label: routerInfo.state,
+                  }
+                : undefined
+            }
+            title={routerOpen ?? ""}
+            meta="Router state comes from the config, not a connectivity check."
+            nav={
+              routerIndex >= 0
+                ? {
+                    index: routerIndex,
+                    total: routerRows.length,
+                    onPrev:
+                      routerIndex > 0
+                        ? () => setRouterOpen(routerRows[routerIndex - 1])
+                        : undefined,
+                    onNext:
+                      routerIndex < routerRows.length - 1
+                        ? () => setRouterOpen(routerRows[routerIndex + 1])
+                        : undefined,
+                  }
+                : undefined
+            }
+            rowKey={routerOpen}
+            storageKey="access-routers"
+            actions={
+              routerOpen &&
+              routerInfo && (
+                <>
+                  <MonitorButton
+                    size="sm"
+                    variant="ghost"
+                    disabled={locked}
+                    onClick={() => allowRouter(routerOpen)}
+                  >
+                    Allow
+                  </MonitorButton>
+                  <MonitorButton
+                    size="sm"
+                    variant="ghost"
+                    disabled={locked}
+                    onClick={() => toggle("denyDevices", routerOpen, !routerInfo.denied)}
+                  >
+                    {routerInfo.denied ? "Unblock" : "Block"}
+                  </MonitorButton>
+                </>
+              )
+            }
+          >
+            {routerOpen && routerInfo && (
+              <DetailList
+                items={[
+                  { label: "Router", value: routerOpen, mono: true },
+                  { label: "State", value: routerInfo.state },
+                  { label: "In config", value: routerInfo.known ? "Yes" : "No" },
+                  {
+                    label: "Group",
+                    value:
+                      deviceMode === "all" ? "All configured routers" : "Only selected routers",
+                  },
+                  { label: "Blocked", value: routerInfo.denied ? "Yes" : "No" },
+                ]}
+              />
+            )}
+          </RowDrawer>
 
           <MonitorDialog
             open={review}
@@ -1090,6 +1301,11 @@ export function AccessView(): ReactNode {
       )}
     </div>
   );
+}
+
+/** "14:02", the table's short time. */
+function clockTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function Gate({

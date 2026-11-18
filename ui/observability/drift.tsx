@@ -8,9 +8,10 @@
 import "./drift.css";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Check, ChevronDown, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Archive, Check, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { api, deleteJson, postJson } from "./api";
 import { DiffPre, ScoreRing } from "./config-charts";
+import { Field, RowDrawer, RowMenu, RowMore, Select, TextInput, tipProps } from "./kit";
 import { LoadingState } from "./loading-state";
 import {
   Metric,
@@ -24,6 +25,7 @@ import {
   StatusBadge,
   StatusDot,
 } from "./monitoring-ui";
+import type { Tone as KitTone } from "./kit";
 import type { Tone } from "./monitoring-ui";
 import { toast } from "./toast-action";
 import type {
@@ -88,6 +90,14 @@ const STATUS_LABEL: Record<Status, string> = {
   drifted: "Drifted",
   unknown: "Unknown",
   "no-baseline": "No baseline",
+};
+
+/** The same status in the kit's LED tones, for the drawer. */
+const KIT_TONE: Record<Status, KitTone> = {
+  "in-sync": "ok",
+  drifted: "warn",
+  unknown: "bad",
+  "no-baseline": "off",
 };
 
 // ── Set baseline dialog ─────────────────────────────────────────────────────
@@ -174,8 +184,10 @@ function SetBaselineDialog({
       }
     >
       <div className="drift-dialog flex flex-col gap-4">
-        <div className="monitor-fl">
-          <span className="monitor-label">Baseline snapshot</span>
+        <Field
+          label="Baseline snapshot"
+          help="Pick a known-good export. Capture one with capture_config_snapshot if the list is empty."
+        >
           {snapshots === null ? (
             <LoadingState label="Loading snapshots" layout="form" />
           ) : snapshots.length === 0 ? (
@@ -183,35 +195,21 @@ function SetBaselineDialog({
               No snapshots for this router. Capture one with capture_config_snapshot first.
             </span>
           ) : (
-            <span className="monitor-select drift-select">
-              <Archive aria-hidden="true" className="drift-select-icon" />
-              <select
-                aria-label="Baseline snapshot"
-                value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-              >
-                {snapshots.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {[device, s.label ?? s.id, shortDate(s.ts), size(s.bytes)].join(" · ")}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown aria-hidden="true" />
-            </span>
+            <Select
+              label="Baseline snapshot"
+              leading={<Archive aria-hidden="true" />}
+              value={selected}
+              onChange={setSelected}
+              options={snapshots.map((s) => ({
+                value: s.id,
+                label: [device, s.label ?? s.id, shortDate(s.ts), size(s.bytes)].join(" · "),
+              }))}
+            />
           )}
-          <span className="monitor-hint">
-            Pick a known-good export. Capture one with capture_config_snapshot if the list is empty.
-          </span>
-        </div>
-        <label className="monitor-fl">
-          <span className="monitor-label">Label (optional)</span>
-          <input
-            className="monitor-input"
-            placeholder="golden-7.16"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-          />
-        </label>
+        </Field>
+        <Field label="Label" optional="optional">
+          <TextInput label="Label" placeholder="golden-7.16" value={label} onChange={setLabel} />
+        </Field>
         <MonitorNote>
           Setting a baseline replaces the old one. Nothing on the router changes.
         </MonitorNote>
@@ -226,9 +224,20 @@ function SetBaselineDialog({
 function SectionBars({ sections }: { sections: DriftSection[] }): ReactNode {
   const max = Math.max(1, ...sections.map((s) => s.added + s.removed));
   return (
-    <>
+    <div className="kit-tips">
       {sections.map((s) => (
-        <div key={s.path} className="drift-section" title={s.hunks}>
+        <div
+          key={s.path}
+          className="drift-section"
+          {...tipProps(() => ({
+            title: s.path.length > 64 ? `${s.path.slice(0, 63)}…` : s.path,
+            rows: [
+              { label: "Added", value: `+${s.added} lines`, color: "var(--success)" },
+              { label: "Removed", value: `−${s.removed} lines`, color: "var(--destructive)" },
+            ],
+            foot: { label: "Lines changed", value: String(s.added + s.removed) },
+          }))}
+        >
           <span className="mono trunc text-fg-secondary">{s.path}</span>
           <span className="drift-section-bars">
             {s.added > 0 && (
@@ -249,7 +258,7 @@ function SectionBars({ sections }: { sections: DriftSection[] }): ReactNode {
           </span>
         </div>
       ))}
-    </>
+    </div>
   );
 }
 
@@ -262,17 +271,42 @@ function Attribution({ rows }: { rows: DriftAttribution[] }): ReactNode {
         <span>Action</span>
         <span>Section</span>
         <span>Log</span>
+        <span />
       </div>
       {rows.map((a, i) => (
-        <div key={`${a.section}-${i}`} className="monitor-row drift-attr">
-          <span className="mono trunc text-muted-foreground">{a.timestamp ?? "—"}</span>
-          <span className="mono trunc">{a.user ?? "—"}</span>
-          <span className="trunc">{a.action ?? "—"}</span>
-          <span className="mono trunc">{a.section}</span>
-          <span className="mono trunc" title={a.logLine}>
-            {a.logLine}
-          </span>
-        </div>
+        <RowMenu
+          key={`${a.section}-${i}`}
+          title={a.section}
+          sub={[a.timestamp, a.user, a.action].filter(Boolean).join(" · ") || undefined}
+          cells={{
+            time: { value: a.timestamp ?? "", kind: "time" },
+            user: { value: a.user ?? "" },
+            action: { value: a.action ?? "" },
+            section: { value: a.section },
+            log: { value: a.logLine },
+          }}
+          copies={[{ label: "Log line", value: a.logLine, hint: "" }]}
+          row={a}
+        >
+          <div className="monitor-row drift-attr">
+            <span data-col="time" className="mono trunc text-muted-foreground">
+              {a.timestamp ?? "—"}
+            </span>
+            <span data-col="user" className="mono trunc">
+              {a.user ?? "—"}
+            </span>
+            <span data-col="action" className="trunc">
+              {a.action ?? "—"}
+            </span>
+            <span data-col="section" className="mono trunc">
+              {a.section}
+            </span>
+            <span data-col="log" className="mono trunc" title={a.logLine}>
+              {a.logLine}
+            </span>
+            <RowMore />
+          </div>
+        </RowMenu>
       ))}
     </>
   );
@@ -280,16 +314,22 @@ function Attribution({ rows }: { rows: DriftAttribution[] }): ReactNode {
 
 function DeviceDetail({
   device,
+  status,
   report,
+  nav,
   onReport,
   onClose,
   onChanged,
+  onRemove,
 }: {
   device: string;
+  status: Status;
   report: DriftReport | undefined;
+  nav?: { index: number; total: number; onPrev?: () => void; onNext?: () => void };
   onReport: (r: DriftReport) => void;
   onClose: () => void;
   onChanged: () => void;
+  onRemove: () => Promise<void>;
 }): ReactNode {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -323,36 +363,26 @@ function DeviceDetail({
     }
   };
 
-  const remove = async (): Promise<void> => {
-    await deleteJson<{ ok?: boolean }>(`/api/drift/baseline/${encodeURIComponent(device)}`, {});
-    toast.success("Baseline removed");
-    onChanged();
-  };
-
   const drifted = report !== undefined && !report.identical;
 
   return (
-    <MonitorPanel
+    <RowDrawer
+      open
+      onClose={onClose}
+      label={`Drift details: ${device}`}
+      status={{ tone: KIT_TONE[status], label: STATUS_LABEL[status] }}
       title={`${device} · drift detail`}
-      description="Live export compared with the golden baseline."
-      flush
-      extra={
-        <div className="flex flex-wrap items-center gap-2">
-          <MonitorButton
-            variant="primary"
-            size="sm"
-            icon={<RefreshCw aria-hidden="true" />}
-            disabled={loading}
-            aria-busy={loading || undefined}
-            onClick={() => void check()}
-          >
-            {loading ? "Checking…" : "Check now"}
-          </MonitorButton>
+      meta="Live export compared with the golden baseline."
+      nav={nav}
+      rowKey={device}
+      storageKey="drift"
+      actions={
+        <>
           <MonitorButton
             variant="ghost"
             size="sm"
             icon={<Trash2 aria-hidden="true" />}
-            onClick={() => void remove()}
+            onClick={() => void onRemove()}
           >
             Remove baseline
           </MonitorButton>
@@ -364,81 +394,114 @@ function DeviceDetail({
           >
             Close
           </MonitorButton>
-        </div>
+        </>
+      }
+      primary={
+        <MonitorButton
+          variant="primary"
+          size="sm"
+          icon={<RefreshCw aria-hidden="true" />}
+          disabled={loading}
+          aria-busy={loading || undefined}
+          onClick={() => void check()}
+        >
+          {loading ? "Checking…" : "Check now"}
+        </MonitorButton>
       }
     >
-      <div className="flex flex-col gap-4 px-[18px] pb-4">
-        {error && (
-          <MonitorNote tone="bad" role="alert">
-            {error}
-          </MonitorNote>
-        )}
-        {loading && !report && <LoadingState label="Checking drift" layout="cards" />}
-        {!report && !loading && !error && (
-          <MonitorEmpty compact title="Not checked yet">
-            Press Check now to compare the live config with the golden baseline.
-          </MonitorEmpty>
-        )}
-        {report && (
-          <div className="glass drift-summary">
-            <ScoreRing
-              value={drifted ? report.score : 100}
-              size={54}
-              stroke={5}
-              fontSize={14}
-              tone={drifted ? "warn" : "good"}
-              label={`Drift score ${report.score} of 100`}
-            >
-              {report.score}
-            </ScoreRing>
-            <div className="flex flex-col gap-0.5">
-              <b className={`text-[15px] ${drifted ? "text-warning" : "text-success"}`}>
-                {drifted ? "Drifted" : "In sync"}
-              </b>
-              <span className="monitor-hint">score {report.score}/100</span>
-            </div>
-            <span className="mono big text-success">+{report.summary.added}</span>
-            <span className="mono big text-destructive">−{report.summary.removed}</span>
-            <span className="text-[12px] text-muted-foreground">
-              {report.summary.unchanged} unchanged
-            </span>
-            <span className="flex-1" />
-            <span className="monitor-hint" title={clock(report.capturedAt)}>
-              Checked {hhmm(report.capturedAt)}
-            </span>
-            {drifted && (
-              <MonitorButton
-                size="sm"
-                icon={<Check aria-hidden="true" />}
-                onClick={() => void promote()}
+      <div className="drift-in-drawer">
+        <div className="flex flex-col gap-4 pb-4">
+          {error && (
+            <MonitorNote tone="bad" role="alert">
+              {error}
+            </MonitorNote>
+          )}
+          {loading && !report && <LoadingState label="Checking drift" layout="cards" />}
+          {!report && !loading && !error && (
+            <MonitorEmpty compact title="Not checked yet">
+              Press Check now to compare the live config with the golden baseline.
+            </MonitorEmpty>
+          )}
+          {report && (
+            <div className="glass drift-summary">
+              <ScoreRing
+                value={drifted ? report.score : 100}
+                size={54}
+                stroke={5}
+                fontSize={14}
+                tone={drifted ? "warn" : "good"}
+                label={`Drift score ${report.score} of 100`}
+                tip={() => ({
+                  title: "Drift score",
+                  sub: drifted ? "drifted" : "in sync",
+                  led: drifted ? "warn" : "ok",
+                  rows: [
+                    { label: "Score", value: `${report.score} of 100` },
+                    {
+                      label: "Lines added",
+                      value: `+${report.summary.added}`,
+                      color: "var(--success)",
+                    },
+                    {
+                      label: "Lines removed",
+                      value: `−${report.summary.removed}`,
+                      color: "var(--destructive)",
+                    },
+                    { label: "Unchanged", value: String(report.summary.unchanged) },
+                  ],
+                })}
               >
-                Promote as baseline
-              </MonitorButton>
-            )}
-          </div>
+                {report.score}
+              </ScoreRing>
+              <div className="flex flex-col gap-0.5">
+                <b className={`text-[15px] ${drifted ? "text-warning" : "text-success"}`}>
+                  {drifted ? "Drifted" : "In sync"}
+                </b>
+                <span className="monitor-hint">score {report.score}/100</span>
+              </div>
+              <span className="mono big text-success">+{report.summary.added}</span>
+              <span className="mono big text-destructive">−{report.summary.removed}</span>
+              <span className="text-[12px] text-muted-foreground">
+                {report.summary.unchanged} unchanged
+              </span>
+              <span className="flex-1" />
+              <span className="monitor-hint" title={clock(report.capturedAt)}>
+                Checked {hhmm(report.capturedAt)}
+              </span>
+              {drifted && (
+                <MonitorButton
+                  size="sm"
+                  icon={<Check aria-hidden="true" />}
+                  onClick={() => void promote()}
+                >
+                  Promote as baseline
+                </MonitorButton>
+              )}
+            </div>
+          )}
+          {report && report.sections.length > 0 && (
+            <div className="monitor-fl">
+              <span className="monitor-label">Sections with drift</span>
+              <SectionBars sections={report.sections} />
+            </div>
+          )}
+        </div>
+        {report && report.attributions.length > 0 && (
+          <>
+            <div className="pb-1.5">
+              <span className="monitor-label">Change attribution · from the router log</span>
+            </div>
+            <Attribution rows={report.attributions} />
+          </>
         )}
-        {report && report.sections.length > 0 && (
-          <div className="monitor-fl">
-            <span className="monitor-label">Sections with drift</span>
-            <SectionBars sections={report.sections} />
+        {drifted && (
+          <div className="drift-diff-block">
+            <span className="monitor-label">Unified diff</span>
+            <DiffPre text={report.unified} className="drift-diff" />
           </div>
         )}
       </div>
-      {report && report.attributions.length > 0 && (
-        <>
-          <div className="px-[18px] pb-1.5">
-            <span className="monitor-label">Change attribution · from the router log</span>
-          </div>
-          <Attribution rows={report.attributions} />
-        </>
-      )}
-      {drifted && (
-        <div className="drift-diff-block">
-          <span className="monitor-label">Unified diff</span>
-          <DiffPre text={report.unified} className="drift-diff" />
-        </div>
-      )}
-    </MonitorPanel>
+    </RowDrawer>
   );
 }
 
@@ -562,7 +625,29 @@ export function DriftView(): ReactNode {
     setReports((prev) => ({ ...prev, [r.device]: r }));
   }, []);
 
+  const removeBaseline = async (device: string): Promise<void> => {
+    await deleteJson<{ ok?: boolean }>(`/api/drift/baseline/${encodeURIComponent(device)}`, {});
+    toast.success("Baseline removed");
+    setSelectedDevice(null);
+    void load();
+  };
+
   if (initialLoading) return <LoadingState label="Loading drift baselines" />;
+
+  const baseIndex = selectedDevice ? baselines.findIndex((b) => b.device === selectedDevice) : -1;
+  const baseNav =
+    baseIndex >= 0
+      ? {
+          index: baseIndex,
+          total: baselines.length,
+          onPrev:
+            baseIndex > 0 ? () => setSelectedDevice(baselines[baseIndex - 1]!.device) : undefined,
+          onNext:
+            baseIndex < baselines.length - 1
+              ? () => setSelectedDevice(baselines[baseIndex + 1]!.device)
+              : undefined,
+        }
+      : undefined;
 
   const withBaseline = devices.filter((d) => d.status !== "no-baseline");
   const noBaseline = devices.filter((d) => d.status === "no-baseline");
@@ -674,7 +759,10 @@ export function DriftView(): ReactNode {
       {selectedDevice && (
         <DeviceDetail
           device={selectedDevice}
+          status={devices.find((d) => d.device === selectedDevice)?.status ?? "unknown"}
           report={reports[selectedDevice]}
+          nav={baseNav}
+          onRemove={() => removeBaseline(selectedDevice)}
           onReport={onReport}
           onClose={() => setSelectedDevice(null)}
           onChanged={() => {
@@ -698,35 +786,82 @@ export function DriftView(): ReactNode {
             <span>Label</span>
             <span>Size</span>
             <span>SHA</span>
+            <span />
           </div>
           {baselines.map((b) => {
             const status = devices.find((d) => d.device === b.device)?.status ?? "unknown";
             return (
-              <button
+              <RowMenu
                 key={b.device}
-                type="button"
-                className="monitor-row drift-base"
-                data-selected={selectedDevice === b.device || undefined}
-                aria-pressed={selectedDevice === b.device}
-                onClick={() => setSelectedDevice(b.device)}
+                title={b.device}
+                sub={`${STATUS_LABEL[status]} · set ${shortDate(b.setAt)} by ${b.setBy}`}
+                onOpen={() => setSelectedDevice(b.device)}
+                cells={{
+                  device: { value: b.device, kind: "router" },
+                  snapshot: { value: b.snapshotId, kind: "id" },
+                  setAt: { value: shortDate(b.setAt), kind: "time" },
+                  setBy: { value: b.setBy },
+                  label: { value: b.label ?? "" },
+                  size: { value: b.snapshot ? size(b.snapshot.bytes) : "deleted" },
+                  sha: { value: b.snapshot?.sha ?? "", kind: "id" },
+                }}
+                copies={[
+                  { label: "Snapshot ID", value: b.snapshotId },
+                  ...(b.snapshot?.sha ? [{ label: "SHA", value: b.snapshot.sha }] : []),
+                ]}
+                row={b}
+                actions={[
+                  {
+                    label: "Remove baseline",
+                    icon: <Trash2 aria-hidden="true" />,
+                    danger: true,
+                    onSelect: () => void removeBaseline(b.device),
+                  },
+                ]}
               >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <StatusDot tone={STATUS_TONE[status]} />
-                  <span className="mono p trunc">{b.device}</span>
-                </span>
-                <span className="mono trunc">{b.snapshotId}</span>
-                <span className="mono trunc text-muted-foreground" title={clock(b.setAt)}>
-                  {shortDate(b.setAt)}
-                </span>
-                <span className="mono trunc">{b.setBy}</span>
-                <span className="trunc">{b.label ?? <span className="text-faint">—</span>}</span>
-                <span className="mono trunc">
-                  {b.snapshot ? size(b.snapshot.bytes) : "deleted"}
-                </span>
-                <span className="mono trunc text-faint" title={b.snapshot?.sha}>
-                  {b.snapshot?.sha ? shortSha(b.snapshot.sha) : "—"}
-                </span>
-              </button>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="monitor-row drift-base cursor-pointer"
+                  data-selected={selectedDevice === b.device || undefined}
+                  aria-pressed={selectedDevice === b.device}
+                  onClick={() => setSelectedDevice(b.device)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedDevice(b.device);
+                    }
+                  }}
+                >
+                  <span data-col="device" className="flex min-w-0 items-center gap-2.5">
+                    <StatusDot tone={STATUS_TONE[status]} />
+                    <span className="mono p trunc">{b.device}</span>
+                  </span>
+                  <span data-col="snapshot" className="mono trunc">
+                    {b.snapshotId}
+                  </span>
+                  <span
+                    data-col="setAt"
+                    className="mono trunc text-muted-foreground"
+                    title={clock(b.setAt)}
+                  >
+                    {shortDate(b.setAt)}
+                  </span>
+                  <span data-col="setBy" className="mono trunc">
+                    {b.setBy}
+                  </span>
+                  <span data-col="label" className="trunc">
+                    {b.label ?? <span className="text-faint">—</span>}
+                  </span>
+                  <span data-col="size" className="mono trunc">
+                    {b.snapshot ? size(b.snapshot.bytes) : "deleted"}
+                  </span>
+                  <span data-col="sha" className="mono trunc text-faint" title={b.snapshot?.sha}>
+                    {b.snapshot?.sha ? shortSha(b.snapshot.sha) : "—"}
+                  </span>
+                  <RowMore />
+                </div>
+              </RowMenu>
             );
           })}
         </MonitorPanel>

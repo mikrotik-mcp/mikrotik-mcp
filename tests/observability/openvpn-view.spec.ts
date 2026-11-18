@@ -95,9 +95,7 @@ test("requires confirmation and sends only the selected session token, never the
   expect(dialog.textContent).toContain("management tunnel");
   expect(button("Disconnect connection").disabled).toBe(true);
   expect(postJson).not.toHaveBeenCalled();
-  await act(async () =>
-    (dialog.querySelector('input[type="checkbox"]') as HTMLButtonElement).click(),
-  );
+  await act(async () => (dialog.querySelector('[role="checkbox"]') as HTMLButtonElement).click());
   await act(async () => button("Disconnect connection").click());
   expect(postJson).toHaveBeenCalledExactlyOnceWith("/api/openvpn/disconnect?device=lab", {
     token: "ticket2",
@@ -126,7 +124,7 @@ test("expires an open confirmation without sending a disconnect", async () => {
     (host.querySelector('[aria-label="Disconnect ali session *1"]') as HTMLButtonElement).click(),
   );
   await act(async () =>
-    (document.querySelector('[role="dialog"] input[type="checkbox"]') as HTMLButtonElement).click(),
+    (document.querySelector('[role="dialog"] [role="checkbox"]') as HTMLButtonElement).click(),
   );
   expect(button("Disconnect connection").disabled).toBe(false);
   await act(async () => {

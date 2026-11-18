@@ -1,11 +1,11 @@
 /**
  * Form pieces the Tunnel Bandwidth and Round-trip boards share: a labelled
- * field (the boards' `.fl`), a full-width 34px select (`.select`) and a
- * checkbox row (`.check`). Styles live in path-fields.css.
+ * field (the boards' `.fl`), a full-width select (`.select`) and a checkbox
+ * row (`.check`), both kit controls. Styles live in path-fields.css.
  */
 import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Checkbox, Select } from "./kit";
 import "./path-fields.css";
 
 /** A label above its control, with an optional hint below. */
@@ -33,7 +33,7 @@ export function FormField({
   );
 }
 
-/** A native select drawn as the boards' `.select`, filling its cell. */
+/** The boards' `.select`, drawn by the kit (Kit-Select), filling its cell. */
 export function FormSelect({
   value,
   onChange,
@@ -53,35 +53,23 @@ export function FormSelect({
   mono?: boolean;
 }): ReactNode {
   const known = options.some((o) => o.value === value);
+  // A saved value the router no longer offers still shows, greyed.
+  const all =
+    !known && value !== "" ? [{ value, label: value, disabled: true }, ...options] : options;
   return (
-    <span className="monitor-select pf-select" data-mono={mono || undefined}>
-      <select
-        aria-label={label}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="" disabled>
-          {placeholder ?? "Select…"}
-        </option>
-        {/* A saved value the router no longer offers still shows, greyed. */}
-        {!known && value !== "" && (
-          <option value={value} disabled>
-            {value}
-          </option>
-        )}
-        {options.map((o) => (
-          <option key={o.value} value={o.value} disabled={o.disabled}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown aria-hidden="true" />
-    </span>
+    <Select
+      value={value}
+      onChange={onChange}
+      options={all}
+      label={label}
+      placeholder={placeholder ?? "Select…"}
+      disabled={disabled}
+      className={cn("pf-select", mono && "pf-mono")}
+    />
   );
 }
 
-/** The boards' `.check`: a box and its sentence. */
+/** The boards' `.check`: a box and its sentence (Kit-Checkbox). */
 export function FormCheck({
   checked,
   onChange,
@@ -98,16 +86,28 @@ export function FormCheck({
   children: ReactNode;
   className?: string;
 }): ReactNode {
-  return (
-    <label className={cn("monitor-check pf-check", className)}>
-      <input
-        type="checkbox"
+  const text = <span className="min-w-0 text-foreground">{children}</span>;
+  if (label == null)
+    return (
+      <Checkbox
         checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        className={cn("pf-check", className)}
+        label={text}
+      />
+    );
+  // The kit drops aria-label when it draws its own label, so the box keeps the
+  // name here and a plain label makes the sentence clickable.
+  return (
+    <label className={cn("kit-check pf-check", className)} data-disabled={disabled || undefined}>
+      <Checkbox
+        checked={checked}
+        onCheckedChange={onChange}
         disabled={disabled}
         aria-label={label}
-        onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="min-w-0 text-foreground">{children}</span>
+      {text}
     </label>
   );
 }

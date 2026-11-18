@@ -195,6 +195,7 @@ function PaletteDialog({
       >
         <div className="pal-in">
           <Search aria-hidden="true" />
+          {/* kit-exempt: command palette combobox search, drives the result list keys */}
           <input
             ref={inputRef}
             role="combobox"

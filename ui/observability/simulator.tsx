@@ -36,6 +36,7 @@ import {
   useStaggerIn,
 } from "./monitoring-ui";
 import { PolicyVerifier } from "./policy-verifier";
+import { TextArea, TextInput } from "./kit";
 import { toast } from "./toast-action";
 import type {
   SimChangePayload,
@@ -147,12 +148,7 @@ function Field({
   return (
     <label className="monitor-fl">
       <span className="monitor-label">{label}</span>
-      <input
-        className="monitor-input sim-input"
-        value={value}
-        spellCheck={false}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <TextInput mono label={label} value={value} spellCheck={false} onChange={onChange} />
     </label>
   );
 }
@@ -469,12 +465,11 @@ export function SimulatorView(): ReactNode {
       >
         <div className="sim-change">
           <div className="flex min-w-0 flex-col gap-2.5">
-            <textarea
-              className="monitor-input"
-              aria-label="Proposed change"
+            <TextArea
+              mono
+              label="Proposed change"
               value={changes}
-              spellCheck={false}
-              onChange={(e) => setChanges(e.target.value)}
+              onChange={setChanges}
               rows={4}
               placeholder={
                 "/ip firewall filter\nadd action=drop chain=forward dst-port=443 protocol=tcp"

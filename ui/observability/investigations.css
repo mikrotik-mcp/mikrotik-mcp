@@ -329,15 +329,6 @@
   cursor: pointer;
 }
 
-/* ── Inputs ──────────────────────────────────────────────────────────────── */
-.inv-input.monitor-input {
-  width: 100%;
-  line-height: 21px;
-}
-.inv-input.inv-mono {
-  font-family: var(--font-mt);
-  font-size: 12px;
-}
 .inv-full .monitor-select,
 .inv-full .monitor-router {
   display: flex;
@@ -355,10 +346,12 @@
   align-items: center;
   gap: 8px;
 }
-.inv-controls .monitor-input {
+.inv-controls .kit-input {
   width: auto;
   min-width: calc(12ch + 24px);
   max-width: 220px;
+}
+.inv-controls .kit-input input {
   field-sizing: content;
 }
 
@@ -686,7 +679,7 @@
 .inv-persp-name > span {
   color: var(--foreground);
 }
-.inv-persp .monitor-check {
+.inv-persp .kit-box {
   align-self: center;
 }
 

@@ -23,6 +23,8 @@ import type { Tone } from "./monitoring-ui";
 import { api, withToken } from "./api";
 import { clock } from "./format";
 import { sparkPoints } from "./signal-charts";
+import { DetailBlock, DetailList, LineHover, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
+import type { Tone as KitTone, TipCard } from "./kit";
 import type { DevicesPayload } from "./types";
 import type { InterfaceSample, InterfaceStats } from "../../src/observability/interface-stats";
 
@@ -33,7 +35,14 @@ const PAGE = 24;
 const LEAD =
   "Every port, bridge and tunnel on one router, with live traffic and counters. Read-only.";
 /** The table's columns, from the board. */
-const COLS = "grid-cols-[minmax(0,1.6fr)_88px_96px_96px_128px_64px]";
+const COLS = "grid-cols-[minmax(0,1.6fr)_88px_96px_96px_128px_64px_26px]";
+const KIT_TONE: Record<Tone, KitTone> = {
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  brand: "acc",
+  default: "off",
+};
 
 /** Bits per second as a number and a unit: ["386", "Mbps"], ["1.20", "Gbps"]. */
 const rateParts = (b: number | null): [string, string] | null => {
@@ -82,6 +91,33 @@ const stateLabel = (row: InterfaceStats): string =>
 const stateTone = (row: InterfaceStats): Tone =>
   row.disabled ? "default" : row.running ? "good" : "warn";
 
+/** The counters the side panel and the row drawer list: label, value, mono. */
+function counters(row: InterfaceStats, unavailable: boolean): [string, string, boolean][] {
+  return [
+    ["RX total", total(row.rxBytes), false],
+    ["TX total", total(row.txBytes), false],
+    ["Packets/s RX · TX", unavailable ? "—" : pair(count(row.rxPps), count(row.txPps)), true],
+    ["Packets RX · TX", pair(compact(row.rxPackets), compact(row.txPackets)), true],
+    ["Errors RX · TX", pair(count(row.rxErrors), count(row.txErrors)), true],
+    ["Drops RX · TX", pair(count(row.rxDrops), count(row.txDrops)), true],
+    ["TX queue drops", count(row.queueDrops), true],
+    ["Link downs", count(row.linkDowns), true],
+    ["MTU", row.mtu == null ? "—" : String(row.mtu), true],
+    ["MAC address", row.mac || "Not reported", !!row.mac],
+  ];
+}
+
+/** "+12 Mbps", "−3.1 Mbps": the change from the previous reading. */
+function rateDelta(
+  now: number | null,
+  before: number | null,
+): { value: string; tone?: "up" | "down" } {
+  if (now == null || before == null) return { value: "—" };
+  const d = now - before;
+  if (d === 0) return { value: "no change" };
+  return { value: `${d > 0 ? "+" : "−"}${rate(Math.abs(d))}`, tone: d > 0 ? "up" : "down" };
+}
+
 // The board's chart: 720×210, drawn edge to edge.
 const CW = 720;
 const CH = 210;
@@ -129,6 +165,23 @@ function TrafficChart({ points, name }: { points: Point[]; name: string }): Reac
     x,
     y,
   );
+  const hover: [number, number][] = points.map((p, i) => [x(i), y(p.rx ?? p.tx ?? 0)]);
+  const card = (i: number): TipCard => {
+    const p = points[i]!;
+    const before = points[i - 1];
+    const gap = p.rx == null && p.tx == null;
+    return {
+      title: clock(p.ts),
+      sub: name,
+      rows: gap
+        ? [{ label: "Reading", value: "none (gap)" }]
+        : [
+            { label: "RX · received", value: rate(p.rx), color: "var(--sig)" },
+            { label: "TX · sent", value: rate(p.tx), color: "var(--brand)" },
+          ],
+      foot: !gap && before ? { label: "RX vs previous", ...rateDelta(p.rx, before.rx) } : undefined,
+    };
+  };
   return (
     <div ref={root} className="contents">
       <svg
@@ -137,8 +190,6 @@ function TrafficChart({ points, name }: { points: Point[]; name: string }): Reac
         width="100%"
         height={CH}
         preserveAspectRatio="none"
-        role="img"
-        aria-label={`Receive and transmit rate on ${name} over the last 2 minutes`}
       >
         {[1, 2, 3].map((k) => (
           <line
@@ -171,6 +222,15 @@ function TrafficChart({ points, name }: { points: Point[]; name: string }): Reac
             />
           )),
         )}
+        {n > 0 && (
+          <LineHover
+            width={CW}
+            height={CH}
+            points={hover}
+            card={card}
+            label={`Receive and transmit rate on ${name} over the last 2 minutes`}
+          />
+        )}
       </svg>
       <div className="mt-1.5 flex justify-between text-[11px] text-faint">
         {ticks.map((p, i) => (
@@ -182,11 +242,9 @@ function TrafficChart({ points, name }: { points: Point[]; name: string }): Reac
 }
 
 /** The table's 120×24 sparkline: the last 24 RX readings, scaled to the row. */
-function Spark({ points, muted }: { points: Point[]; muted: boolean }) {
-  const values = points
-    .slice(-24)
-    .map((p) => p.rx)
-    .filter((v): v is number => v != null);
+function Spark({ points, muted, name }: { points: Point[]; muted: boolean; name: string }) {
+  const recent = points.slice(-24).filter((p): p is Point & { rx: number } => p.rx != null);
+  const values = recent.map((p) => p.rx);
   if (muted || values.length < 2)
     return (
       <svg width="120" height="24" aria-hidden="true">
@@ -196,8 +254,19 @@ function Spark({ points, muted }: { points: Point[]; muted: boolean }) {
   const d = `M${sparkPoints(values, 120, 24)
     .map(([px, py]) => `${px},${py}`)
     .join(" L")}`;
+  // The row is the focus stop, so the spark shows its card on hover only.
+  const tip = tipProps(() => ({
+    title: name,
+    sub: `${clock(recent[0]!.ts)}–${clock(recent.at(-1)!.ts)}`,
+    rows: [
+      { label: "RX now", value: rate(values.at(-1)!), color: "var(--sig)" },
+      { label: "RX peak", value: rate(Math.max(...values)) },
+      { label: "RX low", value: rate(Math.min(...values)) },
+    ],
+    foot: { label: "Readings", value: String(values.length) },
+  }));
   return (
-    <svg viewBox="0 0 120 24" width="120" height="24" aria-hidden="true">
+    <svg viewBox="0 0 120 24" width="120" height="24" {...tip} tabIndex={-1} aria-hidden="true">
       <path d={d} fill="none" stroke="var(--sig)" strokeWidth={1.5} strokeLinejoin="round" />
     </svg>
   );
@@ -217,6 +286,7 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
   const [history, setHistory] = useState<Record<string, Point[]>>(() => Object.create(null));
   const [totals, setTotals] = useState<Total[]>([]);
   const [selected, setSelected] = useState("");
+  const [drawer, setDrawer] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [kind, setKind] = useState("all");
@@ -508,28 +578,7 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
           >
             <SectionLabel>Counters</SectionLabel>
             <dl className="monitor-facts grid-cols-[132px_minmax(0,1fr)]">
-              {(
-                [
-                  ["RX total", total(active.rxBytes), false],
-                  ["TX total", total(active.txBytes), false],
-                  [
-                    "Packets/s RX · TX",
-                    unavailable ? "—" : pair(count(active.rxPps), count(active.txPps)),
-                    true,
-                  ],
-                  [
-                    "Packets RX · TX",
-                    pair(compact(active.rxPackets), compact(active.txPackets)),
-                    true,
-                  ],
-                  ["Errors RX · TX", pair(count(active.rxErrors), count(active.txErrors)), true],
-                  ["Drops RX · TX", pair(count(active.rxDrops), count(active.txDrops)), true],
-                  ["TX queue drops", count(active.queueDrops), true],
-                  ["Link downs", count(active.linkDowns), true],
-                  ["MTU", active.mtu == null ? "—" : String(active.mtu), true],
-                  ["MAC address", active.mac || "Not reported", !!active.mac],
-                ] as const
-              ).map(([label, value, mono]) => (
+              {counters(active, unavailable).map(([label, value, mono]) => (
                 <div key={label} className="contents">
                   <dt>{label}</dt>
                   <dd className="truncate">
@@ -597,6 +646,7 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
                 <span className="text-right">TX</span>
                 <span>Last 2 min</span>
                 <span className="text-right">Errors</span>
+                <span />
               </div>
               {shown.map((row) => {
                 const off = row.disabled;
@@ -612,46 +662,82 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
                     ? ["Disabled", row.comment].filter(Boolean).join(" · ")
                     : row.comment || `${row.type} interface`;
                 return (
-                  <button
-                    type="button"
+                  <RowMenu
                     key={row.name}
-                    className={`monitor-row ifaces-row min-w-[720px] ${COLS}`}
-                    data-selected={active?.name === row.name || undefined}
-                    aria-pressed={active?.name === row.name}
-                    onClick={() => setSelected(row.name)}
+                    title={row.name}
+                    sub={`${row.type} · ${stateLabel(row)}`}
+                    onOpen={() => setDrawer(row.name)}
+                    opens={[
+                      { label: "Chart this interface", onSelect: () => setSelected(row.name) },
+                    ]}
+                    cells={{
+                      name: { value: row.name, search: () => resetPage(setQuery)(row.name) },
+                      type: {
+                        value: row.type,
+                        filter: () => resetPage(setKind)(row.type),
+                        clearFilter: kind !== "all" ? () => resetPage(setKind)("all") : undefined,
+                      },
+                      rx: { value: quiet ? "—" : currentRate(row.rxRate), copy: !quiet },
+                      tx: { value: quiet ? "—" : currentRate(row.txRate), copy: !quiet },
+                      errors: { value: off ? "—" : count(errors), copy: !off },
+                    }}
+                    copies={[
+                      { label: "Interface name", value: row.name },
+                      ...(row.mac ? [{ label: "MAC address", value: row.mac }] : []),
+                    ]}
+                    row={row}
                   >
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <StatusDot tone={stateTone(row)} />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="p truncate font-mono text-[13px]">{row.name}</span>
-                        <span
-                          className={`truncate text-[12px] leading-[17px] ${isDown ? "text-warning" : "text-muted-foreground"}`}
-                        >
-                          {sub}
-                          {row.dynamic ? " · dynamic" : ""}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className={`monitor-row ifaces-row min-w-[720px] ${COLS}`}
+                      data-selected={active?.name === row.name || undefined}
+                      aria-pressed={active?.name === row.name}
+                      onClick={() => setSelected(row.name)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelected(row.name);
+                        }
+                      }}
+                    >
+                      <span data-col="name" className="flex min-w-0 items-center gap-2.5">
+                        <StatusDot tone={stateTone(row)} />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="p truncate font-mono text-[13px]">{row.name}</span>
+                          <span
+                            className={`truncate text-[12px] leading-[17px] ${isDown ? "text-warning" : "text-muted-foreground"}`}
+                          >
+                            {sub}
+                            {row.dynamic ? " · dynamic" : ""}
+                          </span>
                         </span>
                       </span>
-                    </span>
-                    <span className="min-w-0">
-                      <span className="monitor-chip">{row.type}</span>
-                    </span>
-                    <span
-                      className={`truncate text-right font-mono text-[12px] ${quiet ? "text-faint" : "text-fg-secondary"}`}
-                    >
-                      {quiet ? "—" : currentRate(row.rxRate)}
-                    </span>
-                    <span
-                      className={`truncate text-right font-mono text-[12px] ${quiet ? "text-faint" : "text-fg-secondary"}`}
-                    >
-                      {quiet ? "—" : currentRate(row.txRate)}
-                    </span>
-                    <Spark points={history[row.name] ?? []} muted={quiet} />
-                    <span
-                      className={`text-right font-mono text-[12px] ${errors ? "text-warning" : "text-faint"}`}
-                    >
-                      {off ? "—" : count(errors)}
-                    </span>
-                  </button>
+                      <span data-col="type" className="min-w-0">
+                        <span className="monitor-chip">{row.type}</span>
+                      </span>
+                      <span
+                        data-col="rx"
+                        className={`truncate text-right font-mono text-[12px] ${quiet ? "text-faint" : "text-fg-secondary"}`}
+                      >
+                        {quiet ? "—" : currentRate(row.rxRate)}
+                      </span>
+                      <span
+                        data-col="tx"
+                        className={`truncate text-right font-mono text-[12px] ${quiet ? "text-faint" : "text-fg-secondary"}`}
+                      >
+                        {quiet ? "—" : currentRate(row.txRate)}
+                      </span>
+                      <Spark points={history[row.name] ?? []} muted={quiet} name={row.name} />
+                      <span
+                        data-col="errors"
+                        className={`text-right font-mono text-[12px] ${errors ? "text-warning" : "text-faint"}`}
+                      >
+                        {off ? "—" : count(errors)}
+                      </span>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
                 );
               })}
             </div>
@@ -677,6 +763,52 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
           </div>
         </MonitorPanel>
       )}
+      {(() => {
+        const at = shown.findIndex((r) => r.name === drawer);
+        const row = at >= 0 ? shown[at]! : null;
+        if (!row) return null;
+        return (
+          <RowDrawer
+            open
+            onClose={() => setDrawer(null)}
+            label={`Interface details: ${row.name}`}
+            status={{ tone: KIT_TONE[stateTone(row)], label: stateLabel(row) }}
+            title={row.name}
+            meta={[row.type, row.comment, row.dynamic ? "dynamic" : ""].filter(Boolean).join(" · ")}
+            rowKey={row.name}
+            nav={{
+              index: at,
+              total: shown.length,
+              onPrev: at > 0 ? () => setDrawer(shown[at - 1]!.name) : undefined,
+              onNext: at < shown.length - 1 ? () => setDrawer(shown[at + 1]!.name) : undefined,
+            }}
+            storageKey="interfaces"
+            primary={
+              <MonitorButton size="sm" onClick={() => setSelected(row.name)}>
+                Chart this interface
+              </MonitorButton>
+            }
+          >
+            <DetailBlock label="Now">
+              <DetailList
+                items={[
+                  { label: "RX · received", value: currentRate(row.rxRate), mono: true },
+                  { label: "TX · sent", value: currentRate(row.txRate), mono: true },
+                ]}
+              />
+            </DetailBlock>
+            <DetailBlock label="Counters" aside="since the last reset">
+              <DetailList
+                items={counters(row, unavailable).map(([label, value, mono]) => ({
+                  label,
+                  value,
+                  mono,
+                }))}
+              />
+            </DetailBlock>
+          </RowDrawer>
+        );
+      })()}
     </section>
   );
 }

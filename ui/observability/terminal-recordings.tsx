@@ -7,10 +7,11 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { Pause, Play, RotateCcw, Search, Trash2, Video, X } from "lucide-react";
+import { Pause, Play, RotateCcw, Trash2, Video, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, deleteJson, withToken } from "./api";
+import { SearchInput, Slider } from "./kit";
 import { cleanOutput } from "./terminal-lib";
 
 interface Recording {
@@ -204,17 +205,18 @@ function Player({ recording, cast }: { recording: Recording; cast: string }): Re
         </span>
         <span>{clock(total, total < 10)} long</span>
         <span>{bytes(recording.bytes)}</span>
-        <label className="term-player-search">
-          <Search size={12} />
-          <input
-            value={query}
-            placeholder="Search this recording…"
-            spellCheck={false}
-            aria-label="Search this recording"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {needle && <small>{hits.length === 300 ? "300+" : hits.length}</small>}
-        </label>
+        <SearchInput
+          size="sm"
+          mono
+          wrapClassName="ml-auto w-60"
+          value={query}
+          placeholder="Search this recording…"
+          spellCheck={false}
+          label="Search this recording"
+          aria-label="Search this recording"
+          onChange={setQuery}
+          end={needle && <small>{hits.length === 300 ? "300+" : hits.length}</small>}
+        />
       </header>
       <div className="term-player-stage">
         <div className="term-player-screen" ref={screen} data-hidden={Boolean(needle)} />
@@ -251,16 +253,16 @@ function Player({ recording, cast }: { recording: Recording; cast: string }): Re
         <span className="term-player-time">
           {clock(at, total < 10)} / {clock(total, total < 10)}
         </span>
-        <input
-          type="range"
-          className="term-player-seek"
+        <Slider
+          className="min-w-[60px] flex-1"
+          showLabel={false}
           min={0}
           max={Math.max(total, 0.01)}
           step={0.01}
           value={Math.min(at, total)}
-          aria-label="Position"
-          style={{ "--done": `${total ? (Math.min(at, total) / total) * 100 : 0}%` } as never}
-          onChange={(event) => seek(Number(event.target.value))}
+          label="Position"
+          format={(n) => clock(n, total < 10)}
+          onChange={(value) => seek(typeof value === "number" ? value : value[0])}
         />
         <span className="term-player-speeds" role="group" aria-label="Speed">
           {[1, 2, 4, 8].map((value) => (
@@ -351,17 +353,19 @@ export function RecordingsDialog({ onClose }: { onClose: () => void }): ReactNod
         </header>
         <div className="term-recordings-body">
           <aside>
-            <label className="term-search">
-              <Search size={13} />
-              <input
+            <div className="mx-2.5">
+              <SearchInput
+                size="sm"
+                mono
                 value={filter}
                 placeholder="Filter by router…"
                 spellCheck={false}
+                label="Filter recordings by router"
                 aria-label="Filter recordings by router"
-                onChange={(event) => setFilter(event.target.value)}
+                onChange={setFilter}
+                end={items && <small>{shown.length}</small>}
               />
-              {items && <small>{shown.length}</small>}
-            </label>
+            </div>
             <div className="term-recordings-list">
               {items?.length === 0 && (
                 <p className="term-recordings-none">

@@ -7,7 +7,7 @@
 import "./snapshots.css";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowRight, Archive, ChevronDown, History, RefreshCw, X } from "lucide-react";
+import { ArrowRight, Archive, History, RefreshCw, X } from "lucide-react";
 import { api, postJson } from "./api";
 import { DiffPre } from "./config-charts";
 import type { DiffSummary } from "./config-studio";
@@ -23,6 +23,7 @@ import {
   StatusBadge,
   StatusDot,
 } from "./monitoring-ui";
+import { DetailList, RowDrawer, RowMenu, RowMore, Select } from "./kit";
 import { SnapshotTimeline } from "./snapshot-timeline";
 import { toast } from "./toast-action";
 
@@ -63,37 +64,6 @@ function span(a: number, b: number): string {
   if (days === 0) return "the same day";
   if (days === 7) return "a week";
   return `${days} day${days === 1 ? "" : "s"}`;
-}
-
-function SnapSelect({
-  value,
-  onChange,
-  options,
-  placeholder,
-  label,
-  icon = false,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-  placeholder: string;
-  label: string;
-  icon?: boolean;
-}): ReactNode {
-  return (
-    <span className="monitor-select snaps-select" data-icon={icon || undefined}>
-      {icon && <Archive aria-hidden="true" className="snaps-select-icon" />}
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{placeholder}</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown aria-hidden="true" />
-    </span>
-  );
 }
 
 /** Browse stored `/export` snapshots and time-travel diff any two. */
@@ -180,6 +150,8 @@ export function SnapshotsView(): ReactNode {
   const a = diff?.summary.added ?? 0;
   const r = diff?.summary.removed ?? 0;
 
+  const selIndex = sel ? snaps.findIndex((s) => s.id === sel.id) : -1;
+
   const table = (
     <MonitorPanel
       title="Config snapshots"
@@ -193,40 +165,161 @@ export function SnapshotsView(): ReactNode {
         <span>Version</span>
         <span>Lines</span>
         <span>Size</span>
+        <span />
       </div>
       {snaps.map((s) => (
-        <button
+        <RowMenu
           key={s.id}
-          type="button"
-          className="monitor-row snaps-table"
-          data-selected={sel?.id === s.id || undefined}
-          aria-pressed={sel?.id === s.id}
-          title={clock(s.ts)}
-          onClick={() => viewBody(s.id)}
+          title={s.label ?? s.id}
+          sub={`${s.device} · ${stamp(s.ts)}`}
+          onOpen={() => viewBody(s.id)}
+          cells={{
+            captured: { value: stamp(s.ts), kind: "time" },
+            device: { value: s.device, kind: "router" },
+            label: { value: s.label ?? "" },
+            version: { value: s.rosVersion ?? "" },
+            lines: { value: s.lines.toLocaleString() },
+            size: { value: size(s.bytes) },
+          }}
+          copies={[
+            { label: "Snapshot ID", value: s.id },
+            { label: "SHA", value: s.sha },
+          ]}
+          row={s}
+          actions={[
+            {
+              label: "Diff from this snapshot",
+              icon: <Archive aria-hidden="true" />,
+              onSelect: () => pickFrom(s.id),
+            },
+            {
+              label: "Diff to this snapshot",
+              icon: <ArrowRight aria-hidden="true" />,
+              onSelect: () => pickTo(s.id),
+            },
+          ]}
         >
-          <span className="mono trunc text-muted-foreground">{stamp(s.ts)}</span>
-          <span className="flex min-w-0 items-center gap-2.5">
-            <StatusDot tone="good" />
-            <span className="mono p trunc">{s.device}</span>
-          </span>
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="trunc">{s.label ?? "—"}</span>
-            {diff?.from === s.id && <span className="monitor-chip snaps-chip-from">from</span>}
-            {diff?.to === s.id && <span className="monitor-chip snaps-chip-to">to</span>}
-          </span>
-          <span className="mono trunc">{s.rosVersion ?? "—"}</span>
-          <span className="num">{s.lines.toLocaleString()}</span>
-          <span className="mono trunc">{size(s.bytes)}</span>
-        </button>
+          <div
+            role="button"
+            tabIndex={0}
+            className="monitor-row snaps-table cursor-pointer"
+            data-selected={sel?.id === s.id || undefined}
+            aria-pressed={sel?.id === s.id}
+            title={clock(s.ts)}
+            onClick={() => viewBody(s.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                viewBody(s.id);
+              }
+            }}
+          >
+            <span data-col="captured" className="mono trunc text-muted-foreground">
+              {stamp(s.ts)}
+            </span>
+            <span data-col="device" className="flex min-w-0 items-center gap-2.5">
+              <StatusDot tone="good" />
+              <span className="mono p trunc">{s.device}</span>
+            </span>
+            <span data-col="label" className="flex min-w-0 items-center gap-1.5">
+              <span className="trunc">{s.label ?? "—"}</span>
+              {diff?.from === s.id && <span className="monitor-chip snaps-chip-from">from</span>}
+              {diff?.to === s.id && <span className="monitor-chip snaps-chip-to">to</span>}
+            </span>
+            <span data-col="version" className="mono trunc">
+              {s.rosVersion ?? "—"}
+            </span>
+            <span data-col="lines" className="num">
+              {s.lines.toLocaleString()}
+            </span>
+            <span data-col="size" className="mono trunc">
+              {size(s.bytes)}
+            </span>
+            <RowMore />
+          </div>
+        </RowMenu>
       ))}
     </MonitorPanel>
   );
 
-  const exportPanel = sel && (
-    <MonitorPanel
-      title={`Snapshot · ${sel.label ?? sel.id}`}
-      description={`${sel.device} · ${sel.lines.toLocaleString()} lines`}
-      extra={
+  const step = (d: 1 | -1): (() => void) | undefined => {
+    const next = snaps[selIndex + d];
+    return next ? () => viewBody(next.id) : undefined;
+  };
+
+  const drawer = (
+    <RowDrawer
+      open={Boolean(sel)}
+      onClose={() => setSel(null)}
+      label={`Snapshot details: ${sel?.label ?? sel?.id ?? ""}`}
+      title={`Snapshot · ${sel?.label ?? sel?.id ?? ""}`}
+      meta={sel ? `${sel.device} · ${sel.lines.toLocaleString()} lines` : undefined}
+      nav={
+        selIndex >= 0
+          ? { index: selIndex, total: snaps.length, onPrev: step(-1), onNext: step(1) }
+          : undefined
+      }
+      rowKey={sel?.id}
+      storageKey="snapshots"
+      tabs={
+        sel
+          ? [
+              {
+                id: "export",
+                label: "Export",
+                content: (
+                  <pre
+                    className="monitor-pre snaps-export"
+                    style={{ maxHeight: 460, overflow: "auto" }}
+                  >
+                    {sel.body || "(empty)"}
+                  </pre>
+                ),
+              },
+              {
+                id: "details",
+                label: "Details",
+                content: (
+                  <DetailList
+                    items={[
+                      { label: "Captured", value: stamp(sel.ts), mono: true },
+                      { label: "Device", value: sel.device, mono: true },
+                      { label: "Label", value: sel.label ?? "—" },
+                      { label: "Version", value: sel.rosVersion ?? "—", mono: true },
+                      { label: "Lines", value: sel.lines.toLocaleString() },
+                      { label: "Size", value: size(sel.bytes) },
+                      { label: "SHA", value: sel.sha, mono: true },
+                      { label: "ID", value: sel.id, mono: true },
+                    ]}
+                  />
+                ),
+              },
+            ]
+          : undefined
+      }
+      actions={
+        sel && (
+          <>
+            <MonitorButton
+              variant="ghost"
+              size="sm"
+              icon={<Archive aria-hidden="true" />}
+              onClick={() => pickFrom(sel.id)}
+            >
+              Diff from
+            </MonitorButton>
+            <MonitorButton
+              variant="ghost"
+              size="sm"
+              icon={<ArrowRight aria-hidden="true" />}
+              onClick={() => pickTo(sel.id)}
+            >
+              Diff to
+            </MonitorButton>
+          </>
+        )
+      }
+      primary={
         <MonitorButton
           variant="ghost"
           size="sm"
@@ -236,20 +329,14 @@ export function SnapshotsView(): ReactNode {
           Close
         </MonitorButton>
       }
-    >
-      <pre className="monitor-pre snaps-export" style={{ maxHeight: 460, overflow: "auto" }}>
-        {sel.body || "(empty)"}
-      </pre>
-    </MonitorPanel>
+    />
   );
 
-  const body = exportPanel ? (
-    <div className="snaps-cols">
+  const body = (
+    <>
       {table}
-      {exportPanel}
-    </div>
-  ) : (
-    table
+      {drawer}
+    </>
   );
 
   if (diff)
@@ -282,8 +369,10 @@ export function SnapshotsView(): ReactNode {
           }
           actions={
             <>
-              <SnapSelect
-                icon
+              <Select
+                size="sm"
+                className="monitor-kit-select snaps-select"
+                leading={<Archive aria-hidden="true" />}
                 value={from}
                 onChange={pickFrom}
                 options={opts}
@@ -293,7 +382,9 @@ export function SnapshotsView(): ReactNode {
               <span className="snaps-arrow" aria-hidden="true">
                 <ArrowRight />
               </span>
-              <SnapSelect
+              <Select
+                size="sm"
+                className="monitor-kit-select snaps-select"
                 value={to}
                 onChange={pickTo}
                 options={opts}
@@ -362,15 +453,19 @@ export function SnapshotsView(): ReactNode {
         }
         actions={
           <>
-            <SnapSelect
-              icon
+            <Select
+              size="sm"
+              className="monitor-kit-select snaps-select"
+              leading={<Archive aria-hidden="true" />}
               value={from}
               onChange={pickFrom}
               options={opts}
               placeholder="diff from…"
               label="Diff from snapshot"
             />
-            <SnapSelect
+            <Select
+              size="sm"
+              className="monitor-kit-select snaps-select"
               value={to}
               onChange={pickTo}
               options={opts}

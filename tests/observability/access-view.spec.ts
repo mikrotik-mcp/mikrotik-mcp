@@ -5,6 +5,7 @@ import type { Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, test, vi } from "vite-plus/test";
 import { AccessView } from "../../ui/observability/access-view";
 import type { AccessSettings } from "../../src/observability/access-settings";
+import { kitControl } from "../_stubs/kit";
 
 vi.hoisted(() => {
   Reflect.deleteProperty(Element.prototype, "animate");
@@ -107,10 +108,12 @@ test("loads a configured form, actual BeUI controls, and a read-only decision pr
   await settle();
   expect(host.textContent).toContain("Access scope off");
   expect(host.textContent).toContain("Within the access boundary");
-  // Native Signal selects for risk, preview target and probe tool; comboboxes for the two pickers.
-  expect(host.querySelectorAll("select").length).toBe(3);
-  expect(host.querySelector('select[aria-label="Maximum risk"]')).toBeTruthy();
-  expect(host.querySelectorAll('[role="combobox"]').length).toBe(2);
+  // Kit selects for risk, preview target and probe tool, plus comboboxes for the two pickers.
+  expect(host.querySelectorAll("select").length).toBe(0);
+  expect(kitControl("Maximum risk", host)).toBeTruthy();
+  expect(kitControl("Preview router", host)).toBeTruthy();
+  expect(kitControl("Tool to check", host)).toBeTruthy();
+  expect(host.querySelectorAll('[role="combobox"]').length).toBe(5);
   expect(host.querySelector('[role="switch"]')).toBeTruthy();
   expect(writes()).toHaveLength(0);
 });

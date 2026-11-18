@@ -1,9 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Plus, Search, Server, SlidersHorizontal } from "lucide-react";
+import {
+  PenLine,
+  Plus,
+  Power,
+  RotateCw,
+  Search,
+  Server,
+  SlidersHorizontal,
+  Zap,
+} from "lucide-react";
+import { DetailList, RowDrawer, RowMenu, RowMore } from "./kit";
+import type { RowAction, Tone as KitTone } from "./kit";
 import { LoadingState } from "./loading-state";
 import { ManagementPaths, PathLegend } from "./connectivity";
-import { PhoneRouterRow, RouterDetails, RouterRow, clockTime, deviceState } from "./device-card";
+import {
+  PhoneRouterRow,
+  RouterDetails,
+  RouterRow,
+  clockTime,
+  deviceState,
+  transportLine,
+} from "./device-card";
 import type { DeviceActions, DeviceBusy } from "./device-card";
 import { SSHPoolPanel } from "./ssh-pool";
 import { ConfigEditor } from "./config-editor";
@@ -16,6 +34,7 @@ import {
   MonitorSearch,
   PageIntro,
   Segmented,
+  formatMs,
   useStaggerIn,
 } from "./monitoring-ui";
 import { api } from "./api";
@@ -24,6 +43,13 @@ import { addDevice } from "../../src/config-device-draft";
 import type { CapabilitiesJson, DevicesPayload, SSHPoolPayload } from "./types";
 
 type DeviceFilter = "all" | "online" | "offline" | "pending" | "disabled";
+
+const STATE_KIT: Record<ReturnType<typeof deviceState>, KitTone> = {
+  online: "ok",
+  offline: "bad",
+  pending: "off",
+  disabled: "off",
+};
 
 /** "edge-02 is offline", "edge-02 and lab-chr are offline", "3 routers are offline". */
 function offlineLine(names: string[]): string {
@@ -63,6 +89,8 @@ export function DevicesView({
   const [filter, setFilter] = useState<DeviceFilter>("all");
   // undefined: nothing chosen yet, so the first router is open; null: closed.
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
+  // The row drawer, by router name.
+  const [drawer, setDrawer] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, DeviceBusy>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   type Request = { name?: string; add?: boolean; seed?: NonNullable<typeof seed> };
@@ -460,15 +488,76 @@ export function DevicesView({
                     <span className="text-right">Latency</span>
                     <span className="text-right">Calls</span>
                   </div>
-                  {shown.map((d) => (
-                    <RouterRow
-                      key={d.name}
-                      d={d}
-                      capabilities={capabilities[d.name] ?? null}
-                      selected={selected?.name === d.name}
-                      onSelect={() => setPicked(d.name)}
-                    />
-                  ))}
+                  {shown.map((d) => {
+                    const rowBusy = !!busy[d.name] || !!d.disabled;
+                    const rowActions: RowAction[] = [];
+                    if (actions.onTest)
+                      rowActions.push({
+                        label: "Test",
+                        icon: <Zap aria-hidden="true" />,
+                        disabled: rowBusy,
+                        onSelect: () => void runAction(d.name, "test"),
+                      });
+                    if (actions.onReconnect && !d.mac)
+                      rowActions.push({
+                        label: "Reconnect",
+                        icon: <RotateCw aria-hidden="true" />,
+                        disabled: rowBusy,
+                        onSelect: () => void runAction(d.name, "reconnect"),
+                      });
+                    if (!editor && !loading)
+                      rowActions.push({
+                        label: "Edit",
+                        icon: <PenLine aria-hidden="true" />,
+                        onSelect: () => openManager({ name: d.name }),
+                      });
+                    if (actions.onToggle)
+                      rowActions.push({
+                        label: d.disabled ? "Make available to MCP" : "Turn off for MCP",
+                        icon: <Power aria-hidden="true" />,
+                        danger: !d.disabled,
+                        onSelect: () => actions.onToggle?.(d.name, !d.disabled),
+                      });
+                    return (
+                      <RowMenu
+                        key={d.name}
+                        title={d.name}
+                        sub={d.mac ?? `${d.host}:${d.port}`}
+                        onOpen={() => setDrawer(d.name)}
+                        opens={[{ label: "Show full details", onSelect: () => setPicked(d.name) }]}
+                        copies={[
+                          { label: "Router name", value: d.name },
+                          { label: d.mac ? "MAC address" : "Address", value: d.mac ?? d.host },
+                        ]}
+                        row={d}
+                        cells={{
+                          name: {
+                            value: d.name,
+                            kind: "router",
+                            open: { label: "Show full details", run: () => setPicked(d.name) },
+                          },
+                          address: { value: d.mac ?? d.host },
+                          latency: {
+                            value:
+                              d.status.latencyMs != null
+                                ? `${Math.round(d.status.latencyMs)} ms`
+                                : "",
+                            kind: "duration",
+                          },
+                          calls: { value: String(d.activity.calls) },
+                        }}
+                        actions={rowActions}
+                      >
+                        <RouterRow
+                          d={d}
+                          capabilities={capabilities[d.name] ?? null}
+                          selected={selected?.name === d.name}
+                          onSelect={() => setPicked(d.name)}
+                          more={<RowMore />}
+                        />
+                      </RowMenu>
+                    );
+                  })}
                   <div className="monitor-foot">
                     <span>
                       {checkedAt ? `Last check ${checkedAt} · ` : ""}checks run every 30 s
@@ -513,9 +602,111 @@ export function DevicesView({
           </>
         )}
 
+        {(() => {
+          const at = shown.findIndex((d) => d.name === drawer);
+          const d = at >= 0 ? shown[at]! : null;
+          if (!d) return null;
+          const state = deviceState(d);
+          const rowBusy = !!busy[d.name] || !!d.disabled;
+          const pct = (v: number | null | undefined) => (v == null ? "—" : `${Math.round(v)}%`);
+          return (
+            <RowDrawer
+              open
+              onClose={() => setDrawer(null)}
+              label={`Router row: ${d.name}`}
+              status={{
+                tone: STATE_KIT[state],
+                label:
+                  state === "pending"
+                    ? "Unchecked"
+                    : state === "disabled"
+                      ? "Off for MCP"
+                      : state === "online"
+                        ? "Online"
+                        : "Offline",
+              }}
+              title={d.name}
+              meta={transportLine(d)}
+              rowKey={d.name}
+              nav={{
+                index: at,
+                total: shown.length,
+                onPrev: at > 0 ? () => setDrawer(shown[at - 1]!.name) : undefined,
+                onNext: at < shown.length - 1 ? () => setDrawer(shown[at + 1]!.name) : undefined,
+              }}
+              storageKey="devices"
+              actions={
+                <>
+                  {actions.onTest && (
+                    <MonitorButton
+                      size="sm"
+                      disabled={rowBusy}
+                      onClick={() => void runAction(d.name, "test")}
+                    >
+                      {busy[d.name] === "test" ? "Testing…" : "Test"}
+                    </MonitorButton>
+                  )}
+                  {actions.onReconnect && !d.mac && (
+                    <MonitorButton
+                      size="sm"
+                      disabled={rowBusy}
+                      onClick={() => void runAction(d.name, "reconnect")}
+                    >
+                      {busy[d.name] === "reconnect" ? "Reconnecting…" : "Reconnect"}
+                    </MonitorButton>
+                  )}
+                </>
+              }
+              primary={
+                <MonitorButton size="sm" variant="primary" onClick={() => setPicked(d.name)}>
+                  Show full details
+                </MonitorButton>
+              }
+            >
+              {errors[d.name] && (
+                <p role="alert" className="monitor-err">
+                  {errors[d.name]}
+                </p>
+              )}
+              <DetailList
+                items={[
+                  { label: "Router", value: d.name, mono: true },
+                  { label: d.mac ? "MAC address" : "Address", value: d.mac ?? d.host, mono: true },
+                  { label: "Path", value: transportLine(d) },
+                  ...(d.status.identity
+                    ? [{ label: "Identity", value: d.status.identity, mono: true }]
+                    : []),
+                  ...(d.status.boardName ? [{ label: "Hardware", value: d.status.boardName }] : []),
+                  { label: "CPU", value: pct(d.status.cpuLoad) },
+                  { label: "Memory", value: pct(d.status.memUsedPct) },
+                  {
+                    label: "Latency",
+                    value:
+                      d.status.latencyMs != null && state === "online"
+                        ? formatMs(d.status.latencyMs)
+                        : "—",
+                    mono: true,
+                  },
+                  {
+                    label: "Recent calls",
+                    value: `${num(d.activity.calls)} · ${num(d.activity.errors)} failed`,
+                  },
+                  ...(d.status.checkedAt
+                    ? [{ label: "Last check", value: clockTime(d.status.checkedAt) }]
+                    : []),
+                ]}
+              />
+            </RowDrawer>
+          );
+        })()}
+
         {/* Pool totals always describe the whole fleet, not the filtered table. */}
         <div className="min-w-0 max-sm:hidden">
-          <SSHPoolPanel devices={list} poolPayload={pool} />
+          <SSHPoolPanel
+            devices={list}
+            poolPayload={pool}
+            onSelectRouter={(name) => setPicked(name)}
+          />
         </div>
       </div>
     </section>

@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { api } from "./api";
 import { highlightJson } from "./highlight";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 // ── Config types + helpers (shared across the config editor) ─────────────────
@@ -214,9 +213,10 @@ export function JsonEditor({
           {highlightJson(text)}
           {"\n"}
         </pre>
-        <Textarea
+        {/* kit-exempt: code editor; the transparent text sits over the highlight layer */}
+        <textarea
           ref={taRef}
-          className="caret-brand selection:bg-brand/35 relative z-[1] m-0 box-border h-[400px] min-h-0 w-full resize-y rounded-none border-0 bg-transparent px-3 py-2.5 font-mono text-xs leading-[1.5] whitespace-pre text-transparent shadow-none [field-sizing:fixed] [tab-size:2] outline-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
+          className="flex caret-brand selection:bg-brand/35 relative z-[1] m-0 box-border h-[400px] min-h-0 w-full resize-y rounded-none border-0 bg-transparent px-3 py-2.5 font-mono text-xs leading-[1.5] whitespace-pre text-transparent shadow-none [field-sizing:fixed] [tab-size:2] outline-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
           spellCheck={false}
           wrap="off"
           value={text}

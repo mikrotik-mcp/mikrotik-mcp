@@ -3,6 +3,7 @@ import { Globe2, Layers3, Network, Plus, Router, ShieldCheck, X } from "lucide-r
 import type { Entity } from "../../src/memory/types";
 import type { MemoryPage, MemoryScope, MemoryScopeKind } from "../../src/memory/knowledge";
 import { api } from "./api";
+import { Checkbox, SearchInput, TextInput } from "./kit";
 import { saveMemory } from "./memory-editors";
 import { MonitorButton, MonitorNote, MonitorPanel } from "./monitoring-ui";
 import "./memory-sharing.css";
@@ -259,14 +260,13 @@ function ScopeForm({
                 </span>
               ))}
             </div>
-            <input
-              className="monitor-input"
-              aria-label="Search group members"
+            <SearchInput
+              label="Search group members"
               value={query}
               maxLength={500}
               placeholder="Find a device entity…"
-              onChange={(e) => {
-                setQuery(e.target.value);
+              onChange={(v) => {
+                setQuery(v);
                 setOffset(0);
               }}
             />
@@ -279,8 +279,7 @@ function ScopeForm({
               <div className="memory-member-list">
                 {choices?.items.map((item) => (
                   <label key={item.name} className="monitor-check">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       aria-label={`Include ${item.name}`}
                       checked={members.includes(item.name)}
                       disabled={
@@ -288,8 +287,7 @@ function ScopeForm({
                         (item.memoryScope ?? "device") !== "device" ||
                         (!members.includes(item.name) && members.length >= 100)
                       }
-                      onChange={(e) => {
-                        const checked = e.target.checked;
+                      onCheckedChange={(checked) => {
                         setMembers((old) =>
                           checked ? [...old, item.name] : old.filter((m) => m !== item.name),
                         );
@@ -356,11 +354,11 @@ function ScopeForm({
         </div>
         {scope !== "device" && (
           <label className="memory-sharing-confirm monitor-check">
-            <input
-              type="checkbox"
+            <Checkbox
+              tone="warn"
               aria-label="Confirm sharing all entity memories"
               checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
+              onCheckedChange={setConfirmed}
             />
             <span>
               I reviewed this entity’s knowledge and intend to share all of it{" "}
@@ -444,12 +442,13 @@ export function MemorySharing({
       >
         <label className="memory-field">
           <span>Policy or device entity</span>
-          <input
-            className="monitor-input font-mono text-xs"
+          <TextInput
+            label="Policy or device entity"
+            mono
             required
             maxLength={200}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={setName}
             placeholder="Exact entity name, e.g. fleet-policy"
           />
         </label>

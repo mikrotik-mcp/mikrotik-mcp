@@ -52,7 +52,7 @@
 
 /* History: state, transaction, participants, when. */
 .txn-hist {
-  grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1.5fr) 70px;
+  grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1.5fr) 70px 26px;
 }
 
 /* Recovery | Assertions under the lanes. */
@@ -78,6 +78,11 @@
 .txn-detail-title .mono {
   color: var(--text-faint);
   font-weight: 400;
+}
+/* A finished transaction in its row drawer: one column, no panel padding. */
+.txn-drawer .txn-foot {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
 }
 
 /* The review dialog: the lanes sit in a glass box. */
@@ -112,7 +117,7 @@
     font-size: 11px;
   }
   .txn-hist {
-    grid-template-columns: 96px minmax(0, 1fr) 56px;
+    grid-template-columns: 96px minmax(0, 1fr) 56px 26px;
   }
   .txn-hist > :nth-child(3) {
     display: none;

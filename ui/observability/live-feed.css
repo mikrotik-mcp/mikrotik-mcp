@@ -17,7 +17,7 @@
 /* The table: the board's column widths. */
 .live-feed-grid {
   min-width: 600px;
-  grid-template-columns: 18px 44px minmax(0, 1.4fr) 62px 110px 60px minmax(0, 1fr);
+  grid-template-columns: 18px 44px minmax(0, 1.4fr) 62px 110px 60px minmax(0, 1fr) 26px;
 }
 .live-feed-grid > span {
   min-width: 0;
@@ -25,20 +25,6 @@
 /* The checkbox sits on the row's text line, 1px down, as on the board. */
 .live-feed-grid > .monitor-check {
   height: 21px;
-}
-.live-feed-grid > .monitor-check input {
-  margin-top: 1px;
-}
-.live-feed-grid .monitor-check input:indeterminate {
-  background: var(--sig);
-  box-shadow: none;
-}
-.live-feed-grid .monitor-check input:indeterminate::after {
-  content: "";
-  width: 8px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--on-sig);
 }
 
 /* The call details beside the table. */

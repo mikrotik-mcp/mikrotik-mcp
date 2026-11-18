@@ -14,6 +14,7 @@ import {
 import { composePrompt, missingPromptArguments, promptCategory } from "../../src/prompts/compose";
 import type { PromptTemplate } from "../../src/prompts/compose";
 import { api } from "./api";
+import { TextArea, TextInput } from "./kit";
 import {
   Metric,
   MetricStrip,
@@ -335,29 +336,27 @@ function PromptComposer({ prompt }: { prompt: PromptTemplate }) {
           <span className="monitor-label">
             Your request · describe the outcome, symptoms or constraints
           </span>
-          <textarea
+          <TextArea
             dir="auto"
-            className="monitor-input prompts-request"
-            aria-label="Your request"
+            label="Your request"
+            rows={3}
+            showCount={false}
             value={request}
-            onChange={(e) => setRequest(e.target.value)}
+            onChange={setRequest}
             maxLength={12000}
             placeholder="For example: investigate evening slowdowns without interrupting anyone…"
           />
         </label>
         <label className="monitor-fl">
           <span className="monitor-label">Target router · optional</span>
-          <span className="monitor-input">
-            <Server aria-hidden="true" className="size-[15px] flex-none text-muted-foreground" />
-            <input
-              className="prompts-bare"
-              aria-label="Target router"
-              value={device}
-              onChange={(e) => setDevice(e.target.value)}
-              maxLength={200}
-              placeholder="core-router-01"
-            />
-          </span>
+          <TextInput
+            label="Target router"
+            icon={<Server aria-hidden="true" />}
+            value={device}
+            onChange={setDevice}
+            maxLength={200}
+            placeholder="core-router-01"
+          />
           <span className="monitor-hint">
             Exact configured device name. Leave blank and the assistant asks first.
           </span>
@@ -373,12 +372,12 @@ function PromptComposer({ prompt }: { prompt: PromptTemplate }) {
                 <span className="font-normal text-faint">· optional</span>
               )}
             </span>
-            <input
-              className="monitor-input font-mono"
-              aria-label={arg.name}
+            <TextInput
+              label={arg.name}
+              mono
               required={arg.required}
               value={values[arg.name] ?? ""}
-              onChange={(e) => setValues({ ...values, [arg.name]: e.target.value })}
+              onChange={(v) => setValues({ ...values, [arg.name]: v })}
               maxLength={4000}
             />
             {arg.description && <span className="monitor-hint">{arg.description}</span>}

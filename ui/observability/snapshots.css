@@ -16,15 +16,8 @@
 }
 
 /* The hero's snapshot pickers: the first carries an archive icon. */
-.snaps-select select {
+.kit-trigger.snaps-select {
   max-width: 300px;
-}
-.snaps-select[data-icon] select {
-  padding-left: 34px;
-}
-.snaps-select[data-icon] .snaps-select-icon {
-  right: auto;
-  left: 12px;
 }
 .snaps-arrow {
   display: inline-flex;
@@ -35,14 +28,8 @@
   height: 16px;
 }
 
-.snaps-cols {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
-  gap: 14px;
-}
-
 .snaps-table {
-  grid-template-columns: 104px minmax(0, 1.25fr) minmax(0, 1.2fr) 58px 50px 64px;
+  grid-template-columns: 104px minmax(0, 1.25fr) minmax(0, 1.2fr) 58px 50px 64px 26px;
 }
 .snaps-chip-from {
   color: var(--brand);
@@ -57,20 +44,14 @@
   word-break: break-all;
 }
 
-@media (max-width: 1100px) {
-  .snaps-cols {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 639px) {
   .snaps-table {
-    grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) 26px;
   }
-  .snaps-table > :nth-child(n + 4) {
+  .snaps-table > :nth-child(n + 4):not(:last-child) {
     display: none;
   }
-  .snaps-select select {
+  .kit-trigger.snaps-select {
     max-width: 100%;
   }
 }

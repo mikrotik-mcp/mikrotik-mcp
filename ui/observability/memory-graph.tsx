@@ -3,6 +3,7 @@ import type { ReactNode, RefObject } from "react";
 import { animate, createScope, stagger } from "animejs";
 import type { Scope } from "animejs";
 import type { Relation } from "../../src/memory/types";
+import { tipProps } from "./kit";
 
 const W = 320;
 const H = 150;
@@ -55,6 +56,7 @@ export function RelationGraph({
     return {
       name: out ? r.to : r.from,
       type: r.relationType,
+      at: r.createdAt,
       out,
       x: Math.round(CX + Math.cos(angle) * 110),
       y: Math.round(CY + Math.sin(angle) * 48),
@@ -68,7 +70,7 @@ export function RelationGraph({
       height={H}
       role="img"
       aria-label={`Relations of ${entity}`}
-      className="memory-graph"
+      className="memory-graph kit-tips"
     >
       {nodes.map((n) => (
         <line
@@ -100,8 +102,23 @@ export function RelationGraph({
           data-node
           style={{ transformOrigin: `${n.x}px ${n.y}px`, cursor: "pointer" }}
           onClick={() => onSelect(n.name)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onSelect(n.name);
+            }
+          }}
+          {...tipProps(() => ({
+            title: n.name,
+            sub: n.out ? "outgoing" : "incoming",
+            rows: [
+              { label: "Relation", value: n.type, color: n.out ? "var(--brand)" : "var(--sig)" },
+              { label: n.out ? "From" : "To", value: entity },
+              { label: "Added", value: new Date(n.at).toLocaleString("en-US") },
+            ],
+            action: { label: `Open ${short(n.name, 20)}`, onClick: () => onSelect(n.name) },
+          }))}
         >
-          <title>{`${n.out ? "→" : "←"} ${n.type} ${n.name}`}</title>
           <circle cx={n.x} cy={n.y} r={6} fill={n.out ? "var(--brand)" : "var(--sig)"} />
           <text
             x={n.x}

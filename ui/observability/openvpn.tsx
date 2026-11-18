@@ -20,6 +20,7 @@ import {
   formatBytes,
   useStaggerIn,
 } from "./monitoring-ui";
+import { Checkbox, DetailBlock, DetailList, RowDrawer, RowMenu, RowMore } from "./kit";
 import { OpenVpnRadar } from "./openvpn-graphics";
 import type { OvpnRadarStatus } from "./openvpn-graphics";
 import { connectionDuration, openVpnTrafficRate } from "../../src/core/openvpn-sessions-model";
@@ -264,6 +265,8 @@ export function OpenVpnConnections({
   const [now, setNow] = useState(Date.now);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<OpenVpnSession>();
+  // The row drawer, by `${id}:${sessionId}`.
+  const [inspect, setInspect] = useState<string | null>(null);
   const [counts, setCounts] = useState<number[]>([]);
   const sampleRef = useRef<{ data: OpenVpnSnapshot; receivedAt: number } | undefined>(undefined);
   const [confirmed, setConfirmed] = useState(false);
@@ -541,127 +544,189 @@ export function OpenVpnConnections({
               <span role="columnheader">
                 <span className="sr-only">Actions</span>
               </span>
+              <span role="columnheader" className="ovpn-more" />
             </div>
             {matching.map((session) => {
               const tone = toneOf(session);
+              const key = `${session.id}:${session.sessionId}`;
+              const network = networkOf(session);
+              const canDisconnect = !(
+                stale ||
+                busy ||
+                !data.canDisconnect ||
+                !session.disconnectToken
+              );
               return (
-                <div
-                  role="row"
-                  className="monitor-row ovpn-grid ovpn-session"
-                  key={`${session.id}:${session.sessionId}`}
-                >
-                  <span role="cell" className="ovpn-person">
-                    <span className="ovpn-avatar" data-tone={tone} aria-hidden="true">
-                      {initials(session.name)}
-                    </span>
-                    <span className="ovpn-stack ovpn-stack-2">
-                      <span className="p ovpn-trunc">{session.name}</span>
-                      <span className="ovpn-sub ovpn-trunc">
-                        {session.radius ? "RADIUS authenticated" : "OpenVPN connection"} ·{" "}
-                        <span className="ovpn-mono">{session.id}</span>
-                      </span>
-                    </span>
-                  </span>
-                  <span role="cell" className="ovpn-path">
-                    <ClientSource session={session} />
-                    <svg
-                      className="ovpn-path-arrow"
-                      viewBox="0 0 70 12"
-                      width="70"
-                      height="12"
-                      aria-hidden="true"
-                    >
-                      <line
-                        x1="2"
-                        y1="6"
-                        x2="62"
-                        y2="6"
-                        stroke="var(--sig)"
-                        strokeOpacity=".7"
-                        strokeWidth="1.5"
-                        strokeDasharray="3 4"
-                      />
-                      <path d="M60 2l6 4-6 4" fill="none" stroke="var(--sig)" strokeWidth="1.5" />
-                    </svg>
-                    <span className="ovpn-stack">
-                      <span className="ovpn-mono ovpn-tx ovpn-trunc">
-                        {session.address || "Not reported"}
-                      </span>
-                      <span className="ovpn-sub">Tunnel IP</span>
-                    </span>
-                  </span>
-                  <span role="cell" className="ovpn-stack">
-                    <span className="ovpn-mono ovpn-tx ovpn-num">
-                      {connectionDuration(
+                <RowMenu
+                  key={key}
+                  title={session.name}
+                  sub={`${session.callerId || "No source IP"} → ${session.address || "no tunnel IP"}`}
+                  onOpen={() => setInspect(key)}
+                  cells={{
+                    person: { value: session.name, search: () => setQuery(session.name) },
+                    path: session.callerId
+                      ? {
+                          value: session.callerId,
+                          kind: "ip",
+                          search: () => setQuery(session.callerId!),
+                        }
+                      : { value: "" },
+                    duration: {
+                      value: connectionDuration(
                         session.uptimeSeconds === null ? null : session.uptimeSeconds + elapsed,
+                      ),
+                      kind: "duration",
+                    },
+                  }}
+                  copies={[
+                    { label: "User name", value: session.name },
+                    ...(session.callerId ? [{ label: "Source IP", value: session.callerId }] : []),
+                    ...(session.address ? [{ label: "Tunnel IP", value: session.address }] : []),
+                    { label: "Session ID", value: session.sessionId },
+                    ...(network.known ? [{ label: "Network", value: network.name }] : []),
+                  ]}
+                  row={session}
+                  actions={[
+                    {
+                      label: "Disconnect…",
+                      icon: <Power aria-hidden="true" />,
+                      danger: true,
+                      disabled: !canDisconnect,
+                      onSelect: () => choose(session),
+                    },
+                  ]}
+                >
+                  <div
+                    role="row"
+                    tabIndex={0}
+                    className="monitor-row ovpn-grid ovpn-session"
+                    data-selected={inspect === key || undefined}
+                    onClick={() => setInspect(key)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setInspect(key);
+                      }
+                    }}
+                  >
+                    <span role="cell" data-col="person" className="ovpn-person">
+                      <span className="ovpn-avatar" data-tone={tone} aria-hidden="true">
+                        {initials(session.name)}
+                      </span>
+                      <span className="ovpn-stack ovpn-stack-2">
+                        <span className="p ovpn-trunc">{session.name}</span>
+                        <span className="ovpn-sub ovpn-trunc">
+                          {session.radius ? "RADIUS authenticated" : "OpenVPN connection"} ·{" "}
+                          <span className="ovpn-mono">{session.id}</span>
+                        </span>
+                      </span>
+                    </span>
+                    <span role="cell" data-col="path" className="ovpn-path">
+                      <ClientSource session={session} />
+                      <svg
+                        className="ovpn-path-arrow"
+                        viewBox="0 0 70 12"
+                        width="70"
+                        height="12"
+                        aria-hidden="true"
+                      >
+                        <line
+                          x1="2"
+                          y1="6"
+                          x2="62"
+                          y2="6"
+                          stroke="var(--sig)"
+                          strokeOpacity=".7"
+                          strokeWidth="1.5"
+                          strokeDasharray="3 4"
+                        />
+                        <path d="M60 2l6 4-6 4" fill="none" stroke="var(--sig)" strokeWidth="1.5" />
+                      </svg>
+                      <span className="ovpn-stack">
+                        <span className="ovpn-mono ovpn-tx ovpn-trunc">
+                          {session.address || "Not reported"}
+                        </span>
+                        <span className="ovpn-sub">Tunnel IP</span>
+                      </span>
+                    </span>
+                    <span role="cell" data-col="duration" className="ovpn-stack">
+                      <span className="ovpn-mono ovpn-tx ovpn-num">
+                        {connectionDuration(
+                          session.uptimeSeconds === null ? null : session.uptimeSeconds + elapsed,
+                        )}
+                      </span>
+                      <span className="ovpn-sub ovpn-trunc">
+                        {session.encoding || "Encoding not reported"}
+                      </span>
+                    </span>
+                    <span
+                      role="cell"
+                      className="ovpn-stack ovpn-traffic"
+                      aria-label={`${session.name} session traffic`}
+                    >
+                      {session.downloadBytes == null && session.uploadBytes == null ? (
+                        <>
+                          <span className="ovpn-sub">↓ Measuring…</span>
+                          <span className="ovpn-sub">↑ Measuring…</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="ovpn-mono ovpn-trunc">
+                            <span className="ovpn-down">
+                              ↓{" "}
+                              {session.downloadBytes == null
+                                ? "Unavailable"
+                                : formatBytes(session.downloadBytes)}
+                            </span>{" "}
+                            <span className="ovpn-faint">
+                              ·{" "}
+                              {session.downloadBytesPerSecond == null
+                                ? "Measuring…"
+                                : `${formatBytes(session.downloadBytesPerSecond)}/s`}
+                            </span>
+                          </span>
+                          <span className="ovpn-mono ovpn-trunc">
+                            <span className="ovpn-up">
+                              ↑{" "}
+                              {session.uploadBytes == null
+                                ? "Unavailable"
+                                : formatBytes(session.uploadBytes)}
+                            </span>{" "}
+                            <span className="ovpn-faint">
+                              ·{" "}
+                              {session.uploadBytesPerSecond == null
+                                ? "Measuring…"
+                                : `${formatBytes(session.uploadBytesPerSecond)}/s`}
+                            </span>
+                          </span>
+                        </>
                       )}
                     </span>
-                    <span className="ovpn-sub ovpn-trunc">
-                      {session.encoding || "Encoding not reported"}
+                    {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- keeps the button from opening the row */}
+                    <span role="cell" className="ovpn-action" onClick={(e) => e.stopPropagation()}>
+                      <MonitorButton
+                        variant="danger"
+                        size="sm"
+                        className="ovpn-disconnect"
+                        icon={<Power aria-hidden="true" />}
+                        aria-label={`Disconnect ${session.name} session ${session.id}`}
+                        title={
+                          !session.disconnectToken
+                            ? "Session identity or uptime is missing; disconnect is unavailable."
+                            : undefined
+                        }
+                        disabled={stale || busy || !data.canDisconnect || !session.disconnectToken}
+                        onClick={() => choose(session)}
+                      >
+                        Disconnect
+                      </MonitorButton>
                     </span>
-                  </span>
-                  <span
-                    role="cell"
-                    className="ovpn-stack ovpn-traffic"
-                    aria-label={`${session.name} session traffic`}
-                  >
-                    {session.downloadBytes == null && session.uploadBytes == null ? (
-                      <>
-                        <span className="ovpn-sub">↓ Measuring…</span>
-                        <span className="ovpn-sub">↑ Measuring…</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="ovpn-mono ovpn-trunc">
-                          <span className="ovpn-down">
-                            ↓{" "}
-                            {session.downloadBytes == null
-                              ? "Unavailable"
-                              : formatBytes(session.downloadBytes)}
-                          </span>{" "}
-                          <span className="ovpn-faint">
-                            ·{" "}
-                            {session.downloadBytesPerSecond == null
-                              ? "Measuring…"
-                              : `${formatBytes(session.downloadBytesPerSecond)}/s`}
-                          </span>
-                        </span>
-                        <span className="ovpn-mono ovpn-trunc">
-                          <span className="ovpn-up">
-                            ↑{" "}
-                            {session.uploadBytes == null
-                              ? "Unavailable"
-                              : formatBytes(session.uploadBytes)}
-                          </span>{" "}
-                          <span className="ovpn-faint">
-                            ·{" "}
-                            {session.uploadBytesPerSecond == null
-                              ? "Measuring…"
-                              : `${formatBytes(session.uploadBytesPerSecond)}/s`}
-                          </span>
-                        </span>
-                      </>
-                    )}
-                  </span>
-                  <span role="cell" className="ovpn-action">
-                    <MonitorButton
-                      variant="danger"
-                      size="sm"
-                      className="ovpn-disconnect"
-                      icon={<Power aria-hidden="true" />}
-                      aria-label={`Disconnect ${session.name} session ${session.id}`}
-                      title={
-                        !session.disconnectToken
-                          ? "Session identity or uptime is missing; disconnect is unavailable."
-                          : undefined
-                      }
-                      disabled={stale || busy || !data.canDisconnect || !session.disconnectToken}
-                      onClick={() => choose(session)}
-                    >
-                      Disconnect
-                    </MonitorButton>
-                  </span>
-                </div>
+                    <span role="cell" className="ovpn-more">
+                      <RowMore />
+                    </span>
+                  </div>
+                </RowMenu>
               );
             })}
           </div>
@@ -681,6 +746,95 @@ export function OpenVpnConnections({
           <span>Disconnect ends one session. It does not disable the account.</span>
         </div>
       </MonitorPanel>
+      {(() => {
+        const at = matching.findIndex((s) => `${s.id}:${s.sessionId}` === inspect);
+        const s = at >= 0 ? matching[at]! : null;
+        if (!s || !data) return null;
+        const keyOf = (x: OpenVpnSession) => `${x.id}:${x.sessionId}`;
+        const network = networkOf(s);
+        const geo = s.sourceGeo;
+        const tone = toneOf(s);
+        const rate = (v: number | null | undefined) =>
+          v == null ? "Measuring…" : `${formatBytes(v)}/s`;
+        const total = (v: number | null | undefined) =>
+          v == null ? "Unavailable" : formatBytes(v);
+        return (
+          <RowDrawer
+            open
+            onClose={() => setInspect(null)}
+            label={`Connection details: ${s.name}`}
+            status={{
+              tone,
+              label:
+                tone === "warn"
+                  ? "No traffic counters yet"
+                  : s.radius
+                    ? "RADIUS authenticated"
+                    : "OpenVPN connection",
+            }}
+            title={s.name}
+            meta={`${s.callerId || "Not reported"} → ${s.address || "Not reported"} · ${device}`}
+            rowKey={keyOf(s)}
+            nav={{
+              index: at,
+              total: matching.length,
+              onPrev: at > 0 ? () => setInspect(keyOf(matching[at - 1]!)) : undefined,
+              onNext:
+                at < matching.length - 1 ? () => setInspect(keyOf(matching[at + 1]!)) : undefined,
+            }}
+            storageKey="openvpn"
+            primary={
+              <MonitorButton
+                variant="danger"
+                size="sm"
+                icon={<Power aria-hidden="true" />}
+                disabled={stale || busy || !data.canDisconnect || !s.disconnectToken}
+                onClick={() => choose(s)}
+              >
+                Disconnect
+              </MonitorButton>
+            }
+          >
+            <DetailList
+              items={[
+                { label: "User", value: s.name },
+                { label: "Session", value: `${s.id} · ${s.sessionId}`, mono: true },
+                { label: "Client source", value: <ClientSource session={s} /> },
+                {
+                  label: "Country",
+                  value: geo?.status === "resolved" ? geo.country || geo.countryCode || "—" : "—",
+                },
+                { label: "Network", value: network.name },
+                { label: "Tunnel IP", value: s.address || "Not reported", mono: true },
+                {
+                  label: "Connected for",
+                  value: connectionDuration(
+                    s.uptimeSeconds === null ? null : s.uptimeSeconds + elapsed,
+                  ),
+                  mono: true,
+                },
+                { label: "Encoding", value: s.encoding || "Encoding not reported" },
+              ]}
+            />
+            <DetailBlock label="Traffic">
+              <DetailList
+                items={[
+                  {
+                    label: "↓ Download",
+                    value: `${total(s.downloadBytes)} · ${rate(s.downloadBytesPerSecond)}`,
+                    mono: true,
+                  },
+                  {
+                    label: "↑ Upload",
+                    value: `${total(s.uploadBytes)} · ${rate(s.uploadBytesPerSecond)}`,
+                    mono: true,
+                  },
+                ]}
+              />
+            </DetailBlock>
+          </RowDrawer>
+        );
+      })()}
       <MonitorDialog
         open={!!selected}
         onOpenChange={(open) => {
@@ -749,15 +903,13 @@ export function OpenVpnConnections({
                 This selection expired. Close this dialog and select the current connection again.
               </MonitorNote>
             )}
-            <label className="monitor-check">
-              <input
-                type="checkbox"
-                checked={confirmed}
-                disabled={busy}
-                onChange={(e) => setConfirmed(e.target.checked)}
-              />
-              I want to disconnect this one connection.
-            </label>
+            <Checkbox
+              tone="warn"
+              checked={confirmed}
+              disabled={busy}
+              onCheckedChange={setConfirmed}
+              label="I want to disconnect this one connection."
+            />
           </div>
         )}
       </MonitorDialog>

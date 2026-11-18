@@ -41,11 +41,9 @@
     align-items: center;
     gap: 8px;
   }
-  .access-risk-select > .monitor-select {
+  .access-risk-select > .kit-trigger.monitor-kit-select {
     min-width: 0;
     flex: 1;
-  }
-  .access-risk-select > .monitor-select select {
     width: 100%;
   }
 
@@ -55,12 +53,20 @@
     min-height: 44px;
     align-items: center;
     gap: 12px;
-    grid-template-columns: minmax(0, 1fr) 170px 150px;
+    grid-template-columns: minmax(0, 1fr) 170px 150px 26px;
     border-top: 1px solid var(--line);
+  }
+  .access-router:hover .kit-row-more,
+  .access-router:focus-within .kit-row-more {
+    opacity: 1;
+    background: var(--glass-3);
+  }
+  .access-router[data-selected] {
+    background: linear-gradient(90deg, var(--sig-soft), transparent 70%);
   }
   @media (max-width: 639px) {
     .access-router {
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto 26px;
       padding: 8px 0;
     }
     .access-router-state {
@@ -69,6 +75,10 @@
     }
     .access-router > .monitor-seg {
       grid-column: 2;
+      grid-row: 1 / span 2;
+    }
+    .access-router > .kit-row-more {
+      grid-column: 3;
       grid-row: 1 / span 2;
     }
   }
@@ -169,14 +179,21 @@
   }
 
   .access-denial-grid {
-    grid-template-columns: 56px 160px minmax(0, 1fr) 300px;
+    grid-template-columns: 56px 160px minmax(0, 1fr) 300px 26px;
   }
   @media (max-width: 899px) {
     .access-denial-grid {
-      grid-template-columns: 56px minmax(0, 1fr);
+      grid-template-columns: 56px minmax(0, 1fr) 26px;
     }
     .access-denial-grid > :nth-child(n + 3) {
       grid-column: 2;
+    }
+    .access-denial-grid > .kit-row-more {
+      grid-column: 3;
+      grid-row: 1;
+    }
+    .monitor-thead.access-denial-grid > :last-child {
+      display: none;
     }
   }
 
@@ -387,8 +404,7 @@
   .access-glob-option .access-tool-option-content > svg {
     color: var(--brand);
   }
-  .access-fl-select > .monitor-select,
-  .access-fl-select > .monitor-select select {
+  .access-fl-select > .kit-trigger.monitor-kit-select {
     width: 100%;
   }
 }

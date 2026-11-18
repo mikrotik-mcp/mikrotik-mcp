@@ -8,6 +8,7 @@ import { Check, Pencil, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { TextInput } from "./kit";
 
 /** Colour names; terminal.css maps each to a colour (`[data-pane-color]`). */
 export const PANE_COLORS = ["cyan", "green", "amber", "rose", "violet", "blue", "slate"] as const;
@@ -113,19 +114,24 @@ export function PaneTab(
                 rename();
               }}
             >
-              <Pencil size={12} />
-              <input
+              <TextInput
+                size="sm"
+                mono
+                icon={<Pencil size={12} />}
                 // eslint-disable-next-line jsx-a11y/no-autofocus -- the menu opens on a click
                 autoFocus
                 value={draft}
                 maxLength={60}
+                label="Pane title"
                 aria-label="Pane title"
                 onFocus={(event) => event.target.select()}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={setDraft}
+                end={
+                  <button type="submit" disabled={!draft.trim()} title="Rename">
+                    <Check size={13} />
+                  </button>
+                }
               />
-              <button type="submit" disabled={!draft.trim()} title="Rename">
-                <Check size={13} />
-              </button>
             </form>
             <div className="term-tab-colors" role="group" aria-label="Pane colour">
               {PANE_COLORS.map((name) => (

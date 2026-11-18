@@ -9,6 +9,8 @@ import { animate, createScope, stagger } from "animejs";
 import type { Scope } from "animejs";
 import { ListFilter } from "lucide-react";
 import { num } from "./format";
+import { EASE, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import { formatMs, MonitorButton, MonitorPanel, RiskBadge, StatusDot } from "./monitoring-ui";
 import type { ToolEvent } from "./types";
 import "./live-feed.css";
@@ -103,6 +105,34 @@ export function CallsPerMinute({ events }: { events: ToolEvent[] }): ReactNode {
   const bw = (W - GAP * (MINUTES - 1)) / MINUTES;
   const total = ok.reduce((a, b) => a + b, 0) + bad.reduce((a, b) => a + b, 0);
 
+  const clock = (t: number) =>
+    new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const card = (i: number): TipCard => {
+    const at = start + i * MINUTE;
+    const calls = ok[i] + bad[i];
+    const before = i > 0 ? ok[i - 1] + bad[i - 1] : null;
+    const delta = before === null ? null : calls - before;
+    return {
+      title: `${clock(at)} – ${clock(at + MINUTE)}`,
+      sub: `${MINUTES - i} min ago`,
+      led: bad[i] > 0 ? "bad" : calls > 0 ? "ok" : "off",
+      rows: [
+        { label: "Ok", value: num(ok[i]), color: "var(--sig)" },
+        { label: "Failed", value: num(bad[i]), color: "var(--destructive)" },
+        { label: "Calls", value: num(calls) },
+      ],
+      ...(delta !== null
+        ? {
+            foot: {
+              label: "vs the minute before",
+              value: `${delta >= 0 ? "+" : ""}${num(delta)}`,
+              tone: delta >= 0 ? ("up" as const) : ("down" as const),
+            },
+          }
+        : {}),
+    };
+  };
+
   const root = useRef<HTMLDivElement>(null);
   const scope = useRef<Scope | null>(null);
   useEffect(() => {
@@ -115,7 +145,7 @@ export function CallsPerMinute({ events }: { events: ToolEvent[] }): ReactNode {
         scaleY: [0, 1],
         duration: 600,
         delay: stagger(12),
-        ease: "outQuart",
+        ease: EASE.enter,
       });
     });
     return () => scope.current?.revert();
@@ -147,6 +177,7 @@ export function CallsPerMinute({ events }: { events: ToolEvent[] }): ReactNode {
           preserveAspectRatio="none"
           role="img"
           aria-label={`${num(total)} calls in the last 30 minutes`}
+          className="kit-tips"
         >
           {[1, 2, 3].map((k) => (
             <line
@@ -165,7 +196,8 @@ export function CallsPerMinute({ events }: { events: ToolEvent[] }): ReactNode {
             const fails = bad[i];
             const fh = fails ? Math.max(5, (fails / max) * (H - 14)) : 0;
             return (
-              <g key={i}>
+              <g key={i} {...tipProps(() => card(i))}>
+                <rect x={x} y={0} width={bw} height={H} fill="transparent" />
                 {bh > 0 && (
                   <rect
                     data-bar=""
@@ -189,9 +221,7 @@ export function CallsPerMinute({ events }: { events: ToolEvent[] }): ReactNode {
                     rx="3"
                     fill="var(--destructive)"
                     style={{ transformOrigin: `0 ${H}px` }}
-                  >
-                    <title>{`${fails} failed`}</title>
-                  </rect>
+                  />
                 )}
               </g>
             );

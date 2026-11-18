@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, deleteJson, postJson } from "./api";
 import { Select } from "./geist";
+import { DateTimePicker, TextInput } from "./kit";
 import { isReadCommand } from "./terminal-lib";
 
 interface Schedule {
@@ -46,7 +47,7 @@ export function ScheduleDrawer({
   const [command, setCommand] = useState(draft);
   const [device, setDevice] = useState(devices[0] ?? "");
   const [everyMs, setEveryMs] = useState(0);
-  const [at, setAt] = useState("");
+  const [at, setAt] = useState<Date | undefined>(undefined);
   const [error, setError] = useState("");
 
   const refresh = useCallback((): void => {
@@ -81,7 +82,7 @@ export function ScheduleDrawer({
             device,
             command,
             everyMs,
-            at: at ? new Date(at).getTime() : undefined,
+            at: at ? at.getTime() : undefined,
           }).then((answer) => {
             if (answer.error) setError(answer.error);
             else {
@@ -91,12 +92,15 @@ export function ScheduleDrawer({
           });
         }}
       >
-        <input
+        <TextInput
+          size="sm"
+          mono
           value={command}
           placeholder="/system resource print"
           spellCheck={false}
+          label="Command to schedule"
           aria-label="Command to schedule"
-          onChange={(event) => setCommand(event.target.value)}
+          onChange={setCommand}
         />
         <div>
           <Select
@@ -116,15 +120,17 @@ export function ScheduleDrawer({
             options={REPEATS.map(([label, value]) => ({ value: String(value), label }))}
           />
         </div>
-        <label>
+        {/* Not a <label>: a label would forward its click to the picker and close it again. */}
+        <span className="term-field">
           first run
-          <input
-            type="datetime-local"
+          <DateTimePicker
+            className="flex-1"
             value={at}
-            onChange={(event) => setAt(event.target.value)}
-            aria-label="First run (empty: now)"
+            onChange={setAt}
+            label="First run (empty: now)"
+            placeholder="now"
           />
-        </label>
+        </span>
         <button type="submit" disabled={!command.trim() || !readable}>
           Schedule
         </button>

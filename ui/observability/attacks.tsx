@@ -24,13 +24,12 @@
 import "./monitoring.css";
 import "./security.css";
 import { LoadingState } from "./loading-state";
-import type { ReactNode } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactElement, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Calendar,
   Check,
-  ChevronDown,
   ChevronRight,
   Eye,
   Lock,
@@ -63,6 +62,8 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { DetailBlock, DetailList, RowDrawer, RowMenu, RowMore, Select, tipProps } from "./kit";
+import type { CellMenu, Tone as KitTone, TipCard } from "./kit";
 import { KillChain, PressureBars } from "./security-charts";
 import type { PressureDay } from "./security-charts";
 import { cn } from "@/lib/utils";
@@ -212,68 +213,96 @@ function IncidentAction({
   );
 }
 
-function IncidentDetail({ incident }: { incident: AttackIncident }): ReactNode {
-  const tone = severityTone(incident.severity);
+/** How far it got and what to do: the drawer's overview tab. */
+function IncidentOverview({ incident }: { incident: AttackIncident }): ReactNode {
   return (
-    <div
-      className="sec-inc-detail"
-      data-tone={tone === "bad" || tone === "warn" ? tone : undefined}
-    >
-      <div>
-        {incident.spoofableOnly && (
-          <MonitorNote tone="warn" icon={<AlertTriangle aria-hidden="true" />}>
-            Every signal here rests on a source address that can be forged. It cannot be blocked on
-            its own, and blocking it by hand may punish whoever the attacker chose to name.
-          </MonitorNote>
-        )}
-        <div className="monitor-fl">
-          <span className="monitor-label">How far it got</span>
-          <StageTrack stage={incident.stage} />
-        </div>
-        <div className="monitor-fl">
-          <span className="monitor-label">What to do</span>
-          <ul className="sec-todo">
-            {incident.recommendations.map((r) => (
-              <li key={r}>
-                <span className="sec-acc">→</span> {r}
-              </li>
-            ))}
-          </ul>
-        </div>
+    <div className="sec-drawer-stack">
+      {incident.spoofableOnly && (
+        <MonitorNote tone="warn" icon={<AlertTriangle aria-hidden="true" />}>
+          Every signal here rests on a source address that can be forged. It cannot be blocked on
+          its own, and blocking it by hand may punish whoever the attacker chose to name.
+        </MonitorNote>
+      )}
+      <div className="monitor-fl">
+        <span className="monitor-label">How far it got</span>
+        <StageTrack stage={incident.stage} />
       </div>
-      <div>
-        <span className="monitor-label">
-          Evidence ({incident.evidence.length}) · detectors:{" "}
-          <span className="sec-mono">{incident.detectors.join(", ")}</span>
-        </span>
-        <pre className="monitor-pre sec-evidence">
-          {incident.evidence.slice(0, 60).map((e, i) => (
-            <Fragment key={`${e.ts ?? 0}-${i}`}>
-              {e.ts ? logStamp(e.ts) : "??"} [{e.device}]{" "}
-              <span className={lineClass(e.message)}>{e.message}</span>
-              {"\n"}
-            </Fragment>
+      <div className="monitor-fl">
+        <span className="monitor-label">What to do</span>
+        <ul className="sec-todo">
+          {incident.recommendations.map((r) => (
+            <li key={r}>
+              <span className="sec-acc">→</span> {r}
+            </li>
           ))}
-        </pre>
+        </ul>
       </div>
     </div>
   );
 }
+
+/** Every raw log line behind an incident: the drawer's evidence tab. */
+function IncidentEvidence({ incident }: { incident: AttackIncident }): ReactNode {
+  return (
+    <DetailBlock
+      label={`Evidence (${incident.evidence.length})`}
+      aside={
+        <>
+          detectors: <span className="sec-mono">{incident.detectors.join(", ")}</span>
+        </>
+      }
+    >
+      <pre className="monitor-pre sec-evidence">
+        {incident.evidence.slice(0, 60).map((e, i) => (
+          <Fragment key={`${e.ts ?? 0}-${i}`}>
+            {e.ts ? logStamp(e.ts) : "??"} [{e.device}]{" "}
+            <span className={lineClass(e.message)}>{e.message}</span>
+            {"\n"}
+          </Fragment>
+        ))}
+      </pre>
+    </DetailBlock>
+  );
+}
+
+const KIT_TONE: Record<Tone, KitTone> = {
+  default: "off",
+  good: "ok",
+  warn: "warn",
+  bad: "bad",
+  brand: "acc",
+};
+
+/** True when the row's Block… button would show. */
+const canBlock = (incident: AttackIncident): boolean =>
+  !incident.blocked && Boolean(incident.source) && !incident.spoofableOnly;
+
+/** Enter on a focused row opens its details. */
+const enterOpens =
+  (open: () => void) =>
+  (e: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === "Enter" && e.target === e.currentTarget) {
+      e.preventDefault();
+      open();
+    }
+  };
 
 function IncidentRow({
   incident,
   onRespond,
   busy,
   now,
+  open,
+  onOpen,
 }: {
   incident: AttackIncident;
   onRespond: (id: string) => void;
   busy: boolean;
   now: number;
+  open: boolean;
+  onOpen: () => void;
 }): ReactNode {
-  const [open, setOpen] = useState(false);
   const failed = incident.confidence === "confirmed";
-  const toggle = (): void => setOpen((o) => !o);
   const caret = (
     <button
       type="button"
@@ -282,62 +311,125 @@ function IncidentRow({
       aria-label={`${open ? "Hide" : "Show"} details: ${incident.narrative}`}
       onClick={(e) => {
         e.stopPropagation();
-        toggle();
+        onOpen();
       }}
     >
-      {open ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+      <ChevronRight aria-hidden="true" />
     </button>
   );
   const source = incident.source ? (
-    <span className="sec-mono p">{incident.source}</span>
+    <span data-col="source" className="sec-mono p">
+      {incident.source}
+    </span>
   ) : (
-    <span className="sec-mut">(config change)</span>
+    <span data-col="source" className="sec-mut">
+      (config change)
+    </span>
   );
   const action = <IncidentAction incident={incident} busy={busy} onRespond={onRespond} />;
   const today = startOfDay(incident.lastTs) === startOfDay(now);
+  const cells: Record<string, CellMenu> = {
+    severity: { value: incident.severity, kind: "risk" },
+    confidence: { value: incident.confidence },
+    source: incident.source ? { value: incident.source, kind: "ip" } : { value: "" },
+    what: { value: incident.narrative },
+    devices: { value: incident.devices.join(", "), kind: "router" },
+    time: { value: stamp(incident.lastTs), kind: "time" },
+  };
+  const menu = (row: ReactElement): ReactNode => (
+    <RowMenu
+      title={incident.narrative}
+      sub={`${incident.source ?? "config change"} · ${incident.devices.join(", ")} · ${stamp(incident.lastTs)}`}
+      onOpen={onOpen}
+      cells={cells}
+      copies={[
+        { label: "Incident ID", value: incident.id },
+        ...(incident.source ? [{ label: "Source address", value: incident.source }] : []),
+      ]}
+      row={incident}
+      actions={
+        canBlock(incident)
+          ? [
+              {
+                label: "Block…",
+                icon: <Lock aria-hidden="true" />,
+                danger: true,
+                disabled: busy,
+                onSelect: () => onRespond(incident.id),
+              },
+            ]
+          : undefined
+      }
+    >
+      {row}
+    </RowMenu>
+  );
   return (
     <>
-      <div
-        className={cn("monitor-row sec-inc-cols sec-inc-row sec-wide", failed && "sec-fail")}
-        data-selected={open || undefined}
-        data-failed={failed || undefined}
-        onClick={toggle}
-      >
-        {caret}
-        <span>
-          <SeverityPill severity={incident.severity} />
-        </span>
-        <span>
-          <ConfidenceTag confidence={incident.confidence} />
-        </span>
-        {source}
-        <span className="sec-trunc sec-mut">{incident.narrative}</span>
-        <span className="sec-mono sec-mut sec-trunc">{incident.devices.join(", ")}</span>
-        <span className="sec-mono sec-mut">{stamp(incident.lastTs)}</span>
-        <span className="sec-end">{action}</span>
-      </div>
-      <div
-        className={cn("monitor-row sec-card sec-phone sec-inc-row", failed && "sec-fail")}
-        data-selected={open || undefined}
-        data-failed={failed || undefined}
-        onClick={toggle}
-      >
-        <span className="sec-card-line">
-          <SeverityPill severity={incident.severity} />
-          <ConfidenceTag confidence={incident.confidence} />
-          <span className="sec-sp" />
-          <span className="sec-mono sec-faint">
-            {today ? hhmm(incident.lastTs) : monthDay(incident.lastTs)}
+      {menu(
+        <div
+          className={cn("monitor-row sec-inc-cols sec-inc-row sec-wide", failed && "sec-fail")}
+          data-selected={open || undefined}
+          data-failed={failed || undefined}
+          tabIndex={0}
+          onClick={onOpen}
+          onKeyDown={enterOpens(onOpen)}
+        >
+          {caret}
+          <span data-col="severity">
+            <SeverityPill severity={incident.severity} />
           </span>
-        </span>
-        {source}
-        <span className="sec-tx2 text-[13px]">{incident.narrative}</span>
-        <span className="sec-card-line sec-card-foot">
-          <span className="sec-mono sec-mut sec-trunc flex-1">{incident.devices.join(", ")}</span>
-          {action}
-        </span>
-      </div>
-      {open && <IncidentDetail incident={incident} />}
+          <span data-col="confidence">
+            <ConfidenceTag confidence={incident.confidence} />
+          </span>
+          {source}
+          <span data-col="what" className="sec-trunc sec-mut">
+            {incident.narrative}
+          </span>
+          <span data-col="devices" className="sec-mono sec-mut sec-trunc">
+            {incident.devices.join(", ")}
+          </span>
+          <span data-col="time" className="sec-mono sec-mut">
+            {stamp(incident.lastTs)}
+          </span>
+          <span className="sec-end">{action}</span>
+          <RowMore />
+        </div>,
+      )}
+      {menu(
+        <div
+          className={cn("monitor-row sec-card sec-phone sec-inc-row", failed && "sec-fail")}
+          data-selected={open || undefined}
+          data-failed={failed || undefined}
+          tabIndex={0}
+          onClick={onOpen}
+          onKeyDown={enterOpens(onOpen)}
+        >
+          <span className="sec-card-line">
+            <span data-col="severity">
+              <SeverityPill severity={incident.severity} />
+            </span>
+            <span data-col="confidence">
+              <ConfidenceTag confidence={incident.confidence} />
+            </span>
+            <span className="sec-sp" />
+            <span data-col="time" className="sec-mono sec-faint">
+              {today ? hhmm(incident.lastTs) : monthDay(incident.lastTs)}
+            </span>
+            <RowMore />
+          </span>
+          {source}
+          <span data-col="what" className="sec-tx2 text-[13px]">
+            {incident.narrative}
+          </span>
+          <span className="sec-card-line sec-card-foot">
+            <span data-col="devices" className="sec-mono sec-mut sec-trunc flex-1">
+              {incident.devices.join(", ")}
+            </span>
+            {action}
+          </span>
+        </div>,
+      )}
     </>
   );
 }
@@ -352,24 +444,18 @@ function ScopePicker({
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
 }): ReactNode {
-  const current = options.find((o) => o.value === value)?.label ?? "";
+  // The kit treats "" as no choice, so "all devices" travels as a named value.
+  const ALL = "__all";
   return (
-    <span className="monitor-router">
-      <Server aria-hidden="true" />
-      <span className="truncate">{current}</span>
-      <ChevronDown aria-hidden="true" />
-      <select
-        aria-label="Which devices to scan"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </span>
+    <Select
+      label="Which devices to scan"
+      size="sm"
+      className="monitor-kit-select"
+      leading={<Server aria-hidden="true" />}
+      value={value || ALL}
+      onChange={(v) => onChange(v === ALL ? "" : v)}
+      options={options.map((o) => ({ ...o, value: o.value || ALL }))}
+    />
   );
 }
 
@@ -485,38 +571,92 @@ function BlockDialog({
   );
 }
 
-function ResponseRow({
+/** What a response row says in its last cell. */
+function responseState(r: AttackResponse): string {
+  return !r.ok ? "failed" : r.revokedAt ? "revoked" : "in force";
+}
+
+function ResponseState({
   response,
   onUnblock,
 }: {
   response: AttackResponse;
   onUnblock: (address: string) => void;
 }): ReactNode {
+  return !response.ok ? (
+    <span className="sec-bad text-[12px]">failed</span>
+  ) : response.revokedAt ? (
+    <StatusBadge dot={false}>revoked</StatusBadge>
+  ) : (
+    <MonitorButton
+      size="sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        onUnblock(response.source);
+      }}
+    >
+      Unblock
+    </MonitorButton>
+  );
+}
+
+function ResponseRow({
+  response,
+  onUnblock,
+  open,
+  onOpen,
+}: {
+  response: AttackResponse;
+  onUnblock: (address: string) => void;
+  open: boolean;
+  onOpen: () => void;
+}): ReactNode {
   const tone: Tone = !response.ok ? "bad" : response.revokedAt ? "default" : "good";
+  const when = `${monthDay(response.ts)} ${hhmm(response.ts)}`;
+  const live = response.ok && !response.revokedAt;
   return (
-    <div className="monitor-row sec-resp-cols">
-      <StatusDot tone={tone} />
-      <span className="sec-mono p sec-trunc">{response.source}</span>
-      <span className="sec-mono sec-mut">{response.action}</span>
-      <span className="sec-col">
-        <span className="sec-trunc sec-tx2">{response.reason}</span>
-        <span className="sec-mono sec-faint">
-          {monthDay(response.ts)} {hhmm(response.ts)} ·{" "}
-          {response.timeout ? `for ${response.timeout}` : "PERMANENT"}
+    <RowMenu
+      title={response.source}
+      sub={`${response.action} · ${when}`}
+      onOpen={onOpen}
+      cells={{
+        source: { value: response.source, kind: "ip" },
+        action: { value: response.action },
+        reason: { value: response.reason },
+        state: { value: responseState(response) },
+      }}
+      copies={[{ label: "Source address", value: response.source }]}
+      row={response}
+      actions={
+        live ? [{ label: "Unblock", onSelect: () => onUnblock(response.source) }] : undefined
+      }
+    >
+      <div
+        className="monitor-row sec-resp-cols sec-inc-row"
+        data-selected={open || undefined}
+        tabIndex={0}
+        onClick={onOpen}
+        onKeyDown={enterOpens(onOpen)}
+      >
+        <StatusDot tone={tone} />
+        <span data-col="source" className="sec-mono p sec-trunc">
+          {response.source}
         </span>
-      </span>
-      <span className="sec-end">
-        {!response.ok ? (
-          <span className="sec-bad text-[12px]">failed</span>
-        ) : response.revokedAt ? (
-          <StatusBadge dot={false}>revoked</StatusBadge>
-        ) : (
-          <MonitorButton size="sm" onClick={() => onUnblock(response.source)}>
-            Unblock
-          </MonitorButton>
-        )}
-      </span>
-    </div>
+        <span data-col="action" className="sec-mono sec-mut">
+          {response.action}
+        </span>
+        <span data-col="reason" className="sec-col">
+          <span className="sec-trunc sec-tx2">{response.reason}</span>
+          <span className="sec-mono sec-faint">
+            {when} · {response.timeout ? `for ${response.timeout}` : "PERMANENT"}
+          </span>
+        </span>
+        <span data-col="state" className="sec-end">
+          <ResponseState response={response} onUnblock={onUnblock} />
+        </span>
+        <RowMore />
+      </div>
+    </RowMenu>
   );
 }
 
@@ -538,6 +678,9 @@ export function AttacksView(): ReactNode {
   const [auditCron, setAuditCron] = useState<string>(CRON_PRESETS[0].cron);
   const [scheduling, setScheduling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The row whose details are open in the drawer. */
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const closeDetail = useCallback(() => setDetail(null), []);
 
   const load = useCallback((): Promise<void> => {
     return Promise.all([
@@ -937,6 +1080,7 @@ export function AttacksView(): ReactNode {
                 stroke={14}
                 center={incidents.length}
                 sub="incidents"
+                noun="incidents"
                 label="Incidents by confidence"
                 parts={CONFIDENCE_ORDER.map((c) => ({
                   label: c,
@@ -1009,6 +1153,7 @@ export function AttacksView(): ReactNode {
               <span>Devices</span>
               <span>Last seen</span>
               <span />
+              <span />
             </div>
             {incidents.map((incident) => (
               <IncidentRow
@@ -1017,6 +1162,8 @@ export function AttacksView(): ReactNode {
                 now={now}
                 busy={busy === incident.id}
                 onRespond={(id) => void respond(id, false)}
+                open={detail?.kind === "incident" && detail.key === incident.id}
+                onOpen={() => setDetail({ kind: "incident", key: incident.id })}
               />
             ))}
           </div>
@@ -1035,9 +1182,28 @@ export function AttacksView(): ReactNode {
             title="Top attackers"
             description="Incidents per source. Blocked sources are greyed."
           >
-            <div className="sec-attackers">
+            <div className="sec-attackers kit-tips">
               {sorted.map((s) => (
-                <div key={s.source} className="sec-attacker" data-blocked={s.blocked || undefined}>
+                <div
+                  key={s.source}
+                  className="sec-attacker"
+                  data-blocked={s.blocked || undefined}
+                  {...tipProps((): TipCard => ({
+                    title: s.source,
+                    sub: s.geo?.countryCode,
+                    led: s.blocked ? "ok" : "bad",
+                    rows: [
+                      {
+                        label: "Incidents",
+                        value: `${s.incidents} of ${maxIncidents} (top)`,
+                        color: s.blocked ? "var(--text-faint)" : "var(--destructive)",
+                      },
+                      { label: "Routers", value: s.devices.join(", ") },
+                      { label: "State", value: s.blocked ? "blocked" : "not blocked" },
+                    ],
+                    foot: { label: "Last seen", value: relative(s.lastTs, now) },
+                  }))}
+                >
                   <span className="sec-mono sec-tx sec-trunc">{s.source}</span>
                   <span className="monitor-bar">
                     <span
@@ -1067,42 +1233,77 @@ export function AttacksView(): ReactNode {
                 <span>Detectors</span>
                 <span>Last seen</span>
                 <span />
+                <span />
               </div>
               {sources.map((s) => (
-                <div
+                <RowMenu
                   key={s.source}
-                  className={cn(
-                    "monitor-row sec-src-cols",
-                    s.worst === "critical" && !s.blocked && "sec-fail",
-                  )}
-                  title={s.devices.join(", ")}
+                  title={s.source}
+                  sub={`${plural(s.incidents, "incident")} · ${relative(s.lastTs, now)}`}
+                  onOpen={() => setDetail({ kind: "source", key: s.source })}
+                  cells={{
+                    source: { value: s.source, kind: "ip" },
+                    where: {
+                      value: s.geo
+                        ? `${s.geo.countryCode}${s.geo.city ? ` · ${s.geo.city}` : ""}`
+                        : "",
+                    },
+                    incidents: { value: String(s.incidents) },
+                    detectors: { value: s.detectors.join(", ") },
+                    time: { value: relative(s.lastTs, now), kind: "time" },
+                  }}
+                  copies={[{ label: "Source address", value: s.source }]}
+                  row={s}
                 >
-                  <span className="sec-mono p">{s.source}</span>
-                  {s.geo ? (
-                    <span className="sec-tx2">
-                      {s.geo.countryCode}
-                      {s.geo.city ? ` · ${s.geo.city}` : ""}
-                    </span>
-                  ) : (
-                    <span className="sec-mut">—</span>
-                  )}
-                  <span className="sec-num">{s.incidents}</span>
-                  <span className="sec-chips">
-                    {s.detectors.map((d) => (
-                      <span key={d} className="monitor-chip">
-                        {d}
-                      </span>
-                    ))}
-                  </span>
-                  <span className="sec-mut">{relative(s.lastTs, now)}</span>
-                  <span>
-                    {s.blocked && (
-                      <StatusBadge tone="good" dot={false}>
-                        blocked
-                      </StatusBadge>
+                  <div
+                    className={cn(
+                      "monitor-row sec-src-cols sec-inc-row",
+                      s.worst === "critical" && !s.blocked && "sec-fail",
                     )}
-                  </span>
-                </div>
+                    data-selected={
+                      (detail?.kind === "source" && detail.key === s.source) || undefined
+                    }
+                    title={s.devices.join(", ")}
+                    tabIndex={0}
+                    onClick={() => setDetail({ kind: "source", key: s.source })}
+                    onKeyDown={enterOpens(() => setDetail({ kind: "source", key: s.source }))}
+                  >
+                    <span data-col="source" className="sec-mono p">
+                      {s.source}
+                    </span>
+                    {s.geo ? (
+                      <span data-col="where" className="sec-tx2">
+                        {s.geo.countryCode}
+                        {s.geo.city ? ` · ${s.geo.city}` : ""}
+                      </span>
+                    ) : (
+                      <span data-col="where" className="sec-mut">
+                        —
+                      </span>
+                    )}
+                    <span data-col="incidents" className="sec-num">
+                      {s.incidents}
+                    </span>
+                    <span data-col="detectors" className="sec-chips">
+                      {s.detectors.map((d) => (
+                        <span key={d} className="monitor-chip">
+                          {d}
+                        </span>
+                      ))}
+                    </span>
+                    <span data-col="time" className="sec-mut">
+                      {relative(s.lastTs, now)}
+                    </span>
+                    <span>
+                      {s.blocked && (
+                        <StatusBadge tone="good" dot={false}>
+                          blocked
+                        </StatusBadge>
+                      )}
+                    </span>
+                    <RowMore />
+                  </div>
+                </RowMenu>
               ))}
             </div>
           )}
@@ -1123,7 +1324,13 @@ export function AttacksView(): ReactNode {
           ) : (
             <div>
               {responses.map((r) => (
-                <ResponseRow key={r.id} response={r} onUnblock={(a) => void unblock(a)} />
+                <ResponseRow
+                  key={r.id}
+                  response={r}
+                  onUnblock={(a) => void unblock(a)}
+                  open={detail?.kind === "response" && detail.key === String(r.id)}
+                  onOpen={() => setDetail({ kind: "response", key: String(r.id) })}
+                />
               ))}
             </div>
           )}
@@ -1202,6 +1409,19 @@ export function AttacksView(): ReactNode {
         </MonitorPanel>
       )}
 
+      <AttackDrawer
+        detail={detail}
+        onClose={closeDetail}
+        onMove={setDetail}
+        incidents={incidents}
+        sources={sources}
+        responses={responses}
+        now={now}
+        busy={busy}
+        onRespond={(id) => void respond(id, false)}
+        onUnblock={(a) => void unblock(a)}
+      />
+
       <BlockDialog
         pending={pending}
         incident={pendingIncident}
@@ -1211,5 +1431,158 @@ export function AttacksView(): ReactNode {
         onCancel={() => setPending(null)}
       />
     </div>
+  );
+}
+
+type Detail = { kind: "incident" | "source" | "response"; key: string };
+
+/** One drawer for the three tables: incidents, top sources and the response log. */
+function AttackDrawer({
+  detail,
+  onClose,
+  onMove,
+  incidents,
+  sources,
+  responses,
+  now,
+  busy,
+  onRespond,
+  onUnblock,
+}: {
+  detail: Detail | null;
+  onClose: () => void;
+  onMove: (d: Detail) => void;
+  incidents: AttackIncident[];
+  sources: AttackSource[];
+  responses: AttackResponse[];
+  now: number;
+  busy: string | null;
+  onRespond: (id: string) => void;
+  onUnblock: (address: string) => void;
+}): ReactNode {
+  const keys =
+    detail?.kind === "incident"
+      ? incidents.map((i) => i.id)
+      : detail?.kind === "source"
+        ? sources.map((s) => s.source)
+        : responses.map((r) => String(r.id));
+  const index = detail ? keys.indexOf(detail.key) : -1;
+  if (!detail || index < 0) return null;
+  const nav = {
+    index,
+    total: keys.length,
+    onPrev: index > 0 ? () => onMove({ kind: detail.kind, key: keys[index - 1]! }) : undefined,
+    onNext:
+      index < keys.length - 1
+        ? () => onMove({ kind: detail.kind, key: keys[index + 1]! })
+        : undefined,
+  };
+
+  if (detail.kind === "incident") {
+    const incident = incidents[index]!;
+    return (
+      <RowDrawer
+        open
+        onClose={onClose}
+        label={`Incident details: ${incident.narrative}`}
+        storageKey="attacks"
+        rowKey={`incident:${incident.id}`}
+        nav={nav}
+        status={{ tone: KIT_TONE[severityTone(incident.severity)], label: incident.severity }}
+        title={incident.narrative}
+        meta={[
+          incident.source ?? "config change",
+          incident.devices.join(", "),
+          stamp(incident.lastTs),
+        ].join(" · ")}
+        chips={
+          <>
+            <ConfidenceTag confidence={incident.confidence} />
+            <span className="monitor-chip">{incident.stage}</span>
+          </>
+        }
+        tabs={[
+          { id: "overview", label: "Overview", content: <IncidentOverview incident={incident} /> },
+          {
+            id: "evidence",
+            label: "Evidence",
+            count: incident.evidence.length,
+            content: <IncidentEvidence incident={incident} />,
+          },
+        ]}
+        primary={
+          <IncidentAction incident={incident} busy={busy === incident.id} onRespond={onRespond} />
+        }
+      />
+    );
+  }
+
+  if (detail.kind === "source") {
+    const s = sources[index]!;
+    return (
+      <RowDrawer
+        open
+        onClose={onClose}
+        label={`Source details: ${s.source}`}
+        storageKey="attacks"
+        rowKey={`source:${s.source}`}
+        nav={nav}
+        status={
+          s.blocked
+            ? { tone: "ok", label: "blocked" }
+            : { tone: KIT_TONE[severityTone(s.worst)], label: `worst: ${s.worst}` }
+        }
+        title={<span className="sec-mono">{s.source}</span>}
+        meta={`${plural(s.incidents, "incident")} · last seen ${relative(s.lastTs, now)}`}
+      >
+        <DetailList
+          items={[
+            {
+              label: "Where",
+              value: s.geo
+                ? `${s.geo.countryCode} · ${s.geo.city ? `${s.geo.city}, ` : ""}${s.geo.country}`
+                : "—",
+            },
+            { label: "Incidents", value: s.incidents },
+            { label: "Worst", value: s.worst },
+            { label: "Detectors", value: s.detectors.join(", "), mono: true },
+            { label: "Routers", value: s.devices.join(", "), mono: true },
+            { label: "First seen", value: stamp(s.firstTs) },
+            { label: "Last seen", value: stamp(s.lastTs) },
+            { label: "Blocked", value: s.blocked ? "yes" : "no" },
+          ]}
+        />
+      </RowDrawer>
+    );
+  }
+
+  const r = responses[index]!;
+  return (
+    <RowDrawer
+      open
+      onClose={onClose}
+      label={`Response details: ${r.source}`}
+      storageKey="attacks"
+      rowKey={`response:${r.id}`}
+      nav={nav}
+      status={{ tone: !r.ok ? "bad" : r.revokedAt ? "off" : "ok", label: responseState(r) }}
+      title={<span className="sec-mono">{r.source}</span>}
+      meta={`${r.action} · ${monthDay(r.ts)} ${hhmm(r.ts)}`}
+      primary={<ResponseState response={r} onUnblock={onUnblock} />}
+    >
+      <DetailList
+        items={[
+          { label: "Action", value: r.action, mono: true },
+          { label: "Reason", value: r.reason },
+          { label: "Routers", value: r.devices.join(", "), mono: true },
+          ...(r.list ? [{ label: "Address list", value: r.list, mono: true }] : []),
+          { label: "Expires", value: r.timeout ? `after ${humanTimeout(r.timeout)}` : "never" },
+          { label: "Time", value: `${monthDay(r.ts)} ${hhmm(r.ts)}` },
+          ...(r.revokedAt ? [{ label: "Revoked", value: stamp(r.revokedAt) }] : []),
+          ...(r.error ? [{ label: "Error", value: r.error }] : []),
+          { label: "Incident", value: r.incidentId, mono: true },
+        ]}
+      />
+    </RowDrawer>
   );
 }

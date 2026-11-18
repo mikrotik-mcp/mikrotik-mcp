@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { RoutingTrafficPanel } from "../../ui/observability/service-routing-traffic";
 import { RoutingDomainFields } from "../../ui/observability/service-routing-domain-fields";
 import { api } from "../../ui/observability/api";
+import { kitToggle, toggle } from "../_stubs/kit";
 import type { RoutingPolicy } from "../../src/service-routing/model";
 import type { RoutingTraffic } from "../../src/service-routing/traffic-model";
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn() }));
@@ -88,7 +89,9 @@ test("wildcard field explains apex exclusion and DNS consent without enabling it
   expect(host.textContent).toContain("not example.com itself");
   expect(host.textContent).toContain("RouterOS 7.17");
   expect(host.textContent).toContain("adlist bypass");
-  expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(false);
-  await act(async () => host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+  expect(
+    kitToggle(/I confirm clients use this router as DNS/, host).getAttribute("aria-checked"),
+  ).toBe("false");
+  await toggle(/I confirm clients use this router as DNS/, host);
   expect(onDnsConfirmed).toHaveBeenCalledExactlyOnceWith(true);
 });

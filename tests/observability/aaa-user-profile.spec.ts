@@ -7,6 +7,7 @@ import { AaaView } from "../../ui/observability/aaa";
 import { api, postJson } from "../../ui/observability/api";
 import { generateUserPassword } from "../../ui/observability/aaa-user-credentials";
 import { toast } from "../../ui/observability/toast-action";
+import { choose as chooseKit, kitControl, kitValue } from "../_stubs/kit";
 
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
 vi.mock("../../ui/observability/um-reports", () => ({
@@ -97,14 +98,7 @@ const open = async () => {
   await click(button("Users"));
   await click(button("Add user"));
 };
-const choose = async (label: string, value: string) => {
-  const select = document.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
-  const option = [...select.options].find((el) => el.textContent === value)!;
-  await act(async () => {
-    select.value = option.value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-};
+const choose = (label: string, value: string) => chooseKit(new RegExp(`^${label}$`), value);
 /** The receipt shown once a user is created (the add/edit form is a dialog too). */
 const receipt = () =>
   [...document.querySelectorAll('[role="dialog"]')].find((el) =>
@@ -557,7 +551,13 @@ test("changing routers aborts a pending edit-profile lookup and clears the draft
   expect(
     document.querySelector<HTMLButtonElement>('[aria-label="Service profile"]')!.disabled,
   ).toBe(true);
-  await choose("Router", "remote");
+  // The edit dialog holds focus, so switch routers with the closed picker's typeahead.
+  await act(async () => {
+    kitControl(/^Router$/).dispatchEvent(
+      new KeyboardEvent("keydown", { key: "r", bubbles: true, cancelable: true }),
+    );
+  });
+  expect(kitValue(/^Router$/)).toContain("remote");
   expect(signal?.aborted).toBe(true);
   await act(async () => resolve({ available: true, rows: assignments }));
   await click(button("Users"));

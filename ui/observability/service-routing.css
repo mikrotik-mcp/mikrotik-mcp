@@ -91,9 +91,6 @@
   .sr-inventory[data-inspecting] {
     grid-template-columns: minmax(0, 1fr) 320px;
   }
-  .sr-inspect {
-    border-left: 1px solid var(--line);
-  }
 
   /* Small uppercase section label: "Policies", "Primary exit", "Inspect · route #1". */
   .sr-eyebrow {
@@ -148,7 +145,7 @@
   }
 
   /* The Primary exit select shows its value in the foreground colour. */
-  .sr-primary select {
+  .sr-primary .kit-trigger {
     color: var(--foreground);
   }
 
@@ -191,10 +188,6 @@
   }
   .service-routing .sr-inventory[data-inspecting] {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .service-routing .sr-inspect {
-    border-top: 1px solid var(--line);
-    border-left: 0;
   }
 }
 

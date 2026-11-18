@@ -1,4 +1,5 @@
 import { Plus, X } from "lucide-react";
+import { TextInput } from "./kit";
 import { MonitorButton } from "./monitoring-ui";
 
 /** Keep host as the canonical primary; the rest are fallbacks, tried in order. */
@@ -23,16 +24,15 @@ export function DeviceAddressesEditor({
             <span className="monitor-chip w-16 justify-center">
               {index === 0 ? "Primary" : index + 1}
             </span>
-            <input
+            <TextInput
               id={index === 0 ? "f_host" : `f_fallback_${index}`}
-              className="monitor-input min-w-0 flex-1 font-mono"
-              aria-label={index === 0 ? "Host / IP" : `Alternate IP ${index}`}
-              aria-invalid={invalid && !value.trim() ? true : undefined}
+              wrapClassName="min-w-0 flex-1"
+              mono
+              label={index === 0 ? "Host / IP" : `Alternate IP ${index}`}
+              invalid={invalid && !value.trim() ? true : undefined}
               value={value}
               placeholder={index === 0 ? "192.168.88.1" : "203.0.113.10 or IPv6"}
-              onChange={(e) =>
-                change(hosts.map((h, i) => (i === index ? e.target.value.trim() : h)))
-              }
+              onChange={(v) => change(hosts.map((h, i) => (i === index ? v.trim() : h)))}
               autoComplete="off"
               spellCheck={false}
               dir="ltr"

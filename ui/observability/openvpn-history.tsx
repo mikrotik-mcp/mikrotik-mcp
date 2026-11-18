@@ -10,7 +10,6 @@ import {
   Search,
   TriangleAlert,
 } from "lucide-react";
-import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { api, withToken } from "./api";
 import {
   Metric,
@@ -24,9 +23,23 @@ import {
   StatusBadge,
   useStaggerIn,
 } from "./monitoring-ui";
+import {
+  Combobox,
+  DateTimePicker,
+  DetailList,
+  Field,
+  RowDrawer,
+  RowMenu,
+  RowMore,
+  tipProps,
+} from "./kit";
 import { OpenVpnBars, OpenVpnTreemap } from "./openvpn-graphics";
 import { connectionDuration } from "../../src/core/openvpn-sessions-model";
-import type { HistoryGroup, OpenVpnHistoryReport } from "../../src/observability/openvpn-history";
+import type {
+  HistoryGroup,
+  HistorySession,
+  OpenVpnHistoryReport,
+} from "../../src/observability/openvpn-history";
 
 /** "Nov 14, 09:50" in local time. */
 const timestamp = (at: number) =>
@@ -108,7 +121,7 @@ function Breakdown({
   return (
     <MonitorPanel title={title} description="Top 20 · connections" className="ovpn-breakdown-panel">
       {rows.length ? (
-        <div className="ovpn-breakdown-list">
+        <div className="ovpn-breakdown-list kit-tips">
           {rows.map((row) => {
             const label = kind === "network" ? row.detail || row.label : row.label;
             const detail =
@@ -119,12 +132,26 @@ function Breakdown({
                   : "";
             const share = total ? Math.round((row.count / total) * 100) : 0;
             return (
-              <div className="ovpn-breakdown" key={row.label}>
+              <div
+                className="ovpn-breakdown"
+                key={row.label}
+                {...tipProps(() => ({
+                  title: label,
+                  sub: detail || undefined,
+                  rows: [
+                    {
+                      label: "Connections",
+                      value: row.count.toLocaleString(),
+                      color: "var(--sig)",
+                    },
+                    { label: "Share", value: `${share}%` },
+                  ],
+                  foot: { label: "All in range", value: total.toLocaleString() },
+                }))}
+              >
                 <div className="ovpn-breakdown-line">
                   {kind === "country" && <CountryFlag code={row.detail} />}
-                  <span className="ovpn-breakdown-label" title={label}>
-                    {label}
-                  </span>
+                  <span className="ovpn-breakdown-label">{label}</span>
                   <span className="ovpn-mono ovpn-tx ovpn-num">{row.count.toLocaleString()}</span>
                   <span className="ovpn-mono ovpn-faint ovpn-share">{share}%</span>
                 </div>
@@ -163,6 +190,8 @@ export function OpenVpnHistory({ device, controls }: { device: string; controls?
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [treemapView, setTreemapView] = useState<TreemapView>("person");
+  // The journal row drawer, by session id.
+  const [inspect, setInspect] = useState<string | null>(null);
   const journalRef = useRef<HTMLDivElement>(null);
   const fromMs = from?.getTime();
   const toMs = to?.getTime();
@@ -224,6 +253,17 @@ export function OpenVpnHistory({ device, controls }: { device: string; controls?
   const coverage = data?.coverage;
   const stale = !!error || !coverage || now - coverage.last > 45_000;
   const who = user || "all users";
+  const filterUser = (name: string) => {
+    setDraftUser(name);
+    setUser(name);
+    setOffset(0);
+  };
+  const ended = (session: HistorySession): string =>
+    session.ended
+      ? timestamp(session.ended)
+      : stale
+        ? "Unknown · collector delayed"
+        : "Present at last read";
   function range(value: Preset | "custom") {
     if (value === "custom") return;
     setPreset(value);
@@ -248,32 +288,35 @@ export function OpenVpnHistory({ device, controls }: { device: string; controls?
             setOffset(0);
           }}
         >
-          <label className="monitor-label" htmlFor="ovpn-history-user">
-            User · empty for everyone
-          </label>
-          <span className="monitor-input ovpn-user-field">
-            <button type="submit" className="ovpn-field-icon" aria-label="Apply user filter">
-              <Search aria-hidden="true" />
-            </button>
-            <input
-              id="ovpn-history-user"
-              list="ovpn-history-users"
-              placeholder="Find a username"
-              value={draftUser}
-              onChange={(e) => setDraftUser(e.target.value)}
-            />
-          </span>
-          <datalist id="ovpn-history-users">
-            {data?.users.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
+          <Field label="User · empty for everyone" id="ovpn-history-user">
+            {/* The kit stops Enter on its input; Enter on a closed list still applies the filter. */}
+            <div
+              onKeyDown={(e) => {
+                const el = e.target as HTMLElement;
+                if (e.key === "Enter" && el.getAttribute("aria-expanded") !== "true")
+                  el.closest("form")?.requestSubmit();
+              }}
+            >
+              <Combobox
+                label="User · empty for everyone"
+                noun="user"
+                placeholder="Find a username"
+                value={draftUser}
+                onChange={setDraftUser}
+                options={(data?.users ?? []).map((name) => ({ value: name, label: name }))}
+                icon={
+                  <button type="submit" className="ovpn-field-icon" aria-label="Apply user filter">
+                    <Search aria-hidden="true" />
+                  </button>
+                }
+              />
+            </div>
+          </Field>
         </form>
         <div className="monitor-fl">
           <span className="monitor-label">From · local time</span>
           <DateTimePicker
-            aria-label="History from"
-            className="monitor-input ovpn-date"
+            label="History from"
             placeholder="Earliest recorded"
             value={from}
             onChange={(v) => {
@@ -287,8 +330,7 @@ export function OpenVpnHistory({ device, controls }: { device: string; controls?
         <div className="monitor-fl">
           <span className="monitor-label">Through · local time</span>
           <DateTimePicker
-            aria-label="History through"
-            className="monitor-input ovpn-date"
+            label="History through"
             placeholder="Now"
             value={to}
             onChange={(v) => {
@@ -472,65 +514,103 @@ export function OpenVpnHistory({ device, controls }: { device: string; controls?
                       {label}
                     </span>
                   ))}
+                  <span role="columnheader" />
                 </div>
                 {data.sessions.map((session) => (
-                  <div
-                    role="row"
-                    className="monitor-row ovpn-journal-grid ovpn-journal-row"
+                  <RowMenu
                     key={session.id}
+                    title={session.user}
+                    sub={`${session.ip || "Unknown source"} · ${timestamp(session.started)}`}
+                    onOpen={() => setInspect(session.id)}
+                    cells={{
+                      user: {
+                        value: session.user,
+                        filter: () => filterUser(session.user),
+                        clearFilter: user ? () => filterUser("") : undefined,
+                      },
+                      network: { value: session.organization || session.asn },
+                      started: { value: timestamp(session.started), kind: "time" },
+                      lastSeen: { value: timestamp(session.lastSeen), kind: "time" },
+                      ended: { value: session.ended ? timestamp(session.ended) : "", kind: "time" },
+                      uptime: { value: connectionDuration(session.uptime), kind: "duration" },
+                    }}
+                    copies={[
+                      { label: "User name", value: session.user },
+                      ...(session.ip ? [{ label: "Source IP", value: session.ip }] : []),
+                      ...(session.tunnel ? [{ label: "Tunnel IP", value: session.tunnel }] : []),
+                    ]}
+                    row={session}
                   >
-                    <span role="cell" className="ovpn-stack ovpn-stack-2">
-                      <button
-                        type="button"
-                        className="ovpn-history-user-link"
-                        onClick={() => {
-                          setDraftUser(session.user);
-                          setUser(session.user);
-                          setOffset(0);
-                        }}
-                      >
-                        {session.user}
-                      </button>
-                      <span className="ovpn-mono ovpn-mut ovpn-trunc">
-                        {session.ip || "Unknown source"} · tunnel {session.tunnel || "not reported"}
-                      </span>
-                    </span>
-                    <span role="cell" className="ovpn-stack ovpn-stack-2">
-                      <span className="ovpn-trunc">
-                        {session.organization || session.asn || "Unknown network"}
-                      </span>
-                      <span className="ovpn-sub ovpn-trunc">
-                        {session.country || "Unknown country"}
-                        {session.asn ? ` · ${session.asn}` : ""}
-                      </span>
-                    </span>
-                    <span role="cell" className="ovpn-stack ovpn-stack-2">
-                      <span className="ovpn-mono">{timestamp(session.started)}</span>
-                      {!!session.uncertain && (
-                        <span className="ovpn-sub ovpn-warn-text">Timing uncertain</span>
-                      )}
-                      {coverage && session.started < coverage.first && (
-                        <span className="ovpn-sub ovpn-trunc">
-                          Already connected when recording began
+                    <div
+                      role="row"
+                      tabIndex={0}
+                      className="monitor-row ovpn-journal-grid ovpn-journal-row"
+                      data-selected={inspect === session.id || undefined}
+                      onClick={() => setInspect(session.id)}
+                      onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setInspect(session.id);
+                        }
+                      }}
+                    >
+                      <span role="cell" data-col="user" className="ovpn-stack ovpn-stack-2">
+                        <button
+                          type="button"
+                          className="ovpn-history-user-link"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            filterUser(session.user);
+                          }}
+                        >
+                          {session.user}
+                        </button>
+                        <span className="ovpn-mono ovpn-mut ovpn-trunc">
+                          {session.ip || "Unknown source"} · tunnel{" "}
+                          {session.tunnel || "not reported"}
                         </span>
-                      )}
-                    </span>
-                    <span role="cell" className="ovpn-mono">
-                      {timestamp(session.lastSeen)}
-                    </span>
-                    <span role="cell">
-                      {session.ended ? (
-                        <span className="ovpn-mono">{timestamp(session.ended)}</span>
-                      ) : stale ? (
-                        <span className="ovpn-mut">Unknown · collector delayed</span>
-                      ) : (
-                        <StatusBadge tone="good">Present at last read</StatusBadge>
-                      )}
-                    </span>
-                    <span role="cell" className="ovpn-mono">
-                      {connectionDuration(session.uptime)}
-                    </span>
-                  </div>
+                      </span>
+                      <span role="cell" data-col="network" className="ovpn-stack ovpn-stack-2">
+                        <span className="ovpn-trunc">
+                          {session.organization || session.asn || "Unknown network"}
+                        </span>
+                        <span className="ovpn-sub ovpn-trunc">
+                          {session.country || "Unknown country"}
+                          {session.asn ? ` · ${session.asn}` : ""}
+                        </span>
+                      </span>
+                      <span role="cell" data-col="started" className="ovpn-stack ovpn-stack-2">
+                        <span className="ovpn-mono">{timestamp(session.started)}</span>
+                        {!!session.uncertain && (
+                          <span className="ovpn-sub ovpn-warn-text">Timing uncertain</span>
+                        )}
+                        {coverage && session.started < coverage.first && (
+                          <span className="ovpn-sub ovpn-trunc">
+                            Already connected when recording began
+                          </span>
+                        )}
+                      </span>
+                      <span role="cell" data-col="lastSeen" className="ovpn-mono">
+                        {timestamp(session.lastSeen)}
+                      </span>
+                      <span role="cell" data-col="ended">
+                        {session.ended ? (
+                          <span className="ovpn-mono">{timestamp(session.ended)}</span>
+                        ) : stale ? (
+                          <span className="ovpn-mut">Unknown · collector delayed</span>
+                        ) : (
+                          <StatusBadge tone="good">Present at last read</StatusBadge>
+                        )}
+                      </span>
+                      <span role="cell" data-col="uptime" className="ovpn-mono">
+                        {connectionDuration(session.uptime)}
+                      </span>
+                      <span role="cell">
+                        <RowMore />
+                      </span>
+                    </div>
+                  </RowMenu>
                 ))}
               </div>
             </div>
@@ -561,6 +641,59 @@ export function OpenVpnHistory({ device, controls }: { device: string; controls?
               </MonitorButton>
             </div>
           </MonitorPanel>
+          {(() => {
+            const list = data.sessions;
+            const at = list.findIndex((x) => x.id === inspect);
+            const s = at >= 0 ? list[at]! : null;
+            if (!s) return null;
+            return (
+              <RowDrawer
+                open
+                onClose={() => setInspect(null)}
+                label={`Session details: ${s.user}`}
+                status={
+                  s.ended
+                    ? { tone: "off", label: `Ended ${timestamp(s.ended)}` }
+                    : stale
+                      ? { tone: "warn", label: "Unknown · collector delayed" }
+                      : { tone: "ok", label: "Present at last read" }
+                }
+                title={s.user}
+                meta={`${s.ip || "Unknown source"} · tunnel ${s.tunnel || "not reported"}`}
+                rowKey={s.id}
+                nav={{
+                  index: at,
+                  total: list.length,
+                  onPrev: at > 0 ? () => setInspect(list[at - 1]!.id) : undefined,
+                  onNext: at < list.length - 1 ? () => setInspect(list[at + 1]!.id) : undefined,
+                }}
+                storageKey="openvpn-history"
+                primary={
+                  <MonitorButton size="sm" onClick={() => filterUser(s.user)}>
+                    Show only {s.user}
+                  </MonitorButton>
+                }
+              >
+                <DetailList
+                  items={[
+                    { label: "User", value: s.user },
+                    ...(s.identity ? [{ label: "Identity", value: s.identity, mono: true }] : []),
+                    { label: "Source IP", value: s.ip || "Unknown source", mono: true },
+                    { label: "Tunnel IP", value: s.tunnel || "not reported", mono: true },
+                    { label: "Network", value: s.organization || s.asn || "Unknown network" },
+                    ...(s.asn ? [{ label: "ASN", value: s.asn, mono: true }] : []),
+                    { label: "Country", value: s.country || "Unknown country" },
+                    { label: "Started ≈", value: timestamp(s.started), mono: true },
+                    { label: "First seen", value: timestamp(s.firstSeen), mono: true },
+                    { label: "Last seen", value: timestamp(s.lastSeen), mono: true },
+                    { label: "End detected", value: ended(s), mono: !!s.ended },
+                    { label: "Uptime", value: connectionDuration(s.uptime), mono: true },
+                    ...(s.uncertain ? [{ label: "Timing", value: "Timing uncertain" }] : []),
+                  ]}
+                />
+              </RowDrawer>
+            );
+          })()}
         </>
       )}
     </section>

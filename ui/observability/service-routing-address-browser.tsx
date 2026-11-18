@@ -4,6 +4,7 @@ import { api } from "./api";
 import { IpNetwork } from "./ip-network";
 import { createAddressIndexCache, searchAddressEntries } from "./routing-address-search";
 import type { AddressFamily, AddressIndex } from "./routing-address-search";
+import { SearchInput } from "./kit";
 import { MonitorButton, MonitorEmpty, MonitorSelect, Segmented } from "./monitoring-ui";
 import { hhmm } from "./service-routing-ui";
 import { cn } from "@/lib/utils";
@@ -147,33 +148,32 @@ export function RoutingAddressBrowser({
           ]}
         />
       ) : null}
-      <label className="monitor-field">
-        <Search aria-hidden="true" />
-        <input
-          type="search"
-          aria-label="Search IP, comment or address list"
-          placeholder="Search an IP, comment or list"
-          value={query}
-          maxLength={160}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setPage(0);
-          }}
-        />
-        {query && (
-          <button
-            type="button"
-            aria-label="Clear address search"
-            className="grid size-5 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              setQuery("");
-              setPage(0);
-            }}
-          >
-            <X className="size-4" />
-          </button>
-        )}
-      </label>
+      <SearchInput
+        wrapClassName="monitor-field"
+        label="Search IP, comment or address list"
+        placeholder="Search an IP, comment or list"
+        value={query}
+        maxLength={160}
+        onChange={(next) => {
+          setQuery(next);
+          setPage(0);
+        }}
+        end={
+          query ? (
+            <button
+              type="button"
+              aria-label="Clear address search"
+              className="grid size-5 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setQuery("");
+                setPage(0);
+              }}
+            >
+              <X className="size-4" />
+            </button>
+          ) : undefined
+        }
+      />
       {scope === "referenced" ? (
         <div className="flex flex-wrap gap-1.5">
           {referenced.map((name) => (

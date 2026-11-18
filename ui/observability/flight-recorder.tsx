@@ -27,6 +27,7 @@ import type { Tone } from "./monitoring-ui";
 import { useOperations } from "./operations-ui";
 import { FlightSignal } from "./flight-signal";
 import type { FlightEvent, FlightRecord } from "../../src/flight-recorder/model";
+import { NumberInput, TextInput } from "./kit";
 import "./monitoring.css";
 import "./flight-recorder.css";
 
@@ -447,39 +448,36 @@ export function FlightRecorderView() {
         }
       >
         <div className="flight-dialog-body">
-          <label className="monitor-fl">
+          <div className="monitor-fl">
             <span className="monitor-label">Sample interval · seconds</span>
-            <input
-              className="monitor-input"
-              type="number"
+            <NumberInput
+              label="Sample interval · seconds"
               min={30}
               max={300}
               value={interval}
-              onChange={(e) => setIntervalValue(Number(e.target.value))}
+              onChange={(n) => setIntervalValue(n ?? 30)}
             />
-          </label>
-          <label className="monitor-fl">
+          </div>
+          <div className="monitor-fl">
             <span className="monitor-label">Rolling window · minutes</span>
-            <input
-              className="monitor-input"
-              type="number"
+            <NumberInput
+              label="Rolling window · minutes"
               min={15}
               max={360}
               value={window}
-              onChange={(e) => setWindow(Number(e.target.value))}
+              onChange={(n) => setWindow(n ?? 15)}
             />
-          </label>
-          <label className="monitor-fl">
+          </div>
+          <div className="monitor-fl">
             <span className="monitor-label">Incident retention · days</span>
-            <input
-              className="monitor-input"
-              type="number"
+            <NumberInput
+              label="Incident retention · days"
               min={1}
               max={30}
               value={retention}
-              onChange={(e) => setRetention(Number(e.target.value))}
+              onChange={(n) => setRetention(n ?? 1)}
             />
-          </label>
+          </div>
           <MonitorNote>
             Up to 720 samples, 500 metadata events and 30 incidents per router. Raw log messages are
             not stored. Logs are polled over SSH, not a lossless remote syslog stream.
@@ -514,12 +512,12 @@ export function FlightRecorderView() {
         <div className="flight-dialog-body flight-freeze">
           <label className="monitor-fl">
             <span className="monitor-label">Incident title</span>
-            <input
-              className="monitor-input"
+            <TextInput
+              label="Incident title"
               value={title}
               maxLength={120}
               autoFocus
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={setTitle}
               placeholder="VPN disconnected during a call"
             />
           </label>

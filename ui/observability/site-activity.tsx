@@ -1,6 +1,6 @@
 import { LoadingState } from "./loading-state";
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import {
   AlertTriangle,
   CalendarDays,
@@ -12,9 +12,8 @@ import {
   Play,
   SlidersHorizontal,
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { Checkbox, DateTimePicker, DetailList, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
 import { api, withToken } from "./api";
 import { bytes, num } from "./format";
 import {
@@ -185,6 +184,17 @@ function tileTone(rank: number): { background: string; edge: string } {
   return { background: "var(--glass-2)", edge: "var(--line-2)" };
 }
 
+/** Enter or Space on a focused row acts like a click. */
+function onRowKey(run: () => void): (e: KeyboardEvent<HTMLElement>) => void {
+  return (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      run();
+    }
+  };
+}
+
 /** Width of an element, kept current as it resizes. */
 function useWidth(ref: RefObject<HTMLElement | null>, fallback: number): number {
   const [width, setWidth] = useState(fallback);
@@ -202,10 +212,16 @@ function DestinationMap({
   tiles,
   measure,
   animateKey,
+  total,
+  onSearch,
 }: {
   tiles: Tile[];
   measure: Measure;
   animateKey: string;
+  /** All observations or bytes in the selection, for each tile's share. */
+  total: number;
+  /** Runs the page search for a site; not offered on the "Other" tile. */
+  onSearch: (site: string) => void;
 }): ReactNode {
   const ref = useRef<HTMLDivElement>(null);
   const width = useWidth(ref, 1100);
@@ -213,20 +229,38 @@ function DestinationMap({
   return (
     <div
       ref={ref}
-      className="site-map"
+      className="site-map kit-tips"
       style={{ height: MAP_HEIGHT }}
-      role="img"
+      role="group"
       aria-label={`Map of the top destinations by ${measure === "bytes" ? "traffic bytes" : "observations"}`}
     >
       {tiles.map((t) => {
         const tone = tileTone(t.rank);
         const big = (t.h / 100) * MAP_HEIGHT > 110 && (t.w / 100) * width > 160;
+        const other = t.name.startsWith("Other ");
         return (
           <div
             key={t.name}
             data-tile=""
             className="site-tile"
-            title={`${t.name}: ${formatMeasure(t.value, measure)}`}
+            aria-label={`${t.name}: ${formatMeasure(t.value, measure)}`}
+            {...tipProps(() => ({
+              title: t.name,
+              sub: other ? undefined : `#${t.rank + 1}`,
+              rows: [
+                {
+                  label: measure === "bytes" ? "Traffic" : "Observations",
+                  value: formatMeasure(t.value, measure),
+                  color: tone.edge,
+                },
+                ...(total > 0
+                  ? [{ label: "Share", value: `${((t.value / total) * 100).toFixed(1)}%` }]
+                  : []),
+              ],
+              action: other
+                ? undefined
+                : { label: "Search for this site", onClick: () => onSearch(t.name) },
+            }))}
             style={{
               left: `${t.x}%`,
               top: `${t.y}%`,
@@ -280,6 +314,7 @@ export function SiteActivityView() {
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [policySearch, setPolicySearch] = useState("");
   const rowsRef = useRef<HTMLDivElement>(null);
+  const [openAt, setOpenAt] = useState<{ q: string; i: number } | null>(null);
 
   async function savePolicy(next: SitePolicy) {
     setSavingPolicy(true);
@@ -337,6 +372,9 @@ export function SiteActivityView() {
   }, [client, owner, kind, search, windowMs, page]);
 
   useStaggerIn(rowsRef, ".site-row", loadedKey);
+  // A new query shows other rows, so the open row's index no longer points at it.
+  const openRow = openAt && openAt.q === loadedKey ? openAt.i : null;
+  const setOpenRow = (i: number | null): void => setOpenAt(i == null ? null : { q: loadedKey, i });
 
   const visits = payload?.visits ?? [];
   const summary = payload?.summary;
@@ -404,6 +442,48 @@ export function SiteActivityView() {
   });
   const firstRow = page * PAGE_SIZE + 1;
   const lastRow = page * PAGE_SIZE + visits.length;
+
+  const visitKey = (v: Visit, i: number): string => `${v.client}:${v.destination}:${v.domain}:${i}`;
+  const visitDrawer = ((): ReactNode => {
+    if (openRow == null) return null;
+    const v = visits[openRow];
+    if (!v) return null;
+    const at = openRow;
+    return (
+      <RowDrawer
+        open
+        onClose={() => setOpenRow(null)}
+        label={`Destination details: ${v.domain ?? v.destination}`}
+        storageKey="site-activity"
+        rowKey={visitKey(v, at)}
+        title={v.domain ?? "Unidentified"}
+        meta={`${v.owner || "Unidentified"} · ${v.client}`}
+        chips={<span className="monitor-chip">{sourceLabel[v.source]}</span>}
+        nav={{
+          index: at,
+          total: visits.length,
+          onPrev: at > 0 ? () => setOpenRow(at - 1) : undefined,
+          onNext: at < visits.length - 1 ? () => setOpenRow(at + 1) : undefined,
+        }}
+      >
+        <DetailList
+          items={[
+            { label: "Site", value: v.domain ?? "Unidentified" },
+            { label: "Destination IP", value: v.destination, mono: true },
+            { label: "Source", value: sourceLabel[v.source] },
+            { label: "Who", value: v.owner || "Unidentified" },
+            { label: "Connection type", value: kindLabel[v.kind] ?? v.kind },
+            ...(v.device ? [{ label: "Device", value: v.device }] : []),
+            { label: "Client IP", value: v.client, mono: true },
+            { label: "Seen", value: num(v.connections) },
+            { label: "Traffic", value: v.bytes ? rowBytes(v.bytes) : "—" },
+            { label: "First seen", value: new Date(v.firstSeen).toLocaleString() },
+            { label: "Last seen", value: new Date(v.lastSeen).toLocaleString() },
+          ]}
+        />
+      </RowDrawer>
+    );
+  })();
 
   function clearFilters() {
     setSearch("");
@@ -588,23 +668,21 @@ export function SiteActivityView() {
                     filteredOwners.map((name, i) => {
                       const id = `site-owner-${i}`;
                       return (
-                        <div key={name} className="site-owner">
-                          <Checkbox
-                            id={id}
-                            checked={draftPolicy.owners.includes(name)}
-                            onCheckedChange={() =>
-                              setDraftPolicy((current) => ({
-                                ...current,
-                                owners: current.owners.includes(name)
-                                  ? current.owners.filter((item) => item !== name)
-                                  : [...current.owners, name],
-                              }))
-                            }
-                          />
-                          <label htmlFor={id} title={name}>
-                            {name}
-                          </label>
-                        </div>
+                        <Checkbox
+                          key={name}
+                          id={id}
+                          className="site-owner"
+                          checked={draftPolicy.owners.includes(name)}
+                          onCheckedChange={() =>
+                            setDraftPolicy((current) => ({
+                              ...current,
+                              owners: current.owners.includes(name)
+                                ? current.owners.filter((item) => item !== name)
+                                : [...current.owners, name],
+                            }))
+                          }
+                          label={<span title={name}>{name}</span>}
+                        />
                       );
                     })
                   ) : (
@@ -637,7 +715,8 @@ export function SiteActivityView() {
               />
               {draftPolicy.until !== null && (
                 <DateTimePicker
-                  aria-label="Collection end date and time"
+                  label="Collection end date and time"
+                  showTime
                   value={new Date(draftPolicy.until)}
                   onChange={(date) =>
                     setDraftPolicy({ ...draftPolicy, until: date?.getTime() ?? null })
@@ -766,7 +845,16 @@ export function SiteActivityView() {
         }
       >
         {tiles.length ? (
-          <DestinationMap tiles={tiles} measure={measure} animateKey={`${loadedKey}:${measure}`} />
+          <DestinationMap
+            tiles={tiles}
+            measure={measure}
+            animateKey={`${loadedKey}:${measure}`}
+            total={measure === "bytes" ? (summary?.bytes ?? 0) : (summary?.observations ?? 0)}
+            onSearch={(site) => {
+              setSearch(site);
+              setPage(0);
+            }}
+          />
         ) : (
           <MonitorEmpty icon={<Globe2 />} title="No observations for this selection">
             Try a longer period or clear the filters.
@@ -789,6 +877,7 @@ export function SiteActivityView() {
               <span className="text-right">Seen</span>
               <span className="text-right">Traffic</span>
               <span className="text-right">Last</span>
+              <span />
             </div>
             <ScrollArea
               viewportProps={{
@@ -797,44 +886,128 @@ export function SiteActivityView() {
                 className: "max-h-[560px]",
               }}
             >
-              <div ref={rowsRef} role="list">
+              <div ref={rowsRef}>
                 {visits.map((v, i) => (
-                  <div
-                    key={`${v.client}:${v.destination}:${v.domain}:${i}`}
-                    role="listitem"
-                    className="monitor-row site-grid site-row"
+                  <RowMenu
+                    key={visitKey(v, i)}
+                    title={v.domain ?? v.destination}
+                    sub={`${v.owner || "Unidentified"} · ${v.client} · ${lastSeenLabel(v.lastSeen)}`}
+                    onOpen={() => setOpenRow(i)}
+                    cells={{
+                      site: {
+                        value: v.domain ?? "",
+                        search: v.domain
+                          ? () => {
+                              setSearch(v.domain!);
+                              setPage(0);
+                            }
+                          : undefined,
+                      },
+                      ip: {
+                        value: v.destination,
+                        kind: "ip",
+                        search: () => {
+                          setSearch(v.destination);
+                          setPage(0);
+                        },
+                      },
+                      who: v.owner
+                        ? {
+                            value: v.owner,
+                            filter: () => {
+                              setOwner(v.owner);
+                              setPage(0);
+                            },
+                            clearFilter:
+                              owner !== "*"
+                                ? () => {
+                                    setOwner("*");
+                                    setPage(0);
+                                  }
+                                : undefined,
+                          }
+                        : { value: "" },
+                      client: {
+                        value: v.client,
+                        kind: "ip",
+                        filter: () => {
+                          setClient(v.client);
+                          setPage(0);
+                        },
+                        clearFilter:
+                          client !== "*"
+                            ? () => {
+                                setClient("*");
+                                setPage(0);
+                              }
+                            : undefined,
+                      },
+                      seen: { value: num(v.connections) },
+                      traffic: { value: v.bytes ? rowBytes(v.bytes) : "" },
+                      last: { value: new Date(v.lastSeen).toLocaleString(), kind: "time" },
+                    }}
+                    copies={[
+                      ...(v.domain ? [{ label: "Site", value: v.domain }] : []),
+                      { label: "Destination IP", value: v.destination },
+                      { label: "Client IP", value: v.client },
+                    ]}
+                    row={v}
                   >
-                    <span className="site-cell">
-                      <span className="site-title" title={v.domain ?? v.destination}>
-                        {v.domain ?? "Unidentified"}
-                      </span>
-                      <span className="site-sub">
-                        <span className="site-mono">{v.destination}</span>
-                        <span className="monitor-chip">{sourceLabel[v.source]}</span>
-                      </span>
-                    </span>
-                    <span className="site-cell site-who-cell">
-                      <span className="site-who" title={kindLabel[v.kind] ?? v.kind}>
-                        {v.owner || "Unidentified"}
-                      </span>
-                      <span className="site-mono">{v.client}</span>
-                    </span>
-                    <span className="site-num">
-                      <span className="sr-only">Seen </span>
-                      {num(v.connections)}
-                    </span>
-                    <span className="site-num">
-                      <span className="sr-only">Traffic </span>
-                      {v.bytes ? rowBytes(v.bytes) : "—"}
-                    </span>
-                    <time
-                      className="site-num site-last"
-                      dateTime={new Date(v.lastSeen).toISOString()}
-                      title={new Date(v.lastSeen).toLocaleString()}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${v.domain ?? v.destination}, ${v.owner || "Unidentified"}, ${lastSeenLabel(v.lastSeen)}`}
+                      className="monitor-row site-grid site-row"
+                      data-selected={openRow === i || undefined}
+                      onClick={() => setOpenRow(i)}
+                      onKeyDown={onRowKey(() => setOpenRow(i))}
                     >
-                      {lastSeenLabel(v.lastSeen)}
-                    </time>
-                  </div>
+                      <span className="site-cell">
+                        <span
+                          data-col="site"
+                          className="site-title"
+                          title={v.domain ?? v.destination}
+                        >
+                          {v.domain ?? "Unidentified"}
+                        </span>
+                        <span className="site-sub">
+                          <span data-col="ip" className="site-mono">
+                            {v.destination}
+                          </span>
+                          <span className="monitor-chip">{sourceLabel[v.source]}</span>
+                        </span>
+                      </span>
+                      <span className="site-cell site-who-cell">
+                        <span
+                          data-col="who"
+                          className="site-who"
+                          title={kindLabel[v.kind] ?? v.kind}
+                        >
+                          {v.owner || "Unidentified"}
+                        </span>
+                        <span data-col="client" className="site-mono">
+                          {v.client}
+                        </span>
+                      </span>
+                      <span data-col="seen" className="site-num">
+                        <span className="sr-only">Seen </span>
+                        {num(v.connections)}
+                      </span>
+                      <span data-col="traffic" className="site-num">
+                        <span className="sr-only">Traffic </span>
+                        {v.bytes ? rowBytes(v.bytes) : "—"}
+                      </span>
+                      <time
+                        data-col="last"
+                        className="site-num site-last"
+                        dateTime={new Date(v.lastSeen).toISOString()}
+                        title={new Date(v.lastSeen).toLocaleString()}
+                      >
+                        {lastSeenLabel(v.lastSeen)}
+                      </time>
+                      <RowMore />
+                    </div>
+                  </RowMenu>
                 ))}
               </div>
             </ScrollArea>
@@ -871,6 +1044,7 @@ export function SiteActivityView() {
         Clients on encrypted DNS, another VPN or hardware-offloaded paths may be missing. One IP can
         host several sites.
       </p>
+      {visitDrawer}
     </div>
   );
 }

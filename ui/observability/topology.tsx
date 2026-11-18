@@ -25,6 +25,8 @@ import { animate, createScope, stagger } from "animejs";
 import type { Scope } from "animejs";
 import { Copy, Plus, Radar, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { tipProps } from "./kit";
+import type { TipCard, TipRow } from "./kit";
 import { LoadingState } from "./loading-state";
 import {
   Metric,
@@ -38,7 +40,7 @@ import {
 } from "./monitoring-ui";
 import { toast } from "./toast-action";
 import { CX, CY, H, HUB_ID, INNER_Y, layout, OUTER_Y, W } from "./topology-layout";
-import type { TopoNode, TopologyPayload } from "./types";
+import type { TopoEdge, TopoNode, TopologyPayload } from "./types";
 
 type Onboard = (name: string, body: Record<string, unknown>) => void;
 
@@ -53,6 +55,57 @@ function metricColor(v: number): string {
 function ringDash(r: number, pct: number): string {
   const full = 2 * Math.PI * r;
   return `${((Math.min(100, Math.max(0, pct)) / 100) * full).toFixed(1)} ${full.toFixed(1)}`;
+}
+
+const pct = (v: number): string => `${Math.round(v)}%`;
+
+/** The card for a managed router or a neighbour on the map. */
+function nodeCard(n: TopoNode, seenBy?: TopoEdge): TipCard {
+  const rows: TipRow[] = [];
+  if (n.kind === "device") {
+    if (n.cpuLoad != null)
+      rows.push({ label: "CPU", value: pct(n.cpuLoad), color: metricColor(n.cpuLoad) });
+    if (n.memUsedPct != null)
+      rows.push({ label: "Memory", value: pct(n.memUsedPct), color: metricColor(n.memUsedPct) });
+  } else if (seenBy) {
+    rows.push({ label: "Seen by", value: seenBy.from });
+    if (seenBy.interface) rows.push({ label: "On", value: seenBy.interface });
+  }
+  if (n.identity && n.identity !== n.label) rows.push({ label: "Identity", value: n.identity });
+  if (n.ip) rows.push({ label: "IP", value: n.ip });
+  if (n.mac) rows.push({ label: "MAC", value: n.mac });
+  if (n.board) rows.push({ label: "Board", value: n.board });
+  if (n.platform) rows.push({ label: "Platform", value: n.platform });
+  if (n.version) rows.push({ label: "Version", value: n.version });
+  if (n.uptime) rows.push({ label: "Uptime", value: n.uptime });
+  const state =
+    n.kind === "device"
+      ? n.reachable === false
+        ? "Offline"
+        : n.reachable === true
+          ? "Online"
+          : "Not checked"
+      : n.onboardable
+        ? "Can be added"
+        : n.configured
+          ? "Managed"
+          : "Neighbour";
+  return {
+    title: n.label || n.id,
+    sub: n.kind === "device" ? "router" : "neighbour",
+    led:
+      n.kind === "device"
+        ? n.reachable === false
+          ? "bad"
+          : n.reachable === true
+            ? "ok"
+            : "off"
+        : n.onboardable
+          ? "acc"
+          : "off",
+    rows,
+    foot: { label: "State", value: state },
+  };
 }
 
 /** A quadratic link from `a` to `b`, bowed sideways by `bow` of its length. */
@@ -407,11 +460,21 @@ export function TopologyMap({
                     strokeWidth={1.5}
                     strokeDasharray={down ? "4 4" : undefined}
                     className={cn("transition-opacity", dimmed(d.id) && "opacity-15")}
-                  >
-                    <title>
-                      {topo.server} → {d.label || d.id}
-                    </title>
-                  </line>
+                    {...tipProps((): TipCard => ({
+                      title: `${topo.server} → ${d.label || d.id}`,
+                      sub: "polled",
+                      led: down ? "bad" : d.reachable === true ? "ok" : "off",
+                      rows: [
+                        { label: "From", value: topo.server },
+                        { label: "To", value: d.label || d.id },
+                        ...(d.ip ? [{ label: "IP", value: d.ip }] : []),
+                      ],
+                      foot: {
+                        label: "State",
+                        value: down ? "Offline" : d.reachable === true ? "Online" : "Not checked",
+                      },
+                    }))}
+                  />
                 );
               })}
               {topo.edges.map((e, i) => {
@@ -429,12 +492,16 @@ export function TopologyMap({
                       fill="none"
                       stroke={lit ? "var(--sig)" : "var(--line-2)"}
                       strokeWidth={lit ? 2 : 1.2}
-                    >
-                      <title>
-                        {e.from} → {e.to}
-                        {e.interface ? ` (${e.interface})` : ""}
-                      </title>
-                    </path>
+                      {...tipProps((): TipCard => ({
+                        title: `${byId.get(e.from)?.label || e.from} → ${byId.get(e.to)?.label || e.to}`,
+                        sub: "layer-2 link",
+                        rows: [
+                          { label: "Router", value: byId.get(e.from)?.label || e.from },
+                          { label: "Neighbour", value: byId.get(e.to)?.label || e.to },
+                          { label: "Interface", value: e.interface ?? "Not reported" },
+                        ],
+                      }))}
+                    />
                     {lit && e.interface && (
                       <text
                         x={(mx - 46).toFixed(0)}
@@ -456,8 +523,16 @@ export function TopologyMap({
                 className={cn("transition-opacity", focus && !focus.has(HUB_ID) && "opacity-15")}
                 onMouseEnter={() => setHover(HUB_ID)}
                 onMouseLeave={() => setHover(null)}
+                {...tipProps((): TipCard => ({
+                  title: topo.server,
+                  sub: "MCP server",
+                  rows: [
+                    { label: "Routers", value: String(topo.stats.devices) },
+                    { label: "Neighbours", value: String(topo.stats.neighbors) },
+                    { label: "Can be added", value: String(topo.stats.onboardable) },
+                  ],
+                }))}
               >
-                <title>{topo.server}</title>
                 <circle cx={CX} cy={CY} r={46} fill="var(--sig)" opacity={0.06} />
                 <circle
                   cx={CX}
@@ -497,6 +572,21 @@ export function TopologyMap({
                   onMouseEnter: () => setHover(n.id),
                   onMouseLeave: () => setHover(null),
                   onClick: select,
+                  onKeyDown: (ev: {
+                    key: string;
+                    preventDefault: () => void;
+                    stopPropagation: () => void;
+                  }) => {
+                    if (ev.key !== "Enter" && ev.key !== " ") return;
+                    ev.preventDefault();
+                    select(ev);
+                  },
+                  ...tipProps(() =>
+                    nodeCard(
+                      n,
+                      topo.edges.find((e) => e.to === n.id),
+                    ),
+                  ),
                 };
 
                 if (n.kind === "device") {

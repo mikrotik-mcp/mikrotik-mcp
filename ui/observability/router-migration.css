@@ -47,24 +47,10 @@
   line-height: 21px;
 }
 
-/* A select with an icon on the left (the boards' .select). */
-.mig-select {
-  display: flex;
-  width: 100%;
-}
-.mig-select select {
-  width: 100%;
-}
-.mig-select[data-icon] select {
-  padding-left: 34px;
-}
-.mig-select[data-icon] .mig-icon {
-  right: auto;
-  left: 12px;
-}
-.mig-select select.mono {
-  font-family: var(--font-mt);
-  font-size: 12px;
+/* The saved-plan picker sits at the end of the button row. */
+.mig-saved {
+  width: auto;
+  max-width: 100%;
 }
 
 .mig-cols {
@@ -114,7 +100,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 9px 14px;
 }
-.mig-sections .monitor-check {
+.mig-sections .mig-section {
   min-width: 0;
   font-family: var(--font-mt);
   font-size: 12px;

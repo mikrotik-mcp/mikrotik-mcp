@@ -2,6 +2,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { formatMs, useLineDraw } from "./monitoring-ui";
 import { deviceState } from "./device-card";
+import { tipProps } from "./kit";
+import type { TipCard, TipRow } from "./kit";
 import type { DeviceInfo } from "./types";
 
 /** How long a line stays lit after a tool call reaches its router. */
@@ -40,6 +42,65 @@ function pathSub(d: DeviceInfo, via: string | null): string {
             ? formatMs(d.status.latencyMs)
             : "reachable";
   return `${how} · ${result}`;
+}
+
+const STATE_WORD = {
+  online: "Online",
+  offline: "Offline",
+  pending: "Not checked",
+  disabled: "Off for MCP",
+} as const;
+
+function linkWord(d: DeviceInfo, via: string | null): string {
+  if (d.mac) return "MAC-Telnet (layer 2)";
+  if (via) return "Through a jump host";
+  return d.transport === "rest" ? "REST, direct" : "Direct SSH";
+}
+
+function latencyRow(d: DeviceInfo): TipRow[] {
+  return d.status.latencyMs != null
+    ? [{ label: "Latency", value: formatMs(d.status.latencyMs) }]
+    : [];
+}
+
+function errorFoot(d: DeviceInfo): TipCard["foot"] {
+  return d.status.error ? { label: "Error", value: d.status.error, tone: "down" } : undefined;
+}
+
+/** The card for a router box. */
+function routerCard(d: DeviceInfo, via: string | null, on: boolean): TipCard {
+  const state = deviceState(d);
+  return {
+    title: d.name,
+    sub: STATE_WORD[state],
+    led: state === "online" ? "ok" : state === "offline" ? "bad" : "off",
+    rows: [
+      { label: "Address", value: d.address ?? `${d.host}:${d.port}` },
+      { label: "Path", value: via ? `via ${via}` : linkWord(d, via) },
+      ...latencyRow(d),
+      { label: "Calls", value: d.activity.calls.toLocaleString("en-US") },
+      { label: "Errors", value: d.activity.errors.toLocaleString("en-US") },
+      ...(d.pool ? [{ label: "In flight", value: String(d.pool.inflight) }] : []),
+      ...(on ? [{ label: "Now", value: "call running" }] : []),
+    ],
+    foot: errorFoot(d),
+  };
+}
+
+/** The card for the line from the server (or jump host) to a router. */
+function pathCard(d: DeviceInfo, via: string | null, from: string): TipCard {
+  return {
+    title: `${from} → ${d.name}`,
+    sub: linkWord(d, via),
+    rows: [
+      { label: "From", value: from },
+      ...(via ? [{ label: "Via", value: via }] : []),
+      { label: "To", value: d.address ?? `${d.host}:${d.port}` },
+      ...latencyRow(d),
+      { label: "State", value: STATE_WORD[deviceState(d)] },
+    ],
+    foot: errorFoot(d),
+  };
 }
 
 /** Place direct routers in one column and routers behind a jump host in the next. */
@@ -153,37 +214,57 @@ export function ManagementPaths({
   return (
     <svg
       ref={root}
-      className="dv-paths"
+      className="dv-paths kit-tips"
       viewBox={`0 0 1080 ${height}`}
       width="100%"
       height={height}
       role="img"
       aria-label={`Management paths from the MCP server to ${devices.length} router${devices.length === 1 ? "" : "s"}`}
     >
-      <rect
-        x="20"
-        y={mid - 26}
-        width="220"
-        height="52"
-        rx="12"
-        fill="var(--glass-2)"
-        stroke="var(--sig)"
-        strokeOpacity=".55"
-      />
-      <circle cx="42" cy={mid} r="4" fill="var(--sig)" />
-      <circle cx="42" cy={mid} r="9" fill="none" stroke="var(--sig)" strokeOpacity=".35" />
-      <text x="60" y={mid - 4} fontSize="13" fontWeight="600" fill="var(--foreground)">
-        MCP server
-      </text>
-      <text
-        x="60"
-        y={mid + 13}
-        fontSize="11"
-        fill="var(--muted-foreground)"
-        fontFamily="var(--font-mt)"
+      <g
+        {...tipProps((): TipCard => ({
+          title: "MCP server",
+          sub: "this machine",
+          rows: [
+            { label: "Routers", value: String(devices.length) },
+            {
+              label: "Online",
+              value: String(devices.filter((d) => deviceState(d) === "online").length),
+              color: "var(--sig)",
+            },
+            {
+              label: "Offline",
+              value: String(devices.filter((d) => deviceState(d) === "offline").length),
+              color: "var(--destructive)",
+            },
+          ],
+        }))}
       >
-        this machine
-      </text>
+        <rect
+          x="20"
+          y={mid - 26}
+          width="220"
+          height="52"
+          rx="12"
+          fill="var(--glass-2)"
+          stroke="var(--sig)"
+          strokeOpacity=".55"
+        />
+        <circle cx="42" cy={mid} r="4" fill="var(--sig)" />
+        <circle cx="42" cy={mid} r="9" fill="none" stroke="var(--sig)" strokeOpacity=".35" />
+        <text x="60" y={mid - 4} fontSize="13" fontWeight="600" fill="var(--foreground)">
+          MCP server
+        </text>
+        <text
+          x="60"
+          y={mid + 13}
+          fontSize="11"
+          fill="var(--muted-foreground)"
+          fontFamily="var(--font-mt)"
+        >
+          this machine
+        </text>
+      </g>
       {placed.map(({ d, x, cy, via }) => {
         const state = deviceState(d);
         const on = isLit(d);
@@ -211,7 +292,11 @@ export function ManagementPaths({
         const markY = (4 * from.y + 4 * cy) / 8;
         return (
           <Fragment key={d.name}>
-            <g opacity={state === "disabled" ? 0.5 : 1}>
+            <g
+              opacity={state === "disabled" ? 0.5 : 1}
+              {...tipProps(() => pathCard(d, via, host ? host.d.name : "MCP server"))}
+            >
+              <path d={path} fill="none" stroke="transparent" strokeWidth="12" />
               {on && (
                 <path
                   d={path}
@@ -239,8 +324,11 @@ export function ManagementPaths({
                 </>
               )}
             </g>
-            <g className="dv-path-box" opacity={state === "disabled" ? 0.5 : 1}>
-              <title>{`${d.name}: ${pathSub(d, via)}`}</title>
+            <g
+              className="dv-path-box"
+              opacity={state === "disabled" ? 0.5 : 1}
+              {...tipProps(() => routerCard(d, via, on))}
+            >
               <rect
                 x={x}
                 y={cy - BOX_H / 2}

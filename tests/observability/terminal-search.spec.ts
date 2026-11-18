@@ -3,6 +3,8 @@ import { expect, test, vi } from "vite-plus/test";
 import { buildPattern, findMatches } from "../../ui/observability/terminal-search";
 
 vi.mock("../../ui/observability/terminal-lib", () => ({ workspace: { activePane: "" } }));
+// The kit pulls in the dashboard api (needs `location`); these tests only cover the pattern logic.
+vi.mock("../../ui/observability/kit", () => ({ SearchInput: () => null }));
 
 const plain = { matchCase: false, words: false, regex: false };
 const matches = (text: string, query: string, options = plain) => {

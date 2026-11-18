@@ -17,6 +17,7 @@ import { saveDownload, useWorkspaceClock, workspacePost } from "./workspace-ui";
 import type { DevicesPayload } from "./types";
 import type { Bundle } from "../../src/support/bundle";
 import type { Investigation } from "../../src/investigations/model";
+import { Checkbox } from "./kit";
 import "./monitoring.css";
 import "./support-bundles.css";
 
@@ -284,11 +285,10 @@ function Bundles({ device }: { device: string }) {
             </div>
             {contents.map(([key, title, description]) => (
               <label key={key} className="sb-choice" data-on={include[key] || undefined}>
-                <span className="monitor-check sb-box">
-                  <input
-                    type="checkbox"
+                <span className="sb-box">
+                  <Checkbox
                     checked={include[key]}
-                    onChange={(e) => setInclude((i) => ({ ...i, [key]: e.target.checked }))}
+                    onCheckedChange={(on) => setInclude((i) => ({ ...i, [key]: on }))}
                   />
                 </span>
                 <span className="sb-choice-text">
@@ -306,13 +306,11 @@ function Bundles({ device }: { device: string }) {
               </span>
               {inWindow.map((c) => (
                 <label key={c.id} className="sb-case">
-                  <span className="monitor-check sb-box">
-                    <input
-                      type="checkbox"
+                  <span className="sb-box">
+                    <Checkbox
                       checked={chosen.includes(c.id)}
                       disabled={!chosen.includes(c.id) && chosen.length >= 10}
-                      onChange={(e) => {
-                        const on = e.target.checked;
+                      onCheckedChange={(on) => {
                         setChosen((a) => (on ? [...a, c.id] : a.filter((id) => id !== c.id)));
                       }}
                     />
@@ -384,17 +382,16 @@ function Bundles({ device }: { device: string }) {
                     {highlightJson(selected.report)}
                   </pre>
                   <p className="monitor-hint sb-digest">SHA-256 · {selected.digest}</p>
-                  <label className="monitor-check">
-                    <input
-                      type="checkbox"
-                      checked={reviewed}
-                      onChange={(e) => setReviewed(e.target.checked)}
-                    />
-                    <span className="sb-review">
-                      I reviewed the complete report. I understand minimisation does not guarantee
-                      anonymity.
-                    </span>
-                  </label>
+                  <Checkbox
+                    checked={reviewed}
+                    onCheckedChange={setReviewed}
+                    label={
+                      <span className="sb-review">
+                        I reviewed the complete report. I understand minimisation does not guarantee
+                        anonymity.
+                      </span>
+                    }
+                  />
                   <div className="sb-row">
                     <MonitorButton
                       variant="primary"

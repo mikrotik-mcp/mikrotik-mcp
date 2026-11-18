@@ -3,8 +3,8 @@
  * the boards' `.select` and the page's stylesheet.
  */
 import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Select } from "./kit";
 import "./aaa.css";
 
 /**
@@ -24,9 +24,8 @@ export function compactBytes(n: number): string {
 }
 
 /**
- * The boards' `.select`: the chosen text with the chevron right after it. A
- * native select sits on top, invisible, so keyboard and screen readers get a
- * real select.
+ * The boards' `.select`: a 34px select that is as wide as its text. Drawn by
+ * the kit (Kit-Select).
  */
 export function AaaSelect({
   value,
@@ -43,23 +42,15 @@ export function AaaSelect({
   disabled?: boolean;
   className?: string;
 }): ReactNode {
-  const current = options.find((o) => o.value === value)?.label ?? value;
   return (
-    <span className={cn("aaa-select", className)} data-disabled={disabled || undefined}>
-      <span className="truncate">{current}</span>
-      <ChevronDown aria-hidden="true" />
-      <select
-        aria-label={label}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </span>
+    <Select
+      value={value}
+      onChange={onChange}
+      options={options}
+      label={label}
+      size="sm"
+      disabled={disabled}
+      className={cn("monitor-kit-select", className)}
+    />
   );
 }

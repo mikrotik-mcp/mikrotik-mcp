@@ -7,6 +7,8 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, stagger, svg } from "animejs";
 import type { Scope } from "animejs";
+import { LineHover, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import { useLineDraw } from "./monitoring-ui";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
@@ -22,12 +24,17 @@ export function CallsLine({
   values,
   failed,
   labels,
+  times,
+  bucketMs,
 }: {
   values: number[];
   /** Failed calls per bucket, same length as `values`. */
   failed: number[];
   /** `at` is the bucket's time, also the React key. */
   labels: { at: number; text: string }[];
+  /** Start of each bucket (ms), for the tooltip. */
+  times?: number[];
+  bucketMs?: number;
 }): ReactNode {
   const root = useRef<HTMLDivElement>(null);
   useLineDraw(root, values.join(","));
@@ -38,6 +45,29 @@ export function CallsLine({
     Math.round((H - 8 - (v / max) * (H - 20)) * 10) / 10,
   ]);
   const d = points.length ? `M${points.map(([x, y]) => `${x},${y}`).join(" L")}` : "";
+  const card = (i: number): TipCard => {
+    const t = times?.[i];
+    const span =
+      t != null && bucketMs ? `${clock(t)} – ${clock(t + bucketMs)}` : `Interval ${i + 1} of ${n}`;
+    const prev = i > 0 ? values[i]! - values[i - 1]! : null;
+    return {
+      title: span,
+      sub: t != null ? dayWord(t) : undefined,
+      rows: [
+        { label: "Calls", value: values[i]!.toLocaleString("en-US"), color: "var(--sig)" },
+        { label: "Failed", value: failed[i]!.toLocaleString("en-US"), color: "var(--destructive)" },
+      ],
+      ...(prev != null
+        ? {
+            foot: {
+              label: "vs the interval before",
+              value: `${prev >= 0 ? "+" : ""}${prev.toLocaleString("en-US")}`,
+              tone: prev >= 0 ? ("up" as const) : ("down" as const),
+            },
+          }
+        : {}),
+    };
+  };
   return (
     <div ref={root}>
       <svg
@@ -83,11 +113,17 @@ export function CallsLine({
                   fill="var(--destructive)"
                   stroke="var(--background)"
                   strokeWidth="2"
-                >
-                  <title>{`${failed[i]} failed`}</title>
-                </circle>
+                />
               ) : null,
             )}
+            <LineHover
+              width={W}
+              height={H}
+              points={points}
+              card={card}
+              label="Calls over time. Use the arrow keys to read each interval."
+              band={Math.max(12, W / n)}
+            />
           </>
         )}
       </svg>
@@ -100,7 +136,36 @@ export function CallsLine({
   );
 }
 
+function clock(t: number): string {
+  const d = new Date(t);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function dayWord(t: number): string | undefined {
+  const day = (x: number): number => {
+    const d = new Date(x);
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  };
+  const diff = (day(Date.now()) - day(t)) / 86_400_000;
+  return diff === 0 ? "today" : diff === 1 ? "yesterday" : undefined;
+}
+
 export type RadarTone = "good" | "warn" | "bad" | "unknown";
+
+/** What a radar node's hover card shows, and its one action. */
+export interface RadarDetail {
+  state: string;
+  rows: { label: string; value: string }[];
+  onOpen?: () => void;
+}
+
+const RADAR_LED = { good: "ok", warn: "warn", bad: "bad", unknown: "off" } as const;
+const RADAR_WORD: Record<RadarTone, string> = {
+  good: "Healthy",
+  warn: "Strain",
+  bad: "Offline",
+  unknown: "Not checked",
+};
 
 const RADAR_COLOR: Record<RadarTone, string> = {
   good: "var(--sig)",
@@ -113,7 +178,11 @@ const RADAR_COLOR: Record<RadarTone, string> = {
  * The MCP server in the middle and one node per router around it. A dashed
  * spoke means the router is offline or not checked yet.
  */
-export function RouterRadar({ nodes }: { nodes: { name: string; tone: RadarTone }[] }): ReactNode {
+export function RouterRadar({
+  nodes,
+}: {
+  nodes: { name: string; tone: RadarTone; detail?: RadarDetail }[];
+}): ReactNode {
   const root = useRef<SVGSVGElement>(null);
   const scope = useRef<Scope | null>(null);
   const key = nodes.map((n) => `${n.name}:${n.tone}`).join(",");
@@ -153,7 +222,7 @@ export function RouterRadar({ nodes }: { nodes: { name: string; tone: RadarTone 
   return (
     <svg
       ref={root}
-      className="overview-radar block"
+      className="overview-radar kit-tips block"
       viewBox="0 0 420 300"
       width="100%"
       height="300"
@@ -198,8 +267,25 @@ export function RouterRadar({ nodes }: { nodes: { name: string; tone: RadarTone 
         MCP
       </text>
       {placed.map((n) => (
-        <g key={n.name} data-node>
-          <title>{n.name}</title>
+        <g
+          key={n.name}
+          data-node
+          {...tipProps((): TipCard => ({
+            title: n.name,
+            led: RADAR_LED[n.tone],
+            rows: [
+              {
+                label: "State",
+                value: n.detail?.state ?? RADAR_WORD[n.tone],
+                color: RADAR_COLOR[n.tone],
+              },
+              ...(n.detail?.rows ?? []),
+            ],
+            action: n.detail?.onOpen
+              ? { label: "Open router", onClick: n.detail.onOpen }
+              : undefined,
+          }))}
+        >
           <g data-dot className="overview-radar-dot">
             <circle
               cx={n.x}

@@ -12,12 +12,20 @@ import { clockTime } from "./device-card";
 import {
   MonitorButton,
   MonitorDialog,
+  MonitorSearch,
   MonitorSwitch,
   Segmented,
   StatusBadge,
   StatusDot,
 } from "./monitoring-ui";
-import { TagsInput } from "@/components/ui/tags-input";
+import {
+  Field as KitField,
+  MultiSelect,
+  NumberInput,
+  SecretInput,
+  TextArea,
+  TextInput,
+} from "./kit";
 import { cn } from "@/lib/utils";
 
 type Draft = Record<string, unknown>;
@@ -36,13 +44,14 @@ const TRANSPORTS = [
   ["mac", "MAC-Telnet", "Same layer-2 network, no IP"],
 ] as const;
 
-/** A label over a 36px input, with a hint or an error under it. */
+/** A label over a 36px input, with a hint or an error under it (Kit-Inputs). */
 function Field({
   label,
   optional,
   hint,
   error,
   className,
+  id,
   children,
 }: {
   label: string;
@@ -50,28 +59,26 @@ function Field({
   hint?: ReactNode;
   error?: string;
   className?: string;
+  /** The control's id, so the label names it. */
+  id?: string;
   children: ReactNode;
 }): ReactNode {
   return (
-    <label className={cn("monitor-fl", className)}>
-      <span className="monitor-label">
-        {label}
-        {optional && <span className="text-faint font-normal"> optional</span>}
-      </span>
+    <KitField
+      label={label}
+      optional={optional ? "optional" : undefined}
+      help={hint || undefined}
+      error={error || undefined}
+      className={cn("monitor-fl", className)}
+      id={id}
+    >
       {children}
-      {error ? (
-        <span role="alert" className="monitor-err">
-          {error}
-        </span>
-      ) : hint ? (
-        <span className="monitor-hint">{hint}</span>
-      ) : null}
-    </label>
+    </KitField>
   );
 }
 
 /** A secret field: stored values are never shown, new ones can be revealed. */
-function SecretInput({
+function SecretField({
   label,
   value,
   optional,
@@ -82,36 +89,16 @@ function SecretInput({
   optional?: boolean;
   onChange: (value: string) => void;
 }) {
-  const [visible, setVisible] = useState(false);
   const stored = value === REDACTED;
   return (
-    <div className="monitor-fl">
-      <span className="monitor-label">
-        {label}
-        {optional && <span className="text-faint font-normal"> optional</span>}
-      </span>
-      <span className="monitor-input justify-between">
-        <input
-          aria-label={label}
-          className="min-w-0 flex-1 bg-transparent font-mono outline-none"
-          type={visible && !stored ? "text" : "password"}
-          value={stored ? "" : text(value)}
-          onChange={(e) => onChange(e.target.value)}
-          autoComplete="new-password"
-          placeholder={stored ? "Stored securely · leave unchanged" : "Enter a secret"}
-        />
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-foreground text-[12px] disabled:opacity-40"
-          aria-label={`${visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
-          aria-pressed={visible}
-          disabled={stored}
-          onClick={() => setVisible(!visible)}
-        >
-          {visible ? "Hide" : "Show"}
-        </button>
-      </span>
-    </div>
+    <Field label={label} optional={optional}>
+      <SecretInput
+        value={stored ? "" : text(value)}
+        onChange={onChange}
+        autoComplete="new-password"
+        placeholder={stored ? "Stored securely · leave unchanged" : "Enter a secret"}
+      />
+    </Field>
   );
 }
 
@@ -263,12 +250,11 @@ function KeyPicker({ value, onSelect }: { value: string; onSelect: (key: SshKeyO
             <b className="text-foreground flex-1 font-[510]">New SSH key</b>
             <span className="monitor-chip">RSA · 3072 bit</span>
           </div>
-          <Field label="Key name" className="w-full">
-            <input
-              id="ssh_create_name"
-              className="monitor-input font-mono"
+          <Field label="Key name" className="w-full" id="ssh_create_name">
+            <TextInput
+              mono
               value={keyName}
-              onChange={(e) => setKeyName(e.target.value)}
+              onChange={setKeyName}
               disabled={creating}
               placeholder="mikrotik_home"
               autoComplete="off"
@@ -308,12 +294,14 @@ function KeyPicker({ value, onSelect }: { value: string; onSelect: (key: SshKeyO
         <div className="monitor-note flex-col" data-tone="warn" role="status">
           <b className="text-foreground font-[510]">Public key ready to import</b>
           <code className="w-full font-mono text-[11px] break-all">{created.fingerprint}</code>
-          <textarea
+          <TextArea
             aria-label="Generated public key"
             readOnly
+            mono
             value={created.publicKey}
+            onChange={() => {}}
             rows={3}
-            className="monitor-input w-full resize-none font-mono"
+            className="w-full"
           />
           <CopyKey text={created.publicKey} name={created.name} />
           <p className="text-muted-foreground text-[12px]">
@@ -327,15 +315,12 @@ function KeyPicker({ value, onSelect }: { value: string; onSelect: (key: SshKeyO
         </div>
       )}
       {data && data.keys.length > 3 && (
-        <label className="monitor-field">
-          <input
-            type="search"
-            aria-label="Search public keys"
-            placeholder="Search name, path or fingerprint"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
+        <MonitorSearch
+          label="Search public keys"
+          placeholder="Search name, path or fingerprint"
+          value={query}
+          onChange={setQuery}
+        />
       )}
       <div
         role="listbox"
@@ -635,22 +620,20 @@ export function DeviceEditor({
       setTesting(false);
     }
   };
-  const input = (key: string, placeholder = "", type = "text", mono = true) => (
-    <input
-      id={key === "name" ? "dev_name" : `f_${key}`}
-      className={cn("monitor-input", mono ? "font-mono" : "tabular-nums")}
+  const fieldId = (key: string) => (key === "name" ? "dev_name" : `f_${key}`);
+  const input = (key: string, placeholder = "", mono = true) => (
+    <TextInput
+      mono={mono}
       placeholder={placeholder}
-      type={type}
       value={key === "name" ? newName : text(dev[key])}
-      aria-invalid={errors[key] ? true : undefined}
+      invalid={errors[key] ? true : undefined}
       autoComplete="off"
       spellCheck={false}
-      onChange={(e) => {
-        const value = e.target.value;
+      onChange={(value) => {
         if (key === "name") {
           setNewName(value);
           setErrors({});
-        } else setField(key, type === "number" && value ? Number(value) : value);
+        } else setField(key, value);
       }}
     />
   );
@@ -852,11 +835,11 @@ export function DeviceEditor({
           {step === 0 && (
             <>
               <div className="dv-grid-2">
-                <Field label="Device name" error={errors.name}>
-                  {input("name", "home-router", "text", false)}
+                <Field label="Device name" error={errors.name} id={fieldId("name")}>
+                  {input("name", "home-router", false)}
                 </Field>
-                <Field label="Description" optional>
-                  {input("description", "Home · hAP ax³", "text", false)}
+                <Field label="Description" optional id={fieldId("description")}>
+                  {input("description", "Home · hAP ax³", false)}
                 </Field>
               </div>
               <div className="monitor-fl">
@@ -879,7 +862,7 @@ export function DeviceEditor({
                 </div>
               </div>
               {transport === "mac" ? (
-                <Field label="MAC address" error={errors.mac}>
+                <Field label="MAC address" error={errors.mac} id={fieldId("mac")}>
                   {input("mac", "48:A9:8A:C6:42:F7")}
                 </Field>
               ) : (
@@ -911,17 +894,32 @@ export function DeviceEditor({
               )}
               <div className={transport === "mac" ? undefined : "dv-grid-port"}>
                 {transport !== "mac" && (
-                  <Field label="SSH port" error={errors.port}>
-                    {input("port", "22", "number", false)}
+                  <Field label="SSH port" error={errors.port} id={fieldId("port")}>
+                    <NumberInput
+                      allowEmpty
+                      placeholder="22"
+                      className="tabular-nums"
+                      value={dev.port == null || dev.port === "" ? null : Number(dev.port)}
+                      invalid={errors.port ? true : undefined}
+                      onChange={(value) => setField("port", value ?? "")}
+                    />
                   </Field>
                 )}
                 <div className="dv-tags">
-                  <TagsInput
+                  <MultiSelect
+                    label="Tags"
+                    noun="tag"
+                    placeholder="Add a tag"
+                    allowCustom
                     value={Array.isArray(dev.tags) ? dev.tags : []}
-                    suggestions={Object.values(devices).flatMap((device) =>
-                      Array.isArray(device.tags) ? device.tags : [],
-                    )}
-                    onValueChange={(tags) => setField("tags", tags)}
+                    options={[
+                      ...new Set(
+                        Object.values(devices).flatMap((device) =>
+                          Array.isArray(device.tags) ? device.tags : [],
+                        ),
+                      ),
+                    ].map((t) => ({ value: t, label: t }))}
+                    onChange={(tags) => setField("tags", tags)}
                     disabled={busy}
                   />
                 </div>
@@ -959,7 +957,12 @@ export function DeviceEditor({
           )}
           {step === 1 && (
             <>
-              <Field label="Username" className="max-w-80" error={errors.username}>
+              <Field
+                label="Username"
+                className="max-w-80"
+                error={errors.username}
+                id={fieldId("username")}
+              >
                 {input("username", "admin")}
               </Field>
               {transport !== "mac" && (
@@ -997,10 +1000,11 @@ export function DeviceEditor({
                         label="Private key path"
                         hint="The private file, not the .pub one."
                         error={errors.keyFilename}
+                        id={fieldId("keyFilename")}
                       >
                         {input("keyFilename", "~/.ssh/id_ed25519")}
                       </Field>
-                      <SecretInput
+                      <SecretField
                         label="Key passphrase"
                         optional
                         value={dev.keyPassphrase}
@@ -1020,18 +1024,17 @@ export function DeviceEditor({
                         </MonitorButton>
                       </div>
                       {inlineVisible ? (
-                        <textarea
+                        <TextArea
                           aria-label="Inline private key"
-                          className="monitor-input font-mono"
-                          aria-invalid={errors.privateKey ? true : undefined}
+                          mono
+                          invalid={errors.privateKey ? true : undefined}
                           value={dev.privateKey === REDACTED ? "" : text(dev.privateKey)}
                           placeholder={
                             dev.privateKey === REDACTED
                               ? "The stored key stays until you paste a new one"
                               : "Paste a PEM or OpenSSH private key"
                           }
-                          onChange={(event) => setField("privateKey", event.target.value)}
-                          spellCheck={false}
+                          onChange={(value) => setField("privateKey", value)}
                         />
                       ) : (
                         <span className="monitor-hint">
@@ -1045,7 +1048,7 @@ export function DeviceEditor({
                           {errors.privateKey}
                         </span>
                       )}
-                      <SecretInput
+                      <SecretField
                         label="Key passphrase"
                         optional
                         value={dev.keyPassphrase}
@@ -1079,7 +1082,7 @@ export function DeviceEditor({
                     summary={transport === "rest" ? "Needed for REST" : "Optional for SSH"}
                     defaultOpen={transport === "rest"}
                   >
-                    <SecretInput
+                    <SecretField
                       label="Password"
                       value={dev.password}
                       onChange={(value) => setField("password", value)}
@@ -1088,7 +1091,7 @@ export function DeviceEditor({
                 </>
               ) : (
                 <>
-                  <SecretInput
+                  <SecretField
                     label="Password"
                     value={dev.password}
                     onChange={(value) => setField("password", value)}

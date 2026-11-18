@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { format, isValid, parseISO } from "date-fns";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { ChevronRight, Download, RefreshCw } from "lucide-react";
-import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { api } from "./api";
 import { num } from "./format";
 import { saveDownload } from "./workspace-ui";
@@ -20,6 +19,8 @@ import {
   useStaggerIn,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { DateTimePicker, DetailList, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
+import type { TipCard, Tone as KitTone } from "./kit";
 import { AaaSelect, compactBytes as bytes } from "./aaa-ui";
 import { HourBars, TrafficChart } from "./um-report-charts";
 import type { UmCollectionState, UmReport } from "../../src/observability/um-reports";
@@ -89,6 +90,31 @@ function causeTone(name: string): "good" | "warn" | "bad" {
   if (/Lost-|Unavailable/i.test(name)) return "warn";
   return "good";
 }
+const kitTone = { good: "ok", warn: "warn", bad: "bad" } as const satisfies Record<string, KitTone>;
+/** "+1.2 GiB" or "−300 KiB" against the previous value. */
+function delta(now: number, before: number): { value: string; tone?: "up" | "down" } {
+  const d = now - before;
+  if (d === 0) return { value: "no change" };
+  return { value: `${d > 0 ? "+" : "−"}${bytes(Math.abs(d))}`, tone: d > 0 ? "up" : "down" };
+}
+/** Enter or Space on a focusable row runs its click. */
+function onEnter(run: () => void) {
+  return (e: KeyboardEvent<HTMLElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      run();
+    }
+  };
+}
+/** The columns of an inventory table: every key its rows carry, except .id. */
+function invTitle(key: string, row: Record<string, string>, i: number): string {
+  return row.name || row[".id"] || `${sourceNames[key]} ${i + 1}`;
+}
+function columns(rows: Record<string, string>[]): string[] {
+  return [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => k !== ".id");
+}
+
 function Bar({ pct, tone = "good" }: { pct: number; tone?: string }): ReactNode {
   return (
     <span className="monitor-bar">
@@ -115,6 +141,8 @@ export function UmReports({
   const [user, setUser] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [mode, setMode] = useState<"daily" | "cumulative">("daily");
+  /** The row open in the details drawer: which list, and its index. */
+  const [open, setOpen] = useState<{ list: string; i: number } | null>(null);
   const [data, setReport] = useState<UmReport | null>(null);
   const [collection, setCollection] = useState<UmCollectionState | null>(null);
   const collecting = collection?.device === device && collection.status === "collecting";
@@ -193,6 +221,10 @@ export function UmReports({
   const focus = (name: string) => {
     setUser(name);
   };
+  const onlyDay = (d: string) => {
+    setFrom(d);
+    setTo(d);
+  };
   const selected = report?.users.find((u) => u.name === user);
   const ready = report?.sources.sessions.available;
   const summary = report?.summary;
@@ -200,6 +232,7 @@ export function UmReports({
   const maxUserBytes = report?.users.reduce((n, u) => Math.max(n, u.download + u.upload), 1) ?? 1;
   const maxStarts = report?.series.reduce((n, d) => Math.max(n, d.sessions), 1) ?? 1;
   const maxCause = report?.causes.reduce((n, c) => Math.max(n, c.value), 1) ?? 1;
+  const closed = report?.causes.reduce((n, c) => n + c.value, 0) || 1;
   const phrase =
     from || to ? "in this period" : (PERIODS.find((p) => p.value === period)?.phrase ?? "");
 
@@ -289,7 +322,7 @@ export function UmReports({
           </label>
           <DateTimePicker
             id="um-report-from"
-            aria-label="From date"
+            label="From date"
             showTime={false}
             placeholder={
               report?.coverage.from ? day(report.coverage.from, "MMM d, yyyy") : undefined
@@ -305,7 +338,7 @@ export function UmReports({
           </label>
           <DateTimePicker
             id="um-report-to"
-            aria-label="Through date"
+            label="Through date"
             showTime={false}
             placeholder={report?.coverage.to ? day(report.coverage.to, "MMM d, yyyy") : undefined}
             value={to ? parseISO(to) : undefined}
@@ -528,10 +561,35 @@ export function UmReports({
                       )}
                       up={series.map((d) => (mode === "daily" ? d.upload : d.cumulativeUpload))}
                       labels={pick.map((d) => day(d.day))}
-                      titles={series.map(
-                        (d) =>
-                          `${d.day} · ↓ ${bytes(mode === "daily" ? d.download : d.cumulativeDownload)} · ↑ ${bytes(mode === "daily" ? d.upload : d.cumulativeUpload)}`,
-                      )}
+                      card={(i): TipCard => {
+                        const d = series[i]!;
+                        const prev = series[i - 1];
+                        const daily = mode === "daily";
+                        return {
+                          title: day(d.day, "EEE, MMM d"),
+                          sub: daily ? "by start day" : "cumulative",
+                          rows: [
+                            {
+                              label: "Download",
+                              value: bytes(daily ? d.download : d.cumulativeDownload),
+                              color: "var(--sig)",
+                            },
+                            {
+                              label: "Upload",
+                              value: bytes(daily ? d.upload : d.cumulativeUpload),
+                              color: "var(--warning)",
+                            },
+                            { label: "Sessions started", value: num(d.sessions) },
+                          ],
+                          foot:
+                            daily && prev
+                              ? {
+                                  label: "Download vs day before",
+                                  ...delta(d.download, prev.download),
+                                }
+                              : undefined,
+                        };
+                      }}
                     />
                   ) : (
                     <MonitorEmpty compact title="No sessions in this period">
@@ -547,30 +605,51 @@ export function UmReports({
                   <div ref={usersRef} className="um-user-list">
                     {report.users.length ? (
                       report.users.map((u, i) => (
-                        <button
+                        <RowMenu
                           key={u.name}
-                          type="button"
-                          className="um-user-button"
-                          aria-pressed={user === u.name}
-                          onClick={() => focus(u.name)}
+                          title={u.name}
+                          sub={`${num(u.sessions)} sessions in period · ${bytes(u.download + u.upload)}`}
+                          onOpen={() => setOpen({ list: "users", i })}
+                          cells={{
+                            user: {
+                              value: u.name,
+                              filter: () => focus(u.name),
+                              clearFilter: user ? () => focus("") : undefined,
+                            },
+                            bytes: { value: bytes(u.download + u.upload) },
+                          }}
+                          copies={[{ label: "User name", value: u.name }]}
+                          row={u}
                         >
-                          <span className="um-user-rank">{String(i + 1).padStart(2, "0")}</span>
-                          <span className="um-user-name">
-                            <span className="um-user-line">
-                              <span className="um-user-who">{u.name}</span>
-                              <span className="um-user-meta">
-                                {u.active == null
-                                  ? "Monitor unavailable"
-                                  : u.active
-                                    ? `${u.active} active`
-                                    : "No active sessions"}{" "}
-                                · {num(u.sessions)} in period
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className="um-user-button"
+                            aria-pressed={user === u.name}
+                            onClick={() => focus(u.name)}
+                            onKeyDown={onEnter(() => focus(u.name))}
+                          >
+                            <span className="um-user-rank">{String(i + 1).padStart(2, "0")}</span>
+                            <span className="um-user-name" data-col="user">
+                              <span className="um-user-line">
+                                <span className="um-user-who">{u.name}</span>
+                                <span className="um-user-meta">
+                                  {u.active == null
+                                    ? "Monitor unavailable"
+                                    : u.active
+                                      ? `${u.active} active`
+                                      : "No active sessions"}{" "}
+                                  · {num(u.sessions)} in period
+                                </span>
                               </span>
+                              <Bar pct={((u.download + u.upload) / maxUserBytes) * 100} />
                             </span>
-                            <Bar pct={((u.download + u.upload) / maxUserBytes) * 100} />
-                          </span>
-                          <span className="um-user-bytes">{bytes(u.download + u.upload)}</span>
-                        </button>
+                            <span className="um-user-bytes" data-col="bytes">
+                              {bytes(u.download + u.upload)}
+                            </span>
+                            <RowMore />
+                          </div>
+                        </RowMenu>
                       ))
                     ) : (
                       <p className="monitor-hint">No configured or historical users.</p>
@@ -587,7 +666,25 @@ export function UmReports({
                     label={`Session starts by hour, router time ${report.clock.zone}`}
                     drawKey={requestKey}
                     values={report.hours.map((h) => h.sessions)}
-                    titles={report.hours.map((h) => `${h.hour} · ${num(h.sessions)} starts`)}
+                    card={(i): TipCard => {
+                      const hr = report.hours[i]!;
+                      const total = report.summary.sessions;
+                      return {
+                        title: `${hr.hour}–${hr.hour.slice(0, 2)}:59`,
+                        sub: `router time, ${report.clock.zone}`,
+                        rows: [
+                          {
+                            label: "Session starts",
+                            value: num(hr.sessions),
+                            color: "var(--chart-1)",
+                          },
+                          {
+                            label: "Share of the period",
+                            value: total ? `${Math.round((hr.sessions / total) * 100)}%` : "—",
+                          },
+                        ],
+                      };
+                    }}
                   />
                 </MonitorPanel>
                 <MonitorPanel
@@ -595,9 +692,23 @@ export function UmReports({
                   description="Termination reasons in the period."
                 >
                   {report.causes.length ? (
-                    <div className="um-hbars">
+                    <div className="um-hbars kit-tips">
                       {report.causes.map((c) => (
-                        <div key={c.name} className="um-hbar um-cause">
+                        <div
+                          key={c.name}
+                          className="um-hbar um-cause"
+                          {...tipProps((): TipCard => ({
+                            title: c.name,
+                            led: kitTone[causeTone(c.name)],
+                            rows: [
+                              { label: "Sessions ended", value: num(c.value) },
+                              {
+                                label: "Share of closed sessions",
+                                value: `${Math.round((c.value / closed) * 100)}%`,
+                              },
+                            ],
+                          }))}
+                        >
                           <span className="um-hbar-label">{c.name}</span>
                           <Bar pct={(c.value / maxCause) * 100} tone={causeTone(c.name)} />
                           <span className="um-hbar-value">{num(c.value)}</span>
@@ -611,16 +722,43 @@ export function UmReports({
                 <MonitorPanel title="Access points of entry" description="Sessions by NAS.">
                   {report.nas.length ? (
                     <div className="um-nas">
-                      {report.nas.map((n) => (
-                        <div key={n.name} className="um-nas-row">
-                          <div className="um-nas-top">
-                            <span className="um-nas-name">{n.name || "Unknown NAS"}</span>
-                            <span className="um-nas-n">{num(n.sessions)} sessions</span>
+                      {report.nas.map((n, i) => (
+                        <RowMenu
+                          key={n.name}
+                          title={n.name || "Unknown NAS"}
+                          sub={`${num(n.sessions)} sessions`}
+                          onOpen={() => setOpen({ list: "nas", i })}
+                          cells={{
+                            name: { value: n.name || "Unknown NAS", copy: Boolean(n.name) },
+                            sessions: { value: `${num(n.sessions)} sessions` },
+                          }}
+                          copies={n.name ? [{ label: "NAS", value: n.name }] : undefined}
+                          row={n}
+                        >
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${n.name || "Unknown NAS"}, ${num(n.sessions)} sessions`}
+                            className="um-nas-row"
+                            onClick={() => setOpen({ list: "nas", i })}
+                            onKeyDown={onEnter(() => setOpen({ list: "nas", i }))}
+                          >
+                            <div className="um-nas-main">
+                              <div className="um-nas-top">
+                                <span className="um-nas-name" data-col="name">
+                                  {n.name || "Unknown NAS"}
+                                </span>
+                                <span className="um-nas-n" data-col="sessions">
+                                  {num(n.sessions)} sessions
+                                </span>
+                              </div>
+                              <span className="um-nas-bytes">
+                                ↓ {bytes(n.download)} · ↑ {bytes(n.upload)}
+                              </span>
+                            </div>
+                            <RowMore />
                           </div>
-                          <span className="um-nas-bytes">
-                            ↓ {bytes(n.download)} · ↑ {bytes(n.upload)}
-                          </span>
-                        </div>
+                        </RowMenu>
                       ))}
                     </div>
                   ) : (
@@ -644,8 +782,8 @@ export function UmReports({
                 extra={<span className="um-starts">{num(report.summary.sessions)} starts</span>}
               >
                 <div
-                  className="um-calendar"
-                  role="img"
+                  className="um-calendar kit-tips"
+                  role="group"
                   aria-label={`Daily session starts for ${user || "all users"}; exact daily data is in the table below and in Export report.`}
                 >
                   {series.map((d) => (
@@ -663,7 +801,15 @@ export function UmReports({
                           : undefined
                       }
                       data-active={d.sessions > 0}
-                      title={`${d.day}: ${num(d.sessions)} session starts · ↓ ${bytes(d.download)} · ↑ ${bytes(d.upload)}`}
+                      {...tipProps((): TipCard => ({
+                        title: day(d.day, "EEE, MMM d, yyyy"),
+                        rows: [
+                          { label: "Session starts", value: num(d.sessions), color: "var(--sig)" },
+                          { label: "Download", value: bytes(d.download) },
+                          { label: "Upload", value: bytes(d.upload) },
+                        ],
+                        action: { label: "Show only this day", onClick: () => onlyDay(d.day) },
+                      }))}
                     />
                   ))}
                 </div>
@@ -692,17 +838,45 @@ export function UmReports({
                           <th>Download</th>
                           <th>Upload</th>
                           <th>Uptime</th>
+                          <th className="um-more" aria-label="Row actions" />
                         </tr>
                       </thead>
                       <tbody>
-                        {series.map((d) => (
-                          <tr key={d.day}>
-                            <td>{d.day}</td>
-                            <td>{num(d.sessions)}</td>
-                            <td>{bytes(d.download)}</td>
-                            <td>{bytes(d.upload)}</td>
-                            <td>{duration(d.seconds)}</td>
-                          </tr>
+                        {series.map((d, i) => (
+                          <RowMenu
+                            key={d.day}
+                            title={day(d.day, "EEE, MMM d, yyyy")}
+                            sub={`${num(d.sessions)} starts · ↓ ${bytes(d.download)} · ↑ ${bytes(d.upload)}`}
+                            onOpen={() => setOpen({ list: "daily", i })}
+                            cells={{
+                              date: {
+                                value: d.day,
+                                kind: "time",
+                                filter: () => onlyDay(d.day),
+                                clearFilter: from || to ? () => onlyDay("") : undefined,
+                              },
+                              starts: { value: num(d.sessions) },
+                              download: { value: bytes(d.download) },
+                              upload: { value: bytes(d.upload) },
+                              uptime: { value: duration(d.seconds), kind: "duration" },
+                            }}
+                            row={d}
+                          >
+                            <tr
+                              tabIndex={0}
+                              onClick={() => setOpen({ list: "daily", i })}
+                              onKeyDown={onEnter(() => setOpen({ list: "daily", i }))}
+                            >
+                              <td data-col="date">{d.day}</td>
+                              <td data-col="starts">{num(d.sessions)}</td>
+                              <td data-col="download">{bytes(d.download)}</td>
+                              <td data-col="upload">{bytes(d.upload)}</td>
+                              <td data-col="uptime">{duration(d.seconds)}</td>
+                              <td className="um-more">
+                                <RowMore />
+                              </td>
+                            </tr>
+                          </RowMenu>
                         ))}
                       </tbody>
                     </table>
@@ -734,22 +908,45 @@ export function UmReports({
                         <table>
                           <thead>
                             <tr>
-                              {[...new Set(rows.flatMap((r) => Object.keys(r)))]
-                                .filter((k) => k !== ".id")
-                                .map((k) => (
-                                  <th key={k}>{k.replaceAll("-", " ")}</th>
-                                ))}
+                              {columns(rows).map((k) => (
+                                <th key={k}>{k.replaceAll("-", " ")}</th>
+                              ))}
+                              <th className="um-more" aria-label="Row actions" />
                             </tr>
                           </thead>
                           <tbody>
                             {rows.map((row, i) => (
-                              <tr key={row[".id"] || i}>
-                                {[...new Set(rows.flatMap((r) => Object.keys(r)))]
-                                  .filter((k) => k !== ".id")
-                                  .map((k) => (
-                                    <td key={k}>{row[k] || "—"}</td>
+                              <RowMenu
+                                key={row[".id"] || i}
+                                title={invTitle(key, row, i)}
+                                sub={sourceNames[key]}
+                                onOpen={() => setOpen({ list: `inv:${key}`, i })}
+                                cells={Object.fromEntries(
+                                  columns(rows).map((k) => [k, { value: row[k] || "" }]),
+                                )}
+                                copies={[
+                                  ...(row[".id"]
+                                    ? [{ label: "Router ID", value: row[".id"] }]
+                                    : []),
+                                  ...(row.name ? [{ label: "Name", value: row.name }] : []),
+                                ]}
+                                row={row}
+                              >
+                                <tr
+                                  tabIndex={0}
+                                  onClick={() => setOpen({ list: `inv:${key}`, i })}
+                                  onKeyDown={onEnter(() => setOpen({ list: `inv:${key}`, i }))}
+                                >
+                                  {columns(rows).map((k) => (
+                                    <td key={k} data-col={k}>
+                                      {row[k] || "—"}
+                                    </td>
                                   ))}
-                              </tr>
+                                  <td className="um-more">
+                                    <RowMore />
+                                  </td>
+                                </tr>
+                              </RowMenu>
                             ))}
                           </tbody>
                         </table>
@@ -766,7 +963,7 @@ export function UmReports({
               </div>
             </MonitorPanel>
             <MonitorPanel title="Source health" description="What was read, and what could not be.">
-              <div className="um-hbars">
+              <div className="um-hbars kit-tips">
                 {healthRows
                   .filter(([key]) => report.sources[key])
                   .map(([key, label]) => {
@@ -775,11 +972,23 @@ export function UmReports({
                       <div
                         key={key}
                         className="um-hbar um-health"
-                        title={
-                          s.available
-                            ? `${sourceNames[key]}: ${num(s.count)} records${s.collectionMs == null ? "" : ` · ${(s.collectionMs / 1000).toFixed(1)} s`}`
-                            : `${sourceNames[key]}: ${s.error || "Unsupported or not read"}`
-                        }
+                        {...tipProps((): TipCard => ({
+                          title: sourceNames[key],
+                          led: s.available ? "ok" : "bad",
+                          rows: s.available
+                            ? [
+                                { label: "Records", value: num(s.count) },
+                                ...(s.collectionMs == null
+                                  ? []
+                                  : [
+                                      {
+                                        label: "Read in",
+                                        value: `${(s.collectionMs / 1000).toFixed(1)} s`,
+                                      },
+                                    ]),
+                              ]
+                            : [{ label: "Not read", value: s.error || "Unsupported or not read" }],
+                        }))}
                       >
                         <span className="um-hbar-label">{label}</span>
                         <Bar pct={s.available ? 100 : 0} />
@@ -800,6 +1009,163 @@ export function UmReports({
           </div>
         </>
       )}
+      {report && open && (
+        <UmRowDrawer
+          report={report}
+          open={open}
+          setOpen={setOpen}
+          user={user}
+          focus={focus}
+          onlyDay={onlyDay}
+        />
+      )}
     </div>
+  );
+}
+
+type Detail = { label: string; value: ReactNode; mono?: boolean };
+
+/** One row of the report's lists and tables in the kit's details drawer. */
+function UmRowDrawer({
+  report,
+  open,
+  setOpen,
+  user,
+  focus,
+  onlyDay,
+}: {
+  report: UmReport;
+  open: { list: string; i: number };
+  setOpen: (o: { list: string; i: number } | null) => void;
+  user: string;
+  focus: (name: string) => void;
+  onlyDay: (d: string) => void;
+}): ReactNode {
+  const { list, i } = open;
+  let total = 0;
+  let title = "";
+  let meta: ReactNode;
+  let status: { tone: KitTone; label: ReactNode } | undefined;
+  let items: Detail[] = [];
+  let primary: ReactNode;
+  if (list === "users") {
+    const u = report.users[i];
+    total = report.users.length;
+    if (!u) return null;
+    title = u.name;
+    meta = `${num(u.sessions)} sessions in period · ${bytes(u.download + u.upload)}`;
+    status = !u.configured
+      ? { tone: "off", label: "Historical user" }
+      : u.disabled
+        ? { tone: "warn", label: "Disabled" }
+        : { tone: "ok", label: "Enabled" };
+    items = [
+      { label: "Download in period", value: bytes(u.download), mono: true },
+      { label: "Upload in period", value: bytes(u.upload), mono: true },
+      { label: "Sessions in period", value: num(u.sessions) },
+      {
+        label: "Active now",
+        value:
+          u.active == null
+            ? "Monitor unavailable"
+            : u.active
+              ? `${u.active} active`
+              : "No active sessions",
+      },
+      { label: "Active profile", value: u.profile || "Not reported" },
+      { label: "Group", value: u.group || "—" },
+      {
+        label: "Total download",
+        value: u.totalDownload == null ? "—" : bytes(u.totalDownload),
+        mono: true,
+      },
+      {
+        label: "Total upload",
+        value: u.totalUpload == null ? "—" : bytes(u.totalUpload),
+        mono: true,
+      },
+      { label: "Total uptime", value: u.totalSeconds == null ? "—" : duration(u.totalSeconds) },
+      { label: "Latest session start", value: u.latest || "—", mono: true },
+      ...(u.comment ? [{ label: "Comment", value: u.comment }] : []),
+    ];
+    primary =
+      user === u.name ? (
+        <MonitorButton size="sm" variant="ghost" onClick={() => focus("")}>
+          Back to all users
+        </MonitorButton>
+      ) : (
+        <MonitorButton size="sm" onClick={() => focus(u.name)}>
+          Focus this user
+        </MonitorButton>
+      );
+  } else if (list === "nas") {
+    const n = report.nas[i];
+    total = report.nas.length;
+    if (!n) return null;
+    title = n.name || "Unknown NAS";
+    meta = "Sessions by NAS in the period";
+    items = [
+      { label: "Sessions", value: num(n.sessions) },
+      { label: "Download", value: bytes(n.download), mono: true },
+      { label: "Upload", value: bytes(n.upload), mono: true },
+    ];
+  } else if (list === "daily") {
+    const d = report.series[i];
+    total = report.series.length;
+    if (!d) return null;
+    title = day(d.day, "EEE, MMM d, yyyy");
+    meta = "Sessions grouped by the day they started";
+    items = [
+      { label: "Date", value: d.day, mono: true },
+      { label: "Session starts", value: num(d.sessions) },
+      { label: "Download", value: bytes(d.download), mono: true },
+      { label: "Upload", value: bytes(d.upload), mono: true },
+      { label: "Uptime", value: duration(d.seconds) },
+      { label: "Download so far", value: bytes(d.cumulativeDownload), mono: true },
+      { label: "Upload so far", value: bytes(d.cumulativeUpload), mono: true },
+    ];
+    primary = (
+      <MonitorButton size="sm" onClick={() => onlyDay(d.day)}>
+        Show only this day
+      </MonitorButton>
+    );
+  } else if (list.startsWith("inv:")) {
+    const key = list.slice(4);
+    const rows = (report.inventory as Record<string, Record<string, string>[]>)[key] ?? [];
+    const row = rows[i];
+    total = rows.length;
+    if (!row) return null;
+    title = invTitle(key, row, i);
+    meta = sourceNames[key];
+    items = [
+      ...(row[".id"] ? [{ label: "Router ID", value: row[".id"], mono: true }] : []),
+      ...columns(rows).map((k) => ({
+        label: k.replaceAll("-", " "),
+        value: row[k] || "—",
+        mono: true,
+      })),
+    ];
+  }
+  const go = (k: number) => setOpen({ list, i: k });
+  return (
+    <RowDrawer
+      open
+      onClose={() => setOpen(null)}
+      label={`Report row details: ${title}`}
+      storageKey="um-reports"
+      rowKey={`${list}:${i}`}
+      nav={{
+        index: i,
+        total,
+        onPrev: i > 0 ? () => go(i - 1) : undefined,
+        onNext: i < total - 1 ? () => go(i + 1) : undefined,
+      }}
+      status={status}
+      title={title}
+      meta={meta}
+      primary={primary}
+    >
+      <DetailList items={items} />
+    </RowDrawer>
   );
 }

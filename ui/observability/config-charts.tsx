@@ -10,10 +10,10 @@ import { useEffect, useRef } from "react";
 import { animate, createScope, stagger } from "animejs";
 import type { Scope } from "animejs";
 import { ArrowRight, Check } from "lucide-react";
+import { DUR, EASE, reducedMotion, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import { TONE_COLOR } from "./signal-charts";
 import type { ChartTone } from "./signal-charts";
-
-const REDUCE = "(prefers-reduced-motion: reduce)";
 
 /** A ring with a score or a count in the middle, not a percentage. */
 export function ScoreRing({
@@ -23,6 +23,7 @@ export function ScoreRing({
   tone = "good",
   fontSize = 14,
   label,
+  tip,
   children,
 }: {
   /** 0 to 100: how much of the ring is drawn. */
@@ -33,6 +34,8 @@ export function ScoreRing({
   fontSize?: number;
   /** Read out by screen readers. */
   label: string;
+  /** The card shown on hover or focus: the numbers behind the ring. */
+  tip?: TipCard | (() => TipCard);
   /** The text in the middle. Defaults to the value. */
   children?: ReactNode;
 }): ReactNode {
@@ -46,12 +49,12 @@ export function ScoreRing({
 
   useEffect(() => {
     const el = root.current;
-    if (!el || window.matchMedia?.(REDUCE).matches) return;
+    if (!el || reducedMotion()) return;
     scope.current = createScope({ root: el }).add(() => {
       animate("[data-arc]", {
         strokeDasharray: [`0 ${circ.toFixed(1)}`, `${arc.toFixed(1)} ${circ.toFixed(1)}`],
-        duration: 700,
-        ease: "outQuart",
+        duration: DUR.draw,
+        ease: EASE.enter,
       });
     });
     return () => scope.current?.revert();
@@ -66,6 +69,7 @@ export function ScoreRing({
       role="img"
       aria-label={label}
       className="shrink-0"
+      {...(tip ? tipProps(tip) : {})}
     >
       <circle cx={c} cy={c} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
       <circle
@@ -101,15 +105,15 @@ export function ScoreRing({
 export function BarChart({
   values,
   labels,
-  titles,
+  cards,
   width = 400,
   height = 120,
   label,
 }: {
   values: number[];
   labels?: string[];
-  /** Hover text per bar. */
-  titles?: string[];
+  /** The card shown on hover, focus or tap of bar i. */
+  cards?: (i: number) => TipCard;
   width?: number;
   height?: number;
   label: string;
@@ -124,20 +128,20 @@ export function BarChart({
 
   useEffect(() => {
     const el = root.current;
-    if (!el || window.matchMedia?.(REDUCE).matches) return;
+    if (!el || reducedMotion()) return;
     scope.current = createScope({ root: el }).add(() => {
       animate("[data-bar]", {
         scaleY: [0, 1],
         duration: 520,
         delay: stagger(40),
-        ease: "outQuart",
+        ease: EASE.enter,
       });
     });
     return () => scope.current?.revert();
   }, [key]);
 
   return (
-    <div ref={root}>
+    <div ref={root} className="kit-tips">
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
@@ -172,9 +176,8 @@ export function BarChart({
               fill="var(--brand)"
               opacity=".85"
               style={{ transformOrigin: `${x}px ${height}px`, transformBox: "view-box" }}
-            >
-              {titles?.[i] && <title>{titles[i]}</title>}
-            </rect>
+              {...(cards ? tipProps(() => cards(i)) : {})}
+            />
           );
         })}
       </svg>

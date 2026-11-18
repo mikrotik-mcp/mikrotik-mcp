@@ -101,10 +101,10 @@
 }
 
 .explain-grid-wan {
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1fr) 90px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1fr) 90px 26px;
 }
 .explain-grid-subnet {
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1.2fr) 70px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1.2fr) 70px 26px;
 }
 
 /* The selects in the header and the compare panel: the router picker's look. */

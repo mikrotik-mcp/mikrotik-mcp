@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { parseRecords } from "../../src/core/routeros-parse";
+import { DetailList, RowDrawer, RowMenu, RowMore, SearchInput } from "./kit";
 
 /** Numbers sort as numbers ("10" after "9"), everything else as text. */
 function compare(a: string, b: string): number {
@@ -13,6 +14,11 @@ function compare(a: string, b: string): number {
   const y = Number.parseFloat(b);
   if (!Number.isNaN(x) && !Number.isNaN(y) && x !== y) return x - y;
   return a.localeCompare(b, undefined, { numeric: true });
+}
+
+/** What a record is called in its menu and drawer: its name, else its id. */
+function rowName(row: Record<string, string>, i: number): string {
+  return row.name || row["host-name"] || row.address || row[".id"] || `Row ${i + 1}`;
 }
 
 /** True when the output parses into at least one record. */
@@ -24,6 +30,7 @@ export function RecordTable({ output }: { output: string }): ReactNode {
   const parsed = useMemo(() => parseRecords(output), [output]);
   const [sort, setSort] = useState<{ column: string; down: boolean } | null>(null);
   const [filter, setFilter] = useState("");
+  const [open, setOpen] = useState<number | null>(null);
   const rows = useMemo(() => {
     const needle = filter.trim().toLowerCase();
     const kept = needle
@@ -36,15 +43,25 @@ export function RecordTable({ output }: { output: string }): ReactNode {
     return sort.down ? ordered.reverse() : ordered;
   }, [parsed.rows, sort, filter]);
 
+  const opened = open != null ? rows[open] : undefined;
+  const step = (d: 1 | -1): (() => void) | undefined =>
+    open != null && rows[open + d] ? () => setOpen(open + d) : undefined;
+
   if (!parsed.rows.length) return <div className="term-empty">This output has no table form.</div>;
   return (
     <div className="term-table">
       <div className="term-table-tools">
-        <input
+        <SearchInput
+          size="sm"
+          wrapClassName="w-[180px]"
           value={filter}
-          onChange={(event) => setFilter(event.target.value)}
+          onChange={(v) => {
+            setFilter(v);
+            setOpen(null);
+          }}
           placeholder="Filter rows…"
           spellCheck={false}
+          label="Filter rows"
           aria-label="Filter rows"
         />
         <span>
@@ -75,20 +92,81 @@ export function RecordTable({ output }: { output: string }): ReactNode {
                   </button>
                 </th>
               ))}
+              <th aria-hidden="true" className="term-more" />
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              // eslint-disable-next-line react/no-array-index-key -- rows have no identity
-              <tr key={i}>
-                {parsed.columns.map((column) => (
-                  <td key={column}>{row[column] ?? ""}</td>
-                ))}
-              </tr>
+              <RowMenu
+                // eslint-disable-next-line react/no-array-index-key -- rows have no identity
+                key={i}
+                title={rowName(row, i)}
+                sub={`row ${i + 1} of ${rows.length}`}
+                onOpen={() => setOpen(i)}
+                cells={Object.fromEntries(
+                  parsed.columns.map((column) => [
+                    column,
+                    {
+                      value: row[column] ?? "",
+                      search: () => {
+                        setFilter(row[column] ?? "");
+                        setOpen(null);
+                      },
+                      sort: () => setSort({ column, down: false }),
+                    },
+                  ]),
+                )}
+                row={row}
+              >
+                <tr
+                  tabIndex={0}
+                  data-selected={open === i || undefined}
+                  onClick={() => setOpen(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      setOpen(i);
+                    }
+                  }}
+                >
+                  {parsed.columns.map((column) => (
+                    <td key={column} data-col={column}>
+                      {row[column] ?? ""}
+                    </td>
+                  ))}
+                  <td className="term-more">
+                    <RowMore />
+                  </td>
+                </tr>
+              </RowMenu>
             ))}
           </tbody>
         </table>
       </div>
+      <RowDrawer
+        open={Boolean(opened)}
+        onClose={() => setOpen(null)}
+        label={`Record details: ${opened && open != null ? rowName(opened, open) : ""}`}
+        title={opened && open != null ? rowName(opened, open) : ""}
+        meta={`${parsed.columns.length} fields`}
+        nav={
+          open != null
+            ? { index: open, total: rows.length, onPrev: step(-1), onNext: step(1) }
+            : undefined
+        }
+        rowKey={open ?? undefined}
+        storageKey="terminal-record"
+      >
+        {opened && (
+          <DetailList
+            items={parsed.columns.map((column) => ({
+              label: column,
+              value: opened[column] || "—",
+              mono: true,
+            }))}
+          />
+        )}
+      </RowDrawer>
     </div>
   );
 }

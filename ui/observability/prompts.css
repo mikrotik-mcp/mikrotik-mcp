@@ -134,25 +134,6 @@
     }
   }
 
-  textarea.monitor-input.prompts-request {
-    min-height: 70px;
-    color: var(--foreground);
-    font-family: inherit;
-    font-size: 13px;
-    line-height: 20px;
-  }
-  .prompts-bare {
-    min-width: 0;
-    flex: 1;
-    border: 0;
-    background: transparent;
-    color: var(--foreground);
-    font: inherit;
-    outline: none;
-  }
-  .prompts-bare::placeholder {
-    color: var(--muted-foreground);
-  }
   .prompts-link {
     color: var(--brand);
     font-weight: 500;

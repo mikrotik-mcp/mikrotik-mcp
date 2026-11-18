@@ -78,8 +78,17 @@ test("shows detect-only posture and incident evidence before a response is offer
       b.getAttribute("aria-label")?.includes("Repeated SSH failures"),
     ),
   );
-  expect(host.textContent).toContain("login failure");
-  expect(host.textContent).toContain("Check authorized operators");
+  // The details open in the row drawer (a portal): advice first, then the raw log lines.
+  const drawer = document.body.querySelector(
+    '[role="dialog"][aria-label="Incident details: Repeated SSH failures"]',
+  );
+  expect(drawer?.textContent).toContain("Check authorized operators");
+  await click(
+    [...drawer!.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) =>
+      b.textContent?.startsWith("Evidence"),
+    ),
+  );
+  expect(drawer?.textContent).toContain("login failure");
   expect(postJson).not.toHaveBeenCalled();
 });
 

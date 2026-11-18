@@ -10,6 +10,8 @@ import {
   formatBytes,
   useLineDraw,
 } from "./monitoring-ui";
+import { LineHover } from "./kit";
+import type { TipCard } from "./kit";
 import { cn } from "@/lib/utils";
 
 /** Exact binary units; kept for the full-precision tooltip. */
@@ -106,6 +108,33 @@ export function RoutingTrafficPanel({
     )
     .join(" ");
   useLineDraw(chart, `${policy.id}:${rates.length > 1}`);
+  const hoverPoints = rates.map((p): [number, number] => [Number(x(p.at)), Number(y(p.bps!))]);
+  const rateCard = (i: number): TipCard => {
+    const p = rates[i]!;
+    const before = rates[i - 1];
+    const ago = Math.max(0, Math.round((end - p.at) / 1000));
+    return {
+      title: new Date(p.at).toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+      sub: ago ? `${ago} s ago` : "latest",
+      rows: [
+        { label: "Rate", value: formatRate(p.bps), color: "var(--sig)" },
+        { label: "Peak in 5 min", value: formatRate(peak) },
+      ],
+      ...(before && before.bps !== null
+        ? {
+            foot: {
+              label: "vs the sample before",
+              value: `${p.bps! >= before.bps ? "+" : "−"}${formatRate(Math.abs(p.bps! - before.bps))}`,
+              tone: p.bps! >= before.bps ? ("up" as const) : ("down" as const),
+            },
+          }
+        : {}),
+    };
+  };
   const status = paused
     ? "Counter reads pause while a routing change is open."
     : sample?.state === "unavailable"
@@ -171,7 +200,7 @@ export function RoutingTrafficPanel({
           preserveAspectRatio="none"
           role="img"
           aria-label="Matched traffic rate over the last 5 minutes"
-          className="block"
+          className="block kit-tips"
         >
           {[30, 60, 90].map((gy) => (
             <line
@@ -196,6 +225,16 @@ export function RoutingTrafficPanel({
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
           />
+          {hoverPoints.length > 0 && (
+            <LineHover
+              width={360}
+              height={120}
+              points={hoverPoints}
+              card={rateCard}
+              label="Matched traffic rate. Use the arrow keys to read each sample."
+              band={12}
+            />
+          )}
         </svg>
         {!rates.length && (
           <span className="absolute inset-0 grid place-items-center text-[12px] text-muted-foreground">

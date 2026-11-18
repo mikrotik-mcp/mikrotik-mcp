@@ -87,14 +87,14 @@ test("report date filters use the shared picker and send date-only boundaries to
   vi.setSystemTime(new Date(2026, 8, 28, 12));
   const from = host.querySelector<HTMLButtonElement>('[aria-label="From date"]')!;
   const through = host.querySelector<HTMLButtonElement>('[aria-label="Through date"]')!;
-  expect(from.dataset.slot).toBe("date-time-picker");
-  expect(through.dataset.slot).toBe("date-time-picker");
+  expect(from.classList.contains("kit-trigger")).toBe(true);
+  expect(through.classList.contains("kit-trigger")).toBe(true);
   expect(host.querySelector('input[type="date"]')).toBeNull();
   await act(async () => from.click());
   expect(document.querySelector('input[type="time"]')).toBeNull();
   const day = (n: number) =>
     document.querySelector<HTMLButtonElement>(
-      `button[data-day="${new Date(2026, 8, n).toLocaleDateString()}"]`,
+      `button[data-day="2026-09-${String(n).padStart(2, "0")}"]`,
     )!;
   await act(async () => day(27).click());
   let query = new URL(vi.mocked(api).mock.calls.at(-1)![0], "http://fixture").searchParams;

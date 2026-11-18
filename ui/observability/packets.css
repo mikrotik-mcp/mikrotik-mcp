@@ -78,7 +78,8 @@
 /* Decoded packets: newest first, zebra rows, mono 12/18. */
 .pkt-cols {
   display: grid;
-  grid-template-columns: 104px 52px 48px minmax(0, 1fr);
+  grid-template-columns: 104px 52px 48px minmax(0, 1fr) 26px;
+  align-items: center;
   gap: 10px;
 }
 .pkt-head {
@@ -98,8 +99,23 @@
   font-size: 12px;
   line-height: 18px;
 }
+.pkt-line {
+  cursor: pointer;
+}
 .pkt-line:nth-child(even) {
   background: var(--glass);
+}
+.pkt-line:hover,
+.pkt-line[data-selected] {
+  background: var(--glass-2);
+}
+/* The row menu button: as tall as a packet line, shown on hover and focus. */
+.pkt-line .kit-row-more {
+  height: 18px;
+}
+.pkt-line:hover .kit-row-more,
+.pkt-line:focus-within .kit-row-more {
+  opacity: 1;
 }
 .pkt-line > span:first-child,
 .pkt-line > span:nth-child(3) {
@@ -109,7 +125,7 @@
   color: var(--proto);
   font-weight: 500;
 }
-.pkt-line > span:last-child {
+.pkt-line > span:nth-child(4) {
   overflow: hidden;
   min-width: 0;
   color: var(--foreground);
@@ -127,7 +143,7 @@
 
 @media (max-width: 639px) {
   .pkt-cols {
-    grid-template-columns: 92px 44px minmax(0, 1fr);
+    grid-template-columns: 92px 44px minmax(0, 1fr) 26px;
   }
   .pkt-cols > :nth-child(3) {
     display: none;

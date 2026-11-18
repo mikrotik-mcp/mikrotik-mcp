@@ -10,7 +10,9 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { animate, createScope, stagger, svg } from "animejs";
 import type { Scope } from "animejs";
-import type { DeviceNarrativePayload } from "./types";
+import { EASE, tipProps } from "./kit";
+import type { TipCard, TipRow } from "./kit";
+import type { DeviceNarrativePayload, NarrativeInterfaceRow } from "./types";
 
 const W = 560;
 const H = 330;
@@ -24,6 +26,15 @@ const CHILD_R = 120;
 const CHILD_STEP = Math.PI / 5;
 
 type Kind = "wan" | "bridge" | "vlan" | "tunnel" | "wireless" | "ether";
+
+const KIND_WORD: Record<Kind, string> = {
+  wan: "WAN",
+  bridge: "Bridge",
+  vlan: "VLAN",
+  tunnel: "Tunnel",
+  wireless: "Wireless",
+  ether: "Ethernet",
+};
 
 const NODE_FILL: Record<Kind, string> = {
   wan: "var(--destructive)",
@@ -145,7 +156,7 @@ export function ExplainTopology({ narrative }: { narrative: DeviceNarrativePaylo
       if (self?.matches.reduceMotion || !root.current?.querySelector("[data-dot]")) return;
       // Dashed tunnel links fade in; drawing them would replace their dash pattern.
       const dashed = root.current?.querySelectorAll("line[data-link][stroke-dasharray]");
-      if (dashed?.length) animate(dashed, { opacity: [0, 1], duration: 600, ease: "outQuart" });
+      if (dashed?.length) animate(dashed, { opacity: [0, 1], duration: 600, ease: EASE.enter });
       const lines = root.current?.querySelectorAll<SVGLineElement>(
         "line[data-link]:not([stroke-dasharray])",
       );
@@ -153,7 +164,7 @@ export function ExplainTopology({ narrative }: { narrative: DeviceNarrativePaylo
         animate(svg.createDrawable(lines), {
           draw: ["0 0", "0 1"],
           duration: 600,
-          ease: "outQuart",
+          ease: EASE.enter,
         });
       }
       animate("[data-dot]", {
@@ -161,7 +172,7 @@ export function ExplainTopology({ narrative }: { narrative: DeviceNarrativePaylo
         scale: [0.4, 1],
         duration: 360,
         delay: stagger(30, { start: 120 }),
-        ease: "outQuart",
+        ease: EASE.enter,
       });
     });
     return () => scope.current?.revert();
@@ -183,8 +194,59 @@ export function ExplainTopology({ narrative }: { narrative: DeviceNarrativePaylo
   // The hub circle holds about seven mono characters.
   const hubLabel = name.length > 8 ? `${name.slice(0, 7)}…` : name;
 
+  const rowOf = new Map(narrative.interfaces.map((i) => [i.name, i]));
+  const wanOf = new Map(narrative.wans.map((w) => [w.interface, w]));
+  const nodeCard = (nd: Node): TipCard => {
+    const row: NarrativeInterfaceRow | undefined = rowOf.get(nd.name);
+    const w = wanOf.get(nd.name);
+    const rows: TipRow[] = [
+      { label: "Type", value: row?.kind ?? KIND_WORD[nd.kind], color: NODE_FILL[nd.kind] },
+    ];
+    if (nd.parent) rows.push({ label: "Parent", value: nd.parent });
+    if (row?.vlanId != null) rows.push({ label: "VLAN ID", value: String(row.vlanId) });
+    rows.push({
+      label: "Addresses",
+      value: row?.addresses.length ? row.addresses.join(", ") : "None",
+    });
+    if (row?.lists.length) rows.push({ label: "Lists", value: row.lists.join(", ") });
+    if (w) {
+      rows.push({ label: "Addressing", value: w.addressing });
+      if (w.gateway) rows.push({ label: "Gateway", value: w.gateway });
+      rows.push({ label: "NAT", value: w.nat });
+    }
+    if (row?.comment) rows.push({ label: "Comment", value: row.comment });
+    return {
+      title: nd.name,
+      sub: KIND_WORD[nd.kind],
+      led: nd.disabled ? "off" : "ok",
+      rows,
+      foot: { label: "State", value: nd.disabled ? "Disabled" : "Enabled" },
+    };
+  };
+  const linkCard = (nd: Node): TipCard => ({
+    title: `${nd.parent ?? name} → ${nd.name}`,
+    sub: nd.parent ? "port" : "interface",
+    rows: [
+      { label: "From", value: nd.parent ?? name },
+      { label: "To", value: nd.name },
+      { label: "Link", value: KIND_WORD[nd.kind] },
+    ],
+  });
+  const hubCard = (): TipCard => ({
+    title: name,
+    sub: "router",
+    rows: [
+      ...(narrative.identity.model ? [{ label: "Model", value: narrative.identity.model }] : []),
+      ...(narrative.identity.version
+        ? [{ label: "RouterOS", value: narrative.identity.version }]
+        : []),
+      { label: "Interfaces", value: String(narrative.interfaces.length) },
+      { label: "WANs", value: String(narrative.wans.length) },
+    ],
+  });
+
   return (
-    <div ref={root} className="explain-topo">
+    <div ref={root} className="explain-topo kit-tips">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
@@ -214,23 +276,30 @@ export function ExplainTopology({ narrative }: { narrative: DeviceNarrativePaylo
               strokeWidth={1.5}
               strokeDasharray={nd.kind === "tunnel" ? "4 4" : undefined}
               opacity={nd.disabled ? 0.4 : undefined}
+              {...tipProps(() => linkCard(nd))}
             />
           );
         })}
-        <circle
-          cx={CX}
-          cy={CY}
-          r={30}
-          fill="var(--sig-soft)"
-          stroke="var(--sig)"
-          strokeWidth={1.5}
-        />
-        <text x={CX} y={CY + 4} textAnchor="middle" className="explain-topo-hub">
-          <title>{name}</title>
-          {hubLabel}
-        </text>
+        <g {...tipProps(hubCard)}>
+          <circle
+            cx={CX}
+            cy={CY}
+            r={30}
+            fill="var(--sig-soft)"
+            stroke="var(--sig)"
+            strokeWidth={1.5}
+          />
+          <text x={CX} y={CY + 4} textAnchor="middle" className="explain-topo-hub">
+            {hubLabel}
+          </text>
+        </g>
         {nodes.map((nd) => (
-          <g key={nd.name} data-node="" opacity={nd.disabled ? 0.45 : undefined}>
+          <g
+            key={nd.name}
+            data-node=""
+            opacity={nd.disabled ? 0.45 : undefined}
+            {...tipProps(() => nodeCard(nd))}
+          >
             <circle
               data-dot=""
               cx={nd.x}

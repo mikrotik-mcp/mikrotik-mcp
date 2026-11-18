@@ -140,15 +140,6 @@
   border-top: 1px solid var(--term-line);
   font-size: 12px;
 }
-.term-group-form input:not([type="checkbox"]) {
-  padding: 4px 7px;
-  border: 1px solid var(--term-line);
-  border-radius: 6px;
-  outline: none;
-  background: var(--term-bg);
-  color: var(--term-ink);
-  font-size: 12px;
-}
 .term-group-form label {
   display: flex;
   align-items: center;
@@ -779,30 +770,6 @@
   background: rgb(255 255 255 / 6%);
   color: var(--term-ink);
 }
-.term-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 10px;
-  padding: 6px 9px;
-  border: 1px solid var(--term-line);
-  border-radius: 8px;
-  background: var(--term-bg);
-  color: var(--term-dim);
-}
-.term-search:focus-within {
-  border-color: var(--term-accent);
-}
-.term-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: var(--term-ink);
-  font-family: var(--term-mono);
-  font-size: 12px;
-}
 .term-drawer-filters {
   display: flex;
   align-items: center;
@@ -1007,35 +974,6 @@
   background: var(--term-surface);
   font-size: 12.5px;
   animation: term-rise 0.15s ease-out;
-}
-.term-find-field {
-  display: flex;
-  flex: 0 1 420px;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 6px 3px 9px;
-  border: 1px solid var(--term-line);
-  border-radius: 8px;
-  background: var(--term-bg);
-  color: var(--term-dim);
-}
-.term-find-field:focus-within {
-  border-color: var(--term-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--term-accent) 22%, transparent);
-}
-.term-find[data-invalid="true"] .term-find-field {
-  border-color: var(--term-err);
-}
-.term-find-field input {
-  flex: 1;
-  min-width: 80px;
-  border: 0;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent;
-  color: var(--term-ink);
-  font-family: var(--term-mono);
-  font-size: 12.5px;
 }
 .term-find button {
   display: inline-flex;
@@ -1281,20 +1219,6 @@
   color: var(--term-faint);
   font-size: 11px;
 }
-.term-table-tools input {
-  width: 180px;
-  padding: 2px 7px;
-  border: 1px solid var(--term-line);
-  border-radius: 6px;
-  outline: none;
-  background: var(--term-bg);
-  color: var(--term-ink);
-  font-family: inherit;
-  font-size: 11.5px;
-}
-.term-table-tools input:focus {
-  border-color: var(--term-accent);
-}
 .term-table-scroll {
   max-height: 420px;
   overflow: auto;
@@ -1338,6 +1262,25 @@
 }
 .term-table tbody tr:hover td {
   background: color-mix(in srgb, var(--term-accent) 8%, transparent);
+}
+.term-table tbody tr {
+  cursor: pointer;
+}
+.term-table tbody tr:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.term-table tbody tr[data-selected] td {
+  background: color-mix(in srgb, var(--term-accent) 14%, transparent);
+}
+/* The row's ⋯ menu button. */
+.term-table .term-more {
+  width: 26px;
+  padding: 0 4px 0 0;
+}
+.term-table .term-more .kit-row-more {
+  width: 22px;
+  height: 22px;
 }
 
 /* ── compare ─────────────────────────────────────────────────────────── */
@@ -1483,21 +1426,8 @@
 .term-script {
   width: min(820px, 100%);
 }
-.term-script textarea {
+.term-script .kit-ta textarea {
   min-height: 170px;
-  padding: 10px 12px;
-  border: 1px solid var(--term-line);
-  border-radius: 8px;
-  outline: none;
-  resize: vertical;
-  background: var(--term-bg);
-  color: var(--term-ink);
-  font-family: var(--term-mono);
-  font-size: 12.5px;
-  line-height: 1.55;
-}
-.term-script textarea:focus {
-  border-color: var(--term-accent);
 }
 .term-script-lines {
   max-height: 220px;
@@ -1819,31 +1749,6 @@
   font-size: 12px;
   animation: term-rise 0.12s ease-out;
 }
-.term-tab-menu form {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px 0 8px;
-  border: 1px solid var(--term-line);
-  border-radius: 7px;
-  background: var(--term-bg);
-  color: var(--term-dim);
-}
-.term-tab-menu form:focus-within {
-  border-color: var(--term-accent);
-}
-.term-tab-menu input {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 0;
-  border: 0;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent;
-  color: var(--term-ink);
-  font-family: var(--term-mono);
-  font-size: 12px;
-}
 .term-tab-menu form button {
   display: inline-flex;
   padding: 3px;
@@ -2162,19 +2067,6 @@
   display: flex;
   gap: 6px;
 }
-.term-schedule-form input,
-.term-schedule-form select {
-  min-width: 0;
-  padding: 5px 7px;
-  border: 1px solid var(--term-line);
-  border-radius: 6px;
-  outline: none;
-  background: var(--term-bg);
-  color: var(--term-ink);
-  color-scheme: dark;
-  font-family: var(--term-mono);
-  font-size: 12px;
-}
 .term-schedule-form select {
   flex: 1;
 }
@@ -2184,17 +2076,14 @@
   gap: 8px;
   color: var(--term-dim);
 }
-.term-schedule-form label input {
-  flex: 1;
-}
-.term-schedule-form button {
+.term-schedule-form > button {
   padding: 6px;
   border: 1px solid var(--term-accent);
   border-radius: 6px;
   background: color-mix(in srgb, var(--term-accent) 16%, transparent);
   color: var(--term-ink);
 }
-.term-schedule-form button:disabled {
+.term-schedule-form > button:disabled {
   opacity: 0.4;
   cursor: default;
 }
@@ -2262,11 +2151,6 @@
   padding: 12px 0 0;
   border-right: 1px solid var(--term-line);
   background: rgb(11 15 23 / 45%);
-}
-.term-recordings-body .term-search small {
-  color: var(--term-faint);
-  font-family: var(--term-mono);
-  font-size: 11px;
 }
 .term-recordings-list {
   flex: 1;
@@ -2413,35 +2297,6 @@
   font-size: 12.5px;
   font-weight: 500;
 }
-.term-player-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 240px;
-  margin-left: auto;
-  padding: 4px 9px;
-  border: 1px solid var(--term-line);
-  border-radius: 7px;
-  background: var(--term-bg);
-}
-.term-player-search:focus-within {
-  border-color: var(--term-accent);
-}
-.term-player-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent;
-  color: var(--term-ink);
-  font-family: var(--term-mono);
-  font-size: 12px;
-}
-.term-player-search small {
-  color: var(--term-accent);
-  font-family: var(--term-mono);
-}
 .term-player-stage {
   position: relative;
   box-sizing: border-box;
@@ -2522,35 +2377,6 @@
   color: var(--term-dim);
   font-family: var(--term-mono);
   font-size: 12px;
-}
-.term-player-seek {
-  flex: 1;
-  min-width: 60px;
-  height: 5px;
-  border-radius: 999px;
-  outline: none;
-  appearance: none;
-  background: linear-gradient(
-    to right,
-    var(--term-accent) var(--done, 0%),
-    var(--term-line) var(--done, 0%)
-  );
-  cursor: pointer;
-}
-.term-player-seek::-webkit-slider-thumb {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--term-bg);
-  border-radius: 50%;
-  appearance: none;
-  background: var(--term-accent);
-}
-.term-player-seek::-moz-range-thumb {
-  width: 11px;
-  height: 11px;
-  border: 2px solid var(--term-bg);
-  border-radius: 50%;
-  background: var(--term-accent);
 }
 .term-player-speeds {
   display: inline-flex;
@@ -2796,31 +2622,6 @@ label.term-pop-row {
   color: var(--term-dim);
   font-size: 11px;
   line-height: 1.4;
-}
-.term-pop-field {
-  display: grid;
-  gap: 5px;
-  padding: 8px;
-}
-.term-pop-field > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--term-dim);
-  font-size: 11.5px;
-}
-.term-pop-field input {
-  padding: 6px 9px;
-  border: 1px solid var(--term-line);
-  border-radius: 7px;
-  outline: none;
-  background: var(--term-bg);
-  color: var(--term-ink);
-  font-family: var(--term-mono);
-  font-size: 12px;
-}
-.term-pop-field input:focus {
-  border-color: var(--term-accent);
 }
 .term-pop-foot {
   margin: 4px 0 0;

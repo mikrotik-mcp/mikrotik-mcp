@@ -17,6 +17,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, Pause, Play, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { api, postJson } from "./api";
 import { onRolloutUpdate } from "./hooks";
+import { DetailList, RowDrawer, RowMenu, RowMore } from "./kit";
+import type { Tone as KitTone } from "./kit";
 import { LoadingState } from "./loading-state";
 import {
   MonitorButton,
@@ -66,6 +68,15 @@ const OUTCOME_MEANING: Record<RolloutOutcome, string> = {
   "needs-attention":
     "A revert failed. Restore the flagged routers by hand from the snapshot named below.",
   aborted: "Someone stopped it. Whatever had been applied was reverted.",
+};
+
+const OUTCOME_LED: Record<RolloutOutcome, KitTone> = {
+  completed: "ok",
+  "completed-with-failures": "warn",
+  halted: "warn",
+  reverted: "off",
+  "needs-attention": "bad",
+  aborted: "off",
 };
 
 const STAGE_TONE: Record<string, Tone | undefined> = {
@@ -326,6 +337,7 @@ export function RolloutView({ switcher }: { switcher?: ReactNode }): ReactNode {
     null,
   );
   const [busy, setBusy] = useState(false);
+  const [drawer, setDrawer] = useState<string | null>(null);
 
   const load = useCallback(() => {
     return api<{ rollouts: Rollout[]; error?: string }>("/api/rollout")
@@ -369,12 +381,15 @@ export function RolloutView({ switcher }: { switcher?: ReactNode }): ReactNode {
     });
   }, [selected, loadDetail]);
 
-  const act = async (verb: "hold" | "resume" | "abort"): Promise<void> => {
-    if (!selected) return;
+  const act = async (
+    verb: "hold" | "resume" | "abort",
+    id: string | null = selected,
+  ): Promise<void> => {
+    if (!id) return;
     setBusy(true);
     try {
       const res = await postJson<{ error?: string; outcome?: string; held?: boolean }>(
-        `/api/rollout/${encodeURIComponent(selected)}/${verb}`,
+        `/api/rollout/${encodeURIComponent(id)}/${verb}`,
         {},
       );
       if (res.error) toast.error(res.error);
@@ -387,6 +402,21 @@ export function RolloutView({ switcher }: { switcher?: ReactNode }): ReactNode {
 
   const r = detail?.rollout;
   const name = r ? (r.label ?? r.id) : "";
+  const open = (id: string): void => {
+    setPicked(id);
+    setDrawer(id);
+  };
+  const dIndex = drawer ? rows.findIndex((x) => x.id === drawer) : -1;
+  const dRow = dIndex >= 0 ? rows[dIndex] : undefined;
+  const liveActions = (row: Rollout): { label: string; verb: "hold" | "resume" | "abort" }[] =>
+    row.outcome !== undefined
+      ? []
+      : [
+          row.phase === "held"
+            ? { label: "Resume", verb: "resume" }
+            : { label: "Hold", verb: "hold" },
+          { label: "Abort", verb: "abort" },
+        ];
   const verdict = r ? (
     r.outcome === undefined ? (
       <>
@@ -478,44 +508,163 @@ export function RolloutView({ switcher }: { switcher?: ReactNode }): ReactNode {
               <span>Rollout</span>
               <span>Devices</span>
               <span>Started</span>
+              <span />
             </div>
             {rows.map((row) => (
-              <button
+              <RowMenu
                 key={row.id}
-                type="button"
-                className="monitor-row plan-hist"
-                data-selected={row.id === selected || undefined}
-                data-failed={row.outcome === "needs-attention" || undefined}
-                aria-pressed={row.id === selected}
-                onClick={() => setPicked(row.id)}
+                title={row.label ?? row.id}
+                sub={`${row.outcome ? OUTCOME_LABEL[row.outcome] : "live"} · ${ago(row.ts)}`}
+                onOpen={() => open(row.id)}
+                cells={{
+                  outcome: {
+                    value: row.outcome ? OUTCOME_LABEL[row.outcome] : "live",
+                    copy: false,
+                  },
+                  rollout: { value: row.label ?? row.id },
+                  devices: { value: `${row.devices.length} · ${plural(row.waves.length, "wave")}` },
+                  started: { value: new Date(row.ts).toLocaleString(), kind: "time" },
+                }}
+                copies={[
+                  { label: "Rollout ID", value: row.id },
+                  { label: "Commands", value: row.commands.join("\n"), hint: "" },
+                ]}
+                row={row}
+                actions={liveActions(row).map((a) => ({
+                  label: a.label,
+                  icon:
+                    a.verb === "abort" ? (
+                      <X aria-hidden="true" />
+                    ) : a.verb === "hold" ? (
+                      <Pause aria-hidden="true" />
+                    ) : (
+                      <Play aria-hidden="true" />
+                    ),
+                  danger: a.verb === "abort",
+                  disabled: busy,
+                  onSelect: () => void act(a.verb, row.id),
+                }))}
               >
-                <span className="trunc">
-                  {row.outcome ? (
-                    <StatusBadge
-                      tone={OUTCOME_TONE[row.outcome]}
-                      dot={false}
-                      quiet={OUTCOME_TONE[row.outcome] === "default"}
-                    >
-                      {OUTCOME_LABEL[row.outcome]}
-                    </StatusBadge>
-                  ) : (
-                    <StatusBadge tone="warn">LIVE</StatusBadge>
-                  )}
-                </span>
-                <span className="trunc">
-                  <span className="mono p">{row.label ?? row.id}</span>
-                </span>
-                <span className="trunc">
-                  {row.devices.length} · {plural(row.waves.length, "wave")}
-                </span>
-                <span className="trunc">
-                  <span className="mono text-muted-foreground">{ago(row.ts)}</span>
-                </span>
-              </button>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="monitor-row plan-hist cursor-pointer"
+                  data-selected={row.id === selected || undefined}
+                  data-failed={row.outcome === "needs-attention" || undefined}
+                  aria-pressed={row.id === selected}
+                  onClick={() => open(row.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      open(row.id);
+                    }
+                  }}
+                >
+                  <span data-col="outcome" className="trunc">
+                    {row.outcome ? (
+                      <StatusBadge
+                        tone={OUTCOME_TONE[row.outcome]}
+                        dot={false}
+                        quiet={OUTCOME_TONE[row.outcome] === "default"}
+                      >
+                        {OUTCOME_LABEL[row.outcome]}
+                      </StatusBadge>
+                    ) : (
+                      <StatusBadge tone="warn">LIVE</StatusBadge>
+                    )}
+                  </span>
+                  <span data-col="rollout" className="trunc">
+                    <span className="mono p">{row.label ?? row.id}</span>
+                  </span>
+                  <span data-col="devices" className="trunc">
+                    {row.devices.length} · {plural(row.waves.length, "wave")}
+                  </span>
+                  <span data-col="started" className="trunc">
+                    <span className="mono text-muted-foreground">{ago(row.ts)}</span>
+                  </span>
+                  <RowMore />
+                </div>
+              </RowMenu>
             ))}
           </>
         )}
       </MonitorPanel>
+
+      <RowDrawer
+        open={Boolean(dRow)}
+        onClose={() => setDrawer(null)}
+        label={`Rollout details: ${dRow ? (dRow.label ?? dRow.id) : ""}`}
+        status={
+          dRow
+            ? dRow.outcome
+              ? { tone: OUTCOME_LED[dRow.outcome], label: OUTCOME_LABEL[dRow.outcome] }
+              : { tone: "warn", label: dRow.phase === "held" ? "on hold" : "live" }
+            : undefined
+        }
+        title={dRow ? (dRow.label ?? dRow.id) : ""}
+        meta={dRow ? `${dRow.id} · started ${ago(dRow.ts)}` : undefined}
+        nav={
+          dIndex >= 0
+            ? {
+                index: dIndex,
+                total: rows.length,
+                onPrev: dIndex > 0 ? () => open(rows[dIndex - 1]!.id) : undefined,
+                onNext: dIndex < rows.length - 1 ? () => open(rows[dIndex + 1]!.id) : undefined,
+              }
+            : undefined
+        }
+        rowKey={drawer ?? undefined}
+        storageKey="rollout"
+        actions={
+          dRow &&
+          liveActions(dRow).map((a) => (
+            <MonitorButton
+              key={a.verb}
+              variant={a.verb === "abort" ? "danger" : "ghost"}
+              size="sm"
+              icon={
+                a.verb === "abort" ? (
+                  <X aria-hidden="true" />
+                ) : a.verb === "hold" ? (
+                  <Pause aria-hidden="true" />
+                ) : (
+                  <Play aria-hidden="true" />
+                )
+              }
+              disabled={busy}
+              onClick={() => void act(a.verb, dRow.id)}
+            >
+              {a.label}
+            </MonitorButton>
+          ))
+        }
+      >
+        {dRow && (
+          <DetailList
+            items={[
+              {
+                label: "Outcome",
+                value: dRow.outcome ? OUTCOME_MEANING[dRow.outcome] : "In flight.",
+              },
+              { label: "Rollout", value: dRow.label ?? dRow.id, mono: true },
+              { label: "ID", value: dRow.id, mono: true },
+              { label: "Phase", value: dRow.phase },
+              { label: "Devices", value: String(dRow.devices.length) },
+              { label: "Waves", value: String(dRow.waves.length) },
+              { label: "Started", value: new Date(dRow.ts).toLocaleString(), mono: true },
+              { label: "Updated", value: new Date(dRow.updated).toLocaleString(), mono: true },
+              {
+                label: "Commands",
+                value: (
+                  <pre className="monitor-pre overflow-x-auto whitespace-pre">
+                    {dRow.commands.join("\n")}
+                  </pre>
+                ),
+              },
+            ]}
+          />
+        )}
+      </RowDrawer>
     </section>
   );
 }

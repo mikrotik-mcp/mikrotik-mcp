@@ -14,11 +14,10 @@
  *   • **Export**: copy or download the Markdown in one click.
  */
 import "./explain.css";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
   Archive,
-  ChevronDown,
   ChevronRight,
   Clock,
   Copy,
@@ -30,6 +29,7 @@ import {
 } from "lucide-react";
 import { api, postJson } from "./api";
 import { ExplainTopology } from "./explain-topology";
+import { DetailList, RowDrawer, RowMenu, RowMore, Select } from "./kit";
 import { LoadingState } from "./loading-state";
 import { renderMarkdown } from "./markdown";
 import {
@@ -72,37 +72,6 @@ function Risk({ value, map }: { value: string; map: Record<string, string> }): R
   return (
     <span className="monitor-risk explain-risk" data-risk={map[value] ?? "read"}>
       {value.toUpperCase()}
-    </span>
-  );
-}
-
-/** The boards' `.select` with a leading icon: the look of the router picker, any options. */
-function IconSelect({
-  icon,
-  value,
-  onChange,
-  options,
-  label,
-}: {
-  icon?: ReactNode;
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  label: string;
-}): ReactNode {
-  const current = options.find((o) => o.value === value)?.label ?? "";
-  return (
-    <span className="monitor-router explain-select">
-      {icon}
-      <span className="truncate">{current}</span>
-      <ChevronDown aria-hidden="true" />
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
     </span>
   );
 }
@@ -207,7 +176,47 @@ function ExposurePanel({ payload }: { payload: ExplainPayload }): ReactNode {
 const WAN_GRID = "explain-grid-wan";
 const SUBNET_GRID = "explain-grid-subnet";
 
+/** Click or Enter on a row opens its drawer. */
+function rowProps(
+  open: () => void,
+  selected: boolean,
+): {
+  role: "button";
+  tabIndex: number;
+  "data-selected": true | undefined;
+  onClick: () => void;
+  onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
+} {
+  return {
+    role: "button",
+    tabIndex: 0,
+    "data-selected": selected || undefined,
+    onClick: open,
+    onKeyDown: (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        open();
+      }
+    },
+  };
+}
+
+function navFor(
+  index: number,
+  total: number,
+  go: (i: number) => void,
+): { index: number; total: number; onPrev?: () => void; onNext?: () => void } {
+  return {
+    index,
+    total,
+    onPrev: index > 0 ? () => go(index - 1) : undefined,
+    onNext: index < total - 1 ? () => go(index + 1) : undefined,
+  };
+}
+
 function WansPanel({ n }: { n: DeviceNarrativePayload }): ReactNode {
+  const [open, setOpen] = useState<number | null>(null);
+  const cur = open != null ? n.wans[open] : undefined;
   return (
     <MonitorPanel title="WANs" description="How the router reaches the internet." flush>
       <div className="explain-table">
@@ -216,29 +225,81 @@ function WansPanel({ n }: { n: DeviceNarrativePayload }): ReactNode {
           <span>Addressing</span>
           <span>Gateway</span>
           <span>NAT</span>
+          <span />
         </div>
         {n.wans.length === 0 ? (
           <div className="monitor-row explain-row-empty">No WAN found in this export.</div>
         ) : (
-          n.wans.map((w) => (
-            <div key={`${w.interface}-${w.addressing}`} className={`monitor-row ${WAN_GRID}`}>
-              <span className="trunc">
-                <span className="mono p">{w.interface}</span>
-              </span>
-              <span className="trunc">{wanAddressing(n, w)}</span>
-              <span className="trunc">
-                <span className="mono">{w.gateway ?? "—"}</span>
-              </span>
-              <span className="trunc">{w.nat}</span>
-            </div>
+          n.wans.map((w, i) => (
+            <RowMenu
+              key={`${w.interface}-${w.addressing}`}
+              title={w.interface}
+              sub={wanAddressing(n, w)}
+              onOpen={() => setOpen(i)}
+              cells={{
+                wan: { value: w.interface },
+                addressing: { value: wanAddressing(n, w) },
+                gateway: { value: w.gateway ?? "", kind: "ip" },
+                nat: { value: w.nat },
+              }}
+              copies={[{ label: "Interface", value: w.interface }]}
+              row={w}
+            >
+              <div
+                className={`monitor-row ${WAN_GRID} cursor-pointer`}
+                {...rowProps(() => setOpen(i), open === i)}
+              >
+                <span data-col="wan" className="trunc">
+                  <span className="mono p">{w.interface}</span>
+                </span>
+                <span data-col="addressing" className="trunc">
+                  {wanAddressing(n, w)}
+                </span>
+                <span data-col="gateway" className="trunc">
+                  <span className="mono">{w.gateway ?? "—"}</span>
+                </span>
+                <span data-col="nat" className="trunc">
+                  {w.nat}
+                </span>
+                <RowMore />
+              </div>
+            </RowMenu>
           ))
         )}
       </div>
+      <RowDrawer
+        open={Boolean(cur)}
+        onClose={() => setOpen(null)}
+        label={`WAN details: ${cur?.interface ?? ""}`}
+        title={cur?.interface ?? ""}
+        meta={cur ? wanAddressing(n, cur) : undefined}
+        nav={open != null ? navFor(open, n.wans.length, setOpen) : undefined}
+        rowKey={open ?? undefined}
+        storageKey="explain-wan"
+      >
+        {cur && (
+          <DetailList
+            items={[
+              { label: "WAN", value: cur.interface, mono: true },
+              { label: "Addressing", value: wanAddressing(n, cur) },
+              { label: "Gateway", value: cur.gateway ?? "—", mono: true },
+              { label: "NAT", value: cur.nat },
+              ...(cur.distance != null ? [{ label: "Distance", value: String(cur.distance) }] : []),
+            ]}
+          />
+        )}
+      </RowDrawer>
     </MonitorPanel>
   );
 }
 
+function dhcpText(s: DeviceNarrativePayload["subnets"][number]): string {
+  return s.dhcp ? [s.dhcp.pool ?? s.dhcp.server, ...s.dhcp.ranges.map(shortRange)].join(" · ") : "";
+}
+
 function SubnetsPanel({ n }: { n: DeviceNarrativePayload }): ReactNode {
+  const [open, setOpen] = useState<number | null>(null);
+  const cur = open != null ? n.subnets[open] : undefined;
   return (
     <MonitorPanel title="Subnets" description="Addressing and DHCP per interface." flush>
       <div className="explain-table">
@@ -247,38 +308,81 @@ function SubnetsPanel({ n }: { n: DeviceNarrativePayload }): ReactNode {
           <span>Interface</span>
           <span>DHCP</span>
           <span>Reserved</span>
+          <span />
         </div>
         {n.subnets.length === 0 ? (
           <div className="monitor-row explain-row-empty">No subnets found in this export.</div>
         ) : (
-          n.subnets.map((s) => (
-            <div key={`${s.cidr}-${s.interface}`} className={`monitor-row ${SUBNET_GRID}`}>
-              <span className="trunc">
-                <span className="mono p">{s.cidr}</span>
-              </span>
-              <span className="trunc">
-                <span className="mono">{s.interface}</span>
-                {s.vlanId != null && (
-                  <>
-                    {" "}
-                    <span className="monitor-chip">vlan {s.vlanId}</span>
-                  </>
-                )}
-              </span>
-              <span className="trunc">
-                {s.dhcp ? (
-                  [s.dhcp.pool ?? s.dhcp.server, ...s.dhcp.ranges.map(shortRange)].join(" · ")
-                ) : (
-                  <span className="text-faint">none</span>
-                )}
-              </span>
-              <span className="trunc">
-                <span className="num">{s.reservations.length}</span>
-              </span>
-            </div>
+          n.subnets.map((s, i) => (
+            <RowMenu
+              key={`${s.cidr}-${s.interface}`}
+              title={s.cidr}
+              sub={s.interface}
+              onOpen={() => setOpen(i)}
+              cells={{
+                subnet: { value: s.cidr, kind: "ip" },
+                interface: { value: s.interface },
+                dhcp: { value: dhcpText(s) },
+                reserved: { value: String(s.reservations.length) },
+              }}
+              copies={[
+                { label: "Subnet", value: s.cidr },
+                { label: "Interface", value: s.interface },
+              ]}
+              row={s}
+            >
+              <div
+                className={`monitor-row ${SUBNET_GRID} cursor-pointer`}
+                {...rowProps(() => setOpen(i), open === i)}
+              >
+                <span data-col="subnet" className="trunc">
+                  <span className="mono p">{s.cidr}</span>
+                </span>
+                <span data-col="interface" className="trunc">
+                  <span className="mono">{s.interface}</span>
+                  {s.vlanId != null && (
+                    <>
+                      {" "}
+                      <span className="monitor-chip">vlan {s.vlanId}</span>
+                    </>
+                  )}
+                </span>
+                <span data-col="dhcp" className="trunc">
+                  {s.dhcp ? dhcpText(s) : <span className="text-faint">none</span>}
+                </span>
+                <span data-col="reserved" className="trunc">
+                  <span className="num">{s.reservations.length}</span>
+                </span>
+                <RowMore />
+              </div>
+            </RowMenu>
           ))
         )}
       </div>
+      <RowDrawer
+        open={Boolean(cur)}
+        onClose={() => setOpen(null)}
+        label={`Subnet details: ${cur?.cidr ?? ""}`}
+        title={cur?.cidr ?? ""}
+        meta={
+          cur ? `${cur.interface}${cur.vlanId != null ? ` · vlan ${cur.vlanId}` : ""}` : undefined
+        }
+        nav={open != null ? navFor(open, n.subnets.length, setOpen) : undefined}
+        rowKey={open ?? undefined}
+        storageKey="explain-subnet"
+      >
+        {cur && (
+          <DetailList
+            items={[
+              { label: "Subnet", value: cur.cidr, mono: true },
+              { label: "Interface", value: cur.interface, mono: true },
+              ...(cur.vlanId != null ? [{ label: "VLAN", value: String(cur.vlanId) }] : []),
+              { label: "DHCP", value: cur.dhcp ? dhcpText(cur) : "none" },
+              { label: "Reserved", value: String(cur.reservations.length) },
+            ]}
+          />
+        )}
+      </RowDrawer>
     </MonitorPanel>
   );
 }
@@ -436,15 +540,19 @@ export function ExplainView(): ReactNode {
       flush
     >
       <div className="monitor-panel-body explain-compare-pick">
-        <IconSelect
-          icon={<Archive aria-hidden="true" />}
+        <Select
+          size="sm"
+          className="monitor-kit-select explain-select"
+          leading={<Archive aria-hidden="true" />}
           value={beforeSnapshot}
           onChange={setBeforeSnapshot}
           label="Baseline configuration"
           options={[{ value: "", label: "pick a baseline…" }, ...snapshotOptions]}
         />
         <ChevronRight aria-hidden="true" className="explain-compare-arrow" />
-        <IconSelect
+        <Select
+          size="sm"
+          className="monitor-kit-select explain-select"
           value={afterSnapshot}
           onChange={setAfterSnapshot}
           label="Comparison configuration"
@@ -494,8 +602,10 @@ export function ExplainView(): ReactNode {
               defaultRouter={defaultDevice}
               label="Device to explain"
             />
-            <IconSelect
-              icon={<Clock aria-hidden="true" />}
+            <Select
+              size="sm"
+              className="monitor-kit-select explain-select"
+              leading={<Clock aria-hidden="true" />}
               value={snapshot}
               onChange={setSnapshot}
               label="Configuration source"

@@ -43,6 +43,8 @@ import type { Tone } from "./monitoring-ui";
 import { ThroughputChart } from "./bandwidth-chart";
 import type { ThroughputPoint } from "./bandwidth-chart";
 import { FormCheck, FormField, FormSelect } from "./path-fields";
+import { DetailList, NumberInput, RowDrawer, RowMenu, RowMore, TextInput } from "./kit";
+import type { RowAction, Tone as KitTone } from "./kit";
 import "./monitoring.css";
 import "./bandwidth.css";
 
@@ -79,6 +81,13 @@ const WINDOWS = [
 const RUN_TONE: Record<BandwidthRun["status"], Tone> = {
   ok: "good",
   running: "brand",
+  failed: "bad",
+  interrupted: "warn",
+};
+
+const RUN_LED: Record<BandwidthRun["status"], KitTone> = {
+  ok: "ok",
+  running: "acc",
   failed: "bad",
   interrupted: "warn",
 };
@@ -127,6 +136,15 @@ function stamp(at: number, now: number): string {
   const day = new Date(at).toDateString() === new Date(now).toDateString();
   if (day) return clock(at);
   return `${dayMonth(at)}, ${clock(at)}`;
+}
+/** Lost packets as the runs table shows them. */
+function lossText(r: BandwidthRun): string | number {
+  if (r.status === "ok") return r.lostPackets ?? "Missing";
+  return r.status === "running" ? "—" : "Missing";
+}
+/** The run's message, or what it means when there is none. */
+function resultText(r: BandwidthRun): string {
+  return r.message || (r.status === "running" ? "Collecting" : "Completed");
 }
 const DIRECTION_TEXT: Record<BandwidthJob["direction"], string> = {
   both: "both directions",
@@ -205,6 +223,7 @@ export function BandwidthView(): ReactNode {
   const [selected, setSelected] = useState<string[]>([]);
   const [hours, setHours] = useState("24");
   const [notice, setNotice] = useState("");
+  const [openRun, setOpenRun] = useState<string>();
   const mounted = useRef(false);
   const actionLock = useRef(false);
   useEffect(() => {
@@ -375,6 +394,52 @@ export function BandwidthView(): ReactNode {
       );
     });
   }
+
+  function disable(job: BandwidthJob) {
+    void action(async () => {
+      const { nextRunAt: _next, ...saved } = job;
+      await post("save", {
+        job: { ...saved, enabled: false },
+        acknowledgeImpact: true,
+      });
+      await refresh();
+      setNotice(`Disabled ${job.name}.`);
+    });
+  }
+  /** The saved test's own buttons, for a run's menu. */
+  function jobActions(job: BandwidthJob): RowAction[] {
+    const running = runs.some((r) => r.job.id === job.id && r.status === "running");
+    return [
+      {
+        label: `Run ${job.name}`,
+        icon: <Play aria-hidden="true" />,
+        disabled: busy || running,
+        onSelect: () => setConfirmation({ kind: "run", job }),
+      },
+      {
+        label: `Edit ${job.name}`,
+        icon: <Pencil aria-hidden="true" />,
+        disabled: busy,
+        onSelect: () => edit(job),
+      },
+      ...(job.enabled
+        ? [{ label: `Disable ${job.name}`, disabled: busy, onSelect: () => disable(job) }]
+        : []),
+      {
+        label: `Delete ${job.name}`,
+        icon: <Trash2 aria-hidden="true" />,
+        danger: true,
+        disabled: busy,
+        onSelect: () => setConfirmation({ kind: "delete", job }),
+      },
+    ];
+  }
+
+  // Retained runs, newest first, and the one open in the drawer.
+  const shownRuns = [...filtered].reverse();
+  const runIndex = shownRuns.findIndex((r) => r.id === openRun);
+  const run = runIndex >= 0 ? shownRuns[runIndex] : undefined;
+  const runJobSaved = run ? jobs.find((j) => j.id === run.job.id) : undefined;
 
   const inventoryLines = (
     [
@@ -588,17 +653,7 @@ export function BandwidthView(): ReactNode {
                             variant="ghost"
                             disabled={busy}
                             aria-label={`Disable ${job.name}`}
-                            onClick={() =>
-                              void action(async () => {
-                                const { nextRunAt: _next, ...saved } = job;
-                                await post("save", {
-                                  job: { ...saved, enabled: false },
-                                  acknowledgeImpact: true,
-                                });
-                                await refresh();
-                                setNotice(`Disabled ${job.name}.`);
-                              })
-                            }
+                            onClick={() => disable(job)}
                           >
                             Disable
                           </MonitorButton>
@@ -761,59 +816,191 @@ export function BandwidthView(): ReactNode {
                       </th>
                     ),
                   )}
+                  <th scope="col" />
                 </tr>
               </thead>
               <tbody>
-                {[...filtered].reverse().map((r) => (
-                  <tr
-                    key={r.id}
-                    className="monitor-row"
-                    data-selected={r.status === "running" || undefined}
-                    data-failed={r.status === "failed" || undefined}
-                  >
-                    <th scope="row" className="p truncate font-mono text-[12px]">
-                      {r.job.name}
-                    </th>
-                    <td className="font-mono text-[12px] text-muted-foreground">
-                      {stamp(r.startedAt, observedAt)}
-                    </td>
-                    <td>
-                      <span className="inline-flex min-w-0 items-center gap-2">
-                        <StatusDot tone={RUN_TONE[r.status]} />
-                        <span className="truncate">
-                          {r.status} · {r.trigger}
-                        </span>
-                      </span>
-                    </td>
-                    <td className="tabular-nums">{mbps(bandwidthMeasurement(r, "txBps"))}</td>
-                    <td className="tabular-nums">{mbps(bandwidthMeasurement(r, "rxBps"))}</td>
-                    <td className="tabular-nums">
-                      {r.status === "ok"
-                        ? (r.lostPackets ?? "Missing")
-                        : r.status === "running"
-                          ? "—"
-                          : "Missing"}
-                    </td>
-                    <td
-                      className={
-                        r.status === "failed"
-                          ? "truncate text-destructive"
-                          : r.status === "interrupted"
-                            ? "truncate text-warning"
-                            : r.status === "running"
-                              ? "truncate text-muted-foreground"
-                              : "truncate"
-                      }
-                      title={r.message}
+                {shownRuns.map((r) => {
+                  const job = jobs.find((j) => j.id === r.job.id);
+                  return (
+                    <RowMenu
+                      key={r.id}
+                      title={r.job.name}
+                      sub={`${stamp(r.startedAt, observedAt)} · ${r.status} · ${r.trigger}`}
+                      onOpen={() => setOpenRun(r.id)}
+                      cells={{
+                        test: {
+                          value: r.job.name,
+                          filter: () => setSelected([r.job.id]),
+                          clearFilter: selected.length ? () => setSelected([]) : undefined,
+                        },
+                        started: { value: stamp(r.startedAt, observedAt), kind: "time" },
+                        status: { value: `${r.status} · ${r.trigger}` },
+                        tx: {
+                          value: mbps(bandwidthMeasurement(r, "txBps")),
+                          copy: bandwidthMeasurement(r, "txBps") !== null,
+                        },
+                        rx: {
+                          value: mbps(bandwidthMeasurement(r, "rxBps")),
+                          copy: bandwidthMeasurement(r, "rxBps") !== null,
+                        },
+                        loss: { value: String(lossText(r)), copy: typeof lossText(r) === "number" },
+                        result: { value: resultText(r) },
+                      }}
+                      copies={[
+                        { label: "Run ID", value: r.id },
+                        { label: "Test ID", value: r.job.id },
+                      ]}
+                      row={r}
+                      actions={job ? jobActions(job) : undefined}
                     >
-                      {r.message || (r.status === "running" ? "Collecting" : "Completed")}
-                    </td>
-                  </tr>
-                ))}
+                      <tr
+                        className="monitor-row"
+                        tabIndex={0}
+                        aria-label={`${r.job.name}, ${r.status}, ${stamp(r.startedAt, observedAt)}`}
+                        data-selected={r.status === "running" || openRun === r.id || undefined}
+                        data-failed={r.status === "failed" || undefined}
+                        onClick={() => setOpenRun(r.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            setOpenRun(r.id);
+                          }
+                        }}
+                      >
+                        <th
+                          scope="row"
+                          data-col="test"
+                          className="p truncate font-mono text-[12px]"
+                        >
+                          {r.job.name}
+                        </th>
+                        <td
+                          data-col="started"
+                          className="font-mono text-[12px] text-muted-foreground"
+                        >
+                          {stamp(r.startedAt, observedAt)}
+                        </td>
+                        <td data-col="status">
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <StatusDot tone={RUN_TONE[r.status]} />
+                            <span className="truncate">
+                              {r.status} · {r.trigger}
+                            </span>
+                          </span>
+                        </td>
+                        <td data-col="tx" className="tabular-nums">
+                          {mbps(bandwidthMeasurement(r, "txBps"))}
+                        </td>
+                        <td data-col="rx" className="tabular-nums">
+                          {mbps(bandwidthMeasurement(r, "rxBps"))}
+                        </td>
+                        <td data-col="loss" className="tabular-nums">
+                          {lossText(r)}
+                        </td>
+                        <td
+                          data-col="result"
+                          className={
+                            r.status === "failed"
+                              ? "truncate text-destructive"
+                              : r.status === "interrupted"
+                                ? "truncate text-warning"
+                                : r.status === "running"
+                                  ? "truncate text-muted-foreground"
+                                  : "truncate"
+                          }
+                          title={r.message}
+                        >
+                          {resultText(r)}
+                        </td>
+                        <td>
+                          <RowMore />
+                        </td>
+                      </tr>
+                    </RowMenu>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </MonitorPanel>
+      )}
+
+      {run && (
+        <RowDrawer
+          open
+          onClose={() => setOpenRun(undefined)}
+          label={`Run details: ${run.job.name}`}
+          storageKey="bandwidth-runs"
+          rowKey={run.id}
+          nav={{
+            index: runIndex,
+            total: shownRuns.length,
+            onPrev: runIndex > 0 ? () => setOpenRun(shownRuns[runIndex - 1]!.id) : undefined,
+            onNext:
+              runIndex < shownRuns.length - 1
+                ? () => setOpenRun(shownRuns[runIndex + 1]!.id)
+                : undefined,
+          }}
+          status={{ tone: RUN_LED[run.status], label: run.status }}
+          title={run.job.name}
+          meta={`${stamp(run.startedAt, observedAt)} · ${run.trigger}`}
+          chips={
+            <span className="monitor-chip">
+              {run.job.protocol.toUpperCase()} · {run.job.direction} · {run.job.durationSeconds} s
+            </span>
+          }
+          actions={
+            runJobSaved && (
+              <MonitorButton
+                size="sm"
+                icon={<Pencil aria-hidden="true" />}
+                disabled={busy}
+                onClick={() => edit(runJobSaved)}
+              >
+                Edit
+              </MonitorButton>
+            )
+          }
+          primary={
+            runJobSaved && (
+              <MonitorButton
+                size="sm"
+                variant="primary"
+                icon={<Play aria-hidden="true" />}
+                disabled={
+                  busy || runs.some((r) => r.job.id === runJobSaved.id && r.status === "running")
+                }
+                onClick={() => setConfirmation({ kind: "run", job: runJobSaved })}
+              >
+                Run
+              </MonitorButton>
+            )
+          }
+        >
+          <DetailList
+            items={[
+              { label: "Started", value: stamp(run.startedAt, observedAt), mono: true },
+              {
+                label: "Finished",
+                value: run.finishedAt ? stamp(run.finishedAt, observedAt) : "—",
+                mono: true,
+              },
+              { label: "Status", value: `${run.status} · ${run.trigger}` },
+              { label: "Source TX", value: `${mbps(bandwidthMeasurement(run, "txBps"))} Mbps` },
+              { label: "Source RX", value: `${mbps(bandwidthMeasurement(run, "rxBps"))} Mbps` },
+              { label: "Loss", value: lossText(run) },
+              { label: "Result", value: resultText(run) },
+              { label: "Path", value: `${run.job.source} → ${run.job.destination}`, mono: true },
+              {
+                label: "Addresses",
+                value: `${run.job.sourceInterface} · ${run.job.sourceAddress} → ${run.job.destinationAddress}`,
+                mono: true,
+              },
+              { label: "Run ID", value: run.id, mono: true },
+            ]}
+          />
+        </RowDrawer>
       )}
 
       <MonitorDialog
@@ -860,11 +1047,12 @@ export function BandwidthView(): ReactNode {
               </MonitorNote>
             )}
             <FormField label="Name">
-              <input
+              <TextInput
                 required
-                className="monitor-input font-mono text-[12px]"
+                mono
+                label="Name"
                 value={draft.name}
-                onChange={(e) => patch({ name: e.target.value })}
+                onChange={(name) => patch({ name })}
               />
             </FormField>
             <div className="bw-pair">
@@ -1026,18 +1214,17 @@ export function BandwidthView(): ReactNode {
               ).map((field) => (
                 <FormField
                   key={field.key}
+                  group
                   label={field.label}
                   hint={"hint" in field ? field.hint : undefined}
                 >
-                  <input
-                    type="number"
-                    required
+                  <NumberInput
+                    label={field.label}
                     step={1}
                     min={field.min}
                     max={field.max}
-                    className="monitor-input font-mono text-[12px]"
                     value={draft[field.key]}
-                    onChange={(e) => patch({ [field.key]: e.target.valueAsNumber })}
+                    onChange={(n) => patch({ [field.key]: n ?? field.min })}
                   />
                 </FormField>
               ))}
@@ -1064,10 +1251,12 @@ export function BandwidthView(): ReactNode {
                   this section is closed.
                 </p>
                 <FormField label="Test ID (automatic)">
-                  <input
-                    value={draft.id}
+                  <TextInput
+                    mono
                     readOnly
-                    className="monitor-input font-mono text-[12px] text-muted-foreground"
+                    label="Test ID (automatic)"
+                    value={draft.id}
+                    onChange={() => {}}
                   />
                 </FormField>
                 <div className="bw-pair">
@@ -1094,16 +1283,14 @@ export function BandwidthView(): ReactNode {
                       },
                     ] as const
                   ).map((field) => (
-                    <FormField key={field.key} label={field.label}>
-                      <input
-                        type="number"
-                        required
+                    <FormField key={field.key} group label={field.label}>
+                      <NumberInput
+                        label={field.label}
                         step={field.key === "reportIntervalSeconds" ? 0.001 : 1}
                         min={field.min}
                         max={field.max}
-                        className="monitor-input font-mono text-[12px]"
                         value={draft[field.key]}
-                        onChange={(e) => patch({ [field.key]: e.target.valueAsNumber })}
+                        onChange={(n) => patch({ [field.key]: n ?? field.min })}
                       />
                     </FormField>
                   ))}

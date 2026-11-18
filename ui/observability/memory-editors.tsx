@@ -4,13 +4,8 @@ import { Check, Key, Link2, Lock, Plus, Server } from "lucide-react";
 import { memoryKinds } from "../../src/memory/knowledge";
 import type { MemoryFact, MemoryScope } from "../../src/memory/knowledge";
 import { api, postJson } from "./api";
-import {
-  MonitorButton,
-  MonitorDialog,
-  MonitorNote,
-  MonitorSelect,
-  MonitorSwitch,
-} from "./monitoring-ui";
+import { MonitorButton, MonitorDialog, MonitorNote, MonitorSwitch } from "./monitoring-ui";
+import { Field, NumberInput, Select, TextArea, TextInput } from "./kit";
 
 export async function saveMemory<T>(path: string, body: unknown): Promise<T> {
   const result = await postJson<T & { error?: string }>(path, body);
@@ -31,10 +26,9 @@ export function MemorySelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="monitor-fl memory-fl-select">
-      <span className="monitor-label">{label}</span>
-      <MonitorSelect label={label} value={value} onChange={onChange} options={options} />
-    </div>
+    <Field label={label}>
+      <Select label={label} value={value} onChange={onChange} options={options} />
+    </Field>
   );
 }
 
@@ -80,7 +74,9 @@ export function MemoryEditor({
   const [key, setKey] = useState(fact?.key ?? "");
   const [kind, setKind] = useState<MemoryFact["kind"]>(fact?.kind ?? "fact");
   const [source, setSource] = useState(fact?.source ?? "dashboard");
-  const [confidence, setConfidence] = useState(String(Math.round((fact?.confidence ?? 0.5) * 100)));
+  const [confidence, setConfidence] = useState<number | null>(
+    Math.round((fact?.confidence ?? 0.5) * 100),
+  );
   const [expiry, setExpiry] = useState(fact?.expiresAt ? "keep" : "never");
   const [pinned, setPinned] = useState(fact?.pinned ?? false);
   const [busy, setBusy] = useState(false);
@@ -131,7 +127,7 @@ export function MemoryEditor({
       content,
       kind,
       source,
-      confidence: Number(confidence) / 100,
+      confidence: (confidence ?? 0) / 100,
       pinned,
       expiresAt,
     };
@@ -183,21 +179,19 @@ export function MemoryEditor({
     >
       <form id="memory-editor-form" className="monitor-dialog-body" onSubmit={submit}>
         <fieldset disabled={busy} className="flex min-w-0 flex-col gap-4">
-          <label className="monitor-fl">
-            <span className="monitor-label">Entity</span>
-            <span className="monitor-input">
-              <Server aria-hidden="true" className="size-[15px] flex-none text-muted-foreground" />
-              <input
-                className="memory-bare font-mono text-xs"
-                required
-                maxLength={200}
-                value={entity}
-                disabled={Boolean(fact)}
-                onChange={(e) => setEntity(e.target.value)}
-                placeholder="Exact existing entity name"
-              />
-            </span>
-          </label>
+          <Field label="Entity">
+            <TextInput
+              label="Entity"
+              mono
+              icon={<Server aria-hidden="true" />}
+              required
+              maxLength={200}
+              value={entity}
+              disabled={Boolean(fact)}
+              onChange={setEntity}
+              placeholder="Exact existing entity name"
+            />
+          </Field>
           <MonitorNote
             tone={scopeError ? "bad" : undefined}
             icon={<Lock aria-hidden="true" />}
@@ -235,68 +229,68 @@ export function MemoryEditor({
               ))}
             </div>
           </div>
-          <label className="monitor-fl">
-            <span className="monitor-label">What should the MCP remember?</span>
-            <textarea
-              className="monitor-input memory-textarea"
+          <Field
+            label="What should the MCP remember?"
+            help="One reusable idea. Never include passwords or private keys."
+          >
+            <TextArea
+              label="What should the MCP remember?"
               dir="auto"
               required
               maxLength={8000}
+              showCount={false}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={setContent}
               rows={4}
               placeholder="Example: Before changing the WAN route, preserve the management path."
             />
-            <span className="monitor-hint">
-              One reusable idea. Never include passwords or private keys.
-            </span>
-          </label>
+          </Field>
           <div className="grid gap-3.5 sm:grid-cols-2">
-            <label className="monitor-fl">
-              <span className="monitor-label">Source / evidence</span>
-              <input
-                className="monitor-input font-mono text-xs"
+            <Field
+              label="Source / evidence"
+              help="Operator confirmation, snapshot ID or diagnostic reference."
+            >
+              <TextInput
+                label="Source / evidence"
+                mono
                 required
                 maxLength={500}
                 dir="auto"
                 value={source}
-                onChange={(e) => setSource(e.target.value)}
+                onChange={setSource}
                 placeholder="snap-2026-03-14"
               />
-              <span className="monitor-hint">
-                Operator confirmation, snapshot ID or diagnostic reference.
-              </span>
-            </label>
-            <label className="monitor-fl">
-              <span className="monitor-label">Stable key · optional</span>
-              <span className="monitor-input">
-                <Key aria-hidden="true" className="size-[15px] flex-none text-muted-foreground" />
-                <input
-                  className="memory-bare font-mono text-xs"
-                  maxLength={120}
-                  value={key}
-                  disabled={Boolean(fact)}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder="wan.provider"
-                />
-              </span>
-              <span className="monitor-hint">
-                Same entity + key updates one fact and keeps its history.
-              </span>
-            </label>
-            <label className="monitor-fl">
-              <span className="monitor-label">Confidence · 0–100%</span>
-              <input
-                className="monitor-input"
-                type="number"
+            </Field>
+            <Field
+              label="Stable key"
+              optional="optional"
+              help="Same entity + key updates one fact and keeps its history."
+            >
+              <TextInput
+                label="Stable key"
+                mono
+                icon={<Key aria-hidden="true" />}
+                maxLength={120}
+                value={key}
+                disabled={Boolean(fact)}
+                onChange={setKey}
+                placeholder="wan.provider"
+              />
+            </Field>
+            <Field
+              label="Confidence"
+              optional="0–100%"
+              help="Your assessment, not an automatic score."
+            >
+              <NumberInput
+                label="Confidence"
                 min={0}
                 max={100}
-                required
+                unit="%"
                 value={confidence}
-                onChange={(e) => setConfidence(e.target.value)}
+                onChange={setConfidence}
               />
-              <span className="monitor-hint">Your assessment, not an automatic score.</span>
-            </label>
+            </Field>
             <MemorySelect
               label="Expires after"
               value={expiry}
@@ -407,29 +401,28 @@ export function EntityEditor({
         onSubmit={submit}
         className="monitor-dialog-body flex flex-col gap-3.5"
       >
-        <label className="monitor-fl">
-          <span className="monitor-label">{from ? "Target entity" : "Name"}</span>
-          <input
-            className="monitor-input font-mono text-xs"
+        <Field label={from ? "Target entity" : "Name"}>
+          <TextInput
+            label={from ? "Target entity" : "Name"}
+            mono
             autoFocus
             required
             maxLength={200}
             value={name}
             disabled={busy}
-            onChange={(e) => setName(e.target.value)}
+            onChange={setName}
           />
-        </label>
-        <label className="monitor-fl">
-          <span className="monitor-label">{from ? "Relation" : "Type"}</span>
-          <input
-            className="monitor-input"
+        </Field>
+        <Field label={from ? "Relation" : "Type"}>
+          <TextInput
+            label={from ? "Relation" : "Type"}
             required
             maxLength={200}
             value={type}
             disabled={busy}
-            onChange={(e) => setType(e.target.value)}
+            onChange={setType}
           />
-        </label>
+        </Field>
         {error && (
           <MonitorNote tone="bad" role="alert">
             {error}

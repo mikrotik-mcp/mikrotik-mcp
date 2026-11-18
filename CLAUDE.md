@@ -162,6 +162,27 @@ hard-code hex in TSX (`tests/observability-ui.spec.ts` fails on it). Check both
 themes and a 375px width in the browser preview before you call a UI change
 done.
 
+Controls come from the **Signal UI kit** in `ui/observability/kit` (boards: the
+"Signal UI kit" row of the canvas): `Select`, `Combobox`, `MultiSelect`,
+`RouterPicker`, `Field`, `TextInput`, `SearchInput`, `NumberInput`,
+`SecretInput`, `TextArea`, `Checkbox`, `Switch`, `RadioCards`, `Segmented`,
+`Slider`, `DateTimePicker`, `DateRangePicker`, `Menu`, `Tooltip`. Never use a raw
+`<select>`, `<datalist>`, or checkbox, radio, range, number or date input in a
+page, and no raw text `<input>`/`<textarea>` without a `kit-exempt:` comment;
+the guard test in `tests/observability-ui.spec.ts` fails on them. Tests drive
+kit controls with the helpers in `tests/_stubs/kit.ts`. A control the kit lacks
+is designed on a kit board first, then added to the kit.
+
+Data views follow the "Signal UI kit: charts, tables and motion" boards. Every
+chart, graph and diagram shows the kit tooltip card on hover, focus and tap
+(`LineHover`, `tipProps`, `TipTarget`, or `ChartTooltip` for recharts); a pure
+illustration says so with a `chart-exempt:` comment. Every table wraps its rows
+in `RowMenu` (cells marked `data-col`, a `RowMore` button at the end) and opens
+a row's details in `RowDrawer`; menus offer only what the page can already do.
+Motion uses the tokens and helpers in `kit/motion.ts` (`DUR`, `EASE`, `enter`,
+`arrive`, `tick`); the page entrance is global in `main.tsx`. The guard test
+checks tables and charts too.
+
 ### Design first, then code that matches the board exactly
 
 1. **Design before code.** Any new page or redesign starts as artboards in a

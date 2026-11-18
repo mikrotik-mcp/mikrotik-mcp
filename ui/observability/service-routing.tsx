@@ -29,6 +29,7 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { Field, TextInput } from "./kit";
 import { CheckRow, FieldSelect, hhmm } from "./service-routing-ui";
 import { cn } from "@/lib/utils";
 import "./service-routing.css";
@@ -675,15 +676,9 @@ export function ServiceRoutingView() {
       >
         <div className="monitor-dialog-body grid gap-4">
           <div className="grid grid-cols-[minmax(0,1fr)_160px] gap-3 max-sm:grid-cols-1">
-            <label className="monitor-fl">
-              <span className="monitor-label">Policy name</span>
-              <input
-                className="monitor-input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="stream-via-vpn"
-              />
-            </label>
+            <Field label="Policy name" className="monitor-fl">
+              <TextInput value={name} onChange={setName} placeholder="stream-via-vpn" />
+            </Field>
             <div className="monitor-fl">
               <span className="monitor-label">IP family</span>
               <FieldSelect
@@ -723,11 +718,11 @@ export function ServiceRoutingView() {
             <label className="monitor-label" htmlFor="sr-client-subnets">
               Client subnets
             </label>
-            <input
+            <TextInput
               id="sr-client-subnets"
-              className="monitor-input font-mono"
+              mono
               value={sources}
-              onChange={(e) => setSources(e.target.value)}
+              onChange={setSources}
               placeholder={family === "ipv4" ? "192.168.88.0/24, 10.10.0.0/24" : "fd00:10::/64"}
             />
             {sources.trim() !== "" && (

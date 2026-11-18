@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { animate, createScope, svg } from "animejs";
 import {
@@ -11,6 +15,8 @@ import {
   isFreshSample,
 } from "./operations-island-model";
 import { ms, num } from "./format";
+import { EASE, hideTip, showTip, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import type { DevicesPayload, LiveMode, SSHPoolPayload, Stats, ToolEvent } from "./types";
 import type { ViewId } from "./navigation";
 import { REDUCE_MOTION } from "./dashboard-shell";
@@ -137,6 +143,42 @@ export function OperationsIsland(props: OperationsIslandProps): ReactNode {
       ? `${num(Math.round(props.stats.callsPerMin))} calls/min`
       : "— calls/min";
   const sparkKey = series.map((bucket) => bucket.ok + bucket.error).join(",");
+  const clock = (t: number) =>
+    new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const bucketTitle = (t: number) =>
+    bucketMs > 0 ? `${clock(t)} – ${clock(t + bucketMs)}` : clock(t);
+  const perMinuteAt = (index: number) => {
+    const bucket = series[index]!;
+    return bucketMs > 0 ? ((bucket.ok + bucket.error) * 60_000) / bucketMs : null;
+  };
+  /** One bucket: its calls, failures, and the change from the bucket before. */
+  const bucketCard = (index: number): TipCard => {
+    const bucket = series[index]!;
+    const calls = bucket.ok + bucket.error;
+    const before = index > 0 ? series[index - 1]!.ok + series[index - 1]!.error : null;
+    const delta = before === null ? null : calls - before;
+    const rate = perMinuteAt(index);
+    return {
+      title: bucketTitle(bucket.t),
+      led: bucket.error > 0 ? "bad" : "ok",
+      rows: [
+        { label: "Ok", value: num(bucket.ok), color: "var(--sig)" },
+        { label: "Failed", value: num(bucket.error), color: "var(--destructive)" },
+        ...(rate !== null
+          ? [{ label: "Calls/min", value: num(Math.round(rate * 10) / 10) }]
+          : [{ label: "Calls", value: num(calls) }]),
+      ],
+      ...(delta !== null
+        ? {
+            foot: {
+              label: "vs the bucket before",
+              value: `${delta >= 0 ? "+" : ""}${num(delta)}`,
+              tone: delta >= 0 ? ("up" as const) : ("down" as const),
+            },
+          }
+        : {}),
+    };
+  };
 
   // The capsule dot breathes and its sparkline draws in when data changes.
   useEffect(() => {
@@ -154,7 +196,7 @@ export function OperationsIsland(props: OperationsIslandProps): ReactNode {
           animate(svg.createDrawable(line), {
             draw: ["0 0", "0 1"],
             duration: 600,
-            ease: "outQuart",
+            ease: EASE.enter,
           });
       },
     );
@@ -167,7 +209,7 @@ export function OperationsIsland(props: OperationsIslandProps): ReactNode {
     const scope = createScope({ root: rootRef, mediaQueries: { reduceMotion: REDUCE_MOTION } }).add(
       (self) => {
         if (self?.matches.reduceMotion) return;
-        animate(".pop", { opacity: [0, 1], scale: [0.96, 1], duration: 180, ease: "outQuart" });
+        animate(".pop", { opacity: [0, 1], scale: [0.96, 1], duration: 180, ease: EASE.enter });
       },
     );
     return () => scope.revert();
@@ -207,8 +249,39 @@ export function OperationsIsland(props: OperationsIslandProps): ReactNode {
         return `${(index * step).toFixed(1)},${(h - 1 - value * (h - 2)).toFixed(1)}`;
       })
       .join(" ");
+    // Pointer-only: the sparkline sits inside the capsule button, so it takes no focus.
+    const onMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+      const box = event.currentTarget.getBoundingClientRect();
+      const index = Math.min(
+        series.length - 1,
+        Math.max(0, Math.round(((event.clientX - box.left) / box.width) * (series.length - 1))),
+      );
+      const bucket = series[index]!;
+      const rate = perMinuteAt(index);
+      const value = (bucket.ok + bucket.error) / ceiling;
+      showTip(
+        { x: box.left + index * step * (box.width / w), y: box.top + (h - 1 - value * (h - 2)) },
+        {
+          title: bucketTitle(bucket.t),
+          rows: [
+            {
+              label: "Calls/min",
+              value: rate !== null ? num(Math.round(rate * 10) / 10) : "—",
+              color: "var(--sig)",
+            },
+            { label: "Failed", value: num(bucket.error), color: "var(--destructive)" },
+          ],
+        },
+      );
+    };
     return (
-      <svg className="sp" viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <svg
+        className="sp"
+        viewBox={`0 0 ${w} ${h}`}
+        aria-hidden="true"
+        onPointerMove={onMove}
+        onPointerLeave={() => hideTip()}
+      >
         <polyline points={points} />
       </svg>
     );
@@ -341,12 +414,14 @@ export function OperationsIsland(props: OperationsIslandProps): ReactNode {
                       height="72"
                       role="img"
                       aria-label={`Calls per bucket${minutes != null ? `, last ${minutes} minutes` : ""}`}
+                      className="kit-tips"
                     >
                       {series.map((bucket, index) => {
                         const height = Math.round(((bucket.ok + bucket.error) / ceiling) * 64);
                         const x = index * 19;
                         return (
-                          <g key={bucket.t}>
+                          <g key={bucket.t} {...tipProps(() => bucketCard(index))}>
+                            <rect x={x} y={0} width="13" height="72" fill="transparent" />
                             <rect
                               className="isl-bar"
                               x={x}

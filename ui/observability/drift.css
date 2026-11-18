@@ -2,11 +2,13 @@
    Shared parts live in monitoring.css. */
 
 .drift .mono,
+.drift-in-drawer .mono,
 .drift-dialog .mono {
   font-family: var(--font-mt);
   font-size: 12px;
 }
-.drift .trunc {
+.drift .trunc,
+.drift-in-drawer .trunc {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -84,10 +86,22 @@ button.drift-card.glass[data-selected] {
 }
 
 .drift-attr {
-  grid-template-columns: 110px 70px 70px 150px minmax(0, 1fr);
+  grid-template-columns: 110px 70px 70px 150px minmax(0, 1fr) 26px;
 }
 .drift-base {
-  grid-template-columns: minmax(0, 1.3fr) 110px 110px 70px minmax(0, 1fr) 80px 100px;
+  grid-template-columns: minmax(0, 1.3fr) 110px 110px 70px minmax(0, 1fr) 80px 100px 26px;
+}
+/* In the drawer the attribution table drops action and section, as on a narrow screen. */
+.kit-drawer .drift-attr {
+  grid-template-columns: 90px 60px minmax(0, 1fr) 26px;
+  padding-inline: 0;
+}
+.kit-drawer .drift-attr > :nth-child(3),
+.kit-drawer .drift-attr > :nth-child(4) {
+  display: none;
+}
+.kit-drawer .drift-diff-block {
+  padding-inline: 0;
 }
 
 /* The unified diff, capped like the board. */
@@ -102,29 +116,15 @@ button.drift-card.glass[data-selected] {
   padding: 16px 18px;
 }
 
-/* The snapshot select in the dialog carries an icon on the left. */
-.drift-select {
-  display: flex;
-  width: 100%;
-}
-.drift-select select {
-  width: 100%;
-  padding-left: 36px;
-}
-.drift-select .drift-select-icon {
-  right: auto;
-  left: 12px;
-}
-
 @media (max-width: 900px) {
   .drift-base {
-    grid-template-columns: minmax(0, 1fr) 110px 90px;
+    grid-template-columns: minmax(0, 1fr) 110px 90px 26px;
   }
-  .drift-base > :nth-child(n + 4) {
+  .drift-base > :nth-child(n + 4):not(:last-child) {
     display: none;
   }
   .drift-attr {
-    grid-template-columns: 90px 60px minmax(0, 1fr);
+    grid-template-columns: 90px 60px minmax(0, 1fr) 26px;
   }
   .drift-attr > :nth-child(3),
   .drift-attr > :nth-child(4) {
@@ -137,9 +137,9 @@ button.drift-card.glass[data-selected] {
     grid-template-columns: 120px minmax(0, 1fr) 56px;
   }
   .drift-base {
-    grid-template-columns: minmax(0, 1fr) 96px;
+    grid-template-columns: minmax(0, 1fr) 96px 26px;
   }
-  .drift-base > :nth-child(n + 3) {
+  .drift-base > :nth-child(n + 3):not(:last-child) {
     display: none;
   }
 }

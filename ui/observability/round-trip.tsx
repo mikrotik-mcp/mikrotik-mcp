@@ -35,6 +35,7 @@ import {
 import type { Tone } from "./monitoring-ui";
 import { FormField, FormSelect } from "./path-fields";
 import { PATH_LABEL, RoundTripLanes } from "./round-trip-lanes";
+import { DetailList, NumberInput, RowDrawer, RowMenu, RowMore, TextInput } from "./kit";
 import "./monitoring.css";
 import "./round-trip.css";
 
@@ -153,6 +154,11 @@ export function RoundTripView(): ReactNode {
   const [result, setResult] = useState<RoundTripResult | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // The open provenance row belongs to one result; a new result closes it.
+  const [openAt, setOpenAt] = useState<{ of: RoundTripResult; i: number } | null>(null);
+  const openRow = openAt && openAt.of === result ? openAt.i : null;
+  const setOpenRow = (i: number | null): void =>
+    setOpenAt(i == null || !result ? null : { of: result, i });
   const alive = useRef(true),
     loadId = useRef(0);
   const update = (patch: Partial<TripForm>): void => {
@@ -415,6 +421,10 @@ export function RoundTripView(): ReactNode {
     captured.length < 2
       ? "One saved configuration."
       : `${gap} seconds apart, ${gap <= form.maxSkew ? "inside" : "over"} the ${form.maxSkew}-second limit.`;
+  const opened = openRow != null ? result?.provenance[openRow] : undefined;
+  const openSnapshots = (): void => {
+    window.location.hash = "snapshots";
+  };
 
   return (
     <div className="rt-page">
@@ -462,21 +472,23 @@ export function RoundTripView(): ReactNode {
           >
             <div className="rt-conn" data-icmp={form.protocol === "icmp" || undefined}>
               <FormField label="Client IPv4">
-                <input
+                <TextInput
                   required
-                  className="monitor-input font-mono text-[12px]"
+                  mono
+                  label="Client IPv4"
                   placeholder="192.168.88.20"
                   value={form.src}
-                  onChange={(e) => update({ src: e.target.value })}
+                  onChange={(src) => update({ src })}
                 />
               </FormField>
               <FormField label="Destination IPv4">
-                <input
+                <TextInput
                   required
-                  className="monitor-input font-mono text-[12px]"
+                  mono
+                  label="Destination IPv4"
                   placeholder="10.20.0.10"
                   value={form.dst}
-                  onChange={(e) => update({ dst: e.target.value })}
+                  onChange={(dst) => update({ dst })}
                 />
               </FormField>
               <FormField label="Connection type" group>
@@ -493,26 +505,24 @@ export function RoundTripView(): ReactNode {
               </FormField>
               {form.protocol !== "icmp" && (
                 <>
-                  <FormField label="Destination port">
-                    <input
-                      required
-                      type="number"
+                  <FormField label="Destination port" group>
+                    <NumberInput
+                      label="Destination port"
+                      allowEmpty
                       min={1}
                       max={65535}
-                      className="monitor-input font-mono text-[12px]"
-                      value={form.dstPort}
-                      onChange={(e) => update({ dstPort: e.target.value })}
+                      value={form.dstPort === "" ? null : Number(form.dstPort)}
+                      onChange={(n) => update({ dstPort: n == null ? "" : String(n) })}
                     />
                   </FormField>
-                  <FormField label="Client source port">
-                    <input
-                      required
-                      type="number"
+                  <FormField label="Client source port" group>
+                    <NumberInput
+                      label="Client source port"
+                      allowEmpty
                       min={1}
                       max={65535}
-                      className="monitor-input font-mono text-[12px]"
-                      value={form.srcPort}
-                      onChange={(e) => update({ srcPort: e.target.value })}
+                      value={form.srcPort === "" ? null : Number(form.srcPort)}
+                      onChange={(n) => update({ srcPort: n == null ? "" : String(n) })}
                     />
                   </FormField>
                 </>
@@ -577,24 +587,22 @@ export function RoundTripView(): ReactNode {
                   </span>
                 </span>
               </div>
-              <FormField label="Maximum snapshot age · seconds">
-                <input
-                  className="monitor-input font-mono text-[12px]"
-                  type="number"
+              <FormField label="Maximum snapshot age · seconds" group>
+                <NumberInput
+                  label="Maximum snapshot age · seconds"
                   min={1}
                   max={86400}
                   value={form.maxAge}
-                  onChange={(e) => update({ maxAge: Number(e.target.value) })}
+                  onChange={(n) => update({ maxAge: n ?? 1 })}
                 />
               </FormField>
-              <FormField label="Maximum capture gap · seconds">
-                <input
-                  className="monitor-input font-mono text-[12px]"
-                  type="number"
+              <FormField label="Maximum capture gap · seconds" group>
+                <NumberInput
+                  label="Maximum capture gap · seconds"
                   min={0}
                   max={3600}
                   value={form.maxSkew}
-                  onChange={(e) => update({ maxSkew: Number(e.target.value) })}
+                  onChange={(n) => update({ maxSkew: n ?? 0 })}
                 />
               </FormField>
               <MonitorButton
@@ -669,30 +677,113 @@ export function RoundTripView(): ReactNode {
                         {h}
                       </th>
                     ))}
+                    <th scope="col" aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
-                  {result.provenance.map((p) => (
-                    <tr key={p.device} className="monitor-row">
-                      <th scope="row" className="p truncate font-mono text-[12px]">
-                        {p.device}
-                      </th>
-                      <td className="truncate font-mono text-[12px] text-muted-foreground">
-                        {when(p.capturedAt, true)}
-                      </td>
-                      <td className="truncate font-mono text-[12px]">{p.snapshotId}</td>
-                      <td
-                        className="truncate font-mono text-[12px] text-muted-foreground"
-                        title={p.sha}
+                  {result.provenance.map((p, i) => (
+                    <RowMenu
+                      key={p.device}
+                      title={p.device}
+                      sub={`Captured ${when(p.capturedAt, true)}`}
+                      onOpen={() => setOpenRow(i)}
+                      opens={[{ label: "Open Snapshots", onSelect: openSnapshots }]}
+                      cells={{
+                        device: { value: p.device, kind: "router" },
+                        captured: { value: when(p.capturedAt, true), kind: "time" },
+                        snapshot: { value: p.snapshotId, kind: "id" },
+                        sha: { value: p.sha, kind: "id" },
+                      }}
+                      copies={[
+                        { label: "Snapshot ID", value: p.snapshotId },
+                        { label: "SHA", value: p.sha },
+                      ]}
+                      row={p}
+                    >
+                      <tr
+                        className="monitor-row"
+                        tabIndex={0}
+                        aria-label={`${p.device}, captured ${when(p.capturedAt, true)}`}
+                        data-selected={openRow === i || undefined}
+                        onClick={() => setOpenRow(i)}
+                        onKeyDown={(ev) => {
+                          if (ev.key === "Enter") {
+                            ev.preventDefault();
+                            setOpenRow(i);
+                          }
+                        }}
                       >
-                        {p.sha.length > 10 ? `${p.sha.slice(0, 4)}…${p.sha.slice(-4)}` : p.sha}
-                      </td>
-                    </tr>
+                        <th
+                          scope="row"
+                          data-col="device"
+                          className="p truncate font-mono text-[12px]"
+                        >
+                          {p.device}
+                        </th>
+                        <td
+                          data-col="captured"
+                          className="truncate font-mono text-[12px] text-muted-foreground"
+                        >
+                          {when(p.capturedAt, true)}
+                        </td>
+                        <td data-col="snapshot" className="truncate font-mono text-[12px]">
+                          {p.snapshotId}
+                        </td>
+                        <td
+                          data-col="sha"
+                          className="truncate font-mono text-[12px] text-muted-foreground"
+                        >
+                          {p.sha.length > 10 ? `${p.sha.slice(0, 4)}…${p.sha.slice(-4)}` : p.sha}
+                        </td>
+                        <td>
+                          <RowMore />
+                        </td>
+                      </tr>
+                    </RowMenu>
                   ))}
                 </tbody>
               </table>
             </div>
           </MonitorPanel>
+          {opened && (
+            <RowDrawer
+              open
+              onClose={() => setOpenRow(null)}
+              label={`Saved configuration: ${opened.device}`}
+              storageKey="round-trip"
+              rowKey={opened.device}
+              nav={{
+                index: openRow!,
+                total: result.provenance.length,
+                onPrev: openRow! > 0 ? () => setOpenRow(openRow! - 1) : undefined,
+                onNext:
+                  openRow! < result.provenance.length - 1
+                    ? () => setOpenRow(openRow! + 1)
+                    : undefined,
+              }}
+              title={opened.device}
+              meta={`Captured ${when(opened.capturedAt, true)}`}
+              primary={
+                <MonitorButton size="sm" onClick={openSnapshots}>
+                  Open Snapshots
+                </MonitorButton>
+              }
+            >
+              <DetailList
+                items={[
+                  { label: "Router", value: opened.device, mono: true },
+                  { label: "Captured", value: when(opened.capturedAt, true), mono: true },
+                  { label: "Snapshot", value: opened.snapshotId, mono: true },
+                  {
+                    label: "SHA",
+                    value: <span className="break-all">{opened.sha}</span>,
+                    mono: true,
+                  },
+                ]}
+              />
+              <MonitorNote>{provenanceNote}</MonitorNote>
+            </RowDrawer>
+          )}
         </div>
       )}
     </div>

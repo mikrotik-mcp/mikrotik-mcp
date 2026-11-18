@@ -14,6 +14,8 @@ import type { ReactNode, RefObject } from "react";
 import { animate, createScope, stagger, svg } from "animejs";
 import type { Scope } from "animejs";
 import { Server } from "lucide-react";
+import { DUR, EASE, tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import { TONE_COLOR } from "./signal-charts";
 import type { ChartTone } from "./signal-charts";
 
@@ -40,8 +42,8 @@ function useMotion(
 function playKillChain(): void {
   animate(svg.createDrawable("[data-draw]"), {
     draw: ["0 0", "0 1"],
-    duration: 700,
-    ease: "outQuart",
+    duration: DUR.draw,
+    ease: EASE.enter,
   });
   animate("[data-node]", {
     opacity: [0, 1],
@@ -58,7 +60,7 @@ function playBars(): void {
     scaleY: [0, 1],
     duration: 520,
     delay: stagger(40),
-    ease: "outQuart",
+    ease: EASE.enter,
   });
 }
 
@@ -68,8 +70,8 @@ function playSweep(el: Element): void {
     const [len, circ] = (arc.getAttribute("stroke-dasharray") ?? "0 0").split(" ");
     animate(arc, {
       strokeDasharray: [`0 ${circ}`, `${len} ${circ}`],
-      duration: 700,
-      ease: "outQuart",
+      duration: DUR.draw,
+      ease: EASE.enter,
     });
   }
 }
@@ -100,6 +102,7 @@ export function KillChain({
   return (
     <svg
       ref={root}
+      className="kit-tips"
       viewBox="0 0 420 300"
       width="100%"
       height="300"
@@ -136,7 +139,20 @@ export function KillChain({
         const r = 10 + Math.min(s.count, 8) * 3.2;
         const color = STAGE_COLOR[i] ?? STAGE_COLOR[3];
         return (
-          <g key={s.name} data-node style={{ transformBox: "fill-box", transformOrigin: "center" }}>
+          <g
+            key={s.name}
+            data-node
+            style={{ transformBox: "fill-box", transformOrigin: "center" }}
+            {...tipProps((): TipCard => ({
+              title: s.name,
+              sub: caption.toLowerCase(),
+              rows: [{ label: "Incidents", value: s.count, color }],
+              foot:
+                i > 0
+                  ? { label: `Reached ${stages[i - 1]!.name}`, value: stages[i - 1]!.count }
+                  : undefined,
+            }))}
+          >
             {s.count > 0 && <circle cx={xs[i]} cy="150" r={r + 10} fill={color} opacity=".10" />}
             <circle
               cx={xs[i]}
@@ -202,6 +218,7 @@ export function PressureBars({ days }: { days: PressureDay[] }): ReactNode {
   days.forEach((d, i) => {
     const x = r1(i * (bw + gap));
     let y = h;
+    const segs: ReactNode[] = [];
     const parts: [number, string, string][] = [
       [d.other, "var(--brand)", "medium / low"],
       [d.high, "var(--warning)", "high"],
@@ -211,7 +228,7 @@ export function PressureBars({ days }: { days: PressureDay[] }): ReactNode {
       if (!v) continue;
       const bh = (v / max) * (h - 14);
       y -= bh;
-      bars.push(
+      segs.push(
         <rect
           key={`${d.label}-${name}`}
           data-bar
@@ -223,15 +240,41 @@ export function PressureBars({ days }: { days: PressureDay[] }): ReactNode {
           fill={fill}
           opacity=".9"
           style={{ transformBox: "fill-box", transformOrigin: "50% 100%" }}
-        >
-          <title>{`${d.label}: ${v} ${name}`}</title>
-        </rect>,
+        />,
       );
     }
+    const total = d.confirmed + d.high + d.other;
+    const prev = i > 0 ? days[i - 1] : undefined;
+    const prevTotal = prev ? prev.confirmed + prev.high + prev.other : 0;
+    bars.push(
+      <g
+        key={d.label}
+        {...tipProps((): TipCard => ({
+          title: d.label,
+          sub: `${total} incident${total === 1 ? "" : "s"}`,
+          rows: [
+            { label: "Confirmed", value: d.confirmed, color: "var(--destructive)" },
+            { label: "High", value: d.high, color: "var(--warning)" },
+            { label: "Medium / low", value: d.other, color: "var(--brand)" },
+          ],
+          foot: prev
+            ? {
+                label: `vs ${prev.label}`,
+                value: `${total - prevTotal >= 0 ? "+" : ""}${total - prevTotal}`,
+                tone: total > prevTotal ? "up" : total < prevTotal ? "down" : undefined,
+              }
+            : undefined,
+        }))}
+      >
+        <rect x={x} y={0} width={r1(bw)} height={h} fill="transparent" />
+        {segs}
+      </g>,
+    );
   });
   return (
     <div ref={root}>
       <svg
+        className="kit-tips"
         viewBox={`0 0 ${w} ${h}`}
         width="100%"
         height={h}
@@ -288,6 +331,10 @@ export function ScoreRing({
       height={size}
       role="img"
       aria-label={`Risk score ${Math.round(pct)}`}
+      {...tipProps((): TipCard => ({
+        title: "Risk score",
+        rows: [{ label: "Score", value: `${Math.round(pct)} of 100`, color: TONE_COLOR[tone] }],
+      }))}
     >
       <circle cx={c} cy={c} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
       <circle

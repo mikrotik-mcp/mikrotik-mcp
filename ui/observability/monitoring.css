@@ -792,7 +792,7 @@
     color: var(--muted-foreground);
     pointer-events: none;
   }
-  .monitor-field {
+  .monitor-field:not(.kit-input) {
     display: flex;
     height: 36px;
     min-width: 0;
@@ -806,17 +806,17 @@
     font-size: 13px;
     line-height: 21px;
   }
-  .monitor-field:focus-within {
+  .monitor-field:not(.kit-input):focus-within {
     box-shadow:
       inset 0 0 0 1px var(--sig),
       0 0 0 3px var(--sig-soft);
   }
-  .monitor-field svg {
+  .monitor-field:not(.kit-input) svg {
     width: 16px;
     height: 16px;
     flex: none;
   }
-  .monitor-field input {
+  .monitor-field:not(.kit-input) input {
     min-width: 0;
     flex: 1;
     border: 0;
@@ -825,7 +825,7 @@
     font: inherit;
     outline: none;
   }
-  .monitor-field input::placeholder {
+  .monitor-field:not(.kit-input) input::placeholder {
     color: var(--muted-foreground);
   }
 

@@ -8,7 +8,6 @@ import "./recovery-lab.css";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  ChevronDown,
   ChevronRight,
   ExternalLink,
   FlaskConical,
@@ -32,6 +31,17 @@ import {
   useLineDraw,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import {
+  Checkbox,
+  DetailList,
+  Field,
+  RowDrawer,
+  RowMenu,
+  RowMore,
+  Select,
+  TextInput,
+  tipProps,
+} from "./kit";
 import { useOperations } from "./operations-ui";
 import type { RecoveryRun, RunnerCapabilities } from "../../src/recovery-lab/model";
 
@@ -91,7 +101,11 @@ function stepOf(r: RecoveryRun | undefined): number {
 }
 
 /** The runner's checks as a path: one node per check, ticked or crossed. */
-function CheckPath({ checks }: { checks: { name: string; state: string }[] }): ReactNode {
+function CheckPath({
+  checks,
+}: {
+  checks: { name: string; state: string; detail?: string }[];
+}): ReactNode {
   const root = useRef<HTMLDivElement>(null);
   useLineDraw(root, checks.length);
   const w = 780;
@@ -99,7 +113,14 @@ function CheckPath({ checks }: { checks: { name: string; state: string }[] }): R
   const x = (i: number): number => (n === 1 ? w / 2 : 70 + (i * (w - 140)) / (n - 1));
   return (
     <div ref={root}>
-      <svg viewBox={`0 0 ${w} 76`} width="100%" height="76" role="img" aria-label="Runner checks">
+      <svg
+        className="kit-tips"
+        viewBox={`0 0 ${w} 76`}
+        width="100%"
+        height="76"
+        role="img"
+        aria-label="Runner checks"
+      >
         {n > 1 && (
           <path
             data-draw
@@ -117,7 +138,18 @@ function CheckPath({ checks }: { checks: { name: string; state: string }[] }): R
           const color = ok ? "var(--sig)" : bad ? "var(--destructive)" : "var(--warning)";
           const soft = ok ? "var(--sig-soft)" : bad ? "var(--bad-soft)" : "var(--warn-soft)";
           return (
-            <g key={c.name}>
+            <g
+              key={c.name}
+              {...tipProps(() => ({
+                title: c.name.replaceAll("-", " "),
+                sub: `check ${i + 1} of ${n}`,
+                led: ok ? "ok" : bad ? "bad" : "warn",
+                rows: [
+                  { label: "State", value: c.state, color },
+                  ...(c.detail ? [{ label: "Detail", value: c.detail }] : []),
+                ],
+              }))}
+            >
               <circle cx={cx} cy="30" r="14" fill={soft} stroke={color} strokeWidth="1.5" />
               {ok ? (
                 <path d={`M${cx - 5},30 l4,4 l7,-8`} fill="none" stroke={color} strokeWidth="2" />
@@ -142,34 +174,6 @@ function CheckPath({ checks }: { checks: { name: string; state: string }[] }): R
   );
 }
 
-function Select({
-  value,
-  onChange,
-  options,
-  label,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-  label: string;
-  placeholder?: string;
-}): ReactNode {
-  return (
-    <span className="monitor-select flex w-full [&>select]:w-full">
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-        {placeholder !== undefined && <option value="">{placeholder}</option>}
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown aria-hidden="true" />
-    </span>
-  );
-}
-
 export function RecoveryLabView(): ReactNode {
   const w = useOperations<{
     runs: RecoveryRun[];
@@ -187,8 +191,13 @@ export function RecoveryLabView(): ReactNode {
   const [confirm, setConfirm] = useState<"start" | "destroy">();
   const [consent, setConsent] = useState(false);
   const [showCommands, setShowCommands] = useState(false);
+  // The open coverage row, kept per run so another run starts closed.
+  const [scopeSel, setScopeSel] = useState<{ run: string; i: number }>();
   const run = w.data?.runs.find((r) => r.id === id) ?? w.data?.runs[0];
   const { refresh, busy } = w;
+  const scope = scopeSel && scopeSel.run === run?.id ? scopeSel.i : undefined;
+  const setScope = (i: number | undefined): void =>
+    setScopeSel(i === undefined || !run ? undefined : { run: run.id, i });
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -221,6 +230,7 @@ export function RecoveryLabView(): ReactNode {
     return <LoadingState label="Loading workspace evidence" layout="cards" />;
 
   const pageError = w.error || error || w.data?.configurationError || "";
+  const scopeRow = scope === undefined ? undefined : run?.coverage[scope];
   const cleanupDone = run?.state === "destroyed" || run?.result?.cleanup === "destroyed";
 
   return (
@@ -450,26 +460,99 @@ export function RecoveryLabView(): ReactNode {
                 <span>Scope</span>
                 <span>Included</span>
                 <span>Untested</span>
+                <span />
               </div>
               {run.coverage.length === 0 && (
                 <div className="monitor-row lab-cov">
                   <span className="text-muted-foreground">No scopes recorded.</span>
                 </div>
               )}
-              {run.coverage.map((c) => (
-                <div key={c.scope} className="monitor-row lab-cov">
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="mono p">{c.scope}</span>
-                    {c.reason && <span className="monitor-hint">{c.reason}</span>}
-                  </span>
-                  <span className="num">{c.included}</span>
-                  {c.excluded ? (
-                    <span className="num text-warning">{c.excluded}</span>
-                  ) : (
-                    <span className="text-faint">—</span>
-                  )}
-                </div>
+              {run.coverage.map((c, i) => (
+                <RowMenu
+                  key={c.scope}
+                  title={c.scope}
+                  sub={`${c.included} included · ${c.excluded} untested`}
+                  onOpen={() => setScope(i)}
+                  cells={{
+                    scope: { value: c.scope },
+                    included: { value: String(c.included) },
+                    untested: { value: String(c.excluded) },
+                  }}
+                  copies={[{ label: "Scope", value: c.scope }]}
+                  row={c}
+                >
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${c.scope}, ${c.included} included, ${c.excluded} untested`}
+                    className="monitor-row lab-cov cursor-pointer"
+                    data-selected={scopeRow?.scope === c.scope || undefined}
+                    onClick={() => setScope(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setScope(i);
+                      }
+                    }}
+                  >
+                    <span data-col="scope" className="flex min-w-0 flex-col gap-0.5">
+                      <span className="mono p">{c.scope}</span>
+                      {c.reason && <span className="monitor-hint">{c.reason}</span>}
+                    </span>
+                    <span data-col="included" className="num">
+                      {c.included}
+                    </span>
+                    {c.excluded ? (
+                      <span data-col="untested" className="num text-warning">
+                        {c.excluded}
+                      </span>
+                    ) : (
+                      <span data-col="untested" className="text-faint">
+                        —
+                      </span>
+                    )}
+                    <RowMore />
+                  </div>
+                </RowMenu>
               ))}
+              <RowDrawer
+                open={Boolean(scopeRow)}
+                onClose={() => setScope(undefined)}
+                label={`Coverage details: ${scopeRow?.scope ?? ""}`}
+                status={
+                  scopeRow
+                    ? scopeRow.excluded
+                      ? { tone: "warn", label: `${scopeRow.excluded} untested` }
+                      : { tone: "ok", label: "all included" }
+                    : undefined
+                }
+                title={scopeRow?.scope ?? ""}
+                meta={`${run.device} · RouterOS ${run.version}`}
+                nav={
+                  scope !== undefined && scopeRow
+                    ? {
+                        index: scope,
+                        total: run.coverage.length,
+                        onPrev: scope > 0 ? () => setScope(scope - 1) : undefined,
+                        onNext:
+                          scope < run.coverage.length - 1 ? () => setScope(scope + 1) : undefined,
+                      }
+                    : undefined
+                }
+                rowKey={scopeRow?.scope}
+                storageKey="recovery-lab-coverage"
+              >
+                {scopeRow && (
+                  <DetailList
+                    items={[
+                      { label: "Scope", value: scopeRow.scope, mono: true },
+                      { label: "Included", value: scopeRow.included },
+                      { label: "Untested", value: scopeRow.excluded || "—" },
+                      ...(scopeRow.reason ? [{ label: "Reason", value: scopeRow.reason }] : []),
+                    ]}
+                  />
+                )}
+              </RowDrawer>
             </MonitorPanel>
 
             <MonitorPanel
@@ -548,8 +631,14 @@ export function RecoveryLabView(): ReactNode {
             <LoadingState label="Loading snapshots and runner capabilities" layout="form" />
           ) : (
             <>
-              <div className="monitor-fl">
-                <span className="monitor-label">Source snapshot</span>
+              <Field
+                label="Source snapshot"
+                help={
+                  inventory?.snapshots.length
+                    ? undefined
+                    : "No snapshots yet. Capture one from the Snapshots page first."
+                }
+              >
                 <Select
                   label="Source snapshot"
                   value={snapshot}
@@ -560,14 +649,8 @@ export function RecoveryLabView(): ReactNode {
                     label: `${s.label || s.id} · ${s.version ?? "version unknown"}`,
                   }))}
                 />
-                {!inventory?.snapshots.length && (
-                  <span className="monitor-hint">
-                    No snapshots yet. Capture one from the Snapshots page first.
-                  </span>
-                )}
-              </div>
-              <div className="monitor-fl">
-                <span className="monitor-label">Rehearsal type</span>
+              </Field>
+              <Field label="Rehearsal type">
                 <Select
                   label="Rehearsal type"
                   value={mode}
@@ -577,9 +660,8 @@ export function RecoveryLabView(): ReactNode {
                     { value: "upgrade", label: "Restore source, then upgrade to target" },
                   ]}
                 />
-              </div>
-              <div className="monitor-fl">
-                <span className="monitor-label">Target RouterOS version</span>
+              </Field>
+              <Field label="Target RouterOS version">
                 {inventory?.runner ? (
                   <Select
                     label="Target RouterOS version"
@@ -592,15 +674,15 @@ export function RecoveryLabView(): ReactNode {
                     }))}
                   />
                 ) : (
-                  <input
-                    className="monitor-input"
-                    aria-label="Target RouterOS version"
+                  <TextInput
+                    label="Target RouterOS version"
+                    mono
                     placeholder="7.20.1"
                     value={version}
-                    onChange={(e) => setVersion(e.target.value)}
+                    onChange={setVersion}
                   />
                 )}
-              </div>
+              </Field>
               <MonitorNote icon={<ShieldCheck aria-hidden="true" />}>
                 The preview leaves out unsupported fields and scopes instead of claiming a full
                 restore. Running it needs a separately configured isolated runner.
@@ -667,18 +749,16 @@ export function RecoveryLabView(): ReactNode {
               <pre className="monitor-pre lab-transfer">{run.commands.join("\n")}</pre>
             </>
           )}
-          <label className="monitor-check">
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-            />
-            <span>
-              {confirm === "start"
+          <Checkbox
+            tone="warn"
+            checked={consent}
+            onCheckedChange={setConsent}
+            label={
+              confirm === "start"
                 ? "I reviewed the commands and approve this transfer to the configured isolated runner."
-                : "I confirm cleanup of this rehearsal's disposable lab."}
-            </span>
-          </label>
+                : "I confirm cleanup of this rehearsal's disposable lab."
+            }
+          />
         </div>
       </MonitorDialog>
     </section>

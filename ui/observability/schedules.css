@@ -109,7 +109,7 @@
 
 /* ── Jobs ──────────────────────────────────────────────────────────────────── */
 .sched-job-grid {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto 26px;
 }
 .sched-job-main {
   display: flex;
@@ -176,25 +176,18 @@
 
 /* ── Regressions and run history ───────────────────────────────────────────── */
 .sched-reg-grid {
-  grid-template-columns: 82px minmax(0, 1fr) 64px;
+  grid-template-columns: 82px minmax(0, 1fr) 64px 26px;
 }
-button.sched-reg-grid {
-  border-right: 0;
-  border-bottom: 0;
-  border-left: 0;
-  background: transparent;
-  font-family: inherit;
-}
+/* A regression's detail, in its row drawer. */
 .sched-reg-detail {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 0 18px 12px 112px;
   color: var(--text-secondary);
   font-size: 13px;
 }
 .sched-run-grid {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 92px 52px 96px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 92px 52px 96px 26px;
 }
 
 .sched-tools {
@@ -235,34 +228,7 @@ button.sched-reg-grid {
   gap: 10px;
   padding: 10px 12px;
 }
-.sched-bare {
-  min-width: 0;
-  height: 100%;
-  flex: 1;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--foreground);
-  font: inherit;
-  outline: none;
-}
-.sched-bare.sched-mono {
-  font-family: var(--font-mt);
-  font-size: 12px;
-}
-.sched-bare::placeholder {
-  color: var(--muted-foreground);
-}
-.sched-retain {
-  max-width: 4ch;
-  flex: none;
-}
-.sched-field-icon {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  color: var(--muted-foreground);
-}
+
 .sched-picks,
 .sched-notify {
   display: flex;
@@ -287,15 +253,13 @@ button.sched-reg-grid {
 }
 @media (max-width: 639px) {
   .sched-run-grid {
-    grid-template-columns: minmax(0, 1fr) 52px 88px;
+    grid-template-columns: minmax(0, 1fr) 52px 88px 26px;
   }
   .sched-run-grid > :nth-child(2),
   .sched-run-grid > :nth-child(3) {
     display: none;
   }
-  .sched-reg-detail {
-    padding-left: 18px;
-  }
+
   .sched-form-grid[data-cols] {
     grid-template-columns: minmax(0, 1fr);
   }

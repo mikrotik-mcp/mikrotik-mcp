@@ -90,7 +90,7 @@
 }
 
 .lab-cov {
-  grid-template-columns: minmax(0, 1fr) 90px 90px;
+  grid-template-columns: minmax(0, 1fr) 90px 90px 26px;
 }
 
 /* "Inspect exact transmitted commands": a panel header that opens. */

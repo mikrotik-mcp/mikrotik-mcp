@@ -5,6 +5,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Button } from "@/components/ui/button";
 import { DigitSwap } from "@/components/beui/digit-swap";
 import { activityModel, sameActivitySeries } from "./activity-model";
+import { DetailList, DUR, RowDrawer, RowMenu, RowMore } from "./kit";
 import type { Bucket } from "./types";
 import "./activity-chart.css";
 
@@ -12,6 +13,8 @@ const config = {
   ok: { label: "Successful", color: "var(--activity-ok)" },
   error: { label: "Errors", color: "var(--activity-error)" },
 };
+/** The x axis is a numeric time scale, not categories. */
+const TIME_AXIS = "number" as const;
 const timeLabel = (t: number): string =>
   new Date(t).toLocaleTimeString(undefined, {
     hour: "2-digit",
@@ -40,6 +43,7 @@ export const ActivityChart = memo(
     const model = useMemo(() => activityModel(series), [series]);
     const reduceMotion = useSyncExternalStore(subscribeMotion, reducedMotion, () => true);
     const [paused, setPaused] = useState(false);
+    const [openRow, setOpenRow] = useState<number | null>(null);
     const animate = !reduceMotion && !paused;
     const gradientId = `activity-fill-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
     const descriptionId = useId();
@@ -134,7 +138,7 @@ export const ActivityChart = memo(
                 <XAxis
                   dataKey="t"
                   ticks={model.rows.length === 1 ? [first.t] : undefined}
-                  type="number"
+                  type={TIME_AXIS}
                   domain={
                     first.t === last.t ? [first.t - 30000, first.t + 30000] : ["dataMin", "dataMax"]
                   }
@@ -193,7 +197,7 @@ export const ActivityChart = memo(
                     strokeWidth: 3,
                   }}
                   isAnimationActive={animate}
-                  animationDuration={700}
+                  animationDuration={DUR.draw}
                   animationEasing="ease-in-out"
                 />
                 <Bar
@@ -204,7 +208,7 @@ export const ActivityChart = memo(
                   radius={[3, 3, 0, 0]}
                   minPointSize={0}
                   isAnimationActive={animate}
-                  animationDuration={700}
+                  animationDuration={DUR.draw}
                   animationEasing="ease-in-out"
                 />
               </ComposedChart>
@@ -243,20 +247,79 @@ export const ActivityChart = memo(
                     <th scope="col">Interval start</th>
                     <th scope="col">Successful</th>
                     <th scope="col">Errors</th>
+                    <th scope="col">
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {model.rows.map((row, index) => (
-                    <tr key={`${row.t}-${index}`}>
-                      <th scope="row">{fullTime(row.t)}</th>
-                      <td>{row.ok.toLocaleString()}</td>
-                      <td>{row.error.toLocaleString()}</td>
-                    </tr>
+                    <RowMenu
+                      key={`${row.t}-${index}`}
+                      title={fullTime(row.t)}
+                      sub={`${row.ok.toLocaleString()} successful · ${row.error.toLocaleString()} errors`}
+                      onOpen={() => setOpenRow(index)}
+                      cells={{
+                        start: { value: fullTime(row.t), kind: "time" },
+                        ok: { value: row.ok.toLocaleString() },
+                        error: { value: row.error.toLocaleString() },
+                      }}
+                      row={row}
+                    >
+                      <tr
+                        tabIndex={0}
+                        data-selected={openRow === index || undefined}
+                        onClick={() => setOpenRow(index)}
+                        onKeyDown={(e) => {
+                          if (
+                            e.target === e.currentTarget &&
+                            (e.key === "Enter" || e.key === " ")
+                          ) {
+                            e.preventDefault();
+                            setOpenRow(index);
+                          }
+                        }}
+                      >
+                        <th scope="row" data-col="start">
+                          {fullTime(row.t)}
+                        </th>
+                        <td data-col="ok">{row.ok.toLocaleString()}</td>
+                        <td data-col="error">{row.error.toLocaleString()}</td>
+                        <td>
+                          <RowMore />
+                        </td>
+                      </tr>
+                    </RowMenu>
                   ))}
                 </tbody>
               </table>
             </div>
           </details>
+        )}
+        {openRow != null && model.rows[openRow] && (
+          <RowDrawer
+            open
+            onClose={() => setOpenRow(null)}
+            label={`Interval details: ${fullTime(model.rows[openRow].t)}`}
+            storageKey="activity-chart"
+            rowKey={model.rows[openRow].t}
+            title={fullTime(model.rows[openRow].t)}
+            meta="Interval start"
+            nav={{
+              index: openRow,
+              total: model.rows.length,
+              onPrev: openRow > 0 ? () => setOpenRow(openRow - 1) : undefined,
+              onNext: openRow < model.rows.length - 1 ? () => setOpenRow(openRow + 1) : undefined,
+            }}
+          >
+            <DetailList
+              items={[
+                { label: "Interval start", value: fullTime(model.rows[openRow].t), mono: true },
+                { label: "Successful", value: model.rows[openRow].ok.toLocaleString() },
+                { label: "Errors", value: model.rows[openRow].error.toLocaleString() },
+              ]}
+            />
+          </RowDrawer>
         )}
       </figure>
     );

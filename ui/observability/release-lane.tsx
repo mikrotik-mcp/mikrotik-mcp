@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 import { animate, createScope, stagger } from "animejs";
 import type { Scope } from "animejs";
+import { tipProps } from "./kit";
+import type { TipCard } from "./kit";
 import type { ReleaseItem } from "./releases";
 
 const W = 1100;
@@ -32,6 +34,45 @@ export function VersionLane({
   const x = (i: number): number => Math.round(80 + i * step);
   const cur = shown.findIndex((r) => r.relation === "current");
   const key = shown.map((r) => r.version).join(",");
+  const card = (r: ReleaseItem, i: number): TipCard => {
+    const published = new Date(r.publishedAt);
+    const prev = shown[i - 1];
+    const days =
+      prev && !Number.isNaN(published.getTime())
+        ? Math.round((published.getTime() - new Date(prev.publishedAt).getTime()) / 86_400_000)
+        : null;
+    return {
+      title: `v${r.version}`,
+      sub: r.name && !r.name.includes(r.version) ? r.name : undefined,
+      led: r.relation === "current" ? "ok" : r.relation === "older" ? "off" : "acc",
+      rows: [
+        {
+          label: "Published",
+          value: Number.isNaN(published.getTime())
+            ? "Unknown"
+            : published.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              }),
+        },
+        { label: "Channel", value: r.prerelease ? "Pre-release" : "Stable" },
+        {
+          label: "Relation",
+          value:
+            r.relation === "current"
+              ? "Running"
+              : r.relation === "older"
+                ? "Older than running"
+                : "Newer than running",
+        },
+        ...(r.version === latest ? [{ label: "Latest", value: "Yes" }] : []),
+      ],
+      ...(days !== null && prev
+        ? { foot: { label: `After ${laneLabel(prev)}`, value: `${days} days` } }
+        : {}),
+    };
+  };
   useEffect(() => {
     if (!root.current) return;
     scope.current = createScope({
@@ -57,7 +98,7 @@ export function VersionLane({
       height="70"
       role="img"
       aria-label="Version lane"
-      className="release-lane"
+      className="release-lane kit-tips"
     >
       <line x1="20" y1="30" x2={W - 20} y2="30" stroke="var(--line-2)" strokeWidth="2" />
       {cur >= 0 && cur < shown.length - 1 && (
@@ -82,7 +123,12 @@ export function VersionLane({
               ? "var(--muted-foreground)"
               : "var(--sig)";
         return (
-          <g key={r.version} data-node style={{ transformOrigin: `${x(i)}px 30px` }}>
+          <g
+            key={r.version}
+            data-node
+            style={{ transformOrigin: `${x(i)}px 30px` }}
+            {...tipProps(() => card(r, i))}
+          >
             <circle
               cx={x(i)}
               cy="30"

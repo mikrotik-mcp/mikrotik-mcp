@@ -82,12 +82,12 @@ test("saving and previewing never publish until explicit command consent", async
     expect(postJson).not.toHaveBeenCalled();
     await act(async () => button("Save revision").click());
     expect(host.textContent).toContain("Example rule");
-    await act(async () => host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
     await act(async () => button("Preview publication").click());
     expect(button("Publish revision").disabled).toBe(true);
     expect(vi.mocked(postJson).mock.calls.some(([path]) => path.includes("/apply"))).toBe(false);
     await act(async () =>
-      [...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].at(-1)!.click(),
+      [...host.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')].at(-1)!.click(),
     );
     expect(button("Publish revision").disabled).toBe(false);
     await act(async () => button("Publish revision").click());

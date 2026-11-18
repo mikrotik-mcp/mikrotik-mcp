@@ -24,12 +24,18 @@ import type {
   RefObject,
 } from "react";
 import { animate, createScope, stagger, svg } from "animejs";
-import { ChevronDown, HelpCircle, Info, Search, Server, X } from "lucide-react";
+import { HelpCircle, Info, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import type { Scope } from "animejs";
 import { cn } from "@/lib/utils";
 import type { Risk } from "./types";
 import { Sparkline } from "./signal-charts";
+import {
+  RouterPicker as KitRouterPicker,
+  SearchInput as KitSearchInput,
+  Select as KitSelect,
+  Switch as KitSwitch,
+} from "./kit";
 
 export { Donut, Ring, Sparkline } from "./signal-charts";
 export type { ChartTone, DonutPart } from "./signal-charts";
@@ -91,33 +97,36 @@ export function MonitorButton({
   );
 }
 
-/** The boards' `.select`: a native select, 32px, with a chevron. */
+/** A select from the kit (Kit-Select), with the old MonitorSelect props. */
 export function MonitorSelect({
   value,
   onChange,
   options,
   label,
+  size,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; description?: string; disabled?: boolean }[];
   label: string;
+  size?: "md" | "sm";
+  disabled?: boolean;
 }): ReactNode {
   return (
-    <span className="monitor-select">
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown aria-hidden="true" />
-    </span>
+    <KitSelect
+      value={value}
+      onChange={onChange}
+      options={options}
+      label={label}
+      size={size ?? "sm"}
+      disabled={disabled}
+      className="monitor-kit-select"
+    />
   );
 }
 
-/** The boards' `.field` search box: 36px, search icon, plain input. */
+/** The boards' `.field` search box, drawn by the kit (Kit-Inputs, Search). */
 export function MonitorSearch({
   value,
   onChange,
@@ -132,16 +141,13 @@ export function MonitorSearch({
   className?: string;
 }): ReactNode {
   return (
-    <label className={cn("monitor-field", className)}>
-      <Search aria-hidden="true" />
-      <input
-        type="search"
-        aria-label={label}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </label>
+    <KitSearchInput
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      label={label}
+      wrapClassName={cn("monitor-field", className)}
+    />
   );
 }
 
@@ -366,6 +372,8 @@ export function Metric({
   tone = "default",
   primary = false,
   spark,
+  sparkLabels,
+  sparkFormat,
 }: {
   label: string;
   value: ReactNode;
@@ -375,6 +383,9 @@ export function Metric({
   primary?: boolean;
   /** Recent values for the sparkline, oldest first. Two or more. */
   spark?: number[];
+  /** What each sparkline point is, for its tooltip: "09:00", "Nov 12". */
+  sparkLabels?: readonly string[];
+  sparkFormat?: (v: number) => string;
 }): ReactNode {
   const showSpark = spark != null && spark.length > 1;
   return (
@@ -387,7 +398,15 @@ export function Metric({
       <p className="monitor-metric-label">{label}</p>
       <p className="monitor-metric-value">{value}</p>
       {hint != null && <p className="monitor-metric-hint">{hint}</p>}
-      {showSpark && <Sparkline values={spark} tone={tone === "bad" ? "bad" : "good"} />}
+      {showSpark && (
+        <Sparkline
+          values={spark}
+          tone={tone === "bad" ? "bad" : "good"}
+          name={label}
+          labels={sparkLabels}
+          format={sparkFormat}
+        />
+      )}
     </div>
   );
 }
@@ -658,11 +677,7 @@ export function useLineDraw(root: RefObject<HTMLElement | null>, key: unknown): 
   }, [root, key]);
 }
 
-/**
- * The router picker from the Network boards: server icon, the router name, a
- * muted "(default)" on the default router, and a chevron. A native select sits
- * on top, invisible, so keyboard and screen readers get a real select.
- */
+/** The kit's router picker (Kit-Combobox 03), with the old props. */
 export function RouterPicker({
   value,
   onChange,
@@ -679,29 +694,15 @@ export function RouterPicker({
   label?: string;
 }): ReactNode {
   return (
-    <span className="monitor-router" data-disabled={disabled || undefined}>
-      <Server aria-hidden="true" />
-      <span className="truncate">
-        {value || "Choose a router"}
-        {value !== "" && value === defaultRouter && (
-          <span className="text-muted-foreground"> (default)</span>
-        )}
-      </span>
-      <ChevronDown aria-hidden="true" />
-      <select
-        aria-label={label}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {value === "" && <option value="">Choose a router</option>}
-        {routers.map((r) => (
-          <option key={r} value={r}>
-            {r === defaultRouter ? `${r} (default)` : r}
-          </option>
-        ))}
-      </select>
-    </span>
+    <KitRouterPicker
+      value={value}
+      onChange={onChange}
+      routers={routers}
+      defaultRouter={defaultRouter}
+      disabled={disabled}
+      label={label}
+      className="monitor-kit-router"
+    />
   );
 }
 
@@ -744,27 +745,27 @@ export function MonitorTabs<T extends string>({
   );
 }
 
-/** The boards' 32×18 switch. */
+/** The kit's switch (Kit-Choices 02), with the old props. */
 export function MonitorSwitch({
   checked,
   onChange,
   label,
   disabled,
+  busy,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label: string;
   disabled?: boolean;
+  busy?: boolean;
 }): ReactNode {
   return (
-    <button
-      type="button"
-      role="switch"
-      className="monitor-switch"
-      aria-checked={checked}
+    <KitSwitch
+      checked={checked}
+      onCheckedChange={onChange}
       aria-label={label}
       disabled={disabled}
-      onClick={() => onChange(!checked)}
+      busy={busy}
     />
   );
 }

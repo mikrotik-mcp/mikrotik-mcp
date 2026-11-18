@@ -102,6 +102,7 @@ export function CommandPalette({
       <div className="term-palette">
         <label>
           <Command size={15} />
+          {/* kit-exempt: command palette search, drives the result list keys */}
           <input
             // eslint-disable-next-line jsx-a11y/no-autofocus -- the palette opens on a key press
             autoFocus

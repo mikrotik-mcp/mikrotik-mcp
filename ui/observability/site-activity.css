@@ -111,11 +111,10 @@
 .site-owner:hover {
   background: var(--overlay-03);
 }
-.site-owner label {
+.site-owner > span {
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  cursor: pointer;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -197,7 +196,7 @@
 
 /* ── Destinations table ────────────────────────────────────────────────────── */
 .site-grid {
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 80px 100px 110px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 80px 100px 110px 26px;
 }
 .site-cell {
   display: flex;
@@ -261,11 +260,11 @@
     display: none;
   }
   .site-grid {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto 26px;
     grid-template-areas:
-      "dest seen"
-      "who traffic"
-      "who last";
+      "dest seen more"
+      "who traffic more"
+      "who last more";
     row-gap: 4px;
   }
   .site-grid > :nth-child(1) {
@@ -282,5 +281,9 @@
   }
   .site-grid > :nth-child(5) {
     grid-area: last;
+  }
+  .site-grid > :nth-child(6) {
+    grid-area: more;
+    align-self: center;
   }
 }

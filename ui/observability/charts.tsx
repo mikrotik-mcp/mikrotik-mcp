@@ -199,6 +199,20 @@ export function RadialGauge({
             barSize={7}
           >
             <PolarAngleAxis type="number" domain={[0, 100]} tick={false} axisLine={false} />
+            {has && (
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    hideIndicator
+                    formatter={(val) => (
+                      <span className="font-mono tabular-nums text-foreground">
+                        {typeof val === "number" ? `${val.toFixed(1)}% used` : String(val)}
+                      </span>
+                    )}
+                  />
+                }
+              />
+            )}
             <RadialBar
               dataKey="value"
               cornerRadius={4}
