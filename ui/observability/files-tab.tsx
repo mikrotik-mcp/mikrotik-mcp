@@ -4,7 +4,7 @@
  */
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 import { fleetStore, swatch, usageStore } from "./files-parts";
 import { Led } from "./kit";
@@ -17,12 +17,11 @@ export function FilesTab(props: IDockviewPanelHeaderProps<{ device?: string }>):
   const title = props.api.title ?? device;
   const extra = title !== device ? title.slice(device.length) : "";
   return (
-    <div className="fp-tab">
-      <span
-        className="sw"
-        style={{ background: swatch(fleet.names.indexOf(device)) }}
-        aria-hidden="true"
-      />
+    <div
+      className="fp-tab"
+      style={{ "--tab-color": swatch(fleet.names.indexOf(device)) } as CSSProperties}
+    >
+      <span className="sw" style={{ background: "var(--tab-color)" }} aria-hidden="true" />
       <Led tone={fleet.tone[device] ?? "off"} />
       <span className="nm">
         {device}
