@@ -131,9 +131,10 @@ function unquote(value: string): string {
  * a quoted value belongs to the value, and `tokenize` has already kept such a
  * token whole.
  */
-function parseFields(tokens: string[]): { fields: Record<string, string>; flags: string[] } {
+function parseFields(input: string[]): { fields: Record<string, string>; flags: string[] } {
   const fields: Record<string, string> = {};
   const flags: string[] = [];
+  let tokens = input;
 
   // RouterOS `set` (and `remove`/`enable`/…) take a POSITIONAL selector first:
   // `/ip service set telnet disabled=yes` names the item as a bare token, not as
@@ -141,8 +142,20 @@ function parseFields(tokens: string[]): { fields: Record<string, string>; flags:
   // `where: {name: telnet}` — without this, every rule about a named service or
   // a numbered rule silently matches nothing, which reads as "not applicable"
   // and quietly disappears from the report.
+  //
+  // An export selects a built-in item with a query instead:
+  // `set [ find default-name=ether2 ] disabled=yes`. The brackets and `find`
+  // are syntax, not a name and not flags; the item is the one the query names.
   const [first] = tokens;
-  if (first !== undefined && !first.includes("=") && !first.startsWith("!")) {
+  const close = first === "[" ? tokens.indexOf("]") : -1;
+  if (close > 0) {
+    const named = tokens
+      .slice(1, close)
+      .find((t) => t.startsWith("default-name=") || t.startsWith("name="));
+    const renamed = tokens.slice(close + 1).some((t) => t.startsWith("name="));
+    if (named && !renamed) fields.name = unquote(named.slice(named.indexOf("=") + 1));
+    tokens = tokens.filter((t, i) => i > close || (i > 0 && i < close && t !== "find"));
+  } else if (first !== undefined && !first.includes("=") && !first.startsWith("!")) {
     if (!tokens.some((t) => t.startsWith("name="))) fields.name = unquote(first);
   }
 

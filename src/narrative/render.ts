@@ -46,7 +46,10 @@ export const NARRATIVE_SECTIONS: NarrativeSection[] = [
 
 /** Escape a value for a Markdown table cell — a stray `|` breaks the row. */
 function cell(text: string | undefined): string {
-  return (text ?? "—").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ");
+  const safe = (text ?? "—").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ");
+  // `*26` is the id RouterOS prints for a removed interface. As code, its `*`
+  // cannot start Markdown emphasis.
+  return /^\*[0-9a-f]+$/i.test(safe) ? `\`${safe}\`` : safe;
 }
 
 const SEVERITY_MARK: Record<string, string> = {
@@ -75,7 +78,8 @@ function identitySection(n: DeviceNarrative): string[] {
 
   out.push(`Primary role: **${primary.label}**`);
   if (secondary.length > 0) {
-    out.push(`Also acts as: ${secondary.map((r) => r.label).join(", ")}`);
+    // A blank line between them: Markdown joins adjacent lines into one paragraph.
+    out.push("", `Also acts as: ${secondary.map((r) => r.label).join(", ")}`);
   }
   out.push("", "The signals behind that call:", "");
   for (const role of [primary, ...secondary]) {

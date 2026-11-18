@@ -306,7 +306,7 @@ function analyzeInterfaces(model: ConfigModel): NarrativeInterface[] {
     if (kind === "list") continue;
     for (const record of recordsOf(model, path)) {
       if (record.op !== "add" && record.op !== "set") continue;
-      const name = record.fields.name;
+      const name = record.fields.name ?? record.fields["default-name"];
       if (!name) continue;
       const iface = ensure(name, kind);
       iface.comment = record.fields.comment ?? iface.comment;
@@ -364,6 +364,10 @@ function analyzeInterfaces(model: ConfigModel): NarrativeInterface[] {
 
   // Purpose from the interface lists, which is what an operator named them for.
   for (const iface of byName.values()) {
+    // RouterOS prints `*26` (an internal id) where a setting still points to an
+    // interface that was removed.
+    if (/^\*[0-9a-f]+$/i.test(iface.name))
+      iface.purpose = "removed interface: a setting still points to it";
     if (iface.purpose) continue;
     if (iface.lists.some((l) => /wan/i.test(l))) iface.purpose = "upstream / internet-facing";
     else if (iface.lists.some((l) => /lan/i.test(l))) iface.purpose = "local network";

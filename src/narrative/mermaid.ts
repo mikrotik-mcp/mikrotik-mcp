@@ -59,7 +59,9 @@ function shape(id: string, text: string, kind: string): string {
 }
 
 function describeInterface(iface: NarrativeInterface, subnetsFor: string[]): string {
-  const bits = [iface.name];
+  const bits = [
+    /^\*[0-9a-f]+$/i.test(iface.name) ? `${iface.name} (removed interface)` : iface.name,
+  ];
   if (iface.vlanId !== undefined) bits.push(`VLAN ${iface.vlanId}`);
   if (subnetsFor.length > 0) bits.push(subnetsFor.join(", "));
   else if (iface.addresses.length > 0) bits.push(iface.addresses.join(", "));
