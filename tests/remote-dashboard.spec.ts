@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import {
+  crossOrigin,
   localPage,
   serverOrigin,
   upstreamHeaders,
@@ -52,12 +53,26 @@ describe("remote dashboard", () => {
       authorization: "Bearer from-browser",
       "content-type": "application/json",
       "accept-encoding": "gzip",
+      origin: "http://localhost:9090",
     });
     const out = upstreamHeaders(incoming, "server-token");
     expect(out.get("authorization")).toBe("Bearer server-token");
     expect(out.get("host")).toBeNull();
+    // The server compares `origin` with its own address; the proxy's would be refused.
+    expect(out.get("origin")).toBeNull();
     expect(out.get("accept-encoding")).toBeNull();
     expect(out.get("content-type")).toBe("application/json");
     expect(upstreamHeaders(incoming).get("authorization")).toBeNull();
+  });
+
+  it("refuses a browser request from a page of another origin", () => {
+    const from = (origin?: string): Request =>
+      new Request("http://localhost:9090/api/files/delete", {
+        method: "POST",
+        headers: origin ? { origin } : {},
+      });
+    expect(crossOrigin(from("http://localhost:9090"))).toBe(false);
+    expect(crossOrigin(from())).toBe(false);
+    expect(crossOrigin(from("http://evil.example"))).toBe(true);
   });
 });

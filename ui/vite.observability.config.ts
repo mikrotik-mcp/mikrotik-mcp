@@ -43,6 +43,9 @@ export default defineConfig(async ({ command, mode, isSsrBuild }) => ({
         target: process.env.MIKROTIK_DASHBOARD_SERVER ?? "http://127.0.0.1:9091",
         ws: true,
         changeOrigin: true,
+        // `origin` names this dev server; the dashboard refuses a write whose
+        // origin is not its own.
+        configure: (proxy) => proxy.on("proxyReq", (request) => request.removeHeader("origin")),
         headers: process.env.MIKROTIK_DASHBOARD_SERVER_TOKEN
           ? { authorization: `Bearer ${process.env.MIKROTIK_DASHBOARD_SERVER_TOKEN}` }
           : undefined,

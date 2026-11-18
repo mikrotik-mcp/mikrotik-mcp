@@ -48,9 +48,18 @@ export function upstreamUrl(origin: string, pathAndQuery: string, ws = false): s
 export function upstreamHeaders(incoming: Headers, token?: string): Headers {
   const out = new Headers(incoming);
   // `host` must name the server; a client-sent `authorization` must not reach it.
-  for (const name of ["host", "connection", "authorization", "accept-encoding"]) out.delete(name);
+  // `origin` names this proxy, not the server, so the server's same-origin check
+  // would refuse every write. The proxy makes that check itself (`crossOrigin`).
+  for (const name of ["host", "connection", "authorization", "accept-encoding", "origin"])
+    out.delete(name);
   if (token) out.set("authorization", `Bearer ${token}`);
   return out;
+}
+
+/** True when a browser sent the request from a page of another origin. */
+export function crossOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  return origin !== null && origin !== new URL(req.url).origin;
 }
 
 /** This machine's built dashboard page, or undefined when it has not been built. */
@@ -78,6 +87,8 @@ export function runRemoteDashboard(options: RemoteDashboardOptions): { stop: () 
     async fetch(req, srv) {
       const url = new URL(req.url);
       const path = url.pathname + url.search;
+      // The server cannot see the browser's origin any more, so it is checked here.
+      if (crossOrigin(req)) return new Response("Cross-origin operation denied", { status: 403 });
 
       if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
         const target = upstreamUrl(origin, path, true);
