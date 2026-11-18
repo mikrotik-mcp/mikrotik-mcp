@@ -76,6 +76,11 @@ export const McpServerSettingsSchema = z.object({
    */
   corsOrigins: z.string().default(""),
   /**
+   * Close an HTTP session after this many milliseconds without a request
+   * (default 24 hours). The client then gets HTTP 404 and initializes again.
+   */
+  sessionIdleTimeout: z.coerce.number().int().positive().default(86_400_000),
+  /**
    * Page size for `tools/list`. `0` (default) sends every tool in one response —
    * the current behaviour. A positive value delivers the SAME full catalog in
    * cursor-paginated pages (MCP-standard) so clients that struggle with a very
@@ -475,6 +480,12 @@ export const DashboardConfigSchema = z.object({
    * same for every viewer.
    */
   feedLimit: z.coerce.number().int().positive().max(10_000).default(200),
+  /**
+   * Serve the dashboard terminal (raw RouterOS commands from the browser).
+   * Even when true, it is served only if the dashboard has a token or listens
+   * on loopback.
+   */
+  terminal: z.boolean().default(true),
 });
 export type DashboardConfig = z.infer<typeof DashboardConfigSchema>;
 
@@ -925,6 +936,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     allowedHosts: pick("mcp-allowed-hosts", "MIKROTIK_MCP__ALLOWED_HOSTS"),
     allowedOrigins: pick("mcp-allowed-origins", "MIKROTIK_MCP__ALLOWED_ORIGINS"),
     corsOrigins: pick("mcp-cors-origins", "MIKROTIK_MCP__CORS_ORIGINS"),
+    sessionIdleTimeout: pick("mcp-session-idle-timeout", "MIKROTIK_MCP__SESSION_IDLE_TIMEOUT"),
     toolPageSize: pick("tool-page-size", "MIKROTIK_MCP__TOOL_PAGE_SIZE"),
     toolSurface: pick("tool-surface", "MIKROTIK_MCP__TOOL_SURFACE"),
     coreTools: pick("core-tools", "MIKROTIK_MCP__CORE_TOOLS"),
@@ -986,6 +998,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     maxBodyBytes: pick("dashboard-max-body-bytes", "MIKROTIK_DASHBOARD__MAX_BODY_BYTES"),
     token: pick("dashboard-token", "MIKROTIK_DASHBOARD__TOKEN"),
     feedLimit: pick("dashboard-feed-limit", "MIKROTIK_DASHBOARD__FEED_LIMIT"),
+    terminal: boolOpt(pick("dashboard-terminal", "MIKROTIK_DASHBOARD__TERMINAL")),
   });
 
   // 5) SSH connection pooling. Config-file block is the baseline; env/flags override.

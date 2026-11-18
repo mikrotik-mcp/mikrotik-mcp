@@ -96,17 +96,18 @@ Then open **http://127.0.0.1:9090/** in a browser on the same machine.
 
 ## Configuration
 
-| Env var                              | Flag                         | Default                     | Meaning                                                                            |
-| ------------------------------------ | ---------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| `MIKROTIK_DASHBOARD__ENABLED`        | `--dashboard`                | `false`                     | Master switch. When off, zero overhead and no SQLite is loaded.                    |
-| `MIKROTIK_DASHBOARD__HOST`           | `--dashboard-host`           | `0.0.0.0`                   | Set to loopback for local-only access.                                             |
-| `MIKROTIK_DASHBOARD__PORT`           | `--dashboard-port`           | `9090`                      | Bind port.                                                                         |
-| `MIKROTIK_DASHBOARD__DB_PATH`        | `--dashboard-db`             | `~/.mikrotik-mcp/events.db` | SQLite file (per-user home on Win/macOS/Linux); `:memory:` for an ephemeral store. |
-| `MIKROTIK_DASHBOARD__MAX_EVENTS`     | `--dashboard-max-events`     | `100000`                    | Retention cap; older rows are pruned.                                              |
-| `MIKROTIK_DASHBOARD__CAPTURE_BODY`   | `--dashboard-capture-body`   | `true`                      | Record bodies; input redaction is a separate setting.                              |
-| `MIKROTIK_DASHBOARD__REDACT_INPUT`   | `--dashboard-redact-input`   | `false`                     | Enable to mask credential fields before persisting input.                          |
-| `MIKROTIK_DASHBOARD__MAX_BODY_BYTES` | `--dashboard-max-body-bytes` | `16384`                     | Per-body truncation budget.                                                        |
-| `MIKROTIK_DASHBOARD__TOKEN`          | `--dashboard-token`          | _(none)_                    | Optional bearer token; when set, the page, API and WebSocket all require it.       |
+| Env var                              | Flag                         | Default                     | Meaning                                                                                |
+| ------------------------------------ | ---------------------------- | --------------------------- | -------------------------------------------------------------------------------------- |
+| `MIKROTIK_DASHBOARD__ENABLED`        | `--dashboard`                | `false`                     | Master switch. When off, zero overhead and no SQLite is loaded.                        |
+| `MIKROTIK_DASHBOARD__HOST`           | `--dashboard-host`           | `0.0.0.0`                   | Set to loopback for local-only access.                                                 |
+| `MIKROTIK_DASHBOARD__PORT`           | `--dashboard-port`           | `9090`                      | Bind port.                                                                             |
+| `MIKROTIK_DASHBOARD__DB_PATH`        | `--dashboard-db`             | `~/.mikrotik-mcp/events.db` | SQLite file (per-user home on Win/macOS/Linux); `:memory:` for an ephemeral store.     |
+| `MIKROTIK_DASHBOARD__MAX_EVENTS`     | `--dashboard-max-events`     | `100000`                    | Retention cap; older rows are pruned.                                                  |
+| `MIKROTIK_DASHBOARD__CAPTURE_BODY`   | `--dashboard-capture-body`   | `true`                      | Record bodies; input redaction is a separate setting.                                  |
+| `MIKROTIK_DASHBOARD__REDACT_INPUT`   | `--dashboard-redact-input`   | `false`                     | Enable to mask credential fields before persisting input.                              |
+| `MIKROTIK_DASHBOARD__MAX_BODY_BYTES` | `--dashboard-max-body-bytes` | `16384`                     | Per-body truncation budget.                                                            |
+| `MIKROTIK_DASHBOARD__TOKEN`          | `--dashboard-token`          | _(none)_                    | Optional bearer token; when set, the page, API and WebSocket all require it.           |
+| `MIKROTIK_DASHBOARD__TERMINAL`       | `--dashboard-terminal`       | `true`                      | Serve the [Terminal](/docs/guides/terminal). It also needs a token or a loopback bind. |
 
 A `dashboard` block in the JSON config file provides the baseline. Explicit environment variables and CLI flags override it:
 
@@ -126,13 +127,29 @@ A `dashboard` block in the JSON config file provides the baseline. Explicit envi
 With a token set, open `http://127.0.0.1:9090/?token=YOUR_TOKEN` — the page
 forwards it to the API and the live WebSocket automatically.
 
+## Terminal
+
+The **Terminal** page gives you RouterOS consoles in the browser, as the Terminal of WinBox does: command blocks with live output, an interactive shell, history, favourites, broadcast to several routers, and Safe Mode.
+
+It runs any command on a router, so it is served only when the dashboard has a token or listens on loopback. Turn it off with `--dashboard-terminal=false`.
+
+Every command of a block pane is saved to the audit feed as the tool `dashboard_terminal`, so it shows on this page with the tool calls.
+
+See the [terminal guide](/docs/guides/terminal).
+
 ## Run the dashboard on another machine
 
 `mikrotik-mcp dashboard --server <url>` serves the dashboard on a machine that
 has no MCP server and no device configuration. It connects to the dashboard port
-of a server that runs somewhere else and passes everything through: the page,
-the API, the live WebSocket and the SSE fallback. That machine opens no SSH
-connection to a router and stores no events.
+of a server that runs somewhere else and takes all data from it: the API, the
+live WebSocket and the SSE fallback. That machine opens no SSH connection to a
+router and stores no events.
+
+The page is the build on the machine that runs the command
+(`dist/ui/observability.html`, made by `bun run build:ui`, and included in an
+installed package). If that machine has no build, the server's page is used. The
+startup log line says which one. The file is read on each request, so a rebuild
+shows on the next browser refresh.
 
 **On the server.** The dashboard port is the data source, so it must be enabled
 and reachable from the other machine. Set a token.

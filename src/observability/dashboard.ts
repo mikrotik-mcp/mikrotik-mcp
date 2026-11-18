@@ -61,6 +61,10 @@ import {
 import { createContext } from "../core/context";
 import { investigationRoutes } from "./investigation-routes";
 import { homeRoutes } from "./home-routes";
+import { createTerminalRoutes, stopTerminalScheduler, terminalAccess } from "./terminal-routes";
+import { closeAllShells, setRecordingDir } from "./terminal-shell";
+import { openTerminalStore } from "./terminal-store";
+import type { TerminalStore } from "./terminal-store";
 import { workspaceRoutes } from "./workspace-routes";
 import { clientCheckRoutes } from "../client-check/routes";
 import { clientCheckNetwork } from "../client-check/network";
@@ -1659,6 +1663,19 @@ export async function runDashboard(
   };
 
   const accessSettingsRoutes = createAccessSettingsRoutes(configAdmin);
+  // Interactive shell sessions are recorded beside the databases (not for an in-memory run).
+  setRecordingDir(
+    cfg.dbPath === ":memory:" ? undefined : join(dirname(cfg.dbPath), "terminal-recordings"),
+  );
+  // The terminal's history database opens on the first terminal request.
+  let terminalStore: Promise<TerminalStore> | undefined;
+  const terminalRoutes = createTerminalRoutes({
+    denied: terminalAccess(cfg),
+    store: () =>
+      (terminalStore ??= openTerminalStore(
+        cfg.dbPath === ":memory:" ? ":memory:" : join(dirname(cfg.dbPath), "terminal.db"),
+      )),
+  });
 
   /** Route all dashboard API requests; exceptions bubble to the caller. */
   async function dashboardRoute(
@@ -1716,6 +1733,8 @@ export async function runDashboard(
     if (investigationResp) return investigationResp;
     const homeResp = await homeRoutes(req, url);
     if (homeResp) return homeResp;
+    const terminalResp = await terminalRoutes(req, url);
+    if (terminalResp) return terminalResp;
     if (url.pathname === "/api/client-checks/network" && req.method === "GET")
       return json(clientCheckNetwork(cfg.host, srv.port ?? cfg.port));
     const workspaceResp = await workspaceRoutes(req, url);
@@ -2166,6 +2185,9 @@ export async function runDashboard(
       store.close();
       usageStore?.close();
       usageStore = null;
+      closeAllShells();
+      stopTerminalScheduler();
+      void terminalStore?.then((opened) => opened.close()).catch(() => {});
       capsmanStore?.close();
       capsmanStore = null;
       closeMemoryStore();

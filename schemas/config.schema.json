@@ -261,6 +261,7 @@
         "allowedHosts": "",
         "allowedOrigins": "",
         "corsOrigins": "",
+        "sessionIdleTimeout": 86400000,
         "toolPageSize": 0,
         "toolSurface": "full",
         "coreTools": "",
@@ -296,6 +297,12 @@
           "default": "",
           "type": "string"
         },
+        "sessionIdleTimeout": {
+          "default": 86400000,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
         "toolPageSize": {
           "default": 0,
           "type": "integer",
@@ -328,6 +335,7 @@
         "allowedHosts",
         "allowedOrigins",
         "corsOrigins",
+        "sessionIdleTimeout",
         "toolPageSize",
         "toolSurface",
         "coreTools",
@@ -381,7 +389,8 @@
         "captureBody": true,
         "redactInput": false,
         "maxBodyBytes": 16384,
-        "feedLimit": 200
+        "feedLimit": 200,
+        "terminal": true
       },
       "type": "object",
       "properties": {
@@ -431,6 +440,10 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 10000
+        },
+        "terminal": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -442,7 +455,8 @@
         "captureBody",
         "redactInput",
         "maxBodyBytes",
-        "feedLimit"
+        "feedLimit",
+        "terminal"
       ],
       "additionalProperties": false
     },
