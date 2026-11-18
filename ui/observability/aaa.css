@@ -1,0 +1,359 @@
+/* RADIUS & User Manager page, after the Usr-AAA boards. Tokens only. */
+.aaa-page {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 18px;
+}
+/* The header block: page intro over the tab strip, 14px apart. */
+.aaa-head {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+.aaa-head .monitor-head-main,
+.aaa-head .monitor-head[data-layout="verdict"] .monitor-head-main {
+  gap: 8px;
+}
+.aaa-head .monitor-tabs {
+  padding: 0;
+}
+.aaa-head .monitor-tab {
+  line-height: 21px;
+}
+:is(.aaa-page, .aaa-menu, .aaa-form) svg.lucide {
+  stroke-width: 1.6;
+}
+
+/* The boards' .select: text, then the chevron; a native select on top. */
+.aaa-select {
+  position: relative;
+  display: inline-flex;
+  height: 34px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  padding: 0 10px 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 21px;
+  white-space: nowrap;
+}
+.aaa-select > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.aaa-select select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  cursor: pointer;
+  opacity: 0;
+}
+.aaa-select select option {
+  background: var(--surface-2);
+  color: var(--foreground);
+}
+.aaa-select:focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--sig),
+    0 0 0 3px var(--sig-soft);
+}
+.aaa-select[data-disabled] {
+  opacity: 0.5;
+}
+.aaa-select[data-disabled] select {
+  cursor: not-allowed;
+}
+
+/* Icon button (the boards' .ib). */
+.aaa-ib {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 0;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+.aaa-ib:hover,
+.aaa-ib[aria-expanded="true"] {
+  background: var(--glass-2);
+  color: var(--foreground);
+}
+.aaa-ib:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.aaa-ib:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.aaa-ib svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Users: counter status bar ─────────────────────────────────────────────── */
+.aaa-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  font-size: 13px;
+  line-height: 21px;
+}
+.aaa-live-note {
+  max-width: 560px;
+  text-align: right;
+}
+.aaa-live-line {
+  flex-basis: 100%;
+}
+
+/* ── Tables: real table markup laid out as the boards' grid rows ──────────── */
+.aaa-scroll {
+  overflow-x: auto;
+}
+.aaa-table,
+.aaa-table thead,
+.aaa-table tbody {
+  display: block;
+  width: 100%;
+}
+.aaa-table th,
+.aaa-table td {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  font-weight: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aaa-table td.aaa-cell-action {
+  overflow: visible;
+}
+.aaa-two {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.aaa-two > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.aaa-sub {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.aaa-mono,
+.aaa-mono-em {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.aaa-mono-em {
+  color: var(--foreground);
+}
+.aaa-down {
+  color: var(--success);
+}
+.aaa-up {
+  color: var(--warning);
+}
+.aaa-filter {
+  width: 220px;
+}
+.aaa-loading {
+  padding: 0 18px 16px;
+}
+
+/* ── Row menu (the boards' glass menu) ─────────────────────────────────────── */
+.aaa-menu {
+  width: 200px;
+  min-width: 200px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 0 0 1px var(--line-2),
+    var(--shadow-overlay);
+  padding: 6px;
+  font-size: 14px;
+  line-height: 21px;
+  backdrop-filter: blur(14px);
+}
+.aaa-menu-label {
+  overflow: hidden;
+  padding: 6px 10px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mt);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aaa-menu [role="menuitem"] {
+  height: 32px;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 21px;
+}
+.aaa-menu [role="menuitem"][data-highlighted] {
+  background: var(--glass-2);
+  color: var(--foreground);
+}
+.aaa-menu [role="menuitem"][data-variant="destructive"] {
+  color: var(--destructive);
+}
+.aaa-menu [role="menuitem"][data-variant="destructive"][data-highlighted] {
+  background: var(--bad-soft);
+}
+.aaa-menu [role="menuitem"] svg {
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+}
+.aaa-menu [role="separator"] {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
+/* ── Add / edit dialog ─────────────────────────────────────────────────────── */
+.aaa-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.aaa-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.aaa-password {
+  padding-right: 4px;
+}
+.aaa-password input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-mt);
+  font-size: 12px;
+  outline: none;
+}
+.aaa-password input::placeholder {
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+.aaa-password .aaa-ib {
+  width: 28px;
+  height: 28px;
+}
+.aaa-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+.aaa-profile-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.aaa-profile-head b {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+}
+.aaa-profile-head span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.aaa-profile-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.aaa-profile-change svg {
+  width: 14px;
+  height: 14px;
+  color: var(--success);
+}
+.aaa-profile-change .monitor-chip[data-tone="good"] {
+  background: var(--sig-soft);
+  color: var(--success);
+}
+.aaa-profile-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--destructive);
+  font-size: 12px;
+}
+
+/* ── Settings tab ──────────────────────────────────────────────────────────── */
+.aaa-settings {
+  display: grid;
+  gap: 14px;
+}
+.aaa-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.aaa-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ── Narrow screens ────────────────────────────────────────────────────────── */
+@media (max-width: 1099px) {
+  .aaa-table {
+    min-width: 1040px;
+  }
+}
+@media (max-width: 899px) {
+  .aaa-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .aaa-live-note {
+    text-align: left;
+  }
+  .aaa-filter {
+    width: auto;
+    flex: 1 1 160px;
+  }
+}
+
+/* The boards' table footer spaces its parts 10px apart. */
+.aaa-page .monitor-foot {
+  gap: 10px;
+}

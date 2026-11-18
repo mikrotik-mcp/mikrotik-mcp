@@ -88,12 +88,12 @@ test("uses paginated memory reads, scoped entities, and revision-safe actions", 
     expectedRevision: 3,
     pinned: false,
   });
-  const subject = [...host.querySelectorAll<HTMLElement>(".memory-subject")].find(
-    (el) => el.querySelector("small")?.textContent === "router",
+  const subject = [...host.querySelectorAll<HTMLElement>(".memory-subject")].find((el) =>
+    el.querySelector("small")?.textContent?.startsWith("router ·"),
   )!;
   await click(subject);
   expect(vi.mocked(api).mock.calls.some(([path]) => path.includes("entityName=edge"))).toBe(true);
-  await click(host.querySelector<HTMLElement>('[data-tone="pinned"]')!);
+  await click(host.querySelector<HTMLElement>('[data-state="pinned"]')!);
   expect(vi.mocked(api).mock.calls.some(([path]) => path.includes("state=pinned"))).toBe(true);
 });
 test("refresh does not clear the search or replace filtered results with the full graph", async () => {
@@ -206,7 +206,7 @@ function reviewRecords(count: number, expired = false) {
 test("verification advances in the same dialog, wraps, and never repeats expired records in a round", async () => {
   reviewRecords(3, true);
   await render();
-  await click(host.querySelector<HTMLElement>('[data-tone="review"]')!);
+  await click(host.querySelector<HTMLElement>('[data-state="review"]')!);
   await click(host.querySelectorAll<HTMLElement>(".memory-fact-content")[1]);
   const dialog = document.querySelector('[role="dialog"]')!;
   const content = () => dialog.querySelector(".memory-detail-content")!.textContent;
@@ -229,7 +229,7 @@ test("verification advances in the same dialog, wraps, and never repeats expired
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(postJson).toHaveBeenCalledTimes(3);
   expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("Review round complete: 3"));
-  expect(host.textContent).toContain("Expired");
+  expect(host.textContent).toContain("Needs review · expired");
 });
 
 test("review crosses shrinking page boundaries without skipping records or losing filters", async () => {
@@ -239,9 +239,9 @@ test("review crosses shrinking page boundaries without skipping records or losin
   await click(host.querySelector<HTMLElement>('.memory-subject[data-selected="false"]')!);
   await fill(host.querySelector<HTMLInputElement>('[aria-label="Search knowledge"]')!, "Review");
   await act(async () => vi.advanceTimersByTime(260));
-  await click(host.querySelector<HTMLElement>('[data-tone="review"]')!);
+  await click(host.querySelector<HTMLElement>('[data-state="review"]')!);
   await click(button("Next"));
-  await click(button("Details"));
+  await click(host.querySelector<HTMLElement>(".memory-fact-content")!);
   const content = () => document.querySelector(".memory-detail-content")!.textContent;
   expect(content()).toBe("Review memory 25");
   await click(button("Verify & next"));
@@ -264,8 +264,8 @@ test("review crosses shrinking page boundaries without skipping records or losin
 test("failed verification stays on the current record; retrying next only retries the read", async () => {
   reviewRecords(1);
   await render();
-  await click(host.querySelector<HTMLElement>('[data-tone="review"]')!);
-  await click(button("Details"));
+  await click(host.querySelector<HTMLElement>('[data-state="review"]')!);
+  await click(host.querySelector<HTMLElement>(".memory-fact-content")!);
   vi.mocked(postJson).mockRejectedValueOnce(new Error("Revision conflict"));
   await click(button("Verify & next"));
   expect(document.querySelector(".memory-detail-content")!.textContent).toBe("Review memory 1");
@@ -290,7 +290,7 @@ test("failed verification stays on the current record; retrying next only retrie
 test("verification outside Needs review does not advance to a different record", async () => {
   reviewRecords(2);
   await render();
-  await click(button("Details"));
+  await click(host.querySelector<HTMLElement>(".memory-fact-content")!);
   await click(button("I verified this"));
   expect(document.querySelector(".memory-detail-content")!.textContent).toBe("Review memory 1");
   expect(postJson).toHaveBeenCalledTimes(1);

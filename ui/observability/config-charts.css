@@ -1,0 +1,84 @@
+/* Parts shared by the configuration and recovery pages (config-charts.tsx). */
+
+.cfg-diff {
+  overflow: auto;
+  white-space: pre;
+}
+.cfg-diff .a {
+  color: var(--success);
+}
+.cfg-diff .r {
+  color: var(--destructive);
+}
+.cfg-diff .k {
+  color: var(--brand);
+}
+.cfg-diff .m {
+  color: var(--muted-foreground);
+}
+
+.cfg-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 21px;
+}
+
+/* StepTrail: the numbered workflow steps (the boards' `steps`). */
+.cfg-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cfg-step {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.cfg-step.glass[aria-current="step"] {
+  background: var(--sig-soft);
+  box-shadow: inset 0 0 0 1px var(--sig);
+}
+.cfg-step-n {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.cfg-step-n svg {
+  width: 16px;
+  height: 16px;
+}
+.cfg-step b {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 21px;
+}
+.cfg-step[data-reached] b {
+  color: var(--foreground);
+}
+.cfg-step-arrow {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+.cfg-step-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 639px) {
+  .cfg-steps {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cfg-step-arrow {
+    display: none;
+  }
+}

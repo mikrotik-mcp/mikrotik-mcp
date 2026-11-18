@@ -1,4 +1,4 @@
-/* The header's Live capsule and the Operations panel it opens (Shell-Activity board). */
+/* The header's Live capsule and the activity panel it opens (Shell-Live board). */
 .isl {
   position: relative;
   flex: none;
@@ -7,12 +7,12 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 32px;
-  padding: 0 12px 0 10px;
+  height: 34px;
+  padding: 0 12px;
   border: 0;
   border-radius: 9999px;
-  background: var(--overlay-03);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
   font: inherit;
   font-size: 12px;
   line-height: normal;
@@ -23,17 +23,16 @@
     background-color 150ms,
     box-shadow 150ms;
 }
-.cap:hover,
-.cap.open {
-  background: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--input);
+.cap:hover {
+  background: var(--glass-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 .cap[data-compact] {
   padding: 0 10px;
 }
 .cap b {
   color: var(--foreground);
-  font-weight: 510;
+  font-weight: 600;
 }
 .cap .mut,
 .pop .mut {
@@ -48,22 +47,23 @@
 }
 .cap .sp polyline {
   fill: none;
-  stroke: var(--success);
+  stroke: var(--sig);
   stroke-width: 1.5;
   stroke-linejoin: round;
 }
+/* The panel (the boards' .dialog, 400px, under the capsule). */
 .pop {
   position: absolute;
   top: calc(100% + 8px);
   right: -9px;
   z-index: 40;
-  width: 380px;
+  width: 400px;
   max-width: calc(100vw - 24px);
-  border-radius: 12px;
-  background: var(--muted);
+  border-radius: 18px;
+  background: var(--surface-2);
   box-shadow:
-    inset 0 0 0 1px var(--input),
-    0 24px 64px rgba(0, 0, 0, 0.45);
+    inset 0 0 0 1px var(--line-2),
+    var(--shadow-overlay);
   overflow: hidden;
   transform-origin: top right;
   color: var(--foreground);
@@ -75,12 +75,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px 10px;
+  padding: 16px 18px 10px;
   min-width: 0;
 }
 .isl-head b {
   font-size: 13px;
-  font-weight: 590;
+  font-weight: 700;
   white-space: nowrap;
 }
 .isl-head .mut {
@@ -91,37 +91,39 @@
 }
 .seg {
   display: inline-flex;
-  padding: 2px;
+  padding: 3px;
   gap: 2px;
-  border-radius: 9999px;
-  background: var(--overlay-03);
-  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: 11px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 .isl-tabs {
-  margin: 0 16px 12px;
+  margin: 0 18px 12px;
 }
 .seg button {
-  height: 26px;
+  height: 28px;
   min-width: 36px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 9999px;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted-foreground);
   font: inherit;
   font-size: 12px;
-  font-weight: 510;
-  line-height: 1;
+  font-weight: 500;
+  line-height: normal;
   cursor: pointer;
 }
-.seg button.on {
-  background: var(--muted);
+.seg button:hover {
   color: var(--foreground);
-  box-shadow: var(--shadow-button);
 }
-/* 13px below the chart: the board's 8px padding plus its inline-svg baseline gap. */
+.seg button.on {
+  background: var(--glass-3);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
 .isl-chart {
-  padding: 0 16px 13px;
+  padding: 0 18px 12px;
 }
 .isl-chart[data-stale="true"] svg {
   opacity: 0.6;
@@ -138,9 +140,10 @@
   gap: 8px;
 }
 .isl-total .num {
-  font-size: 24px;
-  line-height: 30px;
-  font-weight: 590;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
   color: var(--text-emphasis);
   font-variant-numeric: tabular-nums;
 }
@@ -148,37 +151,38 @@
   font-size: 12px;
 }
 .isl-bar {
-  fill: var(--chart-1);
+  fill: var(--sig);
   opacity: 0.85;
 }
 .isl-fail {
   fill: var(--destructive);
 }
 .isl-list {
-  padding: 4px 8px 8px;
+  padding: 6px 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  box-shadow: inset 0 1px 0 var(--border);
+  gap: 2px;
+  border-top: 1px solid var(--line);
 }
 .isl-list[data-first] {
-  box-shadow: none;
+  border-top: 0;
 }
 .isl-list > .label {
-  padding: 8px 8px 4px;
-  font-size: 12px;
-  font-weight: 510;
-  color: var(--muted-foreground);
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 .isl-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 36px;
+  gap: 12px;
+  height: 42px;
   flex: none;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   font: inherit;
   font-size: 13px;
@@ -190,32 +194,38 @@ button.isl-row {
   transition: background-color 150ms;
 }
 button.isl-row:hover {
-  background: var(--accent);
+  background: var(--glass-2);
 }
-.isl-row .shell-dot {
-  box-shadow: none;
+.pop .isl-ico {
+  color: var(--text-secondary);
+}
+.pop .isl-ico[data-tone="bad"] {
+  color: var(--destructive);
 }
 .isl-tool {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-family: var(--font-mono);
+  font-family: var(--font-mt);
   font-size: 12px;
   color: var(--foreground);
+}
+.isl-tool[data-failed] {
+  color: var(--destructive);
 }
 .isl-row .r {
   margin-left: auto;
   flex: none;
-  color: var(--text-faint);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 .isl-empty,
 .isl-note {
   margin: 0;
-  padding: 8px 10px;
+  padding: 8px 12px;
   font-size: 12px;
-  line-height: 16px;
+  line-height: 17px;
   color: var(--muted-foreground);
 }
 .isl-chart .isl-empty {
@@ -228,13 +238,13 @@ button.isl-row:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  box-shadow: inset 0 1px 0 var(--border);
-  background: var(--overlay-02);
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--glass);
   font-size: 13px;
 }
 .pop :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 @media (max-width: 899px) {

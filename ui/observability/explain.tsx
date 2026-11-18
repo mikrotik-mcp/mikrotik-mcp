@@ -1,216 +1,330 @@
 /**
- * Explain view — the architecture document for a router, for the person who
- * just inherited it.
+ * Explain view: the architecture document for a router, for the person who
+ * just inherited it (the Cfg-Explain board).
  *
- *   • **Exposure panel first**, given its own loud treatment. It is the part
- *     that matters most and the part a long document buries.
- *   • **Topology diagram** drawn with the radial layout the topology radar
- *     already uses (`topology-layout.ts`) — router at the hub, interfaces
- *     around it, bridge ports fanned off their bridge. A Mermaid renderer would
- *     be a megabyte of dependency inlined into a single-file bundle for one
- *     page; the Mermaid SOURCE still travels with the response, because that is
- *     what people paste into a wiki.
- *   • **Compare mode** — two snapshots, with the consequence-level diff between
+ *   • A verdict line up top: the router's role and how much of it is open to
+ *     the internet.
+ *   • **Exposure panel first**, outlined in pink. It is the part that matters
+ *     most and the part a long document buries.
+ *   • WANs and subnets as tables, the topology as a radial diagram
+ *     (`explain-topology.tsx`). The Mermaid source still travels with the
+ *     Markdown, because that is what people paste into a wiki.
+ *   • **Compare mode**: two snapshots, with the consequence-level diff between
  *     them rather than a line diff.
- *   • **Export** — copy or download the Markdown in one click, because that is
- *     where this document is going anyway.
+ *   • **Export**: copy or download the Markdown in one click.
  */
-import { LoadingState } from "./loading-state";
+import "./explain.css";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Copy,
+  Download,
+  GitBranch,
+  Info,
+  Play,
+  Sparkle,
+} from "lucide-react";
 import { api, postJson } from "./api";
-import { Panel, StatCard } from "./atoms";
-import { Badge, Button, Dot, Select } from "./geist";
-import type { GeistType } from "./geist";
+import { ExplainTopology } from "./explain-topology";
+import { LoadingState } from "./loading-state";
 import { renderMarkdown } from "./markdown";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorNote,
+  MonitorPanel,
+  PageIntro,
+  RouterPicker,
+  StatusBadge,
+  StatusDot,
+} from "./monitoring-ui";
 import { toast } from "./toast-action";
-import { CX, CY, H, HUB_ID, W, layout } from "./topology-layout";
-import type { DevicesPayload, ExplainPayload, NarrativeDiffPayload, SnapshotRow } from "./types";
-import { cn } from "@/lib/utils";
+import type {
+  DeviceNarrativePayload,
+  DevicesPayload,
+  ExplainPayload,
+  NarrativeDiffPayload,
+  SnapshotRow,
+} from "./types";
 
-const SEVERITY_TYPE: Record<string, GeistType> = {
-  critical: "error",
-  high: "error",
-  medium: "warning",
-  low: "secondary",
+/** Severity → the boards' `.risk` tone. */
+const SEVERITY_RISK: Record<string, string> = {
+  critical: "dangerous",
+  high: "destructive",
+  medium: "write",
+  low: "read",
 };
 
-const IMPACT_TYPE: Record<string, GeistType> = {
-  security: "error",
-  connectivity: "warning",
-  structure: "secondary",
-  cosmetic: "secondary",
+/** Impact → the boards' `.risk` tone. */
+const IMPACT_RISK: Record<string, string> = {
+  security: "destructive",
+  connectivity: "write",
+  structure: "idem",
+  cosmetic: "read",
 };
 
-/** Interface kind → the one-word class shown on a node. */
-function kindTint(kind: string): string {
-  if (kind === "bridge") return "fill-sky-500";
-  if (kind === "vlan") return "fill-violet-500";
-  if (kind.includes("wireguard") || kind.includes("tunnel") || kind.endsWith("-client")) {
-    return "fill-emerald-500";
-  }
-  if (kind === "wireless" || kind === "wifi") return "fill-amber-500";
-  return "fill-slate-400";
-}
-
-/**
- * The topology, drawn with the existing radial layout.
- *
- * Top-level interfaces (those with no parent) take the inner ring; anything
- * switched into a bridge or riding on a VLAN parent fans out from it on the
- * outer ring — the same hub/device/neighbour shape the layout was written for.
- */
-function Topology({ payload }: { payload: ExplainPayload }): ReactNode {
-  const { pos, rInner, rOuter } = useMemo(() => {
-    const interfaces = payload.narrative.interfaces;
-    const names = new Set(interfaces.map((i) => i.name));
-    const parents = interfaces.filter((i) => !i.parent || !names.has(i.parent));
-    const children = interfaces.filter((i) => i.parent && names.has(i.parent));
-    const parentOf = new Map(children.map((c) => [c.name, c.parent as string]));
-    return layout(
-      parents.map((i) => ({ id: i.name })),
-      children.map((i) => ({ id: i.name })),
-      parentOf,
-    );
-  }, [payload]);
-
-  const byName = new Map(payload.narrative.interfaces.map((i) => [i.name, i]));
-  const subnetsOf = new Map<string, string[]>();
-  for (const s of payload.narrative.subnets) {
-    const list = subnetsOf.get(s.interface);
-    if (list) list.push(s.cidr);
-    else subnetsOf.set(s.interface, [s.cidr]);
-  }
-
-  if (payload.narrative.interfaces.length === 0) {
-    return <p className="text-sm text-muted-foreground">No interfaces found in this export.</p>;
-  }
-
+function Risk({ value, map }: { value: string; map: Record<string, string> }): ReactNode {
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-[480px] w-full">
-        <circle
-          cx={CX}
-          cy={CY}
-          r={rInner}
-          className="fill-none stroke-border"
-          strokeDasharray="3 6"
-        />
-        <circle
-          cx={CX}
-          cy={CY}
-          r={rOuter}
-          className="fill-none stroke-border"
-          strokeDasharray="3 6"
-        />
-        {[...pos.entries()].map(([id, p]) => {
-          if (id === HUB_ID) return null;
-          const iface = byName.get(id);
-          const parent =
-            iface?.parent && pos.get(iface.parent) ? pos.get(iface.parent) : pos.get(HUB_ID);
-          if (!parent) return null;
-          return (
-            <line
-              key={`l-${id}`}
-              x1={parent.x}
-              y1={parent.y}
-              x2={p.x}
-              y2={p.y}
-              className={cn("stroke-border", iface?.disabled && "opacity-40")}
-              strokeWidth={1.5}
-            />
-          );
-        })}
-        <circle cx={CX} cy={CY} r={30} className="fill-foreground" />
-        <text
-          x={CX}
-          y={CY + 4}
-          textAnchor="middle"
-          className="fill-background text-[11px] font-medium"
-        >
-          {payload.narrative.identity.name ?? "router"}
-        </text>
-        {[...pos.entries()].map(([id, p]) => {
-          if (id === HUB_ID) return null;
-          const iface = byName.get(id);
-          const subnets = subnetsOf.get(id) ?? [];
-          return (
-            <g key={id} className={cn(iface?.disabled && "opacity-45")}>
-              <circle cx={p.x} cy={p.y} r={9} className={kindTint(iface?.kind ?? "")} />
-              <text
-                x={p.x}
-                y={p.y - 14}
-                textAnchor="middle"
-                className="fill-foreground text-[11px]"
-              >
-                {id}
-              </text>
-              {subnets.length > 0 && (
-                <text
-                  x={p.x}
-                  y={p.y + 24}
-                  textAnchor="middle"
-                  className="fill-muted-foreground text-[10px]"
-                >
-                  {subnets.join(" ")}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-    </div>
+    <span className="monitor-risk explain-risk" data-risk={map[value] ?? "read"}>
+      {value.toUpperCase()}
+    </span>
   );
 }
 
-function ExposurePanel({ payload }: { payload: ExplainPayload }): ReactNode {
-  const exposure = payload.narrative.exposure;
-  const worst = exposure[0]?.severity;
+/** The boards' `.select` with a leading icon: the look of the router picker, any options. */
+function IconSelect({
+  icon,
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  icon?: ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  label: string;
+}): ReactNode {
+  const current = options.find((o) => o.value === value)?.label ?? "";
   return (
-    <div
-      className={cn(
-        "rounded-lg border p-4",
-        worst === "critical" || worst === "high"
-          ? "border-red-500/60 bg-red-500/5"
-          : "border-border",
-      )}
-    >
-      <div className="mb-3 flex items-center gap-2">
-        <Dot type={exposure.length === 0 ? "success" : worst === "low" ? "warning" : "error"} />
-        <h3 className="text-sm font-semibold">Exposed to the internet</h3>
-        <span className="ml-auto text-xs text-muted-foreground">
-          {exposure.length === 0 ? "nothing unrestricted" : `${exposure.length} item(s)`}
+    <span className="monitor-router explain-select">
+      {icon}
+      <span className="truncate">{current}</span>
+      <ChevronDown aria-hidden="true" />
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+function snapshotLabel(s: SnapshotRow): string {
+  const day = new Date(s.ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${s.label ?? s.id} · ${day}`;
+}
+
+/** "192.168.88.10-192.168.88.254" → ".10–.254" when both ends share a /24. */
+function shortRange(range: string): string {
+  const [a, b] = range.split("-");
+  if (!a || !b) return range;
+  const pa = a.split(".");
+  const pb = b.split(".");
+  if (pa.length === 4 && pb.length === 4 && pa.slice(0, 3).join(".") === pb.slice(0, 3).join(".")) {
+    return `.${pa[3]}–.${pb[3]}`;
+  }
+  return `${a}–${b}`;
+}
+
+const ADDRESSING: Record<string, string> = {
+  dhcp: "DHCP client",
+  pppoe: "PPPoE client",
+  tunnel: "tunnel client",
+};
+
+function wanAddressing(
+  n: DeviceNarrativePayload,
+  w: DeviceNarrativePayload["wans"][number],
+): string {
+  const address =
+    w.addressing === "static"
+      ? n.interfaces.find((i) => i.name === w.interface)?.addresses[0]
+      : undefined;
+  const base = ADDRESSING[w.addressing] ?? w.addressing;
+  const parts = [address ? `${base} ${address}` : base];
+  if (w.distance != null && w.distance > 1) parts.push(`distance ${w.distance}`);
+  return parts.join(" · ");
+}
+
+function fromLabel(from: string): string {
+  return from === "anyone" ? "any address" : from;
+}
+
+function ExposurePanel({ payload }: { payload: ExplainPayload }): ReactNode {
+  const { exposure, stats } = payload.narrative;
+  const worst = exposure[0]?.severity;
+  const loud = worst === "critical" || worst === "high";
+  return (
+    <MonitorPanel
+      tone={loud ? "bad" : undefined}
+      title={
+        <span className="explain-title-led">
+          <StatusDot tone={exposure.length === 0 ? "good" : worst === "low" ? "warn" : "bad"} />
+          Exposed to the internet
         </span>
-      </div>
+      }
+      description="Accepts connections from outside with no source restriction."
+      extra={
+        exposure.length === 0 ? (
+          <StatusBadge tone="good" dot={false}>
+            nothing open
+          </StatusBadge>
+        ) : (
+          <StatusBadge tone="bad" dot={false}>
+            {exposure.length === 1 ? "1 item" : `${exposure.length} items`}
+          </StatusBadge>
+        )
+      }
+      flush
+    >
       {exposure.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="explain-exp-none">
           Nothing in the configuration accepts connections from outside without a source
           restriction.
         </p>
       ) : (
-        <ul className="divide-y divide-border text-sm">
-          {exposure.map((e) => (
-            <li
-              key={`${e.kind}-${e.what}-${e.line}`}
-              className="flex flex-wrap items-center gap-2 py-2"
-            >
-              <Badge type={SEVERITY_TYPE[e.severity] ?? "secondary"}>{e.severity}</Badge>
-              <span className="font-medium">{e.what}</span>
-              <span className="text-muted-foreground">{e.detail}</span>
-              <span className="ml-auto text-xs">
-                from <span className={cn(e.from === "anyone" && "text-red-500")}>{e.from}</span>
-                <span className="ml-2 text-muted-foreground">line {e.line}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+        exposure.map((e) => (
+          <div key={`${e.kind}-${e.what}-${e.line}`} className="explain-exp-row">
+            <Risk value={e.severity} map={SEVERITY_RISK} />
+            <div className="min-w-0">
+              <b className="explain-row-title">{e.what}</b>
+              <div className="explain-row-detail">{e.detail}</div>
+            </div>
+            <span className="explain-exp-from">
+              from <span className="mono">{fromLabel(e.from)}</span>
+            </span>
+            <span className="explain-exp-line">line {e.line}</span>
+          </div>
+        ))
       )}
-    </div>
+      <div className="monitor-foot">
+        <Info aria-hidden="true" className="size-4 shrink-0" />
+        From the {payload.source} · {stats.recordCount} configuration records · {stats.sections}{" "}
+        sections
+      </div>
+    </MonitorPanel>
+  );
+}
+
+const WAN_GRID = "explain-grid-wan";
+const SUBNET_GRID = "explain-grid-subnet";
+
+function WansPanel({ n }: { n: DeviceNarrativePayload }): ReactNode {
+  return (
+    <MonitorPanel title="WANs" description="How the router reaches the internet." flush>
+      <div className="explain-table">
+        <div className={`monitor-thead ${WAN_GRID}`}>
+          <span>WAN</span>
+          <span>Addressing</span>
+          <span>Gateway</span>
+          <span>NAT</span>
+        </div>
+        {n.wans.length === 0 ? (
+          <div className="monitor-row explain-row-empty">No WAN found in this export.</div>
+        ) : (
+          n.wans.map((w) => (
+            <div key={`${w.interface}-${w.addressing}`} className={`monitor-row ${WAN_GRID}`}>
+              <span className="trunc">
+                <span className="mono p">{w.interface}</span>
+              </span>
+              <span className="trunc">{wanAddressing(n, w)}</span>
+              <span className="trunc">
+                <span className="mono">{w.gateway ?? "—"}</span>
+              </span>
+              <span className="trunc">{w.nat}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </MonitorPanel>
+  );
+}
+
+function SubnetsPanel({ n }: { n: DeviceNarrativePayload }): ReactNode {
+  return (
+    <MonitorPanel title="Subnets" description="Addressing and DHCP per interface." flush>
+      <div className="explain-table">
+        <div className={`monitor-thead ${SUBNET_GRID}`}>
+          <span>Subnet</span>
+          <span>Interface</span>
+          <span>DHCP</span>
+          <span>Reserved</span>
+        </div>
+        {n.subnets.length === 0 ? (
+          <div className="monitor-row explain-row-empty">No subnets found in this export.</div>
+        ) : (
+          n.subnets.map((s) => (
+            <div key={`${s.cidr}-${s.interface}`} className={`monitor-row ${SUBNET_GRID}`}>
+              <span className="trunc">
+                <span className="mono p">{s.cidr}</span>
+              </span>
+              <span className="trunc">
+                <span className="mono">{s.interface}</span>
+                {s.vlanId != null && (
+                  <>
+                    {" "}
+                    <span className="monitor-chip">vlan {s.vlanId}</span>
+                  </>
+                )}
+              </span>
+              <span className="trunc">
+                {s.dhcp ? (
+                  [s.dhcp.pool ?? s.dhcp.server, ...s.dhcp.ranges.map(shortRange)].join(" · ")
+                ) : (
+                  <span className="text-faint">none</span>
+                )}
+              </span>
+              <span className="trunc">
+                <span className="num">{s.reservations.length}</span>
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </MonitorPanel>
+  );
+}
+
+const TOPO_LEGEND = (
+  <span className="monitor-legend">
+    <span>
+      <i style={{ background: "var(--destructive)" }} />
+      wan
+    </span>
+    <span>
+      <i style={{ background: "var(--brand)" }} />
+      bridge / vlan
+    </span>
+    <span>
+      <i style={{ background: "var(--sig)" }} />
+      tunnel
+    </span>
+    <span>
+      <i style={{ background: "var(--warning)" }} />
+      wireless
+    </span>
+  </span>
+);
+
+/** "An edge gateway with 2 services open to the internet." */
+function Verdict({ n }: { n: DeviceNarrativePayload }): ReactNode {
+  const role = (n.identity.roles.primary?.label ?? "unknown role").toLowerCase();
+  const article = /^[aeiou]/.test(role) ? "An" : "A";
+  const count = n.exposure.length;
+  return (
+    <>
+      {article} <span className="s">{role}</span> with{" "}
+      {count === 0 ? (
+        <span className="s">nothing</span>
+      ) : (
+        <em>{count === 1 ? "1 service" : `${count} services`}</em>
+      )}{" "}
+      open to the internet.
+    </>
   );
 }
 
 export function ExplainView(): ReactNode {
   const [devices, setDevices] = useState<string[]>([]);
+  const [defaultDevice, setDefaultDevice] = useState<string | null>(null);
   const [device, setDevice] = useState<string>("");
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [snapshot, setSnapshot] = useState<string>("");
@@ -233,6 +347,7 @@ export function ExplainView(): ReactNode {
         ]);
         const names = d.devices.map((x) => x.name);
         setDevices(names);
+        setDefaultDevice(d.defaultDevice ?? null);
         setDevice((current) => current || names[0] || "");
         setSnapshots(s.snapshots ?? []);
       } catch (e) {
@@ -294,181 +409,210 @@ export function ExplainView(): ReactNode {
     URL.revokeObjectURL(url);
   };
 
-  const roles = payload?.narrative.identity.roles;
+  const n = payload?.narrative;
+  const roles = n?.identity.roles;
   const deviceSnapshots = snapshots.filter((s) => !device || s.device === device);
+  const snapshotOptions = deviceSnapshots.map((s) => ({ value: s.id, label: snapshotLabel(s) }));
+  const sourceLabel = snapshot
+    ? (snapshotOptions.find((o) => o.value === snapshot)?.label ?? snapshot)
+    : "live device";
+
+  const comparePanel = compare && (
+    <MonitorPanel
+      title="Compare two configurations"
+      description="What the difference means, not a line diff. Use Snapshots for that."
+      extra={
+        <MonitorButton
+          variant="primary"
+          size="sm"
+          icon={<Sparkle aria-hidden="true" />}
+          disabled={diffing}
+          aria-busy={diffing || undefined}
+          onClick={() => void runDiff()}
+        >
+          Explain the difference
+        </MonitorButton>
+      }
+      flush
+    >
+      <div className="monitor-panel-body explain-compare-pick">
+        <IconSelect
+          icon={<Archive aria-hidden="true" />}
+          value={beforeSnapshot}
+          onChange={setBeforeSnapshot}
+          label="Baseline configuration"
+          options={[{ value: "", label: "pick a baseline…" }, ...snapshotOptions]}
+        />
+        <ChevronRight aria-hidden="true" className="explain-compare-arrow" />
+        <IconSelect
+          value={afterSnapshot}
+          onChange={setAfterSnapshot}
+          label="Comparison configuration"
+          options={[{ value: "", label: "the device as it is now" }, ...snapshotOptions]}
+        />
+      </div>
+      {diff &&
+        (diff.diff.identical ? (
+          <p className="explain-cmp-same">
+            Nothing this analysis covers is different. That is not the same as the two exports being
+            identical — use Snapshots for the line diff.
+          </p>
+        ) : (
+          diff.diff.changes.map((c) => (
+            <div key={c.summary} className="explain-cmp-row">
+              <Risk value={c.severity} map={SEVERITY_RISK} />
+              <span className="justify-self-start">
+                <Risk value={c.impact} map={IMPACT_RISK} />
+              </span>
+              <div className="min-w-0">
+                <b className="explain-row-title">{c.summary}</b>
+                {c.detail && <div className="explain-row-detail">{c.detail}</div>}
+              </div>
+            </div>
+          ))
+        ))}
+    </MonitorPanel>
+  );
 
   return (
-    <div className="space-y-4">
-      <Panel
-        title="Explain a device"
-        extra={
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={device}
-              onValueChange={setDevice}
-              size="sm"
-              aria-label="Device to explain"
-              options={devices.map((d) => ({ value: d, label: d }))}
-            />
-            <Select
-              value={snapshot}
-              onValueChange={setSnapshot}
-              size="sm"
-              aria-label="Configuration source"
-              options={[
-                { value: "", label: "live device" },
-                ...deviceSnapshots.map((s) => ({ value: s.id, label: s.label ?? s.id })),
-              ]}
-            />
-            <Button size="sm" loading={loading} onClick={() => void explain()}>
-              Explain
-            </Button>
-            <Button size="sm" type="secondary" onClick={() => setCompare(!compare)}>
-              {compare ? "Hide compare" : "Compare"}
-            </Button>
-          </div>
+    <section className="explain grid content-start gap-[18px]">
+      <PageIntro
+        eyebrow={`Explain · ${device || "no router"} · ${sourceLabel}`}
+        verdict={n ? <Verdict n={n} /> : "Explain how a router is built."}
+        lead={
+          <>
+            Read from <span className="mono">/export</span>, a read-only print that writes nothing.
+            Pick a snapshot to explain the router as it was.
+          </>
         }
-      >
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {loading && !payload && <LoadingState label="Reading router architecture" layout="cards" />}
-        {!payload && !error && !loading && (
-          <p className="text-sm text-muted-foreground">
-            Reads the configuration (<span className="font-mono">/export</span>, a read-only print
-            that writes nothing) and turns it into an architecture document — role, topology,
-            addressing, firewall, exposure, tunnels. Pick a snapshot to explain the router as it
-            was.
-          </p>
-        )}
-        {payload && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <StatCard
-                k="Role"
-                v={roles?.primary?.label ?? "unknown"}
-                sub={roles?.secondary.map((r) => r.label).join(", ") || "no other roles"}
-              />
-              <StatCard
-                k="Exposed"
-                v={String(payload.narrative.exposure.length)}
-                cls={payload.narrative.exposure.length > 0 ? "text-red-500" : "text-emerald-500"}
-                sub="reachable from outside"
-              />
-              <StatCard
-                k="Subnets"
-                v={String(payload.narrative.subnets.length)}
-                sub={`${payload.narrative.interfaces.length} interfaces`}
-              />
-              <StatCard
-                k="Not covered"
-                v={String(payload.narrative.unknowns.length)}
-                cls={payload.narrative.unknowns.length > 0 ? "text-amber-500" : undefined}
-                sub="menus not analysed"
-              />
-            </div>
-            <ExposurePanel payload={payload} />
-            <p className="text-xs text-muted-foreground">
-              From the {payload.source} · {payload.narrative.stats.recordCount} configuration
-              records
-            </p>
-          </div>
-        )}
-      </Panel>
+        actions={
+          <>
+            <RouterPicker
+              value={device}
+              onChange={setDevice}
+              routers={devices}
+              defaultRouter={defaultDevice}
+              label="Device to explain"
+            />
+            <IconSelect
+              icon={<Clock aria-hidden="true" />}
+              value={snapshot}
+              onChange={setSnapshot}
+              label="Configuration source"
+              options={[{ value: "", label: "live device" }, ...snapshotOptions]}
+            />
+            <MonitorButton
+              variant="primary"
+              icon={<Play aria-hidden="true" />}
+              disabled={loading || !device}
+              aria-busy={loading || undefined}
+              onClick={() => void explain()}
+            >
+              Explain
+            </MonitorButton>
+            <MonitorButton
+              variant="ghost"
+              icon={<GitBranch aria-hidden="true" />}
+              aria-pressed={compare}
+              onClick={() => setCompare(!compare)}
+            >
+              {compare ? "Hide compare" : "Compare"}
+            </MonitorButton>
+          </>
+        }
+      />
 
-      {compare && (
-        <Panel
-          title="Compare two configurations"
-          extra={
-            <Button size="sm" loading={diffing} onClick={() => void runDiff()}>
-              Explain the difference
-            </Button>
-          }
-        >
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Select
-              value={beforeSnapshot}
-              onValueChange={setBeforeSnapshot}
-              size="sm"
-              aria-label="Baseline configuration"
-              options={[
-                { value: "", label: "pick a baseline…" },
-                ...deviceSnapshots.map((s) => ({ value: s.id, label: s.label ?? s.id })),
-              ]}
-            />
-            <span className="text-muted-foreground">→</span>
-            <Select
-              value={afterSnapshot}
-              onValueChange={setAfterSnapshot}
-              size="sm"
-              aria-label="Comparison configuration"
-              options={[
-                { value: "", label: "the device as it is now" },
-                ...deviceSnapshots.map((s) => ({ value: s.id, label: s.label ?? s.id })),
-              ]}
-            />
-          </div>
-          {diff && (
-            <div className="mt-4">
-              {diff.diff.identical ? (
-                <p className="text-sm text-muted-foreground">
-                  Nothing this analysis covers is different. That is not the same as the two exports
-                  being identical — use Snapshots for the line diff.
-                </p>
-              ) : (
-                <ul className="divide-y divide-border text-sm">
-                  {diff.diff.changes.map((c) => (
-                    <li key={c.summary} className="flex flex-wrap items-start gap-2 py-2">
-                      <Badge type={SEVERITY_TYPE[c.severity] ?? "secondary"}>{c.severity}</Badge>
-                      <Badge type={IMPACT_TYPE[c.impact] ?? "secondary"}>{c.impact}</Badge>
-                      <span className="flex-1">
-                        {c.summary}
-                        {c.detail && (
-                          <span className="block text-xs text-muted-foreground">{c.detail}</span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </Panel>
+      {error && (
+        <MonitorNote tone="bad" role="alert">
+          {error}
+        </MonitorNote>
       )}
+      {loading && !payload && <LoadingState label="Reading router architecture" layout="cards" />}
 
-      {payload && (
+      {payload && n && (
         <>
-          <Panel
-            title="Topology"
-            extra={
-              <span className="text-xs text-muted-foreground">
-                bridge ports fan out from their bridge
-              </span>
-            }
-          >
-            <Topology payload={payload} />
-          </Panel>
+          <MetricStrip label="Router summary">
+            <Metric
+              label="Role"
+              value={roles?.primary?.label ?? "unknown"}
+              hint={
+                roles && roles.secondary.length > 0
+                  ? `also ${roles.secondary.map((r) => r.label).join(", ")}`
+                  : "no other roles"
+              }
+            />
+            <Metric
+              label="Exposed"
+              value={String(n.exposure.length)}
+              hint="reachable from outside"
+              tone={n.exposure.length > 0 ? "bad" : "good"}
+            />
+            <Metric
+              label="Subnets"
+              value={String(n.subnets.length)}
+              hint={`${n.interfaces.length} interfaces`}
+            />
+            <Metric
+              label="Not covered"
+              value={String(n.unknowns.length)}
+              hint="menus not analysed"
+              tone={n.unknowns.length > 0 ? "warn" : "default"}
+            />
+          </MetricStrip>
 
-          <Panel
+          <div className="explain-cols">
+            <div className="explain-col">
+              <ExposurePanel payload={payload} />
+              <WansPanel n={n} />
+              <SubnetsPanel n={n} />
+            </div>
+            <div className="explain-col">
+              <MonitorPanel
+                title="Topology"
+                description="Router at the centre. Bridge ports fan out from their bridge."
+                extra={TOPO_LEGEND}
+              >
+                <ExplainTopology narrative={n} />
+              </MonitorPanel>
+              {comparePanel}
+            </div>
+          </div>
+
+          <MonitorPanel
             title="The document"
+            description="Markdown, ready for a wiki. Diagram source travels with it."
             extra={
-              <div className="flex gap-2">
-                <Button size="sm" type="secondary" onClick={() => void copy()}>
+              <div className="flex flex-wrap items-center gap-2">
+                <MonitorButton
+                  variant="ghost"
+                  size="sm"
+                  icon={<Copy aria-hidden="true" />}
+                  onClick={() => void copy()}
+                >
                   Copy Markdown
-                </Button>
-                <Button size="sm" type="secondary" onClick={download}>
+                </MonitorButton>
+                <MonitorButton
+                  variant="ghost"
+                  size="sm"
+                  icon={<Download aria-hidden="true" />}
+                  onClick={download}
+                >
                   Download
-                </Button>
+                </MonitorButton>
               </div>
             }
           >
             <div
-              className="prose prose-sm max-w-none dark:prose-invert"
+              className="explain-doc"
               // renderMarkdown escapes HTML entities before doing anything else,
               // so device-supplied config text cannot inject markup here.
               dangerouslySetInnerHTML={{ __html: renderMarkdown(payload.markdown) }}
             />
-          </Panel>
+          </MonitorPanel>
         </>
       )}
-    </div>
+
+      {!payload && comparePanel}
+    </section>
   );
 }

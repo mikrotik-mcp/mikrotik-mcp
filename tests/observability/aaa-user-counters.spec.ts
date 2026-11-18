@@ -8,7 +8,9 @@ import { api } from "../../ui/observability/api";
 import type { UmUserCounters } from "../../src/observability/um-reports";
 
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
-vi.mock("../../ui/observability/um-reports", () => ({ UmReports: () => null }));
+vi.mock("../../ui/observability/um-reports", () => ({
+  UmReports: ({ tabs }: { tabs: unknown }) => tabs,
+}));
 vi.mock("../../ui/observability/toast-action", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -75,25 +77,26 @@ const reads = () => vi.mocked(api).mock.calls.filter(([path]) => path.includes("
 test("shows user-perspective totals and refreshes without replacing an open edit form", async () => {
   await open();
   expect(row("alice").textContent).toContain("1d 01:01:01");
-  expect(row("alice").textContent).toContain("1.0 MiB");
-  expect(row("alice").textContent).toContain("2.0 KiB");
+  expect(row("alice").textContent).toContain("1.05 MB");
+  expect(row("alice").textContent).toContain("2.05 KB");
   expect(row("alice").textContent).toContain("2 active connections");
   expect(row("zero").textContent).toContain("00:00:00");
   expect(row("zero").textContent).toContain("0 B");
   expect(
     [...row("unknown").querySelectorAll("td")].filter((cell) => cell.textContent === "—"),
   ).toHaveLength(3);
-  await click(button("Add"));
-  const input = [...host.querySelectorAll("label")]
-    .find((el) => el.textContent?.startsWith("Name"))!
-    .querySelector("input")!;
+  await click(button("Add user"));
+  const label = [...document.querySelectorAll("label")].find((el) =>
+    el.textContent?.startsWith("Name"),
+  )!;
+  const input = document.getElementById(label.htmlFor) as HTMLInputElement;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "draft");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   readCounters = async (device) => counters(device, 2097152);
   await ticks(5000);
-  expect(row("alice").textContent).toContain("2.0 MiB");
+  expect(row("alice").textContent).toContain("2.1 MB");
   expect(input.value).toBe("draft");
   expect(reads()).toHaveLength(2);
   expect(api).not.toHaveBeenCalledWith(expect.stringContaining("/reports"), expect.anything());
@@ -107,7 +110,7 @@ test("retains last known totals on errors and accepts counter resets on recovery
   await ticks(5000);
   expect(host.textContent).toContain("Counters unavailable");
   expect(host.textContent).toContain("showing last known values");
-  expect(row("alice").textContent).toContain("1.0 MiB");
+  expect(row("alice").textContent).toContain("1.05 MB");
   readCounters = async (device) => counters(device, 0);
   await click(button("Refresh"));
   expect(row("alice").textContent).toContain("0 B");
@@ -126,8 +129,8 @@ test("shows router-local last connection dates, unknowns and background refresh 
   });
   await open();
   expect(host.textContent).toContain("Last connection");
-  expect(row("alice").textContent).toContain("2026-10-05");
-  expect(row("alice").textContent).toContain("23:45:56");
+  expect(row("alice").textContent).toContain("Oct 05");
+  expect(row("alice").textContent).toContain("23:45");
   expect(row("alice").querySelector('[title*="router local time"]')).not.toBeNull();
   expect(row("zero").textContent).toContain("Unknown");
   readCounters = async (device) => ({
@@ -142,7 +145,7 @@ test("shows router-local last connection dates, unknowns and background refresh 
     rows: counters(device).rows.map((r) => ({ ...r, lastConnection: "2026-10-05 23:45:56" })),
   });
   await ticks(5000);
-  expect(row("alice").textContent).toContain("23:45:56");
+  expect(row("alice").textContent).toContain("23:45");
 });
 
 test("pauses hidden tabs, avoids overlapping requests, and stops when leaving Users", async () => {
@@ -179,15 +182,14 @@ test("aborts old-device reads and ignores late responses after switching routers
       : Promise.resolve(counters(device, 4096));
   await open();
   const oldSignal = reads()[0][1]!;
-  await click(host.querySelector<HTMLElement>('[aria-label="Router"]')!);
-  await click(
-    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-      (el) => el.textContent === "remote",
-    )!,
-  );
+  const router = host.querySelector<HTMLSelectElement>('select[aria-label="Router"]')!;
+  await act(async () => {
+    router.value = "remote";
+    router.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   expect(oldSignal.aborted).toBe(true);
-  expect(row("alice").textContent).toContain("4.0 KiB");
+  expect(row("alice").textContent).toContain("4.1 KB");
   await act(async () => finish(counters("home")));
-  expect(row("alice").textContent).toContain("4.0 KiB");
-  expect(row("alice").textContent).not.toContain("1.0 MiB");
+  expect(row("alice").textContent).toContain("4.1 KB");
+  expect(row("alice").textContent).not.toContain("1.05 MB");
 });

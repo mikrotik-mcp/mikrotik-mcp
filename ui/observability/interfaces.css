@@ -1,39 +1,45 @@
 /*
- * Interfaces, after the "Interfaces" board (Interfaces.dc.html).
+ * Interfaces, after the Signal board Net-Interfaces.
  * Unlayered on purpose: these rules refine the shared monitor-* classes.
  */
 
-/* The board's status line is 13px muted text with the state in bold. */
-.ifaces .monitor-status {
-  flex-wrap: wrap;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 400;
-  margin-top: 0;
+/* Selected interface: chart on the left, counters in a 320px column. */
+.ifaces-sel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
-.ifaces .monitor-status b {
-  color: var(--foreground);
-  font-weight: 510;
+.ifaces-sel-main {
+  border-right: 1px solid var(--line);
+}
+.ifaces-big small {
+  margin-left: 3px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.ifaces-search {
+  width: 240px;
 }
 
-/* When the counters drop under the chart, they take the full width. */
-.ifaces-sel {
-  container-type: inline-size;
-}
-@container (max-width: 879px) {
-  .ifaces-side {
-    max-width: none;
-    border-top: 1px solid var(--border);
-    border-left: 0;
+/* On narrower windows the counters drop below the chart. */
+@media (max-width: 1099px) {
+  .ifaces-sel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ifaces-sel-main {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
 }
 
 @media (max-width: 639px) {
-  .ifaces .ifaces-chart {
-    height: auto;
+  .ifaces-search {
+    width: 100%;
+  }
+  .ifaces .monitor-panel-extra {
+    flex-basis: 100%;
   }
   /* The interface name gets its own line; the legend wraps under it. */
-  .ifaces-sel .monitor-panel-head > div:first-child {
+  .ifaces-sel-title {
     flex-basis: 100%;
   }
 }

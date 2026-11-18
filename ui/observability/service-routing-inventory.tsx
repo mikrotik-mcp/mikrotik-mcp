@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
-import { AlertTriangle, ChevronRight, Network, Route, X } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Network,
+  Route,
+  X,
+} from "lucide-react";
 import type { RoutingInventory, RoutingSectionKey } from "../../src/service-routing/inventory";
 import type { Row, RoutingPolicy } from "../../src/service-routing/model";
 import { api } from "./api";
 import { RoutingAddressBrowser } from "./service-routing-address-browser";
 import { RoutingGateway } from "./routing-gateway";
+import { RoutingExitsPanel } from "./service-routing-exits";
 import {
   MonitorButton,
   MonitorEmpty,
@@ -158,7 +167,7 @@ const groups = {
 >;
 type Group = keyof typeof groups;
 type Entry = { row: Row; section: RoutingSectionKey; family: string };
-const COLS = "grid-cols-[56px_minmax(190px,1fr)_210px_88px_76px_60px]";
+const COLS = "grid-cols-[48px_minmax(0,1fr)_minmax(0,1.1fr)_84px_76px_70px]";
 
 const familyOf = (key: RoutingSectionKey, row: Row) =>
   key.endsWith("4")
@@ -245,6 +254,18 @@ function stateOf(entry: Entry): { label: string; tone: Tone } {
   return { label: "Enabled", tone: "good" };
 }
 
+/** "ether1": the interfaces of an `address%interface` gateway, for the row's second line. */
+function gatewayInterfaces(value: string): string {
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((m) => m.trim().split("%")[1])
+        .filter(Boolean),
+    ),
+  ].join(", ");
+}
+
 const KIND: Partial<Record<RoutingSectionKey, string>> = {
   routes4: "route",
   routes6: "route",
@@ -256,10 +277,14 @@ function ActionCell({ entry, target }: { entry: Entry; target: string }): ReactN
   const r = entry.row;
   if (entry.section.startsWith("routes"))
     return (
-      <span className="sr-gw flex min-w-0 flex-col gap-0.5">
+      <span className="sr-gw flex min-w-0 flex-col">
         <RoutingGateway value={target} />
-        {r.distance && (
-          <span className="text-[12px] text-muted-foreground">Distance {r.distance}</span>
+        {(gatewayInterfaces(target) || r.distance) && (
+          <span className="truncate text-[12px] leading-[17px] text-faint">
+            {[gatewayInterfaces(target), r.distance && `Distance ${r.distance}`]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
         )}
       </span>
     );
@@ -316,7 +341,7 @@ export function RouterRoutingInventory({
   };
   if (!data)
     return (
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <div className="sr-stack grid grid-cols-[minmax(0,1fr)]">
         {error && (
           <div className="monitor-note" data-tone="bad" role="alert">
             <AlertTriangle aria-hidden="true" className="text-destructive" />
@@ -429,10 +454,7 @@ export function RouterRoutingInventory({
   const head = groups[group].head;
   const selectedSummary = selected ? summary(selected) : undefined;
   return (
-    <div
-      className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6"
-      aria-label="Router routing inventory"
-    >
+    <div className="sr-stack grid min-w-0 grid-cols-[minmax(0,1fr)]">
       {error && (
         <div className="monitor-note" data-tone="bad" role="alert">
           <AlertTriangle aria-hidden="true" className="text-destructive" />
@@ -445,11 +467,11 @@ export function RouterRoutingInventory({
         <div className="monitor-note" data-tone="warn" role="alert">
           <AlertTriangle aria-hidden="true" className="text-warning" />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="font-[510] text-foreground">
+            <b>
               {failed.length === Object.keys(data.sections).length
                 ? "No section could be read"
                 : `${failed.length} ${failed.length === 1 ? "section" : "sections"} could not be read`}
-            </span>
+            </b>
             <span className="font-mono text-[12px] break-words text-muted-foreground">
               {sameError(failed)
                 ? `${failed.map((s) => s.path).join(" · ")} — ${failed[0].error ?? "not read"}`
@@ -467,31 +489,25 @@ export function RouterRoutingInventory({
         </div>
       )}
 
-      <section
-        className="monitor-strip"
-        style={{ "--strip-min": "200px" } as CSSProperties}
-        aria-label="Sections"
-      >
+      <section className="sr-sections monitor-strip" aria-label="Sections">
         {(["routes", "mangle", "rules", "tables"] as const).map((g) => (
           <button
             key={g}
             type="button"
             aria-pressed={group === g}
             onClick={() => pick(g)}
-            className={cn(
-              "monitor-metric cursor-pointer text-left transition-colors hover:bg-overlay-03",
-              group === g &&
-                "bg-overlay-03 shadow-[-1px_0_0_var(--border),0_-1px_0_var(--border),inset_0_-2px_0_var(--chart-1)]",
-            )}
+            className="sr-section monitor-metric cursor-pointer text-left"
           >
             <span className="monitor-metric-label">{groups[g].label}</span>
-            <span className="monitor-metric-value text-emphasis">{count(groups[g].keys)}</span>
+            <span className="monitor-metric-value">{count(groups[g].keys)}</span>
             <span className="monitor-metric-hint">{hints[g]}</span>
           </button>
         ))}
       </section>
 
-      <section className="monitor-panel overflow-hidden">
+      <RoutingExitsPanel data={data} />
+
+      <section className="monitor-panel" aria-label="Router routing inventory">
         <MonitorTabs<Group>
           label="Section"
           value={group}
@@ -503,9 +519,9 @@ export function RouterRoutingInventory({
           }))}
         />
         {group !== "addresses" && (
-          <div className="flex flex-wrap items-center gap-2 px-5 pt-4 pb-2">
+          <div className="flex flex-wrap items-center gap-2 px-[18px] pt-3 pb-1.5">
             <MonitorSearch
-              className="flex-[1_1_320px]"
+              className="w-[300px] max-sm:w-full"
               label="Search router routing"
               placeholder="Find an address, list, comment or gateway"
               value={query}
@@ -541,12 +557,7 @@ export function RouterRoutingInventory({
             />
           </div>
         )}
-        <p
-          className={cn(
-            "px-5 pb-3.5 text-[12px] text-muted-foreground",
-            group === "addresses" && "pt-4",
-          )}
-        >
+        <p className={cn("monitor-hint px-[18px] pb-3", group === "addresses" && "pt-3")}>
           {groups[group].help}
           {table !== "all" &&
             group !== "addresses" &&
@@ -554,14 +565,14 @@ export function RouterRoutingInventory({
         </p>
 
         {group === "addresses" ? (
-          <div className="border-t border-border px-5 py-4">
+          <div className="border-t border-line px-[18px] py-4">
             <RoutingAddressBrowser key={data.device} device={data.device} />
           </div>
         ) : (
-          <div className="flex flex-wrap border-t border-border">
-            <div className="flex min-w-0 flex-[999_1_560px] flex-col">
+          <div className="sr-inventory" data-inspecting={selected ? "" : undefined}>
+            <div className="flex min-w-0 flex-col">
               <div className="overflow-x-auto" role="table" aria-label={groups[group].label}>
-                <div className={cn("monitor-thead min-w-[660px] border-t-0", COLS)} role="row">
+                <div className={cn("monitor-thead min-w-[600px]", COLS)} role="row">
                   <span role="columnheader">Order</span>
                   {head.map((label) => (
                     <span role="columnheader" key={label}>
@@ -587,30 +598,31 @@ export function RouterRoutingInventory({
                     <div
                       key={`${entry.section}-${r[".id"] || r["#"]}`}
                       role="row"
-                      className={cn("monitor-row min-w-[660px] items-start", COLS)}
+                      className={cn("monitor-row min-w-[600px]", COLS)}
                       data-selected={isSelected || undefined}
                       data-failed={state.tone === "bad" || undefined}
                     >
-                      <span role="cell" className="flex flex-col">
-                        <span className="font-mono text-[12px] text-fg-secondary">#{r["#"]}</span>
-                        <span className="text-[12px] text-muted-foreground">{entry.family}</span>
-                      </span>
                       <span role="cell" className="flex min-w-0 flex-col">
+                        <span className="font-mono text-[13px] text-fg-secondary">#{r["#"]}</span>
+                        <span className="text-[12px] leading-[17px] text-faint">
+                          {entry.family}
+                        </span>
+                      </span>
+                      <span role="cell" className="flex min-w-0 flex-col items-start gap-0.5">
                         <span
-                          className="truncate font-mono text-[12px] text-foreground"
+                          className="max-w-full truncate font-mono text-[12px] font-medium text-foreground"
                           title={match}
                         >
                           {match}
                         </span>
-                        {(comment || r.dynamic === "yes") && (
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            {comment && (
-                              <span className="truncate text-[12px] text-muted-foreground">
-                                {comment}
-                              </span>
-                            )}
-                            {r.dynamic === "yes" && <span className="monitor-chip">Dynamic</span>}
-                          </span>
+                        {r.dynamic === "yes" ? (
+                          <span className="monitor-chip">Dynamic</span>
+                        ) : (
+                          comment && (
+                            <span className="max-w-full truncate text-[12px] text-muted-foreground">
+                              {comment}
+                            </span>
+                          )
                         )}
                       </span>
                       <span role="cell" className="min-w-0">
@@ -631,18 +643,14 @@ export function RouterRoutingInventory({
                               ? r.table || "—"
                               : "—"}
                       </span>
-                      <span
-                        role="cell"
-                        className="flex items-center gap-1.5 text-[12px] text-fg-secondary"
-                      >
+                      <span role="cell" className="flex items-center gap-1.5 text-[12px]">
                         <StatusDot tone={state.tone} />
                         {state.label}
                       </span>
-                      <span role="cell" className="text-right">
+                      <span role="cell" className="min-w-0">
                         <MonitorButton
                           size="sm"
                           variant="ghost"
-                          className="px-1.5"
                           aria-label={`Inspect ${match}`}
                           aria-expanded={isSelected}
                           onClick={() => (isSelected ? setSelected(undefined) : inspect(entry))}
@@ -671,63 +679,66 @@ export function RouterRoutingInventory({
                     : "MCP policies are kept apart from these router entries."}
                 </MonitorEmpty>
               )}
-              <div className="monitor-row mt-auto grid-cols-[1fr_auto] text-[12px] text-muted-foreground hover:bg-transparent">
+              <div className="monitor-foot mt-auto">
                 <span>
                   {filtered.length} {filtered.length === 1 ? "entry" : "entries"} · router order
                   kept
                 </span>
-                <span className="flex items-center gap-2">
-                  <MonitorButton
-                    size="sm"
-                    variant="ghost"
-                    disabled={currentPage === 0}
-                    onClick={() => setPage(currentPage - 1)}
-                  >
-                    Previous
-                  </MonitorButton>
-                  <span className="tabular-nums">
-                    {currentPage + 1} / {pages}
-                  </span>
-                  <MonitorButton
-                    size="sm"
-                    variant="ghost"
-                    disabled={currentPage + 1 >= pages}
-                    onClick={() => setPage(currentPage + 1)}
-                  >
-                    Next
-                  </MonitorButton>
+                <span className="flex-1" />
+                <MonitorButton
+                  size="sm"
+                  variant="ghost"
+                  icon={<ChevronLeft />}
+                  disabled={currentPage === 0}
+                  onClick={() => setPage(currentPage - 1)}
+                >
+                  Previous
+                </MonitorButton>
+                <span className="font-mono tabular-nums">
+                  {currentPage + 1} / {pages}
                 </span>
+                <MonitorButton
+                  size="sm"
+                  variant="ghost"
+                  icon={<ChevronRight />}
+                  disabled={currentPage + 1 >= pages}
+                  onClick={() => setPage(currentPage + 1)}
+                >
+                  Next
+                </MonitorButton>
               </div>
             </div>
 
             {selected && selectedSummary && (
               <aside
-                className="sr-inspect flex max-w-[360px] min-w-0 flex-[1_1_300px] flex-col border-l border-border"
+                className="sr-inspect flex min-w-0 flex-col"
                 aria-label={`Inspect ${KIND[selected.section] ?? "rule"} ${selected.row["#"]}`}
               >
-                <div className="flex flex-col gap-1.5 border-b border-border px-5 py-4">
-                  <div className="flex items-center gap-2">
-                    <span className="monitor-label flex-1">
+                <div className="flex flex-col gap-1.5 border-b border-line px-[18px] pt-3.5 pb-3">
+                  <div className="flex items-center">
+                    <span className="sr-eyebrow flex-1">
                       Inspect · {KIND[selected.section] ?? "rule"} #{selected.row["#"]}
                     </span>
-                    <MonitorButton
-                      size="sm"
-                      variant="ghost"
+                    <button
+                      type="button"
+                      className="monitor-icon-btn"
                       aria-label="Close"
-                      icon={<X />}
                       onClick={() => setSelected(undefined)}
-                    />
+                    >
+                      <X aria-hidden="true" />
+                    </button>
                   </div>
-                  <h3 className="font-mono text-[14px] font-medium break-words text-emphasis">
+                  <h3 className="font-mono text-[15px] font-semibold break-words text-emphasis">
                     {selectedSummary.match}
-                    {selectedSummary.target && ` → ${selectedSummary.target}`}
+                    {selectedSummary.target &&
+                      ` → ${(selected.section.startsWith("routes") && selected.row.gateway) || selectedSummary.target}`}
                   </h3>
                   <p className="text-[12px] text-muted-foreground">
                     <span className="font-mono">{data.sections[selected.section].path}</span> ·{" "}
                     {data.device} · read-only
                   </p>
                 </div>
-                <div className="flex flex-col gap-3 px-5 py-4">
+                <div className="flex flex-col gap-2.5 px-[18px] py-3">
                   {linkedLists.length > 0 && (
                     <RoutingAddressBrowser
                       key={`${data.device}:${selected.section}:${selected.row[".id"]}`}
@@ -738,24 +749,25 @@ export function RouterRoutingInventory({
                   )}
                   <div
                     className={cn(
-                      "flex flex-col gap-2",
-                      linkedLists.length > 0 && "border-t border-border pt-3",
+                      "flex flex-col gap-2.5",
+                      linkedLists.length > 0 && "border-t border-line pt-3",
                     )}
                   >
                     <button
                       type="button"
                       aria-expanded={fieldsOpen}
                       onClick={() => setFieldsOpen((v) => !v)}
-                      className="flex cursor-pointer items-center gap-1.5 text-[13px] font-[510] text-foreground"
+                      className="flex cursor-pointer items-center gap-1.5 text-[13px] text-foreground [&_svg]:size-4"
                     >
-                      <ChevronRight
-                        aria-hidden="true"
-                        className={cn("size-4 transition-transform", fieldsOpen && "rotate-90")}
-                      />
+                      {fieldsOpen ? (
+                        <ChevronDown aria-hidden="true" />
+                      ) : (
+                        <ChevronRight aria-hidden="true" />
+                      )}
                       Router fields · {Object.keys(selected.row).length}
                     </button>
                     {fieldsOpen && (
-                      <dl className="monitor-facts grid-cols-[minmax(0,120px)_minmax(0,1fr)]">
+                      <dl className="monitor-facts grid-cols-[110px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5">
                         {Object.entries(selected.row).map(([key, value]) => (
                           <div key={key} className="contents">
                             <dt className="truncate font-mono text-[12px]">{key}</dt>

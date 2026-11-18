@@ -1,0 +1,246 @@
+/* Backups, from the "Rec-Backups", "Rec-Backups-Restore" and
+   "Rec-Backups-Phone" boards. Shared parts live in monitoring.css. */
+
+.bk .mono,
+.bk-dialog .mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.bk .trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Wide and phone copies of the same line; one shows at a time. */
+.bk-narrow {
+  display: none;
+}
+
+/* The lead: the vault path with an "edit path" link beside it. */
+.bk-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.bk-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--brand);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.bk-link:hover {
+  text-decoration: underline;
+}
+.bk-link svg {
+  width: 14px;
+  height: 14px;
+}
+.bk-path .monitor-input {
+  width: min(48vw, 380px);
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+
+.bk-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.bk-create-row {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 10px;
+}
+
+/* A select or a field with an icon on the left (the boards' .select/.field). */
+.bk-select {
+  display: flex;
+  width: 100%;
+}
+.bk-select select {
+  width: 100%;
+  padding-left: 34px;
+}
+.bk-select .bk-icon {
+  right: auto;
+  left: 12px;
+}
+.bk-field {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.bk-field .monitor-input {
+  width: 100%;
+  padding-left: 34px;
+  line-height: 21px;
+}
+.bk-field > svg {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+/* Export options: pill toggles. */
+.bk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.bk-chip {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 99px;
+  background: var(--glass-2);
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-family: var(--font-mt);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bk-chip[aria-pressed="true"] {
+  background: var(--sig-soft);
+  box-shadow: inset 0 0 0 1px var(--sig);
+  color: var(--success);
+}
+.bk-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.bk-chip:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.bk-chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Last backup per router: name, count bar, age. */
+.bk-cover {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 70px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 12px;
+}
+.bk-cover .monitor-bar {
+  min-width: 30px;
+}
+
+.bk-table {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.9fr) 72px 130px 330px;
+}
+.bk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.bk-actions .monitor-input {
+  width: 140px;
+  height: 28px;
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.bk-ask {
+  color: var(--destructive);
+  font-size: 12px;
+}
+
+.bk-export {
+  max-height: 192px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Phone: the vault as cards. */
+.bk-cards {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+.bk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.bk .bk-card-name {
+  color: var(--foreground);
+  line-height: 21px;
+  word-break: break-all;
+}
+.bk-vault-head {
+  display: none;
+  align-items: center;
+}
+
+@media (max-width: 1100px) {
+  .bk-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 639px) {
+  .bk-wide {
+    display: none;
+  }
+  .bk-narrow {
+    display: inline;
+  }
+  .bk .monitor-lead .bk-narrow {
+    display: block;
+  }
+  .bk-hide-phone {
+    display: none !important;
+  }
+  .bk .monitor-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bk-create-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bk-create-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .bk-chips {
+    gap: 6px;
+  }
+  .bk-vault-head {
+    display: flex;
+  }
+  .bk-cards {
+    display: flex;
+  }
+}
+
+@media (max-width: 639px) {
+  .bk-kpis > :nth-child(2),
+  .bk-kpis > :nth-child(4) {
+    display: none;
+  }
+}

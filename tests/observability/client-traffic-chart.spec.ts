@@ -20,15 +20,17 @@ test("client traffic chart fills its container without letterboxing or scaling i
   expect(chart.getAttribute("class")).not.toContain("max-w-");
   expect(chart.getAttribute("preserveAspectRatio")).toBe("none");
   expect(chart.getAttribute("aria-label")).toContain("download and upload");
-  const lines = [...chart.querySelectorAll("polyline")];
+  const lines = [...chart.querySelectorAll("path[data-line]")];
   expect(lines).toHaveLength(2);
   for (const line of lines) {
     expect(line.getAttribute("vector-effect")).toBe("non-scaling-stroke");
-    // First/latest samples reach opposite padded edges, even before history fills.
+    // Points sit on observed time: first and latest samples reach opposite edges,
+    // and the 2s sample sits a quarter of the way across, even before history fills.
     const x = line
-      .getAttribute("points")!
-      .split(" ")
+      .getAttribute("d")!
+      .replace(/^M/, "")
+      .split(" L")
       .map((p) => Number(p.split(",")[0]));
-    expect(x).toEqual([8, 134, 512]);
+    expect(x).toEqual([0, 130, 520]);
   }
 });

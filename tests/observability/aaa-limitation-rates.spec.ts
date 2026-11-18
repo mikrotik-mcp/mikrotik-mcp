@@ -7,7 +7,9 @@ import { api, postJson } from "../../ui/observability/api";
 import { limitationRate } from "../../ui/observability/format";
 
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
-vi.mock("../../ui/observability/um-reports", () => ({ UmReports: () => null }));
+vi.mock("../../ui/observability/um-reports", () => ({
+  UmReports: ({ tabs }: { tabs: unknown }) => tabs,
+}));
 vi.mock("../../ui/observability/toast-action", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -64,7 +66,7 @@ test("formats only rate cells and preserves raw values when editing and saving",
   document.body.append(host);
   const root = createRoot(host);
   const button = (label: string) =>
-    [...host.querySelectorAll("button")].find((b) => b.textContent === label)!;
+    [...document.querySelectorAll("button")].find((b) => b.textContent === label)!;
   const click = async (el: HTMLElement) => {
     await act(async () => el.click());
   };
@@ -90,12 +92,22 @@ test("formats only rate cells and preserves raw values when editing and saving",
       "—",
     ]);
     expect(postJson).not.toHaveBeenCalled();
-    await click(button("Edit"));
-    const input = [...host.querySelectorAll("label")]
-      .find((el) => el.textContent?.startsWith("Download rate"))!
-      .querySelector("input")!;
+    const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Actions for 10m"]')!;
+    await act(async () => {
+      trigger.focus();
+      trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await click(
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (el) => el.textContent === "Edit",
+      )!,
+    );
+    const label = [...document.querySelectorAll("label")].find((el) =>
+      el.textContent?.startsWith("Download rate"),
+    )!;
+    const input = document.getElementById(label.htmlFor) as HTMLInputElement;
     expect(input.value).toBe("10000000B");
-    await click(button("Save"));
+    await click(button("Save changes"));
     expect(postJson).toHaveBeenCalledWith("/api/aaa/update", {
       device: "home",
       slug: "um-limitations",

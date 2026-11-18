@@ -6,7 +6,16 @@
  * repulsion term divides by.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { arcDash, CX, CY, HUB_ID, layout, sweepPath } from "../ui/observability/topology-layout";
+import {
+  arcDash,
+  CX,
+  CY,
+  HUB_ID,
+  INNER_Y,
+  layout,
+  OUTER_Y,
+  sweepPath,
+} from "../ui/observability/topology-layout";
 
 const dev = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `dev${i}` }));
 const nbr = (n: number, parent: string) => ({
@@ -31,11 +40,25 @@ describe("topology layout", () => {
 
   test("devices are spread evenly around the ring", () => {
     const { pos, rInner } = layout(dev(4), [], new Map());
+    const ry = rInner * INNER_Y;
     for (let i = 0; i < 4; i++) {
-      expect(dist(pos.get(`dev${i}`)!, { x: CX, y: CY })).toBeCloseTo(rInner, 5);
+      const p = pos.get(`dev${i}`)!;
+      // Every device lies on the inner ellipse.
+      expect(((p.x - CX) / rInner) ** 2 + ((p.y - CY) / ry) ** 2).toBeCloseTo(1, 5);
     }
-    // Opposite devices on a 4-way split must be on opposite sides.
-    expect(dist(pos.get("dev0")!, pos.get("dev2")!)).toBeCloseTo(rInner * 2, 4);
+    // A 4-way split puts them at 12, 3, 6 and 9 o'clock: opposite pairs on opposite sides.
+    expect(dist(pos.get("dev0")!, pos.get("dev2")!)).toBeCloseTo(ry * 2, 4);
+    expect(dist(pos.get("dev1")!, pos.get("dev3")!)).toBeCloseTo(rInner * 2, 4);
+  });
+
+  test("neighbours lie on the outer ellipse", () => {
+    const { nodes, parents } = nbr(5, "dev1");
+    const { pos, rOuter } = layout(dev(3), nodes, parents);
+    for (let i = 0; i < 5; i++) {
+      const p = pos.get(`nb${i}`)!;
+      const r = ((p.x - CX) / rOuter) ** 2 + ((p.y - CY) / (rOuter * OUTER_Y)) ** 2;
+      expect(r).toBeCloseTo(1, 5);
+    }
   });
 
   test("is deterministic — identical inputs give identical output", () => {

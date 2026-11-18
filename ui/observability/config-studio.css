@@ -1,0 +1,236 @@
+@layer theme, base, components, utilities;
+/* Config (Wks-Config and Wks-Config-Pending boards): server settings only. */
+@layer components {
+  .config-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .config-link {
+    color: var(--brand);
+    font-weight: 500;
+  }
+  .config-link:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .config-json summary {
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .config-bottom {
+    display: grid;
+    min-width: 0;
+    align-items: start;
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+  @media (max-width: 1099px) {
+    .config-bottom {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Section list + the chosen section. */
+  .config-form-grid {
+    display: grid;
+    min-width: 0;
+    align-items: start;
+    gap: 14px;
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+  @media (max-width: 899px) {
+    .config-form-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .config-nav {
+      flex-direction: row;
+      overflow-x: auto;
+    }
+    .config-nav-item {
+      flex: none;
+    }
+  }
+  .config-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .config-nav-item {
+    display: flex;
+    height: 30px;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    padding: 0 10px;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .config-nav-item:hover {
+    background: var(--overlay-03);
+  }
+  .config-nav-item[aria-current="true"] {
+    background: var(--glass-2);
+    box-shadow: inset 2px 0 0 var(--sig);
+    color: var(--foreground);
+  }
+  .config-nav-item:focus-visible,
+  .config-adv-toggle:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+  .config-section {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 14px;
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .config-section .monitor-input[data-changed] {
+    box-shadow:
+      inset 0 0 0 1px var(--sig),
+      0 0 0 3px var(--sig-soft);
+  }
+  .config-adv-toggle {
+    display: flex;
+    width: fit-content;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    padding: 2px 0;
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .config-adv-toggle:hover {
+    color: var(--foreground);
+  }
+  .config-module {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: 12px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 12px 14px;
+    cursor: pointer;
+  }
+  .config-module[data-on] {
+    background: var(--sig-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sig) 45%, transparent);
+  }
+
+  /* The undo window after Save. */
+  .config-pending {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    border-radius: 14px;
+    background: var(--warn-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 40%, transparent);
+    padding: 14px 16px;
+  }
+
+  .config-diff {
+    overflow: auto;
+    max-height: 360px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 6px 0;
+    font-family: var(--font-mt);
+    font-size: 12px;
+    line-height: 22px;
+  }
+  .config-diff:focus-visible {
+    outline: 2px solid var(--ring);
+  }
+  .config-diff > div {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: 28px 14px minmax(0, 1fr);
+    padding: 0 12px;
+    color: var(--text-secondary);
+  }
+  .config-diff > div > span:first-child {
+    color: var(--text-faint);
+    text-align: right;
+  }
+  .config-diff > div > span:last-child {
+    white-space: pre;
+  }
+  .config-diff > div[data-kind="add"] {
+    background: var(--sig-soft);
+    color: var(--success);
+  }
+  .config-diff > div[data-kind="del"] {
+    background: var(--bad-soft);
+    color: var(--destructive);
+  }
+  .config-diff > div[data-kind="hunk"] {
+    color: var(--text-faint);
+  }
+
+  /* Version history table. */
+  .config-history-row {
+    grid-template-columns: 118px 92px minmax(0, 1fr) 62px 150px 150px;
+  }
+  @media (max-width: 899px) {
+    .config-history-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .config-history-row > :nth-child(n + 3):not(:last-child) {
+      display: none;
+    }
+  }
+  .config-drift-bar {
+    display: flex;
+    width: 60px;
+    height: 6px;
+    flex: none;
+    overflow: hidden;
+    border-radius: 9px;
+    background: var(--line);
+  }
+  .config-drift-bar > i {
+    display: block;
+    height: 100%;
+    background: var(--sig);
+  }
+  .config-drift-bar > i[data-del] {
+    background: var(--destructive);
+  }
+  .config-checkpoint {
+    width: min(300px, 100%);
+    height: 30px;
+  }
+  .config-checkpoint input {
+    min-width: 0;
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  .config-fl-select > .monitor-select,
+  .config-fl-select > .monitor-select select {
+    width: 100%;
+  }
+}

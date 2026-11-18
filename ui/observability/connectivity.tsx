@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { formatMs, useLineDraw } from "./monitoring-ui";
 import { deviceState } from "./device-card";
@@ -6,13 +6,16 @@ import type { DeviceInfo } from "./types";
 
 /** How long a line stays lit after a tool call reaches its router. */
 const LIT_MS = 1600;
-const ROW = 66;
-const BOX_W = 230;
+const ROW = 72;
+const BOX_W = 240;
 const BOX_H = 44;
-const COL_1 = 560;
-const COL_2 = 852;
+const COL_1 = 470;
+const COL_2 = 800;
+const SERVER_RIGHT = 240;
+const BEND_1 = 355;
+const BEND_2 = 755;
 
-type Placed = { d: DeviceInfo; x: number; y: number; via: string | null };
+type Placed = { d: DeviceInfo; x: number; cy: number; via: string | null };
 
 /** The second line under a router name: how it is reached, then latency or the failure. */
 function pathSub(d: DeviceInfo, via: string | null): string {
@@ -40,18 +43,19 @@ function pathSub(d: DeviceInfo, via: string | null): string {
 }
 
 /** Place direct routers in one column and routers behind a jump host in the next. */
-function layout(devices: DeviceInfo[]): { placed: Placed[]; height: number } {
+function layout(devices: DeviceInfo[]): { placed: Placed[]; height: number; mid: number } {
   const names = new Set(devices.map((d) => d.name));
   const behind = (d: DeviceInfo) => !d.mac && !!d.jumpVia && names.has(d.jumpVia);
   const first = devices.filter((d) => !behind(d));
   const second = devices.filter(behind);
   const slots = Math.max(first.length, second.length, 1);
-  const height = Math.max(slots * ROW + 2, 134);
-  const top = (height - (first.length * ROW + 2)) / 2;
+  const height = slots * ROW + 20;
+  const mid = height / 2 + 2;
+  const top = 46 + ((slots - first.length) * ROW) / 2;
   const placed: Placed[] = first.map((d, i) => ({
     d,
     x: COL_1,
-    y: top + 12 + i * ROW,
+    cy: top + i * ROW,
     via: !d.mac && d.jumpHost ? `${d.jumpHost.host}:${d.jumpHost.port}` : null,
   }));
   const used = new Set<number>();
@@ -64,9 +68,9 @@ function layout(devices: DeviceInfo[]): { placed: Placed[]; height: number } {
       if (slot < 0) slot = want + step;
     }
     used.add(slot);
-    placed.push({ d, x: COL_2, y: top + 12 + slot * ROW, via: d.jumpVia ?? null });
+    placed.push({ d, x: COL_2, cy: 46 + slot * ROW, via: d.jumpVia ?? null });
   }
-  return { placed, height };
+  return { placed, height, mid };
 }
 
 /** Which routers had a tool call in the last moment, from the live event counters. */
@@ -92,10 +96,42 @@ function useLit(pulses: Record<string, number>): Set<string> {
   return lit;
 }
 
+const short = (name: string) => (name.length > 24 ? `${name.slice(0, 23)}…` : name);
+
+/** The line legend under the panel title: solid, dashed and dotted management paths. */
+export function PathLegend(): ReactNode {
+  const items: [string, string | undefined][] = [
+    ["Direct SSH", undefined],
+    ["Through a jump host", "6 5"],
+    ["MAC-Telnet (layer 2)", "2 5"],
+  ];
+  return (
+    <span className="monitor-legend">
+      {items.map(([label, dash]) => (
+        <span key={label} className="inline-flex items-center gap-1.5">
+          <svg width="24" height="6" aria-hidden="true">
+            <line
+              x1="0"
+              y1="3"
+              x2="24"
+              y2="3"
+              stroke="var(--text-secondary)"
+              strokeWidth="2"
+              strokeDasharray={dash}
+              strokeLinecap="round"
+            />
+          </svg>
+          {label}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /**
  * "How MCP reaches each router": the management path from this server to every
  * router. Solid for direct SSH or REST, dashed through a jump host, dotted for
- * MAC-Telnet. A router's box lights up while a call to it runs.
+ * MAC-Telnet. A path and its router light up while a call to it runs.
  */
 export function ManagementPaths({
   devices,
@@ -106,112 +142,148 @@ export function ManagementPaths({
 }): ReactNode {
   const root = useRef<SVGSVGElement>(null);
   const lit = useLit(pulses);
-  const { placed, height } = layout(devices);
-  const mid = height / 2;
+  const { placed, height, mid } = layout(devices);
   useLineDraw(
     root as unknown as RefObject<HTMLElement | null>,
     devices.map((d) => d.name).join(","),
   );
   const byName = new Map(placed.map((p) => [p.d.name, p]));
+  const isLit = (d: DeviceInfo) =>
+    deviceState(d) === "online" && (lit.has(d.name) || (d.pool?.inflight ?? 0) > 0);
   return (
     <svg
       ref={root}
       className="dv-paths"
-      viewBox={`0 0 1096 ${height}`}
+      viewBox={`0 0 1080 ${height}`}
       width="100%"
       height={height}
       role="img"
       aria-label={`Management paths from the MCP server to ${devices.length} router${devices.length === 1 ? "" : "s"}`}
     >
-      <g strokeWidth="1.5" fill="none">
-        {placed.map(({ d, x, y, via }) => {
-          const state = deviceState(d);
-          const host = d.jumpVia ? byName.get(d.jumpVia) : undefined;
-          const end = y + 22;
-          const from =
-            x === COL_2 && host ? { x: host.x + BOX_W, y: host.y + 22 } : { x: 150, y: mid };
-          const bend = x === COL_2 ? 40 : 210;
-          const path =
-            x === COL_2
-              ? `M${from.x} ${from.y} C ${from.x + bend} ${from.y}, ${x - bend} ${end}, ${x} ${end}`
-              : `M150 ${mid} C 360 ${mid}, 380 ${end}, ${x} ${end}`;
-          const stroke =
-            state === "offline"
-              ? "var(--destructive)"
-              : d.mac
-                ? "var(--text-faint)"
-                : "var(--chart-1)";
-          const dash = d.mac ? "2 4" : via || x === COL_2 ? "5 4" : undefined;
-          return (
-            <path
-              key={d.name}
-              data-draw=""
-              d={path}
-              stroke={stroke}
-              strokeDasharray={dash}
-              opacity={state === "disabled" ? 0.4 : 1}
-            />
-          );
-        })}
-      </g>
-      <g>
-        <rect
-          x="16"
-          y={mid - 24}
-          width="134"
-          height="48"
-          rx="8"
-          fill="var(--accent)"
-          stroke="var(--input)"
-        />
-        <text x="32" y={mid - 3} fontSize="13" fontWeight="590" fill="var(--foreground)">
-          MCP server
-        </text>
-        <text x="32" y={mid + 14} fontSize="12" fill="var(--muted-foreground)">
-          this machine
-        </text>
-      </g>
-      {placed.map(({ d, x, y, via }) => {
+      <rect
+        x="20"
+        y={mid - 26}
+        width="220"
+        height="52"
+        rx="12"
+        fill="var(--glass-2)"
+        stroke="var(--sig)"
+        strokeOpacity=".55"
+      />
+      <circle cx="42" cy={mid} r="4" fill="var(--sig)" />
+      <circle cx="42" cy={mid} r="9" fill="none" stroke="var(--sig)" strokeOpacity=".35" />
+      <text x="60" y={mid - 4} fontSize="13" fontWeight="600" fill="var(--foreground)">
+        MCP server
+      </text>
+      <text
+        x="60"
+        y={mid + 13}
+        fontSize="11"
+        fill="var(--muted-foreground)"
+        fontFamily="var(--font-mt)"
+      >
+        this machine
+      </text>
+      {placed.map(({ d, x, cy, via }) => {
         const state = deviceState(d);
+        const on = isLit(d);
+        const host = x === COL_2 && d.jumpVia ? byName.get(d.jumpVia) : undefined;
+        const from = host
+          ? { x: host.x + BOX_W, y: host.cy, bend: BEND_2 }
+          : { x: SERVER_RIGHT, y: mid, bend: BEND_1 };
+        const path = `M${from.x} ${from.y} C${from.bend} ${from.y} ${from.bend} ${cy} ${x} ${cy}`;
         const stroke =
-          state === "offline"
+          state === "offline" ? "var(--destructive)" : on ? "var(--sig)" : "var(--line-2)";
+        const dash = d.mac ? "2 5" : via || host ? "6 5" : undefined;
+        const box = on
+          ? "var(--sig)"
+          : state === "offline"
             ? "var(--destructive)"
-            : lit.has(d.name) || (d.pool?.inflight ?? 0) > 0
-              ? "var(--chart-1)"
-              : "var(--input)";
+            : "var(--line-2)";
         const dot =
           state === "online"
-            ? "var(--success)"
+            ? "var(--sig)"
             : state === "offline"
               ? "var(--destructive)"
               : "var(--text-faint)";
+        // The middle of the curve, where the lit marker sits.
+        const markX = (from.x + 6 * from.bend + x) / 8;
+        const markY = (4 * from.y + 4 * cy) / 8;
         return (
-          <g key={d.name} opacity={state === "disabled" ? 0.5 : 1}>
-            <title>{`${d.name}: ${pathSub(d, via)}`}</title>
-            <rect
-              className="dv-path-box"
-              x={x}
-              y={y}
-              width={BOX_W}
-              height={BOX_H}
-              rx="8"
-              fill="var(--muted)"
-              stroke={stroke}
-            />
-            <circle cx={x + 16} cy={y + 22} r="3.5" fill={dot} />
-            <text
-              x={x + 30}
-              y={y + 19}
-              fontSize="13"
-              fill="var(--foreground)"
-              fontFamily="var(--font-mono)"
-            >
-              {d.name.length > 26 ? `${d.name.slice(0, 25)}…` : d.name}
-            </text>
-            <text x={x + 30} y={y + 35} fontSize="12" fill="var(--muted-foreground)">
-              {pathSub(d, via)}
-            </text>
-          </g>
+          <Fragment key={d.name}>
+            <g opacity={state === "disabled" ? 0.5 : 1}>
+              {on && (
+                <path
+                  d={path}
+                  fill="none"
+                  stroke="var(--sig)"
+                  strokeOpacity=".18"
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                />
+              )}
+              <path
+                data-draw=""
+                d={path}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={on ? 2.5 : 1.6}
+                strokeOpacity={on ? undefined : 0.9}
+                strokeDasharray={dash}
+                strokeLinecap="round"
+              />
+              {on && (
+                <>
+                  <circle cx={markX} cy={markY} r="4" fill="var(--sig)" />
+                  <circle cx={markX} cy={markY} r="9" fill="var(--sig)" opacity=".18" />
+                </>
+              )}
+            </g>
+            <g className="dv-path-box" opacity={state === "disabled" ? 0.5 : 1}>
+              <title>{`${d.name}: ${pathSub(d, via)}`}</title>
+              <rect
+                x={x}
+                y={cy - BOX_H / 2}
+                width={BOX_W}
+                height={BOX_H}
+                rx="10"
+                fill="var(--surface-2)"
+                stroke={box}
+                strokeOpacity={on || state === "offline" ? 1 : 0.9}
+              />
+              <circle cx={x + 18} cy={cy} r="3.5" fill={dot} />
+              <text
+                x={x + 32}
+                y={cy - 3}
+                fontSize="13"
+                fontWeight="600"
+                fill="var(--foreground)"
+                fontFamily="var(--font-mt)"
+              >
+                {short(d.name)}
+              </text>
+              <text
+                x={x + 32}
+                y={cy + 13}
+                fontSize="11"
+                fill={state === "offline" ? "var(--destructive)" : "var(--muted-foreground)"}
+              >
+                {pathSub(d, via)}
+              </text>
+              {on && (
+                <text
+                  x={x + 228}
+                  y={cy - 3}
+                  textAnchor="end"
+                  fontSize="10"
+                  fill="var(--success)"
+                  fontFamily="var(--font-mt)"
+                >
+                  call running
+                </text>
+              )}
+            </g>
+          </Fragment>
         );
       })}
     </svg>

@@ -130,7 +130,7 @@ test("exports full-period statistics without individual session records", async 
 test("keeps individual-user statistical filtering", async () => {
   await act(async () => host.querySelector<HTMLButtonElement>(".um-user-button")!.click());
   expect(host.textContent).toContain("alice · traffic story");
-  expect(host.textContent).toContain("INDIVIDUAL USER");
+  expect(host.textContent).toContain("Individual user");
   const query = new URL(vi.mocked(api).mock.calls.at(-1)![0], "http://fixture").searchParams;
   expect(query.get("user")).toBe("alice");
   expect(host.textContent).not.toContain("Session explorer");

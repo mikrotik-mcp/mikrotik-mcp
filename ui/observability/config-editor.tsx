@@ -1,4 +1,3 @@
-import { UnifiedDiff } from "./diff-view";
 /**
  * Config editor shell. Owns the single working `cfg` object and the shared
  * safe-apply pipeline (validate → preview → save → countdown → keep/rollback,
@@ -8,19 +7,20 @@ import { UnifiedDiff } from "./diff-view";
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
-import { Braces, Clock, LayoutGrid, X } from "lucide-react";
+import { Check, Clock, Eye, RefreshCw, X } from "lucide-react";
 import { api, postJson } from "./api";
 import { ConfigForm, DevicesForm } from "./config-form";
 import { selectConfigScope, scopeConfigDraft } from "../../src/config-device-draft";
 import type { ConfigScope } from "../../src/config-device-draft";
-import { JsonEditor, ROLLBACK_OPTS } from "./config-studio";
+import { JsonEditor } from "./config-studio";
 import type { ConfigIssue, DiffSummary, SaveResp } from "./config-studio";
-import { Button, Select } from "./geist";
 import { toast } from "./toast-action";
 import { testDeviceConnection } from "./config-connection";
 import { cn } from "@/lib/utils";
 import { ServiceProbesEditor } from "./service-probes-editor";
-import { MonitorButton, MonitorSelect, Segmented, StatusBadge } from "./monitoring-ui";
+import { MonitorButton, MonitorSelect, Ring, Segmented, StatusBadge } from "./monitoring-ui";
+import "./monitoring.css";
+import "./config-studio.css";
 import { diffKind } from "../shared/diff";
 
 type Cfg = Record<string, unknown>;
@@ -667,187 +667,242 @@ export function ConfigEditor({
     );
   }
 
+  const locked = busy || !!pending;
+  const windowSec = Math.max(1, Math.round((pending?.rollbackMs ?? 60000) / 1000));
+  const diff = preview && (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <b className="text-[13px] font-semibold text-foreground">Diff vs current</b>
+        {preview.summary?.changed ? (
+          <span className="font-mono text-xs">
+            <span className="text-success">+{preview.summary.added}</span> /{" "}
+            <span className="text-destructive">−{preview.summary.removed}</span>
+          </span>
+        ) : (
+          <span className="monitor-hint">No changes</span>
+        )}
+        <span className="flex-1" />
+        <MonitorButton
+          size="sm"
+          variant="ghost"
+          aria-label="Close preview"
+          icon={<X aria-hidden="true" />}
+          onClick={() => setPreview(null)}
+        />
+      </div>
+      <ServerDiff unified={preview.unified || ""} />
+    </div>
+  );
   return (
     <div className="flex flex-col gap-3.5">
-      {scope === "server" && (
-        <p className="text-xs text-muted-foreground">
-          Router connections are managed on the{" "}
-          <a className="text-primary underline underline-offset-4" href="#devices">
-            Devices page
-          </a>
-          . This editor only changes server settings.
-        </p>
-      )}
-      <div className="config-editor__toolbar flex flex-wrap items-center gap-2">
-        <div className="border-border bg-muted inline-flex gap-0.5 rounded-md border p-0.5">
-          <button
-            disabled={busy || !!pending}
-            className={cn(
-              "flex cursor-pointer items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-[11px] py-1 text-xs font-semibold",
-              mode === "form" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
-            )}
-            onClick={() => {
+      <div className={cn("flex flex-wrap items-center gap-2", pending && "opacity-45")}>
+        <Segmented
+          label="Editor mode"
+          value={mode}
+          onChange={(m) => {
+            if (locked) return;
+            if (m === "form") {
               setJsonErr(null);
               setMode("form");
-            }}
-          >
-            <LayoutGrid className="size-3.5" /> Form
-          </button>
-          <button
-            disabled={busy || !!pending}
-            className={cn(
-              "flex cursor-pointer items-center gap-1.5 rounded-[6px] border-0 bg-transparent px-[11px] py-1 text-xs font-semibold",
-              mode === "json" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
-            )}
-            onClick={() => {
+            } else {
               setSelection(undefined);
               setMode("json");
-            }}
-          >
-            <Braces className="size-3.5" /> JSON
-          </button>
-        </div>
-        <span
-          className={cn(
-            "rounded-full border px-2.5 py-1 font-mono text-[11px]",
-            valid
-              ? "border-success/40 bg-success/10 text-success"
-              : "border-destructive/40 bg-destructive/10 text-destructive",
-          )}
-        >
-          {jsonErr
-            ? "invalid JSON"
-            : errors.length
-              ? `${errors.length} schema issue(s)`
-              : "valid ✓"}
-        </span>
+            }
+          }}
+          options={[
+            { value: "form", label: "Form" },
+            { value: "json", label: "JSON" },
+          ]}
+        />
+        <StatusBadge tone={valid ? "good" : "bad"}>
+          {jsonErr ? "Invalid JSON" : errors.length ? `${errors.length} schema issues` : "Valid"}
+        </StatusBadge>
         <span className="flex-1" />
-        <Button
+        <MonitorButton
           size="sm"
-          ghost
+          variant="ghost"
+          icon={<Eye aria-hidden="true" />}
           onClick={() => void doPreview()}
-          disabled={!valid || busy || !!pending}
+          disabled={!valid || locked}
         >
           Preview diff
-        </Button>
-        <Select
-          size="sm"
-          disabled={busy || !!pending}
+        </MonitorButton>
+        <MonitorSelect
+          label="Auto-revert window"
           value={String(rollbackMs)}
-          onValueChange={(v) => setRollbackMs(Number(v))}
-          options={ROLLBACK_OPTS.map(([label, v]) => ({ value: String(v), label }))}
-          aria-label="Auto-revert window"
+          onChange={(v) => {
+            if (!locked) setRollbackMs(Number(v));
+          }}
+          options={REVERT_OPTIONS}
         />
-        <Button
+        <MonitorButton
           size="sm"
-          type="accent"
+          variant="primary"
+          icon={<Check aria-hidden="true" />}
           onClick={() => void doSave()}
           disabled={!valid || !!pending || busy || testingAll}
         >
           {busy ? "Working…" : "Save"}
-        </Button>
-        <Button
+        </MonitorButton>
+        <MonitorButton
           size="sm"
-          ghost
-          disabled={busy || !!pending}
+          variant="ghost"
+          disabled={locked}
           onClick={() => (dirty || jsonErr ? setDiscard(true) : onClose())}
         >
           Close
-        </Button>
+        </MonitorButton>
       </div>
       {discard && (
-        <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs" role="alert">
-          <p className="mb-2">Discard this unsaved draft? No saved settings will be changed.</p>
-          <div className="flex gap-2">
-            <Button size="sm" type="error" onClick={onClose}>
-              Discard draft
-            </Button>
-            <Button size="sm" ghost onClick={() => setDiscard(false)}>
-              Continue editing
-            </Button>
-          </div>
+        <div className="monitor-note items-center" data-tone="warn" role="alert">
+          <span className="flex-1">
+            <b className="font-semibold text-foreground">Discard this unsaved draft?</b> No saved
+            settings will be changed.
+          </span>
+          <MonitorButton size="sm" variant="danger" onClick={onClose}>
+            Discard draft
+          </MonitorButton>
+          <MonitorButton size="sm" variant="ghost" onClick={() => setDiscard(false)}>
+            Continue editing
+          </MonitorButton>
         </div>
       )}
-
-      {msg && <div className="text-muted-foreground font-mono text-xs">{msg}</div>}
 
       {pending && (
-        <div className="border-warning/40 bg-warning/10 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2.5 text-xs">
-          <strong>Applied.</strong>{" "}
+        <div className="config-pending" role="status">
           {(pending.rollbackMs ?? 0) > 0 ? (
-            <>
-              Reverting in <span className="text-warning font-mono font-bold">{countdown}s</span>{" "}
-              unless you keep it.
-            </>
+            <Ring
+              value={(countdown / windowSec) * 100}
+              size={58}
+              stroke={5}
+              tone="warn"
+              label="Time left"
+            >
+              {`${countdown}s`}
+            </Ring>
           ) : (
-            <>Saved without an auto-revert window.</>
+            <Clock aria-hidden="true" className="size-6 text-warning" />
           )}
-          {pending.devicesChanged && (
-            <span className="text-warning text-[11px]">
-              {" "}
-              · device list changed — reconnect the MCP client to expose it to the model
+          <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+            <b className="text-[15px] text-foreground">
+              {(pending.rollbackMs ?? 0) > 0
+                ? `Applied. Reverting in ${countdown} s unless you keep it.`
+                : "Applied. Saved without an auto-revert window."}
+            </b>
+            <span className="monitor-hint">
+              {preview?.summary?.changed
+                ? `${preview.summary.added} lines added, ${preview.summary.removed} removed. `
+                : ""}
+              The server reverts on its own even if you close this tab.
+              {pending.devicesChanged &&
+                " The device list changed: reconnect the MCP client to show it to the model."}
             </span>
-          )}
-          <span className="flex-1" />
-          <Button size="sm" type="accent" disabled={busy} onClick={() => void doKeep()}>
-            Keep changes
-          </Button>
-          <Button size="sm" disabled={busy} onClick={() => void doRollback()}>
+          </div>
+          <MonitorButton
+            disabled={busy}
+            icon={<RefreshCw aria-hidden="true" />}
+            onClick={() => void doRollback()}
+          >
             Revert now
-          </Button>
+          </MonitorButton>
+          <MonitorButton
+            variant="primary"
+            disabled={busy}
+            icon={<Check aria-hidden="true" />}
+            onClick={() => void doKeep()}
+          >
+            Keep changes
+          </MonitorButton>
         </div>
       )}
 
-      <fieldset
-        disabled={busy || !!pending}
-        className="min-w-0 border-0 p-0 m-0 disabled:opacity-70"
-      >
-        {mode === "form" ? (
-          <ConfigForm cfg={cfg} onChange={change} />
-        ) : (
-          <JsonEditor
-            value={selectConfigScope(cfg, scope)}
-            onChange={(o) => change(asObj(scopeConfigDraft(o, cfg, scope)))}
-            onJsonError={setJsonErr}
-          />
-        )}
-      </fieldset>
+      {msg && (
+        <p className="monitor-hint font-mono" role="status">
+          {msg}
+        </p>
+      )}
 
       {(jsonErr || errors.length > 0) && (
-        <div className="flex flex-col gap-[3px]">
+        <div className="flex flex-col gap-1" role="alert">
           {jsonErr ? (
-            <div className="text-destructive font-mono text-[11px]">JSON: {jsonErr}</div>
+            <p className="monitor-err">JSON: {jsonErr}</p>
           ) : (
             errors.slice(0, 12).map((e, i) => (
-              <div className="text-destructive font-mono text-[11px]" key={i}>
-                <code className="text-warning">{e.path}</code> — {e.message}
-              </div>
+              <p className="monitor-err" key={i}>
+                <code className="font-mono">{e.path}</code> · {e.message}
+              </p>
             ))
           )}
         </div>
       )}
 
-      {preview && (
-        <div className="border-border overflow-hidden rounded-md border">
-          <div className="bg-muted flex items-center gap-2 px-[13px] py-[9px] text-xs">
-            <strong>Diff vs current</strong>
-            <span className="text-muted-foreground text-[11px]">
-              {preview.summary?.changed
-                ? `+${preview.summary.added} / -${preview.summary.removed}`
-                : "no changes"}
-            </span>
-            <span className="flex-1" />
-            <Button
-              size="sm"
-              ghost
-              icon={<X className="size-4" />}
-              onClick={() => setPreview(null)}
-              aria-label="Close preview"
+      <fieldset
+        disabled={locked}
+        className={cn("m-0 min-w-0 border-0 p-0", pending && "opacity-60")}
+      >
+        {mode === "form" ? (
+          <ConfigForm
+            cfg={cfg}
+            onChange={change}
+            baseline={scope === "server" ? baseline : undefined}
+            below={diff}
+          />
+        ) : (
+          <div className="flex flex-col gap-3.5">
+            <JsonEditor
+              value={selectConfigScope(cfg, scope)}
+              onChange={(o) => change(asObj(scopeConfigDraft(o, cfg, scope)))}
+              onJsonError={setJsonErr}
             />
+            {diff}
           </div>
-          <UnifiedDiff unified={preview.unified || ""} maxHeight={320} />
-        </div>
+        )}
+      </fieldset>
+
+      {scope === "server" && (
+        <p className="monitor-hint">
+          Router connections, credentials and order are managed on the{" "}
+          <a className="config-link" href="#devices">
+            Devices page
+          </a>
+          . This editor only changes server settings.
+        </p>
       )}
+    </div>
+  );
+}
+
+/** A unified diff with line numbers, added lines teal and removed lines pink. */
+function ServerDiff({ unified }: { unified: string }): ReactNode {
+  const rows: { n: number | null; mark: string; text: string; kind: string }[] = [];
+  let oldNo = 1;
+  let newNo = 1;
+  for (const line of (unified || "").replace(/\r\n/g, "\n").split("\n")) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+    if (hunk) {
+      oldNo = Number(hunk[1]);
+      newNo = Number(hunk[2]);
+      rows.push({ n: null, mark: "", text: line, kind: "hunk" });
+    } else if (line.startsWith("+")) {
+      rows.push({ n: newNo++, mark: "+", text: line.slice(1), kind: "add" });
+    } else if (line.startsWith("-")) {
+      rows.push({ n: oldNo++, mark: "-", text: line.slice(1), kind: "del" });
+    } else if (line !== "" || rows.length) {
+      rows.push({ n: newNo++, mark: "", text: line.slice(1), kind: "ctx" });
+      oldNo++;
+    }
+  }
+  if (!rows.length) rows.push({ n: null, mark: "", text: "No differences.", kind: "ctx" });
+  return (
+    <div className="config-diff" tabIndex={0} role="region" aria-label="Configuration diff">
+      {rows.map((r, i) => (
+        <div key={i} data-kind={r.kind}>
+          <span>{r.n ?? ""}</span>
+          <span>{r.mark}</span>
+          <span>{r.text || " "}</span>
+        </div>
+      ))}
     </div>
   );
 }

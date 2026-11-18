@@ -16,6 +16,7 @@ vi.hoisted(() => {
 vi.mock("../../ui/observability/connectivity", () => ({
   ManagementPaths: ({ devices }: { devices: DeviceInfo[] }) =>
     h("div", { "data-testid": "paths" }, devices.map((d) => d.name).join(",")),
+  PathLegend: () => null,
 }));
 let host: HTMLDivElement;
 let root: Root;
@@ -350,7 +351,7 @@ test("router inventory lists and counts draft addresses with a stable primary, n
     [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
       (b) => b.textContent?.trim() === label,
     )!;
-  await click(dialogButton("Add address"));
+  await click(dialogButton("Add fallback address"));
   const input = document.querySelector<HTMLInputElement>("#f_fallback_3")!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
@@ -569,7 +570,10 @@ test("table filters do not filter the management paths or fleet-wide pool statis
   expect(host.querySelector('[data-testid="paths"]')?.textContent).toBe(
     "edge,branch,pending,disabled",
   );
-  expect(host.textContent).toContain("2 open");
+  const poolMetric = [...host.querySelectorAll(".monitor-metric")].find(
+    (m) => m.querySelector(".monitor-metric-label")?.textContent === "SSH pool",
+  );
+  expect(poolMetric?.querySelector(".monitor-metric-value")?.textContent).toBe("2open");
   expect(host.querySelectorAll(".dv-pool-row")).toHaveLength(4);
 });
 test("unknown resources are not meters at zero, but a real zero is retained", async () => {

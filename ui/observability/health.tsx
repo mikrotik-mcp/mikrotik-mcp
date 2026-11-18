@@ -1,11 +1,13 @@
+import { Fragment } from "react";
 import type { ReactNode } from "react";
+import { Sparkline } from "./signal-charts";
 import { bytes } from "./format";
 import type { DeviceInfo } from "./types";
 
-/** The boards' bar colours: amber from 60 %, red from 85 %. */
+/** The boards' bar colours: teal, amber from 60 %, red from 85 %. */
 export function meterTone(value: number | null | undefined): string | undefined {
   if (value == null) return undefined;
-  return value >= 85 ? "bad" : value >= 60 ? "warn" : undefined;
+  return value >= 85 ? "bad" : value >= 60 ? "warn" : "good";
 }
 
 const clamp = (v: number) => Math.max(0, Math.min(v, 100));
@@ -39,7 +41,13 @@ function span(ms: number): string {
  * CPU over the recorded samples. Readings from an offline or disabled router
  * are marked as last known.
  */
-export function DeviceResources({ d }: { d: DeviceInfo }): ReactNode {
+export function DeviceResources({
+  d,
+  phone = false,
+}: {
+  d: DeviceInfo;
+  phone?: boolean;
+}): ReactNode {
   const s = d.status;
   const hist = (d.history ?? []).filter((h) => h.cpuLoad != null);
   const hasReadings = [s.cpuLoad, s.memUsedPct, s.hddUsedPct].some((v) => v != null);
@@ -57,56 +65,61 @@ export function DeviceResources({ d }: { d: DeviceInfo }): ReactNode {
       }`,
     ],
   ];
-  const max = Math.max(20, ...hist.map((h) => h.cpuLoad ?? 0));
-  const step = hist.length > 1 ? 300 / (hist.length - 1) : 0;
-  const points = hist
-    .map((h, i) => `${(i * step).toFixed(1)},${(38 - ((h.cpuLoad ?? 0) / max) * 34).toFixed(1)}`)
-    .join(" ");
-  return (
-    <div className="flex min-w-0 flex-col gap-2" aria-label={`Resources for ${d.name}`}>
-      <span className="monitor-label">
-        Resources
-        {!hasReadings ? (
-          <span className="font-normal"> · awaiting readings</span>
-        ) : stale ? (
-          <span className="font-normal"> · last known, not live</span>
-        ) : null}
-      </span>
+  const peak = Math.max(...hist.map((h) => h.cpuLoad ?? 0));
+  const state = !hasReadings ? "awaiting readings" : stale ? "last known, not live" : "live";
+  const meters = (
+    <div className="dv-res-grid">
       {rows.map(([label, value, detail]) => (
-        <span className="monitor-meter" key={label} title={detail}>
-          <span className="text-muted-foreground w-14 flex-none">{label}</span>
-          <MeterBar value={value} label={label} />
-          <span className="w-9 flex-none text-right">
-            {value != null ? `${Math.round(value)}%` : "—"}
+        <Fragment key={label}>
+          <span className="text-muted-foreground">{label}</span>
+          <span className="monitor-meter" title={detail}>
+            <MeterBar value={value} label={label} />
+            <span className="w-8 flex-none text-right">
+              {value != null ? `${Math.round(value)}%` : "—"}
+            </span>
           </span>
-        </span>
+        </Fragment>
       ))}
+    </div>
+  );
+  // The phone board shows the three meters alone, under a rule.
+  if (phone)
+    return (
+      <div
+        className="border-line flex min-w-0 flex-col gap-2 border-t pt-3.5"
+        aria-label={`Resources for ${d.name}`}
+      >
+        {meters}
+        {state !== "live" && <span className="text-faint text-[11px]">{state}</span>}
+      </div>
+    );
+  return (
+    <div className="flex min-w-0 flex-col gap-2.5" aria-label={`Resources for ${d.name}`}>
+      <div className="flex items-center gap-2">
+        <span className="dv-section flex-1">Resources</span>
+        <span className="text-faint text-[11px]">{state}</span>
+      </div>
+      {meters}
       {hist.length > 1 ? (
-        <>
-          <svg
-            viewBox="0 0 300 40"
-            width="100%"
-            height="40"
-            role="img"
-            aria-label={`CPU over the ${span(hist[hist.length - 1].ts - hist[0].ts)}`}
-            preserveAspectRatio="none"
-          >
-            <polyline
-              points={points}
-              fill="none"
-              stroke="var(--chart-1)"
-              strokeWidth="1.5"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-          <span className="text-muted-foreground text-[12px]">
-            CPU, {span(hist[hist.length - 1].ts - hist[0].ts)} · {hist.length} samples
-          </span>
-        </>
+        <div
+          className="glass dv-cpu"
+          role="img"
+          aria-label={`CPU over the ${span(hist[hist.length - 1].ts - hist[0].ts)}, peak ${Math.round(peak)}%`}
+        >
+          <Sparkline
+            values={hist.map((h) => h.cpuLoad ?? 0)}
+            width={300}
+            height={40}
+            fill
+            className="dv-cpu-spark"
+          />
+          <div className="text-faint flex justify-between text-[11px]">
+            <span>CPU, {span(hist[hist.length - 1].ts - hist[0].ts)}</span>
+            <span>peak {Math.round(peak)}%</span>
+          </div>
+        </div>
       ) : (
-        <span className="text-muted-foreground text-[12px]">
-          No CPU samples yet. Test this router to collect one.
-        </span>
+        <span className="monitor-hint">No CPU samples yet. Test this router to collect one.</span>
       )}
     </div>
   );

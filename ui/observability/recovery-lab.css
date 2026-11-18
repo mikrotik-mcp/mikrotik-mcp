@@ -1,174 +1,148 @@
-.lab-setup {
-  display: flex;
-  gap: 20px;
-  padding: 22px;
-  border: 1px dashed var(--primary);
-  border-radius: 14px;
-  background: var(--card);
-}
-.ops-state[data-state="passed"] {
-  color: var(--ops-teal);
-}
-.ops-state[data-state="failed"] {
-  color: var(--destructive);
-}
-.lab-history,
-.lab-history-viewport {
-  max-height: 520px;
-}
-.lab-detail {
-  grid-template-columns: minmax(0, 1fr);
-}
-.lab-detail > * {
-  min-width: 0;
-}
-@media (max-width: 900px) {
-  .lab-history,
-  .lab-history-viewport {
-    max-height: 260px;
-  }
-}
-.lab-setup > svg {
-  color: var(--primary);
-  flex-shrink: 0;
-}
-.lab-setup h3 {
-  font-weight: 600;
-  font-size: 15px;
-}
-.lab-setup p {
+/* Recovery lab, from the "Rec-Lab" and "Rec-Lab-Authorize" boards. Shared
+   parts live in monitoring.css and config-charts.css. */
+
+.lab .mono,
+.lab-dialog .mono {
+  font-family: var(--font-mt);
   font-size: 12px;
-  line-height: 1.9;
-  color: var(--muted-foreground);
-  margin-top: 7px;
-  overflow-wrap: anywhere;
 }
-.lab-process {
+.lab .num {
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-split {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-bottom: 1px solid var(--border);
-  padding: 6px 0 28px;
-  gap: 12px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
 }
-.lab-process > div {
+.lab-runs {
   display: flex;
-  align-items: center;
+  min-width: 0;
+  flex-direction: column;
   gap: 10px;
 }
-.lab-process span {
-  font: 11px var(--font-mono, monospace);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px;
-  color: var(--primary);
+
+/* One rehearsal in the list. */
+.lab-run {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
 }
-.lab-process strong {
-  font-size: 12px;
+.lab-run.glass[aria-pressed="true"] {
+  background: var(--sig-fill);
+  box-shadow: inset 0 0 0 1px var(--sig);
+}
+.lab-run:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.lab-run .mono {
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 21px;
+}
+.lab-run b {
+  line-height: 21px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lab-detail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+.lab-ticket .monitor-eyebrow {
+  margin: 1px 0 4px;
+  padding-right: 0;
+  color: var(--muted-foreground);
+  line-height: 17px;
+}
+.lab-ticket .monitor-panel-title {
+  font-size: 18px;
+}
+.lab .monitor-facts,
+.lab-dialog .monitor-facts {
+  grid-template-columns: 140px minmax(0, 1fr);
+}
+
+/* Runner checks: the path graphic and one row per check. */
+.lab-check {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 60px;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+  font-size: 13px;
+}
+.lab-check b {
+  color: var(--foreground);
   font-weight: 500;
 }
-.lab-process svg {
-  color: var(--muted-foreground);
-  margin-left: auto;
+
+.lab-cov {
+  grid-template-columns: minmax(0, 1fr) 90px 90px;
 }
-.lab-ticket {
+
+/* "Inspect exact transmitted commands": a panel header that opens. */
+.lab-commands-toggle {
   display: flex;
+  width: 100%;
   align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px dashed var(--border);
-  padding-bottom: 22px;
+  gap: 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.lab-ticket p:not(.ops-eyebrow) {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  margin-top: 10px;
+.lab-commands-toggle svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 150ms ease;
 }
-.lab-facts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+.lab-commands-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
 }
-.lab-facts dt {
-  font-size: 10px;
-  color: var(--muted-foreground);
-  margin-bottom: 6px;
+.lab-commands {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre;
 }
-.lab-facts dd {
-  font: 11px var(--font-mono, monospace);
-  overflow-wrap: anywhere;
+
+.lab-transfer {
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
 }
-.lab-checks {
-  display: grid;
-  gap: 10px;
-}
-.lab-checks > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-.lab-checks > div > svg {
-  color: var(--primary);
-  flex-shrink: 0;
-}
-.lab-checks > div > div {
-  flex: 1;
-  min-width: 0;
-}
-.lab-checks strong {
-  font-size: 12px;
-  text-transform: capitalize;
-}
-.lab-checks p,
-.lab-muted {
-  font-size: 11px;
-  line-height: 1.8;
-  color: var(--muted-foreground);
-}
-.lab-blank {
-  min-height: 340px;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  text-align: center;
-  gap: 20px;
-  border: 1px dashed var(--border);
-  border-radius: 16px;
-  padding: 34px;
-}
-.lab-blank svg {
-  color: var(--primary);
-}
-.lab-blank h3 {
-  font-size: 25px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-}
-.lab-blank p {
-  max-width: 460px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.8;
-}
-@media (max-width: 740px) {
-  .lab-process {
-    grid-template-columns: 1fr 1fr;
-  }
-  .lab-process svg {
-    display: none;
+
+@media (max-width: 900px) {
+  .lab-split {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
-@media (max-width: 540px) {
-  .lab-facts {
-    grid-template-columns: 1fr;
+
+@media (max-width: 639px) {
+  .lab-check {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
-  .lab-setup {
-    padding: 16px;
-    gap: 12px;
+  .lab-check > :nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
-  .lab-ticket {
-    gap: 12px;
-    align-items: flex-start;
+  .lab .monitor-facts,
+  .lab-dialog .monitor-facts {
+    grid-template-columns: 110px minmax(0, 1fr);
   }
 }

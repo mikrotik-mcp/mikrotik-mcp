@@ -1,7 +1,7 @@
-import { Fragment } from "react";
-import type { ReactNode } from "react";
+import { Fragment, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Copy, MoreHorizontal, Pencil, Power, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import type { LucideIcon } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -18,44 +18,44 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TableCell, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
-interface UserActionRowProps {
-  name: string;
-  busy: boolean;
-  disabled: boolean;
-  children: ReactNode;
-  onDuplicate: () => void;
-  onEdit: () => void;
-  onToggle: () => void;
-  onRemove: () => void;
+export interface RowAction {
+  label: string;
+  icon: LucideIcon;
+  onSelect: () => void;
+  destructive?: boolean;
 }
 
-/** Both entry points share the same actions; opening a menu never mutates a user. */
-export function UserActionRow({
+/**
+ * A table row with the boards' row menu: the ⋯ button in the last cell and the
+ * same menu on right-click. The row reads as selected while its menu is open.
+ * Opening a menu never changes anything.
+ */
+export function ActionRow({
   name,
   busy,
-  disabled,
+  actions,
   children,
-  onDuplicate,
-  onEdit,
-  onToggle,
-  onRemove,
-}: UserActionRowProps) {
-  const actions = [
-    { label: "Edit", icon: Pencil, onSelect: onEdit },
-    { label: "Duplicate", icon: Copy, onSelect: onDuplicate },
-    { label: disabled ? "Enable" : "Disable", icon: Power, onSelect: onToggle },
-    { label: "Remove", icon: Trash2, onSelect: onRemove, destructive: true },
-  ];
+  className,
+  style,
+}: {
+  name: string;
+  busy: boolean;
+  actions: RowAction[];
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const items = (context: boolean) => {
     const Item = context ? ContextMenuItem : DropdownMenuItem;
     const Label = context ? ContextMenuLabel : DropdownMenuLabel;
     const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
     return (
       <>
-        <Label className="max-w-52 truncate text-xs text-muted-foreground">{name}</Label>
-        <Separator />
+        <Label className="aaa-menu-label">{name}</Label>
         {actions.map(({ label, icon: Icon, onSelect, destructive }) => (
           <Fragment key={label}>
             {destructive && <Separator />}
@@ -74,31 +74,70 @@ export function UserActionRow({
   };
 
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={setContextOpen}>
       <ContextMenuTrigger asChild disabled={busy}>
-        <TableRow>
+        <tr
+          className={cn("monitor-row", className)}
+          style={style}
+          data-selected={menuOpen || contextOpen || undefined}
+        >
           {children}
-          <TableCell className="w-12 text-right">
-            <DropdownMenu>
+          <td className="aaa-cell-action">
+            <DropdownMenu onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
+                <button
+                  type="button"
+                  className="aaa-ib"
                   disabled={busy}
                   aria-label={`Actions for ${name}`}
                   title={`Actions for ${name} · or right-click this row`}
                 >
                   <MoreHorizontal aria-hidden="true" />
-                </Button>
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="aaa-menu">
                 {items(false)}
               </DropdownMenuContent>
             </DropdownMenu>
-          </TableCell>
-        </TableRow>
+          </td>
+        </tr>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">{items(true)}</ContextMenuContent>
+      <ContextMenuContent className="aaa-menu">{items(true)}</ContextMenuContent>
     </ContextMenu>
+  );
+}
+
+interface UserActionRowProps {
+  name: string;
+  busy: boolean;
+  disabled: boolean;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  onDuplicate: () => void;
+  onEdit: () => void;
+  onToggle: () => void;
+  onRemove: () => void;
+}
+
+/** Both entry points share the same actions; opening a menu never mutates a user. */
+export function UserActionRow({
+  disabled,
+  onDuplicate,
+  onEdit,
+  onToggle,
+  onRemove,
+  ...row
+}: UserActionRowProps) {
+  return (
+    <ActionRow
+      {...row}
+      actions={[
+        { label: "Edit", icon: Pencil, onSelect: onEdit },
+        { label: "Duplicate", icon: Copy, onSelect: onDuplicate },
+        { label: disabled ? "Enable" : "Disable", icon: Power, onSelect: onToggle },
+        { label: "Remove", icon: Trash2, onSelect: onRemove, destructive: true },
+      ]}
+    />
   );
 }

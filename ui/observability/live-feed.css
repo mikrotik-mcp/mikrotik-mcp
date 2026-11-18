@@ -1,0 +1,146 @@
+/*
+ * Live Feed page, after the approved "Live Feed" and "Live Feed, phone" boards.
+ * Builds on monitoring.css; tokens from tailwind.css only.
+ */
+
+/* "Live" and its 10px LED. */
+.live-feed-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.live-feed-heading .monitor-dot {
+  width: 10px;
+  height: 10px;
+}
+
+/* The table: the board's column widths. */
+.live-feed-grid {
+  min-width: 600px;
+  grid-template-columns: 18px 44px minmax(0, 1.4fr) 62px 110px 60px minmax(0, 1fr);
+}
+.live-feed-grid > span {
+  min-width: 0;
+}
+/* The checkbox sits on the row's text line, 1px down, as on the board. */
+.live-feed-grid > .monitor-check {
+  height: 21px;
+}
+.live-feed-grid > .monitor-check input {
+  margin-top: 1px;
+}
+.live-feed-grid .monitor-check input:indeterminate {
+  background: var(--sig);
+  box-shadow: none;
+}
+.live-feed-grid .monitor-check input:indeterminate::after {
+  content: "";
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--on-sig);
+}
+
+/* The call details beside the table. */
+.live-feed-inspector {
+  display: flex;
+  width: 360px;
+  max-height: calc(64vh + 34px);
+  flex: none;
+  flex-direction: column;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+}
+@media (max-width: 1023px) {
+  .live-feed-inspector {
+    display: none;
+  }
+}
+.live-feed-pre .k {
+  color: var(--chart-1);
+}
+.live-feed-pre .a {
+  color: var(--success);
+}
+
+/* The selects sit in the filter row; the Filters button is for phones. */
+.live-feed-selects,
+.live-feed-seg {
+  display: contents;
+}
+.live-feed-toggle {
+  display: none;
+}
+
+/* ── Phone (the phone board) ───────────────────────────────────────────────── */
+@media (max-width: 639px) {
+  .live-feed-page {
+    gap: 14px;
+  }
+  .live-feed-page .monitor-head {
+    row-gap: 14px;
+  }
+  .live-feed-heading {
+    gap: 10px;
+  }
+  .live-feed-minutes {
+    display: none;
+  }
+  .live-feed-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow: visible;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  .live-feed-filters {
+    gap: 14px 8px;
+    padding: 0;
+  }
+  .live-feed-filters > .monitor-field {
+    flex: 1 1 100%;
+  }
+  .live-feed-seg {
+    display: flex;
+    order: 1;
+  }
+  .live-feed-toggle {
+    display: inline-flex;
+    order: 2;
+    margin-left: auto;
+  }
+  .live-feed-selects {
+    display: none;
+    order: 3;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .live-feed-selects[data-open] {
+    display: flex;
+  }
+  .live-feed-body {
+    overflow: hidden;
+    border-top: 0;
+    border-radius: 16px;
+    background: var(--glass);
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(14px);
+  }
+  .live-feed-body .monitor-foot {
+    flex-wrap: nowrap;
+  }
+}
+
+/* A phone row: the call on the left, risk and duration on the right. */
+.live-feed-phone-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-right: 14px;
+  padding-left: 14px;
+  cursor: pointer;
+}

@@ -1,23 +1,36 @@
 /**
- * Transactions view — cross-device two-phase commit, made legible.
+ * Transactions (the Cfg-Txn board): cross-device two-phase commit, made
+ * legible.
  *
- * A distributed operation is confusing precisely because it is in several
- * places at once, so the page is built around a **swimlane**: one lane per
- * participant, columns PREPARE → VERIFY → COMMIT, each cell resolving green /
- * amber / red as the coordinator moves. Live updates ride the shared
- * `/api/stream` socket (message type `txn`) — no second socket.
+ * A distributed change is confusing because it is in several places at once,
+ * so the page is built around a **swimlane**: one lane per participant,
+ * columns PREPARE → VERIFY → COMMIT, each cell resolving green / amber / red as
+ * the coordinator moves. A finished transaction opens inline under the KPIs; a
+ * live one opens the review dialog (Cfg-Txn-Review), where it can be aborted.
+ * Live updates ride the shared `/api/stream` socket (message type `txn`).
  */
-import { LoadingState } from "./loading-state";
+import "./transactions.css";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { Clock, Copy, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { api, postJson } from "./api";
-import { Panel, StatCard } from "./atoms";
-import { Badge, Button, Dot } from "./geist";
-import type { GeistType } from "./geist";
 import { onTxnUpdate } from "./hooks";
+import { LoadingState } from "./loading-state";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorDialog,
+  MonitorEmpty,
+  MonitorNote,
+  MonitorPanel,
+  PageIntro,
+  StatusBadge,
+  StatusDot,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
 import { toast } from "./toast-action";
 import type { TxnEvent, TxnParticipant, TxnRecord, TxnStage, TxnTerminalState } from "./types";
-import { cn } from "@/lib/utils";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -33,90 +46,121 @@ function ago(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
-const STATE_TYPE: Record<TxnTerminalState, GeistType> = {
-  COMMITTED: "success",
-  ABORTED: "secondary",
-  PARTIAL: "error",
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function list(items: string[]): string {
+  return items.join(", ");
+}
+
+const STATE_TONE: Record<TxnTerminalState, Tone> = {
+  COMMITTED: "good",
+  ABORTED: "default",
+  PARTIAL: "bad",
 };
 
-/** What each terminal state actually means for the fleet, in one line. */
+/** What each terminal state means for the fleet, in one line. */
 const STATE_MEANING: Record<TxnTerminalState, string> = {
-  COMMITTED: "Every participant persisted its changes.",
-  ABORTED: "Nothing changed on any device — the clean failure. Safe to retry.",
+  COMMITTED: "Every participant kept its changes.",
+  ABORTED: "Nothing changed on any router. The clean failure: safe to retry.",
   PARTIAL:
     "Some devices committed and could not be undone automatically. Restore each flagged device " +
     "from its pre-change snapshot.",
 };
 
 type CellState = "idle" | "running" | "ok" | "warn" | "fail";
-
-const CELL_CLASS: Record<CellState, string> = {
-  idle: "bg-muted/30 text-muted-foreground",
-  running: "bg-amber-500/15 text-amber-600 dark:text-amber-400 animate-pulse",
-  ok: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  warn: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  fail: "bg-red-500/15 text-red-600 dark:text-red-400",
-};
-
-const CELL_LABEL: Record<CellState, string> = {
-  idle: "—",
+const CELL_MARK: Record<CellState, string> = {
+  idle: "·",
   running: "…",
   ok: "✓",
-  warn: "!",
+  warn: "↺",
   fail: "✕",
+};
+const PAST: Record<string, string> = {
+  prepare: "prepared",
+  verify: "verified",
+  commit: "committed",
 };
 
 /**
- * Resolve one swimlane cell from the event timeline, falling back to the
- * participant's stage while a transaction is still live (events arrive from the
- * store a beat later than the socket does).
+ * One swimlane cell from the event timeline, falling back to the participant's
+ * stage while a transaction is still live (events arrive from the store a beat
+ * later than the socket does). A restore or a failed undo always wins in the
+ * commit column: that is the part a human has to act on.
  */
 function cellFor(
   column: "prepare" | "verify" | "commit",
   device: string,
+  txn: TxnRecord,
   events: TxnEvent[],
   participant: TxnParticipant | undefined,
-  phase: string,
-): { state: CellState; title: string } {
-  const relevant = events.filter(
-    (e) => e.kind === column && (column === "verify" || e.device === device),
-  );
-  const last = relevant.at(-1);
+): { state: CellState; text: string; title: string } {
+  const phase = txn.phase;
+  const stage: TxnStage = participant?.stage ?? "pending";
+  if (column === "commit" && stage === "restored")
+    return {
+      state: "warn",
+      text: "restored",
+      title: `committed, then restored from ${participant?.snapshotId ?? "snapshot"}`,
+    };
+  if (column === "commit" && stage === "rollback-failed")
+    return {
+      state: "fail",
+      text: "undo failed",
+      title: participant?.error ?? "undo failed: needs a human",
+    };
+
+  const last = events
+    .filter((e) => e.kind === column && (column === "verify" || e.device === device))
+    .at(-1);
   if (last) {
+    const text = last.ok ? PAST[column] : `${column} failed`;
     return {
       state: last.ok ? "ok" : "fail",
-      title: `${column}: ${last.ok ? "ok" : "failed"}${last.detail ? ` — ${last.detail}` : ""}`,
+      text,
+      title: `${text}${last.detail ? `: ${last.detail}` : ""}`,
     };
   }
 
-  const stage: TxnStage = participant?.stage ?? "pending";
   if (column === "prepare") {
     if (stage === "pending")
-      return { state: phase === "prepare" ? "running" : "idle", title: "not prepared" };
-    if (stage === "failed") return { state: "fail", title: participant?.error ?? "prepare failed" };
-    return { state: "ok", title: "prepared" };
+      return phase === "prepare"
+        ? { state: "running", text: "preparing", title: "preparing" }
+        : { state: "idle", text: "not prepared", title: "not prepared" };
+    if (stage === "failed")
+      return { state: "fail", text: "failed", title: participant?.error ?? "prepare failed" };
+    return { state: "ok", text: "prepared", title: "prepared" };
   }
   if (column === "verify") {
-    if (phase === "verify") return { state: "running", title: "verifying" };
+    if (phase === "verify") return { state: "running", text: "verifying", title: "verifying" };
     return stage === "pending"
-      ? { state: "idle", title: "not reached" }
-      : { state: "ok", title: "verified" };
+      ? { state: "idle", text: "not reached", title: "not reached" }
+      : { state: "ok", text: "verified", title: "verified" };
   }
   switch (stage) {
     case "committed":
-      return { state: "ok", title: "committed" };
-    case "restored":
-      return {
-        state: "warn",
-        title: `committed, then restored from ${participant?.snapshotId ?? "snapshot"}`,
-      };
-    case "rollback-failed":
-      return { state: "fail", title: participant?.error ?? "undo failed — needs a human" };
+      return { state: "ok", text: "committed", title: "committed" };
     case "rolled-back":
-      return { state: "idle", title: "rolled back, never committed" };
-    default:
-      return { state: phase === "commit" ? "running" : "idle", title: "not committed" };
+      return { state: "idle", text: "rolled back", title: "rolled back, never committed" };
+    default: {
+      if (phase === "commit") return { state: "running", text: "committing", title: "committing" };
+      // A router later in the commit order is not reached until the ones before it commit.
+      const before = txn.commitOrder.slice(0, txn.commitOrder.indexOf(device));
+      const waiting = before.some(
+        (d) => txn.participants.find((p) => p.device === d)?.stage !== "committed",
+      );
+      const text = waiting ? "not reached" : "not committed";
+      return { state: "idle", text, title: text };
+    }
   }
+}
+
+function laneTone(txn: TxnRecord, p: TxnParticipant | undefined): Tone {
+  if (p?.stage === "failed" || p?.stage === "rollback-failed") return "bad";
+  if (txn.state === undefined || p?.stage === "restored") return "warn";
+  if (p?.stage === "committed") return "good";
+  return "default";
 }
 
 // ── Swimlane ────────────────────────────────────────────────────────────────
@@ -124,65 +168,56 @@ function cellFor(
 function Swimlane({ txn, events }: { txn: TxnRecord; events: TxnEvent[] }): ReactNode {
   const columns = ["prepare", "verify", "commit"] as const;
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[32rem] border-separate border-spacing-1 text-sm">
-        <thead>
-          <tr className="text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="text-left font-medium">Participant</th>
-            {columns.map((c) => (
-              <th key={c} className="text-center font-medium">
-                {c}
-              </th>
-            ))}
-            <th className="text-left font-medium">Snapshot</th>
-          </tr>
-        </thead>
-        <tbody>
-          {txn.devices.map((device) => {
-            const participant = txn.participants.find((p) => p.device === device);
-            return (
-              <tr key={device}>
-                <td className="whitespace-nowrap pr-3 font-medium">
-                  {device}
-                  {txn.commitOrder.at(-1) === device && (
-                    <span className="ml-2 text-xs text-muted-foreground">commits last</span>
-                  )}
-                </td>
-                {columns.map((column) => {
-                  const cell = cellFor(column, device, events, participant, txn.phase);
-                  return (
-                    <td key={column} className="text-center">
-                      <div
-                        title={cell.title}
-                        className={cn(
-                          "mx-auto flex h-8 w-full max-w-24 items-center justify-center rounded-md font-mono",
-                          CELL_CLASS[cell.state],
-                        )}
-                      >
-                        {CELL_LABEL[cell.state]}
-                      </div>
-                    </td>
-                  );
-                })}
-                <td className="whitespace-nowrap pl-3 font-mono text-xs text-muted-foreground">
-                  {participant?.snapshotId ?? "—"}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="monitor-thead txn-lane">
+        <span>Participant</span>
+        <span>Prepare</span>
+        <span>Verify</span>
+        <span>Commit</span>
+        <span>Snapshot</span>
+      </div>
+      {txn.devices.map((device) => {
+        const participant = txn.participants.find((p) => p.device === device);
+        return (
+          <div key={device} className="monitor-row txn-lane">
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <StatusDot tone={laneTone(txn, participant)} />
+                <span className="mono p trunc">{device}</span>
+              </span>
+              {txn.commitOrder.at(-1) === device && txn.devices.length > 1 && (
+                <span className="monitor-hint txn-last">commits last</span>
+              )}
+            </span>
+            {columns.map((column) => {
+              const cell = cellFor(column, device, txn, events, participant);
+              return (
+                <span key={column} className="txn-cell" data-state={cell.state} title={cell.title}>
+                  {CELL_MARK[cell.state]} {cell.text}
+                </span>
+              );
+            })}
+            <span className="mono trunc text-muted-foreground">
+              {participant?.snapshotId ?? "—"}
+            </span>
+          </div>
+        );
+      })}
+    </>
   );
 }
 
-// ── Detail ──────────────────────────────────────────────────────────────────
+function assertionTarget(r: TxnRecord["results"][number]): string {
+  return r.assertion.device ?? r.assertion.from ?? "?";
+}
 
-function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode {
+function useTxn(id: string): {
+  txn: TxnRecord | null;
+  events: TxnEvent[];
+  load: () => Promise<void>;
+} {
   const [txn, setTxn] = useState<TxnRecord | null>(null);
   const [events, setEvents] = useState<TxnEvent[]>([]);
-  const [busy, setBusy] = useState(false);
-
   const load = useCallback(() => {
     return api<{ transaction: TxnRecord; events: TxnEvent[] }>(`/api/txn/${encodeURIComponent(id)}`)
       .then((res) => {
@@ -193,15 +228,116 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode
         toast.error(`Failed to load transaction: ${e instanceof Error ? e.message : String(e)}`);
       });
   }, [id]);
-
   useEffect(() => {
     void load();
     // A live transaction pushes updates over the shared socket; re-read on each
-    // so the assertion panel and timeline stay in step with the lanes.
+    // so the assertions stay in step with the lanes.
     return onTxnUpdate((u) => {
       if (u.txnId === id) void load();
     });
   }, [id, load]);
+  return { txn, events, load };
+}
+
+// ── Detail (a finished transaction) ─────────────────────────────────────────
+
+function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode {
+  const { txn, events } = useTxn(id);
+  if (!txn) return <LoadingState label="Loading transaction" layout="cards" />;
+  const state = txn.state;
+  const needsHand = txn.participants.filter(
+    (p) => p.stage === "committed" || p.stage === "rollback-failed",
+  );
+  const restored = txn.participants.filter((p) => p.stage === "restored");
+  const lost = txn.participants.filter((p) => p.sessionLost);
+  return (
+    <MonitorPanel
+      tone={state === "PARTIAL" ? "bad" : undefined}
+      title={
+        <span className="txn-detail-title">
+          {txn.label ?? txn.id} {txn.label && <span className="mono">· {txn.id}</span>}
+        </span>
+      }
+      description={`Started ${ago(txn.ts)} · ${plural(txn.devices.length, "participant")} · commit order ${list(txn.commitOrder)}`}
+      extra={
+        <MonitorButton variant="ghost" size="sm" icon={<X aria-hidden="true" />} onClick={onClose}>
+          Close
+        </MonitorButton>
+      }
+      flush
+    >
+      {state && (
+        <div className="px-[18px] pb-1.5">
+          <MonitorNote
+            tone={state === "PARTIAL" ? "bad" : state === "COMMITTED" ? "good" : undefined}
+            icon={state === "PARTIAL" ? <TriangleAlert aria-hidden="true" /> : undefined}
+          >
+            <b>{state}.</b> {STATE_MEANING[state]}
+          </MonitorNote>
+        </div>
+      )}
+      <Swimlane txn={txn} events={events} />
+      <div className="txn-foot">
+        <div className="monitor-fl">
+          <span className="monitor-label">Recovery</span>
+          {state === "PARTIAL" && needsHand.length > 0 ? (
+            <pre className="monitor-pre">
+              {needsHand
+                .map(
+                  (p) =>
+                    `${p.device}: diff_config_snapshots ${p.snapshotId ?? "<no snapshot>"} live`,
+                )
+                .join("\n")}
+            </pre>
+          ) : (
+            <span className="monitor-hint">Nothing to restore by hand.</span>
+          )}
+          {restored.map((p) => (
+            <span key={p.device} className="monitor-hint">
+              {p.device} was restored from {p.snapshotId ?? "its snapshot"} automatically.
+            </span>
+          ))}
+          {lost.map((p) => (
+            <span key={`lost-${p.device}`} className="monitor-hint text-warning">
+              ! {p.device} lost its SSH session during commit.
+            </span>
+          ))}
+          {txn.warnings.map((w) => (
+            <span key={w} className="monitor-hint text-warning">
+              ! {w}
+            </span>
+          ))}
+        </div>
+        <div className="monitor-fl">
+          <span className="monitor-label">Assertions</span>
+          {txn.results.length === 0 ? (
+            <span className="monitor-hint">
+              None declared. This transaction committed on faith, not on evidence.
+            </span>
+          ) : (
+            txn.results.map((r, i) => (
+              <div key={`${r.assertion.kind}-${i}`} className="txn-assert">
+                <StatusBadge tone={r.ok ? "good" : "bad"} dot={false}>
+                  {r.ok ? "PASS" : "FAIL"}
+                </StatusBadge>
+                <span className="trunc" title={r.detail}>
+                  <span className="mono">{r.assertion.kind}</span> @ {assertionTarget(r)}{" "}
+                  <span className="text-muted-foreground">· {r.detail}</span>
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </MonitorPanel>
+  );
+}
+
+// ── Review (a live transaction) ─────────────────────────────────────────────
+
+function Review({ id, onClose }: { id: string; onClose: () => void }): ReactNode {
+  const { txn, events, load } = useTxn(id);
+  const [busy, setBusy] = useState(false);
 
   const abort = async (): Promise<void> => {
     setBusy(true);
@@ -218,110 +354,120 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode
     }
   };
 
-  if (!txn) return <LoadingState label="Loading transaction" layout="cards" />;
+  const command = `commit_transaction ${id}`;
+  const copy = (): void => {
+    void navigator.clipboard
+      .writeText(command)
+      .then(() => toast.success("Copied"))
+      .catch(() => toast.error("Could not copy"));
+  };
 
-  const live = txn.state === undefined;
+  const live = txn?.state === undefined;
+  const passed = txn?.results.filter((r) => r.ok).length ?? 0;
+  const lastDevice = txn?.commitOrder.at(-1);
+  const others = txn?.commitOrder.slice(0, -1) ?? [];
+
   return (
-    <Panel
-      title={txn.label ? `${txn.label} — ${txn.id}` : txn.id}
-      extra={
-        <div className="flex items-center gap-2">
-          {live && (
-            <Button size="sm" type="secondary" disabled={busy} onClick={() => void abort()}>
-              Abort
-            </Button>
-          )}
-          <Button size="sm" type="secondary" onClick={onClose}>
+    <MonitorDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      width={780}
+      title={`Review ${txn?.label ?? id} before commit`}
+      description={
+        txn
+          ? `${txn.id} · ${live ? "in flight" : (txn.state ?? "").toLowerCase()} · phase ${txn.phase} · started ${ago(txn.ts)}`
+          : id
+      }
+      footer={
+        <>
+          <MonitorButton variant="ghost" onClick={onClose}>
             Close
-          </Button>
-        </div>
+          </MonitorButton>
+          <span className="flex-1" />
+          {live && (
+            <>
+              <span className="monitor-hint">Abort rolls back every participant.</span>
+              <MonitorButton
+                variant="danger"
+                icon={<X aria-hidden="true" />}
+                disabled={busy}
+                onClick={() => void abort()}
+              >
+                Abort transaction
+              </MonitorButton>
+            </>
+          )}
+        </>
       }
     >
-      <div
-        className={cn(
-          "mb-4 rounded-md border p-3 text-sm",
-          txn.state === "PARTIAL" && "border-red-500/40 bg-red-500/10",
-          txn.state === "COMMITTED" && "border-emerald-500/40 bg-emerald-500/10",
-          txn.state === "ABORTED" && "border-muted bg-muted/30",
-          live && "border-amber-500/40 bg-amber-500/10",
-        )}
-      >
-        <div className="flex items-center gap-2 font-medium">
-          <Dot type={txn.state ? STATE_TYPE[txn.state] : "warning"} />
-          {txn.state ?? `IN FLIGHT — phase ${txn.phase}`}
-        </div>
-        <p className="mt-1 text-muted-foreground">
-          {txn.state
-            ? STATE_MEANING[txn.state]
-            : "Changes are staged in Safe Mode on each participant and are not committed."}
-        </p>
-      </div>
-
-      <Swimlane txn={txn} events={events} />
-
-      {txn.warnings.length > 0 && (
-        <ul className="mt-4 space-y-1 text-sm text-amber-600 dark:text-amber-400">
-          {txn.warnings.map((w) => (
-            <li key={w}>! {w}</li>
-          ))}
-        </ul>
-      )}
-
-      {txn.state === "PARTIAL" && (
-        <div className="mt-4 rounded-md border border-red-500/40 p-3 text-sm">
-          <div className="font-medium">Recovery</div>
-          <ul className="mt-1 space-y-1 text-muted-foreground">
-            {txn.participants
-              .filter((p) => p.stage === "committed" || p.stage === "rollback-failed")
-              .map((p) => (
-                <li key={p.device} className="font-mono text-xs">
-                  {p.device}: diff_config_snapshots {p.snapshotId ?? "<no snapshot>"} live
-                </li>
-              ))}
-          </ul>
-        </div>
-      )}
-
-      <h4 className="mt-6 mb-2 text-sm font-medium">Assertions</h4>
-      {txn.results.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          None declared — this transaction committed on faith rather than on evidence.
-        </p>
+      {!txn ? (
+        <LoadingState label="Loading transaction" layout="cards" />
       ) : (
-        <ul className="space-y-1 text-sm">
-          {txn.results.map((r, i) => (
-            <li key={`${r.assertion.kind}-${i}`} className="flex items-start gap-2">
-              <Badge type={r.ok ? "success" : "error"}>{r.ok ? "PASS" : "FAIL"}</Badge>
-              <span className="font-mono text-xs">
-                {r.assertion.kind} @ {r.assertion.device ?? r.assertion.from ?? "?"}
-              </span>
-              <span className="text-muted-foreground">{r.detail}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="txn-review flex flex-col gap-4">
+          {live ? (
+            <MonitorNote tone="warn" icon={<Clock aria-hidden="true" />}>
+              <b>In flight.</b> Changes are staged in Safe Mode on each participant and are not
+              committed yet.
+            </MonitorNote>
+          ) : (
+            txn.state && (
+              <MonitorNote
+                tone={
+                  txn.state === "PARTIAL" ? "bad" : txn.state === "COMMITTED" ? "good" : undefined
+                }
+              >
+                <b>{txn.state}.</b> {STATE_MEANING[txn.state]}
+              </MonitorNote>
+            )
+          )}
+          <div className="glass txn-review-lanes">
+            <Swimlane txn={txn} events={events} />
+          </div>
+          <div className="monitor-fl">
+            <span className="monitor-label">
+              Assertions · {passed} of {txn.results.length} pass
+            </span>
+            {txn.results.length === 0 ? (
+              <span className="monitor-hint">None declared.</span>
+            ) : (
+              txn.results.map((r, i) => (
+                <div key={`${r.assertion.kind}-${i}`} className="txn-assert">
+                  <StatusBadge tone={r.ok ? "good" : "bad"} dot={false}>
+                    {r.ok ? "PASS" : "FAIL"}
+                  </StatusBadge>
+                  <span className="min-w-0">
+                    <span className="mono">{r.assertion.kind}</span> @ {assertionTarget(r)}
+                    <div className="text-[12px] text-muted-foreground">{r.detail}</div>
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+          {live && (
+            <div className="monitor-fl">
+              <span className="monitor-label">Commit from your MCP client</span>
+              <div className="flex items-center gap-2">
+                <span className="monitor-chip txn-command">{command}</span>
+                <MonitorButton
+                  variant="ghost"
+                  size="sm"
+                  icon={<Copy aria-hidden="true" />}
+                  onClick={copy}
+                >
+                  Copy
+                </MonitorButton>
+              </div>
+              {lastDevice && others.length > 0 && (
+                <span className="monitor-hint">
+                  {lastDevice} commits last, so a failure there leaves {list(others)} restorable
+                  from {others.length === 1 ? "its snapshot" : "their snapshots"}.
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       )}
-
-      <h4 className="mt-6 mb-2 text-sm font-medium">Timeline</h4>
-      {events.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No steps recorded yet.</p>
-      ) : (
-        <ol className="space-y-1 font-mono text-xs">
-          {events.map((e) => (
-            <li key={e.seq} className="flex gap-2">
-              <span className="text-muted-foreground">{new Date(e.ts).toLocaleTimeString()}</span>
-              <span className={e.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}>
-                {e.ok ? "✓" : "✕"}
-              </span>
-              <span>
-                {e.kind}
-                {e.device ? ` ${e.device}` : ""}
-              </span>
-              {e.detail && <span className="text-muted-foreground">{e.detail}</span>}
-            </li>
-          ))}
-        </ol>
-      )}
-    </Panel>
+    </MonitorDialog>
   );
 }
 
@@ -329,7 +475,8 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode
 
 export function TransactionsView(): ReactNode {
   const [rows, setRows] = useState<TxnRecord[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [picked, setPicked] = useState<string | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -340,7 +487,8 @@ export function TransactionsView(): ReactNode {
       })
       .catch((e) => {
         setError(e instanceof Error ? e.message : String(e));
-      });
+      })
+      .finally(() => setLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -350,79 +498,154 @@ export function TransactionsView(): ReactNode {
 
   const live = rows.filter((r) => r.state === undefined);
   const partial = rows.filter((r) => r.state === "PARTIAL");
+  const committed = rows.filter((r) => r.state === "COMMITTED");
+  // Until someone picks a row, open the newest partial: it is the one that needs a human.
+  const selected = picked === undefined ? (partial[0]?.id ?? null) : picked;
+  const selectedRow = rows.find((r) => r.id === selected);
+  const reviewing = selectedRow !== undefined && selectedRow.state === undefined;
+
+  const worst = partial[0];
+  const done = worst?.participants.filter((p) => p.stage === "committed" || p.stage === "restored");
+  const stuck = worst?.participants.filter((p) => p.stage === "rollback-failed");
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard k="Transactions" v={String(rows.length)} sub="recorded" />
-        <StatCard k="In flight" v={String(live.length)} sub="prepared, not committed" />
-        <StatCard
-          k="Partial"
-          v={String(partial.length)}
-          sub="need a human"
-          cls={partial.length > 0 ? "text-red-500" : undefined}
+    <section className="txn grid content-start gap-[18px]">
+      <PageIntro
+        eyebrow="Transactions · prepare, verify, commit everywhere"
+        verdict={
+          partial.length > 0 ? (
+            <>
+              {plural(rows.length, "transaction")}. <em>{partial.length} partial</em>{" "}
+              {partial.length === 1 ? "needs" : "need"} a human.
+            </>
+          ) : rows.length === 0 ? (
+            "No transactions yet."
+          ) : (
+            <>
+              {plural(rows.length, "transaction")}. <span className="s">None need a human.</span>
+            </>
+          )
+        }
+        lead={
+          <>
+            {worst && done && stuck && stuck.length > 0
+              ? `${worst.label ?? worst.id} committed on ${list(done.map((p) => p.device))} but could not be undone on ${list(stuck.map((p) => p.device))}. `
+              : ""}
+            Each change is staged in Safe Mode until every router passes.
+          </>
+        }
+        actions={
+          <MonitorButton
+            variant="ghost"
+            icon={<RefreshCw aria-hidden="true" />}
+            onClick={() => void load()}
+          >
+            Refresh
+          </MonitorButton>
+        }
+      />
+
+      <MetricStrip label="Transaction counts">
+        <Metric label="Transactions" value={String(rows.length)} hint="recorded" />
+        <Metric
+          label="In flight"
+          value={String(live.length)}
+          hint="prepared, not committed"
+          tone={live.length > 0 ? "warn" : "default"}
         />
-        <StatCard
-          k="Committed"
-          v={String(rows.filter((r) => r.state === "COMMITTED").length)}
-          sub="landed everywhere"
+        <Metric
+          label="Partial"
+          value={String(partial.length)}
+          hint="need a human"
+          tone={partial.length > 0 ? "bad" : "default"}
         />
-      </div>
+        <Metric
+          label="Committed"
+          value={String(committed.length)}
+          hint="landed everywhere"
+          tone={committed.length > 0 ? "good" : "default"}
+        />
+      </MetricStrip>
 
       {error && (
-        <Panel title="Transaction log">
-          <p className="text-sm text-muted-foreground">
-            The log could not be read ({error}); transactions running right now are still shown.
-          </p>
-        </Panel>
+        <MonitorNote tone="warn">
+          The log could not be read ({error}). Transactions running right now still show.
+        </MonitorNote>
       )}
 
-      {selected && <Detail id={selected} onClose={() => setSelected(null)} />}
+      {selected && !reviewing && (
+        <Detail key={selected} id={selected} onClose={() => setPicked(null)} />
+      )}
+      {selected && reviewing && (
+        <Review key={selected} id={selected} onClose={() => setPicked(null)} />
+      )}
 
-      <Panel
+      <MonitorPanel
         title="History"
+        description="Newest first. Pick one to see its lanes."
+        flush
         extra={
-          <Button size="sm" type="secondary" onClick={() => void load()}>
+          <MonitorButton
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw aria-hidden="true" />}
+            onClick={() => void load()}
+          >
             Refresh
-          </Button>
+          </MonitorButton>
         }
       >
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No transactions yet. Use <span className="font-mono">begin_transaction</span> to
-            coordinate a change across several routers — both ends of a tunnel, a peering, a fleet
-            ACL.
-          </p>
+        {!loaded ? (
+          <LoadingState label="Loading transactions" layout="table" />
+        ) : rows.length === 0 ? (
+          <MonitorEmpty compact title="No transactions yet">
+            Use <span className="mono">begin_transaction</span> to change several routers together:
+            both ends of a tunnel, a peering, a fleet ACL.
+          </MonitorEmpty>
         ) : (
-          <ul className="divide-y divide-border">
+          <>
+            <div className="monitor-thead txn-hist">
+              <span>State</span>
+              <span>Transaction</span>
+              <span>Participants</span>
+              <span>When</span>
+            </div>
             {rows.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(r.id)}
-                  className="flex w-full items-center gap-3 py-2 text-left hover:bg-muted/40"
-                >
-                  <Badge type={r.state ? STATE_TYPE[r.state] : "warning"}>
-                    {r.state ?? "LIVE"}
-                  </Badge>
-                  <span className="flex-1 truncate">
-                    {r.label ?? r.id}
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {r.devices.join(" → ")}
-                    </span>
-                  </span>
-                  <span
-                    className="whitespace-nowrap text-xs text-muted-foreground"
-                    title={clock(r.ts)}
-                  >
-                    {ago(r.ts)}
-                  </span>
-                </button>
-              </li>
+              <button
+                key={r.id}
+                type="button"
+                className="monitor-row txn-hist"
+                data-selected={r.id === selected || undefined}
+                aria-pressed={r.id === selected}
+                onClick={() => setPicked(r.id)}
+              >
+                <span className="trunc">
+                  {r.state ? (
+                    <StatusBadge
+                      tone={STATE_TONE[r.state]}
+                      dot={false}
+                      quiet={r.state === "ABORTED"}
+                    >
+                      {r.state}
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge tone="warn">LIVE</StatusBadge>
+                  )}
+                </span>
+                <span className="trunc">
+                  <span className="mono p">{r.label ?? r.id}</span>
+                </span>
+                <span className="trunc">
+                  <span className="mono text-fg-secondary">{r.devices.join(" → ")}</span>
+                </span>
+                <span className="trunc" title={clock(r.ts)}>
+                  <span className="mono text-muted-foreground">{ago(r.ts)}</span>
+                </span>
+              </button>
             ))}
-          </ul>
+          </>
         )}
-      </Panel>
-    </div>
+      </MonitorPanel>
+    </section>
   );
 }

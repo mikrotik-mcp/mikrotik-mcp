@@ -5,21 +5,6 @@ import { expect, test, vi } from "vite-plus/test";
 import { RecoveryLabView } from "../../ui/observability/recovery-lab";
 import { api, postJson } from "../../ui/observability/api";
 vi.mock("../../ui/observability/api", () => ({ api: vi.fn(), postJson: vi.fn() }));
-// Exercise consent and error behavior independently of happy-dom's incomplete WAAPI cancellation.
-vi.mock("../../ui/observability/components/ui/checkbox", () => ({
-  Checkbox: ({
-    checked,
-    onCheckedChange,
-  }: {
-    checked: boolean;
-    onCheckedChange: (value: boolean) => void;
-  }) =>
-    h("button", {
-      role: "checkbox",
-      "aria-checked": checked,
-      onClick: () => onCheckedChange(!checked),
-    }),
-}));
 test("unconfigured lab explains its boundary without sending data", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.mocked(api).mockImplementation(async (path) =>
@@ -92,7 +77,7 @@ test("starting a prepared run requires transfer consent", async () => {
       new Error("Runner unavailable; verify this run before retrying."),
     );
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[role="dialog"] [role="checkbox"]')!.click();
+      document.querySelector<HTMLInputElement>('[role="dialog"] input[type="checkbox"]')!.click();
     });
     expect((submit as HTMLButtonElement).disabled).toBe(false);
     await act(async () => submit.click());

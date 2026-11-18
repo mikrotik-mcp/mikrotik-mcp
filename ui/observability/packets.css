@@ -1,0 +1,135 @@
+/* Packets page, after the approved Packets board. Layout only; colours come from tailwind.css tokens. */
+
+.pkt-page {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+  line-height: 21px;
+}
+
+.pkt-grid {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  gap: 14px;
+}
+@media (min-width: 1024px) {
+  .pkt-grid {
+    grid-template-columns: 360px minmax(0, 1fr);
+  }
+}
+
+.pkt-side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pkt-mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+
+/* Protocols: the donut, then one share bar per protocol. */
+.pkt-protocols {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+.pkt-protocols > svg {
+  align-self: center;
+}
+.pkt-bar-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 10px;
+}
+.pkt-bar-row .monitor-bar {
+  height: 6px;
+}
+.pkt-bar-row .monitor-bar > span {
+  background: var(--proto);
+}
+.pkt-count {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Top talkers: address on the left, packet count on the right. */
+.pkt-talker {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding: 7px 0;
+}
+.pkt-talker > span:first-child {
+  color: var(--text-secondary);
+}
+.pkt-talker > span:last-child {
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Decoded packets: newest first, zebra rows, mono 12/18. */
+.pkt-cols {
+  display: grid;
+  grid-template-columns: 104px 52px 48px minmax(0, 1fr);
+  gap: 10px;
+}
+.pkt-head {
+  padding: 0 18px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.pkt-list {
+  max-height: 532px;
+  overflow-y: auto;
+}
+.pkt-line {
+  padding: 5px 18px;
+  font-family: var(--font-mt);
+  font-size: 12px;
+  line-height: 18px;
+}
+.pkt-line:nth-child(even) {
+  background: var(--glass);
+}
+.pkt-line > span:first-child,
+.pkt-line > span:nth-child(3) {
+  color: var(--muted-foreground);
+}
+.pkt-line > span:nth-child(2) {
+  color: var(--proto);
+  font-weight: 500;
+}
+.pkt-line > span:last-child {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pkt-right {
+  text-align: right;
+}
+.pkt-waiting {
+  padding: 5px 18px 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+@media (max-width: 639px) {
+  .pkt-cols {
+    grid-template-columns: 92px 44px minmax(0, 1fr);
+  }
+  .pkt-cols > :nth-child(3) {
+    display: none;
+  }
+}

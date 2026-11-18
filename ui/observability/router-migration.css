@@ -1,0 +1,161 @@
+/* Router migration, from the "Rec-Migration" and "Rec-Migration-Undo" boards.
+   Shared parts live in monitoring.css. */
+
+.mig .mono,
+.mig-dialog .mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.mig .trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mig .monitor-head[data-layout="verdict"][data-aside] {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+/* Source → target, with the inspect button. */
+.mig-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+.mig-pair-arrow {
+  display: flex;
+  justify-content: center;
+  color: var(--success);
+}
+.mig-pair-arrow svg {
+  width: 20px;
+  height: 20px;
+}
+.mig-target {
+  display: flex;
+  height: 34px;
+  align-items: center;
+  color: var(--foreground);
+}
+.mig .mig-target.mono {
+  font-size: 15px;
+  line-height: 21px;
+}
+
+/* A select with an icon on the left (the boards' .select). */
+.mig-select {
+  display: flex;
+  width: 100%;
+}
+.mig-select select {
+  width: 100%;
+}
+.mig-select[data-icon] select {
+  padding-left: 34px;
+}
+.mig-select[data-icon] .mig-icon {
+  right: auto;
+  left: 12px;
+}
+.mig-select select.mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+
+.mig-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.mig-hw {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 12px;
+  padding: 14px;
+}
+.mig-hw b {
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mig-port {
+  display: grid;
+  grid-template-columns: 110px 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.mig-port .monitor-chip {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.mig-arrow {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+.mig-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mig-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px 14px;
+}
+.mig-sections .monitor-check {
+  min-width: 0;
+  font-family: var(--font-mt);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.mig-diff {
+  max-height: 260px;
+}
+.mig-manual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding: 7px 0;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .mig-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 639px) {
+  .mig .monitor-head[data-layout="verdict"][data-aside] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mig-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mig-pair-arrow svg {
+    transform: rotate(90deg);
+  }
+  .mig-sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mig-hw-row {
+    flex-direction: column;
+  }
+  .mig-port {
+    grid-template-columns: 96px 16px minmax(0, 1fr);
+  }
+}

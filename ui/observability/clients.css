@@ -1,0 +1,376 @@
+/* Clients page, after the Usr-Clients, Usr-Clients-Detail and Usr-Clients-Phone
+   boards. Tokens only; shared parts live in monitoring.css. */
+
+.clients-page {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 18px;
+}
+
+/* Text helpers: the board's .mono, .num, .trunc, .hint, .label. */
+.clients-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.clients-num {
+  font-variant-numeric: tabular-nums;
+}
+.clients-trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clients-sub {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.clients-hint {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 17px;
+}
+.clients-label {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.clients-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.clients-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.clients-link-sm {
+  font-size: 12px;
+}
+.clients-link svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* Header: the search box and the "Busiest right now" card. */
+.clients-search {
+  width: 260px;
+}
+.clients-busiest {
+  display: flex;
+  line-height: 21px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+.clients-busiest-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.clients-busiest-head b {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+}
+.clients-talkers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.clients-talker {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.clients-talker .monitor-bar {
+  min-width: 30px;
+}
+
+/* Table */
+.clients-grid {
+  grid-template-columns: minmax(0, 1.3fr) 150px 70px 150px 210px 190px;
+}
+.clients-row {
+  cursor: pointer;
+}
+.clients-client {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.clients-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.clients-unknown {
+  color: var(--muted-foreground);
+}
+.clients-row .clients-sub.clients-mono {
+  font-size: 12px;
+}
+.clients-row[data-blocked] :is(.p, .clients-unknown, .clients-client .clients-mono) {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+.clients-status,
+.clients-traffic,
+.clients-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+.clients-status {
+  gap: 6px;
+}
+.clients-traffic {
+  gap: 10px;
+}
+.clients-rates {
+  display: flex;
+  gap: 10px;
+  white-space: nowrap;
+}
+.clients-spark {
+  display: block;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.clients-actions {
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.clients-table-panel .monitor-foot {
+  gap: 10px;
+}
+
+/* Charts */
+.clients-chart-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.clients-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.clients-big-rates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 26px;
+  margin-bottom: 10px;
+}
+.clients-big {
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.clients-big small {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.clients-usage-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+/* Drawer */
+.clients-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.clients-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.clients-who-name {
+  color: var(--text-emphasis);
+  font-size: 15px;
+  font-weight: 700;
+}
+.clients-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--acc-soft);
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.clients-avatar[data-size="lg"] {
+  width: 40px;
+  height: 40px;
+}
+.clients-avatar[data-tone="ok"] {
+  background: var(--sig-soft);
+  color: var(--success);
+}
+.clients-avatar[data-tone="bad"] {
+  background: var(--bad-soft);
+  color: var(--destructive);
+}
+.clients-live-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.clients-live-rates {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+.clients-live-rates .clients-num {
+  font-size: 20px;
+  font-weight: 600;
+}
+.clients-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.clients-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.clients-inline {
+  display: flex;
+  gap: 8px;
+}
+.clients-baseline {
+  display: flex;
+  align-items: baseline;
+}
+.clients-fl {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+.clients-pinned {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 10px;
+  background: var(--acc-soft);
+  padding: 0 9px;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.clients-pinned svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* Wide and phone parts: the phone board drops the lead, the busiest card,
+   two KPIs and the table columns, and moves the search under the KPIs. */
+.clients-phone-flex,
+.clients-phone-grid,
+.clients-phone-inline {
+  display: none;
+}
+@media (max-width: 1023px) {
+  .clients-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 639px) {
+  .clients-page {
+    gap: 14px;
+  }
+  .clients-wide,
+  .clients-wide-block,
+  .clients-wide-flex,
+  .clients-wide-grid,
+  .clients-wide-inline,
+  .clients-wide-cell,
+  .clients-page .monitor-head-aside,
+  .clients-table-panel .monitor-panel-head {
+    display: none;
+  }
+  .clients-phone-flex {
+    display: flex;
+  }
+  .clients-phone-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .clients-phone-inline {
+    display: inline;
+  }
+  .clients-page .monitor-verdict {
+    letter-spacing: -0.025em;
+  }
+  .clients-phone-tools {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .clients-phone-tools .monitor-seg {
+    display: flex;
+  }
+  .clients-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 14px;
+  }
+  .clients-row .clients-stack {
+    gap: 3px;
+  }
+  .clients-client {
+    align-items: flex-start;
+  }
+  .clients-client > .monitor-dot {
+    margin-top: 7px;
+  }
+  .clients-traffic {
+    align-items: flex-end;
+  }
+  .clients-rates {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+  .clients-table-panel .monitor-thead {
+    display: none;
+  }
+  .clients-table-panel .monitor-row:first-of-type {
+    border-top: 0;
+  }
+  .clients-table-panel .monitor-foot {
+    padding: 10px 18px;
+  }
+}

@@ -1,13 +1,23 @@
 import { LoadingState } from "./loading-state";
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Globe2 } from "lucide-react";
+import type { ReactNode, RefObject } from "react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Globe2,
+  Pause,
+  Play,
+  SlidersHorizontal,
+} from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { api, withToken } from "./api";
 import { bytes, num } from "./format";
 import {
-  formatBytes,
   Metric,
   MetricStrip,
   MonitorButton,
@@ -117,97 +127,135 @@ function lastSeenLabel(ts: number): string {
   return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
 }
 
-/** The map is a 12-column grid of 44px rows, five rows tall, like the board. */
-const MAP_COLS = 12;
-const MAP_ROWS = 5;
-/** A map cell is about twice as wide as it is tall. */
-const CELL_ASPECT = 2;
-/** At most this many named tiles; the rest of the top sites share one tile. */
+/** The map's height, as on the board. */
+const MAP_HEIGHT = 240;
+/** At most this many named tiles; every other site shares one "Other" tile. */
 const MAP_TILES = 9;
-/** Tile tint by rank, strongest first. The shared "Other" tile uses 6%. */
-const TINTS = [45, 35, 28, 22, 18, 16, 12, 12, 8];
 
 type Tile = {
   name: string;
   value: number;
-  tint: number;
-  col: string;
-  row: string;
+  rank: number;
+  /** Position and size in percent of the map. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 };
-type Rect = { x0: number; y0: number; x1: number; y1: number };
 
 /**
- * Ordered treemap in horizontal bands, read like the board's grid: left to
- * right, top to bottom. Each band takes sites while that keeps its tiles
- * closer to square. Returns one rectangle per value inside `w` x `h`.
+ * The board's treemap: the two biggest sites each take a full-height column,
+ * the rest share the remaining width in two rows. Values must be sorted,
+ * biggest first.
  */
-function bands(values: number[], w: number, h: number): Rect[] {
-  const total = values.reduce((sum, v) => sum + v, 0);
+function treemap(items: { name: string; value: number }[]): Tile[] {
+  const total = items.reduce((sum, t) => sum + t.value, 0);
   if (!total) return [];
-  const areas = values.map((v) => (v / total) * w * h);
-  const worst = (band: number[]): number => {
-    const sum = band.reduce((a, b) => a + b, 0);
-    return Math.max(
-      (w * w * Math.max(...band)) / (sum * sum),
-      (sum * sum) / (w * w * Math.min(...band)),
-    );
-  };
-  const rects: Rect[] = [];
-  let y = 0;
-  let i = 0;
-  while (i < areas.length) {
-    const band = [areas[i]];
-    let j = i + 1;
-    while (j < areas.length && worst([...band, areas[j]]) <= worst(band)) {
-      band.push(areas[j]);
-      j++;
-    }
-    const sum = band.reduce((a, b) => a + b, 0);
-    const bottom = j >= areas.length ? h : y + sum / w;
-    let x = 0;
-    band.forEach((area, k) => {
-      const right = k === band.length - 1 ? w : x + (area / sum) * w;
-      rects.push({ x0: x, y0: y, x1: right, y1: bottom });
-      x = right;
-    });
-    y = bottom;
-    i = j;
+  const tiles: Tile[] = [];
+  let x = 0;
+  for (const [i, t] of items.slice(0, 2).entries()) {
+    const w = (t.value / total) * 100;
+    tiles.push({ ...t, rank: i, x, y: 0, w, h: 100 });
+    x += w;
   }
-  return rects;
+  const rest = items.slice(2);
+  const restTotal = rest.reduce((sum, t) => sum + t.value, 0);
+  const half = Math.floor(rest.length / 2);
+  const rows = [rest.slice(0, half), rest.slice(half)];
+  let rank = 2;
+  rows.forEach((row, ri) => {
+    const rowTotal = row.reduce((sum, t) => sum + t.value, 0);
+    if (!rowTotal) return;
+    const h = (rowTotal / restTotal) * 100;
+    const y = ri === 0 ? 0 : 100 - h;
+    let xx = x;
+    for (const t of row) {
+      const w = ((100 - x) * t.value) / rowTotal;
+      tiles.push({ ...t, rank: rank++, x: xx, y, w, h });
+      xx += w;
+    }
+  });
+  return tiles;
 }
 
-/**
- * Lays the top sites out on the map grid. Each tile snaps to whole cells; when
- * a site is too small for a cell it joins the "Other" tile.
- */
-function mapTiles(groups: { name: string; value: number }[]): Tile[] {
-  for (let named = Math.min(MAP_TILES, groups.length); named >= 0; named--) {
-    const rest = groups.slice(named);
-    const items = groups.slice(0, named).map((g, i) => ({ ...g, tint: TINTS[i] }));
-    const restValue = rest.reduce((sum, g) => sum + g.value, 0);
-    if (rest.length && restValue > 0)
-      items.push({ name: `Other ${num(rest.length)}`, value: restValue, tint: 6 });
-    const rects = bands(
-      items.map((t) => t.value),
-      MAP_COLS * CELL_ASPECT,
-      MAP_ROWS,
-    );
-    const tiles = items.map((t, i) => {
-      const r = rects[i];
-      const c0 = Math.round(r.x0 / CELL_ASPECT);
-      const c1 = Math.round(r.x1 / CELL_ASPECT);
-      const r0 = Math.round(r.y0);
-      const r1 = Math.round(r.y1);
-      return {
-        ...t,
-        ok: c1 > c0 && r1 > r0,
-        col: `${c0 + 1} / ${c1 + 1}`,
-        row: `${r0 + 1} / ${r1 + 1}`,
-      };
-    });
-    if (tiles.every((t) => t.ok)) return tiles.map(({ ok: _ok, ...t }) => t);
-  }
-  return [];
+/** Tile colours by rank: teal for the top two, indigo for the next three, glass after. */
+function tileTone(rank: number): { background: string; edge: string } {
+  if (rank < 2) return { background: "var(--sig-soft)", edge: "var(--sig)" };
+  if (rank < 5) return { background: "var(--acc-soft)", edge: "var(--chart-1)" };
+  return { background: "var(--glass-2)", edge: "var(--line-2)" };
+}
+
+/** Width of an element, kept current as it resizes. */
+function useWidth(ref: RefObject<HTMLElement | null>, fallback: number): number {
+  const [width, setWidth] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return width;
+}
+
+function DestinationMap({
+  tiles,
+  measure,
+  animateKey,
+}: {
+  tiles: Tile[];
+  measure: Measure;
+  animateKey: string;
+}): ReactNode {
+  const ref = useRef<HTMLDivElement>(null);
+  const width = useWidth(ref, 1100);
+  useStaggerIn(ref, "[data-tile]", animateKey);
+  return (
+    <div
+      ref={ref}
+      className="site-map"
+      style={{ height: MAP_HEIGHT }}
+      role="img"
+      aria-label={`Map of the top destinations by ${measure === "bytes" ? "traffic bytes" : "observations"}`}
+    >
+      {tiles.map((t) => {
+        const tone = tileTone(t.rank);
+        const big = (t.h / 100) * MAP_HEIGHT > 110 && (t.w / 100) * width > 160;
+        return (
+          <div
+            key={t.name}
+            data-tile=""
+            className="site-tile"
+            title={`${t.name}: ${formatMeasure(t.value, measure)}`}
+            style={{
+              left: `${t.x}%`,
+              top: `${t.y}%`,
+              width: `calc(${t.w}% - 4px)`,
+              height: `calc(${t.h}% - 4px)`,
+              background: tone.background,
+              boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tone.edge} 45%, transparent)`,
+            }}
+          >
+            <span className="site-tile-name" style={{ fontSize: big ? 14 : 12 }}>
+              {t.name}
+            </span>
+            <span className="site-tile-value">{formatMeasure(t.value, measure)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** "12.6 GiB" as the board's KPI shows it: the number, then the unit in small type. */
+function BytesValue({ value }: { value: number }): ReactNode {
+  const unit = bytes(value).split(" ")[1];
+  return (
+    <>
+      <Ticker value={value} format={(n) => bytes(n).split(" ")[0]} />
+      <small>{unit}</small>
+    </>
+  );
 }
 
 export function SiteActivityView() {
@@ -232,7 +280,6 @@ export function SiteActivityView() {
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [policySearch, setPolicySearch] = useState("");
   const rowsRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<HTMLDivElement>(null);
 
   async function savePolicy(next: SitePolicy) {
     setSavingPolicy(true);
@@ -290,7 +337,6 @@ export function SiteActivityView() {
   }, [client, owner, kind, search, windowMs, page]);
 
   useStaggerIn(rowsRef, ".site-row", loadedKey);
-  useStaggerIn(mapRef, "[data-tile]", `${loadedKey}:${measure}`);
 
   const visits = payload?.visits ?? [];
   const summary = payload?.summary;
@@ -310,13 +356,35 @@ export function SiteActivityView() {
   const ended = !!policy?.enabled && !active;
 
   const topGroups = summary?.groups ?? [];
-  // The server sends the top 30 sites. The biggest get their own tile; the
-  // rest of those 30 share the "Other" tile.
-  const tiles = mapTiles(
-    topGroups.map((g) => ({ name: g.label, value: g[measure] })).filter((g) => g.value > 0),
+  // The biggest sites get their own tile. Every other site, including those
+  // past the server's top 30, shares the "Other" tile, sized from the totals.
+  const ranked = topGroups
+    .map((g) => ({ name: g.label, value: g[measure] }))
+    .filter((g) => g.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const named = ranked.slice(0, MAP_TILES);
+  const namedTotal = named.reduce((sum, g) => sum + g.value, 0);
+  const otherValue = Math.max(
+    0,
+    (measure === "bytes" ? (summary?.bytes ?? 0) : (summary?.observations ?? 0)) - namedTotal,
+  );
+  const otherCount = Math.max(0, (summary?.destinations ?? 0) - named.length);
+  const tiles = treemap(
+    otherValue > 0 && otherCount > 0
+      ? [...named, { name: `Other ${num(otherCount)}`, value: otherValue }]
+      : named,
   );
 
+  // The busiest site, and who on this page of rows reached it most.
+  const busiest = topGroups[0]?.label;
+  const busiestOwner = busiest
+    ? visits
+        .filter((v) => (v.domain ?? v.destination) === busiest && v.owner)
+        .sort((a, b) => b.connections - a.connections)[0]?.owner
+    : undefined;
+
   const windowLabel = WINDOWS.find((w) => w.ms === windowMs)?.label ?? "24 hours";
+  const isDay = windowMs === WINDOWS[0].ms;
   const selection =
     owner !== "*"
       ? owner
@@ -324,7 +392,7 @@ export function SiteActivityView() {
         ? client
         : kind !== "*"
           ? (kindLabel[kind] ?? kind)
-          : "all clients";
+          : "everyone";
   const filtered = search !== "" || kind !== "*" || owner !== "*" || client !== "*";
   const exportParams = new URLSearchParams({
     from: String((payload?.to ?? 0) - windowMs),
@@ -360,9 +428,108 @@ export function SiteActivityView() {
       ? "Nothing new is recorded. Set a new end date or record until you turn it off."
       : "Nothing new is recorded. Existing records stay on this host for 30 days.";
 
+  const devices = summary?.clients ?? 0;
+  const sites = summary?.destinations ?? 0;
+
+  const collect = policy && (
+    <section className="glass site-collect" aria-label="Collection settings">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <StatusBadge tone={active ? "good" : ended ? "warn" : "default"} dot>
+          {active ? "Recording" : ended ? "Ended" : "Paused"}
+        </StatusBadge>
+        <span className="flex-1" />
+        <MonitorButton
+          size="sm"
+          icon={<SlidersHorizontal aria-hidden="true" />}
+          aria-expanded={editingPolicy}
+          onClick={() => {
+            setDraftPolicy(policy);
+            setPolicySearch("");
+            setEditingPolicy(!editingPolicy);
+          }}
+        >
+          {editingPolicy ? "Close settings" : "Configure"}
+        </MonitorButton>
+        <MonitorButton
+          size="sm"
+          variant={active ? "ghost" : "glass"}
+          icon={active ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+          disabled={savingPolicy}
+          onClick={() =>
+            void savePolicy({
+              ...policy,
+              enabled: !active,
+              until: active ? policy.until : null,
+            })
+          }
+        >
+          {active ? "Pause collection" : "Start collection"}
+        </MonitorButton>
+      </div>
+      <div>
+        <h2 className="site-collect-title">{headline}</h2>
+        <p className="text-muted-foreground text-[12px] leading-[21px]">{subline}</p>
+      </div>
+      <dl className="monitor-facts">
+        <dt>Audience</dt>
+        <dd title={policy.owners.length ? policy.owners.join(", ") : undefined}>
+          {policy.owners.length ? `${policy.owners.length} selected` : "Every client"}
+        </dd>
+        <dt>Schedule</dt>
+        <dd>
+          {policy.until
+            ? `Until ${new Date(policy.until).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
+            : "Until turned off"}
+        </dd>
+        <dt>Retention</dt>
+        <dd>Local · 30 days</dd>
+        <dt>Flow collector</dt>
+        <dd>
+          <span className="inline-flex items-center gap-1.5">
+            <StatusDot tone={payload?.collection.flows.running ? "good" : "warn"} />
+            {payload?.collection.flows.running ? "Online" : "Offline"}
+          </span>
+        </dd>
+      </dl>
+    </section>
+  );
+
   return (
-    <div className="flex flex-col gap-6 pb-12">
-      <PageIntro>Which sites each device reached, from DNS answers and flow records.</PageIntro>
+    <div className="site-activity flex flex-col gap-[18px] pb-12">
+      <PageIntro
+        eyebrow="Site Activity · DNS answers and flow records"
+        verdict={
+          <>
+            {num(devices)} {devices === 1 ? "device" : "devices"} reached{" "}
+            <span className="s">
+              {num(sites)} {sites === 1 ? "site" : "sites"}
+            </span>{" "}
+            {isDay ? "today" : `in the last ${windowLabel}`}.
+          </>
+        }
+        lead="Which sites each device reached, from DNS answers and flow records. This view stores destinations only, never page content."
+        actions={
+          <>
+            <a
+              className="monitor-btn"
+              data-variant="glass"
+              data-size="md"
+              href={payload ? withToken(`/api/site-activity/export?${exportParams}`) : undefined}
+              download
+            >
+              <Download aria-hidden="true" />
+              Export CSV
+            </a>
+            {busiest && (
+              <span className="text-muted-foreground text-[12px]">
+                Busiest: <span className="font-mono">{busiest}</span>
+                {busiestOwner && ` from ${busiestOwner}`}
+              </span>
+            )}
+          </>
+        }
+        aside={collect || undefined}
+      />
 
       {error && (
         <div role="alert" className="monitor-note text-destructive" data-tone="bad">
@@ -371,201 +538,132 @@ export function SiteActivityView() {
         </div>
       )}
 
-      {policy && (
-        <section className="monitor-panel site-collect" aria-label="Collection settings">
-          <div className="monitor-panel-head">
-            <StatusBadge tone={active ? "good" : ended ? "warn" : "default"}>
-              {active ? "Recording" : ended ? "Ended" : "Paused"}
-            </StatusBadge>
-            <div className="site-collect-copy">
-              <h2 className="monitor-panel-title">{headline}</h2>
-              <p className="monitor-panel-desc">{subline}</p>
-            </div>
-            <MonitorButton
-              size="sm"
-              aria-expanded={editingPolicy}
-              onClick={() => {
-                setDraftPolicy(policy);
-                setPolicySearch("");
-                setEditingPolicy(!editingPolicy);
-              }}
-            >
-              {editingPolicy ? "Close settings" : "Configure"}
-            </MonitorButton>
-            <MonitorButton
-              size="sm"
-              variant={active ? "ghost" : "glass"}
-              disabled={savingPolicy}
-              onClick={() =>
-                void savePolicy({
-                  ...policy,
-                  enabled: !active,
-                  until: active ? policy.until : null,
-                })
-              }
-            >
-              {active ? "Pause collection" : "Start collection"}
-            </MonitorButton>
+      {policy && editingPolicy && (
+        <section className="monitor-panel site-editor" aria-label="Collection settings editor">
+          <div>
+            <h3 className="monitor-panel-title">Who to record, and for how long</h3>
+            <p className="monitor-panel-desc">Changes apply when you save.</p>
           </div>
-          <div className="site-facts">
-            <div className="site-fact">
-              <span className="site-fact-label">Audience</span>
-              <span
-                className="site-fact-value"
-                title={policy.owners.length ? policy.owners.join(", ") : undefined}
-              >
-                {policy.owners.length ? `${policy.owners.length} selected` : "Every client"}
-              </span>
-            </div>
-            <div className="site-fact">
-              <span className="site-fact-label">Schedule</span>
-              <span className="site-fact-value">
-                {policy.until
-                  ? `Until ${new Date(policy.until).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
-                  : "Until turned off"}
-              </span>
-            </div>
-            <div className="site-fact">
-              <span className="site-fact-label">Retention</span>
-              <span className="site-fact-value">Local · 30 days</span>
-            </div>
-            <div className="site-fact">
-              <span className="site-fact-label">Flow collector</span>
-              <span className="site-fact-value">
-                <StatusDot tone={payload?.collection.flows.running ? "good" : "warn"} />
-                {payload?.collection.flows.running ? "Online" : "Offline"}
-              </span>
-            </div>
-          </div>
-
-          {editingPolicy && (
-            <div className="site-editor">
+          <div className="site-editor-grid">
+            <div className="site-editor-card">
               <div>
-                <h3 className="monitor-panel-title">Who to record, and for how long</h3>
-                <p className="monitor-panel-desc">Changes apply when you save.</p>
+                <h3>People and devices</h3>
+                <p>Record everyone, or only the names you pick.</p>
               </div>
-              <div className="site-editor-grid">
-                <div className="site-editor-card">
-                  <div>
-                    <h3>People and devices</h3>
-                    <p>Record everyone, or only the names you pick.</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="site-option"
-                    aria-pressed={!draftPolicy.owners.length}
-                    onClick={() => setDraftPolicy({ ...draftPolicy, owners: [] })}
-                  >
-                    <span>
-                      <span className="block font-[510]">All clients</span>
-                      <span className="block text-[12px] text-muted-foreground">
-                        Includes clients without a known name
-                      </span>
-                    </span>
-                    <StatusDot tone={draftPolicy.owners.length ? "default" : "brand"} />
-                  </button>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-[510]">
-                      Named clients{" "}
-                      <span className="tabular-nums">
-                        {draftPolicy.owners.length}/{availableOwners.length}
-                      </span>
+              <button
+                type="button"
+                className="site-option"
+                aria-pressed={!draftPolicy.owners.length}
+                onClick={() => setDraftPolicy({ ...draftPolicy, owners: [] })}
+              >
+                <span>
+                  <span className="block font-medium">All clients</span>
+                  <span className="text-muted-foreground block text-[12px]">
+                    Includes clients without a known name
+                  </span>
+                </span>
+                <StatusDot tone={draftPolicy.owners.length ? "default" : "brand"} />
+              </button>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium">
+                  Named clients{" "}
+                  <span className="tabular-nums">
+                    {draftPolicy.owners.length}/{availableOwners.length}
+                  </span>
+                </p>
+                <MonitorSearch
+                  className="w-full sm:w-48"
+                  label="Find a client"
+                  placeholder="Find a client"
+                  value={policySearch}
+                  onChange={setPolicySearch}
+                />
+              </div>
+              <ScrollArea
+                className="h-48"
+                viewportProps={{ tabIndex: 0, "aria-label": "Named clients to record" }}
+              >
+                <div className="site-owner-list">
+                  {filteredOwners.length ? (
+                    filteredOwners.map((name, i) => {
+                      const id = `site-owner-${i}`;
+                      return (
+                        <div key={name} className="site-owner">
+                          <Checkbox
+                            id={id}
+                            checked={draftPolicy.owners.includes(name)}
+                            onCheckedChange={() =>
+                              setDraftPolicy((current) => ({
+                                ...current,
+                                owners: current.owners.includes(name)
+                                  ? current.owners.filter((item) => item !== name)
+                                  : [...current.owners, name],
+                              }))
+                            }
+                          />
+                          <label htmlFor={id} title={name}>
+                            {name}
+                          </label>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="col-span-full py-5 text-center">
+                      {availableOwners.length ? "No client matches" : "No named clients yet"}
                     </p>
-                    <MonitorSearch
-                      className="w-full sm:w-48"
-                      label="Find a client"
-                      placeholder="Find a client"
-                      value={policySearch}
-                      onChange={setPolicySearch}
-                    />
-                  </div>
-                  <ScrollArea
-                    className="h-48"
-                    viewportProps={{ tabIndex: 0, "aria-label": "Named clients to record" }}
-                  >
-                    <div className="site-owner-list">
-                      {filteredOwners.length ? (
-                        filteredOwners.map((name, i) => {
-                          const id = `site-owner-${i}`;
-                          return (
-                            <div key={name} className="site-owner">
-                              <Checkbox
-                                id={id}
-                                checked={draftPolicy.owners.includes(name)}
-                                onCheckedChange={() =>
-                                  setDraftPolicy((current) => ({
-                                    ...current,
-                                    owners: current.owners.includes(name)
-                                      ? current.owners.filter((item) => item !== name)
-                                      : [...current.owners, name],
-                                  }))
-                                }
-                              />
-                              <label htmlFor={id} title={name}>
-                                {name}
-                              </label>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <p className="col-span-full py-5 text-center">
-                          {availableOwners.length ? "No client matches" : "No named clients yet"}
-                        </p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                  <p>Pick names to record only those clients.</p>
-                </div>
-                <div className="site-editor-card">
-                  <div>
-                    <h3>Collection window</h3>
-                    <p>Choose when recording stops.</p>
-                  </div>
-                  <Segmented
-                    label="Collection window"
-                    value={draftPolicy.until === null ? "off" : "date"}
-                    options={[
-                      { value: "off", label: "Until turned off" },
-                      { value: "date", label: "End on a date" },
-                    ]}
-                    onChange={(v) =>
-                      setDraftPolicy({
-                        ...draftPolicy,
-                        until: v === "off" ? null : (draftPolicy.until ?? Date.now() + 86_400_000),
-                      })
-                    }
-                  />
-                  {draftPolicy.until !== null && (
-                    <DateTimePicker
-                      aria-label="Collection end date and time"
-                      value={new Date(draftPolicy.until)}
-                      onChange={(date) =>
-                        setDraftPolicy({ ...draftPolicy, until: date?.getTime() ?? null })
-                      }
-                    />
                   )}
                 </div>
-              </div>
-              <div className="site-editor-foot">
-                <p className="max-w-xl">
-                  This controls what this host stores. The router keeps exporting, and the Flow
-                  collector keeps running.
-                </p>
-                <div className="flex gap-2">
-                  <MonitorButton size="sm" variant="ghost" onClick={() => setEditingPolicy(false)}>
-                    Cancel
-                  </MonitorButton>
-                  <MonitorButton
-                    size="sm"
-                    disabled={savingPolicy}
-                    onClick={() => void savePolicy(draftPolicy)}
-                  >
-                    {savingPolicy ? "Saving…" : "Save changes"}
-                  </MonitorButton>
-                </div>
-              </div>
+              </ScrollArea>
+              <p>Pick names to record only those clients.</p>
             </div>
-          )}
+            <div className="site-editor-card">
+              <div>
+                <h3>Collection window</h3>
+                <p>Choose when recording stops.</p>
+              </div>
+              <Segmented
+                label="Collection window"
+                value={draftPolicy.until === null ? "off" : "date"}
+                options={[
+                  { value: "off", label: "Until turned off" },
+                  { value: "date", label: "End on a date" },
+                ]}
+                onChange={(v) =>
+                  setDraftPolicy({
+                    ...draftPolicy,
+                    until: v === "off" ? null : (draftPolicy.until ?? Date.now() + 86_400_000),
+                  })
+                }
+              />
+              {draftPolicy.until !== null && (
+                <DateTimePicker
+                  aria-label="Collection end date and time"
+                  value={new Date(draftPolicy.until)}
+                  onChange={(date) =>
+                    setDraftPolicy({ ...draftPolicy, until: date?.getTime() ?? null })
+                  }
+                />
+              )}
+            </div>
+          </div>
+          <div className="site-editor-foot">
+            <p className="max-w-xl">
+              This controls what this host stores. The router keeps exporting, and the Flow
+              collector keeps running.
+            </p>
+            <div className="flex gap-2">
+              <MonitorButton size="sm" variant="ghost" onClick={() => setEditingPolicy(false)}>
+                Cancel
+              </MonitorButton>
+              <MonitorButton
+                size="sm"
+                disabled={savingPolicy}
+                onClick={() => void savePolicy(draftPolicy)}
+              >
+                {savingPolicy ? "Saving…" : "Save changes"}
+              </MonitorButton>
+            </div>
+          </div>
         </section>
       )}
 
@@ -583,11 +681,11 @@ export function SiteActivityView() {
         <Metric
           label="Client IPs"
           value={<Ticker value={summary?.clients ?? 0} format={num} />}
-          hint={windowMs === WINDOWS[0].ms ? "Seen today" : `Seen in the last ${windowLabel}`}
+          hint={isDay ? "Seen today" : `Seen in the last ${windowLabel}`}
         />
         <Metric
           label="Observed traffic"
-          value={<Ticker value={summary?.bytes ?? 0} format={formatBytes} />}
+          value={<BytesValue value={summary?.bytes ?? 0} />}
           hint="Flow records only"
         />
       </MetricStrip>
@@ -637,36 +735,30 @@ export function SiteActivityView() {
             setPage(0);
           }}
         />
-        <MonitorSelect
-          label="Report period"
-          value={String(windowMs)}
-          options={WINDOWS.map((w) => ({ value: String(w.ms), label: w.label }))}
-          onChange={(v) => {
-            setWindowMs(Number(v));
-            setPage(0);
-          }}
-        />
+        <span className="site-period">
+          <CalendarDays aria-hidden="true" />
+          <MonitorSelect
+            label="Report period"
+            value={String(windowMs)}
+            options={WINDOWS.map((w) => ({ value: String(w.ms), label: w.label }))}
+            onChange={(v) => {
+              setWindowMs(Number(v));
+              setPage(0);
+            }}
+          />
+        </span>
         {filtered && (
           <MonitorButton size="sm" variant="ghost" onClick={clearFilters}>
             Clear
           </MonitorButton>
         )}
-        <a
-          className="monitor-btn"
-          data-variant="glass"
-          data-size="sm"
-          href={payload ? withToken(`/api/site-activity/export?${exportParams}`) : undefined}
-          download
-        >
-          Export CSV
-        </a>
       </div>
 
       <MonitorPanel
         title="Destination map"
         description={
-          topGroups.length
-            ? `Area follows the chosen measure · top ${topGroups.length} sites for ${selection}`
+          named.length
+            ? `Area follows the chosen measure · top ${named.length} ${named.length === 1 ? "site" : "sites"} for ${selection}, last ${windowLabel}`
             : "Area follows the chosen measure"
         }
         extra={
@@ -674,29 +766,7 @@ export function SiteActivityView() {
         }
       >
         {tiles.length ? (
-          <div
-            ref={mapRef}
-            className="site-map"
-            role="img"
-            aria-label={`Map of the top destinations by ${measure === "bytes" ? "traffic bytes" : "observations"}`}
-          >
-            {tiles.map((t) => (
-              <div
-                key={t.name}
-                data-tile=""
-                className="site-tile"
-                title={`${t.name}: ${formatMeasure(t.value, measure)}`}
-                style={{
-                  gridColumn: t.col,
-                  gridRow: t.row,
-                  background: `color-mix(in srgb, var(--chart-1) ${t.tint}%, transparent)`,
-                }}
-              >
-                <span className="site-tile-name">{t.name}</span>
-                <span className="site-tile-value">{formatMeasure(t.value, measure)}</span>
-              </div>
-            ))}
-          </div>
+          <DestinationMap tiles={tiles} measure={measure} animateKey={`${loadedKey}:${measure}`} />
         ) : (
           <MonitorEmpty icon={<Globe2 />} title="No observations for this selection">
             Try a longer period or clear the filters.
@@ -740,10 +810,10 @@ export function SiteActivityView() {
                       </span>
                       <span className="site-sub">
                         <span className="site-mono">{v.destination}</span>
-                        <span className="monitor-badge site-src">{sourceLabel[v.source]}</span>
+                        <span className="monitor-chip">{sourceLabel[v.source]}</span>
                       </span>
                     </span>
-                    <span className="site-cell">
+                    <span className="site-cell site-who-cell">
                       <span className="site-who" title={kindLabel[v.kind] ?? v.kind}>
                         {v.owner || "Unidentified"}
                       </span>
@@ -780,6 +850,7 @@ export function SiteActivityView() {
           <MonitorButton
             size="sm"
             variant="ghost"
+            icon={<ChevronLeft aria-hidden="true" />}
             disabled={page === 0}
             onClick={() => setPage(page - 1)}
           >
@@ -787,6 +858,7 @@ export function SiteActivityView() {
           </MonitorButton>
           <MonitorButton
             size="sm"
+            icon={<ChevronRight aria-hidden="true" />}
             disabled={visits.length < PAGE_SIZE}
             onClick={() => setPage(page + 1)}
           >
@@ -796,7 +868,6 @@ export function SiteActivityView() {
       </MonitorPanel>
 
       <p className="site-footnote">
-        {payload?.note ?? "This view stores destinations only. It does not capture page content."}{" "}
         Clients on encrypted DNS, another VPN or hardware-offloaded paths may be missing. One IP can
         host several sites.
       </p>

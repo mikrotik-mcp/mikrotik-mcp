@@ -134,8 +134,8 @@ Load them before you write UI code, not after.
 
 1. **`/ui-ux-pro-max`**: decide layout, hierarchy, interaction and accessibility
    first. Search its data (`python .claude/skills/ui-ux-pro-max/scripts/search.py`)
-   for the UX guideline or chart type that fits. Target: a world-class, calm,
-   dense tool UI, in the style of Linear. No generic dashboard templates.
+   for the UX guideline or chart type that fits. Target: a world-class tool UI
+   in the "Signal" language (below). No generic dashboard templates.
 2. **shadcn** (skill `shadcn` + the `shadcn` MCP server in `.mcp.json`): build
    from shadcn/ui components in `ui/observability/components/ui` before writing
    your own. Find and add components with the MCP tools or
@@ -151,18 +151,22 @@ Load them before you write UI code, not after.
    person: short, concrete, active voice, no hype words, no "It's not X, it's Y".
    Keep code the same way: simple, plain names, no clever abstractions.
 
-Design system: the Linear-inspired "MikroTik MCP" system. Tokens live in
-`ui/observability/tailwind.css` (`:root` = light, `.dark` = default dark). Use
-the tokens; do not invent colors, sizes or radii, and never hard-code hex in TSX
-(`tests/observability-ui.spec.ts` fails on it). Check both themes and a 375px
-width in the browser preview before you call a UI change done.
+Design system: **Signal**, approved by the user as the dashboard's look (the
+"Signal Redesign" Design canvas holds every page's approved board). A night-time
+operations room: ink ground, frosted glass panels, one luminous teal for healthy
+paths, pink for failures, amber for strain, indigo for neutral data; Geist and
+Geist Mono; LEDs, signal paths, rings and sparklines that move with anime.js.
+Tokens live in `ui/observability/tailwind.css` (`:root` = light, `.dark` =
+default dark). Use the tokens; do not invent colors, sizes or radii, and never
+hard-code hex in TSX (`tests/observability-ui.spec.ts` fails on it). Check both
+themes and a 375px width in the browser preview before you call a UI change
+done.
 
 ### Design first, then code that matches the board exactly
 
 1. **Design before code.** Any new page or redesign starts as artboards in a
-   claude.ai Design canvas (the Design artifact type) built on the "MikroTik
-   MCP" design system: one artboard per page or state, both themes, and a phone
-   width. Stop and ask for approval. Write no UI code until the user approves.
+   claude.ai Design canvas (the Design artifact type) in the Signal design
+   system: one artboard per page or state, both themes, and a phone width. Stop and ask for approval. Write no UI code until the user approves.
 2. **The approved board is the spec.** Implement it element by element: same
    order, same copy, same components, and the same font size, weight, line
    height, colour token, padding, gap, border, radius and shadow. Take values

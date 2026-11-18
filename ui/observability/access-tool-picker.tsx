@@ -11,7 +11,7 @@ import {
   ComboboxList,
   ComboboxTrigger,
 } from "@/components/beui/registry/components/motion/combobox";
-import { Button } from "./geist";
+import { StatusDot } from "./monitoring-ui";
 
 // Filtering happens before mounting options, so a large catalog stays responsive.
 const RESULTS_LIMIT = 80;
@@ -68,9 +68,43 @@ export function AccessToolPicker({
 
   return (
     <div className="access-tool-picker" data-kind={kind}>
-      <div className="access-picker-label" id={`${id}-label`}>
-        <span>{kind === "allow" ? "Allow matching tools" : "Always block"}</span>
+      <div className="access-picker-label monitor-label" id={`${id}-label`}>
+        <StatusDot tone={kind === "allow" ? "good" : "bad"} />
+        {kind === "allow" ? "Allow" : "Block"} · {values.length} pattern
+        {values.length === 1 ? "" : "s"}
         <small>{kind === "allow" ? "empty = all" : "takes precedence"}</small>
+      </div>
+      <div className="access-tool-tokens" aria-label={`${name} rules`}>
+        {!values.length && (
+          <span className="access-picker-empty">
+            {kind === "allow"
+              ? "All tool names · other boundaries still apply"
+              : "No explicit tool exclusions"}
+          </span>
+        )}
+        {values.map((value) => {
+          const glob = value.includes("*");
+          const count = tools.filter((t) => globMatch(value, t.name)).length;
+          return (
+            <span
+              className="access-tool-token"
+              key={value}
+              data-glob={glob || undefined}
+              title={`${count} matching tools in the current catalog`}
+            >
+              <code>{value}</code>
+              <button
+                type="button"
+                className="access-token-remove"
+                disabled={disabled}
+                aria-label={`Remove ${value} from ${name.toLowerCase()}`}
+                onClick={() => onChange(values.filter((v) => v !== value))}
+              >
+                <X aria-hidden="true" />
+              </button>
+            </span>
+          );
+        })}
       </div>
       <Combobox
         value=""
@@ -82,11 +116,11 @@ export function AccessToolPicker({
         disabled={disabled}
         filter={alreadyFiltered}
       >
-        <ComboboxTrigger className="access-tool-trigger">
+        <ComboboxTrigger className="access-tool-trigger h-9 min-w-0 gap-2 rounded-[10px] border-0 bg-glass shadow-[inset_0_0_0_1px_var(--line-2)] focus-within:shadow-[inset_0_0_0_1px_var(--sig),0_0_0_3px_var(--sig-soft)] focus-within:ring-0">
           <ComboboxInput
             aria-label={name}
             aria-describedby={`${id}-hint`}
-            placeholder="Search tools or add a * pattern…"
+            placeholder="Search tool names…"
             className="access-tool-input"
             maxLength={200}
           />
@@ -156,35 +190,6 @@ export function AccessToolPicker({
       <p id={`${id}-hint`} className="access-picker-hint" role="status">
         {helper}
       </p>
-      <div className="access-tool-tokens" aria-label={`${name} rules`}>
-        {!values.length && (
-          <span className="access-picker-empty">
-            {kind === "allow"
-              ? "All tool names · other boundaries still apply"
-              : "No explicit tool exclusions"}
-          </span>
-        )}
-        {values.map((value) => {
-          const glob = value.includes("*");
-          const count = tools.filter((t) => globMatch(value, t.name)).length;
-          return (
-            <span className="access-tool-token" key={value} data-glob={glob || undefined}>
-              {glob ? <Asterisk aria-hidden="true" /> : <Terminal aria-hidden="true" />}
-              <code>{value}</code>
-              <small title="Matching tools in the current catalog">{count}</small>
-              <Button
-                ghost
-                size="sm"
-                disabled={disabled}
-                aria-label={`Remove ${value} from ${name.toLowerCase()}`}
-                onClick={() => onChange(values.filter((v) => v !== value))}
-              >
-                <X aria-hidden="true" />
-              </Button>
-            </span>
-          );
-        })}
-      </div>
       <div className="access-picker-summary">
         <span>{values.length} rules</span>
         <span>

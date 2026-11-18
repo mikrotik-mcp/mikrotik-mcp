@@ -1,18 +1,19 @@
 /**
- * Shared building blocks for the Monitoring pages (Overview, Home Internet,
- * Service Health, Flows, Site Activity, Live Feed, Alerts, Schedules) and the
- * Network pages (Devices, Interfaces, Topology, L2 Fabric, CAPsMAN, Service
- * Routing). They follow the approved "Monitoring Redesign" and "Network
- * Redesign" canvases.
+ * Shared building blocks for every dashboard page, after the approved "Signal"
+ * boards. Styles live in monitoring.css.
  *
- * - `PageIntro`: the page header (title, status or description, controls).
- *   The shell hides its own header on Monitoring pages and passes the title
- *   and the Help toggle through `MonitorPageProvider`.
- * - `MetricStrip` + `Metric`: one surface split by hairlines.
+ * - `PageIntro`: the page header: teal eyebrow, title or a large verdict,
+ *   status, lead and actions, with an optional graphic beside it. The shell
+ *   hides its own header on pages that use it and passes the group, title and
+ *   the Help toggle through `MonitorPageProvider`.
+ * - `MetricStrip` + `Metric`: a row of glass KPI cards, optional sparkline.
  * - `Ticker`: a number that eases to its new value (anime.js).
- * - `MonitorPanel`: title, one line of context, a controls slot.
- * - `MonitorEmpty`, `StatusDot`, `RiskBadge`, `Segmented`.
- * - Network: `RouterPicker`, `MonitorTabs`, `MonitorSwitch`, `MonitorDialog`.
+ * - `MonitorPanel`: a glass panel with a title, one line of context and a
+ *   controls slot.
+ * - `MonitorEmpty`, `MonitorNote`, `StatusDot` (LED), `StatusBadge` (pill),
+ *   `RiskBadge`, `Segmented`, `MonitorTabs`, `MonitorSelect`, `RouterPicker`,
+ *   `MonitorSearch`, `MonitorSwitch`, `MonitorDialog` (dialog or drawer).
+ * - Charts: `Sparkline`, `Ring`, `Donut` in signal-charts.tsx.
  */
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type {
@@ -23,11 +24,15 @@ import type {
   RefObject,
 } from "react";
 import { animate, createScope, stagger, svg } from "animejs";
-import { ChevronDown, HelpCircle, Search, Server, X } from "lucide-react";
+import { ChevronDown, HelpCircle, Info, Search, Server, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import type { Scope } from "animejs";
 import { cn } from "@/lib/utils";
 import type { Risk } from "./types";
+import { Sparkline } from "./signal-charts";
+
+export { Donut, Ring, Sparkline } from "./signal-charts";
+export type { ChartTone, DonutPart } from "./signal-charts";
 
 /** Milliseconds the way the design system writes them: "412 ms", "1.2 s", "<1 ms". */
 export function formatMs(value: number): string {
@@ -49,21 +54,16 @@ export function formatBytes(value: number): string {
 
 export type Tone = "default" | "good" | "warn" | "bad" | "brand";
 
-const TONE_TEXT: Record<Tone, string> = {
-  default: "",
-  good: "text-success",
-  warn: "text-warning",
-  bad: "text-destructive",
-  brand: "text-brand",
-};
-
 const REDUCE = "(prefers-reduced-motion: reduce)";
 
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && !!window.matchMedia?.(REDUCE).matches;
 }
 
-/** The boards' pill button. `inverse` is the one solid action per page. */
+/**
+ * The boards' `.btn`. `primary` is the one teal action per page; `inverse` is
+ * its older name and looks the same.
+ */
 export function MonitorButton({
   variant = "glass",
   size = "md",
@@ -73,7 +73,7 @@ export function MonitorButton({
   className,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "glass" | "inverse" | "ghost" | "danger";
+  variant?: "glass" | "primary" | "inverse" | "ghost" | "danger";
   size?: "md" | "sm";
   icon?: ReactNode;
 }): ReactNode {
@@ -159,79 +159,131 @@ const MonitorPageContext = createContext<MonitorPageInfo | null>(null);
 export const MonitorPageProvider = MonitorPageContext.Provider;
 
 /**
- * The page header from the boards: "Monitoring", the page title, a status line
- * and/or one line of description, and the page's controls on the right.
+ * The page header from the Signal boards (`.ph1`): a teal uppercase eyebrow
+ * (the sidebar group), the page title at 34px, a status line, a lead and the
+ * page's actions on the right.
  *
- * - `title` + `tone`: the status line. `small` is the 13px variant the boards
- *   use for live streams (Live Feed, Flows), where `children` follows it.
- * - `children` alone: the one-line description.
+ * - `title` + `tone`: the status line, with an LED. `small` keeps the status
+ *   and `children` on one line (Live Feed, Flows).
+ * - `children` or `lead`: the lead paragraph.
+ * - `heading`: replaces the page title, e.g. `<>Wi-Fi is healthy, <em>2
+ *   channels overlap</em>.</>`. Inside it `<em>` is pink, `.s` teal, `.w` amber.
+ * - `verdict`: the large 40px answer line from the Overview board. It takes the
+ *   title's place, the actions move under the lead, and `aside` (a graphic,
+ *   e.g. a radar) sits on the right. Pass `eyebrow` to say what it covers
+ *   ("Last hour").
+ * - `controls` and `actions` are the same slot.
  */
 export function PageIntro({
   tone,
   live = false,
   title,
+  status,
   small = false,
   children,
+  lead,
   controls,
+  actions,
+  eyebrow,
+  heading,
+  verdict,
+  aside,
 }: {
-  /** Leave out for a plain description with no status dot. */
+  /** Leave out for a plain status with no LED. */
   tone?: Tone;
   live?: boolean;
+  /** The status line. */
   title?: ReactNode;
+  /** Same as `title`. */
+  status?: ReactNode;
   small?: boolean;
   children?: ReactNode;
+  /** Same as `children`. */
+  lead?: ReactNode;
   controls?: ReactNode;
+  /** Same as `controls`. */
+  actions?: ReactNode;
+  /** Replaces the sidebar group shown above the title. */
+  eyebrow?: ReactNode;
+  /** Replaces the page title. */
+  heading?: ReactNode;
+  /** The large answer line; replaces the title. */
+  verdict?: ReactNode;
+  /** A graphic beside a verdict header. */
+  aside?: ReactNode;
 }): ReactNode {
   const page = useContext(MonitorPageContext);
+  const statusLine = status ?? title;
+  const leadText = lead ?? children;
+  const buttons = actions ?? controls;
+  const eyebrowText = eyebrow ?? page?.eyebrow;
+  const titleText = heading ?? page?.title;
+  const isVerdict = verdict != null;
+  const help = page != null && (
+    <button
+      type="button"
+      className="monitor-icon-btn"
+      aria-label="About this page"
+      aria-expanded={page.helpOpen}
+      title="About this page"
+      onClick={page.onToggleHelp}
+    >
+      <HelpCircle aria-hidden="true" />
+    </button>
+  );
+  const statusBlock =
+    statusLine == null ? null : small ? (
+      <p className="monitor-status-sm">
+        {tone != null && <StatusDot tone={tone} pulse={live} />}
+        <b>{statusLine}</b>
+        {leadText != null && <span>· {leadText}</span>}
+      </p>
+    ) : (
+      <p className="monitor-status">
+        {tone != null && <StatusDot tone={tone} pulse={live} />}
+        {statusLine}
+      </p>
+    );
+  const leadBlock =
+    leadText != null && !(small && statusLine != null) ? (
+      <p className="monitor-lead">{leadText}</p>
+    ) : null;
+
+  if (isVerdict)
+    return (
+      <>
+        <header
+          className="monitor-head"
+          data-layout="verdict"
+          data-aside={aside != null || undefined}
+          data-group={page?.eyebrow}
+        >
+          <div className="monitor-head-main">
+            {eyebrowText != null && <p className="monitor-eyebrow">{eyebrowText}</p>}
+            <h1 className="monitor-verdict">{verdict}</h1>
+            {statusBlock}
+            {leadBlock}
+            {buttons != null && <div className="monitor-head-controls">{buttons}</div>}
+            {/* Help sits in the text column, so it never covers the graphic beside it. */}
+            {help}
+          </div>
+          {aside != null && <div className="monitor-head-aside">{aside}</div>}
+        </header>
+        {page?.helpOpen && page.helpPanel}
+      </>
+    );
+
   return (
     <>
       <header className="monitor-head" data-group={page?.eyebrow}>
         <div className="monitor-head-main">
-          {page != null && (
-            <>
-              <p className="monitor-eyebrow">{page.eyebrow}</p>
-              <h1 className="monitor-title">{page.title}</h1>
-            </>
-          )}
-          {small && title != null ? (
-            <p className="monitor-status-sm">
-              {tone != null && <StatusDot tone={tone} pulse={live} />}
-              <span className="text-foreground">{title}</span>
-              {children != null && <span>· {children}</span>}
-            </p>
-          ) : (
-            <>
-              {title != null && (
-                <p className="monitor-status">
-                  {tone != null && <StatusDot tone={tone} pulse={live} />}
-                  {title}
-                </p>
-              )}
-              {children != null && (
-                <p className={title != null ? "monitor-lead" : "monitor-lead monitor-lead-only"}>
-                  {children}
-                </p>
-              )}
-            </>
-          )}
+          {eyebrowText != null && <p className="monitor-eyebrow">{eyebrowText}</p>}
+          {titleText != null && <h1 className="monitor-title">{titleText}</h1>}
+          {statusBlock}
+          {leadBlock}
         </div>
-        {(controls != null || page != null) && (
-          <div className="monitor-head-controls">
-            {controls}
-            {page != null && (
-              <button
-                type="button"
-                className="monitor-icon-btn"
-                aria-label="About this page"
-                aria-expanded={page.helpOpen}
-                title="About this page"
-                onClick={page.onToggleHelp}
-              >
-                <HelpCircle aria-hidden="true" />
-              </button>
-            )}
-          </div>
-        )}
+        {buttons != null && <div className="monitor-head-controls">{buttons}</div>}
+        {help}
       </header>
       {page?.helpOpen && page.helpPanel}
     </>
@@ -302,26 +354,40 @@ export function MetricStrip({
   );
 }
 
-/** One KPI cell inside a `MetricStrip`. A warn or bad tone adds an edge mark. */
+/**
+ * One glass KPI card inside a `MetricStrip`. A warn or bad tone colours the
+ * value and adds a glowing bar along the top. `spark` draws a trend line in
+ * the bottom-right corner. Put a unit in `<small>` inside `value`: `412<small>ms</small>`.
+ */
 export function Metric({
   label,
   value,
   hint,
   tone = "default",
   primary = false,
+  spark,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   tone?: Tone;
-  /** Larger value, for the one or two numbers the page is about. */
+  /** Kept for older call sites; every card uses the same size in Signal. */
   primary?: boolean;
+  /** Recent values for the sparkline, oldest first. Two or more. */
+  spark?: number[];
 }): ReactNode {
+  const showSpark = spark != null && spark.length > 1;
   return (
-    <div className="monitor-metric" data-tone={tone} data-primary={primary || undefined}>
+    <div
+      className="monitor-metric"
+      data-tone={tone}
+      data-primary={primary || undefined}
+      data-spark={showSpark || undefined}
+    >
       <p className="monitor-metric-label">{label}</p>
-      <p className={cn("monitor-metric-value", TONE_TEXT[tone])}>{value}</p>
+      <p className="monitor-metric-value">{value}</p>
       {hint != null && <p className="monitor-metric-hint">{hint}</p>}
+      {showSpark && <Sparkline values={spark} tone={tone === "bad" ? "bad" : "good"} />}
     </div>
   );
 }
@@ -353,7 +419,7 @@ export function MonitorPanel({
   return (
     <section className={cn("monitor-panel", className)} data-tone={tone} {...rest}>
       <header className="monitor-panel-head">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-[1_1_220px]">
           <h2 className="monitor-panel-title">{title}</h2>
           {description != null && <p className="monitor-panel-desc">{description}</p>}
         </div>
@@ -398,7 +464,10 @@ export function MonitorEmpty({
   );
 }
 
-/** A status dot. Always put a word next to it; `pulse` means live right now. */
+/**
+ * A glowing LED (the boards' `.led`). Always put a word next to it. `pulse`
+ * means live right now: a halo, and the LED breathes.
+ */
 export function StatusDot({
   tone = "default",
   pulse = false,
@@ -406,8 +475,23 @@ export function StatusDot({
   tone?: Tone;
   pulse?: boolean;
 }): ReactNode {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const dot = ref.current;
+    if (!pulse || !dot || prefersReducedMotion()) return;
+    const breathe = animate(dot, {
+      opacity: [1, 0.45, 1],
+      duration: 2400,
+      loop: true,
+      ease: "inOutSine",
+    });
+    return () => {
+      breathe.revert();
+    };
+  }, [pulse]);
   return (
     <span
+      ref={ref}
       className="monitor-dot"
       data-tone={tone}
       data-pulse={pulse || undefined}
@@ -416,21 +500,51 @@ export function StatusDot({
   );
 }
 
-/** A pill with a status dot and a word, e.g. "Recording", "Firing". */
+/**
+ * A pill with an LED and a word, e.g. "Recording", "Firing" (the boards'
+ * `.pill`). The tone colours the whole pill; `quiet` keeps it neutral with
+ * only the LED in colour. `dot={false}` drops the LED.
+ */
 export function StatusBadge({
   tone = "default",
   pulse = false,
+  quiet = false,
+  dot = true,
   children,
 }: {
   tone?: Tone;
   pulse?: boolean;
+  quiet?: boolean;
+  dot?: boolean;
   children: ReactNode;
 }): ReactNode {
   return (
-    <span className="monitor-badge">
-      <StatusDot tone={tone} pulse={pulse} />
+    <span className="monitor-badge" data-tone={quiet ? undefined : tone}>
+      {dot && <StatusDot tone={tone} pulse={pulse} />}
       {children}
     </span>
+  );
+}
+
+/** A note box (the boards' `.note`): an icon and a sentence, toned by status. */
+export function MonitorNote({
+  tone,
+  icon,
+  children,
+  className,
+  role,
+}: {
+  tone?: "good" | "warn" | "bad";
+  icon?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  role?: "status" | "alert";
+}): ReactNode {
+  return (
+    <div className={cn("monitor-note", className)} data-tone={tone} role={role}>
+      {icon ?? <Info aria-hidden="true" />}
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   );
 }
 
@@ -446,7 +560,7 @@ const RISK_KIND: Record<Risk, string> = {
 export function RiskBadge({ risk, short = false }: { risk: Risk; short?: boolean }): ReactNode {
   return (
     <span className="monitor-risk" data-risk={RISK_KIND[risk]}>
-      {short && risk === "WRITE_IDEMPOTENT" ? "WRITE·I" : risk}
+      {risk === "WRITE_IDEMPOTENT" ? (short ? "WRITE·I" : "IDEMPOTENT") : risk}
     </span>
   );
 }
@@ -656,8 +770,10 @@ export function MonitorSwitch({
 }
 
 /**
- * A dialog over a dimmed page, as on the Network boards: a header with title,
+ * A dialog over a dimmed page (the boards' `.dialog`): a header with title,
  * one line of description and a close button, a body, and a footer bar.
+ * `variant="drawer"` slides the same parts in from the right edge, full height
+ * (the boards' `.drawer`, 440px by default).
  */
 export function MonitorDialog({
   open,
@@ -665,18 +781,20 @@ export function MonitorDialog({
   title,
   description,
   eyebrow,
-  width = 560,
+  width,
   footer,
   children,
   dismissible = true,
   confirm = false,
   closeDisabled = false,
+  variant = "dialog",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: ReactNode;
   description?: ReactNode;
   eyebrow?: ReactNode;
+  /** Max width in px: 560 for a dialog, 440 for a drawer. */
   width?: number;
   footer?: ReactNode;
   children: ReactNode;
@@ -689,19 +807,44 @@ export function MonitorDialog({
   confirm?: boolean;
   /** Disables the close icon, e.g. while a save runs. */
   closeDisabled?: boolean;
+  variant?: "dialog" | "drawer";
 }): ReactNode {
+  const drawer = variant === "drawer";
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  // The scrim fades in; the dialog scales up from 0.98, the drawer slides in.
+  useEffect(() => {
+    if (!open || prefersReducedMotion()) return;
+    const overlay = overlayRef.current;
+    const content = contentRef.current;
+    if (!overlay || !content) return;
+    const motion = [
+      animate(overlay, { opacity: [0, 1], duration: 160, ease: "outQuad" }),
+      drawer
+        ? animate(content, { x: ["100%", "0%"], duration: 240, ease: "outQuart" })
+        : animate(content, { opacity: [0, 1], scale: [0.98, 1], duration: 180, ease: "outQuart" }),
+    ];
+    return () => {
+      for (const m of motion) m.revert();
+    };
+  }, [open, drawer]);
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55" />
+        <DialogPrimitive.Overlay ref={overlayRef} className="monitor-scrim fixed inset-0 z-50" />
         <DialogPrimitive.Content
+          ref={contentRef}
           className={cn(
-            "monitor-dialog fixed left-1/2 z-50 flex w-[calc(100%-32px)] -translate-x-1/2 flex-col outline-none",
-            confirm
-              ? "top-[min(120px,8dvh)] max-h-[calc(100dvh-min(120px,8dvh)-16px)]"
-              : "top-1/2 max-h-[calc(100dvh-32px)] -translate-y-1/2",
+            "monitor-dialog fixed z-50 flex flex-col outline-none",
+            drawer
+              ? "inset-y-0 right-0 w-full"
+              : confirm
+                ? "top-[min(120px,8dvh)] left-0 right-0 mx-auto max-h-[calc(100dvh-min(120px,8dvh)-16px)] w-[calc(100%-32px)]"
+                : "inset-0 m-auto h-fit max-h-[calc(100dvh-32px)] w-[calc(100%-32px)]",
           )}
-          style={{ maxWidth: width }}
+          data-variant={variant}
+          style={{ maxWidth: width ?? (drawer ? 440 : 560) }}
           role={confirm ? "alertdialog" : "dialog"}
           onEscapeKeyDown={closeDisabled ? (e) => e.preventDefault() : undefined}
           onPointerDownOutside={dismissible ? undefined : (e) => e.preventDefault()}
@@ -722,13 +865,14 @@ export function MonitorDialog({
             </div>
             {!confirm && (
               <DialogPrimitive.Close asChild>
-                <MonitorButton
-                  size="sm"
-                  variant="ghost"
+                <button
+                  type="button"
+                  className="monitor-icon-btn"
                   aria-label="Close"
-                  icon={<X />}
                   disabled={closeDisabled}
-                />
+                >
+                  <X aria-hidden="true" />
+                </button>
               </DialogPrimitive.Close>
             )}
           </div>

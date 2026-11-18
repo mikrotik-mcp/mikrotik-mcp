@@ -1,0 +1,37 @@
+/*
+ * Topology, after the Signal board Net-Topology.
+ * Unlayered on purpose: these rules refine the shared monitor-* classes.
+ */
+
+.topo-search {
+  width: 320px;
+}
+
+/* The map, with the inspector in a 340px column once a node is picked. */
+.topo-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.topo-body[data-inspector] {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.topo-inspector {
+  border-left: 1px solid var(--line);
+}
+
+/* On narrower windows the inspector drops below the map. */
+@media (max-width: 1099px) {
+  .topo-body[data-inspector] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .topo-inspector {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .topo-search {
+    width: 100%;
+  }
+}

@@ -1,29 +1,34 @@
 /**
- * Flows view: traffic analytics from collected NetFlow/IPFIX.
+ * Flows view: traffic analytics from collected NetFlow/IPFIX, after the
+ * Mon-Flows board.
  *
- * People arrive asking "who is using my bandwidth", so the ranking comes
- * first. The collector numbers sit in the same strip as the traffic numbers
- * because an empty flow page and an idle link look the same; templates
- * pending is the number that tells them apart.
+ * The header answers "is the collector hearing my routers": the port, who is
+ * sending and who went quiet, with a radar of the exporters. The collector
+ * numbers sit in the same strip as the traffic numbers because an empty flow
+ * page and an idle link look the same; templates pending is the number that
+ * tells them apart.
  */
 import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Radio } from "lucide-react";
+import { ChevronRight, Clock, Radio, TriangleAlert } from "lucide-react";
 import { api } from "./api";
 import {
+  Donut,
   Metric,
   MetricStrip,
   MonitorEmpty,
+  MonitorNote,
   MonitorPanel,
   PageIntro,
   Segmented,
   StatusDot,
   Ticker,
-  useLineDraw,
   useStaggerIn,
 } from "./monitoring-ui";
-import type { Tone } from "./monitoring-ui";
+import type { ChartTone, Tone } from "./monitoring-ui";
+import { FlowLines, FlowRadar } from "./flows-graphics";
+import type { RadarStatus } from "./flows-graphics";
 import type { FlowConversation, FlowHealth, FlowTimelinePayload, FlowTopPayload } from "./types";
 import "./flows.css";
 
@@ -31,20 +36,22 @@ const WINDOWS = ["5m", "15m", "1h", "6h", "24h"] as const;
 type Window = (typeof WINDOWS)[number];
 
 const DIMENSIONS = [
-  { id: "source", label: "Source" },
-  { id: "destination", label: "Destination" },
-  { id: "conversation", label: "Conversation" },
-  { id: "application", label: "Application" },
+  { id: "source", label: "Source", plural: "sources" },
+  { id: "destination", label: "Destination", plural: "destinations" },
+  { id: "conversation", label: "Conversation", plural: "conversations" },
+  { id: "application", label: "Application", plural: "applications" },
 ] as const;
 type Dimension = (typeof DIMENSIONS)[number]["id"];
 
-/** Protocol colours, in share order: bar segment and legend dot. The rest are grey. */
-const PROTOCOL_TONES: { bar: string; dot: Tone }[] = [
-  { bar: "var(--chart-1)", dot: "brand" },
-  { bar: "var(--success)", dot: "good" },
-  { bar: "var(--warning)", dot: "warn" },
-];
-const PROTOCOL_REST = { bar: "var(--muted-foreground)", dot: "default" as Tone };
+/** Protocol colours in share order; everything after the third is "Other". */
+const PROTOCOL_TONES: ChartTone[] = ["good", "brand", "warn"];
+const TONE_BG: Record<ChartTone, string> = {
+  good: "bg-sig",
+  brand: "bg-brand",
+  warn: "bg-warning",
+  bad: "bg-destructive",
+  muted: "bg-faint",
+};
 
 /** "last hour" for the KPI hint and panel descriptions. */
 const WINDOW_PHRASE: Record<Window, string> = {
@@ -55,35 +62,58 @@ const WINDOW_PHRASE: Record<Window, string> = {
   "24h": "last 24 hours",
 };
 
-function humanBytes(n: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = n;
+const BYTE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB"];
+
+/** The unit a byte count reads best in, and its divisor. */
+function byteUnit(n: number): { unit: string; div: number } {
   let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+  while (n >= 1024 ** (unit + 1) && unit < BYTE_UNITS.length - 1) unit++;
+  return { unit: BYTE_UNITS[unit], div: 1024 ** unit };
+}
+function byteNumber(value: number, div: number): string {
+  const v = value / div;
+  return v >= 100 || div === 1 ? String(Math.round(v)) : v.toFixed(1);
+}
+function humanBytes(n: number): string {
+  const { unit, div } = byteUnit(n);
+  return `${byteNumber(n, div)} ${unit}`;
 }
 
-const compactFormat = new Intl.NumberFormat(undefined, {
+const compactFormat = new Intl.NumberFormat("en", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
 // The boards write thousands as "96.2k"; millions stay "21.7M".
 const compact = (n: number): string => compactFormat.format(Math.round(n)).replace(/K$/, "k");
+/** "1.2M" as ["1.2", "M"] so the suffix can sit in a <small>. */
+function compactParts(n: number): [string, string] {
+  const m = /^([\d.,-]+)(\D*)$/.exec(compact(n));
+  return m ? [m[1], m[2]] : [compact(n), ""];
+}
 const num = (n: number): string => Math.round(n).toLocaleString();
 const pct = (share: number): string => `${Math.round(share * 100)}%`;
 const hhmm = (ts: number): string =>
   new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
-function ago(ts: number, now: number): string {
+function since(ts: number, now: number): string {
   const s = Math.max(0, Math.round((now - ts) / 1000));
-  if (s < 60) return `${s} s ago`;
+  if (s < 60) return `${s} s`;
   const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
+  if (m < 60) return `${m} min`;
   const h = Math.round(m / 60);
-  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
+  return h < 24 ? `${h} h` : `${Math.round(h / 24)} d`;
+}
+const ago = (ts: number, now: number): string => `${since(ts, now)} ago`;
+
+/** "7 minutes" for the header sentence. */
+function spoken(ts: number, now: number): string {
+  const unit = (n: number, one: string): string => `${n} ${n === 1 ? one : `${one}s`}`;
+  const s = Math.max(0, Math.round((now - ts) / 1000));
+  if (s < 60) return unit(s, "second");
+  const m = Math.round(s / 60);
+  if (m < 60) return unit(m, "minute");
+  const h = Math.round(m / 60);
+  return h < 24 ? unit(h, "hour") : unit(Math.round(h / 24), "day");
 }
 
 function interval(ms: number): string {
@@ -96,77 +126,33 @@ function interval(ms: number): string {
 const protocolName = (version: number): string =>
   version === 10 ? "IPFIX" : `NetFlow v${version}`;
 
-// ── Bytes over time ────────────────────────────────────────────────────────
+/** "a", "a and b", "a, b and c", each name in mono. */
+function nameList(names: string[]): ReactNode {
+  return names.map((name, i) => (
+    <span key={name}>
+      {i > 0 && (i === names.length - 1 ? " and " : ", ")}
+      <span className="flows-mono">{name}</span>
+    </span>
+  ));
+}
 
-const CHART_W = 1100;
-const CHART_H = 160;
-const CHART_TOP = 20;
-const CHART_BASE = 140;
-
-function BytesChart({
-  data,
-  drawKey,
-  now,
-}: {
-  data: FlowTimelinePayload;
-  drawKey: string;
-  now: number;
-}): ReactNode {
-  const ref = useRef<HTMLDivElement>(null);
-  useLineDraw(ref, drawKey);
-  const keys = [...data.keys, "other"];
-  const totals = data.buckets.map((b) => ({
-    ts: b.ts,
-    bytes: keys.reduce((n, k) => n + (b.series[k] ?? 0), 0),
-  }));
-  const peak = totals.reduce((a, b) => (b.bytes > a.bytes ? b : a), totals[0]);
-  const max = Math.max(peak.bytes, 1);
-  const step = totals.length > 1 ? CHART_W / (totals.length - 1) : CHART_W;
-  const points = (totals.length > 1 ? totals : [totals[0], totals[0]]).map((t, i) => [
-    +(i * step).toFixed(1),
-    +(CHART_BASE - (t.bytes / max) * (CHART_BASE - CHART_TOP)).toFixed(1),
-  ]);
-  const line = `M${points.map((p) => p.join(" ")).join(" L")}`;
-  const area = `${line} L${CHART_W} ${CHART_BASE} L0 ${CHART_BASE} Z`;
-  const mid = data.window.from + (data.window.to - data.window.from) / 2;
-  const endsNow = now - data.window.to < 60_000;
-
+/** A KPI number that eases to new values, with its unit in a <small>. */
+function BytesValue({ value }: { value: number }): ReactNode {
+  const { unit, div } = byteUnit(value);
   return (
-    <div ref={ref}>
-      <svg
-        viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-        width="100%"
-        height={CHART_H}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={`Bytes per ${interval(data.bucketMs)}, peaking at ${humanBytes(
-          peak.bytes,
-        )} at ${hhmm(peak.ts)}`}
-        className="flows-chart"
-      >
-        <line x1="0" y1={CHART_TOP} x2={CHART_W} y2={CHART_TOP} className="flows-chart-peak" />
-        <line x1="0" y1={CHART_BASE} x2={CHART_W} y2={CHART_BASE} className="flows-chart-base" />
-        <path d={area} className="flows-chart-area" />
-        <path d={line} className="flows-chart-line" data-draw="" />
-        {totals.map((t, i) => (
-          <rect
-            key={t.ts}
-            x={Math.max(0, i * step - step / 2)}
-            y="0"
-            width={Math.min(CHART_W, i * step + step / 2) - Math.max(0, i * step - step / 2)}
-            height={CHART_H}
-            className="flows-chart-hit"
-          >
-            <title>{`${hhmm(t.ts)} · ${humanBytes(t.bytes)}`}</title>
-          </rect>
-        ))}
-      </svg>
-      <div className="flows-chart-axis">
-        <span>{hhmm(data.window.from)}</span>
-        <span>{hhmm(mid)}</span>
-        <span>{endsNow ? "now" : hhmm(data.window.to)}</span>
-      </div>
-    </div>
+    <>
+      <Ticker value={value} format={(n) => byteNumber(n, div)} />
+      <small>{unit}</small>
+    </>
+  );
+}
+function CompactValue({ value }: { value: number }): ReactNode {
+  const suffix = compactParts(value)[1];
+  return (
+    <>
+      <Ticker value={value} format={(n) => compactParts(n)[0]} />
+      {suffix && <small>{suffix}</small>}
+    </>
   );
 }
 
@@ -223,72 +209,152 @@ export function FlowsView(): ReactNode {
   const c = health?.collector;
   const running = !!c?.running;
   const exporterHealth = c?.exporterHealth ?? [];
-  const exporterNames = exporterHealth.length
-    ? [...new Set(exporterHealth.map((e) => e.exporter))]
-    : Object.keys(c?.exporters ?? {});
-  const dimLabel = DIMENSIONS.find((d) => d.id === dimension)?.label ?? "Source";
+  // One entry per exporter name: sending if any of its streams is fresh.
+  const exporters: { name: string; stale: boolean; lastSeen: number }[] = exporterHealth.length
+    ? [...new Set(exporterHealth.map((e) => e.exporter))].map((name) => {
+        const streams = exporterHealth.filter((e) => e.exporter === name);
+        return {
+          name,
+          stale: streams.every((e) => e.stale),
+          lastSeen: Math.max(...streams.map((e) => e.lastSeen)),
+        };
+      })
+    : Object.keys(c?.exporters ?? {}).map((name) => ({ name, stale: false, lastSeen: 0 }));
+  const sending = exporters.filter((e) => !e.stale);
+  const silent = exporters.filter((e) => e.stale);
+  const dim = DIMENSIONS.find((d) => d.id === dimension) ?? DIMENSIONS[0];
   const rows = top?.top ?? [];
   const maxBytes = Math.max(...rows.map((r) => r.bytes), 1);
-  const protocols = top?.protocols ?? [];
-  const lineTotals = line?.buckets.length ? line : null;
-  const peak = lineTotals?.buckets
-    .map((b) => ({
+  const rawProtocols = top?.protocols ?? [];
+  // The board shows three protocols and folds the rest into "Other".
+  const protocols =
+    rawProtocols.length > 4
+      ? [
+          ...rawProtocols.slice(0, 3),
+          {
+            protocol: "Other",
+            bytes: rawProtocols.slice(3).reduce((n, p) => n + p.bytes, 0),
+            share: rawProtocols.slice(3).reduce((n, p) => n + p.share, 0),
+          },
+        ]
+      : rawProtocols;
+  const toneOf = (i: number, name: string): ChartTone =>
+    name === "Other" ? "muted" : (PROTOCOL_TONES[i] ?? "muted");
+  const timeline = line?.buckets.length ? line : null;
+  const bucketTotals =
+    timeline?.buckets.map((b) => ({
       ts: b.ts,
-      bytes: [...lineTotals.keys, "other"].reduce((n, k) => n + (b.series[k] ?? 0), 0),
-    }))
-    .reduce((a, b) => (b.bytes > a.bytes ? b : a));
+      bytes: [...timeline.keys, "other"].reduce((n, k) => n + (b.series[k] ?? 0), 0),
+    })) ?? [];
+  const peak = bucketTotals.length
+    ? bucketTotals.reduce((a, b) => (b.bytes > a.bytes ? b : a))
+    : undefined;
   const hasTraffic = !!totals && totals.flows > 0;
+  const trafficUnit = byteUnit(totals?.bytes ?? 0);
+
+  // Bytes over time: the top two keys stacked, the first one on top.
+  const lineKeys = timeline?.keys.slice(0, 2) ?? [];
+  const series = !timeline
+    ? []
+    : lineKeys.length === 2
+      ? [
+          timeline.buckets.map((b) => (b.series[lineKeys[0]] ?? 0) + (b.series[lineKeys[1]] ?? 0)),
+          timeline.buckets.map((b) => b.series[lineKeys[1]] ?? 0),
+        ]
+      : lineKeys.length === 1
+        ? [timeline.buckets.map((b) => b.series[lineKeys[0]] ?? 0)]
+        : [bucketTotals.map((t) => t.bytes)];
+  const axis = timeline
+    ? Array.from({ length: 7 }, (_, i) => {
+        const ts = timeline.window.from + ((timeline.window.to - timeline.window.from) * i) / 6;
+        return i === 6 && now - timeline.window.to < 60_000 ? "now" : hhmm(ts);
+      })
+    : [];
 
   const windowControl = (
-    <Segmented
-      label="Time window"
-      value={window}
-      onChange={setWindow}
-      options={WINDOWS.map((w) => ({ value: w, label: w }))}
-    />
+    <>
+      <Segmented
+        label="Time window"
+        value={window}
+        onChange={setWindow}
+        options={WINDOWS.map((w) => ({ value: w, label: w }))}
+      />
+      <span className="text-[12px] text-muted-foreground">
+        Add a router with{" "}
+        <span className="flows-mono text-fg-secondary">add_traffic_flow_target</span>
+      </span>
+    </>
   );
 
-  return (
-    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-6">
-      {running ? (
-        <PageIntro
-          small
-          tone="good"
-          live
-          title={`Listening on UDP ${c?.port}`}
-          controls={windowControl}
-        >
-          {exporterNames.length ? (
-            <>
-              {exporterNames.length === 1 ? "1 exporter: " : `${exporterNames.length} exporters: `}
-              {exporterNames.map((name, i) => (
-                <span key={name}>
-                  {i > 0 && ", "}
-                  <span className="flows-mono align-top text-fg-secondary">{name}</span>
-                </span>
-              ))}
-            </>
-          ) : (
-            <>
-              No exporters yet. Point a router at this host with{" "}
-              <code className="font-mono">add_traffic_flow_target</code>.
-            </>
-          )}
-        </PageIntro>
+  const verdict = running ? (
+    <>
+      Listening on UDP {c?.port}.{" "}
+      {sending.length ? (
+        <>
+          <span className="s">
+            {sending.length === 1 ? "1 exporter" : `${sending.length} exporters`}
+          </span>{" "}
+          sending.
+        </>
       ) : (
-        <PageIntro
-          tone={health ? "default" : undefined}
-          title={health ? "Collector stopped" : "Collector status unknown"}
-          controls={windowControl}
-        >
-          {health ? "Nothing new is being collected." : "Could not read the collector."}
-        </PageIntro>
+        "No exporters sending."
       )}
+    </>
+  ) : health ? (
+    "Collector stopped."
+  ) : (
+    "Collector status unknown."
+  );
+
+  const lead = !health ? (
+    "Could not read the collector."
+  ) : !running ? (
+    "Nothing new is being collected."
+  ) : !exporters.length ? (
+    "No exporters yet. Point a router at this host with add_traffic_flow_target."
+  ) : (
+    <>
+      {sending.length > 0 && (
+        <>
+          {nameList(sending.map((e) => e.name))} {sending.length === 1 ? "sends" : "send"} flow
+          records to this host.
+        </>
+      )}
+      {silent.map((e) => (
+        <span key={e.name}>
+          {" "}
+          <span className="flows-mono">{e.name}</span> has been silent for {spoken(e.lastSeen, now)}
+          .
+        </span>
+      ))}
+    </>
+  );
+
+  const radarStatus = (stale: boolean): RadarStatus => (!running ? "faint" : stale ? "warn" : "ok");
+
+  return (
+    <section className="flows-page">
+      <PageIntro
+        eyebrow="Flow collector · NetFlow v9 and IPFIX"
+        verdict={verdict}
+        lead={lead}
+        actions={windowControl}
+        aside={
+          health ? (
+            <div className="glass flows-radar-box">
+              <FlowRadar
+                hub={String(c?.port ?? "")}
+                nodes={exporters.map((e) => ({ label: e.name, status: radarStatus(e.stale) }))}
+              />
+            </div>
+          ) : undefined
+        }
+      />
 
       {error && (
-        <p role="alert" className="monitor-note text-destructive" data-tone="bad">
+        <MonitorNote tone="bad" role="alert" icon={<TriangleAlert aria-hidden="true" />}>
           {error}
-        </p>
+        </MonitorNote>
       )}
 
       {health && !running && (
@@ -302,16 +368,15 @@ export function FlowsView(): ReactNode {
 
       {(running || hasTraffic) && (
         <>
-          <MetricStrip label="Flow metrics" minCell={130}>
+          <MetricStrip label="Flow metrics" minCell={120}>
             <Metric
               label="Traffic"
-              primary
-              value={totals ? <Ticker value={totals.bytes} format={humanBytes} /> : "—"}
-              hint={WINDOW_PHRASE[window]}
+              value={totals ? <BytesValue value={totals.bytes} /> : "—"}
+              hint={`in the ${WINDOW_PHRASE[window]}`}
             />
             <Metric
               label="Flows"
-              value={totals ? <Ticker value={totals.flows} format={compact} /> : "—"}
+              value={totals ? <CompactValue value={totals.flows} /> : "—"}
               hint="records"
             />
             <Metric
@@ -326,7 +391,7 @@ export function FlowsView(): ReactNode {
             />
             <Metric
               label="Packets"
-              value={c ? <Ticker value={c.packets} format={compact} /> : "—"}
+              value={c ? <CompactValue value={c.packets} /> : "—"}
               hint="received"
             />
             <Metric
@@ -357,35 +422,88 @@ export function FlowsView(): ReactNode {
             />
             <Metric
               label="Stored"
-              value={health?.store ? compact(health.store.rawRows) : "—"}
+              value={
+                health?.store ? (
+                  <>
+                    {compactParts(health.store.rawRows)[0]}
+                    {compactParts(health.store.rawRows)[1] && (
+                      <small>{compactParts(health.store.rawRows)[1]}</small>
+                    )}
+                  </>
+                ) : (
+                  "—"
+                )
+              }
               hint={health?.store ? `${compact(health.store.rollupRows)} rollups` : "no store"}
             />
           </MetricStrip>
 
           {!!c?.storageDropped && (
-            <p role="alert" className="monitor-note text-destructive" data-tone="bad">
+            <MonitorNote tone="bad" role="alert" icon={<TriangleAlert aria-hidden="true" />}>
               {num(c.storageDropped)} decoded records could not be saved. Check free disk space and
               the server logs; totals are incomplete.
-            </p>
+            </MonitorNote>
           )}
           {!!c && c.templatesPending > 0 && (
-            <p className="monitor-note" data-tone="warn">
-              {num(c.templatesPending)} data sets are waiting for their template. v9 and IPFIX
-              exporters send their field layout every few minutes, so these flows appear after the
-              next refresh.
-            </p>
+            <MonitorNote tone="warn" icon={<Clock aria-hidden="true" />}>
+              {c.templatesPending === 1
+                ? "1 data set is waiting for its template."
+                : `${num(c.templatesPending)} data sets are waiting for their template.`}{" "}
+              v9 and IPFIX exporters send their field layout every few minutes, so these flows
+              appear after the next refresh.
+            </MonitorNote>
           )}
           {c?.lastError && (
-            <p className="monitor-note text-muted-foreground">
+            <MonitorNote>
               Last collector error: <code className="font-mono">{c.lastError}</code>
-            </p>
+            </MonitorNote>
           )}
+
+          <MonitorPanel
+            title="Bytes over time"
+            description={
+              timeline && peak
+                ? `${
+                    lineKeys.length
+                      ? `Top ${dim.plural} stacked, one point per`
+                      : "All traffic, one point per"
+                  } ${interval(timeline.bucketMs)}. Peak ${humanBytes(peak.bytes)} at ${hhmm(
+                    peak.ts,
+                  )}.`
+                : `${WINDOW_PHRASE[window][0].toUpperCase()}${WINDOW_PHRASE[window].slice(1)}`
+            }
+            extra={
+              lineKeys.length > 0 && (
+                <span className="monitor-legend">
+                  {lineKeys.map((k, i) => (
+                    <span key={k}>
+                      <i className={i === 0 ? "bg-sig" : "bg-brand"} />
+                      <span className="flows-mono">{k}</span>
+                    </span>
+                  ))}
+                </span>
+              )
+            }
+          >
+            {timeline ? (
+              <FlowLines
+                series={series}
+                labels={axis}
+                hits={bucketTotals.map((t) => `${hhmm(t.ts)} · ${humanBytes(t.bytes)}`)}
+                drawKey={loadedKey}
+                label={`Bytes per ${interval(timeline.bucketMs)}${
+                  peak ? `, peaking at ${humanBytes(peak.bytes)} at ${hhmm(peak.ts)}` : ""
+                }`}
+              />
+            ) : (
+              <MonitorEmpty compact title="No traffic in this window" />
+            )}
+          </MonitorPanel>
 
           <div className="flows-columns">
             <MonitorPanel
               title="Top talkers"
-              description={`By ${dimLabel.toLowerCase()}, ${WINDOW_PHRASE[window]}, share of bytes`}
-              className="flows-talkers"
+              description={`By ${dim.label.toLowerCase()}, in the ${WINDOW_PHRASE[window]}, share of bytes`}
               extra={
                 <Segmented
                   label="Group by"
@@ -402,164 +520,142 @@ export function FlowsView(): ReactNode {
                     Try a longer window, or check that an exporter is sending.
                   </MonitorEmpty>
                 ) : (
-                  rows.map((r, i) => (
-                    <div key={r.key} className="monitor-row flows-talker-grid">
-                      <span className="text-[12px] text-muted-foreground tabular-nums">
-                        {i + 1}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="flows-mono block truncate text-foreground" title={r.key}>
+                  <>
+                    <div className="monitor-thead flows-talker-grid">
+                      <span>{dim.label}</span>
+                      <span>Share of bytes</span>
+                      <span>Bytes</span>
+                      <span>Share</span>
+                    </div>
+                    {rows.map((r) => (
+                      <div key={r.key} className="monitor-row flows-talker-grid">
+                        <span
+                          className="p flows-mono truncate"
+                          title={`${r.key} · ${num(r.flows)} flows · ${compact(r.packets)} packets`}
+                        >
                           {r.key}
                         </span>
-                        <span className="block truncate text-[12px] text-muted-foreground">
-                          {num(r.flows)} flows · {compact(r.packets)} packets
+                        <span className="monitor-bar flows-bar">
+                          <span
+                            data-tone="good"
+                            style={{ width: `${(r.bytes / maxBytes) * 100}%` }}
+                          />
                         </span>
-                      </span>
-                      <span className="monitor-bar">
-                        <span style={{ width: `${(r.bytes / maxBytes) * 100}%` }} />
-                      </span>
-                      <span className="text-right text-fg-secondary tabular-nums">
-                        {humanBytes(r.bytes)}
-                      </span>
-                      <span className="text-right text-[12px] text-muted-foreground tabular-nums">
-                        {pct(r.share)}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </MonitorPanel>
-
-            <MonitorPanel
-              title="Protocols"
-              description="Share of bytes"
-              className="flows-side"
-              flush
-            >
-              <div className="flows-protocols">
-                {protocols.length === 0 ? (
-                  <p className="text-[13px] text-muted-foreground">No traffic in this window.</p>
-                ) : (
-                  <>
-                    <div className="flows-share" aria-hidden="true">
-                      {protocols.map((p, i) => (
-                        <span
-                          key={p.protocol}
-                          style={{
-                            width: `${p.share * 100}%`,
-                            background: (PROTOCOL_TONES[i] ?? PROTOCOL_REST).bar,
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <ul className="flows-legend">
-                      {protocols.map((p, i) => (
-                        <li key={p.protocol}>
-                          <StatusDot tone={(PROTOCOL_TONES[i] ?? PROTOCOL_REST).dot} />
-                          <span className="uppercase">{p.protocol}</span>
-                          <span className="flex-1" />
-                          <span className="text-fg-secondary tabular-nums">
-                            {humanBytes(p.bytes)}
-                          </span>
-                          <span className="w-10 text-right text-muted-foreground tabular-nums">
-                            {pct(p.share)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                        <span className="truncate tabular-nums">{humanBytes(r.bytes)}</span>
+                        <span className="truncate text-muted-foreground tabular-nums">
+                          {pct(r.share)}
+                        </span>
+                      </div>
+                    ))}
                   </>
                 )}
               </div>
+            </MonitorPanel>
 
-              <header className="monitor-panel-head flows-subhead">
-                <div className="min-w-0 flex-1">
-                  <h2 className="monitor-panel-title">Exporters</h2>
-                  <p className="monitor-panel-desc">Routers sending flow records</p>
-                </div>
-              </header>
-              {exporterHealth.length ? (
-                exporterHealth.map((e, i) => {
-                  const tone: Tone = !running ? "default" : e.stale ? "warn" : "good";
-                  return (
-                    <div
-                      key={`${e.exporter}/${e.version}/${e.domain}`}
-                      className="monitor-row flows-exporter"
-                    >
-                      <span className="flows-exporter-name">
-                        <StatusDot tone={tone} />
-                        <span className="flows-mono truncate">{e.exporter}</span>
-                      </span>
-                      <span
-                        className={
-                          tone === "warn"
-                            ? "text-[12px] font-[510] text-warning"
-                            : "text-[12px] text-muted-foreground"
-                        }
+            <div className="flows-side">
+              <MonitorPanel title="Protocols" description="Share of bytes">
+                {protocols.length === 0 ? (
+                  <p className="text-[13px] text-muted-foreground">No traffic in this window.</p>
+                ) : (
+                  <div className="flows-protocols">
+                    <Donut
+                      size={132}
+                      stroke={14}
+                      label="Share of bytes by protocol"
+                      center={byteNumber(totals?.bytes ?? 0, trafficUnit.div)}
+                      sub={trafficUnit.unit}
+                      parts={protocols.map((p, i) => ({
+                        value: p.bytes,
+                        tone: toneOf(i, p.protocol),
+                        label: p.protocol,
+                      }))}
+                    />
+                    <ul className="flows-legend">
+                      {protocols.map((p, i) => (
+                        <li key={p.protocol} title={humanBytes(p.bytes)}>
+                          <i className={TONE_BG[toneOf(i, p.protocol)]} />
+                          <span className="text-fg-secondary">
+                            {p.protocol === "Other" ? p.protocol : p.protocol.toUpperCase()}
+                          </span>
+                          <span className="flex-1" />
+                          <span className="text-fg-secondary tabular-nums">{pct(p.share)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </MonitorPanel>
+
+              <MonitorPanel title="Exporters" description="Routers sending flow records" flush>
+                {exporterHealth.length || Object.keys(c?.exporters ?? {}).length ? (
+                  <div className="monitor-thead flows-exporter-grid">
+                    <span>Router</span>
+                    <span>Status</span>
+                  </div>
+                ) : null}
+                {exporterHealth.length ? (
+                  exporterHealth.map((e, i) => {
+                    const tone: Tone = !running ? "default" : e.stale ? "warn" : "good";
+                    return (
+                      <div
+                        key={`${e.exporter}/${e.version}/${e.domain}`}
+                        className="monitor-row flows-exporter-grid"
                       >
-                        {!running ? "Stopped · " : e.stale ? "Silent over 5 min · " : ""}
-                        {protocolName(e.version)} · {i === 0 ? "last packet " : ""}
-                        {ago(e.lastSeen, now)}
+                        <span className="flows-exporter-name">
+                          <StatusDot tone={tone} />
+                          <span className="p flows-mono truncate">{e.exporter}</span>
+                        </span>
+                        <span className="flows-exporter-status">
+                          <span
+                            className={
+                              tone === "warn"
+                                ? "truncate text-warning"
+                                : "truncate text-fg-secondary"
+                            }
+                          >
+                            {!running ? "Stopped · " : e.stale ? "Silent over 5 min · " : ""}
+                            {protocolName(e.version)} · {i === 0 ? "last packet " : ""}
+                            {ago(e.lastSeen, now)}
+                          </span>
+                          <span className="truncate text-muted-foreground">
+                            {[
+                              `Domain ${e.domain}`,
+                              `${compact(e.records)} records`,
+                              e.version === 9
+                                ? `${num(e.sequenceGaps)} sequence gaps`
+                                : "gaps not measured",
+                              ...(e.reordered ? [`${num(e.reordered)} reordered or reset`] : []),
+                              ...(e.templateChanges
+                                ? [`${num(e.templateChanges)} template changes`]
+                                : []),
+                              ...(e.pending ? [`${num(e.pending)} pending`] : []),
+                              ...(e.errors ? [`${num(e.errors)} errors`] : []),
+                            ].join(" · ")}
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : Object.keys(c?.exporters ?? {}).length ? (
+                  Object.entries(c?.exporters ?? {}).map(([addr, packets]) => (
+                    <div key={addr} className="monitor-row flows-exporter-grid">
+                      <span className="flows-exporter-name">
+                        <StatusDot tone={running ? "good" : "default"} />
+                        <span className="p flows-mono truncate">{addr}</span>
                       </span>
-                      <span className="flows-exporter-stats">
-                        {[
-                          `Domain ${e.domain}`,
-                          `${compact(e.records)} records`,
-                          e.version === 9
-                            ? `${num(e.sequenceGaps)} sequence gaps`
-                            : "gaps not measured",
-                          ...(e.reordered ? [`${num(e.reordered)} reordered or reset`] : []),
-                          ...(e.templateChanges
-                            ? [`${num(e.templateChanges)} template changes`]
-                            : []),
-                          ...(e.pending ? [`${num(e.pending)} pending`] : []),
-                          ...(e.errors ? [`${num(e.errors)} errors`] : []),
-                        ].join(" · ")}
+                      <span className="flows-exporter-status">
+                        <span className="truncate text-fg-secondary">{num(packets)} packets</span>
                       </span>
                     </div>
-                  );
-                })
-              ) : Object.keys(c?.exporters ?? {}).length ? (
-                Object.entries(c?.exporters ?? {}).map(([addr, packets]) => (
-                  <div key={addr} className="monitor-row flows-exporter">
-                    <span className="flows-exporter-name">
-                      <StatusDot tone={running ? "good" : "default"} />
-                      <span className="flows-mono truncate">{addr}</span>
-                    </span>
-                    <span className="text-[12px] text-muted-foreground">
-                      {num(packets)} packets
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <MonitorEmpty compact title="No exporters yet">
-                  Point a router at this host with <code>add_traffic_flow_target</code>.
-                </MonitorEmpty>
-              )}
-              {exporterHealth.length > 0 && (
-                <p className="monitor-foot">
-                  Silence does not prove an outage. Sequence gaps can include late packets; IPFIX
-                  loss is not inferred.
-                </p>
-              )}
-            </MonitorPanel>
+                  ))
+                ) : (
+                  <MonitorEmpty compact title="No exporters yet">
+                    Point a router at this host with <code>add_traffic_flow_target</code>.
+                  </MonitorEmpty>
+                )}
+              </MonitorPanel>
+            </div>
           </div>
-
-          <MonitorPanel
-            title="Bytes over time"
-            description={
-              lineTotals && peak
-                ? `Per ${interval(lineTotals.bucketMs)} · peak ${humanBytes(peak.bytes)} at ${hhmm(
-                    peak.ts,
-                  )}`
-                : `${WINDOW_PHRASE[window][0].toUpperCase()}${WINDOW_PHRASE[window].slice(1)}`
-            }
-          >
-            {lineTotals ? (
-              <BytesChart data={lineTotals} drawKey={loadedKey} now={now} />
-            ) : (
-              <MonitorEmpty compact title="No traffic in this window" />
-            )}
-          </MonitorPanel>
 
           <MonitorPanel
             title="Busiest conversations"
@@ -575,18 +671,16 @@ export function FlowsView(): ReactNode {
                   <span />
                   <span>Destination</span>
                   <span>Port</span>
-                  <span className="text-right">Bytes</span>
+                  <span>Bytes</span>
                 </div>
                 {talks.map((t) => (
                   <div key={`${t.src}-${t.dst}`} className="monitor-row flows-conv-grid">
-                    <span className="flows-mono truncate" title={t.src}>
+                    <span className="p flows-mono truncate" title={t.src}>
                       {t.src}
                     </span>
-                    <ArrowRight
-                      className="flows-arrow text-muted-foreground"
-                      strokeWidth={1.5}
-                      aria-label="to"
-                    />
+                    <span className="truncate text-success">
+                      <ChevronRight className="flows-arrow" strokeWidth={1.6} aria-label="to" />
+                    </span>
                     <span className="flows-mono truncate" title={t.dst}>
                       {t.dst}
                     </span>
@@ -596,9 +690,7 @@ export function FlowsView(): ReactNode {
                     >
                       {t.applications[0] ?? "—"}
                     </span>
-                    <span className="text-right text-fg-secondary tabular-nums">
-                      {humanBytes(t.bytes)}
-                    </span>
+                    <span className="truncate tabular-nums">{humanBytes(t.bytes)}</span>
                   </div>
                 ))}
               </>

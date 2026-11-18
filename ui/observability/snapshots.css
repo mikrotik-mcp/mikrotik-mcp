@@ -1,0 +1,76 @@
+/* Snapshots, from the "Rec-Snapshots" and "Rec-Snapshots-Diff" boards. Shared
+   parts live in monitoring.css. */
+
+.snaps .mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.snaps .num {
+  font-variant-numeric: tabular-nums;
+}
+.snaps .trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The hero's snapshot pickers: the first carries an archive icon. */
+.snaps-select select {
+  max-width: 300px;
+}
+.snaps-select[data-icon] select {
+  padding-left: 34px;
+}
+.snaps-select[data-icon] .snaps-select-icon {
+  right: auto;
+  left: 12px;
+}
+.snaps-arrow {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+.snaps-arrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+.snaps-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.snaps-table {
+  grid-template-columns: 104px minmax(0, 1.25fr) minmax(0, 1.2fr) 58px 50px 64px;
+}
+.snaps-chip-from {
+  color: var(--brand);
+}
+.snaps-chip-to {
+  color: var(--success);
+}
+
+.snaps-export {
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+@media (max-width: 1100px) {
+  .snaps-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 639px) {
+  .snaps-table {
+    grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .snaps-table > :nth-child(n + 4) {
+    display: none;
+  }
+  .snaps-select select {
+    max-width: 100%;
+  }
+}

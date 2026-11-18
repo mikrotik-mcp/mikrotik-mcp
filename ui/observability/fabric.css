@@ -1,17 +1,26 @@
 /*
- * L2 Fabric, after the "L2 Fabric" board (L2-Fabric.dc.html).
+ * L2 Fabric, after the Net-Fabric board.
  * Unlayered on purpose: these rules refine the shared monitor-* classes.
  */
 
-/* The board's status line is 13px muted text with the count in bold. */
-.fabric .monitor-status {
-  flex-wrap: wrap;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 400;
-  margin-top: 0;
+/* The board's search box in the "Hosts by port" header is 280px wide. */
+.fabric .fabric-search {
+  width: 280px;
+  max-width: 100%;
 }
-.fabric .monitor-status b {
-  color: var(--foreground);
-  font-weight: 510;
+
+/* "Show N more hosts" is a ghost button with no padding, flush with the names. */
+.fabric .fabric-more {
+  padding: 0;
+}
+
+/* Phone: panel titles take the full row; legends and search wrap below. */
+@media (max-width: 639px) {
+  .fabric .monitor-panel-head > :first-child {
+    flex-basis: 100%;
+  }
+  .fabric .fabric-search {
+    flex: 1 1 auto;
+    width: auto;
+  }
 }

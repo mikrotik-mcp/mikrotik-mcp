@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import type { RoutingPolicy } from "../../src/service-routing/model";
 import { routingRate } from "../../src/service-routing/traffic-model";
 import type { RoutingRate, RoutingTraffic } from "../../src/service-routing/traffic-model";
-import { MonitorButton, MonitorPanel, formatBytes } from "./monitoring-ui";
+import {
+  MonitorButton,
+  MonitorPanel,
+  StatusBadge,
+  formatBytes,
+  useLineDraw,
+} from "./monitoring-ui";
+import { cn } from "@/lib/utils";
 
 /** Exact binary units; kept for the full-precision tooltip. */
 export function formatRoutingBytes(value: string | undefined): string {
@@ -84,12 +91,13 @@ export function RoutingTrafficPanel({
       clearTimeout(timer);
     };
   }, [policy.id, policy.device, policy.state, paused, retry]);
+  const chart = useRef<HTMLDivElement>(null);
   const ready = sample?.state === "ready" && !paused;
   const rates = points.filter((p) => p.bps !== null);
   const end = points.at(-1)?.at ?? 0;
   const peak = Math.max(0, ...rates.map((p) => p.bps!));
-  const x = (at: number) => (((at - end + 300_000) / 300_000) * 640).toFixed(1);
-  const y = (bps: number) => (140 - (bps / Math.max(1, peak)) * 120).toFixed(1);
+  const x = (at: number) => (((at - end + 300_000) / 300_000) * 360).toFixed(1);
+  const y = (bps: number) => (112 - (bps / Math.max(1, peak)) * 100).toFixed(1);
   const path = points
     .map((p, index) =>
       p.bps === null
@@ -97,29 +105,39 @@ export function RoutingTrafficPanel({
         : `${index > 0 && points[index - 1].bps !== null ? "L" : "M"}${x(p.at)},${y(p.bps)}`,
     )
     .join(" ");
+  useLineDraw(chart, `${policy.id}:${rates.length > 1}`);
   const status = paused
     ? "Counter reads pause while a routing change is open."
     : sample?.state === "unavailable"
       ? sample.detail
       : undefined;
+  const live = ready && policy.state === "active";
+  const fill =
+    rates.length > 1
+      ? `M${x(rates[0].at)},120 ${rates.map((p) => `L${x(p.at)},${y(p.bps!)}`).join(" ")} L${x(rates.at(-1)!.at)},120 Z`
+      : "";
   return (
     <MonitorPanel
-      className="flex-[2_1_520px]"
       aria-label="Policy traffic"
       title="Traffic matched by this route"
-      description={`Client → service · ${policy.family === "ipv6" ? "IPv6" : "IPv4"} · ${policy.activeTable ?? policy.primary} · counted every 5 s`}
+      description={`Client → service · ${policy.family === "ipv6" ? "IPv6" : "IPv4"} · via ${policy.activeTable ?? policy.primary}`}
       extra={
-        <MonitorButton
-          size="sm"
-          disabled={paused || policy.state !== "active"}
-          onClick={() => setRetry((r) => r + 1)}
-        >
-          Refresh counters
-        </MonitorButton>
+        live ? (
+          <StatusBadge tone="good" pulse>
+            Live
+          </StatusBadge>
+        ) : (
+          <MonitorButton
+            size="sm"
+            disabled={paused || policy.state !== "active"}
+            onClick={() => setRetry((r) => r + 1)}
+          >
+            Refresh counters
+          </MonitorButton>
+        )
       }
-      bodyClassName="flex flex-col gap-4"
     >
-      <dl className="m-0 grid grid-cols-3 gap-3">
+      <dl className="m-0 mb-3 grid grid-cols-3 gap-2.5">
         {[
           [
             "Matched bytes",
@@ -131,10 +149,13 @@ export function RoutingTrafficPanel({
           ["Matched packets", ready ? formatCount(sample.packets) : "—", undefined],
           ["Current rate", ready ? formatRate(points.at(-1)?.bps) : "—", undefined],
         ].map(([label, value, title]) => (
-          <div key={label} className="flex min-w-0 flex-col gap-0.5">
+          <div key={label} className="flex min-w-0 flex-col">
             <dt className="monitor-label truncate">{label}</dt>
             <dd
-              className="m-0 truncate text-[20px] font-[590] text-emphasis tabular-nums max-sm:text-[16px]"
+              className={cn(
+                "m-0 truncate text-[20px] font-semibold tabular-nums max-sm:text-[16px]",
+                label === "Current rate" && value !== "—" ? "text-success" : "text-emphasis",
+              )}
               title={title}
             >
               {value}
@@ -142,31 +163,37 @@ export function RoutingTrafficPanel({
           </div>
         ))}
       </dl>
-      <div className="relative">
+      <div className="relative" ref={chart}>
         <svg
-          viewBox="0 0 640 160"
+          viewBox="0 0 360 120"
           width="100%"
-          height="160"
+          height="120"
           preserveAspectRatio="none"
           role="img"
           aria-label="Matched traffic rate over the last 5 minutes"
           className="block"
         >
-          <g
-            stroke="var(--chart-grid)"
-            strokeDasharray="2 4"
-            strokeWidth="1"
-            vectorEffect="non-scaling-stroke"
-          >
-            {[20, 80, 140].map((gy) => (
-              <line key={gy} x1="0" y1={gy} x2="640" y2={gy} vectorEffect="non-scaling-stroke" />
-            ))}
-          </g>
+          {[30, 60, 90].map((gy) => (
+            <line
+              key={gy}
+              x1="0"
+              y1={gy}
+              x2="360"
+              y2={gy}
+              stroke="var(--line)"
+              strokeDasharray="2 5"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {fill && <path d={fill} fill="var(--sig-fill)" />}
           <path
+            data-draw
             d={path}
             fill="none"
-            stroke="var(--chart-1)"
-            strokeWidth="1.5"
+            stroke="var(--sig)"
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
           />
         </svg>
@@ -180,19 +207,18 @@ export function RoutingTrafficPanel({
           </span>
         )}
       </div>
-      <div className="flex justify-between gap-2 text-[12px] text-muted-foreground">
+      <div className="mt-1.5 flex justify-between gap-2 text-[11px] text-faint">
         <span>5 minutes ago</span>
-        <span>Peak {formatRate(rates.length ? peak : null)}</span>
         <span>Latest sample</span>
       </div>
       {(status || points.at(-1)?.reset) && (
-        <p role="status" className="text-[12px] text-warning">
+        <p role="status" className="mt-3 text-[12px] text-warning">
           {points.at(-1)?.reset
             ? "The router reset its counters. A new rate baseline is being collected."
             : status}
         </p>
       )}
-      <p className="text-[12px] text-muted-foreground">
+      <p className="monitor-hint mt-3">
         Totals count from the router's last counter reset. Only client-to-service traffic is
         counted, not the replies.
       </p>

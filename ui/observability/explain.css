@@ -1,0 +1,260 @@
+/* Explain, from the "Cfg-Explain" board. Shared parts live in monitoring.css. */
+
+.explain .mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.explain .num {
+  font-variant-numeric: tabular-nums;
+}
+.explain .trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.explain .text-faint {
+  color: var(--text-faint);
+}
+
+/* Two columns under the KPIs: exposure, WANs, subnets | topology, compare. */
+.explain-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.explain-col {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* The board's .phd .tt basis, so a wide "extra" (the topology legend) wraps
+   under the title. The shared rule loses to the flex-1 utility. */
+.explain .monitor-panel-head > .min-w-0 {
+  flex: 1 1 220px;
+}
+
+/* The exposure panel: a pink outline only, and an LED before its title. */
+.explain .monitor-panel[data-tone="bad"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 45%, transparent);
+}
+.explain .monitor-panel-title:has(> .explain-title-led) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.explain-title-led {
+  display: contents;
+}
+
+/* Rows with a title and a muted detail line (exposure, compare). */
+.explain-row-title {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+.explain-row-detail {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.explain-risk {
+  justify-self: start;
+  font-weight: 400;
+}
+
+.explain-exp-row,
+.explain-cmp-row {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 12px 18px;
+}
+.explain-exp-row {
+  grid-template-columns: 84px minmax(0, 1fr) 116px 58px;
+}
+.explain-cmp-row {
+  grid-template-columns: 84px 104px minmax(0, 1fr);
+  padding-block: 11px;
+}
+.explain-exp-from {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.explain-exp-line {
+  color: var(--text-faint);
+  font-family: var(--font-mt);
+  font-size: 12px;
+  text-align: right;
+}
+.explain-exp-none,
+.explain-cmp-same {
+  border-top: 1px solid var(--line);
+  padding: 12px 18px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.explain-row-empty {
+  color: var(--muted-foreground);
+}
+
+.explain-grid-wan {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 1fr) 90px;
+}
+.explain-grid-subnet {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1.2fr) 70px;
+}
+
+/* The selects in the header and the compare panel: the router picker's look. */
+.explain-select {
+  max-width: 100%;
+}
+.explain-compare-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.explain-compare-arrow {
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+}
+
+/* Topology: nodes scale from their own centre; hovering one dims the rest. */
+.explain-topo svg {
+  display: block;
+}
+.explain-topo [data-node] {
+  transition: opacity 150ms ease;
+}
+.explain-topo svg:has([data-node]:hover) [data-node]:not(:hover) {
+  opacity: 0.35;
+}
+.explain-topo-hub,
+.explain-topo-label {
+  font-family: var(--font-mt);
+  font-size: 11px;
+}
+.explain-topo-hub {
+  fill: var(--foreground);
+}
+.explain-topo-label {
+  fill: var(--text-secondary);
+}
+.explain-topo-wan {
+  fill: var(--destructive);
+  font-size: 10px;
+}
+.explain-empty {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+/* The rendered Markdown document. */
+.explain-doc {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+.explain-doc h2 {
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.explain-doc h2 + p {
+  color: var(--muted-foreground);
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.explain-doc h2 + p em {
+  font-style: normal;
+}
+.explain-doc h3,
+.explain-doc h4,
+.explain-doc h5 {
+  margin: 4px 0 0;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+.explain-doc strong,
+.explain-doc b {
+  color: var(--foreground);
+}
+.explain-doc code {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.explain-doc pre {
+  overflow-x: auto;
+  border-radius: 10px;
+  background: var(--glass-2);
+  padding: 10px 12px;
+}
+.explain-doc ul {
+  padding-left: 18px;
+  list-style: disc;
+}
+.explain-doc .wn-table-wrap {
+  overflow-x: auto;
+}
+.explain-doc table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.explain-doc th,
+.explain-doc td {
+  border-top: 1px solid var(--line);
+  padding: 6px 12px 6px 0;
+  text-align: left;
+}
+.explain-doc th {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+@media (max-width: 1100px) {
+  .explain-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Phone: exposure and compare rows stack their detail under the title. */
+@media (max-width: 640px) {
+  .explain-exp-row {
+    grid-template-columns: 84px minmax(0, 1fr);
+  }
+  .explain-exp-from {
+    grid-column: 2;
+  }
+  .explain-exp-line {
+    grid-column: 2;
+    text-align: left;
+  }
+  .explain-cmp-row {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+  .explain-cmp-row > :last-child {
+    grid-column: 1 / -1;
+  }
+  /* The diagram keeps its shape instead of a fixed 330px box. */
+  .explain-topo svg {
+    height: auto;
+    aspect-ratio: 560 / 330;
+  }
+  /* Tables keep every column and scroll inside their panel. */
+  .explain-table {
+    overflow-x: auto;
+  }
+  .explain-table > * {
+    min-width: 520px;
+  }
+}

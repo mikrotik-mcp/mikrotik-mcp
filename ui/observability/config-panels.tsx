@@ -5,12 +5,13 @@
 import { LoadingState } from "./loading-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Star, X } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { api, postJson } from "./api";
-import { Button, Input } from "./geist";
+import { Input } from "./geist";
+import { MonitorButton, MonitorEmpty, StatusBadge } from "./monitoring-ui";
 import { JsonDiffView } from "./highlight";
 import { toast } from "./toast-action";
-import { cn } from "@/lib/utils";
+import "./monitoring.css";
 
 // ── Config: version history (point-in-time) ─────────────────────────────────
 interface CfgVersion {
@@ -123,167 +124,178 @@ export function ConfigHistoryPanel({ onRestored }: { onRestored: () => void }): 
 
   if (!data) return <LoadingState label="Loading configuration history" />;
 
+  const today = new Date().toDateString();
+  const prev = new Date();
+  prev.setDate(prev.getDate() - 1);
+  const yesterday = prev.toDateString();
+  const when = (ts: number): string => {
+    const d = new Date(ts);
+    const time = d.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    if (d.toDateString() === today) return `${time} today`;
+    if (d.toDateString() === yesterday) return `Yesterday ${time}`;
+    return fmtWhen(ts);
+  };
+
   return (
     <>
-      {msg && <div className="text-muted-foreground font-mono text-xs">{msg}</div>}
-      <div className="flex flex-wrap items-center gap-2" style={{ marginBottom: 14 }}>
-        {labelDraft === null ? (
-          <Button
-            size="sm"
-            type="accent"
-            icon={<Star className="size-4" />}
-            onClick={() => setLabelDraft("")}
-          >
-            Save checkpoint
-          </Button>
-        ) : (
-          <span className="inline-flex items-center gap-2">
-            <Input
-              className="w-[min(48vw,380px)]"
-              autoFocus
-              placeholder="checkpoint name (e.g. pre-upgrade)"
-              value={labelDraft}
-              onChange={(e) => setLabelDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void saveCheckpoint();
-                if (e.key === "Escape") setLabelDraft(null);
-              }}
-            />
-            <Button size="sm" type="accent" onClick={() => void saveCheckpoint()}>
-              Save
-            </Button>
-            <Button size="sm" onClick={() => setLabelDraft(null)}>
-              Cancel
-            </Button>
-          </span>
-        )}
-        <span className="flex-1" />
-        <span className="text-muted-foreground text-[11px]">
-          {data.versions.length} versions · {fmtBytes(data.bytes)} · auto-keep {data.retention}
-        </span>
-      </div>
-
+      {msg && (
+        <p className="monitor-hint px-[18px] pb-2 font-mono" role="status">
+          {msg}
+        </p>
+      )}
       {data.versions.length === 0 ? (
-        <div className="text-muted-foreground text-[11px]">
-          No versions yet — they appear here after each config change.
-        </div>
+        <MonitorEmpty compact title="No versions yet">
+          They appear here after each config change.
+        </MonitorEmpty>
       ) : (
-        <ol className="m-0 grid list-none p-0 pl-1.5">
+        <div className="config-history">
+          <div className="monitor-thead config-history-row">
+            <span>Saved</span>
+            <span>Kind</span>
+            <span>Label</span>
+            <span>Size</span>
+            <span>Drift vs current</span>
+            <span />
+          </div>
           {data.versions.map((v, i) => {
+            const latest = i === 0;
             const changed = v.drift.added + v.drift.removed;
+            const share = (n: number): number => Math.min((n / Math.max(changed, 1)) * 60, 60);
             return (
-              <li
-                key={v.id}
-                /*
-                 * The rail is a `before:` pseudo-element running from this row's dot
-                 * down through the bottom of the row, so consecutive rows join into
-                 * one continuous line. `last:before:hidden` stops it dangling past
-                 * the final dot. Geometry: py-3.5 (14px) + the dot's mt-1 (4px) +
-                 * half the 14px dot = 25px to the dot's centre.
-                 */
-                className="hover:bg-foreground/5 relative grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-3 rounded-md px-2.5 py-3.5 transition-colors before:absolute before:top-[25px] before:bottom-0 before:left-[22px] before:w-px before:bg-border last:before:hidden"
-              >
-                <span
-                  className={cn(
-                    "relative z-[1] mt-1 justify-self-center rounded-full border-[2.5px]",
-                    i === 0
-                      ? "border-brand bg-brand ring-brand/25 size-[14px] ring-4"
-                      : "border-border bg-card size-[13px]",
-                  )}
-                  aria-hidden="true"
-                />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-[9px] text-[12.5px]">
-                    <span
-                      className={cn(
-                        "rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-[0.05em] uppercase",
-                        v.kind === "checkpoint"
-                          ? "border-warning/45 bg-warning/10 text-warning"
-                          : "border-border text-muted-foreground",
-                      )}
-                    >
-                      {v.kind === "checkpoint" ? "★ checkpoint" : "auto"}
-                    </span>
-                    {v.label && <span className="text-foreground font-semibold">{v.label}</span>}
-                    <span className="text-muted-foreground font-mono text-[11.5px]">
-                      {fmtWhen(v.ts)}
-                    </span>
-                    {i === 0 ? (
-                      <span className="text-brand font-mono text-[10px] font-semibold tracking-[0.05em] uppercase">
-                        latest
-                      </span>
-                    ) : changed === 0 ? (
-                      <span className="text-muted-foreground text-[11.5px]">
-                        identical to current
-                      </span>
+              <div key={v.id}>
+                <div className="monitor-row config-history-row" data-selected={latest || undefined}>
+                  <span className="truncate font-mono text-xs text-foreground">{when(v.ts)}</span>
+                  <span>
+                    <StatusBadge tone={v.kind === "checkpoint" ? "brand" : "default"} dot={false}>
+                      {v.kind}
+                    </StatusBadge>
+                  </span>
+                  <span className="truncate">
+                    {v.label ? (
+                      <span className="text-fg-secondary">{v.label}</span>
                     ) : (
-                      <span className="inline-flex items-baseline gap-[7px] font-mono text-[11.5px]">
-                        <span className="text-success">+{v.drift.added}</span>
-                        <span className="text-destructive">−{v.drift.removed}</span>
-                        <span className="text-muted-foreground text-[11px]"> vs current</span>
+                      <span className="text-faint">—</span>
+                    )}
+                  </span>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {fmtBytes(v.bytes)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {latest ? (
+                      "Current config"
+                    ) : changed === 0 ? (
+                      "Identical to current"
+                    ) : (
+                      <span className="monitor-meter">
+                        <span className="font-mono text-success">+{v.drift.added}</span>
+                        <span className="font-mono text-destructive">−{v.drift.removed}</span>
+                        <span className="config-drift-bar" aria-hidden="true">
+                          <i style={{ width: share(v.drift.added) }} />
+                          <i data-del style={{ width: share(v.drift.removed) }} />
+                        </span>
                       </span>
                     )}
-                  </div>
-                  {diffFor === v.id && (
-                    <div className="mt-2">
-                      {diff ? (
-                        diff.unified.trim() ? (
-                          <JsonDiffView unified={diff.unified} maxHeight={280} />
-                        ) : (
-                          <span className="text-muted-foreground text-[11px]">
-                            No differences from the current config.
-                          </span>
-                        )
+                  </span>
+                  <span className="flex items-center justify-end gap-1">
+                    {latest ? (
+                      <StatusBadge tone="good" dot={false}>
+                        latest
+                      </StatusBadge>
+                    ) : confirmRestore === v.id ? (
+                      <>
+                        <MonitorButton
+                          size="sm"
+                          variant="primary"
+                          disabled={busy}
+                          onClick={() => void restore(v.id)}
+                        >
+                          Confirm restore
+                        </MonitorButton>
+                        <MonitorButton
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setConfirmRestore(null)}
+                        >
+                          Cancel
+                        </MonitorButton>
+                      </>
+                    ) : (
+                      <>
+                        <MonitorButton
+                          size="sm"
+                          variant="ghost"
+                          aria-expanded={diffFor === v.id}
+                          onClick={() => void showDiff(v.id)}
+                        >
+                          {diffFor === v.id ? "Hide" : "Diff"}
+                        </MonitorButton>
+                        <MonitorButton
+                          size="sm"
+                          title="Restore this version"
+                          onClick={() => setConfirmRestore(v.id)}
+                        >
+                          Restore
+                        </MonitorButton>
+                        {v.kind === "checkpoint" && (
+                          <MonitorButton
+                            size="sm"
+                            variant="ghost"
+                            icon={<Trash2 aria-hidden="true" />}
+                            title="Delete"
+                            aria-label={`Delete checkpoint ${v.label ?? when(v.ts)}`}
+                            onClick={() => void del(v.id)}
+                          />
+                        )}
+                      </>
+                    )}
+                  </span>
+                </div>
+                {diffFor === v.id && (
+                  <div className="border-t border-line px-[18px] py-3">
+                    {diff ? (
+                      diff.unified.trim() ? (
+                        <JsonDiffView unified={diff.unified} maxHeight={280} />
                       ) : (
-                        <span className="text-muted-foreground text-[11px]">computing diff…</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-px inline-flex flex-none items-center gap-1.5">
-                  <Button size="sm" onClick={() => void showDiff(v.id)}>
-                    {diffFor === v.id ? "Hide" : "Diff"}
-                  </Button>
-                  {confirmRestore === v.id ? (
-                    <>
-                      <Button
-                        size="sm"
-                        type="accent"
-                        disabled={busy}
-                        onClick={() => void restore(v.id)}
-                      >
-                        Confirm restore
-                      </Button>
-                      <Button size="sm" onClick={() => setConfirmRestore(null)}>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      size="sm"
-                      disabled={i === 0}
-                      title={i === 0 ? "This is the current config" : "Restore this version"}
-                      onClick={() => setConfirmRestore(v.id)}
-                    >
-                      Restore
-                    </Button>
-                  )}
-                  {v.kind === "checkpoint" && (
-                    <Button
-                      size="sm"
-                      ghost
-                      type="error"
-                      icon={<X className="size-4" />}
-                      title="Delete"
-                      onClick={() => void del(v.id)}
-                    />
-                  )}
-                </div>
-              </li>
+                        <span className="monitor-hint">
+                          No differences from the current config.
+                        </span>
+                      )
+                    ) : (
+                      <span className="monitor-hint">Computing diff…</span>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })}
-        </ol>
+        </div>
       )}
+      <div className="monitor-foot">
+        <label className="monitor-field config-checkpoint">
+          <Plus aria-hidden="true" />
+          <input
+            aria-label="Checkpoint name"
+            placeholder="checkpoint name, e.g. pre-upgrade"
+            value={labelDraft ?? ""}
+            onChange={(e) => setLabelDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void saveCheckpoint();
+              if (e.key === "Escape") setLabelDraft(null);
+            }}
+          />
+        </label>
+        <MonitorButton size="sm" onClick={() => void saveCheckpoint()}>
+          Save checkpoint
+        </MonitorButton>
+        <span className="flex-1" />
+        <span>
+          {data.versions.length} versions · {fmtBytes(data.bytes)} · keeps {data.retention}
+        </span>
+      </div>
     </>
   );
 }

@@ -2,29 +2,27 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
-  ArrowRight,
   ChevronDown,
+  ChevronRight,
   CircleHelp,
   Clock,
-  Code2,
-  Database,
+  Copy,
   Layers,
   LockKeyhole,
-  Network,
   Pause,
   Play,
-  Radar,
-  Router,
-  Shield,
-  ShieldAlert,
-  Waypoints,
+  Server,
 } from "lucide-react";
 import type { Investigation, CaseEvidence } from "../../src/investigations/model";
 import { JsonView } from "./highlight";
 import { pingObservation, tunnelInventory } from "./investigation-visual-model";
 import { InvestigationJourney } from "./investigation-journey";
 import { InvestigationFlowPath } from "./investigation-flow-path";
-import "./investigation-result.css";
+import { MonitorButton, MonitorNote, MonitorPanel, StatusBadge } from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
+import { toast } from "./components/ui/sonner";
+import "./monitoring.css";
+import "./investigations.css";
 
 const sourceNames: Record<string, string> = {
   dhcp: "DHCP identity",
@@ -42,270 +40,291 @@ const sourceNames: Record<string, string> = {
   "router-ping": "Router ICMP probe",
 };
 
-function EvidenceCard({ evidence }: { evidence: CaseEvidence }): ReactNode {
-  const Icon =
-    evidence.source === "interfaces"
-      ? Network
-      : evidence.source === "routes"
-        ? Waypoints
-        : ["filter", "nat"].includes(evidence.source)
-          ? Shield
-          : evidence.source === "router-ping"
-            ? Activity
-            : Database;
+/** "17 Nov 2026, 13:42" */
+export function snapshotTime(at: number): string {
+  return new Date(at).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function EvidenceRow({
+  evidence: e,
+  extra,
+  showDevice,
+}: {
+  evidence: CaseEvidence;
+  extra: boolean;
+  showDevice: boolean;
+}): ReactNode {
+  const unknown = e.state === "unknown";
   return (
-    <details
-      id={`evidence-${evidence.id}`}
-      className="group min-w-0 overflow-hidden rounded-xl border border-border bg-card open:border-primary/25"
-    >
-      <summary className="flex cursor-pointer list-none items-center gap-3 p-4 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
-          <Icon className="size-4 text-muted-foreground" />
+    <details id={`evidence-${e.id}`} className="inv-ev" data-extra={extra || undefined}>
+      <summary className="monitor-row inv-ev-grid">
+        <span className="p inv-trunc">
+          {sourceNames[e.source] ?? e.source}
+          {showDevice && <span className="inv-ev-dev"> · {e.device}</span>}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">
-            {sourceNames[evidence.source] ?? evidence.source}
-          </span>
-          <span className="mt-1 block font-mono text-[11px] text-muted-foreground">
-            {evidence.rows.length} records{evidence.truncated ? " · truncated" : ""}
-          </span>
+        <span className={`inv-ev-hide inv-ev-sum inv-trunc ${unknown ? "inv-warn" : "inv-mut"}`}>
+          {e.summary}
         </span>
-        <span
-          className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-wide ${evidence.state === "unknown" ? "border-warning/30 text-warning" : "border-border text-muted-foreground"}`}
-        >
-          {evidence.state}
+        <span className="inv-ev-hide inv-mono inv-mut inv-trunc">
+          {e.rows.length}
+          {e.truncated ? " · truncated" : ""}
         </span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        <span>
+          <StatusBadge tone={unknown ? "warn" : "default"} dot={false}>
+            {e.state}
+          </StatusBadge>
+        </span>
+        <ChevronDown aria-hidden="true" className="inv-ev-hide inv-ev-chev" />
       </summary>
-      <div className="space-y-3 border-t border-border bg-background/40 p-4">
-        <p className="text-xs leading-relaxed text-muted-foreground">{evidence.summary}</p>
-        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Clock className="size-3" />
-          {new Date(evidence.startedAt).toLocaleTimeString()} —{" "}
-          {new Date(evidence.finishedAt).toLocaleTimeString()}
+      <div className="inv-ev-body">
+        <p className="inv-hint">{e.summary}</p>
+        <p className="inv-hint flex items-center gap-1.5">
+          <Clock aria-hidden="true" className="size-3" />
+          {new Date(e.startedAt).toLocaleTimeString()} –{" "}
+          {new Date(e.finishedAt).toLocaleTimeString()}
         </p>
-        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
-          <Code2 className="size-3" />
-          Recorded JSON
-        </div>
-        <JsonView value={evidence.rows} maxHeight={360} />
+        <JsonView value={e.rows} maxHeight={360} />
       </div>
     </details>
   );
 }
 
-/** Historical context plus a separate, explicitly user-triggered export evidence panel. */
+const tunnelTone = (state: string): Tone =>
+  state === "running"
+    ? "good"
+    : state === "disabled" || state === "not-running"
+      ? "warn"
+      : "default";
+
+/** The saved case: header, journey, flow export check, probe, evidence and tunnels. */
 export function InvestigationResult({
   investigation: c,
 }: {
   investigation: Investigation;
 }): ReactNode {
   const [motion, setMotion] = useState(true);
+  const [allEvidence, setAllEvidence] = useState(false);
   const tunnels = tunnelInventory(c);
   const unknown = c.evidence.filter((e) => e.state === "unknown").length;
-  const routerProbe = pingObservation(
+  const probe = pingObservation(
     c.evidence.find((e) => e.device === c.device && e.source === "router-ping"),
   );
   const deviceNames = [...new Set([c.device, ...c.devices, ...c.evidence.map((e) => e.device)])];
+  const ordered = deviceNames.flatMap((d) => c.evidence.filter((e) => e.device === d));
+  const copyId = (): void => {
+    if (!navigator.clipboard) {
+      toast.error("Copy is not available in this browser.");
+      return;
+    }
+    void navigator.clipboard.writeText(c.id).then(
+      () => toast.success("Case ID copied"),
+      () => toast.error("Could not copy the case ID."),
+    );
+  };
+  const stats: [number, string, string, boolean][] = [
+    [c.evidence.length, "Evidence sources", "Sources", false],
+    [unknown, "Unavailable sources", "Unavailable", unknown > 0],
+    [tunnels.length, "Recorded tunnels", "Tunnels", false],
+  ];
   return (
-    <article className="investigation-result min-w-0 space-y-5" data-motion={motion ? "on" : "off"}>
-      <header className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
-          <div className="min-w-0">
-            <p className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              <Radar className="size-4 text-chart-2" />
-              Investigation workspace
-            </p>
-            <h3 className="break-words text-2xl font-semibold tracking-tight">{c.service}</h3>
-            <p className="mt-2 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground">
+    <article className="inv-col inv-result">
+      <section className="glass inv-case-head inv-o1" aria-label="Case">
+        <div className="inv-case-top">
+          <div className="inv-case-title">
+            <p className="inv-eyebrow">Investigation workspace</p>
+            <h2>{c.service}</h2>
+            <span className="inv-case-route inv-mono inv-mut">
               <span>{c.client}</span>
-              <ArrowRight className="size-3" />
+              <ChevronRight aria-hidden="true" />
+              <span className="inv-arrow-text">{" → "}</span>
               <span className="break-all">{c.target}</span>
-            </p>
+            </span>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/5 px-3 py-1.5 text-[11px] text-warning">
-            <CircleHelp className="size-3.5" />
-            Client health unverified
+          <span className="inv-badge-icon">
+            <StatusBadge tone="warn" dot={false}>
+              <CircleHelp aria-hidden="true" />
+              Client health unverified
+            </StatusBadge>
           </span>
         </div>
-        <div className="grid grid-cols-3 divide-x divide-border border-t border-border bg-background/40 text-center">
-          {[
-            [String(c.evidence.length), "Evidence sources"],
-            [String(unknown), "Unavailable sources"],
-            [String(tunnels.length), "Recorded tunnels"],
-          ].map(([value, label]) => (
-            <div key={label} className="px-2 py-4">
-              <p className="font-mono text-xl font-semibold">{value}</p>
-              <p className="mt-1 text-[10px] text-muted-foreground">{label}</p>
+        <div className="inv-stats">
+          {stats.map(([value, long, short, warn]) => (
+            <div key={long} className="inv-stat" data-tone={warn ? "warn" : undefined}>
+              <b>{value}</b>
+              <span className="inv-hint">
+                <span className="inv-long">{long}</span>
+                <span className="inv-short">{short}</span>
+              </span>
             </div>
           ))}
         </div>
-        <p className="border-t border-border px-5 py-3 text-[11px] text-muted-foreground">
-          Snapshot of evidence · {new Date(c.createdAt).toLocaleString()} · Not live telemetry
-        </p>
-      </header>
-
-      <InvestigationFlowPath key={`flow-${c.id}`} investigation={c} />
-      <InvestigationJourney key={c.id} investigation={c} />
-
-      <aside className="rounded-xl border border-border bg-background/50 p-4">
-        <p className="flex items-center gap-2 text-xs font-medium">
-          <Activity className="size-4 text-muted-foreground" />
-          {routerProbe.text}
-        </p>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Separate router-originated probe · does not confirm this client’s route, VPN or
-          application.
-        </p>
-      </aside>
-
-      <details className="rounded-2xl border border-border bg-card p-5">
-        <summary className="cursor-pointer text-sm font-semibold">
-          All recorded tunnels · {tunnels.length} · inventory, not the selected path
-        </summary>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h4 className="flex items-center gap-2 text-sm font-semibold">
-            <Shield className="size-4 text-chart-5" />
-            Protocol inventory
-          </h4>
-          <button
-            type="button"
-            onClick={() => setMotion((m) => !m)}
-            aria-pressed={motion}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+        <div className="monitor-foot inv-case-foot">
+          <Clock aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            Snapshot of evidence · {snapshotTime(c.createdAt)} · not live telemetry
+          </span>
+          <MonitorButton
+            variant="ghost"
+            size="sm"
+            icon={<Copy aria-hidden="true" />}
+            onClick={copyId}
           >
-            {motion ? <Pause className="size-3" /> : <Play className="size-3" />}
-            {motion ? "Pause motion" : "Enable motion"}
-          </button>
+            Copy case ID
+          </MonitorButton>
         </div>
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          Interfaces recorded in this case. Icons animate decoratively, not as packet counters.
-          Running does not prove a VPN handshake or use by this client.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {tunnels.map((t, i) => {
-            const Icon = t.encrypted ? LockKeyhole : Layers;
-            const tone =
-              t.state === "running"
-                ? "text-chart-2 border-chart-2/30"
-                : t.state === "disabled" || t.state === "not-running"
-                  ? "text-warning border-warning/30"
-                  : "text-muted-foreground border-border";
-            return (
-              <div
-                key={`${t.evidenceId}:${t.name}:${i}`}
-                className="min-w-0 overflow-hidden rounded-xl border border-border bg-background"
+      </section>
+
+      <InvestigationJourney key={c.id} investigation={c} className="inv-o2" />
+      <InvestigationFlowPath key={`flow-${c.id}`} investigation={c} className="inv-o4" />
+
+      <MonitorNote
+        className="inv-o5"
+        tone={probe.state === "reply" ? "good" : probe.state === "loss" ? "warn" : undefined}
+        icon={<Activity aria-hidden="true" />}
+      >
+        <b>{probe.text}.</b> Separate router-originated probe; it does not confirm this client’s
+        route, VPN or application.
+      </MonitorNote>
+
+      <MonitorPanel
+        className="inv-o3 inv-evidence"
+        flush
+        title={
+          <>
+            <span className="inv-long">Evidence explorer</span>
+            <span className="inv-short">Evidence</span>
+          </>
+        }
+        description={
+          <span className="inv-long">
+            Grouped by router. Open a source to read its recorded JSON and timing.
+          </span>
+        }
+      >
+        <div data-collapsed={allEvidence ? undefined : true} className="inv-evidence">
+          <div className="monitor-thead inv-ev-grid inv-ev-hide-row">
+            <span>Source</span>
+            <span className="inv-ev-hide">Summary</span>
+            <span className="inv-ev-hide">Records</span>
+            <span>State</span>
+            <span className="inv-ev-hide" />
+          </div>
+          {deviceNames.map((device) => (
+            <div key={device} role="group" aria-label={device}>
+              <div className="monitor-row inv-ev-device">
+                <span className="inv-mono inv-mut">
+                  <Server aria-hidden="true" />
+                  {device}
+                </span>
+              </div>
+              {c.evidence
+                .filter((e) => e.device === device)
+                .map((e) => (
+                  <EvidenceRow
+                    key={e.id}
+                    evidence={e}
+                    showDevice={device !== c.device}
+                    extra={ordered.indexOf(e) >= 6}
+                  />
+                ))}
+            </div>
+          ))}
+          {ordered.length > 6 && (
+            <div className="monitor-foot inv-ev-foot">
+              {c.evidence.length} sources · {unknown} unavailable
+              <span className="flex-1" />
+              <button
+                type="button"
+                aria-expanded={allEvidence}
+                onClick={() => setAllEvidence((v) => !v)}
               >
-                <div
-                  className="relative flex h-24 items-center justify-center overflow-hidden border-b border-border bg-muted/20"
-                  aria-hidden="true"
-                >
-                  <svg
-                    viewBox="0 0 280 90"
-                    preserveAspectRatio="none"
-                    className="absolute inset-0 h-full w-full text-border"
-                  >
-                    <path
-                      d="M0 65C75 65 60 20 140 20S205 65 280 65M0 77C75 77 60 32 140 32S205 77 280 77M0 53C75 53 60 8 140 8S205 53 280 53"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1"
-                    />
-                  </svg>
-                  <span
-                    className={`tunnel-emblem relative flex size-12 items-center justify-center rounded-2xl border bg-card shadow-sm ${tone}`}
-                    style={{ animationDelay: `${(i % 4) * -0.6}s` }}
-                  >
-                    <Icon className="size-5" />
-                  </span>
-                  <span className="absolute bottom-2 left-3 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
-                    {t.protocol}
-                  </span>
-                </div>
-                <div className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h5 className="break-all font-mono text-xs font-semibold">{t.name}</h5>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${tone}`}>
-                      {t.state === "unknown" ? "State unknown" : t.state}
+                {allEvidence ? "Show fewer" : "Show all"}
+              </button>
+            </div>
+          )}
+        </div>
+      </MonitorPanel>
+
+      <MonitorPanel
+        className="inv-o6"
+        title={`All recorded tunnels · ${tunnels.length}`}
+        description="Inventory from this case, not the selected path. Running does not prove a VPN handshake or use by this client."
+        extra={
+          tunnels.length > 0 && (
+            <MonitorButton
+              variant="ghost"
+              size="sm"
+              aria-pressed={!motion}
+              icon={motion ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+              onClick={() => setMotion((m) => !m)}
+            >
+              {motion ? "Pause motion" : "Resume motion"}
+            </MonitorButton>
+          )
+        }
+      >
+        {tunnels.length > 0 ? (
+          <div className="inv-tunnels" data-motion={motion ? "on" : "off"}>
+            {tunnels.map((t, i) => {
+              const tone = tunnelTone(t.state);
+              const Icon = t.encrypted ? LockKeyhole : Layers;
+              return (
+                <div key={`${t.evidenceId}:${t.name}:${i}`} className="glass inv-tunnel">
+                  <div className="inv-tunnel-top">
+                    <span
+                      aria-hidden="true"
+                      className="inv-tunnel-icon"
+                      data-tone={tone}
+                      style={{ animationDelay: `${(i % 4) * -0.6}s` }}
+                    >
+                      <Icon />
                     </span>
+                    <span className="inv-tunnel-name">
+                      <span className="inv-mono">{t.name}</span>
+                      <span className="inv-hint">
+                        {t.protocol} · {t.device}
+                      </span>
+                    </span>
+                    <StatusBadge tone={tone} dot={false}>
+                      {t.state === "unknown" ? "state unknown" : t.state}
+                    </StatusBadge>
                   </div>
-                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <Router className="size-3" />
-                    {t.device}
-                  </p>
-                  <p className="mt-3 text-[11px] text-muted-foreground">
+                  <span className="inv-hint">
                     {t.encrypted
                       ? "Encrypted protocol · session not verified"
                       : "Encapsulation · encryption not established"}
-                  </p>
-                  <details className="mt-3 border-t border-border pt-3">
-                    <summary className="cursor-pointer text-[11px] text-muted-foreground">
-                      {t.routes.length} explicit route references · not flow proof
+                  </span>
+                  <details className="inv-refs">
+                    <summary>
+                      <ChevronRight aria-hidden="true" />
+                      {t.routes.length} route references · not flow proof
                     </summary>
-                    <div className="mt-3">
+                    <div>
                       <JsonView value={t.routes} maxHeight={180} />
                     </div>
                   </details>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-        {!tunnels.length && (
-          <div className="mt-4 flex items-start gap-3 rounded-xl border border-dashed border-border p-4">
-            <ShieldAlert className="size-5 shrink-0 text-muted-foreground" />
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              No typed tunnel interfaces are present in the saved evidence. This does not mean the
-              router has no VPNs; IPsec policies, peer handshakes and omitted/truncated interfaces
-              are not covered.
-            </p>
+              );
+            })}
           </div>
+        ) : (
+          <MonitorNote>
+            No tunnel interfaces in this case. That does not mean the router has no VPN: IPsec
+            policies, handshakes and truncated interface lists are not covered.
+          </MonitorNote>
         )}
         {c.evidence.some((e) => e.source === "interfaces" && e.truncated) && (
-          <p className="mt-3 text-xs text-warning">
-            Interface evidence is truncated; this inventory is incomplete.
+          <p className="inv-hint inv-warn mt-2">
+            Interface evidence is truncated, so this list is incomplete.
           </p>
         )}
-      </details>
-
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 px-1">
-          <Database className="size-4 text-muted-foreground" />
-          <h4 className="text-sm font-semibold">Evidence explorer</h4>
-        </div>
-        {deviceNames.map((device) => (
-          <div key={device} className="space-y-2">
-            <p className="flex items-center gap-2 px-1 py-2 font-mono text-xs text-muted-foreground">
-              <Router className="size-3.5" />
-              {device}
-            </p>
-            {c.evidence
-              .filter((e) => e.device === device)
-              .map((e) => (
-                <EvidenceCard key={e.id} evidence={e} />
-              ))}
-          </div>
-        ))}
-      </section>
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h4 className="flex items-center gap-2 text-sm font-semibold">
-          <Radar className="size-4 text-chart-2" />
-          Close the evidence gaps
-        </h4>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Next experiments · not performed automatically
-        </p>
-        <ol className="mt-4 space-y-3">
-          {c.nextTests.map((t, i) => (
-            <li key={t} className="flex items-start gap-3 text-xs leading-relaxed">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-background font-mono text-[10px] text-muted-foreground">
-                {i + 1}
-              </span>
-              <span className="pt-0.5 text-muted-foreground">{t}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      </MonitorPanel>
     </article>
   );
 }

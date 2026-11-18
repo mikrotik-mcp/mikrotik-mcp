@@ -33,49 +33,91 @@ test("failed, unfinished and absent measurements remain missing instead of zero"
   expect(bandwidthMeasurement({ status: "ok", rxBps: 2500000 } as BandwidthRun, "rxBps")).toBe(2.5);
 });
 
-test("initial view is disabled by default with bounded inputs and explicit live actions", () => {
+test("initial view loads saved state and warns that the path is not forced", () => {
   const host = document.createElement("div");
   host.innerHTML = renderToStaticMarkup(createElement(BandwidthView));
   expect(host.textContent).toContain("Loading saved tests and history");
-  expect(host.textContent).toContain("Selecting a router reads its interfaces");
-  expect(host.textContent).toContain("Check readiness (live reads)");
   expect(host.textContent).toContain("path is not forced");
   expect(host.querySelector('input[type="password"]')).toBeNull();
-  expect(host.querySelector('input[type="checkbox"]')).toBeNull();
-  expect(host.querySelectorAll('[role="checkbox"]')).toHaveLength(3);
-  expect(host.querySelectorAll('[role="checkbox"][aria-checked="true"]')).toHaveLength(0);
-  const advanced = [...host.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find(
-    (button) => button.textContent?.includes("Advanced Options"),
-  )!;
-  expect(advanced.textContent).toContain("Advanced Options");
-  expect(advanced.getAttribute("aria-expanded")).toBe("false");
-  const advancedContent = advanced.parentElement!.querySelector<HTMLElement>("[hidden]")!;
-  expect(advancedContent.hidden).toBe(true);
-  const generatedId = advancedContent.querySelector<HTMLInputElement>("input[readonly]")!;
-  expect(generatedId.value).toMatch(/^[a-f0-9-]{36}$/);
-  expect(advancedContent.querySelectorAll('input[type="number"]')).toHaveLength(4);
-  const visibleNumbers = [...host.querySelectorAll('input[type="number"]')].filter(
-    (input) => !input.closest("[hidden]"),
+  // The test form lives in a drawer and is not rendered until asked for.
+  expect(host.querySelector("form")).toBeNull();
+});
+
+test("new test form is disabled by default with bounded inputs and explicit live actions", async () => {
+  const { act } = await import("react");
+  const { createRoot } = await import("react-dom/client");
+  const { vi } = await import("vite-plus/test");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ jobs: [], runs: [], devices: ["a", "b"], concurrency: 1 })),
+    ),
   );
-  expect(visibleNumbers).toHaveLength(4);
-  const numberInputs = [...host.querySelectorAll<HTMLInputElement>('input[type="number"]')];
-  expect(numberInputs.map((i) => [i.min, i.max])).toEqual([
-    ["5", "60"],
-    ["300", "604800"],
-    ["1", "100000000000"],
-    ["1", "100000000000"],
-    ["28", "64000"],
-    ["28", "64000"],
-    ["1", "255"],
-    ["0.02", "5"],
-  ]);
-  const report = numberInputs.at(-1)!;
-  expect(report.step).toBe("0.001");
-  expect(report.min).toBe("0.02");
-  expect(report.max).toBe("5");
-  expect(
-    [...host.querySelectorAll("button")].find((b) => b.textContent === "Save test")?.disabled,
-  ).toBe(true);
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async () => {
+      root.render(createElement(BandwidthView));
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")].find((b) => b.textContent === "New test")!.click();
+    });
+    const form = document.querySelector<HTMLFormElement>("#bw-test-form")!;
+    expect(form).not.toBeNull();
+    expect(form.textContent).toContain("Interfaces and addresses read from both routers");
+    expect(
+      [...form.querySelectorAll("button")].some((b) => b.textContent === "Check readiness"),
+    ).toBe(true);
+    expect(form.querySelector('input[type="password"]')).toBeNull();
+    const boxes = [...form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    expect(boxes).toHaveLength(2);
+    expect(boxes.filter((box) => box.checked)).toHaveLength(0);
+    expect(
+      form
+        .querySelector('[role="switch"][aria-label="Enable recurring traffic"]')
+        ?.getAttribute("aria-checked"),
+    ).toBe("false");
+    const advanced = [...form.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find(
+      (button) => button.textContent?.includes("Packet sizes, connections, reporting and payload"),
+    )!;
+    expect(advanced.getAttribute("aria-expanded")).toBe("false");
+    const advancedContent = advanced.parentElement!.querySelector<HTMLElement>("[hidden]")!;
+    expect(advancedContent.hidden).toBe(true);
+    const generatedId = advancedContent.querySelector<HTMLInputElement>("input[readonly]")!;
+    expect(generatedId.value).toMatch(/^[a-f0-9-]{36}$/);
+    expect(advancedContent.querySelectorAll('input[type="number"]')).toHaveLength(4);
+    const visibleNumbers = [...form.querySelectorAll('input[type="number"]')].filter(
+      (input) => !input.closest("[hidden]"),
+    );
+    expect(visibleNumbers).toHaveLength(4);
+    const numberInputs = [...form.querySelectorAll<HTMLInputElement>('input[type="number"]')];
+    expect(numberInputs.map((i) => [i.min, i.max])).toEqual([
+      ["5", "60"],
+      ["300", "604800"],
+      ["1", "100000000000"],
+      ["1", "100000000000"],
+      ["28", "64000"],
+      ["28", "64000"],
+      ["1", "255"],
+      ["0.02", "5"],
+    ]);
+    const report = numberInputs.at(-1)!;
+    expect(report.step).toBe("0.001");
+    expect(report.min).toBe("0.02");
+    expect(report.max).toBe("5");
+    expect(
+      [...document.querySelectorAll("button")].find((b) => b.textContent === "Save test")?.disabled,
+    ).toBe(true);
+  } finally {
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+    vi.unstubAllGlobals();
+  }
 });
 
 test("bandwidth is routable and discoverable with tunnel vocabulary", () => {
@@ -192,27 +234,25 @@ test("manual traffic waits for impact confirmation and sends no credentials or b
       root.render(createElement(BandwidthView));
     });
     await act(async () => {
-      [...host.querySelectorAll("button")]
-        .find((b) => b.textContent === "Edit Tunnel One")!
-        .click();
+      host.querySelector<HTMLButtonElement>('button[aria-label="Edit Tunnel One"]')!.click();
     });
-    const advanced = [...host.querySelectorAll("button")].find((b) =>
-      b.textContent?.includes("Advanced Options"),
+    const advanced = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Packet sizes, connections, reporting and payload"),
     )!;
     expect(advanced.getAttribute("aria-expanded")).toBe("false");
     await act(async () => {
       advanced.click();
     });
     expect(advanced.getAttribute("aria-expanded")).toBe("true");
-    const randomData = host.querySelector<HTMLButtonElement>(
-      '[role="checkbox"][aria-label="Generate random data"]',
+    const randomData = document.querySelector<HTMLInputElement>(
+      'input[type="checkbox"][aria-label="Generate random data"]',
     )!;
     await act(async () => {
       randomData.click();
     });
-    expect(randomData.getAttribute("aria-checked")).toBe("true");
-    const report = [...host.querySelectorAll("label")]
-      .find((label) => label.textContent?.includes("Report interval (seconds)"))!
+    expect(randomData.checked).toBe(true);
+    const report = [...document.querySelectorAll("label")]
+      .find((label) => label.textContent?.includes("Report interval · seconds"))!
       .querySelector("input")!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
@@ -228,26 +268,26 @@ test("manual traffic waits for impact confirmation and sends no credentials or b
     expect(advanced.getAttribute("aria-expanded")).toBe("false");
     expect(report.closest("[hidden]")).not.toBeNull();
     expect(report.value).toBe("0.021");
-    const recurring = host.querySelector<HTMLButtonElement>(
-      '[role="checkbox"][aria-label="Enable recurring traffic (off by default)"]',
+    const recurring = document.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="Enable recurring traffic"]',
     )!;
-    const acknowledgement = host.querySelector<HTMLButtonElement>(
-      '[role="checkbox"][aria-label="I acknowledge the traffic impact"]',
+    const acknowledgement = document.querySelector<HTMLInputElement>(
+      'input[type="checkbox"][aria-label="I acknowledge the traffic impact"]',
     )!;
     await act(async () => {
       acknowledgement.click();
     });
-    expect(acknowledgement.getAttribute("aria-checked")).toBe("true");
+    expect(acknowledgement.checked).toBe(true);
     await act(async () => {
       recurring.click();
     });
     expect(recurring.getAttribute("aria-checked")).toBe("true");
-    expect(acknowledgement.getAttribute("aria-checked")).toBe("false");
+    // Changing the test withdraws the acknowledgement.
+    expect(acknowledgement.checked).toBe(false);
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
-    expect(host.querySelector('input[type="checkbox"]')).toBeNull();
     await act(async () => {
-      [...host.querySelectorAll("button")]
-        .find((b) => b.textContent === "Check readiness (live reads)")!
+      [...document.querySelectorAll("button")]
+        .find((b) => b.textContent === "Check readiness")!
         .click();
     });
     const readiness = fetcher.mock.calls.find(([url]) => url === "/api/bandwidth/preflight")!;
@@ -260,18 +300,18 @@ test("manual traffic waits for impact confirmation and sends no credentials or b
       connectionCount: 1,
     });
     fetcher.mockClear();
-    const run = [...host.querySelectorAll("button")].find(
-      (b) => b.textContent === "Run Tunnel One",
-    )!;
+    await act(async () => {
+      [...document.querySelectorAll("button")].find((b) => b.textContent === "Cancel")!.click();
+    });
+    expect(document.querySelector("#bw-test-form")).toBeNull();
+    const run = host.querySelector<HTMLButtonElement>('button[aria-label="Run Tunnel One"]')!;
     await act(async () => {
       run.click();
     });
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
-    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
-      "can disrupt service",
-    );
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("can disrupt service");
     const confirm = [...document.querySelectorAll("button")].find(
-      (b) => b.textContent === "Acknowledge impact & run",
+      (b) => b.textContent === "Acknowledge impact and run",
     )!;
     await act(async () => {
       confirm.click();
@@ -355,26 +395,26 @@ test("comparison respects selected jobs and excludes runs outside the time windo
     const articles = () => [...history.querySelectorAll("article")];
     expect(articles()).toHaveLength(2);
     expect(articles()[0].textContent).toContain(
-      "Successful: 1 · Failed/interrupted: 1 · Running: 0",
+      "Successful 1 · failed or interrupted 1 · running 0",
     );
     const tx = articles()[0].querySelector("tbody tr")!;
     expect([...tx.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual([
       "1",
-      "2 Mbps",
-      "2 Mbps",
-      "2 Mbps",
+      "2",
+      "2",
+      "2",
     ]);
-    const alpha = history.querySelector<HTMLButtonElement>(
-      '[role="checkbox"][aria-label="Alpha (deleted)"]',
+    const alpha = history.querySelector<HTMLInputElement>(
+      'input[type="checkbox"][aria-label="Alpha (deleted)"]',
     )!;
-    expect(history.querySelector('input[type="checkbox"]')).toBeNull();
     await act(async () => {
       alpha.click();
     });
-    expect(alpha.getAttribute("aria-checked")).toBe("true");
+    expect(alpha.checked).toBe(true);
     expect(articles()).toHaveLength(1);
     expect(articles()[0].textContent).toContain("Alpha");
-    expect(history.textContent).not.toContain("8 Mbps");
+    expect(articles()[0].textContent).not.toContain("Beta");
+    expect([...history.querySelectorAll("td")].map((cell) => cell.textContent)).not.toContain("8");
     expect(history.textContent).toContain("not like-for-like");
   } finally {
     await act(async () => {
@@ -449,9 +489,16 @@ test("router changes load inventory automatically, cancel stale reads and expose
   vi.stubGlobal("fetch", fetcher);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const host = document.createElement("div");
+  document.body.append(host);
   const root = createRoot(host);
   const button = (name: string) =>
-    [...host.querySelectorAll("button")].find((b) => b.textContent === name)!;
+    [...document.querySelectorAll("button")].find(
+      (b) => b.textContent === name || b.getAttribute("aria-label") === name,
+    )!;
+  const select = (label: string) =>
+    document.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
+  const sourceOptions = () =>
+    [...select("Expected source interface").options].map((option) => option.value);
   try {
     await act(async () => {
       root.render(createElement(BandwidthView));
@@ -460,13 +507,13 @@ test("router changes load inventory automatically, cancel stale reads and expose
     await act(async () => {
       button("Edit First").click();
     });
-    expect(host.textContent).toContain("Loading source inventory");
-    expect(host.textContent).toContain("Router unreachable");
+    expect(document.body.textContent).toContain("Loading source inventory");
+    expect(document.body.textContent).toContain("Router unreachable");
     await act(async () => {
       button("Edit Second").click();
     });
     expect(slowSignal?.aborted).toBe(true);
-    expect(host.textContent).toContain("Source: 2 interfaces");
+    expect(sourceOptions()).toEqual(expect.arrayContaining(["wg1", "ether2"]));
     await act(async () => {
       resolveSlow(
         new Response(
@@ -477,30 +524,23 @@ test("router changes load inventory automatically, cancel stale reads and expose
         ),
       );
     });
-    expect(host.textContent).toContain("Source: 2 interfaces");
+    expect(sourceOptions()).not.toContain("stale");
+    expect(sourceOptions()).toEqual(expect.arrayContaining(["wg1", "ether2"]));
     failDestination = false;
     await act(async () => {
-      button("Retry destination inventory").click();
+      button("Retry inventory").click();
     });
-    expect(host.textContent).not.toContain("Router unreachable");
-    expect(
-      host.querySelector<HTMLButtonElement>('[aria-label="Expected source interface"]')?.disabled,
-    ).toBe(false);
-    expect(
-      host.querySelector<HTMLButtonElement>('[aria-label="Expected source IPv4"]')?.disabled,
-    ).toBe(false);
-    expect(
-      host.querySelector<HTMLButtonElement>('[aria-label="Destination IPv4 (explicit)"]')?.disabled,
-    ).toBe(false);
+    expect(document.body.textContent).not.toContain("Router unreachable");
     for (const label of [
       "Expected source interface",
       "Expected source IPv4",
       "Destination IPv4 (explicit)",
     ])
-      expect(host.querySelector(`[aria-label="${label}"]`)?.getAttribute("role")).toBe("combobox");
+      expect(select(label).disabled).toBe(false);
     expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   } finally {
     await act(async () => root.unmount());
+    host.remove();
     vi.unstubAllGlobals();
   }
 });

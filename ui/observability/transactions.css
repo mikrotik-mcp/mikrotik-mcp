@@ -1,0 +1,120 @@
+/* Transactions, from the "Cfg-Txn" and "Cfg-Txn-Review" boards. Shared parts
+   live in monitoring.css. */
+
+.txn .mono,
+.txn-review .mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.txn .trunc,
+.txn-review .trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The swimlane: participant, prepare, verify, commit, snapshot. */
+.txn-lane {
+  grid-template-columns: minmax(0, 1.3fr) repeat(4, minmax(0, 1fr));
+}
+.txn-cell {
+  display: flex;
+  height: 30px;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--glass);
+  color: var(--text-faint);
+  font-family: var(--font-mt);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.txn-cell[data-state="ok"] {
+  background: var(--sig-soft);
+  color: var(--success);
+}
+.txn-cell[data-state="warn"],
+.txn-cell[data-state="running"] {
+  background: var(--warn-soft);
+  color: var(--warning);
+}
+.txn-cell[data-state="fail"] {
+  background: var(--bad-soft);
+  color: var(--destructive);
+}
+.txn-last {
+  padding-left: 17px;
+}
+
+/* History: state, transaction, participants, when. */
+.txn-hist {
+  grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1.5fr) 70px;
+}
+
+/* Recovery | Assertions under the lanes. */
+.txn-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  padding: 0 18px 16px;
+}
+.txn-assert {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+  color: var(--foreground);
+  font-size: 13px;
+}
+.txn-assert > span:last-child {
+  color: var(--text-secondary);
+}
+.txn-detail-title .mono {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* The review dialog: the lanes sit in a glass box. */
+.txn-review-lanes {
+  overflow: hidden;
+  border-radius: 12px;
+}
+.txn-review-lanes > :first-child {
+  border-top: 0;
+}
+.txn-command {
+  height: 30px;
+  flex: 1;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .txn-foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 639px) {
+  .txn-lane {
+    grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, 1fr));
+  }
+  .txn-lane > :last-child {
+    display: none;
+  }
+  .txn-cell {
+    font-size: 11px;
+  }
+  .txn-hist {
+    grid-template-columns: 96px minmax(0, 1fr) 56px;
+  }
+  .txn-hist > :nth-child(3) {
+    display: none;
+  }
+}

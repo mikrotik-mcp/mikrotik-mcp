@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Target } from "lucide-react";
 import { api } from "./api";
 import { MonitorButton } from "./monitoring-ui";
 import { FieldSelect } from "./service-routing-ui";
@@ -50,11 +51,11 @@ export function ServiceProbePicker({
     <div className="monitor-fl">
       <div className="flex items-center">
         <span className="monitor-label flex-1">
-          Approved service {optional && <span className="font-normal">· optional</span>}
+          Approved service {optional && <span className="font-normal text-faint">optional</span>}
         </span>
         <button
           type="button"
-          className="cursor-pointer text-[12px] font-[510] text-brand hover:underline"
+          className="cursor-pointer text-[12px] font-medium text-brand hover:underline"
           onClick={onManage}
         >
           Manage service probes
@@ -62,13 +63,14 @@ export function ServiceProbePicker({
       </div>
       <FieldSelect
         label="Approved service"
+        icon={<Target />}
         value={value || (optional ? "__none__" : "")}
         onChange={(v) => onChange(v === "__none__" ? "" : v)}
         disabled={!optional && !targets?.length}
         placeholder={optional ? undefined : placeholder}
         options={[
           ...(optional ? [{ value: "__none__", label: "No probe · manual routing" }] : []),
-          ...(targets ?? []).map((alias) => ({ value: alias, label: `${alias} · HTTPS` })),
+          ...(targets ?? []).map((alias) => ({ value: alias, label: `${alias} · HTTPS check` })),
         ]}
       />
       {error ? (
@@ -91,13 +93,7 @@ export function ServiceProbePicker({
             ? "No HTTPS services approved yet. You can still save a domain route without a probe."
             : "No HTTPS services approved yet. Add one in Service probes, save and keep it, then pick it here."}
         </span>
-      ) : (
-        optional && (
-          <span className="monitor-hint">
-            MCP checks each exit with this service. Pick “No probe · manual routing” to skip checks.
-          </span>
-        )
-      )}
+      ) : null}
     </div>
   );
 }

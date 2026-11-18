@@ -1,4 +1,4 @@
-/* Service Routing page. Tokens only; layout lives in Tailwind utilities. */
+/* Service Routing page, after the Signal boards. Tokens only; layout lives in Tailwind utilities. */
 @layer theme, base, components, utilities;
 
 @layer components {
@@ -18,18 +18,145 @@
     align-items: center;
     gap: 4px;
     overflow: hidden;
-    border-radius: 4px;
-    background: var(--accent);
-    padding: 0 6px;
+    border-radius: 6px;
+    background: var(--glass-2);
+    padding: 0 7px;
     color: var(--text-secondary);
-    font-family: var(--font-mono);
+    font-family: var(--font-mt);
     font-size: 11px;
-    font-weight: 510;
+    font-weight: 400;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .routing-gateway__interface {
     color: var(--muted-foreground);
+  }
+
+  /* The board's Gateway cell: the address in mono 13px, the interface on the line below. */
+  .sr-gw .routing-gateway__member,
+  .sr-gw > code {
+    height: auto;
+    border-radius: 0;
+    background: none;
+    padding: 0;
+    font-size: 13px;
+    line-height: 21px;
+  }
+  .sr-gw .routing-gateway__interface {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Page rhythm: the board's 18px gap between sections, 14px on phones. */
+  .sr-stack {
+    gap: 18px;
+  }
+
+  /* Section cards: KPI glass you can press. The pressed one glows teal. */
+  .monitor-strip.sr-sections {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .monitor-metric.sr-section {
+    border: 0;
+    font-family: inherit;
+    transition: box-shadow 150ms ease;
+  }
+  /* The board's cards are buttons: label and hint keep the browser's normal line height. */
+  .monitor-metric.sr-section :is(.monitor-metric-label, .monitor-metric-hint) {
+    line-height: normal;
+  }
+  .monitor-metric.sr-section:hover {
+    background: var(--glass-2);
+  }
+  .monitor-metric.sr-section[aria-pressed="true"] {
+    box-shadow:
+      inset 0 0 0 1px var(--sig),
+      inset 0 -2px 0 var(--sig),
+      0 0 24px var(--sig-soft);
+  }
+  .sr-section:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Inventory table and the 320px inspector beside it. */
+  .sr-inventory {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sr-inventory[data-inspecting] {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .sr-inspect {
+    border-left: 1px solid var(--line);
+  }
+
+  /* Small uppercase section label: "Policies", "Primary exit", "Inspect · route #1". */
+  .sr-eyebrow {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 21px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* MCP policies: the list beside the policy, then traffic beside history. */
+  .sr-policies {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .sr-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sr-policy {
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+  .sr-policy:hover {
+    background: var(--overlay-03);
+  }
+  .sr-policy[aria-current="true"] {
+    background: linear-gradient(90deg, var(--sig-soft), transparent);
+    box-shadow: inset 2px 0 0 var(--sig);
+  }
+  .sr-policy:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+
+  /* An exit card. The current exit gets the teal ring. */
+  .glass.sr-exit {
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .glass.sr-exit[data-current] {
+    box-shadow:
+      inset 0 0 0 1px var(--sig),
+      0 0 24px var(--sig-soft);
+  }
+
+  /* An allowed exit in the New policy dialog: a checkbox in a 10px box. */
+  .sr-exit-pick {
+    display: flex;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 8px 12px;
+  }
+
+  /* The Primary exit select shows its value in the foreground colour. */
+  .sr-primary select {
+    color: var(--foreground);
+  }
+
+  /* Default-exit map: the SVG on wide screens, a list on phones. */
+  /* The board's map sits inline, so a 6px line gap follows it. */
+  .sr-exits-map {
+    display: block;
+    margin-bottom: 6px;
   }
 }
 
@@ -46,24 +173,49 @@
   font-size: 12px;
   color: var(--text-secondary);
 }
+/* In a chip it reads like the chip: mono 11px. */
 .monitor-chip.sr-net [aria-label^="Network for"],
 .monitor-chip.sr-net [aria-label^="Network for"] span {
+  font-family: inherit;
   font-size: 11px;
-  color: var(--muted-foreground);
+  color: var(--text-secondary);
 }
 
-/* Phones: the policy list and the inspector stack above and below the content. */
-@media (max-width: 639px) {
-  .service-routing .sr-policy-list {
-    max-width: none;
-    flex-basis: 100%;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+@media (max-width: 1023px) {
+  .service-routing .sr-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .service-routing .sr-policies,
+  .service-routing .sr-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .service-routing .sr-inventory[data-inspecting] {
+    grid-template-columns: minmax(0, 1fr);
   }
   .service-routing .sr-inspect {
-    max-width: none;
-    flex-basis: 100%;
+    border-top: 1px solid var(--line);
     border-left: 0;
-    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 639px) {
+  .service-routing.sr-stack,
+  .service-routing .sr-stack {
+    gap: 14px;
+  }
+  .service-routing .sr-exits-map {
+    display: none;
+  }
+  .service-routing .sr-exits-list {
+    display: flex;
+  }
+}
+
+/* Address sets: the publication review is the change in flight, ringed teal. */
+@layer components {
+  .monitor-panel.sr-plan {
+    box-shadow:
+      inset 0 0 0 1px var(--sig),
+      0 0 24px var(--sig-soft);
   }
 }

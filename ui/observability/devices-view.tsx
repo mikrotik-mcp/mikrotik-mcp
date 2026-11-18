@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Plus, Search, Server } from "lucide-react";
+import { Plus, Search, Server, SlidersHorizontal } from "lucide-react";
 import { LoadingState } from "./loading-state";
-import { ManagementPaths } from "./connectivity";
+import { ManagementPaths, PathLegend } from "./connectivity";
 import { PhoneRouterRow, RouterDetails, RouterRow, clockTime, deviceState } from "./device-card";
 import type { DeviceActions, DeviceBusy } from "./device-card";
 import { SSHPoolPanel } from "./ssh-pool";
@@ -16,7 +16,6 @@ import {
   MonitorSearch,
   PageIntro,
   Segmented,
-  formatMs,
   useStaggerIn,
 } from "./monitoring-ui";
 import { api } from "./api";
@@ -31,6 +30,14 @@ function offlineLine(names: string[]): string {
   if (names.length === 1) return `${names[0]} is offline`;
   if (names.length === 2) return `${names[0]} and ${names[1]} are offline`;
   return `${names.length} routers are offline`;
+}
+
+/** An average call as a KPI value and unit: 96 ms, 1.2 s. */
+function msValue(ms: number): { value: string; unit: string } {
+  if (ms < 1) return { value: "<1", unit: "ms" };
+  if (ms < 1000) return { value: String(Math.round(ms)), unit: "ms" };
+  const s = ms / 1000;
+  return { value: String(s < 10 ? Math.round(s * 10) / 10 : Math.round(s)), unit: "s" };
 }
 
 /** The router fleet: management paths, the Routers table with details, and the SSH pool. */
@@ -178,11 +185,20 @@ export function DevicesView({
     ? list.reduce((n, d) => n + d.activity.avgMs * d.activity.calls, 0) / calls
     : null;
   const agg = pool?.aggregate;
+  // The calls KPI trend: the fleet's recent call count at each device poll.
+  const [trend, setTrend] = useState<{ from: DevicesPayload | null; values: number[] }>({
+    from: null,
+    values: [],
+  });
+  if (payload && payload !== trend.from)
+    setTrend({ from: payload, values: [...trend.values, calls].slice(-12) });
+  const callTrend = trend.values;
 
   const controls = (
     <>
       <MonitorButton
-        size="sm"
+        className="dv-manage-btn"
+        icon={<SlidersHorizontal aria-hidden="true" />}
         disabled={loading || !!editor}
         aria-pressed={!!editor && !editor.selection ? true : undefined}
         onClick={() => openManager({})}
@@ -190,8 +206,8 @@ export function DevicesView({
         {loading && !request?.add && !request?.seed ? "Loading settings…" : "Manage routers"}
       </MonitorButton>
       <MonitorButton
-        size="sm"
-        variant="inverse"
+        className="dv-add-btn"
+        variant="primary"
         icon={<Plus aria-hidden="true" />}
         disabled={loading || !!editor}
         onClick={() => openManager({ add: true })}
@@ -200,30 +216,33 @@ export function DevicesView({
       </MonitorButton>
     </>
   );
+  const offlineText = offline.length > 0 && offlineLine(offline.map((d) => d.name));
   const intro = (
     <PageIntro
-      tone={!list.length ? undefined : offline.length ? "warn" : counts.online ? "good" : "default"}
-      title={
+      eyebrow={
         list.length ? (
-          <span>
-            <b>
-              {counts.online} of {counts.all} routers reachable
-            </b>
-            {offline.length > 0 && (
-              <span className="max-sm:hidden"> · {offlineLine(offline.map((d) => d.name))}</span>
-            )}
-          </span>
+          <>
+            Devices<span className="max-sm:hidden"> · checks run every 30 s</span>
+          </>
         ) : undefined
       }
-      controls={controls}
-    >
-      <span className={offline.length ? "max-sm:hidden" : undefined}>
-        Your routers, how MCP reaches them, and what each one reported at its last check.
-      </span>
-      {offline.length > 0 && (
-        <span className="sm:hidden">{offlineLine(offline.map((d) => d.name))}.</span>
-      )}
-    </PageIntro>
+      heading={
+        list.length ? (
+          <>
+            {counts.online} of {counts.all} <span className="max-sm:hidden">routers </span>
+            reachable.
+            {offlineText && (
+              <>
+                {" "}
+                <em>{offlineText}.</em>
+              </>
+            )}
+          </>
+        ) : undefined
+      }
+      lead="Your routers, how MCP reaches them, and what each one reported at its last check."
+      actions={controls}
+    />
   );
   const management = (
     <>
@@ -254,7 +273,7 @@ export function DevicesView({
 
   if (!payload || !list.length)
     return (
-      <section className="dv grid content-start gap-6">
+      <section className="dv grid content-start gap-[18px]">
         {intro}
         {management}
         {!payload ? (
@@ -296,23 +315,34 @@ export function DevicesView({
     { value: "pending", label: `Unchecked ${counts.pending}` },
     { value: "disabled", label: `Disabled ${counts.disabled}` },
   ];
+  const checkedAt = lastCheck ? clockTime(lastCheck) : null;
+  const avgMs = avg != null ? msValue(avg) : null;
 
   return (
-    <section className="dv grid content-start gap-6">
+    <section className="dv grid content-start gap-[18px]">
       {intro}
       {management}
       <div className="dv-overview contents">
-        <MetricStrip label="Router metrics" minCell={170} className="dv-strip">
+        <MetricStrip label="Router metrics" minCell={150} className="dv-strip">
           <Metric
             label="Reachable"
-            primary
+            tone={counts.online ? "good" : "default"}
             value={
               <>
                 {counts.online}
-                <span className="dv-of text-muted-foreground"> / {counts.all}</span>
+                <small>/{counts.all}</small>
               </>
             }
-            hint="at the last check"
+            hint={
+              <>
+                <span className="max-sm:hidden">
+                  at the last check{checkedAt ? `, ${checkedAt}` : ""}
+                </span>
+                <span className="sm:hidden">
+                  {checkedAt ? `at ${checkedAt}` : "at the last check"}
+                </span>
+              </>
+            }
           />
           <Metric
             label="Offline"
@@ -333,21 +363,49 @@ export function DevicesView({
               )
             }
           />
-          <Metric
-            label="Recent tool calls"
-            value={num(calls)}
-            hint={failed ? `${num(failed)} failed` : "no failures"}
-          />
-          <div className="dv-avg contents">
+          <div className="contents max-sm:hidden">
+            <Metric
+              label="Recent tool calls"
+              value={num(calls)}
+              hint={failed ? `${num(failed)} failed` : "no failures"}
+              spark={callTrend}
+            />
+          </div>
+          <div className="contents sm:hidden">
+            <Metric
+              label="Tool calls"
+              value={num(calls)}
+              hint={failed ? `${num(failed)} failed` : "no failures"}
+            />
+          </div>
+          <div className="contents max-sm:hidden">
             <Metric
               label="Average call"
-              value={avg != null ? formatMs(avg) : "—"}
+              value={
+                avgMs ? (
+                  <>
+                    {avgMs.value}
+                    <small>{avgMs.unit}</small>
+                  </>
+                ) : (
+                  "—"
+                )
+              }
               hint="across all routers"
             />
           </div>
           <Metric
             label="SSH pool"
-            value={agg ? `${num(agg.totalConnections)} open` : "—"}
+            value={
+              agg ? (
+                <>
+                  {num(agg.totalConnections)}
+                  <small>open</small>
+                </>
+              ) : (
+                "—"
+              )
+            }
             hint={
               agg
                 ? `${num(agg.totalBusy)} busy · ${num(agg.totalIdle)} idle`
@@ -362,51 +420,39 @@ export function DevicesView({
           className="dv-paths-panel"
           title="How MCP reaches each router"
           description="Management path only, not your clients' traffic. A line lights up while a call runs."
-          extra={
-            <div className="text-muted-foreground flex flex-wrap gap-4 text-[12px]">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="bg-chart-1 h-0.5 w-4" />
-                Direct SSH
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="border-chart-1 w-4 border-t-2 border-dashed" />
-                Through a jump host
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="dv-legend-dot w-4 border-t-2 border-dotted" />
-                MAC-Telnet (layer 2)
-              </span>
-            </div>
-          }
+          extra={<PathLegend />}
         >
           <ManagementPaths devices={list} pulses={pulses} />
         </MonitorPanel>
 
-        <section className="monitor-panel dv-routers" aria-labelledby="dv-routers-title">
-          <div className="dv-toolbar">
-            <h2 id="dv-routers-title" className="mr-2 text-[14px] font-[590]">
-              Routers
-            </h2>
-            <MonitorSearch
-              className="dv-search"
-              value={query}
-              onChange={setQuery}
-              label="Search devices"
-              placeholder="Search name, address or hardware"
-            />
-            <Segmented
-              className="dv-seg"
-              label="Show"
-              value={filter}
-              options={filters}
-              onChange={setFilter}
-            />
-          </div>
-          <div ref={rowsRef} className="border-border border-t">
+        <MonitorPanel
+          className="dv-routers"
+          title="Routers"
+          flush
+          extra={
+            <div className="dv-toolbar">
+              <MonitorSearch
+                className="dv-search"
+                value={query}
+                onChange={setQuery}
+                label="Search devices"
+                placeholder="Search name, address or hardware"
+              />
+              <Segmented
+                className="dv-seg"
+                label="Show"
+                value={filter}
+                options={filters}
+                onChange={setFilter}
+              />
+            </div>
+          }
+        >
+          <div ref={rowsRef}>
             {shown.length ? (
               <>
-                <div className="min-w-0 overflow-x-auto max-sm:hidden">
-                  <div className="monitor-thead dv-cols border-t-0">
+                <div className="min-w-0 max-sm:hidden">
+                  <div className="monitor-thead dv-cols">
                     <span>Router</span>
                     <span>Address</span>
                     <span>CPU</span>
@@ -423,14 +469,15 @@ export function DevicesView({
                       onSelect={() => setPicked(d.name)}
                     />
                   ))}
-                  <div className="monitor-row text-muted-foreground grid-cols-[1fr_auto] text-[12px]">
+                  <div className="monitor-foot">
                     <span>
-                      {lastCheck ? `Last check ${clockTime(lastCheck)} · ` : ""}checks run every 30
-                      s
+                      {checkedAt ? `Last check ${checkedAt} · ` : ""}checks run every 30 s
                     </span>
+                    <span className="flex-1" />
+                    <span>Select a router to see its details</span>
                   </div>
                 </div>
-                <div className="sm:hidden">
+                <div className="dv-cards sm:hidden">
                   {shown.map((d) => (
                     <PhoneRouterRow
                       key={d.name}
@@ -441,7 +488,6 @@ export function DevicesView({
                     />
                   ))}
                 </div>
-                <div className="max-sm:hidden">{details(false)}</div>
               </>
             ) : (
               <MonitorEmpty
@@ -458,12 +504,19 @@ export function DevicesView({
               </MonitorEmpty>
             )}
           </div>
-        </section>
+        </MonitorPanel>
 
-        {shown.length > 0 && <div className="min-w-0 sm:hidden">{details(true)}</div>}
+        {shown.length > 0 && (
+          <>
+            <div className="min-w-0 max-sm:hidden">{details(false)}</div>
+            <div className="min-w-0 sm:hidden">{details(true)}</div>
+          </>
+        )}
 
         {/* Pool totals always describe the whole fleet, not the filtered table. */}
-        <SSHPoolPanel devices={list} poolPayload={pool} />
+        <div className="min-w-0 max-sm:hidden">
+          <SSHPoolPanel devices={list} poolPayload={pool} />
+        </div>
       </div>
     </section>
   );

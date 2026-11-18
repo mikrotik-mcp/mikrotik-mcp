@@ -1,0 +1,179 @@
+/* Tunnel Bandwidth page, after the approved board. Layout only; colours are tokens. */
+
+.bw-page {
+  display: flex;
+  line-height: 21px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bw-tests {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+}
+.bw-test-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.bw-test {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  line-height: 21px;
+}
+
+/* A running test's button reads as a state, not a dimmed control. */
+.bw-running.monitor-btn:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+/* Chart on the left, latest run and statistics on the right. */
+.bw-history {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+}
+.bw-latest {
+  color: var(--text-emphasis);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 21px;
+}
+.bw-latest small {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Tables keep their semantics; each row lays out as the boards' grid row. */
+.bw-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.bw-table caption {
+  padding: 10px 14px 6px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: left;
+}
+.bw-table th,
+.bw-table td {
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+.bw-table th:not(.p) {
+  font-weight: inherit;
+}
+.bw-stats tr {
+  grid-template-columns: minmax(0, 1fr) 44px 48px 48px 48px;
+}
+.bw-runs {
+  min-width: 760px;
+}
+.bw-runs tr {
+  grid-template-columns:
+    minmax(0, 1.2fr) 70px minmax(0, 1.3fr) 84px 84px 70px
+    minmax(0, 1.4fr);
+}
+
+/* Drawer form. */
+.bw-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.bw-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--brand);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.bw-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.bw-disclosure {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  padding: 12px 18px;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 21px;
+  text-align: left;
+  cursor: pointer;
+}
+.bw-disclosure svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  transition: transform 150ms ease;
+}
+.bw-disclosure svg[data-open] {
+  transform: rotate(90deg);
+}
+.bw-disclosure:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.bw-check {
+  display: flex;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 21px;
+}
+.bw-check svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  margin-top: 4px;
+  color: var(--destructive);
+}
+.bw-check[data-ok] svg {
+  color: var(--success);
+}
+
+/* The boards' panel title takes at least 220px before the controls wrap under it. */
+.bw-page .monitor-panel-head > div:first-child {
+  flex-basis: 220px;
+}
+
+@media (max-width: 1099px) {
+  .bw-test-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bw-history {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 699px) {
+  .bw-test-grid,
+  .bw-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bw-stats tr {
+    gap: 8px;
+    padding: 0 14px;
+    grid-template-columns: minmax(0, 1fr) 36px 40px 40px 40px;
+  }
+}

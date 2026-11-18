@@ -121,7 +121,7 @@ test("reveals a below-fold active page by scrolling only the menu viewport", asy
 test("the search field opens the palette, and choosing a page closes the mobile menu", async () => {
   await mount();
   const field = host.querySelector<HTMLButtonElement>("button.sb-search")!;
-  expect(field.textContent).toContain("Search pages");
+  expect(field.textContent).toContain("Jump to a page");
   expect(field.getAttribute("aria-haspopup")).toBe("dialog");
   await act(async () => field.click());
   expect(openSearch).toHaveBeenCalledOnce();

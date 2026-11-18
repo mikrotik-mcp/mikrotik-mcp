@@ -183,7 +183,7 @@ export function RoutingAddressBrowser({
               aria-pressed={list === name}
               className={cn(
                 "monitor-chip cursor-pointer",
-                list === name && "text-foreground shadow-[inset_0_0_0_1px_var(--chart-1)]",
+                list === name && "text-foreground shadow-[inset_0_0_0_1px_var(--sig)]",
               )}
               onClick={() => {
                 setList(list === name ? "" : name);
@@ -244,7 +244,7 @@ export function RoutingAddressBrowser({
       )}
       <ul
         aria-label="Address search results"
-        className="m-0 flex list-none flex-col border-t border-border p-0"
+        className="m-0 flex list-none flex-col border-t border-line p-0"
       >
         {matches.slice(currentPage * PAGE, (currentPage + 1) * PAGE).map((entry) => {
           const { row } = entry;
@@ -253,7 +253,7 @@ export function RoutingAddressBrowser({
             <li
               key={key}
               className={cn(
-                "flex min-w-0 flex-col gap-0.5 border-b border-border py-2.5",
+                "flex min-w-0 flex-col gap-0.5 border-b border-line py-2.5",
                 row.disabled === "yes" && "opacity-60",
               )}
             >
@@ -363,7 +363,7 @@ export function RoutingAddressBrowser({
             />
           </>
         )}
-        <span className="rounded px-[5px] py-px font-mono text-[11px] text-muted-foreground shadow-[inset_0_0_0_1px_var(--input)]">
+        <span className="rounded px-[5px] py-px font-mono text-[11px] text-muted-foreground shadow-[inset_0_0_0_1px_var(--line-2)]">
           40 per page
         </span>
       </div>

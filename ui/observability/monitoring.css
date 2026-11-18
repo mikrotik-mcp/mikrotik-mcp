@@ -1,6 +1,6 @@
 /*
- * Monitoring section, after the approved "Monitoring Redesign" canvas.
- * Only design-system tokens from tailwind.css; no new colours.
+ * Shared page parts for every dashboard page, after the approved "Signal"
+ * boards (signal.css). Only tokens from tailwind.css; no new colours.
  */
 
 /* In the components layer, so Tailwind utilities can refine a part where a
@@ -8,7 +8,19 @@
 @layer theme, base, components, utilities;
 
 @layer components {
-  /* ── Page header (from the boards) ────────────────────────────────────────── */
+  /* ── Glass: the panel and KPI card surface ────────────────────────────────── */
+  .glass,
+  .monitor-panel,
+  .monitor-metric {
+    border-radius: 16px;
+    background: var(--glass);
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(14px);
+  }
+
+  /* ── Page header (the boards' .ph1) ───────────────────────────────────────── */
   .monitor-head {
     position: relative;
     display: flex;
@@ -19,52 +31,98 @@
   .monitor-head-main {
     display: flex;
     min-width: 0;
-    flex: 1 1 320px;
+    flex: 1 1 420px;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     line-height: 21px;
+  }
+  /* The verdict layout: the text column and a graphic beside it. */
+  .monitor-head[data-layout="verdict"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: 22px;
+  }
+  .monitor-head[data-layout="verdict"][data-aside] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  }
+  .monitor-head[data-layout="verdict"] .monitor-head-main {
+    position: relative;
+    gap: 10px;
+  }
+  .monitor-head[data-layout="verdict"] .monitor-head-controls {
+    margin-top: 6px;
+  }
+  .monitor-head-aside {
+    min-width: 0;
   }
   /* Room beside the eyebrow and title for the Help button pinned top-right. */
   .monitor-eyebrow,
-  .monitor-title {
-    padding-right: 36px;
+  .monitor-title,
+  .monitor-verdict {
+    padding-right: 40px;
   }
   .monitor-eyebrow {
-    color: var(--muted-foreground);
+    color: var(--success);
     font-size: 12px;
-    font-weight: 510;
+    font-weight: 500;
+    line-height: 21px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
   .monitor-title {
     color: var(--text-emphasis);
-    font-size: 28px;
-    font-weight: 590;
-    line-height: 34px;
-    letter-spacing: -0.02em;
+    font-size: 34px;
+    font-weight: 600;
+    line-height: 40px;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
   }
-  .monitor-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    font-size: 15px;
-    font-weight: 510;
+  .monitor-verdict {
+    color: var(--text-emphasis);
+    font-size: 40px;
+    font-weight: 600;
+    line-height: 46px;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
   }
+  /* Inside a title or verdict: <em> is a failure, .s healthy, .w strain. */
+  :is(.monitor-title, .monitor-verdict) em {
+    color: var(--destructive);
+    font-style: normal;
+  }
+  :is(.monitor-title, .monitor-verdict) .s {
+    color: var(--success);
+  }
+  :is(.monitor-title, .monitor-verdict) .w {
+    color: var(--warning);
+  }
+  .monitor-status,
   .monitor-status-sm {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin-top: 8px;
     color: var(--muted-foreground);
     font-size: 13px;
+    line-height: 21px;
+  }
+  .monitor-status b,
+  .monitor-status-sm b {
+    color: var(--foreground);
+    font-weight: 500;
   }
   .monitor-lead {
-    color: var(--muted-foreground);
-    font-size: 14px;
+    max-width: 680px;
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 23px;
     text-wrap: pretty;
   }
-  .monitor-lead-only {
-    margin-top: 4px;
+  .monitor-lead code,
+  .monitor-lead .mono {
+    font-family: var(--font-mt);
+    font-size: 13px;
   }
   .monitor-head-controls {
     display: flex;
@@ -81,10 +139,10 @@
   }
   .monitor-icon-btn {
     display: inline-grid;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     place-items: center;
-    border-radius: 9999px;
+    border-radius: 9px;
     color: var(--muted-foreground);
     transition:
       color 150ms ease,
@@ -92,7 +150,7 @@
   }
   .monitor-icon-btn:hover,
   .monitor-icon-btn[aria-expanded="true"] {
-    background: var(--accent);
+    background: var(--glass-2);
     color: var(--foreground);
   }
   .monitor-icon-btn:focus-visible {
@@ -104,57 +162,72 @@
     height: 16px;
   }
 
-  /* ── Buttons (the boards' .btn: glass pill; inverse, ghost, danger; sm) ─── */
+  /* ── Buttons (the boards' .btn: glass; primary teal, ghost, danger; sm) ──── */
   .monitor-btn {
     display: inline-flex;
-    height: 32px;
+    height: 34px;
     flex: none;
     align-items: center;
-    gap: 6px;
-    border-radius: 9999px;
-    background: var(--accent);
-    box-shadow: var(--shadow-button);
+    justify-content: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--glass-2);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     padding: 0 14px;
     color: var(--foreground);
+    font-family: inherit;
     font-size: 13px;
-    font-weight: 510;
+    font-weight: 500;
     line-height: 1;
     white-space: nowrap;
+    cursor: pointer;
     transition:
       background-color 150ms ease,
+      box-shadow 150ms ease,
       color 150ms ease,
       opacity 150ms ease;
   }
   .monitor-btn:hover {
-    background: var(--overlay-08);
+    background: var(--glass-3);
   }
   .monitor-btn[data-size="sm"] {
     height: 28px;
+    border-radius: 8px;
     padding: 0 10px;
     font-size: 12px;
   }
-  .monitor-btn[data-variant="inverse"] {
-    background: var(--primary);
-    box-shadow: none;
-    color: var(--primary-foreground);
+  /* `inverse` is the older name for the one solid action; both are teal now. */
+  .monitor-btn:is([data-variant="primary"], [data-variant="inverse"]) {
+    background: var(--sig);
+    box-shadow:
+      0 0 0 1px var(--sig),
+      0 6px 20px var(--sig-soft);
+    color: var(--on-sig);
+    font-weight: 600;
   }
-  .monitor-btn[data-variant="inverse"]:hover {
-    opacity: 0.9;
+  .monitor-btn:is([data-variant="primary"], [data-variant="inverse"]):hover {
+    background: var(--sig);
+    box-shadow:
+      0 0 0 1px var(--sig),
+      0 8px 28px var(--sig-soft);
   }
   .monitor-btn[data-variant="ghost"] {
     background: transparent;
     box-shadow: none;
-    color: var(--muted-foreground);
-    font-weight: 400;
+    color: var(--text-secondary);
   }
   .monitor-btn[data-variant="ghost"]:hover {
-    background: var(--accent);
+    background: var(--glass-2);
     color: var(--foreground);
   }
   .monitor-btn[data-variant="danger"] {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px var(--input);
+    background: var(--bad-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 40%, transparent);
     color: var(--destructive);
+  }
+  .monitor-btn[data-variant="danger"]:hover {
+    background: color-mix(in srgb, var(--destructive) 18%, transparent);
   }
   .monitor-btn:disabled {
     opacity: 0.4;
@@ -165,19 +238,16 @@
     outline-offset: 2px;
   }
   .monitor-btn svg {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
     flex: none;
   }
 
-  /* ── KPI strip ─────────────────────────────────────────────────────────────── */
+  /* ── KPI cards (the boards' .kpis / .kpi) ─────────────────────────────────── */
   .monitor-strip {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(var(--strip-min, 180px), 1fr));
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--card);
+    gap: 12px;
     line-height: 21px;
   }
   .monitor-metric {
@@ -185,12 +255,9 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 4px;
-    padding: 16px 20px;
-    /* Each cell draws its left and top hairline; the strip clips the outer ones. */
-    box-shadow:
-      -1px 0 0 var(--border),
-      0 -1px 0 var(--border);
+    gap: 3px;
+    overflow: hidden;
+    padding: 14px 16px;
   }
   .monitor-metric-label,
   .monitor-metric-hint {
@@ -201,71 +268,101 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .monitor-metric-label {
-    font-weight: 510;
+  /* A sparkline sits bottom-right; keep the hint clear of it. */
+  .monitor-metric[data-spark] .monitor-metric-hint {
+    padding-right: 72px;
   }
   .monitor-metric-value {
     overflow: hidden;
-    font-size: 24px;
-    font-weight: 590;
-    line-height: 30px;
+    color: var(--text-emphasis);
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 34px;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .monitor-metric[data-tone="default"] .monitor-metric-value {
-    color: var(--text-emphasis);
+  .monitor-metric-value small {
+    margin-left: 2px;
+    color: var(--muted-foreground);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0;
   }
-  .monitor-metric[data-primary] .monitor-metric-value {
-    font-size: 32px;
-    line-height: 38px;
+  .monitor-metric[data-tone="good"] .monitor-metric-value {
+    color: var(--success);
   }
-  .monitor-metric[data-tone="warn"]::before,
-  .monitor-metric[data-tone="bad"]::before {
+  .monitor-metric[data-tone="warn"] .monitor-metric-value {
+    color: var(--warning);
+  }
+  .monitor-metric[data-tone="bad"] .monitor-metric-value {
+    color: var(--destructive);
+  }
+  .monitor-metric[data-tone="brand"] .monitor-metric-value {
+    color: var(--brand);
+  }
+  /* A glowing bar along the top marks a card that needs attention. */
+  .monitor-metric[data-tone="warn"]::after,
+  .monitor-metric[data-tone="bad"]::after {
     content: "";
     position: absolute;
-    inset: 0 auto 0 0;
-    width: 2px;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 2px;
     background: var(--warning);
   }
-  .monitor-metric[data-tone="bad"]::before {
+  .monitor-metric[data-tone="bad"]::after {
     background: var(--destructive);
+    box-shadow: 0 0 12px var(--destructive);
+  }
+  .monitor-metric .monitor-spark {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    opacity: 0.9;
   }
 
   /* ── Panels ────────────────────────────────────────────────────────────────── */
   .monitor-panel {
     display: flex;
-    line-height: 21px;
     min-width: 0;
     flex-direction: column;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--card);
+    overflow: hidden;
+    line-height: 21px;
   }
   .monitor-panel[data-tone="warn"] {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 35%, transparent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--warning) 40%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
   .monitor-panel[data-tone="bad"] {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 40%, transparent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--destructive) 45%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
   .monitor-panel-head {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 12px;
-    padding: 16px 20px 12px;
+    padding: 14px 18px 10px;
+  }
+  .monitor-panel-head > .min-w-0 {
+    flex: 1 1 220px;
   }
   .monitor-panel-title {
+    color: var(--foreground);
     font-size: 14px;
-    font-weight: 590;
+    font-weight: 600;
     line-height: 20px;
   }
   .monitor-panel-desc {
-    margin-top: 2px;
+    margin-top: 1px;
     color: var(--muted-foreground);
     font-size: 12px;
-    line-height: 16px;
+    line-height: 17px;
   }
   .monitor-panel-extra {
     display: flex;
@@ -276,34 +373,61 @@
   .monitor-panel-body {
     min-width: 0;
     flex: 1;
-    padding: 0 20px 20px;
+    padding: 0 18px 16px;
   }
   .monitor-panel-flush {
     min-width: 0;
     flex: 1;
   }
+  .monitor-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .monitor-legend i {
+    display: inline-block;
+    width: 10px;
+    height: 3px;
+    margin-right: 6px;
+    border-radius: 2px;
+    vertical-align: middle;
+  }
 
-  /* ── Rows (lists and simple tables inside a flush panel) ───────────────────── */
+  /* ── Tables (the boards' .thead / .row inside a flush panel) ──────────────── */
   .monitor-thead,
   .monitor-row {
     display: grid;
     min-width: 0;
     align-items: center;
     gap: 12px;
-    border-top: 1px solid var(--border);
-    padding: 10px 20px;
+    border-top: 1px solid var(--line);
+    padding: 0 18px;
   }
   .monitor-thead {
-    padding-block: 8px;
-    color: var(--muted-foreground);
-    font-size: 12px;
-    font-weight: 510;
+    min-height: 34px;
+    color: var(--text-faint);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 21px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
   .monitor-row {
     width: 100%;
+    min-height: 44px;
+    padding-block: 8px;
+    color: var(--text-secondary);
     font-size: 13px;
+    line-height: 21px;
     text-align: left;
     transition: background-color 150ms ease;
+  }
+  /* The row's main cell: the router, tool or name the row is about. */
+  .monitor-row .p {
+    color: var(--foreground);
+    font-weight: 500;
   }
   a.monitor-row,
   button.monitor-row {
@@ -317,12 +441,10 @@
     outline-offset: -2px;
   }
   .monitor-row[data-selected] {
-    background: var(--accent);
-    box-shadow: inset 2px 0 0 var(--chart-1);
+    background: linear-gradient(90deg, var(--sig-soft), transparent 70%);
+    box-shadow: inset 2px 0 0 var(--sig);
   }
-  .monitor-row[data-failed] {
-    box-shadow: inset 2px 0 0 var(--destructive);
-  }
+  .monitor-row[data-failed],
   .monitor-row[data-selected][data-failed] {
     box-shadow: inset 2px 0 0 var(--destructive);
   }
@@ -330,30 +452,39 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 12px;
-    border-top: 1px solid var(--border);
-    padding: 12px 20px;
+    gap: 8px 10px;
+    border-top: 1px solid var(--line);
+    padding: 10px 18px;
     color: var(--muted-foreground);
     font-size: 12px;
   }
 
-  /* A horizontal share bar. */
+  /* A horizontal share bar (the boards' .bar). */
   .monitor-bar {
     display: block;
-    height: 6px;
+    height: 4px;
     overflow: hidden;
-    border-radius: 9999px;
-    background: var(--overlay-08);
+    border-radius: 9px;
+    background: var(--line);
   }
   .monitor-bar > span {
     display: block;
     height: 100%;
-    border-radius: 9999px;
+    border-radius: 9px;
     background: var(--chart-1);
     transition: width 320ms cubic-bezier(0.25, 1, 0.5, 1);
   }
+  .monitor-bar > span[data-tone="good"] {
+    background: var(--sig);
+  }
+  .monitor-bar > span[data-tone="warn"] {
+    background: var(--warning);
+  }
+  .monitor-bar > span[data-tone="bad"] {
+    background: var(--destructive);
+  }
 
-  /* ── Badges ────────────────────────────────────────────────────────────────── */
+  /* ── Pills and risk ───────────────────────────────────────────────────────── */
   .monitor-badge {
     display: inline-flex;
     height: 22px;
@@ -361,93 +492,137 @@
     align-items: center;
     gap: 6px;
     border-radius: 9999px;
-    background: var(--accent);
-    box-shadow: inset 0 0 0 1px var(--border);
-    padding: 0 8px;
+    background: var(--glass-2);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 0 9px;
     color: var(--text-secondary);
     font-size: 12px;
-    font-weight: 510;
+    font-weight: 500;
+    line-height: 21px;
     white-space: nowrap;
+  }
+  .monitor-badge[data-tone="good"] {
+    background: var(--sig-soft);
+    box-shadow: none;
+    color: var(--success);
+  }
+  .monitor-badge[data-tone="warn"] {
+    background: var(--warn-soft);
+    box-shadow: none;
+    color: var(--warning);
+  }
+  .monitor-badge[data-tone="bad"] {
+    background: var(--bad-soft);
+    box-shadow: none;
+    color: var(--destructive);
+  }
+  .monitor-badge[data-tone="brand"] {
+    background: var(--acc-soft);
+    box-shadow: none;
+    color: var(--brand);
   }
   .monitor-risk {
     display: inline-flex;
     height: 20px;
     align-items: center;
-    border-radius: 9999px;
-    box-shadow: inset 0 0 0 1px var(--input);
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
     padding: 0 7px;
-    font-family: var(--font-mt);
     color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.02em;
+    font-family: var(--font-mt);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
     white-space: nowrap;
   }
   .monitor-risk[data-risk="write"] {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 40%, transparent);
     color: var(--warning);
   }
   .monitor-risk[data-risk="idem"] {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 40%, transparent);
     color: var(--brand);
   }
   .monitor-risk[data-risk="destructive"] {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 45%, transparent);
     color: var(--destructive);
   }
   .monitor-risk[data-risk="dangerous"] {
     background: var(--destructive);
     box-shadow: none;
-    color: var(--destructive-foreground);
+    color: var(--background);
   }
 
-  /* ── Status dot ────────────────────────────────────────────────────────────── */
+  /* ── LED (status dot) ─────────────────────────────────────────────────────── */
   .monitor-dot {
     position: relative;
     display: inline-block;
     width: 7px;
     height: 7px;
     flex: none;
-    border-radius: 9999px;
+    border-radius: 9px;
     background: var(--text-faint);
   }
   .monitor-dot[data-tone="good"] {
-    background: var(--success);
+    background: var(--sig);
+    box-shadow: var(--glow) var(--sig);
   }
   .monitor-dot[data-tone="warn"] {
     background: var(--warning);
+    box-shadow: var(--glow) var(--warning);
   }
   .monitor-dot[data-tone="bad"] {
     background: var(--destructive);
+    box-shadow: var(--glow) var(--destructive);
   }
   .monitor-dot[data-tone="brand"] {
-    background: var(--chart-1);
+    background: var(--brand);
+    box-shadow: var(--glow) var(--brand);
   }
+  /* Live: a soft halo around the glow. */
   .monitor-dot[data-pulse][data-tone="good"] {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);
+    box-shadow:
+      0 0 0 4px var(--sig-soft),
+      var(--glow) var(--sig);
   }
   .monitor-dot[data-pulse][data-tone="bad"] {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 25%, transparent);
+    box-shadow:
+      0 0 0 4px var(--bad-soft),
+      var(--glow) var(--destructive);
   }
   .monitor-dot[data-pulse][data-tone="warn"] {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 25%, transparent);
+    box-shadow:
+      0 0 0 4px var(--warn-soft),
+      var(--glow) var(--warning);
+  }
+  .monitor-dot[data-pulse][data-tone="brand"] {
+    box-shadow:
+      0 0 0 4px var(--acc-soft),
+      var(--glow) var(--brand);
   }
 
-  /* ── Segmented control (pill) ──────────────────────────────────────────────── */
+  /* ── Segmented control ────────────────────────────────────────────────────── */
   .monitor-seg {
     display: inline-flex;
     gap: 2px;
-    border-radius: 9999px;
-    background: var(--overlay-03);
-    box-shadow: inset 0 0 0 1px var(--border);
-    padding: 2px;
+    border-radius: 11px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 3px;
   }
   .monitor-seg-item {
-    height: 26px;
+    height: 28px;
     min-width: 36px;
-    border-radius: 9999px;
-    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    padding: 0 12px;
     color: var(--muted-foreground);
+    font-family: inherit;
     font-size: 12px;
-    font-weight: 510;
-    line-height: 1;
+    font-weight: 500;
+    line-height: normal;
+    cursor: pointer;
     transition:
       color 150ms ease,
       background-color 150ms ease;
@@ -456,8 +631,8 @@
     color: var(--foreground);
   }
   .monitor-seg-item[aria-checked="true"] {
-    background: var(--muted);
-    box-shadow: var(--shadow-button);
+    background: var(--glass-3);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     color: var(--foreground);
   }
   .monitor-seg-item:focus-visible {
@@ -471,7 +646,7 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    padding: 32px 20px;
+    padding: 40px 20px;
     color: var(--muted-foreground);
     font-size: 13px;
     line-height: 21px;
@@ -482,21 +657,30 @@
   }
   .monitor-empty-icon {
     display: grid;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 6px;
+    place-items: center;
+    border-radius: 14px;
+    background: var(--glass-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 0 24px var(--sig-soft);
+    color: var(--success);
+  }
+  .monitor-empty-compact .monitor-empty-icon {
     width: 36px;
     height: 36px;
-    margin-bottom: 4px;
-    place-items: center;
-    border-radius: var(--radius);
-    background: var(--overlay-03);
-    box-shadow: inset 0 0 0 1px var(--border);
+    border-radius: 12px;
   }
   .monitor-empty-icon svg {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
   }
   .monitor-empty-title {
     color: var(--foreground);
-    font-weight: 590;
+    font-size: 14px;
+    font-weight: 600;
   }
   .monitor-empty-body {
     max-width: 28rem;
@@ -504,8 +688,8 @@
   }
   .monitor-empty-body code,
   .monitor-note code {
-    border-radius: 4px;
-    background: var(--overlay-08);
+    border-radius: 6px;
+    background: var(--glass-2);
     padding: 1px 5px;
     color: var(--foreground);
     font-size: 12px;
@@ -517,18 +701,29 @@
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    border-radius: var(--radius);
-    background: var(--overlay-03);
-    box-shadow: inset 0 0 0 1px var(--border);
-    padding: 12px 16px;
+    border-radius: 12px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 12px 14px;
+    color: var(--text-secondary);
     font-size: 13px;
     line-height: 21px;
   }
+  .monitor-note b {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+  .monitor-note[data-tone="good"] {
+    background: var(--sig-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sig) 35%, transparent);
+  }
   .monitor-note[data-tone="warn"] {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 40%, transparent);
+    background: var(--warn-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 35%, transparent);
   }
   .monitor-note[data-tone="bad"] {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 40%, transparent);
+    background: var(--bad-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 35%, transparent);
   }
   .monitor-note svg {
     width: 16px;
@@ -536,8 +731,6 @@
     flex: none;
     margin-top: 2px;
   }
-
-  /* ── Phones ────────────────────────────────────────────────────────────────── */
 
   /* ── Live Feed ─────────────────────────────────────────────────────────────── */
   .feed-inspector {
@@ -547,15 +740,19 @@
     flex: 1 1 320px;
     flex-direction: column;
     overflow-y: auto;
-    border-left: 1px solid var(--border);
+    border-left: 1px solid var(--line);
   }
   @media (max-width: 1023px) {
     .feed-inspector {
       display: none;
     }
   }
+  .feed-grid {
+    min-width: 720px;
+    grid-template-columns: 18px 64px minmax(160px, 1.4fr) 96px 120px 72px minmax(120px, 1.6fr);
+  }
 
-  /* ── Form controls (the boards' .select and .field) ───────────────────────── */
+  /* ── Form controls (the boards' .select, .field, .textarea) ───────────────── */
   .monitor-select {
     position: relative;
     display: inline-flex;
@@ -563,11 +760,12 @@
     align-items: center;
   }
   .monitor-select select {
-    height: 32px;
+    height: 34px;
     appearance: none;
-    border-radius: 6px;
-    background: var(--overlay-02);
-    box-shadow: inset 0 0 0 1px var(--input);
+    border: 0;
+    border-radius: 10px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     padding: 0 34px 0 12px;
     color: var(--text-secondary);
     font-family: inherit;
@@ -576,16 +774,22 @@
     white-space: nowrap;
     cursor: pointer;
   }
+  .monitor-select select option {
+    background: var(--surface-2);
+    color: var(--foreground);
+  }
   .monitor-select select:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 1px;
+    outline: none;
+    box-shadow:
+      inset 0 0 0 1px var(--sig),
+      0 0 0 3px var(--sig-soft);
   }
   .monitor-select svg {
     position: absolute;
     right: 10px;
     width: 16px;
     height: 16px;
-    color: var(--text-secondary);
+    color: var(--muted-foreground);
     pointer-events: none;
   }
   .monitor-field {
@@ -594,16 +798,18 @@
     min-width: 0;
     align-items: center;
     gap: 8px;
-    border-radius: 6px;
-    background: var(--overlay-02);
-    box-shadow: inset 0 0 0 1px var(--input);
+    border-radius: 10px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     padding: 0 12px;
     color: var(--muted-foreground);
     font-size: 13px;
     line-height: 21px;
   }
   .monitor-field:focus-within {
-    box-shadow: inset 0 0 0 1px var(--ring);
+    box-shadow:
+      inset 0 0 0 1px var(--sig),
+      0 0 0 3px var(--sig-soft);
   }
   .monitor-field svg {
     width: 16px;
@@ -615,29 +821,24 @@
     flex: 1;
     border: 0;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--foreground);
     font: inherit;
     outline: none;
   }
   .monitor-field input::placeholder {
     color: var(--muted-foreground);
   }
-  .feed-grid {
-    min-width: 720px;
-    grid-template-columns: 18px 64px minmax(160px, 1.4fr) 96px 120px 72px minmax(120px, 1.6fr);
-  }
 
-  /* ---- Network boards: shared pieces (kit.css "Added for the Network boards") ---- */
   .monitor-router {
     position: relative;
     display: inline-flex;
-    height: 32px;
+    height: 34px;
     flex: none;
     align-items: center;
     gap: 8px;
-    border-radius: 6px;
-    background: var(--overlay-02);
-    box-shadow: inset 0 0 0 1px var(--input);
+    border-radius: 10px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     padding: 0 10px 0 12px;
     color: var(--text-secondary);
     font-size: 13px;
@@ -645,13 +846,18 @@
     white-space: nowrap;
   }
   .monitor-router:focus-within {
-    outline: 2px solid var(--ring);
-    outline-offset: 1px;
+    box-shadow:
+      inset 0 0 0 1px var(--sig),
+      0 0 0 3px var(--sig-soft);
+  }
+  .monitor-router[data-disabled] {
+    opacity: 0.5;
   }
   .monitor-router svg {
     width: 16px;
     height: 16px;
     flex: none;
+    color: var(--muted-foreground);
   }
   .monitor-router select {
     position: absolute;
@@ -662,30 +868,44 @@
   }
   .monitor-tabs {
     display: flex;
-    gap: 20px;
+    gap: 22px;
     overflow-x: auto;
-    border-bottom: 1px solid var(--border);
-    padding: 0 20px;
+    border-bottom: 1px solid var(--line);
+    padding: 0 18px;
   }
   .monitor-tab {
     display: inline-flex;
-    height: 40px;
+    height: 42px;
     align-items: center;
     gap: 6px;
+    border: 0;
+    background: transparent;
     box-shadow: inset 0 -2px 0 transparent;
+    padding: 0;
     color: var(--muted-foreground);
+    font-family: inherit;
     font-size: 13px;
-    font-weight: 510;
+    font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
+    transition:
+      color 150ms ease,
+      box-shadow 150ms ease;
+  }
+  .monitor-tab:hover {
+    color: var(--foreground);
   }
   .monitor-tab[aria-selected="true"] {
-    box-shadow: inset 0 -2px 0 var(--chart-1);
+    box-shadow: inset 0 -2px 0 var(--sig);
     color: var(--foreground);
+  }
+  .monitor-tab:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
   .monitor-tab .monitor-tab-n {
     color: var(--text-faint);
-    font-size: 12px;
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
   .monitor-chip {
@@ -693,19 +913,20 @@
     height: 20px;
     align-items: center;
     gap: 4px;
-    border-radius: 4px;
-    background: var(--accent);
-    padding: 0 6px;
+    border-radius: 6px;
+    background: var(--glass-2);
+    padding: 0 7px;
     color: var(--text-secondary);
+    font-family: var(--font-mt);
     font-size: 11px;
-    font-weight: 510;
+    font-weight: 400;
     line-height: 21px;
     white-space: nowrap;
   }
   .monitor-facts {
     display: grid;
     grid-template-columns: 120px minmax(0, 1fr);
-    gap: 6px 12px;
+    gap: 7px 12px;
     margin: 0;
     font-size: 13px;
     line-height: 21px;
@@ -720,14 +941,14 @@
   }
   .monitor-pre {
     margin: 0;
-    border-radius: 6px;
-    background: var(--overlay-03);
-    box-shadow: inset 0 0 0 1px var(--border);
-    padding: 12px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 12px 14px;
     color: var(--text-secondary);
-    font-family: var(--font-mono);
+    font-family: var(--font-mt);
     font-size: 12px;
-    line-height: 18px;
+    line-height: 19px;
     white-space: pre-wrap;
   }
   .monitor-meter {
@@ -740,8 +961,7 @@
     font-variant-numeric: tabular-nums;
   }
   .monitor-meter .monitor-bar {
-    min-width: 32px;
-    height: 4px;
+    min-width: 30px;
     flex: 1;
   }
   .monitor-input {
@@ -751,9 +971,9 @@
     align-items: center;
     gap: 8px;
     border: 0;
-    border-radius: 6px;
-    background: var(--overlay-02);
-    box-shadow: inset 0 0 0 1px var(--input);
+    border-radius: 10px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     padding: 0 12px;
     color: var(--foreground);
     font: inherit;
@@ -762,22 +982,23 @@
     outline: none;
   }
   .monitor-input::placeholder {
-    color: var(--text-faint);
+    color: var(--muted-foreground);
   }
   .monitor-input:focus,
   .monitor-input:focus-within {
     box-shadow:
-      inset 0 0 0 1px var(--chart-1),
-      0 0 0 3px color-mix(in srgb, var(--chart-1) 25%, transparent);
+      inset 0 0 0 1px var(--sig),
+      0 0 0 3px var(--sig-soft);
   }
   .monitor-input[aria-invalid="true"] {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 60%, transparent);
+    box-shadow: inset 0 0 0 1px var(--destructive);
   }
   textarea.monitor-input {
     height: auto;
-    min-height: 76px;
+    min-height: 84px;
     padding: 10px 12px;
     color: var(--text-secondary);
+    font-family: var(--font-mt);
     font-size: 12px;
     line-height: 18px;
     resize: vertical;
@@ -792,35 +1013,38 @@
   .monitor-label {
     color: var(--muted-foreground);
     font-size: 12px;
-    font-weight: 510;
+    font-weight: 500;
     line-height: 21px;
   }
   .monitor-hint {
     color: var(--muted-foreground);
     font-size: 12px;
-    line-height: 16px;
+    line-height: 17px;
   }
   .monitor-err {
     color: var(--destructive);
     font-size: 12px;
-    line-height: 16px;
+    line-height: 17px;
   }
   .monitor-switch {
     position: relative;
-    width: 32px;
-    height: 18px;
+    width: 34px;
+    height: 20px;
     flex: none;
     border: 0;
     border-radius: 9999px;
-    background: var(--overlay-08);
-    box-shadow: inset 0 0 0 1px var(--input);
+    background: var(--glass-2);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     padding: 0;
     cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      box-shadow 150ms ease;
   }
   .monitor-switch::after {
     position: absolute;
-    top: 2px;
-    left: 2px;
+    top: 3px;
+    left: 3px;
     width: 14px;
     height: 14px;
     border-radius: 9999px;
@@ -829,12 +1053,12 @@
     transition: left 150ms ease;
   }
   .monitor-switch[aria-checked="true"] {
-    background: var(--chart-1);
-    box-shadow: none;
+    background: var(--sig);
+    box-shadow: 0 0 12px var(--sig-soft);
   }
   .monitor-switch[aria-checked="true"]::after {
-    left: 16px;
-    background: #fff;
+    left: 17px;
+    background: var(--on-sig);
   }
   .monitor-switch:disabled {
     cursor: not-allowed;
@@ -849,9 +1073,9 @@
     flex-direction: column;
     gap: 2px;
     border: 0;
-    border-radius: 8px;
-    background: var(--overlay-02);
-    box-shadow: inset 0 0 0 1px var(--input);
+    border-radius: 12px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line);
     padding: 12px 14px;
     color: var(--foreground);
     font: inherit;
@@ -859,6 +1083,12 @@
     line-height: 21px;
     text-align: left;
     cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+  .monitor-choice:hover {
+    background: var(--glass-2);
   }
   .monitor-choice small {
     color: var(--muted-foreground);
@@ -866,8 +1096,12 @@
   }
   .monitor-choice[aria-checked="true"],
   .monitor-choice[aria-pressed="true"] {
-    background: var(--accent);
-    box-shadow: inset 0 0 0 1px var(--chart-1);
+    background: var(--sig-soft);
+    box-shadow: inset 0 0 0 1px var(--sig);
+  }
+  .monitor-choice:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
   .monitor-check {
     display: inline-flex;
@@ -878,41 +1112,82 @@
     line-height: 21px;
   }
   .monitor-check input {
+    position: relative;
+    display: grid;
     width: 16px;
     height: 16px;
     flex: none;
     margin: 2px 0 0;
-    accent-color: var(--chart-1);
+    appearance: none;
+    place-items: center;
+    border-radius: 5px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    cursor: pointer;
+  }
+  .monitor-check input:checked {
+    background: var(--sig);
+    box-shadow: none;
+  }
+  /* The tick: two borders of a rotated box. */
+  .monitor-check input:checked::after {
+    content: "";
+    width: 4px;
+    height: 8px;
+    margin-top: -2px;
+    border: solid var(--on-sig);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .monitor-check input:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .monitor-check input:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
   .monitor-side {
     max-width: 380px;
     flex: 1 1 320px;
-    border-left: 1px solid var(--border);
+    border-left: 1px solid var(--line);
+  }
+
+  /* ── Dialog and drawer (the boards' .dialog / .drawer) ────────────────────── */
+  .monitor-scrim {
+    background: var(--scrim);
+    backdrop-filter: blur(3px);
   }
   .monitor-dialog {
     overflow: hidden;
     border: 0;
-    border-radius: 12px;
-    background: var(--card);
+    border-radius: 18px;
+    background: var(--surface-2);
     box-shadow:
-      inset 0 0 0 1px var(--input),
-      0 24px 64px rgba(0, 0, 0, 0.45);
+      inset 0 0 0 1px var(--line-2),
+      var(--shadow-overlay);
     padding: 0;
     color: var(--foreground);
     font-size: 14px;
     line-height: 21px;
   }
+  .monitor-dialog[data-variant="drawer"] {
+    border-radius: 0;
+    box-shadow:
+      inset 1px 0 0 var(--line-2),
+      var(--shadow-overlay);
+  }
   .monitor-dialog-head {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    border-bottom: 1px solid var(--border);
-    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--line);
+    padding: 20px 24px 14px;
   }
   .monitor-dialog-head h2 {
     color: var(--text-emphasis);
     font-size: 18px;
-    font-weight: 590;
+    font-weight: 600;
     line-height: 24px;
   }
   .monitor-dialog-head p {
@@ -920,6 +1195,11 @@
     color: var(--muted-foreground);
     font-size: 13px;
   }
+  .monitor-dialog-head .monitor-eyebrow {
+    margin-top: 0;
+    padding-right: 0;
+  }
+  /* Padding only: the body lays out its own fields (the boards use a 16px gap). */
   .monitor-dialog-body {
     padding: 20px 24px;
   }
@@ -928,27 +1208,20 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    border-top: 1px solid var(--border);
-    background: var(--overlay-02);
+    border-top: 1px solid var(--line);
+    background: var(--glass);
     padding: 14px 24px;
   }
 
-  /* Network boards: the status line is 13px muted text, the state in bold. */
-  .monitor-head[data-group="Network"] .monitor-status {
-    margin-top: 0;
-    color: var(--muted-foreground);
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 21px;
-  }
-  .monitor-head[data-group="Network"] .monitor-status b {
-    color: var(--foreground);
-    font-weight: 510;
-  }
-  .monitor-bar > span[data-tone="warn"] {
-    background: var(--warning);
-  }
-  .monitor-bar > span[data-tone="bad"] {
-    background: var(--destructive);
+  /* ── Phones ────────────────────────────────────────────────────────────────── */
+  @media (max-width: 899px) {
+    /* The phone boards set long verdict lines at 26/32. */
+    .monitor-verdict {
+      font-size: 26px;
+      line-height: 32px;
+    }
+    .monitor-head[data-layout="verdict"][data-aside] {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 }

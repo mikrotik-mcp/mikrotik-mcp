@@ -1,5 +1,6 @@
 /**
- * Network → CAPsMAN: the Wi-Fi access points one router manages.
+ * Network → CAPsMAN: the Wi-Fi access points one router manages, after the
+ * Net-Capsman and Net-Capsman-Confirm boards.
  *
  * Reads /api/capsman/manager|overview|clients|audit|trends for the chosen
  * router and shows the manager switch, a per-floor coverage grid (co-channel
@@ -7,9 +8,21 @@
  * AP, and client load per radio. Every write names the router, asks for
  * confirmation in a dialog first, and reloads the data afterwards.
  */
+import "./monitoring.css";
+import "./capsman.css";
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RefreshCw, Wifi } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Check,
+  ChevronsUpDown,
+  Lock,
+  Power,
+  RefreshCw,
+  Shield,
+  Wifi,
+  Zap,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CapsmanManager } from "../../src/observability/capsman-manager";
 import { api, postJson } from "./api";
@@ -20,12 +33,14 @@ import {
   MonitorButton,
   MonitorDialog,
   MonitorEmpty,
+  MonitorNote,
   MonitorPanel,
   PageIntro,
   RouterPicker,
   StatusBadge,
+  useLineDraw,
 } from "./monitoring-ui";
-import type { Tone } from "./monitoring-ui";
+import { sparkPoints } from "./signal-charts";
 import { toast } from "./toast-action";
 import type { DevicesPayload } from "./types";
 
@@ -100,7 +115,7 @@ interface ApplyResult {
   message?: string;
 }
 
-/** What the header status line needs from the fabric data. */
+/** What the header needs from the fabric data. */
 interface Summary {
   cochannel: number;
   findings: number;
@@ -118,11 +133,12 @@ const SEV_LABEL: Record<Severity, string> = {
   medium: "MED",
   low: "LOW",
 };
-const SEV_CLASS: Record<Severity, string> = {
-  critical: "text-destructive",
-  high: "text-destructive",
-  medium: "text-warning",
-  low: "",
+/** The risk pill per severity: pink for high and critical, amber for medium. */
+const SEV_RISK: Record<Severity, string | undefined> = {
+  critical: "destructive",
+  high: "destructive",
+  medium: "write",
+  low: undefined,
 };
 
 const bandLabel = (b: Band): string => (b === "2ghz" ? "2.4G" : b === "5ghz" ? "5G" : "?");
@@ -130,6 +146,7 @@ const dbm = (v: number): string => `${v < 0 ? "−" : ""}${Math.abs(v)} dBm`;
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 const hhmm = (ms: number): string =>
   new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+const categoryLabel = (c: string): string => (c === "ft" ? "roaming" : c === "ha" ? "HA" : c);
 
 /** POST a confirmed CAPsMAN write and toast the outcome. */
 async function runApply(
@@ -156,7 +173,7 @@ async function runApply(
 }
 
 /**
- * The confirm dialog every CAPsMAN write uses (board "CAPsMAN · confirm"):
+ * The confirm dialog every CAPsMAN write uses (board "Net-Capsman-Confirm"):
  * title and one line, optional list of changes, a note, the snapshot line,
  * then Cancel and the action.
  */
@@ -206,7 +223,13 @@ function ConfirmWrite({
           >
             Cancel
           </MonitorButton>
-          <MonitorButton size="sm" variant="inverse" disabled={busy} onClick={onConfirm}>
+          <MonitorButton
+            size="sm"
+            variant="primary"
+            disabled={busy}
+            icon={<Check aria-hidden="true" />}
+            onClick={onConfirm}
+          >
             {action}
           </MonitorButton>
         </>
@@ -215,15 +238,17 @@ function ConfirmWrite({
       <div className="monitor-dialog-body flex flex-col gap-4">
         {changes}
         {note != null && (
-          <div
-            className="monitor-note text-fg-secondary"
-            data-tone={noteTone === "warn" ? "warn" : undefined}
+          <MonitorNote
+            tone={noteTone === "warn" ? "warn" : undefined}
+            icon={noteTone === "warn" ? <AlertTriangle aria-hidden="true" /> : undefined}
           >
-            {noteTone === "warn" && <AlertTriangle aria-hidden="true" className="text-warning" />}
-            <span>{note}</span>
-          </div>
+            {note}
+          </MonitorNote>
         )}
-        <p className="text-muted-foreground text-[12px]">{footnote}</p>
+        <p className="monitor-hint flex items-start gap-2">
+          <Shield aria-hidden="true" className="size-4 shrink-0" />
+          <span>{footnote}</span>
+        </p>
       </div>
     </MonitorDialog>
   );
@@ -232,17 +257,19 @@ function ConfirmWrite({
 /** A button that opens a ConfirmWrite and runs `run` on confirm. */
 function WriteButton({
   label,
+  icon,
   dialog,
   run,
 }: {
   label: string;
+  icon?: ReactNode;
   dialog: Omit<Parameters<typeof ConfirmWrite>[0], "open" | "onOpenChange" | "onConfirm">;
   run: () => void;
 }): ReactNode {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <MonitorButton size="sm" onClick={() => setOpen(true)}>
+      <MonitorButton size="sm" icon={icon} onClick={() => setOpen(true)}>
         {label}
       </MonitorButton>
       <ConfirmWrite
@@ -295,40 +322,36 @@ export function CapsmanView(): ReactNode {
     setDevice(name);
   };
 
-  let tone: Tone | undefined;
-  let status: ReactNode;
+  let eyebrow: string | undefined;
+  let heading: ReactNode;
   if (fabricFailed) {
-    tone = "bad";
-    status = <b className="text-foreground font-[510]">Could not read CAPsMAN data</b>;
+    eyebrow = `CAPsMAN · ${device}`;
+    heading = <em>Could not read CAPsMAN data.</em>;
   } else if (summary) {
     const issues = summary.cochannel + summary.findings;
-    tone = issues > 0 ? "warn" : summary.radios > 0 ? "good" : "default";
-    status = (
-      <>
-        <b className="text-foreground font-[510]">
-          {issues > 0
-            ? `${plural(summary.cochannel, "co-channel pair", "co-channel pairs")}, ${plural(summary.findings, "finding", "findings")}`
-            : summary.radios > 0
-              ? "No co-channel pairs or findings"
-              : "No managed radios"}
-        </b>{" "}
-        · read {hhmm(summary.at)} from {device}
-      </>
-    );
+    eyebrow = `CAPsMAN · read ${hhmm(summary.at)} from ${device}`;
+    heading =
+      issues > 0 ? (
+        <span className="w">
+          {plural(summary.cochannel, "co-channel pair", "co-channel pairs")},{" "}
+          {plural(summary.findings, "finding", "findings")}.
+        </span>
+      ) : summary.radios > 0 ? (
+        <span className="s">No co-channel pairs or findings.</span>
+      ) : (
+        "No managed radios."
+      );
   } else if (device) {
-    status = `Reading ${device}`;
+    eyebrow = `CAPsMAN · reading ${device}`;
   }
 
   return (
-    <section className="grid min-w-0 content-start gap-6">
+    <section className="capsman grid min-w-0 content-start gap-[18px] max-sm:gap-3.5">
       <PageIntro
-        tone={tone}
-        title={
-          status != null ? (
-            <span className="text-muted-foreground text-[13px] font-normal">{status}</span>
-          ) : undefined
-        }
-        controls={
+        eyebrow={eyebrow}
+        heading={heading}
+        lead="Wi-Fi access points managed by one router: coverage, load, weak clients, roaming and failover."
+        actions={
           routers && routers.devices.length > 0 ? (
             <>
               <RouterPicker
@@ -340,8 +363,7 @@ export function CapsmanView(): ReactNode {
                 disabled={busy}
               />
               <MonitorButton
-                size="sm"
-                icon={<RefreshCw />}
+                icon={<RefreshCw aria-hidden="true" />}
                 disabled={busy || !device}
                 onClick={() => setRefresh((r) => r + 1)}
               >
@@ -350,20 +372,19 @@ export function CapsmanView(): ReactNode {
             </>
           ) : undefined
         }
-      >
-        Wi-Fi access points managed by one router: coverage, load, weak clients, roaming and
-        failover.
-      </PageIntro>
+      />
 
       {error ? (
-        <div className="monitor-note text-fg-secondary items-center" data-tone="bad">
-          <span className="flex-1">
-            <b className="text-foreground font-[510]">Routers unavailable.</b> {error}
-          </span>
-          <MonitorButton size="sm" onClick={() => setAttempt((a) => a + 1)}>
-            Retry
-          </MonitorButton>
-        </div>
+        <MonitorNote tone="bad" icon={<AlertTriangle aria-hidden="true" />}>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex-1">
+              <b className="text-foreground font-medium">Routers unavailable.</b> {error}
+            </span>
+            <MonitorButton size="sm" onClick={() => setAttempt((a) => a + 1)}>
+              Retry
+            </MonitorButton>
+          </div>
+        </MonitorNote>
       ) : !routers ? (
         <LoadingState label="Loading routers" layout="cards" />
       ) : !device ? (
@@ -475,52 +496,55 @@ function ManagerControl({
     }
   }
 
+  const hint = (
+    <span className="capsman-manager-hint monitor-hint">
+      The controller service on {device}. Turning it on or off leaves local Wi-Fi, CAP mode and
+      provisioning alone. Each change takes a snapshot, runs in Safe Mode, then checks the manager
+      state.
+    </span>
+  );
+  const mark = (
+    <span aria-hidden="true" className="capsman-mark">
+      <Wifi />
+    </span>
+  );
   const turningOff = selected?.enabled === true;
   return (
-    <MonitorPanel
-      title="Manager"
-      description={
-        <>
-          The controller service on {device}. Turning it on or off leaves local Wi-Fi, CAP mode and
-          provisioning alone.
-        </>
-      }
-      flush
-    >
+    <section className="monitor-panel capsman-manager" aria-label="Manager">
       {error && (
-        <div className="border-border border-t px-5 py-3">
-          <div className="monitor-note text-fg-secondary" data-tone="bad">
-            <AlertTriangle aria-hidden="true" className="text-destructive" />
-            <span>
-              <b className="text-foreground font-[510]">Manager status needs a refresh.</b> {error}
-            </span>
-          </div>
-        </div>
+        <MonitorNote tone="bad" icon={<AlertTriangle aria-hidden="true" />}>
+          <b className="text-foreground font-medium">Manager status needs a refresh.</b> {error}
+        </MonitorNote>
       )}
       {loading ? (
-        <div role="status" className="monitor-row text-muted-foreground grid-cols-1">
-          Reading manager status…
+        <div className="capsman-manager-row">
+          {mark}
+          <span role="status" className="capsman-manager-name">
+            <span className="text-foreground text-[14px] font-semibold">Manager</span>
+            <span className="text-muted-foreground text-[12px]">Reading manager status…</span>
+          </span>
+          {hint}
         </div>
       ) : !error && managers.length === 0 ? (
-        <div className="border-border border-t">
-          <MonitorEmpty compact title="Not supported on this router">
-            No CAPsMAN manager found. Check the installed RouterOS packages.
-          </MonitorEmpty>
+        <div className="capsman-manager-row">
+          {mark}
+          <span className="capsman-manager-name">
+            <span className="text-foreground text-[14px] font-semibold">
+              Not supported on this router
+            </span>
+            <span className="text-muted-foreground text-[12px]">
+              No CAPsMAN manager found. Check the installed RouterOS packages.
+            </span>
+          </span>
         </div>
       ) : (
         managers.map((manager) => (
-          <div
-            key={manager.path}
-            className="monitor-row grid-cols-[32px_minmax(0,1fr)_auto_auto] hover:bg-transparent"
-          >
-            <span
-              aria-hidden="true"
-              className="bg-overlay-03 text-muted-foreground grid size-8 place-items-center rounded-lg shadow-[inset_0_0_0_1px_var(--border)] [&_svg]:size-4"
-            >
-              <Wifi />
-            </span>
-            <span className="flex min-w-0 flex-col">
-              <span className="text-foreground">{manager.label}</span>
+          <div key={manager.path} className="capsman-manager-row">
+            {mark}
+            <span className="capsman-manager-name">
+              <span className="text-foreground truncate text-[14px] font-semibold">
+                Manager · {manager.label}
+              </span>
               <span className="text-muted-foreground truncate font-mono text-[12px]">
                 {manager.path}
               </span>
@@ -528,8 +552,11 @@ function ManagerControl({
             <StatusBadge tone={error ? "warn" : manager.enabled ? "good" : "default"}>
               {error ? "Refresh required" : manager.enabled ? "Enabled" : "Disabled"}
             </StatusBadge>
+            {hint}
+            <span className="flex-1 max-md:hidden" />
             <MonitorButton
               size="sm"
+              icon={<Power aria-hidden="true" />}
               disabled={busy || !!error}
               onClick={() => setSelected(manager)}
             >
@@ -538,10 +565,6 @@ function ManagerControl({
           </div>
         ))
       )}
-      <div className="monitor-row text-muted-foreground grid-cols-1 text-[12px] hover:bg-transparent">
-        Each change takes a configuration snapshot, runs in Safe Mode, then checks the manager
-        state.
-      </div>
       <ConfirmWrite
         open={selected !== null}
         onOpenChange={(open) => {
@@ -568,7 +591,7 @@ function ManagerControl({
         action={busy ? "Applying…" : turningOff ? "Disable manager" : "Enable manager"}
         onConfirm={() => void apply()}
       />
-    </MonitorPanel>
+    </section>
   );
 }
 
@@ -691,21 +714,17 @@ function CapsmanFabric({
   const flooredCount = floors.filter(([f]) => f !== "?").length;
   const findings = audit?.findings ?? [];
   const findingTotal = audit?.total ?? 0;
-  const categories = [...new Set(findings.map((f) => f.category))].map((c) =>
-    c === "ft" ? "roaming" : c === "ha" ? "HA" : c,
-  );
+  const categories = [...new Set(findings.map((f) => categoryLabel(f.category)))];
   const series = trends?.series ?? [];
   const days = trends?.days ?? 1;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-[18px] max-sm:gap-3.5">
       {!overview.managerEnabled && (
-        <div className="monitor-note text-fg-secondary">
-          <span>
-            This router reports no active manager for this Wi-Fi stack. Its own radios may still
-            show below; the Manager panel has the checked status.
-          </span>
-        </div>
+        <MonitorNote>
+          This router reports no active manager for this Wi-Fi stack. Its own radios may still show
+          below; the Manager panel has the checked status.
+        </MonitorNote>
       )}
 
       <MetricStrip label="CAPsMAN counts" minCell={150}>
@@ -715,7 +734,7 @@ function CapsmanFabric({
           value={overview.totals.radios}
           hint={flooredCount > 0 ? `across ${plural(flooredCount, "floor", "floors")}` : undefined}
         />
-        <Metric label="Clients" value={overview.totals.clients} hint="associated now" />
+        <Metric label="Clients" tone="good" value={overview.totals.clients} hint="associated now" />
         <Metric
           label="2.4G / 5G"
           value={`${overview.bandSplit["2ghz"] ?? 0} / ${overview.bandSplit["5ghz"] ?? 0}`}
@@ -743,6 +762,7 @@ function CapsmanFabric({
             {overview.cochannel.length > 0 && (
               <WriteButton
                 label="Apply channel plan"
+                icon={<Zap aria-hidden="true" />}
                 run={() =>
                   void runApply(
                     "/api/capsman/apply/channel-plan",
@@ -756,22 +776,19 @@ function CapsmanFabric({
                   description: `Moves ${plural(moves.length, "radio", "radios")} to free channels so no two neighbours share one.`,
                   changes:
                     moves.length > 0 ? (
-                      <div className="flex flex-col">
-                        <span className="monitor-label mb-1.5">What changes</span>
+                      <div className="glass capsman-changes">
+                        <div className="flex items-center px-3 py-2">
+                          <span className="capsman-section-label">What changes</span>
+                        </div>
                         {moves.map((r) => (
-                          <div
-                            key={r.radioId}
-                            className="border-border grid grid-cols-[minmax(0,1fr)_44px_auto] items-center gap-3 border-t py-2.5 text-[13px]"
-                          >
+                          <div key={r.radioId} className="capsman-change">
                             <span className="text-foreground truncate font-mono text-[12px]">
                               {r.cap}/{r.radioId}
                             </span>
-                            <span className="monitor-chip justify-self-start">
-                              {bandLabel(r.band)}
-                            </span>
-                            <span className="text-fg-secondary whitespace-nowrap tabular-nums">
-                              ch {r.channel ?? "?"} <span className="text-muted-foreground">→</span>{" "}
-                              <span className="text-brand font-[510]">
+                            <span className="monitor-chip">{bandLabel(r.band)}</span>
+                            <span className="text-fg-secondary text-right font-mono text-[12px] whitespace-nowrap">
+                              ch {r.channel ?? "?"} <span className="text-faint">→</span>{" "}
+                              <span className="text-success">
                                 ch {overview.proposedChannels[r.radioId]}
                               </span>
                             </span>
@@ -791,6 +808,7 @@ function CapsmanFabric({
             )}
             <WriteButton
               label="Auto-balance"
+              icon={<ChevronsUpDown aria-hidden="true" />}
               run={() =>
                 void runApply("/api/capsman/apply/load-balance", { device }, "Load balance", reload)
               }
@@ -811,61 +829,27 @@ function CapsmanFabric({
             Radios show up here once a CAP connects to this manager.
           </MonitorEmpty>
         ) : (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3.5">
             {floors.map(([floor, radios]) => (
-              <div key={floor} className="flex flex-col gap-2">
-                <span className="monitor-label">
-                  {floor === "?" ? "Unfloored · placed by signal" : `Floor ${floor}`}
-                </span>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(200px,100%),1fr))] gap-2">
-                  {radios.map((r) => {
-                    const to = overview.proposedChannels[r.radioId];
-                    const co = r.conflicts.length > 0;
-                    const load = radioLoad(r);
-                    const tint = co
-                      ? "var(--destructive)"
-                      : load > 0.6
-                        ? "var(--warning)"
-                        : "var(--chart-1)";
-                    const mix = co ? 8 : Math.round(3 + load * 8);
-                    const style = {
-                      background: `color-mix(in srgb, ${tint} ${mix}%, var(--card))`,
-                      boxShadow: `inset 0 0 0 1px ${co ? "color-mix(in srgb, var(--destructive) 40%, transparent)" : "var(--border)"}`,
-                    } as CSSProperties;
-                    return (
-                      <div
-                        key={r.radioId}
-                        className="flex flex-col gap-1.5 rounded-lg px-3.5 py-3"
-                        style={style}
-                        title={`${r.cap} · ${plural(r.adjacent.length, "neighbour", "neighbours")}`}
-                      >
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <span className="text-foreground truncate font-mono text-[13px]">
-                            {r.cap}
-                          </span>
-                          <span className="flex-1" />
-                          <span className="monitor-chip">{bandLabel(r.band)}</span>
-                        </div>
-                        <div className="text-fg-secondary flex flex-wrap gap-x-2.5 gap-y-1 text-[12px] tabular-nums">
-                          <span className={cn(co && "text-destructive")}>
-                            ch {r.channel ?? "?"}
-                            {to != null && to !== r.channel && (
-                              <span className="text-brand"> → {to}</span>
-                            )}
-                          </span>
-                          <span>{plural(r.clientCount, "client", "clients")}</span>
-                          <span className="text-muted-foreground">
-                            CPU {r.cpuLoad != null ? `${r.cpuLoad}%` : "—"}
-                          </span>
-                        </div>
-                        {co && (
-                          <span className="text-destructive text-[12px] font-[510]">
-                            Overlaps {r.conflicts.map((id) => capOf.get(id) ?? id).join(", ")}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
+              <div key={floor} className="capsman-floor">
+                <div className="capsman-floor-head">
+                  <span className="capsman-section-label">
+                    {floor === "?" ? "Unfloored" : `Floor ${floor}`}
+                  </span>
+                  <span className="text-emphasis text-[20px] leading-[21px] font-semibold tabular-nums">
+                    {radios.reduce((sum, r) => sum + r.clientCount, 0)}
+                  </span>
+                  <span className="monitor-hint">clients</span>
+                </div>
+                <div className="capsman-tiles">
+                  {radios.map((r) => (
+                    <RadioTile
+                      key={r.radioId}
+                      radio={r}
+                      to={overview.proposedChannels[r.radioId]}
+                      overlaps={r.conflicts.map((id) => capOf.get(id) ?? id)}
+                    />
+                  ))}
                 </div>
               </div>
             ))}
@@ -873,7 +857,7 @@ function CapsmanFabric({
         )}
       </MonitorPanel>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(560px,100%),1fr))] gap-6">
+      <div className="capsman-pair">
         <MonitorPanel
           title="Roaming (FT) and HA"
           description="Fast roaming and backup-manager checks."
@@ -898,6 +882,7 @@ function CapsmanFabric({
               {findings.some((f) => f.category === "ha") && (
                 <WriteButton
                   label="Harden HA"
+                  icon={<Lock aria-hidden="true" />}
                   run={() =>
                     void runApply("/api/capsman/apply/ha", { device }, "Harden HA", reload)
                   }
@@ -914,27 +899,24 @@ function CapsmanFabric({
           }
         >
           {findingTotal === 0 ? (
-            <div className="border-border border-t">
+            <div className="border-line border-t">
               <MonitorEmpty compact title="No findings">
                 Roaming and failover checks all pass.
               </MonitorEmpty>
             </div>
           ) : (
             findings.map((f) => (
-              <div
-                key={f.finding_id}
-                className="monitor-row grid-cols-[56px_minmax(0,1fr)] items-start hover:bg-transparent"
-              >
-                <span className={cn("monitor-risk justify-self-start", SEV_CLASS[f.severity])}>
+              <div key={f.finding_id} className="capsman-finding">
+                <span className="monitor-risk justify-center" data-risk={SEV_RISK[f.severity]}>
                   {SEV_LABEL[f.severity]}
                 </span>
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-foreground">{f.title}</span>
-                  <span className="text-muted-foreground text-[12px]">{f.detail}</span>
-                  <span className="text-fg-secondary text-[12px]">
-                    → {f.recommendation}{" "}
-                    <span className="text-muted-foreground">
-                      · {f.category} · {f.confidence} confidence
+                  <span className="text-foreground text-[13px] font-medium">{f.title}</span>
+                  <span className="text-fg-secondary text-[12px]">{f.detail}</span>
+                  <span className="text-[12px]">
+                    <span className="text-success">→ {f.recommendation}</span>{" "}
+                    <span className="text-faint">
+                      · {categoryLabel(f.category)} · {f.confidence} confidence
                     </span>
                   </span>
                 </span>
@@ -949,73 +931,80 @@ function CapsmanFabric({
           flush
         >
           {weak.length === 0 ? (
-            <div className="border-border border-t">
+            <div className="border-line border-t">
               <MonitorEmpty compact title="No weak clients">
                 Every client hears its access point well.
               </MonitorEmpty>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <div className="monitor-thead min-w-[520px] grid-cols-[minmax(150px,1fr)_80px_56px_minmax(140px,1fr)_minmax(170px,1.2fr)_64px]">
-                <span>Client</span>
-                <span className="text-right">Signal</span>
-                <span>Band</span>
-                <span>Current AP</span>
-                <span>Better AP</span>
-                <span />
-              </div>
-              {weak.map((w) => (
-                <div
-                  key={w.mac}
-                  className="monitor-row min-w-[520px] grid-cols-[minmax(150px,1fr)_80px_56px_minmax(140px,1fr)_minmax(170px,1.2fr)_64px]"
-                >
-                  <span className="text-fg-secondary truncate font-mono text-[12px]">{w.mac}</span>
-                  <span
-                    className={cn(
-                      "text-right tabular-nums",
-                      w.signal < -80 ? "text-destructive" : "text-warning",
-                    )}
-                  >
-                    {dbm(w.signal)}
-                  </span>
-                  <span className="monitor-chip justify-self-start">{bandLabel(w.band)}</span>
-                  <span className="text-fg-secondary truncate font-mono text-[12px]">
-                    {w.currentCap}
-                  </span>
-                  <span
-                    className={cn(
-                      "truncate",
-                      w.recommendCap ? "text-fg-secondary" : "text-muted-foreground",
-                    )}
-                  >
-                    {w.recommendCap ? `${w.recommendCap} +${w.gainDb ?? 0} dB` : "Coverage gap"}
-                  </span>
-                  <span>
-                    {w.recommendCap && (
-                      <WriteButton
-                        label="Steer"
-                        run={() =>
-                          void runApply(
-                            "/api/capsman/apply/steer",
-                            { device, mac: w.mac, mode: "hard" },
-                            `Steer ${w.mac}`,
-                            reload,
-                          )
-                        }
-                        dialog={{
-                          title: `Steer ${w.mac} to ${w.recommendCap}?`,
-                          description:
-                            "Rejects the client on its current radio so it reconnects to the stronger one.",
-                          note: "The client may drop for a moment. It decides where to go; RouterOS can only ask.",
-                          action: "Steer client",
-                        }}
-                      />
-                    )}
-                  </span>
+              <div className="min-w-[520px]">
+                <div className="monitor-thead capsman-weak-cols">
+                  <span>Client</span>
+                  <span className="text-right">Signal</span>
+                  <span>Band</span>
+                  <span>Current AP</span>
+                  <span>Better AP</span>
+                  <span />
                 </div>
-              ))}
+                {weak.map((w) => (
+                  <div key={w.mac} className="monitor-row capsman-weak-cols">
+                    <span className="p truncate font-mono text-[12px]">{w.mac}</span>
+                    <span
+                      className={cn(
+                        "text-right font-mono text-[12px] whitespace-nowrap",
+                        w.signal < -75 ? "text-destructive" : "text-warning",
+                      )}
+                    >
+                      {dbm(w.signal)}
+                    </span>
+                    <span>
+                      <span className="monitor-chip">{bandLabel(w.band)}</span>
+                    </span>
+                    <span className="text-fg-secondary truncate font-mono text-[12px]">
+                      {w.currentCap}
+                    </span>
+                    <span
+                      className={cn(
+                        "truncate text-[12px]",
+                        w.recommendCap ? "text-success" : "text-warning",
+                      )}
+                    >
+                      {w.recommendCap ? `${w.recommendCap} +${w.gainDb ?? 0} dB` : "Coverage gap"}
+                    </span>
+                    <span>
+                      {w.recommendCap && (
+                        <WriteButton
+                          label="Steer"
+                          run={() =>
+                            void runApply(
+                              "/api/capsman/apply/steer",
+                              { device, mac: w.mac, mode: "hard" },
+                              `Steer ${w.mac}`,
+                              reload,
+                            )
+                          }
+                          dialog={{
+                            title: `Steer ${w.mac} to ${w.recommendCap}?`,
+                            description:
+                              "Rejects the client on its current radio so it reconnects to the stronger one.",
+                            note: "The client may drop for a moment. It decides where to go; RouterOS can only ask.",
+                            action: "Steer client",
+                          }}
+                        />
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+          <div className="monitor-foot">
+            <span>
+              Steer rejects the client on its current radio so it reconnects to the stronger one.
+              The client decides where to go.
+            </span>
+          </div>
         </MonitorPanel>
       </div>
 
@@ -1023,16 +1012,24 @@ function CapsmanFabric({
         <MonitorPanel
           title="Client load per radio"
           description={`Associated clients, sampled every 5 minutes over the last ${days === 1 ? "day" : `${days} days`}.`}
+          extra={
+            <span className="monitor-legend">
+              <span>
+                <i className="bg-sig" />
+                5G
+              </span>
+              <span>
+                <i className="bg-warning" />
+                2.4G
+              </span>
+            </span>
+          }
         >
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-2">
-            {series.map((s) => (
-              <Sparkline key={`${s.cap}/${s.radioId}`} s={s} />
-            ))}
-          </div>
+          <LoadGrid series={series} />
         </MonitorPanel>
       )}
 
-      <p className="monitor-note text-fg-secondary">
+      <p className="monitor-hint">
         Every change asks you to confirm, then applies to the router right away. Steering asks the
         client to move; the client decides.
       </p>
@@ -1040,47 +1037,126 @@ function CapsmanFabric({
   );
 }
 
-/** One radio's client count over time, as on the board: area plus line. */
-function Sparkline({ s }: { s: RadioSeries }): ReactNode {
+/**
+ * One radio on the coverage grid: tinted by load, pink when its channel
+ * overlaps a neighbour, amber when busy.
+ */
+function RadioTile({
+  radio: r,
+  to,
+  overlaps,
+}: {
+  radio: RadioNode;
+  to: number | undefined;
+  overlaps: string[];
+}): ReactNode {
+  const co = overlaps.length > 0;
+  const load = radioLoad(r);
+  const cpu = r.cpuLoad;
+  const busy = cpu != null && cpu >= 60;
+  const tint = co ? "var(--destructive)" : load > 0.6 || busy ? "var(--warning)" : "var(--sig)";
+  const mix = co ? 14 : load > 0.6 || busy ? 12 : Math.round(4 + load * 12);
+  const ring = co
+    ? "color-mix(in srgb, var(--destructive) 45%, transparent)"
+    : load > 0.6 || busy
+      ? "color-mix(in srgb, var(--warning) 35%, transparent)"
+      : "var(--line)";
+  const style = {
+    background: `color-mix(in srgb, ${tint} ${mix}%, transparent)`,
+    boxShadow: `inset 0 0 0 1px ${ring}`,
+  } as CSSProperties;
+  return (
+    <div
+      className="capsman-tile"
+      style={style}
+      title={`${r.cap} · ${plural(r.adjacent.length, "neighbour", "neighbours")}`}
+    >
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className="text-foreground truncate font-mono text-[13px] font-medium">{r.cap}</span>
+        <span className="text-faint shrink-0 font-mono text-[12px]">/{r.radioId}</span>
+        <span className="flex-1" />
+        <span className="monitor-chip">{bandLabel(r.band)}</span>
+      </div>
+      <div className="text-fg-secondary flex items-baseline gap-2 text-[12px] whitespace-nowrap">
+        <span className="text-foreground font-mono text-[14px]">
+          ch {r.channel ?? "?"}
+          {to != null && to !== r.channel && <span className="text-success"> → {to}</span>}
+        </span>
+        <span className="flex-1" />
+        <span>{plural(r.clientCount, "client", "clients")}</span>
+      </div>
+      <span className="monitor-bar" aria-hidden="true">
+        <span
+          data-tone={co ? "bad" : busy ? "warn" : "good"}
+          style={{ width: `${Math.round(load * 100)}%` }}
+        />
+      </span>
+      <div className="flex items-center gap-2 text-[12px] whitespace-nowrap">
+        {co ? (
+          <span className="text-destructive truncate">Overlaps {overlaps.join(", ")}</span>
+        ) : (
+          <span className="text-faint">No overlap</span>
+        )}
+        <span className="flex-1" />
+        <span className={busy ? "text-warning" : "text-muted-foreground"}>
+          CPU {cpu != null ? `${cpu}%` : "—"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Client count per radio over time; lines draw in from the left. */
+function LoadGrid({ series }: { series: RadioSeries[] }): ReactNode {
+  const ref = useRef<HTMLDivElement>(null);
+  useLineDraw(ref, series.map((s) => `${s.cap}/${s.radioId}:${s.points.length}`).join("|"));
+  return (
+    <div ref={ref} className="capsman-trends">
+      {series.map((s) => (
+        <RadioSpark key={`${s.cap}/${s.radioId}`} s={s} />
+      ))}
+    </div>
+  );
+}
+
+const SPARK_W = 230;
+const SPARK_H = 40;
+
+/** One radio's client count: area plus line, teal for 5G and amber for 2.4G. */
+function RadioSpark({ s }: { s: RadioSeries }): ReactNode {
   const values = s.points.map((p) => p.clients);
-  const max = Math.max(1, ...values);
-  const step = values.length > 1 ? 230 / (values.length - 1) : 0;
-  const pts = values.map((v, i) => `${Math.round(i * step)} ${Math.round(42 - (v / max) * 38)}`);
-  const line = pts.length > 0 ? `M${pts.join(" L")}` : "";
-  const color =
-    s.band === "5ghz"
-      ? "var(--success)"
-      : s.band === "2ghz"
-        ? "var(--warning)"
-        : "var(--muted-foreground)";
+  const points = values.length > 1 ? sparkPoints(values, SPARK_W, SPARK_H) : [];
+  const line = points.length > 0 ? `M${points.map(([x, y]) => `${x},${y}`).join(" L")}` : "";
+  const five = s.band === "5ghz";
+  const color = five ? "var(--sig)" : s.band === "2ghz" ? "var(--warning)" : "var(--text-faint)";
+  const fill = five ? "var(--sig-fill)" : "var(--warn-soft)";
   const name = `${s.cap}/${s.radioId}`;
   return (
-    <div className="bg-overlay-02 flex flex-col gap-1.5 rounded-lg px-3.5 py-3 shadow-[inset_0_0_0_1px_var(--border)]">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className="glass capsman-spark">
+      <div className="flex min-w-0 items-center gap-1.5 text-[12px]">
         <span className="monitor-chip">{bandLabel(s.band)}</span>
-        <span className="text-foreground truncate font-mono text-[12px]">{name}</span>
-        <span className="flex-1" />
-        <span className="text-muted-foreground text-[12px] whitespace-nowrap tabular-nums">
+        <span className="text-fg-secondary flex-1 truncate font-mono">{name}</span>
+        <span className="text-faint flex-none whitespace-nowrap">
           peak {s.peak} · avg {s.avg}
         </span>
       </div>
       <svg
-        viewBox="0 0 230 44"
+        viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
         width="100%"
-        height={44}
-        preserveAspectRatio="none"
+        height={SPARK_H}
         role="img"
         aria-label={`Clients on ${name} over time`}
       >
         {line && (
           <>
-            <path d={`${line} L230 44 L0 44 Z`} fill={color} opacity={0.15} />
+            <path d={`${line} L${SPARK_W},${SPARK_H} L0,${SPARK_H} Z`} fill={fill} />
             <path
+              data-draw
               d={line}
               fill="none"
               stroke={color}
               strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke"
+              strokeLinejoin="round"
             />
           </>
         )}

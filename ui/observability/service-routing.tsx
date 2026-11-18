@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, ArrowRight, Plus, RefreshCw, Route } from "lucide-react";
+import { AlertTriangle, Check, Plus, RefreshCw, Route, Shield, Target, Trash2 } from "lucide-react";
 import { ServiceProbesSettings } from "./service-probes-settings";
 import { AddressSets } from "./address-sets";
 import { ServiceProbePicker } from "./service-probe-picker";
@@ -29,7 +29,7 @@ import {
   StatusDot,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
-import { CheckRow, FieldSelect, StatusLine, hhmm } from "./service-routing-ui";
+import { CheckRow, FieldSelect, hhmm } from "./service-routing-ui";
 import { cn } from "@/lib/utils";
 import "./service-routing.css";
 
@@ -67,13 +67,19 @@ function Note({
   action?: ReactNode;
 }): ReactNode {
   return (
-    <div className="monitor-note" data-tone={tone} role={tone === "bad" ? "alert" : "status"}>
+    <div
+      className="monitor-note flex-wrap"
+      data-tone={tone}
+      role={tone === "bad" ? "alert" : "status"}
+    >
       <AlertTriangle
         aria-hidden="true"
         className={tone === "bad" ? "text-destructive" : tone === "warn" ? "text-warning" : ""}
       />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-fg-secondary">{children}</div>
-      {action}
+      <div className="flex min-w-0 flex-1 flex-col text-fg-secondary">{children}</div>
+      {action != null && (
+        <span className="flex-none max-sm:basis-full max-sm:pl-[26px]">{action}</span>
+      )}
     </div>
   );
 }
@@ -186,37 +192,55 @@ export function ServiceRoutingView() {
   const latest = (table: string) => policy?.samples.filter((s) => s.table === table).at(-1);
   const armed = (p: RoutingPolicy) => (p.armedUntil ?? 0) > w.observedAt;
 
-  // ── Header status line, per mode ────────────────────────────────────────
+  // ── Header, per mode: eyebrow, heading, status line ─────────────────────
   let tone: Tone = "default";
+  let live = false;
+  let heading: ReactNode;
   let status: ReactNode;
+  let eyebrow = "Service Routing · router configuration";
   if (view === "policies") {
+    eyebrow = `Service Routing · MCP policies${w.device ? ` · ${w.device}` : ""}`;
     const count = (s: RoutingPolicy["state"]) => policies.filter((p) => p.state === s).length;
     const uncertain = count("uncertain");
-    if (w.loading && !w.data) status = <StatusLine lead="Loading MCP policies" />;
-    else {
-      tone = uncertain ? "warn" : count("active") ? "good" : "default";
+    if (w.loading && !w.data) {
+      heading = "Loading MCP policies";
+    } else {
+      tone = uncertain ? "warn" : "brand";
+      heading = (
+        <>
+          {policies.length} MCP {policies.length === 1 ? "policy" : "policies"}.
+          {count("active") > 0 && <span className="s"> {count("active")} active.</span>}
+        </>
+      );
       status = (
-        <StatusLine
-          lead={`${policies.length} MCP ${policies.length === 1 ? "policy" : "policies"}`}
-          rest={`${count("active")} active, ${count("draft")} draft${uncertain ? `, ${uncertain} uncertain` : ""} · automatic failover ${policies.some(armed) ? "on" : "off"}`}
-        />
+        <>
+          <b>
+            {count("active")} active, {count("draft")} draft
+            {uncertain ? `, ${uncertain} uncertain` : ""}
+          </b>
+          <span>· automatic failover {policies.some(armed) ? "on" : "off"}</span>
+        </>
       );
     }
   } else if (!inventory) {
+    if (view === "sets") eyebrow = "Service Routing · address sets";
     tone = inventoryError ? "bad" : "default";
-    status = (
-      <StatusLine
-        lead={inventoryError ? "Router configuration unavailable" : "Reading router configuration"}
-        rest={inventoryError ? "nothing on the router changed" : undefined}
-      />
-    );
+    heading = inventoryError ? "Router configuration unavailable" : "Reading router configuration";
+    status = inventoryError ? (
+      <>
+        <b>{w.device}</b>
+        <span>· nothing on the router changed</span>
+      </>
+    ) : undefined;
   } else if (view === "sets") {
+    eyebrow = "Service Routing · address sets";
     tone = "good";
+    heading = "Configuration loaded";
     status = (
-      <StatusLine
-        lead="Configuration loaded"
-        rest={`read ${hhmm(inventory.observedAt)} from ${inventory.device}`}
-      />
+      <>
+        <b>{inventory.device}</b>
+        <span>· read {hhmm(inventory.observedAt)}</span>
+      </>
     );
   } else {
     // The board keeps "Read-only snapshot" when some sections failed; the note below says which.
@@ -224,30 +248,35 @@ export function ServiceRoutingView() {
     const sections = Object.values(inventory.sections);
     const noneRead = sections.length > 0 && sections.every((s) => s.state !== "ready");
     tone = noneRead ? "bad" : inventoryError ? "warn" : "good";
+    live = tone === "good";
+    heading = noneRead
+      ? "Could not read the router"
+      : inventoryError
+        ? "Last read snapshot"
+        : "Read-only snapshot";
     status = (
-      <StatusLine
-        lead={
-          noneRead
-            ? "Could not read the router"
-            : inventoryError
-              ? "Last read snapshot"
-              : "Read-only snapshot"
-        }
-        rest={
-          routing.loading
+      <>
+        <b>{inventory.device}</b>
+        <span>
+          ·{" "}
+          {routing.loading
             ? "reading again now"
-            : `read ${hhmm(inventory.observedAt)} · refreshes every 30 s`
-        }
-      />
+            : `read ${hhmm(inventory.observedAt)} · refreshes every 30 s`}
+        </span>
+      </>
     );
   }
 
   return (
-    <section className="service-routing grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-6">
+    <section className="service-routing sr-stack grid min-w-0 grid-cols-[minmax(0,1fr)] content-start">
       <PageIntro
-        tone={tone}
-        title={status}
-        controls={
+        eyebrow={eyebrow}
+        heading={heading}
+        tone={status != null ? tone : undefined}
+        live={live}
+        status={status}
+        lead={LEAD[view]}
+        actions={
           <>
             <RouterPicker
               value={w.device}
@@ -257,8 +286,8 @@ export function ServiceRoutingView() {
               onChange={changeDevice}
             />
             <MonitorButton
-              size="sm"
               aria-label="Refresh"
+              className="px-2.5"
               disabled={busyAny}
               icon={<RefreshCw />}
               onClick={() => {
@@ -267,12 +296,15 @@ export function ServiceRoutingView() {
                 void routing.refresh();
               }}
             />
-            <MonitorButton size="sm" disabled={w.busy} onClick={() => setManagingProbes(true)}>
+            <MonitorButton
+              icon={<Target />}
+              disabled={w.busy}
+              onClick={() => setManagingProbes(true)}
+            >
               Service probes
             </MonitorButton>
             <MonitorButton
-              size="sm"
-              variant="inverse"
+              variant="primary"
               icon={<Plus />}
               disabled={!w.device || w.busy}
               onClick={openCreate}
@@ -281,11 +313,9 @@ export function ServiceRoutingView() {
             </MonitorButton>
           </>
         }
-      >
-        {LEAD[view]}
-      </PageIntro>
+      />
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
         <Segmented<Mode>
           label="Mode"
           value={view}
@@ -299,7 +329,7 @@ export function ServiceRoutingView() {
           ]}
         />
         {view === "policies" && (
-          <p className="text-[12px] text-muted-foreground">
+          <p className="monitor-hint">
             Only policies MCP created show here. A draft never changes the router until you review
             and apply it.
           </p>
@@ -340,14 +370,14 @@ export function ServiceRoutingView() {
               <span className="flex flex-wrap justify-center gap-2">
                 <MonitorButton
                   size="sm"
-                  variant="inverse"
+                  variant="primary"
                   icon={<Plus />}
                   disabled={!w.device}
                   onClick={openCreate}
                 >
                   New policy
                 </MonitorButton>
-                <MonitorButton size="sm" onClick={() => setManagingProbes(true)}>
+                <MonitorButton size="sm" icon={<Target />} onClick={() => setManagingProbes(true)}>
                   Service probes
                 </MonitorButton>
               </span>
@@ -360,12 +390,9 @@ export function ServiceRoutingView() {
       ) : (
         policy && (
           <>
-            <section className="monitor-panel flex-row flex-wrap overflow-hidden">
-              <nav
-                aria-label="Policies"
-                className="sr-policy-list flex max-w-[300px] flex-[1_1_260px] flex-col border-r border-border"
-              >
-                <p className="monitor-label px-5 pt-4 pb-2">Policies</p>
+            <div className="sr-policies grid min-w-0 gap-3.5">
+              <nav aria-label="Policies" className="monitor-panel">
+                <p className="sr-eyebrow px-[18px] pt-3.5 pb-2.5">Policies</p>
                 {policies.map((p) => {
                   const on = policy.id === p.id;
                   return (
@@ -379,20 +406,22 @@ export function ServiceRoutingView() {
                         setReview(false);
                         setArming(false);
                       }}
-                      className={cn(
-                        "flex w-full flex-col gap-1 border-t border-border px-5 py-3 text-left transition-colors hover:bg-overlay-03 disabled:cursor-not-allowed",
-                        on && "bg-accent shadow-[inset_2px_0_0_var(--chart-1)] hover:bg-accent",
-                      )}
+                      className="sr-policy flex w-full flex-col gap-[3px] border-t border-line px-[18px] py-3 text-left disabled:cursor-not-allowed"
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-foreground">
+                        <span
+                          className={cn(
+                            "min-w-0 flex-1 truncate font-mono text-[13px]",
+                            on ? "font-semibold text-foreground" : "font-medium text-fg-secondary",
+                          )}
+                        >
                           {p.name}
                         </span>
-                        <StatusBadge tone={POLICY_STATE[p.state].tone}>
+                        <StatusBadge tone={POLICY_STATE[p.state].tone} dot={false}>
                           {POLICY_STATE[p.state].label}
                         </StatusBadge>
                       </span>
-                      <span className="truncate text-[12px] text-muted-foreground">
+                      <span className="truncate font-mono text-[12px] text-muted-foreground">
                         {p.host} · {p.family === "ipv6" ? "IPv6" : "IPv4"}
                       </span>
                     </button>
@@ -400,24 +429,24 @@ export function ServiceRoutingView() {
                 })}
               </nav>
 
-              <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-5 px-6 pt-5 pb-6 max-sm:px-4">
-                <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                  <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <h2 className="min-w-0 truncate font-mono text-[16px] font-medium text-emphasis">
+              <section className="monitor-panel" aria-label={`Policy ${policy.name}`}>
+                <div className="flex flex-wrap items-start gap-3 border-b border-line px-[18px] pt-4 pb-3.5">
+                  <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-1">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <h2 className="min-w-0 truncate font-mono text-[18px] font-semibold text-emphasis">
                         {policy.name}
                       </h2>
                       <StatusBadge tone={POLICY_STATE[policy.state].tone}>
                         {POLICY_STATE[policy.state].label}
                       </StatusBadge>
                     </div>
-                    <p className="text-[13px] break-words text-muted-foreground">
-                      <span className="font-mono text-[12px] text-fg-secondary">{policy.host}</span>{" "}
-                      · {policy.family === "ipv6" ? "IPv6" : "IPv4"} · from{" "}
+                    <p className="text-[12px] break-words text-muted-foreground">
+                      <span className="font-mono text-fg-secondary">{policy.host}</span> ·{" "}
+                      {policy.family === "ipv6" ? "IPv6" : "IPv4"} · from{" "}
                       {policy.sources.map((s, i) => (
                         <span key={s}>
                           {i > 0 && ", "}
-                          <span className="font-mono text-[12px] text-fg-secondary">{s}</span>
+                          <span className="font-mono text-fg-secondary">{s}</span>
                         </span>
                       ))}
                     </p>
@@ -425,6 +454,7 @@ export function ServiceRoutingView() {
                   <div className="flex flex-wrap gap-2">
                     <MonitorButton
                       size="sm"
+                      icon={<Target />}
                       disabled={w.busy || !policy.target}
                       onClick={() => void w.action("/probe", { id: policy.id })}
                     >
@@ -433,6 +463,7 @@ export function ServiceRoutingView() {
                     {armed(policy) ? (
                       <MonitorButton
                         size="sm"
+                        icon={<Shield />}
                         disabled={w.busy}
                         onClick={() =>
                           void w.action("/arm", { id: policy.id, minutes: 0, confirm: true })
@@ -443,6 +474,7 @@ export function ServiceRoutingView() {
                     ) : (
                       <MonitorButton
                         size="sm"
+                        icon={<Shield />}
                         disabled={w.busy || policy.state !== "active" || !policy.target}
                         onClick={() => {
                           setArming(true);
@@ -456,6 +488,7 @@ export function ServiceRoutingView() {
                       <MonitorButton
                         size="sm"
                         variant="danger"
+                        icon={<Trash2 />}
                         disabled={w.busy}
                         onClick={() => void preview(policy.activeTable!, true)}
                       >
@@ -465,118 +498,115 @@ export function ServiceRoutingView() {
                   </div>
                 </div>
 
-                {blockers.length > 0 && (
-                  <Note
-                    tone="warn"
-                    action={
-                      <MonitorButton size="sm" onClick={() => setView("router")}>
-                        Open router configuration
-                      </MonitorButton>
-                    }
-                  >
-                    <span className="font-[510] text-foreground">
-                      Review needed before you apply
+                <div className="flex flex-col gap-3.5 px-[18px] py-4">
+                  {blockers.length > 0 && (
+                    <Note
+                      tone="warn"
+                      action={
+                        <MonitorButton size="sm" onClick={() => setView("router")}>
+                          Open router configuration
+                        </MonitorButton>
+                      }
+                    >
+                      <b>Review needed before you apply</b>
+                      {blockers.map((reason) => (
+                        <span key={reason}>{reason}</span>
+                      ))}
+                    </Note>
+                  )}
+                  {policy.error && (
+                    <Note tone="bad">
+                      <span>{policy.error}</span>
+                    </Note>
+                  )}
+
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3">
+                    {policy.tables.map((table) => {
+                      const sample = latest(table);
+                      const ev = SAMPLE_STATE[sample?.state ?? "untested"];
+                      const current = policy.activeTable === table;
+                      const locked = w.busy || policy.state === "uncertain" || blockers.length > 0;
+                      return (
+                        <div
+                          key={table}
+                          className="sr-exit glass flex min-w-0 flex-col gap-2"
+                          data-current={current || undefined}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="sr-eyebrow flex-1">
+                              {table === policy.primary ? "Primary exit" : "Approved fallback"}
+                              {current ? " · Current" : ""}
+                            </span>
+                            <StatusBadge tone={ev.tone}>{ev.label}</StatusBadge>
+                          </div>
+                          <ExitPath current={current} />
+                          <div className="flex min-w-0 justify-between gap-2 text-[12px]">
+                            <span className="truncate font-mono text-fg-secondary">{w.device}</span>
+                            <span className="text-muted-foreground">Client traffic</span>
+                            <span className="truncate font-mono text-foreground">{table}</span>
+                          </div>
+                          <p className="min-h-[34px] text-[12px] text-fg-secondary">
+                            {sample?.detail ??
+                              (policy.target
+                                ? "Not checked yet. Use Check exits to test it before you allow failover."
+                                : "Manual route with no service probe. It doesn't need one.")}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="monitor-hint flex-1">
+                              Last read{" "}
+                              <span className="font-mono">{sample ? hhmm(sample.at) : "—"}</span>
+                            </span>
+                            <MonitorButton
+                              size="sm"
+                              disabled={locked}
+                              title={blockers.length > 0 ? "Resolve the review first" : undefined}
+                              onClick={() => void preview(table)}
+                            >
+                              {current ? "Preview current route" : `Preview route via ${table}`}
+                            </MonitorButton>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-col gap-1 border-t border-line pt-3">
+                    <span className="flex items-center gap-2 text-[13px] text-fg-secondary">
+                      <StatusDot tone={armed(policy) ? "good" : "default"} />
+                      {armed(policy)
+                        ? `Automatic failover on until ${hhmm(policy.armedUntil)}`
+                        : "Automatic failover off"}{" "}
+                      · switches after {policy.failuresBeforeSwitch} failures ·{" "}
+                      {policy.cooldownSeconds} s cooldown
                     </span>
-                    {blockers.map((reason) => (
-                      <span key={reason} className="text-[12px] text-muted-foreground">
-                        {reason}
-                      </span>
-                    ))}
-                  </Note>
-                )}
-                {policy.error && (
-                  <Note tone="bad">
-                    <span>{policy.error}</span>
-                  </Note>
-                )}
-
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-3">
-                  {policy.tables.map((table) => {
-                    const sample = latest(table);
-                    const ev = SAMPLE_STATE[sample?.state ?? "untested"];
-                    const current = policy.activeTable === table;
-                    return (
-                      <div
-                        key={table}
-                        className="flex min-w-0 flex-col gap-2.5 rounded-lg bg-overlay-02 p-4"
-                        style={{
-                          boxShadow: `inset 0 0 0 1px var(${current ? "--input" : "--border"})`,
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="flex-1 text-[12px] font-[510] text-muted-foreground">
-                            {table === policy.primary ? "Primary exit" : "Approved fallback"}
-                            {current ? " · Current" : ""}
-                          </span>
-                          <StatusBadge tone={ev.tone}>{ev.label}</StatusBadge>
-                        </div>
-                        <div className="flex min-w-0 flex-wrap items-center gap-2 text-[13px] text-fg-secondary">
-                          <span className="font-mono text-[12px]">{w.device}</span>
-                          <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
-                          <span>Client traffic</span>
-                          <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
-                          <span className="font-mono text-[12px] text-foreground">{table}</span>
-                        </div>
-                        <p className="text-[12px] text-fg-secondary">
-                          {sample?.detail ??
-                            (policy.target
-                              ? "Not checked yet. Use Check exits to test it before you allow failover."
-                              : "Manual route with no service probe. It doesn't need one.")}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <span className="flex-1 text-[12px] text-muted-foreground">
-                            Last read {sample ? hhmm(sample.at) : "—"}
-                          </span>
-                          <MonitorButton
-                            size="sm"
-                            disabled={w.busy || policy.state === "uncertain" || blockers.length > 0}
-                            onClick={() => void preview(table)}
-                          >
-                            {current ? "Preview current route" : `Preview route via ${table}`}
-                          </MonitorButton>
-                        </div>
-                      </div>
-                    );
-                  })}
+                    <span className="monitor-hint">
+                      Domains resolve on the router. CDNs change addresses often, so a few
+                      connections may still leave through the main table.
+                    </span>
+                  </div>
                 </div>
+              </section>
+            </div>
 
-                <div className="flex flex-col gap-1.5 border-t border-border pt-4 text-[13px] text-fg-secondary">
-                  <span className="flex items-center gap-2">
-                    <StatusDot tone={armed(policy) ? "good" : "default"} />
-                    {armed(policy)
-                      ? `Automatic failover on until ${hhmm(policy.armedUntil)}`
-                      : "Automatic failover off"}{" "}
-                    · switches after {policy.failuresBeforeSwitch} failures ·{" "}
-                    {policy.cooldownSeconds} s cooldown
-                  </span>
-                  <span className="text-[12px] text-muted-foreground">
-                    Domains resolve on the router. CDNs change addresses often, so a few connections
-                    may still leave through the main table.
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            <div className="flex flex-wrap gap-6">
+            <div className="sr-pair grid min-w-0 gap-3.5">
               <RoutingTrafficPanel
                 key={`${policy.device}:${policy.id}:${policy.state}:${policy.activeTable}:${policy.lastSwitchAt}`}
                 policy={policy}
                 paused={w.busy || creating || review || arming || managingProbes}
               />
               <MonitorPanel
-                className="flex-[1_1_300px]"
                 title="Decision history"
                 description="What MCP did with this policy, newest first."
                 flush
               >
                 {policy.history.length ? (
-                  <ol className="max-h-[360px] overflow-y-auto">
+                  <ol className="m-0 max-h-[360px] list-none overflow-y-auto p-0">
                     {[...policy.history]
                       .sort((a, b) => b.at - a.at)
                       .map((h, i) => (
                         <li
                           key={`${h.at}-${i}`}
-                          className="monitor-row grid-cols-[44px_minmax(0,1fr)] items-start hover:bg-transparent"
+                          className="grid grid-cols-[52px_14px_minmax(0,1fr)] gap-2 border-t border-line px-[18px] py-2.5 text-[13px]"
                         >
                           <time
                             className="font-mono text-[12px] text-muted-foreground"
@@ -585,6 +615,9 @@ export function ServiceRoutingView() {
                           >
                             {hhmm(h.at)}
                           </time>
+                          <span className="flex justify-center pt-1.5">
+                            <StatusDot tone={i === 0 ? "good" : "default"} />
+                          </span>
                           <span className="text-fg-secondary">{h.message}</span>
                         </li>
                       ))}
@@ -609,9 +642,7 @@ export function ServiceRoutingView() {
         description={`For ${w.device}. Saved as a draft: nothing changes until you review and apply it.`}
         footer={
           <>
-            <span className="flex-1 text-[12px] text-muted-foreground">
-              Draft only · not applied
-            </span>
+            <span className="monitor-hint flex-1">Draft only · not applied</span>
             <MonitorButton
               size="sm"
               variant="ghost"
@@ -622,7 +653,8 @@ export function ServiceRoutingView() {
             </MonitorButton>
             <MonitorButton
               size="sm"
-              variant="inverse"
+              variant="primary"
+              icon={<Check />}
               disabled={
                 w.busy ||
                 !name.trim() ||
@@ -646,7 +678,7 @@ export function ServiceRoutingView() {
             <label className="monitor-fl">
               <span className="monitor-label">Policy name</span>
               <input
-                className="monitor-input font-mono"
+                className="monitor-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="stream-via-vpn"
@@ -656,6 +688,7 @@ export function ServiceRoutingView() {
               <span className="monitor-label">IP family</span>
               <FieldSelect
                 label="IP family"
+                secondary
                 value={family}
                 onChange={(next) => {
                   setFamily(next);
@@ -692,7 +725,7 @@ export function ServiceRoutingView() {
             </label>
             <input
               id="sr-client-subnets"
-              className="monitor-input font-mono text-fg-secondary"
+              className="monitor-input font-mono"
               value={sources}
               onChange={(e) => setSources(e.target.value)}
               placeholder={family === "ipv4" ? "192.168.88.0/24, 10.10.0.0/24" : "fd00:10::/64"}
@@ -704,8 +737,8 @@ export function ServiceRoutingView() {
                   .slice(0, 8)
                   .map((address) => (
                     <span key={address} className="monitor-chip sr-net max-w-full">
-                      <span className="font-mono text-[12px] text-fg-secondary">{address}</span>
-                      <span className="text-muted-foreground">·</span>
+                      <span>{address}</span>
+                      <span className="text-faint">·</span>
                       <IpNetwork address={address} />
                     </span>
                   ))}
@@ -718,13 +751,13 @@ export function ServiceRoutingView() {
           </div>
           <CheckRow checked={beforeExisting} onChange={setBeforeExisting}>
             <span>Place this route before existing routing rules</span>
-            <span className="text-[12px] text-muted-foreground">
+            <span className="monitor-hint">
               Use it when an older rule would catch this traffic first. FastTrack stays blocked.
             </span>
           </CheckRow>
           <fieldset className="monitor-fl m-0 min-w-0 border-0 p-0">
             <legend className="monitor-label mb-1.5 p-0">
-              Allowed exits <span className="font-normal">· pick up to 3</span>
+              Allowed exits <span className="font-normal text-faint">· pick up to 3</span>
             </legend>
             {!inventory ? (
               <span className="monitor-hint">
@@ -739,14 +772,14 @@ export function ServiceRoutingView() {
             ) : !inventory.tables.length ? (
               <span className="monitor-hint">This router reported no enabled FIB tables.</span>
             ) : (
-              <div className="flex flex-col overflow-hidden rounded-lg shadow-[inset_0_0_0_1px_var(--input)]">
-                {inventory.tables.map((t, i) => {
+              <div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1">
+                {inventory.tables.map((t) => {
                   const available = routeAvailable(inventory, t, family);
                   const disabled = !available || (!tables.includes(t) && tables.length >= 3);
                   return (
                     <CheckRow
                       key={t}
-                      className={cn("flex px-3 py-2.5", i > 0 && "border-t border-border")}
+                      className="sr-exit-pick"
                       checked={tables.includes(t)}
                       disabled={disabled}
                       onChange={(checked) => {
@@ -755,8 +788,8 @@ export function ServiceRoutingView() {
                         if (!next.includes(primary)) setPrimary(next[0] ?? "");
                       }}
                     >
-                      <span className="font-mono text-[12px] text-foreground">{t}</span>
-                      <span className="text-[12px] text-muted-foreground">
+                      <span className="font-mono text-foreground">{t}</span>
+                      <span className="monitor-hint">
                         {!available
                           ? inventory.sections[family === "ipv6" ? "routes6" : "routes4"].state ===
                             "error"
@@ -774,11 +807,13 @@ export function ServiceRoutingView() {
               </div>
             )}
           </fieldset>
-          <div className="monitor-fl max-w-[320px]">
+          <div className="monitor-fl">
             <span className="monitor-label">Primary exit</span>
             <FieldSelect
               label="Primary exit"
+              secondary
               mono
+              className="sr-primary"
               value={primary}
               onChange={setPrimary}
               placeholder="Choose an allowed exit"
@@ -815,7 +850,7 @@ export function ServiceRoutingView() {
         description="Only this router and the listed client subnets change. Open connections may drop."
         footer={
           <>
-            <span className="flex-1 text-[12px] text-muted-foreground">
+            <span className="monitor-hint flex-1">
               {policy?.plan ? `Plan expires ${hhmm(policy.plan.expiresAt)}` : ""}
             </span>
             <MonitorButton
@@ -828,7 +863,7 @@ export function ServiceRoutingView() {
             </MonitorButton>
             <MonitorButton
               size="sm"
-              variant={policy?.plan?.remove ? "danger" : "inverse"}
+              variant={policy?.plan?.remove ? "danger" : "primary"}
               disabled={w.busy || !consent}
               onClick={() => {
                 if (policy?.plan)
@@ -885,7 +920,7 @@ export function ServiceRoutingView() {
             </MonitorButton>
             <MonitorButton
               size="sm"
-              variant="inverse"
+              variant="primary"
               disabled={!consent || w.busy}
               onClick={() => {
                 if (policy)
@@ -915,5 +950,26 @@ export function ServiceRoutingView() {
         </div>
       </MonitorDialog>
     </section>
+  );
+}
+
+/** The board's exit card line: router, client traffic, exit. Teal when it carries traffic now. */
+function ExitPath({ current }: { current: boolean }): ReactNode {
+  const dim = current ? "var(--sig)" : "var(--text-faint)";
+  return (
+    <svg viewBox="0 0 420 34" width="100%" height="34" aria-hidden="true">
+      <circle cx="8" cy="17" r="4" fill="var(--sig)" />
+      <line
+        x1="14"
+        y1="17"
+        x2="406"
+        y2="17"
+        stroke={current ? "var(--sig)" : "var(--line-2)"}
+        strokeWidth="2"
+        strokeDasharray={current ? undefined : "5 5"}
+      />
+      <circle cx="210" cy="17" r="3" fill={dim} />
+      <circle cx="412" cy="17" r="4" fill={dim} />
+    </svg>
   );
 }

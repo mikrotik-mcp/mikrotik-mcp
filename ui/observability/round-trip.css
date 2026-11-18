@@ -1,0 +1,171 @@
+/* Round-trip lab, after the approved board. Layout only; colours are tokens. */
+
+.rt-page,
+.rt-stack {
+  display: flex;
+  line-height: 21px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+}
+.rt-stack {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+/* The board sets the help card at 380px, bottom-aligned with the pills. */
+.rt-page .monitor-head[data-layout="verdict"][data-aside] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+  align-items: end;
+}
+
+.rt-conn {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+.rt-conn[data-icmp] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rt-hops {
+  min-width: 0;
+}
+.rt-hop-grid {
+  grid-template-columns:
+    28px minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr)
+    96px;
+}
+.rt-hop-notes {
+  display: flex;
+  grid-column: 2 / -1;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.rt-return {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+}
+.rt-reverse {
+  margin: 16px -18px -16px;
+}
+
+.rt-result-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.rt-verdict {
+  color: var(--text-emphasis);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.02em;
+}
+
+.rt-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+.rt-details > summary::-webkit-details-marker {
+  display: none;
+}
+.rt-details > summary svg {
+  flex: none;
+  transition: transform 150ms ease;
+}
+.rt-details[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.rt-legs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+
+.rt-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+}
+.rt-table tr {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.rt-table th,
+.rt-table td {
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+.rt-table th:not(.p) {
+  font-weight: inherit;
+}
+
+/* The boards' panel title takes at least 220px before the controls wrap under it. */
+.rt-page .monitor-panel-head > div:first-child {
+  flex-basis: 220px;
+}
+
+@media (max-width: 1099px) {
+  .rt-conn,
+  .rt-conn[data-icmp] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rt-return {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rt-return > :first-child {
+    grid-column: 1 / -1;
+  }
+  .rt-legs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 899px) {
+  .rt-page .monitor-head[data-layout="verdict"][data-aside] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Each router becomes a small card: number and buttons, then the four selects. */
+  .rt-hop-grid.monitor-thead {
+    display: none;
+  }
+  .rt-hop-grid.monitor-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .rt-hop-grid.monitor-row > :not(:first-child):not(:nth-child(6)):not(.rt-hop-notes) {
+    grid-column: 1 / -1;
+  }
+  .rt-hop-grid.monitor-row > :nth-child(6) {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .rt-hop-notes {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 599px) {
+  /* The badge moves above the sentence so the sentence keeps the full width. */
+  .rt-result-head {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  .rt-conn,
+  .rt-conn[data-icmp],
+  .rt-return {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rt-return > .monitor-btn {
+    width: 100%;
+  }
+}

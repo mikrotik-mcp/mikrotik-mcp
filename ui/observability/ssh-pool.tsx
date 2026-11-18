@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { MonitorPanel, StatusBadge, StatusDot, formatMs } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { deviceState, jumpOf } from "./device-card";
+import { cn } from "@/lib/utils";
 import type { DeviceInfo, SSHPoolPayload } from "./types";
 
 /** "30 s", "5 min": pool timings the way the board writes them. */
@@ -20,7 +22,17 @@ export function poolState(pool: DeviceInfo["pool"]): { tone: Tone; label: string
   return { tone: "good", label: "Ready · idle" };
 }
 
-const COLS = "minmax(160px,1fr) 120px 120px minmax(140px,1fr)";
+const STATE_TONE: Record<ReturnType<typeof deviceState>, Tone> = {
+  online: "good",
+  offline: "bad",
+  pending: "default",
+  disabled: "default",
+};
+
+/** "a", "a and b", "a, b and c". */
+function names(list: string[]): string {
+  return list.length < 2 ? list.join("") : `${list.slice(0, -1).join(", ")} and ${list.at(-1)}`;
+}
 
 /**
  * Open SSH sessions MCP keeps to reuse, per router. An open session shows MCP
@@ -35,6 +47,7 @@ export function SSHPoolPanel({
 }): ReactNode {
   const cfg = poolPayload?.config;
   const ssh = devices.filter((d) => !d.mac);
+  const mac = devices.filter((d) => d.mac).map((d) => d.name);
   const timing = cfg
     ? `Keepalive every ${duration(cfg.keepAliveInterval)}, idle sessions close after ${duration(cfg.idleTimeout)}.`
     : "Connection timing not reported.";
@@ -60,40 +73,61 @@ export function SSHPoolPanel({
         </div>
       ) : (
         <>
-          <div className="monitor-thead max-sm:hidden" style={{ gridTemplateColumns: COLS }}>
+          <div className="monitor-thead dv-pool-cols">
             <span>Router</span>
-            <span className="text-right">Busy channels</span>
-            <span className="text-right">Idle</span>
+            <span>Busy channels</span>
+            <span>Idle</span>
             <span>State</span>
           </div>
           {ssh.map((d) => {
             const info = poolState(d.pool);
             const open = !!d.pool?.pooled && !d.pool.dead;
+            const state = deviceState(d);
+            const jump = jumpOf(d);
             return (
-              <div key={d.name} className="monitor-row dv-pool-row" data-state={info.label}>
-                <span className="truncate font-mono text-[13px]">{d.name}</span>
-                <span className="text-fg-secondary text-right tabular-nums max-sm:hidden">
-                  {d.pool ? (open ? d.pool.inflight : 0) : "—"}
+              <div
+                key={d.name}
+                className="monitor-row dv-pool-row dv-pool-cols"
+                data-state={info.label}
+                data-failed={state === "offline" || undefined}
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <StatusDot tone={STATE_TONE[state]} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="p truncate font-mono text-[13px]">{d.name}</span>
+                    <span
+                      className={cn(
+                        "truncate text-[12px] leading-[17px]",
+                        state === "offline" ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      {jump ? `SSH · via ${jump}` : `SSH · ${d.host}:${d.port}`}
+                    </span>
+                  </span>
                 </span>
-                <span className="text-fg-secondary text-right tabular-nums max-sm:hidden">
+                <span className="tabular-nums">{d.pool ? (open ? d.pool.inflight : 0) : "—"}</span>
+                <span className="tabular-nums">
                   {d.pool ? (open && d.pool.inflight === 0 ? 1 : 0) : "—"}
                 </span>
-                <span className="text-fg-secondary flex items-center gap-2 max-sm:text-[12px]">
+                <span className="flex min-w-0 items-center gap-2">
                   <StatusDot tone={info.tone} />
-                  {info.label}
+                  <span className="truncate">{info.label}</span>
                 </span>
               </div>
             );
           })}
-          <div className="monitor-row text-muted-foreground text-[12px]">
-            <span className="max-sm:hidden">
+          <div className="monitor-foot">
+            <span>
               An open session shows MCP can reach the router. It doesn't show the router is healthy.
             </span>
-            <span className="sm:hidden">
-              {cfg
-                ? `Keepalive ${duration(cfg.keepAliveInterval)} · idle sessions close after ${duration(cfg.idleTimeout)}.`
-                : "Connection timing not reported."}
-            </span>
+            {mac.length > 0 && (
+              <>
+                <span className="flex-1" />
+                <span className="font-mono">
+                  {names(mac)} use{mac.length === 1 ? "s" : ""} MAC-Telnet, no pool
+                </span>
+              </>
+            )}
           </div>
         </>
       )}

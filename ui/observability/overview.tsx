@@ -1,16 +1,17 @@
 /**
- * Overview, built to the approved "Overview" board (Main.dc.html): verdict
- * header, KPI strip, calls over time beside the risk mix, top tools beside
- * recent failures, then calls by device when there is more than one router.
+ * Overview, built to the approved "Mon-Overview" board: a verdict header with
+ * the router map, four KPIs, calls over time beside the risk mix, then the
+ * routers beside the latest calls.
  */
 import type { ReactNode } from "react";
 import "./overview.css";
-import { Boxes, CircleCheck, RefreshCw } from "lucide-react";
+import { ChevronRight, CircleCheck, Filter, RefreshCw, Server } from "lucide-react";
 import { num, WINDOWS } from "./format";
 import { LoadingState } from "./loading-state";
+import { CallsLine, RouterRadar } from "./overview-charts";
+import type { RadarTone } from "./overview-charts";
 import {
-  formatBytes as bytes,
-  formatMs as ms,
+  Donut,
   Metric,
   MetricStrip,
   MonitorButton,
@@ -19,24 +20,26 @@ import {
   PageIntro,
   RiskBadge,
   Segmented,
-  StatusBadge,
   StatusDot,
   Ticker,
 } from "./monitoring-ui";
-import type { Tone } from "./monitoring-ui";
-import type { Bucket, Risk, Stats, ToolEvent } from "./types";
+import type { ChartTone, Tone } from "./monitoring-ui";
+import type { DeviceInfo, Risk, Stats, ToolEvent } from "./types";
 
-// Built from the view id: the hex-colour test would read the literal hash link as a colour.
-const FEED_HREF = `#${"feed"}`;
+// Built from the view ids: the hex-colour test would read a literal hash link as a colour.
+const FEED_HASH = "feed";
+const DEVICES_HASH = "devices";
 
 const RISKS: Risk[] = ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"];
-const RISK_STROKE: Record<Risk, string> = {
-  READ: "var(--muted-foreground)",
-  WRITE: "var(--warning)",
-  WRITE_IDEMPOTENT: "var(--chart-1)",
-  DESTRUCTIVE: "var(--destructive)",
-  DANGEROUS: "var(--destructive)",
+const RISK_TONE: Record<Risk, ChartTone> = {
+  READ: "muted",
+  WRITE: "warn",
+  WRITE_IDEMPOTENT: "brand",
+  DESTRUCTIVE: "bad",
+  DANGEROUS: "bad",
 };
+
+const NUMBER_WORD = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
 
 /** "last hour", "last 15 minutes", "last 24 hours". */
 function windowPhrase(windowMs: number): string {
@@ -46,271 +49,208 @@ function windowPhrase(windowMs: number): string {
   return `last ${Math.round(min / 60)} hours`;
 }
 
-/** "2.5-minute", "15-minute", "1-hour", "12.5-second". */
+/** "15 minutes", "1 hour", "24 hours": the span the chart covers. */
+function spanPhrase(windowMs: number): string {
+  const min = Math.round(windowMs / 60_000);
+  if (min < 60) return `${min} minutes`;
+  const h = Math.round(min / 60);
+  return h === 1 ? "1 hour" : `${h} hours`;
+}
+
+/** "one hour", "2.5 minutes", "15 minutes", "12.5 seconds". */
 function intervalPhrase(bucketMs: number): string {
   const fmt = (n: number): string => String(Math.round(n * 10) / 10);
-  if (bucketMs < 60_000) return `${fmt(bucketMs / 1000)}-second`;
-  if (bucketMs < 3_600_000) return `${fmt(bucketMs / 60_000)}-minute`;
-  return `${fmt(bucketMs / 3_600_000)}-hour`;
+  if (bucketMs < 60_000) return `${fmt(bucketMs / 1000)} seconds`;
+  if (bucketMs < 3_600_000) return `${fmt(bucketMs / 60_000)} minutes`;
+  const h = bucketMs / 3_600_000;
+  return h === 1 ? "one hour" : `${fmt(h)} hours`;
 }
 
 function hhmm(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-const COUNT_WORD = ["", "", "Both", "All three", "All four", "All five", "All six", "All seven"];
-
-function errorTone(stats: Stats): Tone {
-  if (stats.errorRate >= 0.2) return "bad";
-  if (stats.errors > 0) return "warn";
-  return "default";
+function capital(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** The header's status line and the sentence under it. */
+/** A latency as the KPI's number plus a small unit. */
+function latency(msValue: number): ReactNode {
+  if (msValue < 1)
+    return (
+      <>
+        &lt;1<small>ms</small>
+      </>
+    );
+  if (msValue < 1000)
+    return (
+      <>
+        {Math.round(msValue)}
+        <small>ms</small>
+      </>
+    );
+  return (
+    <>
+      {(msValue / 1000).toFixed(1)}
+      <small>s</small>
+    </>
+  );
+}
+
+function formatLatency(msValue: number): string {
+  if (msValue < 1) return "<1 ms";
+  if (msValue < 1000) return `${Math.round(msValue)} ms`;
+  return `${(msValue / 1000).toFixed(1)} s`;
+}
+
+type Router = Pick<DeviceInfo, "name" | "status" | "activity">;
+
+/** Healthy, under strain (CPU or memory at 70% or more), offline or not checked. */
+function routerTone(d: Router): RadarTone {
+  if (d.status.reachable === false) return "bad";
+  if (d.status.reachable == null) return "unknown";
+  const hot = Math.max(d.status.cpuLoad ?? 0, d.status.memUsedPct ?? 0);
+  return hot >= 70 ? "warn" : "good";
+}
+
+const LED_TONE: Record<RadarTone, Tone> = {
+  good: "good",
+  warn: "warn",
+  bad: "bad",
+  unknown: "default",
+};
+
+/** A bar's colour for a CPU or memory percentage. */
+function loadTone(pct: number): "warn" | "bad" | undefined {
+  if (pct >= 85) return "bad";
+  if (pct >= 70) return "warn";
+  return undefined;
+}
+
+/** The header's answer line and the sentence under it. */
 function verdict(
   stats: Stats,
   phrase: string,
   errors: ToolEvent[],
-): { tone: Tone; title: string; sub: ReactNode } {
-  if (stats.total === 0) {
+  routers: string[],
+): { line: ReactNode; lead: ReactNode } {
+  if (stats.total === 0)
     return {
-      tone: "default",
-      title: `No calls in the ${phrase}`,
-      sub: "Calls from any MCP client show up here as they happen.",
+      line: `No calls in the ${phrase}.`,
+      lead: "Calls from any MCP client show up here as they happen.",
     };
-  }
-  const pct = `${(stats.errorRate * 100).toFixed(1)}%`;
-  if (stats.errors === 0) {
+  const calls = `${num(stats.total)} ${stats.total === 1 ? "call" : "calls"}.`;
+  if (stats.errors === 0)
     return {
-      tone: "good",
-      title: `Every call succeeded in the ${phrase}`,
-      sub: `${num(stats.total)} calls, p95 ${ms(stats.latency.p95)}.`,
+      line: (
+        <>
+          {calls} <span className="s">None failed</span>.
+        </>
+      ),
+      lead: `p95 latency ${formatLatency(stats.latency.p95)}, ${stats.callsPerMin.toFixed(1)} calls per minute.`,
     };
-  }
-  const failing = stats.byTool.filter((t) => t.errors > 0);
-  let source: ReactNode = ` ${failing.length} tools had failures.`;
-  if (failing.length === 1) {
-    const tool = failing[0].tool;
-    const devices = new Set(errors.filter((e) => e.tool === tool).map((e) => e.device ?? ""));
-    const device = devices.size === 1 ? [...devices][0] : "";
-    const who =
-      stats.errors === 1 ? "It" : (COUNT_WORD[stats.errors] ?? `All ${num(stats.errors)}`);
+  const since = Date.now() - stats.windowMs;
+  const failedDevices = new Set(
+    errors.filter((e) => e.ts >= since && e.device).map((e) => e.device as string),
+  );
+  const onDevice = failedDevices.size === 1 ? ` on ${[...failedDevices][0]}` : "";
+  const failingTools = stats.byTool.filter((t) => t.errors > 0);
+  let source: ReactNode = `Failures came from ${num(failingTools.length)} tools.`;
+  if (failingTools.length === 1)
     source = (
       <>
-        {" "}
-        {who} came from <span className="text-fg-secondary font-mono text-[12px]">{tool}</span>
-        {device ? ` on ${device}` : ""}.
+        {stats.errors === 1 ? "The failure" : "Every failure"} came from{" "}
+        <span className="mono">{failingTools[0].tool}</span>.
       </>
     );
-  }
+  const others = routers.filter((r) => !failedDevices.has(r)).length;
+  const rest =
+    failedDevices.size === 1 && others > 0
+      ? ` The other ${NUMBER_WORD[others] ?? num(others)} ${others === 1 ? "router" : "routers"} answered every call.`
+      : "";
   return {
-    tone: errorTone(stats),
-    title: `${num(stats.errors)} of ${num(stats.total)} calls failed in the ${phrase}`,
-    sub: (
+    line: (
       <>
-        {pct} error rate.{source}
+        {calls} <em>{num(stats.errors)} failed</em>
+        {onDevice}.
+      </>
+    ),
+    lead: (
+      <>
+        {source}
+        {rest}
       </>
     ),
   };
 }
 
-/** The board's bar chart: succeeded calls per interval, failures stacked on top. */
-function CallsChart({ series }: { series: Bucket[] }): ReactNode {
-  const n = Math.max(series.length, 1);
-  const step = 720 / n;
-  const barW = step * 0.73;
-  const max = Math.max(1, ...series.map((b) => b.ok + b.error));
-  const H = 160;
-  return (
-    <svg
-      viewBox="0 0 720 220"
-      width="100%"
-      height="220"
-      preserveAspectRatio="none"
-      // Inline like the board's chart, so the panel keeps the same height.
-      className="inline"
-      role="img"
-      aria-label={`Calls per interval, peaking at ${num(max)} calls`}
-    >
-      <line x1="0" y1="20" x2="720" y2="20" stroke="var(--chart-grid)" strokeDasharray="2 4" />
-      <line x1="0" y1="100" x2="720" y2="100" stroke="var(--chart-grid)" strokeDasharray="2 4" />
-      <line x1="0" y1="180" x2="720" y2="180" stroke="var(--chart-grid)" />
-      {series.map((b, i) => {
-        const h = Math.round((b.ok / max) * H);
-        const eh = b.error ? Math.max(6, Math.round((b.error / max) * H) + 4) : 0;
-        const x = i * step + (step - barW) / 2;
-        return (
-          <g key={b.t}>
-            {h > 0 && (
-              <rect
-                x={x}
-                y={180 - h}
-                width={barW}
-                height={h}
-                rx="3"
-                fill="var(--chart-1)"
-                opacity="0.85"
-              />
-            )}
-            {eh > 0 && (
-              <rect
-                x={x}
-                y={180 - h - eh - 2}
-                width={barW}
-                height={eh}
-                rx="2"
-                fill="var(--destructive)"
-              />
-            )}
-          </g>
-        );
-      })}
-      <text x="0" y="14" fill="var(--muted-foreground)" fontSize="11">
-        {num(max)}
-      </text>
-      {series.length > 0 && (
-        <>
-          <text x="0" y="200" fill="var(--muted-foreground)" fontSize="11">
-            {hhmm(series[0].t)}
-          </text>
-          <text x="340" y="200" fill="var(--muted-foreground)" fontSize="11">
-            {hhmm(series[Math.floor(series.length / 2)].t)}
-          </text>
-        </>
-      )}
-      <text x="690" y="200" fill="var(--muted-foreground)" fontSize="11">
-        now
-      </text>
-    </svg>
-  );
-}
-
-/** Donut of the risk mix with a legend of counts. */
-function RiskMix({ stats }: { stats: Stats }): ReactNode {
-  const shown = RISKS.filter((r) => (stats.byRisk[r] ?? 0) > 0);
-  const total = shown.reduce((a, r) => a + stats.byRisk[r], 0);
-  const C = 2 * Math.PI * 48;
-  const lengths = shown.map((r) => (stats.byRisk[r] / Math.max(total, 1)) * C);
-  return (
-    <div className="overview-donut flex items-center gap-5">
-      <svg
-        viewBox="0 0 120 120"
-        width="120"
-        height="120"
-        className="flex-none"
-        role="img"
-        aria-label={`Risk mix of ${num(total)} calls`}
-      >
-        <circle cx="60" cy="60" r="48" fill="none" stroke="var(--overlay-08)" strokeWidth="12" />
-        {shown.map((r, i) => (
-          <circle
-            key={r}
-            cx="60"
-            cy="60"
-            r="48"
-            fill="none"
-            stroke={RISK_STROKE[r]}
-            strokeWidth="12"
-            strokeDasharray={`${Math.max(lengths[i] - 2, 1)} ${C}`}
-            // Each arc starts where the previous ones end.
-            strokeDashoffset={-lengths.slice(0, i).reduce((a, b) => a + b, 0)}
-            transform="rotate(-90 60 60)"
-          />
-        ))}
-        <text
-          x="60"
-          y="58"
-          textAnchor="middle"
-          fill="var(--text-emphasis)"
-          fontSize="20"
-          fontWeight="590"
-        >
-          {num(total)}
-        </text>
-        <text x="60" y="76" textAnchor="middle" fill="var(--muted-foreground)" fontSize="11">
-          calls
-        </text>
-      </svg>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {shown.map((r) => (
-          <div key={r} className="flex items-center gap-2 text-[13px]">
-            <RiskBadge risk={r} />
-            <span className="flex-1" />
-            <span className="text-fg-secondary tabular-nums">{num(stats.byRisk[r])}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** The phone board's risk mix: one stacked bar and a 2x2 legend. */
-function RiskStrip({ stats }: { stats: Stats }): ReactNode {
-  const shown = RISKS.filter((r) => (stats.byRisk[r] ?? 0) > 0);
-  const total = Math.max(
-    1,
-    shown.reduce((a, r) => a + stats.byRisk[r], 0),
-  );
-  return (
-    <div className="overview-risk-strip flex-col gap-2.5">
-      <div className="flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
-        {shown.map((r) => (
-          <span
-            key={r}
-            style={{ width: `${(stats.byRisk[r] / total) * 100}%`, background: RISK_STROKE[r] }}
-          />
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-2 text-[12px]">
-        {shown.map((r) => (
-          <span key={r} className="flex items-center gap-1.5">
-            <RiskBadge risk={r} short />
-            <span className="text-fg-secondary tabular-nums">{num(stats.byRisk[r])}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const TOOLS_GRID = "grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)_64px_72px]";
+const ROUTERS_GRID = "grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_64px_52px]";
+const CALLS_GRID = "grid-cols-[48px_minmax(0,1fr)_140px]";
 
 export function OverviewView({
   stats,
   windowMs,
   onWindowChange,
-  status,
   errors,
   feed,
+  devices,
   onOpen,
   onRefresh,
 }: {
   stats: Stats | null;
   windowMs: number;
   onWindowChange: (ms: number) => void;
-  /** Ok/failed split of the calls loaded in the live feed. */
-  status: { ok: number; error: number };
+  /** Ok/failed split of the calls loaded in the live feed. Not drawn on the board. */
+  status?: { ok: number; error: number };
   errors: ToolEvent[];
-  /** The live feed, used to name the slowest call's tool. */
+  /** The live feed; the newest calls fill "Latest calls". */
   feed: ToolEvent[];
+  /** Configured routers with their last health check. */
+  devices?: DeviceInfo[];
   onOpen: (e: ToolEvent) => void;
   onRefresh: () => void;
 }): ReactNode {
   const phrase = windowPhrase(windowMs);
-  const v = stats ? verdict(stats, phrase, errors) : null;
-  const feedTotal = status.ok + status.error;
-  const topCount = Math.max(1, ...(stats?.byTool.map((t) => t.count) ?? [1]));
-  const deviceTop = Math.max(1, ...(stats?.byDevice.map((d) => d.count) ?? [1]));
-  const slowest = stats ? feed.find((e) => e.durationMs === stats.latency.max) : undefined;
-  const bucketMs = stats?.series.length ? windowMs / stats.series.length : windowMs / 24;
+  // Without the health list, fall back to the routers that took calls.
+  const routers: Router[] =
+    devices ??
+    (stats?.byDevice ?? []).map((d) => ({
+      name: d.device,
+      status: { reachable: null, checkedAt: null, latencyMs: null },
+      activity: { calls: d.count, errors: 0, lastSeen: 0, avgMs: 0 },
+    }));
+  const names = routers.map((r) => r.name);
+  const v = stats ? verdict(stats, phrase, errors, names) : null;
+  const callsByDevice = new Map(stats?.byDevice.map((d) => [d.device, d.count]));
+  const offline = routers.filter((r) => r.status.reachable === false);
+  const online = routers.filter((r) => r.status.reachable === true).length;
+  const slowestTool = stats?.byTool.reduce<Stats["byTool"][number] | undefined>(
+    (top, t) => (!top || t.p95Ms > top.p95Ms ? t : top),
+    undefined,
+  );
+  const series = stats?.series ?? [];
+  const bucketMs = series.length ? windowMs / series.length : windowMs / 24;
+  const labelCount = Math.min(7, series.length);
+  const labels = Array.from({ length: labelCount }, (_, i) => {
+    const b = series[Math.round((i * (series.length - 1)) / Math.max(labelCount - 1, 1))];
+    return { at: b.t, text: i === labelCount - 1 ? "now" : hhmm(b.t) };
+  });
+  const riskShown = stats ? RISKS.filter((r) => (stats.byRisk[r] ?? 0) > 0) : [];
+  const riskTotal = riskShown.reduce((a, r) => a + (stats?.byRisk[r] ?? 0), 0);
+  const latest = feed.slice(0, 5);
 
   return (
-    <section className="overview grid content-start gap-6">
+    <section className="overview grid content-start gap-[18px]">
       <PageIntro
-        tone={v?.tone}
-        live={v?.tone === "bad"}
-        title={v?.title ?? `Loading the ${phrase}`}
-        controls={
+        eyebrow={capital(phrase)}
+        verdict={v?.line ?? `Loading the ${phrase}.`}
+        lead={v?.lead}
+        aside={
+          <div className="glass h-[300px] overflow-hidden">
+            <RouterRadar nodes={routers.map((r) => ({ name: r.name, tone: routerTone(r) }))} />
+          </div>
+        }
+        actions={
           <>
             <Segmented
               label="Time window"
@@ -318,260 +258,265 @@ export function OverviewView({
               onChange={onWindowChange}
               options={WINDOWS.map(([l, val]) => ({ value: val, label: l }))}
             />
-            <MonitorButton size="sm" variant="ghost" icon={<RefreshCw />} onClick={onRefresh}>
+            {stats && stats.errors > 0 && (
+              <MonitorButton
+                variant="primary"
+                icon={<Filter />}
+                onClick={() => (location.hash = FEED_HASH)}
+              >
+                Open failures
+              </MonitorButton>
+            )}
+            <MonitorButton variant="ghost" icon={<RefreshCw />} onClick={onRefresh}>
               Refresh
             </MonitorButton>
           </>
         }
-      >
-        {v?.sub}
-      </PageIntro>
+      />
 
       {stats ? (
-        <MetricStrip label="Call metrics" minCell={160}>
+        <MetricStrip label="Call metrics" minCell={160} className="overview-kpis">
           <Metric
-            primary
             label="Calls"
             value={<Ticker value={stats.total} format={(n) => num(Math.round(n))} />}
             hint={`${stats.callsPerMin.toFixed(1)} per minute`}
+            spark={series.map((b) => b.ok + b.error)}
           />
           <Metric
-            primary
-            label="Error rate"
-            tone={errorTone(stats)}
-            value={<Ticker value={stats.errorRate * 100} format={(n) => `${n.toFixed(1)}%`} />}
-            hint={stats.errors ? `${num(stats.errors)} failed` : "No failures"}
+            label="Failed"
+            tone={stats.errors > 0 ? "bad" : "default"}
+            value={<Ticker value={stats.errors} format={(n) => num(Math.round(n))} />}
+            hint={`${(stats.errorRate * 100).toFixed(1)}% of calls`}
+            spark={stats.errors > 0 ? series.map((b) => b.error) : undefined}
           />
           <Metric
             label="p95 latency"
-            value={ms(stats.latency.p95)}
-            hint={`avg ${ms(stats.latency.avg)} · p99 ${ms(stats.latency.p99)}`}
-          />
-          <Metric
-            label="Slowest call"
-            value={ms(stats.latency.max)}
+            value={latency(stats.latency.p95)}
             hint={
-              slowest ? (
-                <span className="font-mono">{slowest.tool}</span>
+              slowestTool ? (
+                <>
+                  slowest: <span className="font-mono">{slowestTool.tool}</span>
+                </>
               ) : (
-                `median ${ms(stats.latency.p50)}`
+                `avg ${formatLatency(stats.latency.avg)}`
               )
             }
           />
           <Metric
-            label="Tools used"
-            value={<Ticker value={stats.distinctTools} format={(n) => num(Math.round(n))} />}
-            hint={`on ${num(stats.distinctDevices)} ${stats.distinctDevices === 1 ? "device" : "devices"}`}
+            label="Routers online"
+            tone={offline.length ? "warn" : "default"}
+            value={
+              devices ? (
+                <>
+                  {online}
+                  <small>/{routers.length}</small>
+                </>
+              ) : (
+                "—"
+              )
+            }
+            hint={
+              !devices
+                ? "Not checked yet"
+                : offline.length === 1
+                  ? `${offline[0].name} offline at the last check`
+                  : offline.length > 1
+                    ? `${offline.length} offline at the last check`
+                    : "All answered the last check"
+            }
           />
-          <Metric label="Output" value={bytes(stats.outputBytes)} hint="returned to clients" />
         </MetricStrip>
       ) : (
         <LoadingState label="Loading overview metrics" layout="cards" />
       )}
 
-      <div className="overview-row flex flex-wrap gap-4">
+      <div className="overview-row overview-row-chart">
         <MonitorPanel
-          className="overview-calls flex-[2_1_560px]"
-          title="Calls over time"
-          description={`Per ${intervalPhrase(bucketMs)} interval, ${phrase}`}
+          title={`Calls over ${spanPhrase(windowMs)}`}
+          description={`Each point is ${intervalPhrase(bucketMs)}. Pink dots are failed calls.`}
           extra={
-            <span className="text-muted-foreground flex gap-4 text-[12px]">
-              <span className="flex items-center gap-1.5">
-                <StatusDot tone="brand" />
-                Succeeded
+            <span className="monitor-legend">
+              <span>
+                <i className="bg-sig" />
+                calls
               </span>
-              <span className="flex items-center gap-1.5">
-                <StatusDot tone="bad" />
-                Failed
+              <span>
+                <i className="bg-destructive" />
+                failed
               </span>
             </span>
           }
         >
           {stats ? (
-            <>
-              <CallsChart series={stats.series} />
-              <p className="overview-legend-phone">
-                <span className="flex items-center gap-1.5">
-                  <StatusDot tone="brand" />
-                  Succeeded
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <StatusDot tone="bad" />
-                  Failed
-                </span>
-              </p>
-            </>
+            <CallsLine
+              values={series.map((b) => b.ok + b.error)}
+              failed={series.map((b) => b.error)}
+              labels={labels}
+            />
           ) : (
             <LoadingState label="Loading calls over time" layout="chart" />
           )}
         </MonitorPanel>
 
-        <MonitorPanel
-          className="overview-risk flex-[1_1_300px]"
-          title="Risk mix"
-          description="What the calls were allowed to do"
-          bodyClassName="flex flex-col gap-4"
-        >
+        <MonitorPanel title="Risk mix" description="What the calls were allowed to change.">
           {stats ? (
-            <>
-              <RiskMix stats={stats} />
-              <RiskStrip stats={stats} />
-              <div className="overview-live-split flex flex-col gap-2 border-t pt-3">
-                <div className="text-muted-foreground flex justify-between text-[12px]">
-                  <span>Live feed</span>
-                  <span className="tabular-nums">
-                    {num(status.ok)} ok · {num(status.error)} failed
+            <div className="overview-risk flex items-center gap-[18px]">
+              <Donut
+                size={132}
+                stroke={14}
+                label="Risk mix"
+                center={num(riskTotal)}
+                sub="calls"
+                parts={riskShown.map((r) => ({
+                  value: stats.byRisk[r],
+                  tone: RISK_TONE[r],
+                  label: r,
+                }))}
+              />
+              <div className="flex min-w-0 flex-1 flex-col gap-[9px] text-[13px]">
+                {riskShown.map((r) => (
+                  <span key={r} className="flex items-center gap-2">
+                    <RiskBadge risk={r} />
+                    <span className="flex-1" />
+                    <span className="text-fg-secondary tabular-nums">{num(stats.byRisk[r])}</span>
                   </span>
-                </div>
-                <div
-                  className="bg-overlay-08 flex h-1.5 gap-0.5 overflow-hidden rounded-full"
-                  aria-hidden="true"
-                >
-                  {feedTotal > 0 && (
-                    <>
-                      <span
-                        className="bg-success rounded-full"
-                        // Widths are data-driven, so they can't be utility classes.
-                        style={{ width: `${(status.ok / feedTotal) * 100}%` }}
-                      />
-                      <span
-                        className="bg-destructive rounded-full"
-                        style={{ width: `${(status.error / feedTotal) * 100}%` }}
-                      />
-                    </>
-                  )}
-                </div>
+                ))}
               </div>
-            </>
+            </div>
           ) : (
             <LoadingState label="Loading risk mix" layout="chart" />
           )}
         </MonitorPanel>
       </div>
 
-      <div className="overview-row flex flex-wrap gap-4">
+      <div className="overview-row overview-row-lists">
         <MonitorPanel
           flush
-          className="overview-tools flex-[2_1_560px]"
-          title="Top tools"
-          description="Most called in the window, with p95 latency"
+          title="Routers"
+          description="CPU and memory at the last check."
           extra={
-            <a href={FEED_HREF} className="text-brand text-[13px] font-[510] no-underline">
-              Open Live Feed
-            </a>
+            <MonitorButton
+              variant="ghost"
+              size="sm"
+              icon={<ChevronRight />}
+              onClick={() => (location.hash = DEVICES_HASH)}
+            >
+              All routers
+            </MonitorButton>
           }
         >
-          {stats?.byTool.length ? (
+          {routers.length ? (
             <>
-              <div className={`monitor-thead ${TOOLS_GRID}`}>
-                <span>Tool</span>
-                <span>Share</span>
-                <span className="text-right">Calls</span>
-                <span className="text-right">p95</span>
+              <div className={`monitor-thead ${ROUTERS_GRID}`}>
+                <span>Router</span>
+                <span>Health</span>
+                <span>Avg</span>
+                <span>Calls</span>
               </div>
-              {stats.byTool.map((t) => (
-                <div key={t.tool} className={`overview-tool-row monitor-row ${TOOLS_GRID}`}>
-                  <span className="overview-tool-name text-fg-secondary truncate font-mono text-[12px]">
-                    {t.tool}
-                  </span>
-                  <span className="overview-tool-bar monitor-bar">
-                    <span
-                      style={{
-                        width: `${Math.round((t.count / topCount) * 100)}%`,
-                        background: t.errors ? "var(--destructive)" : undefined,
-                      }}
-                    />
-                  </span>
-                  <span className="overview-tool-count text-right tabular-nums">
-                    {num(t.count)}
-                  </span>
-                  <span className="overview-tool-p95 text-muted-foreground text-right tabular-nums">
-                    {ms(t.p95Ms)}
-                  </span>
-                </div>
-              ))}
+              {routers.map((r) => {
+                const tone = routerTone(r);
+                const cpu = r.status.cpuLoad;
+                const mem = r.status.memUsedPct;
+                return (
+                  <div
+                    key={r.name}
+                    className={`monitor-row ${ROUTERS_GRID}`}
+                    data-failed={tone === "bad" || undefined}
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <StatusDot tone={LED_TONE[tone]} />
+                      <span className="p truncate font-mono text-[12px]">{r.name}</span>
+                    </span>
+                    {tone === "bad" ? (
+                      <span className="text-destructive truncate text-[12px]">
+                        {r.status.error ? `${r.status.error} · offline` : "Offline"}
+                      </span>
+                    ) : cpu == null && mem == null ? (
+                      <span className="text-muted-foreground truncate text-[12px]">
+                        Not checked yet
+                      </span>
+                    ) : (
+                      <span
+                        className="monitor-meter min-w-0"
+                        title={`CPU ${cpu ?? "?"}% · memory ${mem ?? "?"}%`}
+                      >
+                        <span className="monitor-bar" aria-label={`CPU ${cpu ?? 0}%`}>
+                          <span data-tone={loadTone(cpu ?? 0)} style={{ width: `${cpu ?? 0}%` }} />
+                        </span>
+                        <span className="monitor-bar" aria-label={`Memory ${mem ?? 0}%`}>
+                          <span data-tone={loadTone(mem ?? 0)} style={{ width: `${mem ?? 0}%` }} />
+                        </span>
+                      </span>
+                    )}
+                    <span className="truncate font-mono text-[12px]">
+                      {tone === "bad" || !r.activity.avgMs ? "—" : formatLatency(r.activity.avgMs)}
+                    </span>
+                    <span className="truncate tabular-nums">
+                      {num(callsByDevice.get(r.name) ?? 0)}
+                    </span>
+                  </div>
+                );
+              })}
             </>
           ) : (
-            <MonitorEmpty compact icon={<Boxes />} title="No tool calls yet">
-              Tools show up here once a client calls them.
+            <MonitorEmpty compact icon={<Server />} title="No routers yet">
+              Add a router on the Devices page.
             </MonitorEmpty>
           )}
         </MonitorPanel>
 
         <MonitorPanel
           flush
-          className="overview-failures flex-[1_1_300px]"
-          title="Recent failures"
-          description="Open one to see input and output"
+          title="Latest calls"
+          description="Streaming from the MCP server."
           extra={
-            errors.length > 0 ? (
-              <StatusBadge tone="bad">{num(errors.length)}</StatusBadge>
-            ) : undefined
+            <MonitorButton
+              variant="ghost"
+              size="sm"
+              icon={<ChevronRight />}
+              onClick={() => (location.hash = FEED_HASH)}
+            >
+              Live Feed
+            </MonitorButton>
           }
         >
-          {errors.length ? (
+          {latest.length ? (
             <>
-              {errors.slice(0, 3).map((e) => (
+              <div className={`monitor-thead ${CALLS_GRID}`}>
+                <span>Time</span>
+                <span>Tool</span>
+                <span>Result</span>
+              </div>
+              {latest.map((e) => (
                 <button
                   key={e.id}
                   type="button"
-                  className="monitor-row grid-cols-[52px_minmax(0,1fr)]"
-                  data-failed
+                  className={`monitor-row ${CALLS_GRID}`}
+                  data-failed={e.isError || undefined}
                   onClick={() => onOpen(e)}
                 >
-                  <span className="text-muted-foreground font-mono text-[12px]">{hhmm(e.ts)}</span>
-                  <span className="min-w-0">
-                    <span className="text-foreground block truncate font-mono text-[12px]">
-                      {e.tool}
-                    </span>
-                    <span className="text-muted-foreground block truncate text-[12px]">
-                      {e.device ? `${e.device}: ` : ""}
-                      {e.error ?? e.output ?? "Failed"}
-                    </span>
+                  <span className="text-muted-foreground truncate font-mono text-[12px]">
+                    {hhmm(e.ts)}
                   </span>
+                  <span className="p truncate font-mono text-[12px]">{e.tool}</span>
+                  {e.isError ? (
+                    <span className="text-destructive truncate">{e.error ?? "Failed"}</span>
+                  ) : (
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <StatusDot tone="good" />
+                      {formatLatency(e.durationMs)}
+                    </span>
+                  )}
                 </button>
               ))}
-              <div className="monitor-foot">Older failures are in the Live Feed.</div>
             </>
           ) : (
-            <MonitorEmpty compact icon={<CircleCheck />} title="No failures">
-              Nothing in the live feed has failed.
+            <MonitorEmpty compact icon={<CircleCheck />} title="No calls yet">
+              Calls show up here as they happen.
             </MonitorEmpty>
           )}
         </MonitorPanel>
       </div>
-
-      {stats && stats.byDevice.length > 1 && (
-        <MonitorPanel
-          className="overview-devices"
-          title="Calls by device"
-          description="Shown when more than one router is configured"
-          bodyClassName="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"
-        >
-          {stats.byDevice.map((d) => {
-            const failed = errors.filter((e) => e.device === d.device).length;
-            return (
-              <div
-                key={d.device}
-                className="bg-overlay-02 flex flex-col gap-2 rounded-[6px] px-4 py-3 shadow-[inset_0_0_0_1px_var(--border)]"
-              >
-                <div className="flex items-center gap-2">
-                  <StatusDot tone={failed ? "warn" : "good"} />
-                  <span className="text-foreground font-mono text-[13px]">{d.device}</span>
-                  <span className="flex-1" />
-                  <span className="text-fg-secondary tabular-nums">{num(d.count)}</span>
-                </div>
-                <span className="monitor-bar">
-                  <span style={{ width: `${Math.round((d.count / deviceTop) * 100)}%` }} />
-                </span>
-                <span className="text-muted-foreground text-[12px]">
-                  {failed ? `${num(failed)} failed` : "no failures"} in the live feed
-                </span>
-              </div>
-            );
-          })}
-        </MonitorPanel>
-      )}
     </section>
   );
 }

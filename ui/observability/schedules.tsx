@@ -1,15 +1,10 @@
 /**
  * Schedules: what the server audits on its own, and how the posture moves.
  *
- *   - Jobs: each job with its schedule in plain English, the next run, the last
- *     outcome and Run now. Picking one scopes everything below it.
- *   - Posture over time: findings per run, stacked by severity. One audit says
- *     "12 findings"; a series says "critical went to zero six weeks ago".
- *   - Regressions: new, worse or fixed since the run before, one row per
- *     finding, expandable to the detail.
- *   - Last 5 weeks: one square per day, so "it got worse three weeks ago" is
- *     visible at a glance.
- *   - Run history: per run, with device, duration and outcome.
+ * After the Mon-Schedules board. The header says what changed since the last
+ * run and shows the last five weeks, one square per day. Below: the jobs
+ * (picking one scopes the charts), posture over time, regressions and the run
+ * history. "New job" opens the job editor (schedules-job-editor.tsx).
  */
 import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
@@ -20,7 +15,9 @@ import {
   Metric,
   MetricStrip,
   MonitorButton,
+  MonitorDialog,
   MonitorEmpty,
+  MonitorNote,
   MonitorPanel,
   PageIntro,
   StatusBadge,
@@ -30,7 +27,9 @@ import {
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 import { toast } from "./toast-action";
+import { ScheduleJobEditor, runTime } from "./schedules-job-editor";
 import type {
+  DevicesPayload,
   ScheduleFinding,
   ScheduleJobRow,
   ScheduleOutcome,
@@ -38,23 +37,13 @@ import type {
   ScheduleRegression,
 } from "./types";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { CalendarClock, ChevronRight, Ellipsis, Loader2, Trash2 } from "lucide-react";
+import { CalendarClock, Ellipsis, Loader2, Plus, Trash2, TriangleAlert } from "lucide-react";
 import "./monitoring.css";
 import "./schedules.css";
 
@@ -116,16 +105,13 @@ function dateOnly(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** "yesterday", "5 days ago", "two weeks ago": how long ago the first bar was. */
-function agoPhrase(ms: number, now: number): string {
-  const days = Math.round((now - ms) / DAY_MS);
-  if (days < 1) return "earlier today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days} days ago`;
-  const weeks = Math.round(days / 7);
-  if (weeks === 1) return "a week ago";
-  if (weeks === 2) return "two weeks ago";
-  return `${weeks} weeks ago`;
+/** "today", "yesterday", "on Monday" (this week), else "on Nov 6". */
+function dayWord(ms: number, now: number): string {
+  const d = new Date(ms);
+  if (d.toDateString() === new Date(now).toDateString()) return "today";
+  if (d.toDateString() === new Date(now - DAY_MS).toDateString()) return "yesterday";
+  if (now - ms < 6 * DAY_MS) return `on ${d.toLocaleDateString(undefined, { weekday: "long" })}`;
+  return `on ${dateOnly(ms)}`;
 }
 
 /** `2026-07-30` in local time: the day grid's cell key. */
@@ -134,7 +120,7 @@ function dayKey(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Bar heights for one run, bottom to top: info, low, medium, high, critical. */
+/** Bar segments bottom to top: info, low, medium, high, critical. */
 const STACK = [...SEVERITIES].reverse();
 
 /** Successful runs in time order, newest `MAX_BARS`: what the posture chart draws. */
@@ -145,16 +131,17 @@ function postureRuns(points: SchedulePoint[]): SchedulePoint[] {
     .slice(-MAX_BARS);
 }
 
-/** The chart's key: one dot per severity that shows up in the bars. */
+/** The chart's key: each severity with its count in the newest run. */
 function PostureLegend({ runs }: { runs: SchedulePoint[] }): ReactNode {
-  const present = SEVERITIES.filter((s) => runs.some((p) => (p.bySeverity[s] ?? 0) > 0));
-  if (runs.length < 2 || present.length === 0) return null;
+  if (runs.length < 2) return null;
+  const last = runs[runs.length - 1];
+  const shown = SEVERITIES.filter((s) => s !== "info" || (last.bySeverity.info ?? 0) > 0);
   return (
-    <span className="sched-legend" aria-hidden="true">
-      {present.map((s) => (
+    <span className="monitor-legend" aria-label="Findings in the newest run">
+      {shown.map((s) => (
         <span key={s}>
-          <StatusDot tone={SEVERITY_TONE[s] ?? "default"} />
-          {capitalize(s)}
+          <i className="sched-sev-key" data-sev={s} />
+          {s} {last.bySeverity[s] ?? 0}
         </span>
       ))}
     </span>
@@ -162,9 +149,8 @@ function PostureLegend({ runs }: { runs: SchedulePoint[] }): ReactNode {
 }
 
 /**
- * Findings per run, stacked by severity with critical on top.
- *
- * Hand-drawn SVG: the series is at most a few dozen bars of five numbers.
+ * Findings per run, stacked by severity with critical on top. Hand-drawn SVG:
+ * the series is at most a few dozen bars of five numbers.
  */
 function PostureBars({ runs, scopeKey }: { runs: SchedulePoint[]; scopeKey: string }): ReactNode {
   const ref = useRef<HTMLDivElement>(null);
@@ -173,101 +159,101 @@ function PostureBars({ runs, scopeKey }: { runs: SchedulePoint[]; scopeKey: stri
 
   if (runs.length < 2) {
     return (
-      <p className="sched-summary">
+      <p className="monitor-hint">
         Two runs are needed before there is a trend. The first run is the baseline.
       </p>
     );
   }
 
-  const W = 560;
-  const BASE = 150;
-  const TOP = 30;
+  const W = 640;
+  const H = 200;
+  const GAP = 8;
+  const n = runs.length;
+  const bw = (W - GAP * (n - 1)) / n;
   const max = Math.max(1, ...runs.map((p) => p.total));
-  const k = (BASE - TOP) / max;
-  const slot = W / runs.length;
-  const barW = Math.min(28, slot * 0.7);
-
   const first = runs[0];
-  const last = runs[runs.length - 1];
-  const critFrom = first.bySeverity.critical ?? 0;
-  const critTo = last.bySeverity.critical ?? 0;
-  const ago = agoPhrase(first.at, now);
-  const trend =
-    last.total < first.total
-      ? `down from ${first.total} ${ago}`
-      : last.total > first.total
-        ? `up from ${first.total} ${ago}`
-        : `the same as ${ago}`;
-  const summary = `${plural(last.total, "finding")} now, ${trend}.${
-    critFrom !== critTo ? ` Critical went from ${critFrom} to ${critTo}.` : ""
-  }`;
+  const last = runs[n - 1];
+  const summary = `${plural(last.total, "finding")} now, ${plural(first.total, "finding")} on ${dateOnly(first.at)}.`;
+  const today = new Date(now).toDateString();
+  // Five dates along the axis, first to newest.
+  const ticks = [...new Set([0, 1, 2, 3, 4].map((i) => Math.round((i * (n - 1)) / 4)))].map((i) =>
+    new Date(runs[i].at).toDateString() === today ? "today" : dateOnly(runs[i].at),
+  );
 
   return (
     <div ref={ref}>
       <svg
         className="sched-posture-svg"
-        viewBox={`0 0 ${W} 170`}
+        viewBox={`0 0 ${W} ${H}`}
         width="100%"
-        height="170"
+        height={H}
         preserveAspectRatio="none"
         role="img"
-        aria-label={`Findings per run over the last ${runs.length} runs. ${summary}`}
+        aria-label={`Findings per run over the last ${n} runs. ${summary}`}
       >
-        <line x1="0" y1={BASE} x2={W} y2={BASE} stroke="var(--chart-grid)" />
-        <line x1="0" y1={TOP} x2={W} y2={TOP} stroke="var(--chart-grid)" strokeDasharray="2 4" />
+        {[1, 2, 3].map((i) => (
+          <line
+            key={i}
+            x1="0"
+            x2={W}
+            y1={(H * i) / 4}
+            y2={(H * i) / 4}
+            stroke="var(--line)"
+            strokeDasharray="2 5"
+          />
+        ))}
         {runs.map((p, i) => {
-          const x = i * slot + (slot - barW) / 2;
-          // The bottom segment sits on the base line; each one above leaves a 2px gap.
-          let top = BASE + 2;
+          const x = i * (bw + GAP);
+          let y = H;
           return (
             <g key={`${p.jobId}-${p.device ?? ""}-${p.at}`} data-bar="">
               <title>{`${stamp(p.at)} · ${p.jobId}${p.device ? ` · ${p.device}` : ""} · ${plural(p.total, "finding")}`}</title>
               {STACK.map((s) => {
-                const n = p.bySeverity[s] ?? 0;
-                if (n === 0) return null;
-                const h = n * k;
-                top = top - 2 - h;
+                const v = p.bySeverity[s] ?? 0;
+                if (v === 0) return null;
+                const bh = (v / max) * (H - 12);
+                y -= bh;
                 return (
                   <rect
                     key={s}
                     className="sched-bar"
                     data-sev={s}
                     x={x}
-                    y={top}
-                    width={barW}
-                    height={h}
-                    rx="2"
+                    y={y + 1}
+                    width={bw}
+                    height={Math.max(bh - 2, 1)}
+                    rx="3"
                   />
                 );
               })}
             </g>
           );
         })}
-        <text x="0" y={TOP - 6} fill="var(--muted-foreground)" fontSize="11">
-          {max}
-        </text>
       </svg>
-      <p className="sched-summary sched-summary-chart">{summary}</p>
+      <div className="sched-axis" aria-hidden="true">
+        {ticks.map((t, i) => (
+          <span key={`${t}-${i}`}>{t}</span>
+        ))}
+      </div>
     </div>
   );
 }
 
 type DayState = "none" | "clean" | "more" | "failed";
 
-/** One square per day for the last five weeks. */
+/** One square per day for the last five weeks; today has a ring. */
 function DayGrid({ points }: { points: SchedulePoint[] }): ReactNode {
   const now = useNow(60_000);
-  const byDay = new Map<string, { state: DayState; runs: number; total: number }>();
+  const byDay = new Map<string, { state: DayState; total: number }>();
   for (const p of points) {
     if (p.outcome === "skipped") continue;
     const key = dayKey(p.at);
-    const seen = byDay.get(key) ?? { state: "clean" as DayState, runs: 0, total: 0 };
+    const seen = byDay.get(key) ?? { state: "clean" as DayState, total: 0 };
     let state = seen.state;
     if (p.outcome !== "ok") state = "failed";
     else if (state !== "failed" && p.added + p.worsened > 0) state = "more";
     byDay.set(key, {
       state,
-      runs: seen.runs + 1,
       total: p.outcome === "ok" ? Math.max(seen.total, p.total) : seen.total,
     });
   }
@@ -285,32 +271,47 @@ function DayGrid({ points }: { points: SchedulePoint[] }): ReactNode {
         : day.state === "more"
           ? `${label}: new or worse findings, ${plural(day.total, "finding")}`
           : `${label}: nothing new, ${plural(day.total, "finding")}`;
-    return { key, state: day?.state ?? "none", title };
+    return { key, at, state: day?.state ?? "none", title };
   });
 
   return (
-    <div className="sched-calendar-body">
+    <div className="glass sched-calendar">
+      <div className="sched-calendar-head">
+        <span className="sched-calendar-label">Last 5 weeks</span>
+        <span className="sched-small">One square per day</span>
+      </div>
       <div className="sched-days" role="img" aria-label="Daily run results for the last 5 weeks">
-        {cells.map((c) => (
-          <span key={c.key} className="sched-day" data-state={c.state} title={c.title} />
+        {cells.slice(0, 7).map((c) => (
+          <span key={`h-${c.key}`} className="sched-weekday">
+            {new Date(c.at).toLocaleDateString(undefined, { weekday: "short" })}
+          </span>
+        ))}
+        {cells.map((c, i) => (
+          <i
+            key={c.key}
+            className="sched-day"
+            data-state={c.state}
+            data-today={i === GRID_DAYS - 1 || undefined}
+            title={c.title}
+          />
         ))}
       </div>
-      <div className="sched-legend">
+      <div className="monitor-legend sched-calendar-legend">
         <span>
-          <span className="sched-day sched-day-key" data-state="none" />
-          No run
+          <i data-state="clean" />
+          Ran
         </span>
         <span>
-          <span className="sched-day sched-day-key" data-state="clean" />
-          Clean
-        </span>
-        <span>
-          <span className="sched-day sched-day-key" data-state="more" />
+          <i data-state="more" />
           More findings
         </span>
         <span>
-          <span className="sched-day sched-day-key" data-state="failed" />
-          Run failed
+          <i data-state="failed" />
+          Failed
+        </span>
+        <span>
+          <i data-state="none" />
+          No run
         </span>
       </div>
     </div>
@@ -319,7 +320,7 @@ function DayGrid({ points }: { points: SchedulePoint[] }): ReactNode {
 
 interface RegressionItem {
   key: string;
-  change: "New" | "Worse" | "Fixed" | "Changed";
+  change: "New" | "Worse" | "Resolved" | "Changed";
   severity: string | null;
   title: string;
   finding: ScheduleFinding | null;
@@ -331,7 +332,7 @@ interface RegressionItem {
 const CHANGE_CLASS: Record<RegressionItem["change"], string> = {
   New: "text-destructive",
   Worse: "text-warning",
-  Fixed: "text-success",
+  Resolved: "text-success",
   Changed: "text-muted-foreground",
 };
 
@@ -360,7 +361,7 @@ function flattenRegressions(regressions: ScheduleRegression[]): RegressionItem[]
       })),
       ...r.resolved.map((f) => ({
         key: `${base}-r-${f.id}`,
-        change: "Fixed" as const,
+        change: "Resolved" as const,
         severity: f.severity,
         title: f.title,
         finding: f,
@@ -381,6 +382,7 @@ function flattenRegressions(regressions: ScheduleRegression[]): RegressionItem[]
   });
 }
 
+/** A regression row; a click opens the finding's detail under it. */
 function RegressionRow({ item }: { item: RegressionItem }): ReactNode {
   const [open, setOpen] = useState(false);
   const device = item.finding?.device ?? item.run.device;
@@ -388,27 +390,22 @@ function RegressionRow({ item }: { item: RegressionItem }): ReactNode {
     <div className="sched-reg" data-open={open || undefined}>
       <button
         type="button"
-        className="monitor-row sched-reg-row"
+        className="monitor-row sched-reg-grid"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <ChevronRight className="sched-reg-chevron" aria-hidden="true" strokeWidth={1.5} />
-        <span className="sched-reg-sev">
-          {item.severity ? (
-            <StatusBadge tone={SEVERITY_TONE[item.severity] ?? "default"}>
-              {capitalize(item.severity)}
-            </StatusBadge>
-          ) : (
-            <StatusBadge>Change</StatusBadge>
-          )}
+        <span className="min-w-0">
+          <StatusBadge tone={SEVERITY_TONE[item.severity ?? ""] ?? "default"} dot={false}>
+            {item.severity ? capitalize(item.severity) : "Change"}
+          </StatusBadge>
         </span>
-        <span className="sched-reg-title min-w-0">
-          <span className="text-foreground block truncate">{item.title}</span>
-          <span className="text-muted-foreground block truncate font-mono text-[12px]">
+        <span className="flex min-w-0 flex-col gap-px">
+          <span className="p truncate">{item.title}</span>
+          <span className="sched-mono text-muted-foreground truncate">
             {device} · {item.run.jobId}
           </span>
         </span>
-        <span className={cn("sched-reg-change text-[12px] font-[510]", CHANGE_CLASS[item.change])}>
+        <span className={cn("truncate text-[12px] font-medium", CHANGE_CLASS[item.change])}>
           {item.change}
         </span>
       </button>
@@ -439,6 +436,8 @@ export function SchedulesView(): ReactNode {
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [devices, setDevices] = useState<string[]>([]);
   const jobsRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback((job?: string | null): Promise<void> => {
@@ -468,6 +467,16 @@ export function SchedulesView(): ReactNode {
   useEffect(() => {
     void load(selected);
   }, [load, selected]);
+
+  // Device names for the job editor; only once it opens.
+  useEffect(() => {
+    if (!editorOpen || devices.length > 0) return;
+    api<DevicesPayload>("/api/devices")
+      .then((res) => setDevices(res.devices.map((d) => d.name)))
+      .catch(() => {
+        /* "All devices" still works without the list */
+      });
+  }, [editorOpen, devices.length]);
 
   const runNow = async (id: string): Promise<void> => {
     setRunning(id);
@@ -512,41 +521,80 @@ export function SchedulesView(): ReactNode {
     [points],
   );
 
+  /** Regressions from each job and device's newest run: "since the last run". */
+  const fresh = useMemo(() => {
+    const newest = new Map<string, number>();
+    for (const p of points) {
+      const k = `${p.jobId}\u0000${p.device ?? ""}`;
+      if (p.at > (newest.get(k) ?? 0)) newest.set(k, p.at);
+    }
+    return regressions.filter(
+      (r) =>
+        newest.get(`${r.jobId}\u0000${r.device}`) === r.at &&
+        r.added.length + r.worsened.length > 0,
+    );
+  }, [points, regressions]);
+
   useStaggerIn(jobsRef, ".monitor-row", jobs.map((j) => j.id).join("|"));
 
   if (initialLoading) return <LoadingState label="Loading schedules" />;
 
+  const eyebrow = "Schedules · audits on a timer";
+  const newJob = (
+    <MonitorButton
+      variant="primary"
+      icon={<Plus aria-hidden="true" />}
+      onClick={() => setEditorOpen(true)}
+    >
+      New job
+    </MonitorButton>
+  );
+  const editor = (
+    <ScheduleJobEditor
+      open={editorOpen}
+      onOpenChange={setEditorOpen}
+      auditors={schedulable}
+      devices={devices}
+      onSaved={() => {
+        setSelected(null);
+        void load(null);
+      }}
+    />
+  );
   const count = (n: number): string => String(Math.round(n));
-  const scope = selected ?? "All jobs";
-  const intro = (
-    <PageIntro>
-      Audits that run on a timer and report only what changed since the last run.
-    </PageIntro>
-  );
   const errorNote = error && (
-    <div className="monitor-note" data-tone="bad" role="alert">
-      <span>
-        <span className="font-[590]">Schedules unavailable.</span>{" "}
-        <span className="text-muted-foreground">{error}</span>
-      </span>
-    </div>
+    <MonitorNote tone="bad" role="alert" icon={<TriangleAlert aria-hidden="true" />}>
+      <b>Schedules unavailable.</b> {error}
+    </MonitorNote>
   );
+  const toolOf = (jobId: string): string => jobs.find((j) => j.id === jobId)?.tool ?? jobId;
+
   if (jobs.length === 0) {
     return (
       <div className="sched-page">
-        {intro}
+        <PageIntro
+          eyebrow={eyebrow}
+          verdict="Nothing scheduled yet."
+          lead="Audits that run on a timer and report only what changed."
+          actions={newJob}
+        />
         {errorNote}
         <section className="monitor-panel">
-          <MonitorEmpty icon={<CalendarClock />} title="Nothing scheduled">
-            <p>
-              Add a job with <code>add_schedule</code>. Jobs run on their own and report only what
-              changed since the last run.
-            </p>
+          <MonitorEmpty
+            icon={<CalendarClock />}
+            title="Nothing scheduled"
+            action={
+              <MonitorButton icon={<Plus aria-hidden="true" />} onClick={() => setEditorOpen(true)}>
+                New job
+              </MonitorButton>
+            }
+          >
+            <p>Jobs run on their own and report only what changed since the last run.</p>
             {schedulable.length > 0 && (
               <ul className="sched-tools">
                 {schedulable.map((s) => (
                   <li key={s.tool}>
-                    <span className="text-foreground font-mono text-[12px]">{s.tool}</span>
+                    <span className="sched-mono text-foreground">{s.tool}</span>
                     <span>{s.summary}</span>
                   </li>
                 ))}
@@ -554,17 +602,83 @@ export function SchedulesView(): ReactNode {
             )}
           </MonitorEmpty>
         </section>
+        {editor}
       </div>
     );
   }
 
   const enabled = jobs.filter((j) => j.enabled).length;
   const runs = postureRuns(points);
-  const scopeTool = selected ? (jobs.find((j) => j.id === selected)?.tool ?? selected) : "All jobs";
+  const scope = selected ?? "All jobs";
+  const scopeTool = selected ? toolOf(selected) : "All jobs";
+
+  // The verdict: what is new or worse since each job's last run, else a failed run.
+  const added = fresh.reduce((n, r) => n + r.added.length, 0);
+  const worse = fresh.reduce((n, r) => n + r.worsened.length, 0);
+  const freshDevices = [...new Set(fresh.map((r) => r.device))];
+  const failingJobs = jobs.filter(
+    (j) => j.lastRun && j.lastRun.outcome !== "ok" && j.lastRun.outcome !== "skipped",
+  );
+  const where =
+    freshDevices.length === 1 ? `on ${freshDevices[0]}` : `on ${freshDevices.length} devices`;
+  const verdict =
+    added + worse > 0 ? (
+      <>
+        <em>
+          {added > 0 && worse > 0
+            ? plural(added + worse, "new or worse finding")
+            : added > 0
+              ? plural(added, "new finding")
+              : plural(worse, "worse finding")}
+        </em>{" "}
+        {where} since the last run.
+      </>
+    ) : failingJobs.length > 0 ? (
+      <>
+        <em>
+          {failingJobs[0].id}{" "}
+          {failingJobs[0].lastRun?.outcome === "timeout" ? "timed out" : "failed"}
+        </em>{" "}
+        on its last run.
+      </>
+    ) : (
+      <>
+        <span className="s">Nothing new</span> since the last run.
+      </>
+    );
+  // Jobs whose newest run brought new or worse findings: their LED turns amber.
+  const freshJobs = new Set(fresh.map((r) => r.jobId));
+  const firstAdded = fresh.find((r) => r.added.length > 0);
+  const lead = (
+    <>
+      Audits that run on a timer and report only what changed.
+      {firstAdded && (
+        <>
+          {" "}
+          <span className="mono">{toolOf(firstAdded.jobId)}</span> found:{" "}
+          {firstAdded.added[0].title}.
+        </>
+      )}
+      {failingJobs.slice(0, 1).map((j) => (
+        <span key={j.id}>
+          {" "}
+          <span className="mono">{j.tool}</span>{" "}
+          {j.lastRun?.outcome === "timeout" ? "timed out" : "failed"}{" "}
+          {dayWord(j.lastRun?.startedAt ?? now, now)}.
+        </span>
+      ))}
+    </>
+  );
 
   return (
     <div className="sched-page">
-      {intro}
+      <PageIntro
+        eyebrow={eyebrow}
+        verdict={verdict}
+        lead={lead}
+        actions={newJob}
+        aside={<DayGrid points={points} />}
+      />
       {errorNote}
 
       <MetricStrip label="Schedule summary" minCell={180}>
@@ -594,9 +708,8 @@ export function SchedulesView(): ReactNode {
 
       <div className="sched-split">
         <MonitorPanel
-          className="sched-jobs"
           title="Jobs"
-          description="Pick one to scope the charts below"
+          description="Pick one to scope the charts"
           extra={
             selected && (
               <MonitorButton variant="ghost" size="sm" onClick={() => setSelected(null)}>
@@ -634,7 +747,7 @@ export function SchedulesView(): ReactNode {
               return (
                 <div
                   key={job.id}
-                  className="monitor-row sched-job-row"
+                  className="monitor-row sched-job-grid"
                   data-selected={isSelected || undefined}
                 >
                   <button
@@ -643,15 +756,25 @@ export function SchedulesView(): ReactNode {
                     aria-pressed={isSelected}
                     onClick={() => setSelected(isSelected ? null : job.id)}
                   >
-                    <span className="flex items-center gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
                       <StatusDot
-                        tone={job.enabled ? OUTCOME_TONE[last?.outcome ?? "skipped"] : "default"}
+                        tone={
+                          !job.enabled
+                            ? "default"
+                            : last?.outcome === "ok" && freshJobs.has(job.id)
+                              ? "warn"
+                              : OUTCOME_TONE[last?.outcome ?? "skipped"]
+                        }
                       />
-                      <span className="text-foreground truncate font-mono text-[12px]">
-                        {job.tool}
-                      </span>
+                      <span className="sched-mono p truncate">{job.tool}</span>
                     </span>
-                    <span className="sched-meta" title={meta}>
+                    <span
+                      className={cn(
+                        "sched-meta truncate",
+                        lastFailed && job.enabled ? "text-destructive" : "text-muted-foreground",
+                      )}
+                      title={meta}
+                    >
                       {meta}
                     </span>
                   </button>
@@ -667,12 +790,13 @@ export function SchedulesView(): ReactNode {
                     </MonitorButton>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <MonitorButton
-                          variant="ghost"
-                          size="sm"
+                        <button
+                          type="button"
+                          className="monitor-icon-btn"
                           aria-label={`More actions for ${job.id}`}
-                          icon={<Ellipsis aria-hidden="true" strokeWidth={1.5} />}
-                        />
+                        >
+                          <Ellipsis aria-hidden="true" />
+                        </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
@@ -691,7 +815,6 @@ export function SchedulesView(): ReactNode {
         </MonitorPanel>
 
         <MonitorPanel
-          className="sched-chart"
           title="Posture over time"
           description={`${scopeTool} · findings by severity, last ${plural(runs.length, "run")}`}
           extra={<PostureLegend runs={runs} />}
@@ -701,108 +824,116 @@ export function SchedulesView(): ReactNode {
       </div>
 
       <div className="sched-split">
-        <MonitorPanel
-          className="sched-regressions"
-          title="Regressions"
-          description="New or worse since the previous run"
-          flush
-        >
+        <MonitorPanel title="Regressions" description="New or worse since the previous run" flush>
           {changes.length === 0 ? (
             <MonitorEmpty compact title="No changes">
               Nothing changed between runs. Unchanged findings stay quiet.
             </MonitorEmpty>
           ) : (
-            changes.map((item) => <RegressionRow key={item.key} item={item} />)
+            <>
+              <div className="monitor-thead sched-reg-grid" aria-hidden="true">
+                <span>Severity</span>
+                <span>Finding</span>
+                <span>Change</span>
+              </div>
+              {changes.map((item) => (
+                <RegressionRow key={item.key} item={item} />
+              ))}
+            </>
           )}
         </MonitorPanel>
 
-        <MonitorPanel
-          className="sched-calendar"
-          title="Last 5 weeks"
-          description="One square per day"
-        >
-          <DayGrid points={points} />
+        <MonitorPanel title="Run history" description="Newest first" flush>
+          {history.length === 0 ? (
+            <MonitorEmpty compact title="No runs yet">
+              Runs show up here after the first one finishes.
+            </MonitorEmpty>
+          ) : (
+            <>
+              <div className="monitor-thead sched-run-grid" aria-hidden="true">
+                <span>Job</span>
+                <span>Device</span>
+                <span>Started</span>
+                <span>Took</span>
+                <span>Result</span>
+              </div>
+              {history.map((p) => {
+                const bad = p.outcome === "failed" || p.outcome === "timeout";
+                return (
+                  <div
+                    key={`${p.jobId}-${p.device ?? ""}-${p.at}`}
+                    className="monitor-row sched-run-grid"
+                    data-failed={bad || undefined}
+                  >
+                    <span className="sched-mono p truncate">{p.jobId}</span>
+                    <span className="sched-mono text-muted-foreground truncate">
+                      {p.device ?? "fleet"}
+                    </span>
+                    <span className="text-muted-foreground truncate" title={stamp(p.at)}>
+                      {runTime(p.at, now)}
+                    </span>
+                    <span className="truncate tabular-nums">
+                      {(p.durationMs / 1000).toFixed(1)} s
+                    </span>
+                    <span
+                      className="flex min-w-0 items-center gap-1.5"
+                      title={
+                        p.outcome === "ok"
+                          ? `${p.added} new, ${p.worsened} worse, ${p.resolved} resolved`
+                          : undefined
+                      }
+                    >
+                      <StatusDot tone={OUTCOME_TONE[p.outcome]} />
+                      <span
+                        className={cn("truncate", bad ? "text-destructive" : "text-fg-secondary")}
+                      >
+                        {p.outcome === "ok" ? plural(p.total, "finding") : p.outcome}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })}
+              {points.length > HISTORY_LIMIT && (
+                <div className="monitor-foot">
+                  Showing the newest {HISTORY_LIMIT} of {points.length}
+                </div>
+              )}
+            </>
+          )}
         </MonitorPanel>
       </div>
 
-      <MonitorPanel title="Run history" description={`${scope} · newest first`} flush>
-        {history.length === 0 ? (
-          <MonitorEmpty compact title="No runs yet">
-            Runs show up here after the first one finishes.
-          </MonitorEmpty>
-        ) : (
-          <>
-            <div className="monitor-thead sched-run-row" aria-hidden="true">
-              <span>Job</span>
-              <span>Device</span>
-              <span>Started</span>
-              <span className="text-right">Took</span>
-              <span>Result</span>
-            </div>
-            {history.map((p) => (
-              <div
-                key={`${p.jobId}-${p.device ?? ""}-${p.at}`}
-                className="monitor-row sched-run-row"
-                data-failed={p.outcome === "failed" || p.outcome === "timeout" || undefined}
-              >
-                <span className="sched-run-job flex min-w-0 items-center gap-2">
-                  <StatusDot tone={OUTCOME_TONE[p.outcome]} />
-                  <span className="text-foreground truncate font-mono text-[12px]">{p.jobId}</span>
-                </span>
-                <span className="sched-run-device truncate">{p.device ?? "fleet"}</span>
-                <span className="sched-run-at text-muted-foreground tabular-nums">
-                  {stamp(p.at)}
-                </span>
-                <span className="sched-run-took text-muted-foreground text-right tabular-nums">
-                  {(p.durationMs / 1000).toFixed(1)} s
-                </span>
-                <span
-                  className={cn(
-                    "sched-run-result truncate text-[12px]",
-                    p.outcome === "ok" ? "text-muted-foreground" : "text-destructive",
-                  )}
-                >
-                  {p.outcome === "ok"
-                    ? `${plural(p.total, "finding")} · ${p.added} new, ${p.worsened} worse, ${p.resolved} fixed`
-                    : capitalize(p.outcome)}
-                </span>
-              </div>
-            ))}
-            {points.length > HISTORY_LIMIT && (
-              <div className="monitor-foot">
-                Showing the newest {HISTORY_LIMIT} of {points.length}
-              </div>
-            )}
-          </>
-        )}
-      </MonitorPanel>
-
-      <AlertDialog
+      <MonitorDialog
         open={confirmRemove !== null}
         onOpenChange={(open) => {
           if (!open) setConfirmRemove(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove {confirmRemove}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This deletes the job and its run history. You cannot undo it.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        confirm
+        title={`Remove ${confirmRemove ?? ""}?`}
+        description="This deletes the job and its run history. You cannot undo it."
+        footer={
+          <>
+            <span className="flex-1" />
+            <MonitorButton variant="ghost" onClick={() => setConfirmRemove(null)}>
+              Cancel
+            </MonitorButton>
+            <MonitorButton
+              variant="danger"
+              icon={<Trash2 aria-hidden="true" />}
               onClick={() => {
                 if (confirmRemove) void remove(confirmRemove);
+                setConfirmRemove(null);
               }}
             >
               Remove job
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </MonitorButton>
+          </>
+        }
+      >
+        {null}
+      </MonitorDialog>
+
+      {editor}
     </div>
   );
 }

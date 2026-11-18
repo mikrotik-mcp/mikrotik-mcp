@@ -107,8 +107,10 @@ test("loads a configured form, actual BeUI controls, and a read-only decision pr
   await settle();
   expect(host.textContent).toContain("Access scope off");
   expect(host.textContent).toContain("Within the access boundary");
-  expect(host.querySelector("select")).toBeNull();
-  expect(host.querySelectorAll('[role="combobox"]').length).toBe(6);
+  // Native Signal selects for risk, preview target and probe tool; comboboxes for the two pickers.
+  expect(host.querySelectorAll("select").length).toBe(3);
+  expect(host.querySelector('select[aria-label="Maximum risk"]')).toBeTruthy();
+  expect(host.querySelectorAll('[role="combobox"]').length).toBe(2);
   expect(host.querySelector('[role="switch"]')).toBeTruthy();
   expect(writes()).toHaveLength(0);
 });
@@ -138,11 +140,10 @@ test("quick risk ceiling preserves tool exclusions and cannot apply without conf
 test("selected-router mode cannot silently serialize an empty selection as all routers", async () => {
   await render();
   await settle();
-  await click(host.querySelector('[aria-label="Allowed router scope"]')!);
   await click(
-    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((el) =>
-      el.textContent?.includes("Only selected routers"),
-    )!,
+    [
+      ...host.querySelectorAll<HTMLElement>('[aria-label="Allowed router scope"] [role="radio"]'),
+    ].find((el) => el.textContent?.includes("Only selected routers"))!,
   );
   expect(host.textContent).toContain("Choose at least one allowed router");
   expect(button("Review changes").disabled).toBe(true);

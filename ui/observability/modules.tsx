@@ -1,12 +1,25 @@
 import { LoadingState } from "./loading-state";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode, RefObject } from "react";
+import { animate, createScope } from "animejs";
+import type { Scope } from "animejs";
+import { Check, ChevronDown, Ellipsis, RefreshCw, X } from "lucide-react";
 import { api, postJson } from "./api";
-import { Panel } from "./atoms";
-import { Button, Input, Select } from "./geist";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorEmpty,
+  MonitorPanel,
+  MonitorSearch,
+  MonitorSelect,
+  MonitorSwitch,
+  PageIntro,
+  StatusBadge,
+} from "./monitoring-ui";
 import { toast } from "./toast-action";
+import "./monitoring.css";
+import "./modules.css";
 
 // ── Tool Modules view ────────────────────────────────────────────────────────
 // Every catalog module with a live on/off toggle. Flipping one writes the
@@ -44,15 +57,95 @@ interface ToggleResult extends ModuleSurface {
   error?: string;
 }
 
-/** The shared surface for a toggle row (module row or the app-views row). */
-const rowClass = (on: boolean): string =>
-  cn(
-    "flex items-start gap-2.5 rounded-md border px-[11px] py-[9px] cursor-pointer select-none transition-colors",
-    on ? "border-brand/50 bg-brand/10" : "border-border bg-card hover:border-brand/35",
-  );
+/** The tool count the MCP client handles well: below this band every tool is findable. */
+const TARGET_LOW = 150;
+const TARGET_HIGH = 200;
+/** Groups listed in the "Modules on, by group" panel. */
+const GROUP_BARS = 10;
 
-/** A single module row: checkbox + name/slug + tool count + scope description. */
-function ModuleRow({
+function useNarrow(query = "(max-width: 639px)"): boolean {
+  const [match, setMatch] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.(query).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = (): void => setMatch(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return match;
+}
+
+/**
+ * Exposed tools against the catalog, with the 150–200 target band marked.
+ * The fill sweeps to its value.
+ */
+function SurfaceMeter({ exposed, total }: { exposed: number; total: number }): ReactNode {
+  const root = useRef<SVGSVGElement>(null);
+  const scope = useRef<Scope | null>(null);
+  const w = 400;
+  const x = (v: number): number => Math.round((Math.min(v, total) / (total || 1)) * w * 10) / 10;
+  const fill = x(exposed);
+  useEffect(() => {
+    if (!root.current) return;
+    scope.current = createScope({
+      root: root as unknown as RefObject<HTMLElement | null>,
+      mediaQueries: { reduceMotion: "(prefers-reduced-motion: reduce)" },
+    }).add((self) => {
+      if (self?.matches.reduceMotion) return;
+      animate("[data-fill]", { width: [0, fill], duration: 700, ease: "outQuart" });
+    });
+    return () => scope.current?.revert();
+  }, [fill]);
+  const label = Math.max(fill, 70);
+  return (
+    <svg
+      ref={root}
+      viewBox={`0 -6 ${w} 54`}
+      width="100%"
+      role="img"
+      aria-label={`${exposed} of ${total} tools exposed`}
+    >
+      <rect x="0" y="14" width={w} height="12" rx="6" fill="var(--line)" />
+      <rect
+        data-fill
+        x="0"
+        y="14"
+        width={fill}
+        height="12"
+        rx="6"
+        fill="var(--sig)"
+        opacity=".85"
+      />
+      <rect
+        x={x(TARGET_LOW)}
+        y="8"
+        width={Math.max(x(TARGET_HIGH) - x(TARGET_LOW), 4)}
+        height="24"
+        rx="4"
+        fill="none"
+        stroke="var(--brand)"
+        strokeDasharray="3 3"
+      />
+      <text
+        x={x((TARGET_LOW + TARGET_HIGH) / 2)}
+        y="44"
+        textAnchor="middle"
+        fontSize="10"
+        fill="var(--brand)"
+      >
+        {TARGET_LOW}–{TARGET_HIGH} target
+      </text>
+      <text x={label} y="5" textAnchor="end" fontSize="10" fill="var(--success)">
+        {exposed} exposed
+      </text>
+    </svg>
+  );
+}
+
+/** One module: switch, name, slug, scope, tool count. */
+function ModuleCard({
   m,
   busy,
   onToggle,
@@ -66,29 +159,28 @@ function ModuleRow({
 }): ReactNode {
   return (
     <label
-      className={cn(rowClass(m.enabled), unmet && "opacity-45")}
+      className="modules-card"
+      data-on={m.enabled || undefined}
+      data-unmet={unmet ? true : undefined}
       title={unmet ? `Unavailable on the selected device: ${unmet}` : m.description}
     >
-      <input
-        type="checkbox"
-        className="mt-0.5 cursor-pointer accent-brand"
-        checked={m.enabled}
-        disabled={busy}
-        onChange={() => onToggle(m.slug, !m.enabled)}
-      />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex flex-wrap items-center gap-[7px] text-xs font-semibold text-foreground">
-          {m.label}
-          <code className="rounded border border-border bg-background px-[5px] py-px font-mono text-[10px] text-muted-foreground">
-            {m.slug}
-          </code>
-        </span>
-        <span className="text-[11px] leading-[1.35] text-muted-foreground">{m.description}</span>
-        {unmet && (
-          <span className="text-warning text-[10px] leading-[1.35]">unavailable here: {unmet}</span>
-        )}
+      <span className="mt-px">
+        <MonitorSwitch
+          checked={m.enabled}
+          disabled={busy}
+          label={m.label}
+          onChange={() => onToggle(m.slug, !m.enabled)}
+        />
       </span>
-      <span className="whitespace-nowrap pt-px font-mono text-[10px] text-muted-foreground">
+      <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+        <span className="flex flex-wrap items-center gap-2">
+          <b className="text-[13px] font-semibold text-foreground">{m.label}</b>
+          <span className="monitor-chip">{m.slug}</span>
+        </span>
+        <span className="monitor-hint">{m.description}</span>
+        {unmet && <span className="text-[11px] text-warning">Unavailable here: {unmet}</span>}
+      </span>
+      <span className="font-mono text-xs whitespace-nowrap text-muted-foreground">
         {m.toolCount} tool{m.toolCount === 1 ? "" : "s"}
       </span>
     </label>
@@ -103,9 +195,13 @@ export function ModulesView(): ReactNode {
   const [query, setQuery] = useState("");
   const [appViews, setAppViews] = useState<boolean>(false);
   const [appViewsBusy, setAppViewsBusy] = useState(false);
+  // The App Views value the server started with: a change needs a restart.
+  const [appViewsAtLoad, setAppViewsAtLoad] = useState<boolean | null>(null);
   // Which device to judge module availability against. Empty = judge none, which
   // is the honest default: capabilities are per-device and may not be probed yet.
   const [capDevice, setCapDevice] = useState("");
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const phone = useNarrow();
   // Only devices that some module reports on are offerable — a device with no
   // resolved probe contributes no `unsupported` entries, so selecting it would
   // dim nothing and imply everything is supported.
@@ -121,7 +217,10 @@ export function ModulesView(): ReactNode {
     void api<ModuleSurface>("/api/modules")
       .then((d) => {
         setData(d);
-        if (d.appViews !== undefined) setAppViews(d.appViews);
+        if (d.appViews !== undefined) {
+          setAppViews(d.appViews);
+          setAppViewsAtLoad((v) => v ?? d.appViews ?? null);
+        }
       })
       .catch(() => setMsg("could not load modules"));
   }, []);
@@ -134,7 +233,7 @@ export function ModulesView(): ReactNode {
   const toggle = useCallback(
     async (slug: string, enabled: boolean): Promise<void> => {
       setBusy((s) => new Set(s).add(slug));
-      // Optimistic flip so the checkbox responds instantly.
+      // Optimistic flip so the switch responds instantly.
       setData((prev) =>
         prev
           ? { ...prev, modules: prev.modules.map((m) => (m.slug === slug ? { ...m, enabled } : m)) }
@@ -166,9 +265,8 @@ export function ModulesView(): ReactNode {
     [load],
   );
 
-  // Bulk enable/disable every module currently shown (respects the search filter)
-  // by toggling each one whose state differs from the target — sequentially so
-  // each write lands on the prior result's filter.
+  // Bulk enable/disable by toggling each one whose state differs from the
+  // target — sequentially so each write lands on the prior result's filter.
   const bulk = useCallback(
     async (slugs: string[], enabled: boolean): Promise<void> => {
       for (const slug of slugs) await toggle(slug, enabled);
@@ -222,176 +320,371 @@ export function ModulesView(): ReactNode {
     return [...byGroup.entries()].map(([group, modules]) => ({ group, modules }));
   }, [data, query]);
 
+  const groupBars = useMemo(() => {
+    const byGroup = new Map<string, { n: number; on: number }>();
+    for (const m of data?.modules ?? []) {
+      const g = byGroup.get(m.group) ?? { n: 0, on: 0 };
+      g.n += 1;
+      if (m.enabled) g.on += 1;
+      byGroup.set(m.group, g);
+    }
+    return [...byGroup.entries()]
+      .map(([group, g]) => ({ group, ...g }))
+      .sort((a, b) => b.n - a.n || a.group.localeCompare(b.group));
+  }, [data]);
+
   if (!data) return <LoadingState label="Loading modules" layout="cards" />;
 
   const shown = groups.reduce((n, g) => n + g.modules.length, 0);
+  const over = data.enabledTools > TARGET_HIGH;
+  const hidden = data.total - data.enabledModules;
+  const appViewsChanged = appViewsAtLoad !== null && appViews !== appViewsAtLoad;
+  const unavailable = capDevice
+    ? data.modules.flatMap((m) =>
+        (m.unsupported ?? [])
+          .filter((u) => u.device === capDevice)
+          .map((u) => ({ slug: m.slug, reason: u.reason })),
+      )
+    : [];
+  const enableAll = (): void =>
+    void bulk(
+      data.modules.filter((m) => !m.enabled).map((m) => m.slug),
+      true,
+    );
+  const disableAll = (): void =>
+    void bulk(
+      data.modules.filter((m) => m.enabled).map((m) => m.slug),
+      false,
+    );
+  const availability =
+    capDevices.length > 0 ? (
+      <MonitorSelect
+        label="Module availability by probed device"
+        value={capDevice}
+        onChange={setCapDevice}
+        options={[
+          { value: "", label: phone ? "All routers" : "Availability: all devices" },
+          ...capDevices.map((d) => ({ value: d, label: phone ? d : `Availability: ${d}` })),
+        ]}
+      />
+    ) : null;
+  const meter = (
+    <div className="glass modules-meter">
+      <div className="flex items-center gap-2">
+        <b className="text-[13px] font-semibold text-foreground">Exposed tools</b>
+        <span className="flex-1" />
+        <span className="font-mono text-xs text-muted-foreground">
+          {data.enabledTools} / {data.totalTools}
+        </span>
+      </div>
+      <SurfaceMeter exposed={data.enabledTools} total={data.totalTools} />
+      <span className="monitor-hint modules-phone-hide">
+        Writes to{" "}
+        <span className="font-mono text-fg-secondary">{data.source?.path ?? "config file"}</span> ·{" "}
+        <span className="font-mono">tools.disabledModules</span> ·{" "}
+        {data.hasAllowList ? "allow-list active" : "all modules on by default"}
+      </span>
+    </div>
+  );
 
   return (
-    <section className="grid content-start gap-[18px]">
-      <Panel
-        title="Tool modules"
-        className="reveal"
-        extra={
-          <div className="flex items-center gap-3">
-            <span className="text-muted-foreground text-[11px]">
-              {data.enabledModules}/{data.total} modules · {data.enabledTools}/{data.totalTools}{" "}
-              tools exposed
-            </span>
-            <Button size="sm" ghost icon={<RefreshCw />} onClick={load}>
-              Refresh
-            </Button>
-          </div>
+    <div className="modules-page flex min-w-0 flex-col gap-[18px]">
+      <PageIntro
+        eyebrow="Tool surface"
+        verdict={
+          <>
+            {data.enabledTools} tools exposed.{" "}
+            {over ? (
+              <span className="w">Aim for {TARGET_HIGH}.</span>
+            ) : (
+              <span className="s">On target.</span>
+            )}
+          </>
         }
-      >
-        <label
-          className={cn(rowClass(appViews), "mb-2.5")}
-          title="Emit MCP App view metadata (_meta.ui) on read tools"
-        >
-          <input
-            type="checkbox"
-            className="mt-0.5 cursor-pointer accent-brand"
-            checked={appViews}
-            disabled={appViewsBusy}
-            onChange={() => void toggleAppViews(!appViews)}
-          />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="flex flex-wrap items-center gap-[7px] text-xs font-semibold text-foreground">
-              MCP App Views
-            </span>
-            <span className="text-[11px] leading-[1.35] text-muted-foreground">
-              When on, read tools emit interactive table/detail widgets via <code>_meta.ui</code>.
-              Disable to keep the LLM context lean. Requires server restart.
-            </span>
-          </span>
-        </label>
-
-        <div className="mb-2.5 flex flex-wrap gap-3 font-mono text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-[5px]">
-            writes to: <code>{data.source?.path ?? "config file"}</code>
-          </span>
-          <span className="inline-flex items-center gap-[5px]">
-            {data.hasAllowList ? "allow-list active" : "all modules on by default"}
-          </span>
-        </div>
-
-        <p className="mb-3 text-muted-foreground text-xs">
-          Toggle a module to expose or hide all of its tools. Disabling adds it to{" "}
-          <code>tools.disabledModules</code> in your config file; enabling removes it (or adds it to{" "}
-          <code>tools.enabledModules</code> when an allow-list is in force). Trimming the surface
-          below ~150–200 tools makes every remaining tool reliably findable by the MCP client. The
-          client must reconnect for changes to take effect.
-        </p>
-
-        <div className="mb-1.5 flex flex-wrap items-center gap-2">
-          <Input
-            placeholder="Filter modules by name, slug, group or description…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {capDevices.length > 0 && (
-            <Select
-              size="sm"
-              value={capDevice}
-              onValueChange={setCapDevice}
-              aria-label="Module availability by probed device"
-              options={[
-                { value: "", label: "availability: all devices" },
-                ...capDevices.map((d) => ({ value: d, label: `availability: ${d}` })),
-              ]}
-            />
-          )}
-          <span className="flex-1" />
-          <Button
-            size="sm"
-            onClick={() =>
-              void bulk(
-                data.modules.filter((m) => !m.enabled).map((m) => m.slug),
-                true,
-              )
+        lead={
+          phone
+            ? `Below about ${TARGET_LOW}–${TARGET_HIGH} tools the client finds every tool reliably. Reconnect the client after a change.`
+            : `Turn a module off to hide all of its tools. Below about ${TARGET_LOW}–${TARGET_HIGH} tools the MCP client finds every remaining tool reliably. Clients must reconnect to see a change.`
+        }
+        actions={
+          phone ? undefined : (
+            <>
+              <MonitorButton icon={<Check aria-hidden="true" />} onClick={enableAll}>
+                Enable all
+              </MonitorButton>
+              <MonitorButton icon={<X aria-hidden="true" />} onClick={disableAll}>
+                Disable all
+              </MonitorButton>
+              <MonitorButton variant="ghost" icon={<RefreshCw aria-hidden="true" />} onClick={load}>
+                Refresh
+              </MonitorButton>
+            </>
+          )
+        }
+        aside={phone ? undefined : meter}
+      />
+      {phone && meter}
+      <MetricStrip label="Tool surface" minCell={phone ? 140 : 200}>
+        <Metric
+          label="Modules on"
+          tone="good"
+          value={
+            <>
+              {data.enabledModules}
+              <small>/{data.total}</small>
+            </>
+          }
+          hint={phone ? `${hidden} hidden` : `${hidden} hidden from the client`}
+        />
+        {!phone && (
+          <Metric
+            label="Tools exposed"
+            tone={over ? "warn" : "good"}
+            value={
+              <>
+                {data.enabledTools}
+                <small>/{data.totalTools}</small>
+              </>
             }
-          >
-            Enable all
-          </Button>
-          <Button
-            size="sm"
-            onClick={() =>
-              void bulk(
-                data.modules.filter((m) => m.enabled).map((m) => m.slug),
-                false,
-              )
+            hint={`Target: ${TARGET_LOW}–${TARGET_HIGH}`}
+          />
+        )}
+        {!phone && (
+          <Metric
+            label="Allow-list"
+            value={data.hasAllowList ? "On" : "Off"}
+            hint={
+              data.hasAllowList ? "Only listed modules are on" : "All modules on unless disabled"
             }
-          >
-            Disable all
-          </Button>
-        </div>
-
-        {msg && <div className="mt-3 font-mono text-xs text-muted-foreground">{msg}</div>}
-
-        {shown === 0 ? (
-          <div className="p-3 text-muted-foreground text-[11px]">No modules match “{query}”.</div>
-        ) : (
-          <div className="mt-3 flex flex-col gap-[18px]">
-            {groups.map(({ group, modules }) => {
-              const on = modules.filter((m) => m.enabled).length;
-              const slugs = modules.map((m) => m.slug);
-              return (
-                <div key={group}>
-                  <div className="mb-2 flex items-center gap-2.5 border-b border-border pb-1.5">
-                    <h3 className="m-0 text-[13px] font-semibold text-foreground">{group}</h3>
-                    <span className="text-muted-foreground text-[11px]">
-                      {on}/{modules.length} on
+          />
+        )}
+        <Metric
+          label="App Views"
+          value={appViews ? "On" : "Off"}
+          hint={
+            appViewsChanged
+              ? phone
+                ? "Restart to apply"
+                : "Changed · restart to apply"
+              : "A change needs a restart"
+          }
+        />
+      </MetricStrip>
+      <div className="modules-layout">
+        {!phone && (
+          <div className="flex min-w-0 flex-col gap-3.5">
+            <MonitorPanel
+              title="Modules on, by group"
+              description="Where the tool surface comes from."
+            >
+              <div className="flex flex-col gap-[11px]">
+                {groupBars.slice(0, GROUP_BARS).map((g) => (
+                  <div key={g.group} className="modules-bar-row">
+                    <span className="truncate text-fg-secondary">{g.group}</span>
+                    <span className="modules-bar" aria-hidden="true">
+                      <i style={{ width: `${(g.on / g.n) * 100}%` }} />
                     </span>
-                    <span className="flex-1" />
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        void bulk(
-                          slugs.filter((s) => {
-                            const m = modules.find((x) => x.slug === s);
-                            return m ? !m.enabled : false;
-                          }),
-                          true,
-                        )
-                      }
-                    >
-                      Enable group
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        void bulk(
-                          slugs.filter((s) => {
-                            const m = modules.find((x) => x.slug === s);
-                            return m ? m.enabled : false;
-                          }),
-                          false,
-                        )
-                      }
-                    >
-                      Disable group
-                    </Button>
+                    <span className="text-right text-muted-foreground tabular-nums">
+                      {g.on}/{g.n}
+                    </span>
                   </div>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-2">
-                    {modules.map((m) => (
-                      <ModuleRow
-                        key={m.slug}
-                        m={m}
-                        busy={busy.has(m.slug)}
-                        onToggle={(slug, enabled) => void toggle(slug, enabled)}
-                        unmet={
-                          capDevice
-                            ? m.unsupported?.find((u) => u.device === capDevice)?.reason
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </div>
+                ))}
+              </div>
+              {groupBars.length > GROUP_BARS && (
+                <p className="monitor-hint mt-3">
+                  {groupBars.length - GROUP_BARS} smaller groups not shown.
+                </p>
+              )}
+            </MonitorPanel>
+            {capDevice && (
+              <MonitorPanel
+                title={`Unavailable on ${capDevice}`}
+                description="From the last capability probe. Dimmed in the list."
+                flush
+              >
+                <div className="monitor-thead modules-unavail">
+                  <span>Module</span>
+                  <span>Reason</span>
                 </div>
-              );
-            })}
+                {unavailable.map((u) => (
+                  <div key={u.slug} className="monitor-row modules-unavail">
+                    <span className="p truncate font-mono text-xs">{u.slug}</span>
+                    <span className="truncate text-warning">{u.reason}</span>
+                  </div>
+                ))}
+              </MonitorPanel>
+            )}
           </div>
         )}
-      </Panel>
-    </section>
+        <MonitorPanel
+          title="Tool modules"
+          description={`${data.enabledModules}/${data.total} modules · ${data.enabledTools}/${data.totalTools} tools exposed`}
+          className="modules-list-panel"
+        >
+          <div className="flex flex-col gap-3.5">
+            <label
+              className="modules-card modules-appviews"
+              data-on={appViews || undefined}
+              title="Emit MCP App view metadata (_meta.ui) on read tools"
+            >
+              <span className="mt-px">
+                <MonitorSwitch
+                  checked={appViews}
+                  disabled={appViewsBusy}
+                  label="MCP App Views"
+                  onChange={() => void toggleAppViews(!appViews)}
+                />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                <b className="text-[13px] font-semibold text-foreground">MCP App Views</b>
+                <span className="monitor-hint">
+                  Read tools send interactive table and detail widgets through{" "}
+                  <span className="font-mono">_meta.ui</span>. Turn off to keep the model’s context
+                  lean. Needs a server restart.
+                </span>
+              </span>
+              {appViewsChanged && (
+                <StatusBadge tone="warn" dot={false}>
+                  Restart needed
+                </StatusBadge>
+              )}
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <MonitorSearch
+                className="min-w-[min(100%,300px)] flex-1"
+                label="Filter modules"
+                placeholder={
+                  phone ? "Filter modules…" : "Filter by name, slug, group or description…"
+                }
+                value={query}
+                onChange={setQuery}
+              />
+              {!phone && availability}
+            </div>
+            {phone && (
+              <div className="flex items-center gap-2">
+                <MonitorButton size="sm" onClick={enableAll}>
+                  Enable all
+                </MonitorButton>
+                <MonitorButton size="sm" onClick={disableAll}>
+                  Disable all
+                </MonitorButton>
+                <span className="flex-1" />
+                {availability}
+              </div>
+            )}
+            {msg && (
+              <p className="monitor-hint font-mono" role="status">
+                {msg}
+              </p>
+            )}
+            {shown === 0 ? (
+              <MonitorEmpty compact title="No modules match">
+                Nothing matches “{query}”.
+              </MonitorEmpty>
+            ) : (
+              groups.map(({ group, modules }, i) => {
+                const on = modules.filter((m) => m.enabled).length;
+                const expanded = !phone || open.has(group) || (i === 0 && !open.has(`-${group}`));
+                const setExpanded = (next: boolean): void =>
+                  setOpen((s) => {
+                    const n = new Set(s);
+                    n.delete(group);
+                    n.delete(`-${group}`);
+                    n.add(next ? group : `-${group}`);
+                    return n;
+                  });
+                const enableGroup = (): void =>
+                  void bulk(
+                    modules.filter((m) => !m.enabled).map((m) => m.slug),
+                    true,
+                  );
+                const disableGroup = (): void =>
+                  void bulk(
+                    modules.filter((m) => m.enabled).map((m) => m.slug),
+                    false,
+                  );
+                return (
+                  <section key={group} className="flex flex-col gap-2.5" aria-label={group}>
+                    <div className="modules-group-head">
+                      <h3 className="text-sm font-semibold text-foreground">{group}</h3>
+                      <span className="text-xs text-muted-foreground">
+                        {on}/{modules.length} on
+                      </span>
+                      {!phone && (
+                        <span className="modules-bar w-20 flex-none" aria-hidden="true">
+                          <i style={{ width: `${(on / modules.length) * 100}%` }} />
+                        </span>
+                      )}
+                      <span className="flex-1" />
+                      {phone ? (
+                        expanded ? (
+                          <details className="modules-more">
+                            <summary aria-label={`${group} actions`}>
+                              <Ellipsis aria-hidden="true" />
+                            </summary>
+                            <div className="glass">
+                              <MonitorButton size="sm" variant="ghost" onClick={enableGroup}>
+                                Enable group
+                              </MonitorButton>
+                              <MonitorButton size="sm" variant="ghost" onClick={disableGroup}>
+                                Disable group
+                              </MonitorButton>
+                              <MonitorButton
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setExpanded(false)}
+                              >
+                                Collapse
+                              </MonitorButton>
+                            </div>
+                          </details>
+                        ) : (
+                          <button
+                            type="button"
+                            className="monitor-icon-btn"
+                            aria-label={`Show ${group}`}
+                            aria-expanded={false}
+                            onClick={() => setExpanded(true)}
+                          >
+                            <ChevronDown aria-hidden="true" />
+                          </button>
+                        )
+                      ) : (
+                        <>
+                          <MonitorButton size="sm" variant="ghost" onClick={enableGroup}>
+                            Enable group
+                          </MonitorButton>
+                          <MonitorButton size="sm" variant="ghost" onClick={disableGroup}>
+                            Disable group
+                          </MonitorButton>
+                        </>
+                      )}
+                    </div>
+                    {expanded && (
+                      <div className="modules-grid">
+                        {modules.map((m) => (
+                          <ModuleCard
+                            key={m.slug}
+                            m={m}
+                            busy={busy.has(m.slug)}
+                            onToggle={(slug, enabled) => void toggle(slug, enabled)}
+                            unmet={
+                              capDevice
+                                ? m.unsupported?.find((u) => u.device === capDevice)?.reason
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })
+            )}
+          </div>
+        </MonitorPanel>
+      </div>
+    </div>
   );
 }

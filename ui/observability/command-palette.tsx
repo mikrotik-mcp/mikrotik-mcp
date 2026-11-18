@@ -289,15 +289,15 @@ function PaletteDialog({
           <span>
             <kbd className="kbd2">↑</kbd>
             <kbd className="kbd2">↓</kbd>
-            Move
+            move
           </span>
           <span>
             <kbd className="kbd2">↵</kbd>
-            Open
+            open
           </span>
           <span>
             <kbd className="kbd2">{shortcutLabel("↵")}</kbd>
-            Open in new tab
+            new tab
           </span>
           <span className="pal-count">
             {terms.length

@@ -17,7 +17,7 @@
 /* Must precede every other rule: `@import url()` is only legal at the top of a
    stylesheet. Kept in CSS (not an index.html <link>) because the build inliner
    reads stylesheet links off disk and would choke on a remote href. */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 /* SVG geometry, filters and @keyframes that utilities cannot express. */
@@ -30,67 +30,90 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Values come from the "MikroTik MCP" design system (Linear-inspired): dark is
- * primary, light is its derived counterpart. Glass layers (`--secondary`,
- * `--accent`, borders) are translucent white on dark and translucent ink on
- * light, so they sit on any of the three surface steps.
+ * Values come from the approved "Signal" redesign: a night-time operations
+ * room. Ink ground, frosted glass panels, one luminous teal (`--sig`) for
+ * healthy paths, pink (`--destructive`) for failure, amber (`--warning`) for
+ * strain and indigo (`--brand`, `--chart-1`) for neutral data. Dark is the
+ * default; light is its daytime counterpart. Glass layers are translucent, so
+ * they sit on the page glow in both themes.
  */
 
 /* ── Light ────────────────────────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #08090a;
-  --card: #f7f8f8;
-  --card-foreground: #08090a;
+  --background: #f4f6fb;
+  --foreground: #0b1324;
+  /* Glass: the panel and KPI card surface. */
+  --card: rgba(255, 255, 255, 0.72);
+  --card-foreground: #0b1324;
   --popover: #ffffff;
-  --popover-foreground: #08090a;
-  /* The solid "inverse" button: one decisive action per view. */
-  --primary: #18191a;
-  --primary-foreground: #f7f8f8;
-  /* Glass fill: the default button and chips. */
-  --secondary: rgba(8, 9, 10, 0.05);
-  --secondary-foreground: #08090a;
-  --muted: #eff0f1;
-  --muted-foreground: #62666d;
-  --accent: rgba(8, 9, 10, 0.05);
-  --accent-foreground: #08090a;
-  /* Darkened pink so it passes as text on white (5.2:1); white on it passes too. */
-  --destructive: #d0136b;
+  --popover-foreground: #0b1324;
+  /* The one decisive action per view: the teal signal button. */
+  --primary: #12b393;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(255, 255, 255, 0.92);
+  --secondary-foreground: #0b1324;
+  --muted: #eef1f8;
+  --muted-foreground: #5c6884;
+  --accent: rgba(255, 255, 255, 0.92);
+  --accent-foreground: #0b1324;
+  --destructive: #d6245a;
   --destructive-foreground: #ffffff;
-  --success: #00875a;
-  --warning: #a35a12;
-  --border: rgba(8, 9, 10, 0.08);
-  --input: rgba(8, 9, 10, 0.14);
-  --radius: 0.5rem;
-  --shell-sidebar: #f7f8f8;
-  --shell-selected: rgba(8, 9, 10, 0.08);
-  --shell-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(8, 9, 10, 0.04);
+  /* Text-safe teal on white; `--sig` is the brighter fill. */
+  --success: #0a7d67;
+  --warning: #b86a00;
+  --border: rgba(20, 40, 90, 0.1);
+  --input: rgba(20, 40, 90, 0.18);
+  --radius: 0.625rem;
+  --shell-sidebar: rgba(255, 255, 255, 0.6);
+  --shell-selected: rgba(18, 179, 147, 0.12);
+  --shell-shadow: inset 0 0 0 1px rgba(20, 40, 90, 0.1);
 
-  /* Design-system extras. */
-  --overlay-02: rgba(8, 9, 10, 0.02);
-  --overlay-03: rgba(8, 9, 10, 0.03);
-  --overlay-08: rgba(8, 9, 10, 0.08);
-  --text-faint: #8a8f98;
-  --text-emphasis: #000000;
-  --chart-grid: #e5e5e6;
-  --text-secondary: #3e3e44;
-  --on-accent: #08090a;
-  --shadow-button:
-    inset 0 0 0 1px rgba(8, 9, 10, 0.08), 0 1px 1px 0 rgba(0, 0, 0, 0.07),
-    0 0 1px 0 rgba(0, 0, 0, 0.08);
+  /* Signal surfaces and accents. */
+  --surface-2: #ffffff;
+  --surface-3: #eef1f8;
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-2: rgba(255, 255, 255, 0.92);
+  --glass-3: #ffffff;
+  --line: rgba(20, 40, 90, 0.1);
+  --line-2: rgba(20, 40, 90, 0.18);
+  --sig: #12b393;
+  --sig-fill: rgba(18, 179, 147, 0.1);
+  --sig-soft: rgba(18, 179, 147, 0.12);
+  --acc-soft: rgba(59, 91, 219, 0.1);
+  --warn-soft: rgba(184, 106, 0, 0.1);
+  --bad-soft: rgba(214, 36, 90, 0.09);
+  --on-sig: #ffffff;
+  --scrim: rgba(15, 23, 42, 0.36);
+  /* LED glow spread: none in daylight. */
+  --glow: 0 0 0;
+  --shadow-overlay: 0 24px 64px rgba(15, 23, 42, 0.18);
+  --page-glow:
+    radial-gradient(1200px 600px at 75% -10%, rgba(18, 179, 147, 0.07), transparent 60%),
+    radial-gradient(900px 500px at 0% 110%, rgba(59, 91, 219, 0.06), transparent 60%), #f4f6fb;
 
-  --page-accent: #5e6ad2;
-  --page-accent-2: #62666d;
+  /* Older names, kept for the pages that use them. */
+  --overlay-02: rgba(20, 40, 90, 0.03);
+  --overlay-03: rgba(20, 40, 90, 0.045);
+  --overlay-08: rgba(20, 40, 90, 0.08);
+  --text-faint: #8792a8;
+  --text-emphasis: #060b17;
+  --chart-grid: rgba(20, 40, 90, 0.1);
+  --text-secondary: #33405b;
+  --on-accent: #ffffff;
+  --shadow-button: inset 0 0 0 1px rgba(20, 40, 90, 0.18);
+
+  --page-accent: #3b5bdb;
+  --page-accent-2: #5c6884;
   --brand: var(--page-accent);
   --brand-foreground: #ffffff;
-  --ring: var(--brand);
+  --ring: var(--sig);
 
-  /* Data-visualisation palette: interactive, success, warning, danger, neutral. */
-  --chart-1: #5e6ad2;
-  --chart-2: #00875a;
-  --chart-3: #a35a12;
-  --chart-4: #d0136b;
-  --chart-5: #62666d;
+  /* Data-visualisation palette: neutral data, healthy, strain, failure, muted. */
+  --chart-1: #3b5bdb;
+  --chart-2: #12b393;
+  --chart-3: #b86a00;
+  --chart-4: #d6245a;
+  --chart-5: #5c6884;
 
   /*
    * Categorical palette for the memory graph's entity types, which hashes a type
@@ -112,51 +135,70 @@
 
 /* ── Dark (the dashboard's default) ───────────────────────────────────────── */
 .dark {
-  --background: #08090a;
-  --foreground: #f7f8f8;
-  --card: #0f1011;
-  --card-foreground: #f7f8f8;
-  --popover: #18191a;
-  --popover-foreground: #f7f8f8;
-  --primary: #e5e5e6;
-  --primary-foreground: #08090a;
-  --secondary: rgba(255, 255, 255, 0.05);
-  --secondary-foreground: #f7f8f8;
-  --muted: #18191a;
-  --muted-foreground: #8a8f98;
-  --accent: rgba(255, 255, 255, 0.05);
-  --accent-foreground: #f7f8f8;
-  /* White on #f91880 is 3.8:1, so text on the danger fill is dark ink. */
-  --destructive: #f91880;
-  --destructive-foreground: #08090a;
-  --success: #00ba7c;
-  --warning: #f2994a;
-  --border: rgba(255, 255, 255, 0.05);
-  --input: rgba(255, 255, 255, 0.08);
-  --page-accent: #828fff;
-  --page-accent-2: #8a8f98;
-  --brand-foreground: #08090a;
-  --shell-sidebar: #0f1011;
-  --shell-selected: rgba(255, 255, 255, 0.08);
-  --shell-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --background: #070b14;
+  --foreground: #eef3ff;
+  --card: rgba(148, 178, 255, 0.045);
+  --card-foreground: #eef3ff;
+  --popover: #0b1120;
+  --popover-foreground: #eef3ff;
+  --primary: #5ee6c8;
+  --primary-foreground: #04120f;
+  --secondary: rgba(148, 178, 255, 0.09);
+  --secondary-foreground: #eef3ff;
+  --muted: #111a2e;
+  --muted-foreground: #8592ae;
+  --accent: rgba(148, 178, 255, 0.09);
+  --accent-foreground: #eef3ff;
+  /* White on the pink is under 4.5:1, so text on the danger fill is ink. */
+  --destructive: #ff5c8a;
+  --destructive-foreground: #070b14;
+  --success: #5ee6c8;
+  --warning: #ffb547;
+  --border: rgba(148, 178, 255, 0.12);
+  --input: rgba(148, 178, 255, 0.22);
+  --page-accent: #8aa6ff;
+  --page-accent-2: #8592ae;
+  --brand-foreground: #070b14;
+  --shell-sidebar: rgba(7, 11, 20, 0.7);
+  --shell-selected: rgba(94, 230, 200, 0.14);
+  --shell-shadow: inset 0 0 0 1px rgba(148, 178, 255, 0.12);
 
-  --overlay-02: rgba(255, 255, 255, 0.02);
-  --overlay-03: rgba(255, 255, 255, 0.03);
-  --overlay-08: rgba(255, 255, 255, 0.08);
-  --text-faint: #62666d;
+  --surface-2: #0b1120;
+  --surface-3: #111a2e;
+  --glass: rgba(148, 178, 255, 0.045);
+  --glass-2: rgba(148, 178, 255, 0.09);
+  --glass-3: rgba(148, 178, 255, 0.14);
+  --line: rgba(148, 178, 255, 0.12);
+  --line-2: rgba(148, 178, 255, 0.22);
+  --sig: #5ee6c8;
+  --sig-fill: rgba(94, 230, 200, 0.1);
+  --sig-soft: rgba(94, 230, 200, 0.14);
+  --acc-soft: rgba(138, 166, 255, 0.14);
+  --warn-soft: rgba(255, 181, 71, 0.12);
+  --bad-soft: rgba(255, 92, 138, 0.12);
+  --on-sig: #04120f;
+  --scrim: rgba(3, 6, 12, 0.66);
+  --glow: 0 0 10px;
+  --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.5);
+  --page-glow:
+    radial-gradient(1200px 600px at 75% -10%, rgba(94, 230, 200, 0.07), transparent 60%),
+    radial-gradient(900px 500px at 0% 110%, rgba(138, 166, 255, 0.07), transparent 60%), #070b14;
+
+  --overlay-02: rgba(148, 178, 255, 0.03);
+  --overlay-03: rgba(148, 178, 255, 0.045);
+  --overlay-08: rgba(148, 178, 255, 0.09);
+  --text-faint: #5d6984;
   --text-emphasis: #ffffff;
-  --chart-grid: #3e3e44;
-  --text-secondary: #d0d6e0;
-  --on-accent: #08090a;
-  --shadow-button:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
-    0 0 0 1px rgba(0, 0, 0, 0.6), 0 4px 4px 0 rgba(0, 0, 0, 0.1);
+  --chart-grid: rgba(148, 178, 255, 0.12);
+  --text-secondary: #b9c4dc;
+  --on-accent: #04120f;
+  --shadow-button: inset 0 0 0 1px rgba(148, 178, 255, 0.22);
 
-  --chart-1: #5e6ad2;
-  --chart-2: #00ba7c;
-  --chart-3: #f2994a;
-  --chart-4: #f91880;
-  --chart-5: #8a8f98;
+  --chart-1: #8aa6ff;
+  --chart-2: #5ee6c8;
+  --chart-3: #ffb547;
+  --chart-4: #ff5c8a;
+  --chart-5: #8592ae;
 
   --entity-1: #3291ff;
   --entity-2: #34d399;
@@ -203,25 +245,42 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
 
+  --color-sig: var(--sig);
+  --color-sig-fill: var(--sig-fill);
+  --color-sig-soft: var(--sig-soft);
+  --color-on-sig: var(--on-sig);
+  --color-acc-soft: var(--acc-soft);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad-soft: var(--bad-soft);
+  --color-glass: var(--glass);
+  --color-glass-2: var(--glass-2);
+  --color-glass-3: var(--glass-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-scrim: var(--scrim);
+  --shadow-overlay: var(--shadow-overlay);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  /* Design-system radii: 4 / 6 / 8, pills via rounded-full. */
+  /* Signal radii: 6 / 8 / 10 / 14, panels 16 (rounded-2xl), pills rounded-full. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans:
-    "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --radius-2xl: 16px;
+  --font-sans: Geist, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-mt);
 }
 
 @layer base {
   :root {
-    --font-mt: "Berkeley Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --font-mt: "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   }
 
   * {
@@ -229,7 +288,10 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply text-foreground font-sans antialiased;
+    /* The page glow stays put while the content scrolls over it. */
+    background: var(--page-glow);
+    background-attachment: fixed;
   }
 
   code,

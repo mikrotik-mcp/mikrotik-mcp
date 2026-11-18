@@ -122,10 +122,9 @@ export function ServiceProbesEditor({ cfg, onChange }: { cfg: Cfg; onChange: (cf
               key={alias}
               role="listitem"
               className={cn(
-                "flex min-w-0 flex-col gap-1.5 rounded-lg bg-overlay-02 px-4 py-3.5",
-                edit?.original === alias
-                  ? "shadow-[inset_0_0_0_1px_var(--chart-1)]"
-                  : "shadow-[inset_0_0_0_1px_var(--input)]",
+                "glass flex min-w-0 flex-col gap-1.5 rounded-[14px] px-4 py-3.5",
+                edit?.original === alias &&
+                  "shadow-[inset_0_0_0_1px_var(--sig),0_0_24px_var(--sig-soft)]",
               )}
             >
               <div className="flex min-w-0 items-center gap-2">
@@ -154,12 +153,12 @@ export function ServiceProbesEditor({ cfg, onChange }: { cfg: Cfg; onChange: (cf
                   Remove
                 </MonitorButton>
               </div>
-              <code dir="ltr" className="truncate font-mono text-[12px] text-fg-secondary">
+              <code dir="ltr" className="truncate font-mono text-[13px] text-fg-secondary">
                 {t.host}
                 {t.kind !== "dns" && `:${t.port}`}
                 {t.kind === "https" && t.path}
               </code>
-              <span className="text-[12px] text-muted-foreground" title={t.addresses.join(", ")}>
+              <span className="monitor-hint" title={t.addresses.join(", ")}>
                 {ranges(t.addresses.length)} ·{" "}
                 {t.kind === "https" ? "routing + health" : "health only"}
               </span>
@@ -276,7 +275,7 @@ export function ProbeTargetEditor({
           </MonitorButton>
           <MonitorButton
             size="sm"
-            variant="inverse"
+            variant="primary"
             onClick={() => {
               setSubmitted(true);
               if (parsed.value) onAccept(parsed.value.alias, parsed.value.target);

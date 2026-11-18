@@ -1,8 +1,15 @@
 import type { ReactNode } from "react";
-import { X } from "lucide-react";
+import { PenLine, RotateCw, TriangleAlert, X, Zap } from "lucide-react";
 import { DeviceAddressStatus } from "./device-address-status";
 import { DeviceResources, MeterBar } from "./health";
-import { MonitorButton, MonitorSwitch, StatusBadge, StatusDot, formatMs } from "./monitoring-ui";
+import {
+  MonitorButton,
+  MonitorNote,
+  MonitorSwitch,
+  StatusBadge,
+  StatusDot,
+  formatMs,
+} from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 import { num } from "./format";
 import { cn } from "@/lib/utils";
@@ -78,9 +85,11 @@ function callsLine(d: DeviceInfo): { text: string; bad: boolean } {
 
 function RowMeter({ value, label }: { value?: number; label: string }): ReactNode {
   return (
-    <span className="monitor-meter pt-px">
+    <span className="monitor-meter">
       <MeterBar value={value} label={label} />
-      {value != null ? `${Math.round(value)}%` : "—"}
+      <span className="w-8 flex-none text-right">
+        {value != null ? `${Math.round(value)}%` : "—"}
+      </span>
     </span>
   );
 }
@@ -103,25 +112,23 @@ export function RouterRow({
   return (
     <button
       type="button"
-      className="monitor-row dv-cols items-start"
+      className="monitor-row dv-cols"
       data-selected={selected || undefined}
       data-failed={state === "offline" || undefined}
       aria-pressed={selected}
       aria-label={`${d.name}, ${state === "pending" ? "unchecked" : state}`}
       onClick={onSelect}
     >
-      <span className="flex min-w-0 gap-2.5">
-        <span className="mt-[7px] flex">
-          <StatusDot tone={STATE_TONE[state]} />
-        </span>
+      <span className="flex min-w-0 items-center gap-2.5">
+        <StatusDot tone={STATE_TONE[state]} />
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="dv-name text-foreground truncate font-mono text-[13px]">{d.name}</span>
+            <span className="dv-name p truncate font-mono text-[13px]">{d.name}</span>
             {d.isDefault && <span className="monitor-chip">Default</span>}
           </span>
           <span
             className={cn(
-              "truncate text-[12px]",
+              "truncate text-[12px] leading-[17px]",
               sub.bad ? "text-destructive" : "text-muted-foreground",
             )}
           >
@@ -130,18 +137,20 @@ export function RouterRow({
         </span>
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="text-fg-secondary truncate font-mono text-[12px]" dir="ltr">
+        <span className="text-fg-secondary truncate font-mono text-[13px]" dir="ltr">
           {addressOf(d)}
         </span>
-        <span className="text-muted-foreground truncate text-[12px]">{transportLine(d)}</span>
+        <span className="text-muted-foreground truncate text-[12px] leading-[17px]">
+          {transportLine(d)}
+        </span>
       </span>
       <RowMeter value={d.status.cpuLoad} label="CPU" />
       <RowMeter value={d.status.memUsedPct} label="Memory" />
-      <span className="text-fg-secondary text-right tabular-nums">
+      <span className="truncate text-right font-mono text-[12px]">
         {d.status.latencyMs != null && state === "online" ? formatMs(d.status.latencyMs) : "—"}
       </span>
       <span className="flex flex-col items-end">
-        <span className="text-fg-secondary tabular-nums">{num(d.activity.calls)}</span>
+        <span className="text-foreground tabular-nums">{num(d.activity.calls)}</span>
         <span
           className={cn("text-[12px]", calls.bad ? "text-destructive" : "text-muted-foreground")}
         >
@@ -183,7 +192,7 @@ export function PhoneRouterRow({
   return (
     <button
       type="button"
-      className="monitor-row dv-phone-row"
+      className="glass dv-phone-card"
       data-selected={selected || undefined}
       data-failed={state === "offline" || undefined}
       aria-pressed={selected}
@@ -192,32 +201,30 @@ export function PhoneRouterRow({
     >
       <span className="flex min-w-0 items-center gap-2">
         <StatusDot tone={STATE_TONE[state]} />
-        <span className="text-foreground truncate font-mono text-[13px]">{d.name}</span>
+        <span className="text-foreground truncate font-mono text-[14px] font-medium">{d.name}</span>
         {d.isDefault && <span className="monitor-chip">Default</span>}
         <span className="flex-1" />
-        <span className="text-fg-secondary text-[12px] tabular-nums">
+        <span className="text-fg-secondary font-mono text-[12px]">
           {d.status.latencyMs != null && state === "online" ? formatMs(d.status.latencyMs) : "—"}
         </span>
       </span>
       <span
         className={cn(
-          "truncate pl-[15px] text-[12px]",
+          "truncate text-[12px]",
           sub.bad ? "text-destructive" : "text-muted-foreground",
         )}
       >
         {sub.text}
       </span>
       {cpu != null && (
-        <span className="grid grid-cols-2 gap-3 pl-[15px]">
-          <span className="monitor-meter">
+        <span className="grid grid-cols-2 gap-3 text-[12px]">
+          <span className="flex min-w-0 items-center gap-1.5">
             <span className="text-muted-foreground">CPU</span>
-            <MeterBar value={cpu} label="CPU" />
-            {Math.round(cpu)}%
+            <RowMeter value={cpu} label="CPU" />
           </span>
-          <span className="monitor-meter">
+          <span className="flex min-w-0 items-center gap-1.5">
             <span className="text-muted-foreground">Mem</span>
-            <MeterBar value={mem} label="Memory" />
-            {mem != null ? `${Math.round(mem)}%` : "—"}
+            <RowMeter value={mem} label="Memory" />
           </span>
         </span>
       )}
@@ -235,17 +242,29 @@ function wirelessLabel(c: CapabilitiesJson): string | null {
         : null;
 }
 
+/** The boards' small uppercase section label, with an optional control on the right. */
+function Section({ label, right }: { label: string; right?: ReactNode }): ReactNode {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="dv-section flex-1">{label}</span>
+      {right}
+    </div>
+  );
+}
+
 function Capabilities({
   d,
   capabilities,
   chips,
   busy,
+  phone,
   onProbe,
 }: {
   d: DeviceInfo;
   capabilities: CapabilitiesJson | null;
   chips: number;
   busy: DeviceBusy | null;
+  phone: boolean;
   onProbe?: () => void;
 }): ReactNode {
   const tags = capabilities
@@ -259,41 +278,55 @@ function Capabilities({
   const blocked = capabilities
     ? (["container", "scheduler", "fetch"] as const).filter((k) => !capabilities.deviceMode[k])
     : [];
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center">
-        <span className="monitor-label flex-1">Capabilities</span>
-        {onProbe && (
-          <MonitorButton
-            size="sm"
-            variant="ghost"
-            disabled={!!busy || !!d.disabled}
-            onClick={onProbe}
-          >
-            {busy === "capabilities" ? "Probing…" : capabilities ? "Probe again" : "Probe"}
-          </MonitorButton>
+  const probe = onProbe && (
+    <MonitorButton
+      size="sm"
+      variant="ghost"
+      icon={<RotateCw aria-hidden="true" />}
+      disabled={!!busy || !!d.disabled}
+      onClick={onProbe}
+    >
+      {busy === "capabilities" ? "Probing…" : capabilities ? "Probe again" : "Probe"}
+    </MonitorButton>
+  );
+  const chipRow = capabilities && (
+    <div className="flex flex-wrap gap-1.5">
+      {tags.map((t) => (
+        <span key={t} className="monitor-chip">
+          {t}
+        </span>
+      ))}
+      {packages.slice(0, room).map((p) => (
+        <span key={p} className="monitor-chip">
+          {p}
+        </span>
+      ))}
+      {rest > 0 && (
+        <span className="monitor-chip" title={packages.slice(room).join(", ")}>
+          +{rest} package{rest === 1 ? "" : "s"}
+        </span>
+      )}
+    </div>
+  );
+  // The phone board shows the chips alone; the probe stays reachable beside them.
+  if (phone)
+    return (
+      <div className="flex flex-col gap-2">
+        {chipRow || (
+          <span className="monitor-hint">
+            Not probed yet. Probe reads version, packages, wireless stack and device mode.
+          </span>
         )}
+        {probe && <span className="self-start">{probe}</span>}
       </div>
+    );
+  return (
+    <div className="flex flex-col gap-2.5">
+      <Section label="Capabilities" right={probe} />
       {capabilities ? (
         <>
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map((t) => (
-              <span key={t} className="monitor-chip">
-                {t}
-              </span>
-            ))}
-            {packages.slice(0, room).map((p) => (
-              <span key={p} className="monitor-chip">
-                {p}
-              </span>
-            ))}
-            {rest > 0 && (
-              <span className="monitor-chip" title={packages.slice(room).join(", ")}>
-                +{rest} package{rest === 1 ? "" : "s"}
-              </span>
-            )}
-          </div>
-          <span className="text-muted-foreground text-[12px]">
+          {chipRow}
+          <span className="monitor-hint">
             Probed{" "}
             {new Date(capabilities.probedAt).toLocaleDateString([], {
               month: "short",
@@ -302,14 +335,18 @@ function Capabilities({
             · {capabilities.channel} channel
           </span>
           {blocked.length > 0 && (
-            <span className="text-warning text-[12px]">
+            <MonitorNote
+              tone="warn"
+              icon={<TriangleAlert aria-hidden="true" />}
+              className="dv-cap-note"
+            >
               Device mode blocks {blocked.join(", ")}. Changing device mode needs someone at the
               router.
-            </span>
+            </MonitorNote>
           )}
         </>
       ) : (
-        <span className="text-muted-foreground text-[12px]">
+        <span className="monitor-hint">
           Not probed yet. Probe reads version, packages, wireless stack and device mode.
         </span>
       )}
@@ -333,27 +370,28 @@ function Facts({ d, phone }: { d: DeviceInfo; phone: boolean }): ReactNode {
   return (
     <dl className="monitor-facts dv-facts">
       <dt>Login</dt>
-      <dd>{login}</dd>
+      <dd className="truncate">{login}</dd>
       {phone && (
         <>
           <dt>Transport</dt>
-          <dd>{transport}</dd>
+          <dd className="truncate">{transport}</dd>
         </>
       )}
       <dt>Hardware</dt>
-      <dd>{hw || "Not seen yet"}</dd>
+      <dd className="truncate">{hw || "Not seen yet"}</dd>
       <dt>Uptime</dt>
-      <dd>{s.uptime ?? "Not seen yet"}</dd>
-      {d.geo && (
+      <dd className="truncate">{s.uptime ?? "Not seen yet"}</dd>
+      {d.geo && !phone && (
         <>
           <dt>Location</dt>
-          <dd>{[d.geo.city, d.geo.country].filter(Boolean).join(", ")}</dd>
+          <dd className="truncate">{[d.geo.city, d.geo.country].filter(Boolean).join(", ")}</dd>
         </>
       )}
       <dt>Last call</dt>
-      <dd>
+      <dd className="truncate">
         {d.activity.lastSeen > 0 ? (
           <time
+            className={phone ? undefined : "font-mono text-[12px]"}
             dateTime={new Date(d.activity.lastSeen).toISOString()}
             title={new Date(d.activity.lastSeen).toLocaleString()}
           >
@@ -370,11 +408,12 @@ function Facts({ d, phone }: { d: DeviceInfo; phone: boolean }): ReactNode {
 function MacAddress({ d }: { d: DeviceInfo }): ReactNode {
   return (
     <div className="flex flex-col gap-2" aria-label="Management addresses">
-      <span className="monitor-label">Management address</span>
-      <div className="flex items-center gap-2 text-[13px]">
-        <span className="text-fg-secondary font-mono text-[12px]">{d.mac ?? d.host}</span>
+      <Section label="Management address" />
+      <div className="flex items-center gap-2 text-[12px]">
+        <StatusDot tone={deviceState(d) === "online" ? "good" : "default"} />
+        <span className="text-foreground font-mono font-medium">{d.mac ?? d.host}</span>
         <span className="flex-1" />
-        <span className="text-muted-foreground text-[12px]">MAC-Telnet</span>
+        <span className="text-muted-foreground">MAC-Telnet</span>
       </div>
     </div>
   );
@@ -382,20 +421,24 @@ function MacAddress({ d }: { d: DeviceInfo }): ReactNode {
 
 function AvailableSwitch({
   d,
+  phone,
   onToggle,
-  className,
 }: {
   d: DeviceInfo;
+  phone: boolean;
   onToggle?: (name: string, disabled: boolean) => void;
-  className?: string;
 }): ReactNode {
   if (!onToggle) return null;
   return (
-    <div className={cn("border-border flex items-start gap-3 border-t", className)}>
-      <span className="flex flex-1 flex-col">
-        <span className="text-foreground text-[13px]">Available to MCP</span>
-        <span className="text-muted-foreground text-[12px]">
-          Turns off tool access to this router. The router itself keeps running.
+    <div className="border-line flex items-center justify-between gap-3 border-t pt-3.5">
+      <span className="flex min-w-0 flex-col">
+        <span className="text-foreground text-[13px] leading-[21px] font-medium">
+          Available to MCP
+        </span>
+        <span className="monitor-hint">
+          {phone
+            ? "Turns off tool access. The router keeps running."
+            : "Turns off tool access to this router. The router itself keeps running."}
         </span>
       </span>
       <MonitorSwitch
@@ -408,9 +451,9 @@ function AvailableSwitch({
 }
 
 /**
- * The details block for the selected router: identity, actions, then
- * resources, addresses and facts, capabilities and the MCP switch.
- * `phone` is the single-column layout from the phone board.
+ * The details panel for the selected router: identity and actions, then
+ * resources, addresses and facts, capabilities and the MCP switch in three
+ * columns. `phone` is the single-column card from the phone board.
  */
 export function RouterDetails({
   d,
@@ -456,11 +499,13 @@ export function RouterDetails({
   ]
     .filter(Boolean)
     .join(" · ");
+  const size = phone ? "md" : "sm";
   const actions = (
     <>
       {canTest && (
         <MonitorButton
-          size={phone ? "md" : "sm"}
+          size={size}
+          icon={phone ? undefined : <Zap aria-hidden="true" />}
           disabled={!!busy || !!d.disabled}
           aria-label={`Test ${d.name}`}
           title="Read-only health check on this router"
@@ -471,7 +516,8 @@ export function RouterDetails({
       )}
       {canReconnect && !d.mac && (
         <MonitorButton
-          size={phone ? "md" : "sm"}
+          size={size}
+          icon={phone ? undefined : <RotateCw aria-hidden="true" />}
           disabled={!!busy || !!d.disabled}
           aria-label={`Reconnect ${d.name}`}
           title="Drop and reopen this router's pooled SSH session"
@@ -482,8 +528,9 @@ export function RouterDetails({
       )}
       {onManage && (
         <MonitorButton
-          size={phone ? "md" : "sm"}
+          size={size}
           variant="ghost"
+          icon={phone ? undefined : <PenLine aria-hidden="true" />}
           aria-label={`Edit ${d.name}`}
           onClick={() => onManage(d.name)}
         >
@@ -493,13 +540,14 @@ export function RouterDetails({
     </>
   );
   const close = (
-    <MonitorButton
-      size="sm"
-      variant="ghost"
+    <button
+      type="button"
+      className="monitor-icon-btn"
       aria-label="Close router details"
-      icon={<X aria-hidden="true" />}
       onClick={onClose}
-    />
+    >
+      <X aria-hidden="true" />
+    </button>
   );
   const alert = error && (
     <p role="alert" className="monitor-err">
@@ -512,73 +560,73 @@ export function RouterDetails({
       capabilities={capabilities}
       chips={phone ? 3 : 4}
       busy={busy}
+      phone={phone}
       onProbe={canProbe ? () => onAction("capabilities") : undefined}
     />
   );
   const addresses = d.mac ? (
     <MacAddress d={d} />
   ) : d.endpoints ? (
-    <DeviceAddressStatus endpoints={d.endpoints} compact={phone} />
+    <DeviceAddressStatus endpoints={d.endpoints} />
   ) : null;
 
   if (phone)
     return (
-      <section className="monitor-panel dv-details-phone" aria-label={`Router details: ${d.name}`}>
-        <div className="border-border flex flex-col gap-2 border-b px-4 py-3.5">
-          <div className="flex items-center gap-2">
-            <h3 className="text-emphasis flex-1 truncate font-mono text-[15px] font-medium">
-              {d.name}
-            </h3>
-            {close}
-          </div>
-          <span className="self-start">
-            <StatusBadge tone={STATE_TONE[state]}>{badge}</StatusBadge>
-          </span>
-          {about && <p className="text-muted-foreground text-[12px]">{about}</p>}
-          <div className="dv-phone-actions mt-1 grid grid-cols-3 gap-2">{actions}</div>
-          {alert}
+      <section className="glass dv-details-phone" aria-label={`Router details: ${d.name}`}>
+        <div className="flex items-center gap-2">
+          <h2 className="text-emphasis min-w-0 flex-1 truncate font-mono text-[16px] leading-[21px] font-semibold">
+            {d.name}
+          </h2>
+          {close}
         </div>
-        <div className="flex flex-col gap-5 px-4 pt-3.5 pb-4">
-          <DeviceResources d={d} />
-          {addresses}
-          <Facts d={d} phone />
-          {capabilityBlock}
-          <AvailableSwitch d={d} onToggle={onToggle} className="pt-3.5" />
-        </div>
+        <span className="self-start">
+          <StatusBadge tone={STATE_TONE[state]}>{badge}</StatusBadge>
+        </span>
+        {about && <p className="text-muted-foreground text-[12px] leading-[21px]">{about}</p>}
+        <div className="grid grid-cols-3 gap-2">{actions}</div>
+        {alert}
+        <DeviceResources d={d} phone />
+        <Facts d={d} phone />
+        {capabilityBlock}
+        <AvailableSwitch d={d} phone onToggle={onToggle} />
       </section>
     );
 
   return (
-    <div
-      className="border-border bg-overlay-02 border-t"
+    <section
+      className="monitor-panel dv-details"
       role="region"
       aria-label={`Router details: ${d.name}`}
     >
-      <div className="border-border flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-5 py-4">
-        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <h3 className="text-emphasis truncate font-mono text-[15px] font-medium">{d.name}</h3>
+      <div className="dv-details-head">
+        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h2 className="text-emphasis truncate font-mono text-[16px] leading-[21px] font-semibold">
+              {d.name}
+            </h2>
             <StatusBadge tone={STATE_TONE[state]}>{badge}</StatusBadge>
           </div>
-          {about && <p className="text-muted-foreground text-[12px]">{about}</p>}
+          {about && <p className="text-muted-foreground text-[12px] leading-[21px]">{about}</p>}
           {alert}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {actions}
           {close}
         </div>
       </div>
-      <div className="dv-details-grid px-5 pt-4 pb-5">
-        <DeviceResources d={d} />
-        <div className="flex min-w-0 flex-col gap-3">
+      <div className="dv-details-grid">
+        <div>
+          <DeviceResources d={d} />
+        </div>
+        <div className="flex flex-col gap-4">
           {addresses}
           <Facts d={d} phone={false} />
         </div>
-        <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex flex-col gap-4">
           {capabilityBlock}
-          <AvailableSwitch d={d} onToggle={onToggle} className="mt-2 pt-3" />
+          <AvailableSwitch d={d} phone={false} onToggle={onToggle} />
         </div>
       </div>
-    </div>
+    </section>
   );
 }

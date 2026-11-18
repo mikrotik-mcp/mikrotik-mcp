@@ -1,7 +1,7 @@
 /**
  * Simulator view — trace a hypothetical packet without touching the device.
  *
- * The verdict banner is the whole page in one glyph, so it has to be honest:
+ * The verdict box is the whole page in one word, so it has to be honest:
  * **`UNKNOWN` is styled as a warning, never as success.** A prediction the model
  * could not make must not look like one that succeeded — that is the failure
  * mode this entire feature is designed around.
@@ -11,16 +11,32 @@
  *     source line, so the reasoning can be checked rather than trusted.
  *   • Before/after for a proposed change, with the divergence step marked.
  *   • Reachability map — useful on its own and needs no packet.
+ *
+ * Layout follows the approved Simulator board.
  */
-import { LoadingState } from "./loading-state";
+import "./monitoring.css";
+import "./simulator.css";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { Play, RefreshCw, TriangleAlert } from "lucide-react";
 import { api, postJson } from "./api";
-import { Panel, StatCard } from "./atoms";
-import { Badge, Button, Dot, Input, Select } from "./geist";
-import type { GeistType } from "./geist";
-import { toast } from "./toast-action";
+import { LoadingState } from "./loading-state";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorEmpty,
+  MonitorNote,
+  MonitorPanel,
+  MonitorSelect,
+  PageIntro,
+  Segmented,
+  StatusBadge,
+  StatusDot,
+  useStaggerIn,
+} from "./monitoring-ui";
 import { PolicyVerifier } from "./policy-verifier";
+import { toast } from "./toast-action";
 import type {
   SimChangePayload,
   SimPacketPayload,
@@ -28,23 +44,16 @@ import type {
   SimTrace,
   SimVerdict,
 } from "./types";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 
-const VERDICT_TYPE: Record<SimVerdict, GeistType> = {
-  accept: "success",
-  drop: "error",
-  reject: "error",
-  // Deliberately a warning: it is not a pass, and it must never read like one.
-  unknown: "warning",
+// Deliberately a warning for `unknown`: it is not a pass, and it must never read like one.
+const VERDICT_TONE: Record<SimVerdict, "good" | "bad" | "warn"> = {
+  accept: "good",
+  drop: "bad",
+  reject: "bad",
+  unknown: "warn",
 };
 
-const VERDICT_CLASS: Record<SimVerdict, string> = {
-  accept: "border-emerald-500/40 bg-emerald-500/10",
-  drop: "border-red-500/40 bg-red-500/10",
-  reject: "border-red-500/40 bg-red-500/10",
-  unknown: "border-amber-500/50 bg-amber-500/10",
-};
+type ConnState = "new" | "established" | "related" | "invalid";
 
 interface PacketForm {
   srcAddress: string;
@@ -53,7 +62,7 @@ interface PacketForm {
   srcPort: string;
   dstPort: string;
   inInterface: string;
-  connectionState: "new" | "established" | "related" | "invalid";
+  connectionState: ConnState;
 }
 
 const PRESETS: { label: string; packet: PacketForm }[] = [
@@ -107,6 +116,9 @@ const PRESETS: { label: string; packet: PacketForm }[] = [
   },
 ];
 
+const PROTOCOLS = ["tcp", "udp", "icmp", "gre", "ipsec-esp", "ipsec-ah", "ospf"];
+const STATES: ConnState[] = ["new", "established", "related", "invalid"];
+
 function toPacket(form: PacketForm): Record<string, unknown> {
   return {
     srcAddress: form.srcAddress,
@@ -119,73 +131,135 @@ function toPacket(form: PacketForm): Record<string, unknown> {
   };
 }
 
-/** A labelled form field — `Input` itself is a bare input. */
-function Field({ label, children }: { label: string; children: ReactNode }): ReactNode {
+const samePacket = (a: PacketForm, b: PacketForm): boolean =>
+  (Object.keys(a) as (keyof PacketForm)[]).every((k) => a[k] === b[k]);
+
+/** A labelled text field with its value in mono. */
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}): ReactNode {
   return (
-    <label className="flex flex-col gap-1 text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      {children}
+    <label className="monitor-fl">
+      <span className="monitor-label">{label}</span>
+      <input
+        className="monitor-input sim-input"
+        value={value}
+        spellCheck={false}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </label>
   );
 }
 
-function Verdict({ trace }: { trace: SimTrace }): ReactNode {
+/** The answer in one word, toned by what it means. */
+function VerdictBox({ trace }: { trace: SimTrace }): ReactNode {
+  const tone = VERDICT_TONE[trace.verdict];
   return (
-    <div className={cn("rounded-md border p-3", VERDICT_CLASS[trace.verdict])}>
-      <div className="flex items-center gap-2 text-lg font-semibold">
-        <Dot type={VERDICT_TYPE[trace.verdict]} />
-        {trace.verdict.toUpperCase()}
-        <span className="ml-auto text-xs font-normal text-muted-foreground">
-          confidence: {trace.confidence}
-        </span>
-      </div>
-      <p className="mt-1 text-sm text-muted-foreground">{trace.summary}</p>
+    <div className="monitor-note sim-verdict" data-tone={tone}>
+      <span className="sim-verdict-head">
+        <StatusDot tone={tone} />
+        <b>{trace.verdict.toUpperCase()}</b>
+        <span className="flex-1" />
+        <span className="monitor-hint">confidence: {trace.confidence}</span>
+      </span>
+      <span>{trace.summary}</span>
       {trace.verdict === "unknown" && (
-        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+        <span className="sim-verdict-unknown">
           This is not a pass. The model met something on the path it does not implement, so it
           declined to answer rather than guess.
-        </p>
+        </span>
       )}
     </div>
   );
 }
 
-function Traversal({ trace, divergedAt }: { trace: SimTrace; divergedAt?: number }): ReactNode {
+/** One row per rule the packet met. The deciding rule carries the verdict colour. */
+function Traversal({
+  trace,
+  divergedAt,
+  raw = true,
+}: {
+  trace: SimTrace;
+  divergedAt?: number;
+  raw?: boolean;
+}): ReactNode {
+  const last = trace.steps.length - 1;
+  const decided = trace.verdict === "unknown" ? undefined : VERDICT_TONE[trace.verdict];
   return (
-    <ol className="space-y-1">
+    <ol className="sim-trav">
       {trace.steps.map((s, i) => (
         <li
           key={`${s.chain}-${s.index}-${i}`}
-          className={cn(
-            "rounded-md border-l-2 py-1 pl-2 text-sm",
-            i === divergedAt ? "border-l-amber-500 bg-amber-500/10" : "border-l-border",
-          )}
+          className="sim-step"
+          data-tone={i === last ? decided : undefined}
+          data-diverged={i === divergedAt || undefined}
+          title={raw ? undefined : s.raw || undefined}
         >
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="sim-step-where">
             {i + 1}. {s.chain}
             {s.index >= 0 ? ` #${s.index}` : ""}
             {s.line > 0 ? ` (line ${s.line})` : ""}
           </span>
-          <div>{s.note}</div>
-          {s.raw && <div className="font-mono text-[11px] text-muted-foreground">{s.raw}</div>}
+          <span className="sim-step-note">{s.note}</span>
+          {raw && s.raw && <span className="sim-step-raw">{s.raw}</span>}
         </li>
       ))}
+    </ol>
+  );
+}
+
+/** NAT rules on the path and what the model could not follow. */
+function PathExtras({ trace }: { trace: SimTrace }): ReactNode {
+  return (
+    <>
       {trace.nat.length > 0 && (
-        <li className="rounded-md bg-muted/30 py-1 pl-2 text-sm">
+        <div className="glass sim-nat">
           {trace.nat.map((n) => (
-            <div key={`${n.stage}-${n.rule}`} className="font-mono text-xs">
+            <span key={`${n.stage}-${n.rule}`}>
               {n.stage} #{n.rule} (line {n.line}): {n.note}
-            </div>
+            </span>
           ))}
-        </li>
+        </div>
       )}
       {trace.unmodelled.length > 0 && (
-        <li className="rounded-md border border-amber-500/40 py-1 pl-2 text-xs text-amber-600 dark:text-amber-400">
-          not modelled on this path:{" "}
+        <MonitorNote tone="warn" icon={<TriangleAlert aria-hidden="true" />}>
+          Not modelled on this path:{" "}
           {trace.unmodelled.map((u) => `${u.what}${u.line ? ` (line ${u.line})` : ""}`).join("; ")}
-        </li>
+        </MonitorNote>
       )}
-    </ol>
+    </>
+  );
+}
+
+function ChangeSummary({ change }: { change: SimChangePayload }): ReactNode {
+  const { diff, before, after } = change;
+  const step = diff.divergedAt !== undefined ? diff.divergedAt + 1 : undefined;
+  if (diff.changed)
+    return (
+      <MonitorNote tone="warn" icon={<TriangleAlert aria-hidden="true" />}>
+        <b>The verdict changes{step !== undefined ? ` at step ${step}` : ""}:</b> {before.verdict} →{" "}
+        {after.verdict}.
+      </MonitorNote>
+    );
+  return (
+    <MonitorNote>
+      {step !== undefined ? (
+        <>
+          <b>Same verdict, different path from step {step}.</b>{" "}
+        </>
+      ) : (
+        <>
+          <b>No change.</b>{" "}
+        </>
+      )}
+      {after.verdict.toUpperCase()} either way.
+    </MonitorNote>
   );
 }
 
@@ -196,6 +270,8 @@ export function SimulatorView(): ReactNode {
   const [change, setChange] = useState<SimChangePayload | null>(null);
   const [rules, setRules] = useState<SimReachabilityRule[]>([]);
   const [busy, setBusy] = useState(false);
+  const traceRef = useRef<HTMLDivElement>(null);
+  useStaggerIn(traceRef, ".sim-step", trace);
 
   const set = (key: keyof PacketForm, value: string): void =>
     setForm((f) => ({ ...f, [key]: value }) as PacketForm);
@@ -242,190 +318,244 @@ export function SimulatorView(): ReactNode {
   }, [loadReachability]);
 
   const dead = rules.filter((r) => r.unreachable);
+  const protocols = PROTOCOLS.includes(form.protocol) ? PROTOCOLS : [form.protocol, ...PROTOCOLS];
+  const coverage = trace?.coverage;
+  const showCoverage =
+    coverage != null && (coverage.unmodelled.length > 0 || coverage.dynamicRouteSources.length > 0);
+
+  const packet = (
+    <MonitorPanel title="Packet">
+      <div className="flex min-w-0 flex-col gap-[14px]">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {PRESETS.map((p) => (
+            <MonitorButton
+              key={p.label}
+              size="sm"
+              variant={samePacket(form, p.packet) ? "primary" : "glass"}
+              aria-pressed={samePacket(form, p.packet)}
+              onClick={() => setForm(p.packet)}
+            >
+              {p.label}
+            </MonitorButton>
+          ))}
+        </div>
+        <div className="sim-fields">
+          <Field label="Source" value={form.srcAddress} onChange={(v) => set("srcAddress", v)} />
+          <Field
+            label="Destination"
+            value={form.dstAddress}
+            onChange={(v) => set("dstAddress", v)}
+          />
+          <div className="monitor-fl">
+            <span className="monitor-label">Protocol</span>
+            <div className="sim-select-full">
+              <MonitorSelect
+                label="Protocol"
+                value={form.protocol}
+                onChange={(v) => set("protocol", v)}
+                options={protocols.map((p) => ({ value: p, label: p }))}
+              />
+            </div>
+          </div>
+          <Field
+            label="In interface"
+            value={form.inInterface}
+            onChange={(v) => set("inInterface", v)}
+          />
+          <Field label="Src port" value={form.srcPort} onChange={(v) => set("srcPort", v)} />
+          <Field label="Dst port" value={form.dstPort} onChange={(v) => set("dstPort", v)} />
+        </div>
+        <div className="sim-state">
+          <div className="monitor-fl">
+            <span className="monitor-label">Connection state (declared)</span>
+            <Segmented
+              label="Connection state (declared)"
+              value={form.connectionState}
+              options={STATES.map((s) => ({ value: s, label: s }))}
+              onChange={(v) => set("connectionState", v)}
+            />
+          </div>
+          <MonitorButton
+            variant="primary"
+            icon={<Play aria-hidden="true" />}
+            disabled={busy}
+            onClick={() => void run()}
+          >
+            Trace
+          </MonitorButton>
+        </div>
+        <span className="monitor-hint">
+          Connection state is declared, not inferred: the model has no connection-tracking table.
+          Nothing is sent to the device.
+        </span>
+      </div>
+    </MonitorPanel>
+  );
+
+  const verdict = trace ? (
+    <MonitorPanel title={`Verdict · ${trace.source}`}>
+      <div ref={traceRef} className="flex min-w-0 flex-col gap-3">
+        <VerdictBox trace={trace.result} />
+        <Traversal trace={trace.result} />
+        <PathExtras trace={trace.result} />
+      </div>
+    </MonitorPanel>
+  ) : busy ? (
+    <MonitorPanel title="Verdict">
+      <LoadingState label="Simulating packet traversal" />
+    </MonitorPanel>
+  ) : (
+    <MonitorPanel title="Verdict">
+      <MonitorEmpty compact icon={<Play />} title="No trace yet">
+        Pick a preset or fill in the packet, then press Trace.
+      </MonitorEmpty>
+    </MonitorPanel>
+  );
 
   return (
-    <div className="space-y-4">
-      <PolicyVerifier />
-      <Panel
-        title="Packet"
-        extra={
-          <div className="flex flex-wrap gap-1">
-            {PRESETS.map((p) => (
-              <Button key={p.label} size="sm" type="secondary" onClick={() => setForm(p.packet)}>
-                {p.label}
-              </Button>
-            ))}
-          </div>
-        }
-      >
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Field label="Source">
-            <Input value={form.srcAddress} onChange={(e) => set("srcAddress", e.target.value)} />
-          </Field>
-          <Field label="Destination">
-            <Input value={form.dstAddress} onChange={(e) => set("dstAddress", e.target.value)} />
-          </Field>
-          <Field label="Protocol">
-            <Input value={form.protocol} onChange={(e) => set("protocol", e.target.value)} />
-          </Field>
-          <Field label="In interface">
-            <Input value={form.inInterface} onChange={(e) => set("inInterface", e.target.value)} />
-          </Field>
-          <Field label="Src port">
-            <Input value={form.srcPort} onChange={(e) => set("srcPort", e.target.value)} />
-          </Field>
-          <Field label="Dst port">
-            <Input value={form.dstPort} onChange={(e) => set("dstPort", e.target.value)} />
-          </Field>
-          <label className="flex flex-col gap-1 text-xs">
-            <span className="text-muted-foreground">Connection state (declared)</span>
-            <Select
-              aria-label="Connection state (declared)"
-              value={form.connectionState}
-              onValueChange={(next) => set("connectionState", next)}
-              options={["new", "established", "related", "invalid"].map((s) => ({
-                value: s,
-                label: s,
-              }))}
-            />
-          </label>
-          <div className="flex items-end">
-            <Button onClick={() => void run()} loading={busy}>
-              Trace
-            </Button>
-          </div>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Connection state is <strong>declared</strong>, not inferred — this model has no
-          connection-tracking table. Nothing is sent to the device.
-        </p>
-      </Panel>
+    <div className="sim-page">
+      <PageIntro
+        eyebrow="Simulator"
+        heading="Trace a packet before it exists."
+        lead="Run a hypothetical packet through the saved configuration, preview a change, and find rules that can never match. No device is touched."
+        actions={<StatusBadge tone="brand">Offline model · nothing sent</StatusBadge>}
+      />
 
-      {busy && !trace && <LoadingState label="Simulating packet traversal" />}
-      {trace && (
-        <>
-          <Panel title={`Verdict — ${trace.source}`}>
-            <Verdict trace={trace.result} />
-            <div className="mt-3">
-              <Traversal trace={trace.result} />
-            </div>
-          </Panel>
-
-          {(trace.coverage.unmodelled.length > 0 ||
-            trace.coverage.dynamicRouteSources.length > 0) && (
-            <Panel title="Config coverage">
-              {trace.coverage.dynamicRouteSources.length > 0 && (
-                <p className="text-sm text-amber-600 dark:text-amber-400">
-                  This device runs {trace.coverage.dynamicRouteSources.join(", ")} — routes learned
-                  at runtime are not in an export, so a missing route here is not proof the device
-                  lacks one.
-                </p>
+      <div className="sim-split">
+        {packet}
+        <div className="sim-col gap-[14px]">
+          {verdict}
+          {showCoverage && (
+            <MonitorNote tone="warn" icon={<TriangleAlert aria-hidden="true" />}>
+              <b>Config coverage.</b>{" "}
+              {coverage.dynamicRouteSources.length > 0 && (
+                <>
+                  This device runs {coverage.dynamicRouteSources.join(", ")}. Routes learned at
+                  runtime are not in an export, so a missing route here does not prove the device
+                  lacks one.{" "}
+                </>
               )}
-              {trace.coverage.unmodelled.length > 0 && (
-                <ul className="mt-2 space-y-1 font-mono text-xs text-muted-foreground">
-                  {trace.coverage.unmodelled.slice(0, 20).map((u, i) => (
-                    <li key={`${u.what}-${u.line}-${i}`}>
-                      {u.what} — line {u.line} {u.detail ? `· ${u.detail}` : ""}
-                    </li>
+              {coverage.unmodelled.length > 0 && (
+                <>
+                  Not modelled:{" "}
+                  {coverage.unmodelled.slice(0, 20).map((u, i) => (
+                    <span key={`${u.what}-${u.line}-${i}`}>
+                      {i > 0 && " · "}
+                      <span className="sim-mono" title={u.detail}>
+                        {u.what} — line {u.line}
+                      </span>
+                    </span>
                   ))}
-                </ul>
+                </>
               )}
-            </Panel>
+            </MonitorNote>
           )}
-        </>
-      )}
-
-      <Panel
-        title="Proposed change"
-        extra={
-          <Button size="sm" type="secondary" onClick={() => void runChange()} loading={busy}>
-            Simulate change
-          </Button>
-        }
-      >
-        <Textarea
-          value={changes}
-          onChange={(e) => setChanges(e.target.value)}
-          rows={4}
-          placeholder={
-            "/ip firewall filter\nadd action=drop chain=forward dst-port=443 protocol=tcp"
-          }
-          className="font-mono text-xs"
-        />
-        {change && (
-          <div className="mt-3">
-            <div
-              className={cn(
-                "mb-3 rounded-md border p-2 text-sm",
-                change.diff.changed ? "border-amber-500/50 bg-amber-500/10" : "border-border",
-              )}
-            >
-              {change.diff.summary}
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div>
-                <h4 className="mb-2 text-sm font-medium">Before</h4>
-                <Verdict trace={change.before} />
-                <div className="mt-2">
-                  <Traversal trace={change.before} divergedAt={change.diff.divergedAt} />
-                </div>
-              </div>
-              <div>
-                <h4 className="mb-2 text-sm font-medium">After</h4>
-                <Verdict trace={change.after} />
-                <div className="mt-2">
-                  <Traversal trace={change.after} divergedAt={change.diff.divergedAt} />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Panel>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard k="Filter rules" v={String(rules.length)} sub="in the config" />
-        <StatCard
-          k="Unreachable"
-          v={String(dead.length)}
-          cls={dead.length > 0 ? "text-amber-500" : undefined}
-          sub="can never match"
-        />
+        </div>
       </div>
 
-      <Panel
-        title="Reachability"
+      <MonitorPanel
+        title="Proposed change"
+        description="Paste RouterOS commands. They are applied to a copy of the saved export, never to the router."
         extra={
-          <Button size="sm" type="secondary" onClick={() => void loadReachability()}>
-            Refresh
-          </Button>
+          <MonitorButton
+            size="sm"
+            icon={<Play aria-hidden="true" />}
+            disabled={busy || changes.trim() === ""}
+            onClick={() => void runChange()}
+          >
+            Simulate change
+          </MonitorButton>
         }
       >
-        {rules.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No filter rules read yet.</p>
-        ) : (
-          <ul className="space-y-1 font-mono text-xs">
-            {rules.map((r) => (
-              <li
+        <div className="sim-change">
+          <div className="flex min-w-0 flex-col gap-2.5">
+            <textarea
+              className="monitor-input"
+              aria-label="Proposed change"
+              value={changes}
+              spellCheck={false}
+              onChange={(e) => setChanges(e.target.value)}
+              rows={4}
+              placeholder={
+                "/ip firewall filter\nadd action=drop chain=forward dst-port=443 protocol=tcp"
+              }
+            />
+            {change && <ChangeSummary change={change} />}
+          </div>
+          {change ? (
+            <div className="sim-compare">
+              {(
+                [
+                  ["Before", change.before],
+                  ["After", change.after],
+                ] as const
+              ).map(([label, t]) => (
+                <div key={label} className="flex min-w-0 flex-col gap-2">
+                  <span className="monitor-label">{label}</span>
+                  <VerdictBox trace={t} />
+                  <Traversal trace={t} divergedAt={change.diff.divergedAt} raw={false} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <MonitorEmpty compact icon={<Play />} title="No change simulated yet">
+              Paste a change and press Simulate change to compare the verdict before and after.
+            </MonitorEmpty>
+          )}
+        </div>
+      </MonitorPanel>
+
+      <div className="sim-pair">
+        <MonitorPanel
+          title="Reachability"
+          description="Rules that an earlier rule always catches first."
+          flush
+          extra={
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              icon={<RefreshCw aria-hidden="true" />}
+              onClick={() => void loadReachability()}
+            >
+              Refresh
+            </MonitorButton>
+          }
+        >
+          <div className="sim-reach-kpis">
+            <MetricStrip label="Reachability">
+              <Metric label="Filter rules" value={rules.length} hint="in the config" />
+              <Metric
+                label="Unreachable"
+                value={dead.length}
+                hint="can never match"
+                tone={dead.length > 0 ? "warn" : "default"}
+              />
+            </MetricStrip>
+          </div>
+          {rules.length === 0 ? (
+            <MonitorEmpty compact title="No filter rules read yet." />
+          ) : (
+            rules.map((r) => (
+              <div
                 key={`${r.chain}-${r.index}`}
-                className={cn(
-                  "flex items-start gap-2",
-                  r.unreachable && "text-muted-foreground line-through",
-                  r.disabled && "opacity-50",
-                )}
+                className="monitor-row sim-reach-row"
+                data-shadowed={r.unreachable || undefined}
+                data-disabled={r.disabled || undefined}
                 title={r.why}
               >
-                <Badge type={r.unreachable ? "warning" : "secondary"}>
+                <span className="monitor-chip">
                   {r.chain} #{r.index}
-                </Badge>
-                <span className="flex-1 truncate">{r.raw}</span>
-                {r.unreachable && (
-                  <span className="text-amber-500">shadowed by #{r.shadowedBy}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+                </span>
+                <span className="sim-reach-raw">{r.raw}</span>
+                <span className="sim-reach-why">
+                  {r.unreachable ? `shadowed by #${r.shadowedBy}` : ""}
+                </span>
+              </div>
+            ))
+          )}
+        </MonitorPanel>
+        <PolicyVerifier />
+      </div>
     </div>
   );
 }

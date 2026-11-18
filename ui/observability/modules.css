@@ -1,0 +1,171 @@
+@layer theme, base, components, utilities;
+/* Modules (Wks-Modules, and Wks-Modules-Phone at 639px and below). */
+@layer components {
+  @media (min-width: 900px) {
+    .modules-page .monitor-head[data-layout="verdict"][data-aside] {
+      grid-template-columns: minmax(0, 1fr) 440px;
+    }
+  }
+  .modules-meter {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 18px;
+  }
+
+  .modules-layout {
+    display: grid;
+    min-width: 0;
+    align-items: start;
+    gap: 14px;
+    grid-template-columns: 330px minmax(0, 1fr);
+  }
+  @media (max-width: 1099px) {
+    .modules-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .modules-bar-row {
+    display: grid;
+    align-items: center;
+    gap: 10px;
+    grid-template-columns: 150px minmax(0, 1fr) 64px;
+    font-size: 12px;
+  }
+  .modules-bar {
+    display: flex;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 9px;
+    background: var(--line);
+  }
+  .modules-group-head .modules-bar {
+    height: 4px;
+  }
+  .modules-bar > i {
+    display: block;
+    height: 100%;
+    background: var(--sig);
+    transition: width 320ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .modules-unavail {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .modules-group-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+  .modules-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (max-width: 899px) {
+    .modules-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .modules-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: 12px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 12px 14px;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+  .modules-card[data-on] {
+    background: var(--sig-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sig) 45%, transparent);
+  }
+  .modules-card[data-unmet] {
+    opacity: 0.5;
+  }
+
+  /* Phone: actions for an open group sit behind a "more" button. */
+  .modules-more {
+    position: relative;
+  }
+  .modules-more > summary {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border-radius: 8px;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    list-style: none;
+  }
+  .modules-more > summary::-webkit-details-marker {
+    display: none;
+  }
+  .modules-more > summary svg {
+    width: 15px;
+    height: 15px;
+  }
+  .modules-more > summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .modules-more > div {
+    position: absolute;
+    z-index: 10;
+    top: 32px;
+    right: 0;
+    display: flex;
+    min-width: 150px;
+    flex-direction: column;
+    padding: 4px;
+    background: var(--surface-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      var(--shadow-overlay);
+  }
+  .modules-more > div > button {
+    justify-content: flex-start;
+  }
+
+  @media (max-width: 639px) {
+    .modules-phone-hide {
+      display: none;
+    }
+    .modules-meter {
+      padding: 14px;
+      gap: 8px;
+    }
+    .modules-page .monitor-verdict {
+      font-size: 26px;
+      line-height: 32px;
+    }
+    .modules-page .monitor-lead {
+      color: var(--muted-foreground);
+      font-size: 13px;
+      line-height: 19px;
+    }
+    /* The board's phone list sits on the page, not in a panel. */
+    .modules-list-panel.monitor-panel {
+      background: transparent;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+    .modules-list-panel > .monitor-panel-head {
+      display: none;
+    }
+    .modules-list-panel > .monitor-panel-body {
+      padding: 0;
+    }
+    .modules-group-head {
+      gap: 8px;
+    }
+  }
+}

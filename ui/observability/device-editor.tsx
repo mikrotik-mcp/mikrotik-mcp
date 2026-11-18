@@ -15,6 +15,7 @@ import {
   MonitorSwitch,
   Segmented,
   StatusBadge,
+  StatusDot,
 } from "./monitoring-ui";
 import { TagsInput } from "@/components/ui/tags-input";
 import { cn } from "@/lib/utils";
@@ -656,13 +657,11 @@ export function DeviceEditor({
 
   const hosts = [text(dev.host), ...(Array.isArray(dev.fallbackHosts) ? dev.fallbackHosts : [])];
   const port = text(dev.port) || "22";
-  const address =
-    transport === "mac" ? text(dev.mac) : `${text(dev.host) || "Router address"}:${port}`;
   const via = dev.jumpVia ? text(dev.jumpVia) : dev.jumpHost ? "a bastion" : "";
   const route =
     transport === "mac"
-      ? "Local network · MAC-Telnet"
-      : `Encrypted transport${via ? ` · via ${via}` : ""}`;
+      ? "MAC-Telnet · layer 2"
+      : `${transport === "rest" ? "REST + SSH" : "SSH"} · port ${port} · ${via ? `via ${via}` : "direct"}`;
   const timeout = Number(dev.timeoutMs ?? 10000) / 1000;
   const signIn =
     transport === "mac" || auth === "password"
@@ -718,7 +717,7 @@ export function DeviceEditor({
       <MonitorButton size="sm" disabled={busy} onClick={close}>
         Cancel
       </MonitorButton>
-      <span className="dv-foot-hint text-muted-foreground flex-1 text-[12px]">
+      <span className="dv-foot-hint monitor-hint mr-1.5 flex-1 text-right">
         Draft only · not applied
       </span>
       {step > 0 && (
@@ -727,7 +726,13 @@ export function DeviceEditor({
         </MonitorButton>
       )}
       {step < 2 ? (
-        <MonitorButton size="sm" variant="inverse" disabled={busy} onClick={() => go(step + 1)}>
+        <MonitorButton
+          size="sm"
+          variant="primary"
+          icon={<ChevronRight aria-hidden="true" />}
+          disabled={busy}
+          onClick={() => go(step + 1)}
+        >
           Continue
         </MonitorButton>
       ) : (
@@ -799,34 +804,56 @@ export function DeviceEditor({
               </button>
             ))}
           </nav>
-          <div className="dv-route" aria-label="Connection preview">
-            <span className="monitor-label">Connection</span>
-            <span className="flex flex-col gap-0.5 text-[12px]">
-              <span className="text-foreground">MCP host</span>
-              <span className="text-muted-foreground">Credentials stay here</span>
-            </span>
-            <span className="text-muted-foreground flex items-center gap-1.5 pl-0.5 text-[12px]">
-              <span className="bg-input h-3.5 w-px" />
-              {route}
-            </span>
-            <span className="flex min-w-0 flex-col gap-0.5 text-[12px]">
-              <span className="text-foreground truncate font-mono">
-                {newName.trim() || "New router"}
-              </span>
-              <span className="text-muted-foreground truncate font-mono">{address}</span>
-            </span>
+          <div className="glass dv-route" aria-label="Connection preview">
+            <span className="dv-section">Connection</span>
+            <div className="flex flex-col items-start">
+              <div className="flex items-center gap-2">
+                <StatusDot tone="good" pulse />
+                <span className="flex flex-col">
+                  <span className="text-foreground text-[13px] font-semibold">MCP host</span>
+                  <span className="monitor-hint">Credentials stay here</span>
+                </span>
+              </div>
+              <div className="dv-route-link">
+                <svg width="8" height="41" aria-hidden="true">
+                  <line
+                    x1="4"
+                    y1="2"
+                    x2="4"
+                    y2="39"
+                    stroke="var(--sig)"
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                  />
+                </svg>
+                <span className="monitor-hint truncate font-mono">{route}</span>
+              </div>
+              <div className="flex min-w-0 max-w-full items-center gap-2">
+                <StatusDot tone={currentTest?.ok ? "good" : currentTest ? "bad" : "default"} />
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-foreground truncate font-mono text-[13px] font-semibold">
+                    {newName.trim() || "New router"}
+                  </span>
+                  <span className="monitor-hint truncate font-mono">
+                    {transport === "mac" ? text(dev.mac) : text(dev.host) || "Router address"}
+                  </span>
+                </span>
+              </div>
+            </div>
           </div>
-          <p className="text-muted-foreground text-[12px] leading-4">
+          <p className="monitor-hint">
             This sets how MCP reaches the router. Nothing on the router changes.
           </p>
         </div>
         <fieldset disabled={busy} className="dv-ed-body">
-          <h3 className="text-foreground text-[15px] font-[590]">{HEADINGS[step]}</h3>
+          <h3 className="text-emphasis text-[16px] leading-[21px] font-semibold">
+            {HEADINGS[step]}
+          </h3>
           {step === 0 && (
             <>
               <div className="dv-grid-2">
                 <Field label="Device name" error={errors.name}>
-                  {input("name", "home-router")}
+                  {input("name", "home-router", "text", false)}
                 </Field>
                 <Field label="Description" optional>
                   {input("description", "Home · hAP ax³", "text", false)}
@@ -859,7 +886,7 @@ export function DeviceEditor({
                 <div className="monitor-fl">
                   <div className="flex items-center gap-2">
                     <span className="monitor-label flex-1">Management addresses</span>
-                    <span className="monitor-chip">Automatic failover</span>
+                    <span className="monitor-hint">Automatic failover</span>
                   </div>
                   <DeviceAddressesEditor
                     host={text(dev.host)}

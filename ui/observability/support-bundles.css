@@ -1,0 +1,214 @@
+/* Support Bundles, after the "Dia-Support-Bundles" Signal board. Tokens only. */
+.sb-page,
+.sb-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+  line-height: 21px;
+}
+
+/* Three-step progress: a bar and a numbered label per step. */
+.sb-steps {
+  display: flex;
+  gap: 14px;
+}
+.sb-step {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-step-bar {
+  height: 3px;
+  border-radius: 9px;
+  background: var(--line-2);
+}
+.sb-step:is([data-state="done"], [data-state="on"]) .sb-step-bar {
+  background: var(--sig);
+}
+.sb-step[data-state="on"] .sb-step-bar {
+  box-shadow: 0 0 10px var(--sig-soft);
+}
+.sb-step-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.sb-step:is([data-state="done"], [data-state="on"]) .sb-step-label {
+  color: var(--foreground);
+}
+.sb-step:is([data-state="done"], [data-state="on"]) .monitor-chip {
+  background: var(--sig-soft);
+  color: var(--success);
+}
+
+.sb-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  align-items: start;
+  gap: 14px;
+}
+.sb-col {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+.sb-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.sb-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sb-stack .monitor-seg {
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+/* What goes into the report: a card per kind of evidence. */
+.sb-choice {
+  display: flex;
+  gap: 12px;
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
+  padding: 12px 14px;
+  color: var(--foreground);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+.sb-choice:hover {
+  background: var(--glass-2);
+}
+.sb-choice[data-on] {
+  background: var(--sig-soft);
+  box-shadow: inset 0 0 0 1px var(--sig);
+}
+.sb-box {
+  padding-right: 8px;
+}
+.sb-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-choice-title {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.sb-choice small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.sb-cases-head {
+  display: flex;
+  justify-content: space-between;
+}
+.sb-case {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+  cursor: pointer;
+}
+.sb-case-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.sb-case-title {
+  color: var(--foreground);
+  font-size: 13px;
+}
+.sb-mono {
+  color: var(--muted-foreground);
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.sb-case-empty {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+/* Saved reports. */
+.sb-select,
+.sb-select .monitor-select,
+.sb-select select {
+  display: flex;
+  width: 100%;
+}
+.sb-export-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sb-export-head b {
+  color: var(--foreground);
+  font-size: 13px;
+}
+.sb-pre {
+  max-height: 480px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.sb-pre .sb-k {
+  color: var(--brand);
+}
+.sb-pre .sb-a {
+  color: var(--success);
+}
+.sb-digest {
+  font-family: var(--font-mt);
+  overflow-wrap: anywhere;
+}
+.sb-review {
+  color: var(--foreground);
+}
+
+.sb-out {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.sb-out svg {
+  flex: none;
+  color: var(--destructive);
+}
+
+@media (max-width: 1023px) {
+  .sb-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 559px) {
+  .sb-steps {
+    gap: 8px;
+  }
+  .sb-step-label {
+    align-items: flex-start;
+    font-size: 12px;
+    line-height: 17px;
+  }
+}

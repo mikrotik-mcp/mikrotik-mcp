@@ -175,7 +175,7 @@ test("tags suggest the whole fleet, create and remove chips, and only change the
 
 test("multiple addresses choose Primary atomically and are included in both test and saved draft", async () => {
   await render();
-  await click("Add address");
+  await click("Add fallback address");
   await input("f_fallback_1", "203.0.113.8");
   await click("Make 203.0.113.8 primary");
   expect(document.querySelector<HTMLInputElement>("#f_host")?.value).toBe("203.0.113.8");
@@ -194,7 +194,7 @@ test("multiple addresses choose Primary atomically and are included in both test
 
 test("empty and duplicate addresses prevent connection tests; removing Primary promotes the next address", async () => {
   await render();
-  await click("Add address");
+  await click("Add fallback address");
   await click("Continue");
   expect(document.body.textContent).toContain("Enter every management address");
   await input("f_fallback_1", "192.0.2.1");

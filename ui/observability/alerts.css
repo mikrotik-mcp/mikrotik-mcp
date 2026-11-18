@@ -1,23 +1,87 @@
-/* Alerts page, after the approved Alerts board. Layout only; colours come from tailwind.css tokens. */
+/* Alerts page and its rule editor, after the Mon-Alerts and Mon-Alerts-RuleEditor
+   boards. Tokens only; shared parts live in monitoring.css. */
 
 .alerts-page {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-direction: column;
-  gap: 24px;
-  line-height: 21px;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 18px;
+}
+/* The board's panel title keeps a 220px basis, so controls wrap under it. */
+.alerts-page .monitor-panel-head > .min-w-0 {
+  flex: 1 1 220px;
+}
+/* The board's hero graphic column is 440px wide. */
+.alerts-page .monitor-head[data-layout="verdict"][data-aside] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
 }
 
-/* Second line under a row's name: 12px, muted, one line. */
-.alerts-meta {
-  display: block;
-  overflow: hidden;
+.alerts-mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.alerts-small {
   color: var(--muted-foreground);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
+/* ── Firing now, beside the verdict ────────────────────────────────────────── */
+.alerts-firing {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 21px;
+  overflow: hidden;
+  padding: 16px 18px;
+}
+.alerts-firing-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.alerts-firing-label {
+  flex: 1;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.alerts-firing-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+}
+.alerts-firing-bar {
+  width: 3px;
+  flex: none;
+  align-self: stretch;
+  border-radius: 3px;
+  background: var(--text-faint);
+}
+
+/* Severity colour for the rails and bars. */
+:is(.alerts-firing-bar, .alerts-rail)[data-tone="bad"] {
+  background: var(--destructive);
+}
+:is(.alerts-firing-bar, .alerts-rail)[data-tone="warn"] {
+  background: var(--warning);
+}
+:is(.alerts-firing-bar, .alerts-rail)[data-tone="brand"] {
+  background: var(--brand);
+}
+
+/* ── Rules ─────────────────────────────────────────────────────────────────── */
+.alerts-rule-grid {
+  grid-template-columns: 3px minmax(0, 1fr) minmax(0, 1fr) 120px 128px;
+}
+.alerts-rail {
+  height: 34px;
+  border-radius: 3px;
+  background: var(--text-faint);
+}
 .alerts-warning {
   display: flex;
   align-items: center;
@@ -26,126 +90,187 @@
   font-size: 12px;
 }
 .alerts-warning svg {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   flex: none;
-}
-
-/* ── Firing band ───────────────────────────────────────────────────────────── */
-.alerts-firing.monitor-panel {
-  overflow: hidden;
-  border: 0;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 40%, transparent);
-}
-.alerts-firing > .monitor-panel-head {
-  gap: 10px;
-  padding: 14px 20px;
-}
-.alerts-firing .monitor-panel-title {
-  line-height: 21px;
-}
-.alerts-firing-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.alerts-firing-title .monitor-dot {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 25%, transparent);
-}
-.alerts-firing-row {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-
-/* "Nothing firing": the firing band's header, calm. */
-.alerts-calm {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  padding: 14px 20px;
-}
-.alerts-calm-title {
-  font-size: 14px;
-  font-weight: 590;
-}
-
-/* ── Rules ─────────────────────────────────────────────────────────────────── */
-.monitor-row.alerts-rule-row {
-  grid-template-columns: 4px minmax(0, 1.4fr) minmax(0, 1.6fr) auto auto;
-  grid-template-areas: "rail name when status actions";
-  padding-left: 16px;
-}
-.alerts-rail {
-  grid-area: rail;
-  width: 3px;
-  height: 32px;
-  border-radius: 9999px;
-  background: var(--text-faint);
-}
-.alerts-rail[data-tone="bad"] {
-  background: var(--destructive);
-}
-.alerts-rail[data-tone="warn"] {
-  background: var(--warning);
-}
-.alerts-rail[data-tone="brand"] {
-  background: var(--chart-1);
-}
-.alerts-rule-name {
-  grid-area: name;
-}
-.alerts-rule-when {
-  grid-area: when;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.alerts-rule-status {
-  grid-area: status;
 }
 .alerts-rule-actions {
   display: flex;
-  grid-area: actions;
+  align-items: center;
+  justify-content: flex-end;
   gap: 4px;
 }
 
 /* ── Channels and delivery history ─────────────────────────────────────────── */
 .alerts-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: start;
+  gap: 14px;
+}
+.alerts-channel-grid {
+  grid-template-columns: minmax(0, 1fr) 110px auto;
+}
+.alerts-history-grid {
+  grid-template-columns: 54px minmax(0, 1fr) 70px 120px;
+}
+
+/* ── Rule editor ───────────────────────────────────────────────────────────── */
+.alerts-form {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 16px;
 }
-.alerts-channels {
-  flex: 1 1 340px;
+.alerts-form-grid {
+  display: grid;
+  gap: 12px;
 }
-.alerts-history {
-  flex: 2 1 480px;
+.alerts-form-grid[data-cols="id"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
 }
-.alerts-channel-row {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+.alerts-form-grid[data-cols="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.alerts-history-row {
-  grid-template-columns: 48px minmax(0, 1fr) 90px auto;
-  grid-template-areas: "time rule channel result";
+.alerts-form-grid[data-cols="sev"] {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
 }
-.alerts-history-time {
-  grid-area: time;
-  color: var(--muted-foreground);
-  font-family: var(--font-mono);
+.alerts-kinds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.alerts-select .monitor-select,
+.alerts-select .monitor-select select {
+  width: 100%;
+}
+.alerts-select .monitor-select select {
+  font-family: var(--font-mt);
   font-size: 12px;
 }
-.alerts-history-rule {
-  grid-area: rule;
+input.monitor-input.alerts-mono,
+.alerts-bare.alerts-mono {
+  font-size: 12px;
+}
+.alerts-bare {
   min-width: 0;
+  height: 100%;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--foreground);
+  outline: none;
 }
-.alerts-history-channel {
-  grid-area: channel;
+.alerts-bare::placeholder {
+  color: var(--muted-foreground);
 }
-.alerts-history-result {
-  grid-area: result;
+.alerts-field-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted-foreground);
+}
+.monitor-input.alerts-chips {
+  height: auto;
+  min-height: 36px;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+}
+.alerts-chips input {
+  min-width: 80px;
+  height: 22px;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.alerts-chips input::placeholder {
+  color: var(--muted-foreground);
+}
+.alerts-chip-x {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.alerts-chip-x:hover {
+  color: var(--foreground);
+}
+.alerts-inline {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.alerts-send-to {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding-top: 4px;
+}
+.alerts-dialog-foot-note {
+  flex: 1;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+/* ── Narrow screens ────────────────────────────────────────────────────────── */
+@media (max-width: 899px) {
+  .alerts-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 639px) {
+  /* Rules: rail, name, then the status over the actions; the When line hides. */
+  .alerts-rule-grid {
+    grid-template-columns: 3px minmax(0, 1fr) auto;
+  }
+  .alerts-rule-grid > :nth-child(3) {
+    display: none;
+  }
+  .monitor-thead.alerts-rule-grid {
+    display: none;
+  }
+  .alerts-rule-grid > :nth-child(4) {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .alerts-rule-grid > :nth-child(5) {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .alerts-rule-grid > :nth-child(1) {
+    grid-row: 1 / span 2;
+  }
+  .alerts-rule-grid > :nth-child(2) {
+    grid-row: 1 / span 2;
+  }
+  .alerts-channel-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .alerts-channel-grid > :nth-child(2) {
+    display: none;
+  }
+  .alerts-history-grid {
+    grid-template-columns: 54px minmax(0, 1fr) auto;
+  }
+  .alerts-history-grid > :nth-child(3) {
+    display: none;
+  }
+  .alerts-form-grid[data-cols] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alerts-kinds {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alerts-dialog-foot-note {
+    flex-basis: 100%;
+  }
 }

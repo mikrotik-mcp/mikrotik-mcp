@@ -11,7 +11,6 @@ import { createPortal } from "react-dom";
 import {
   Activity,
   Archive,
-  ChevronRight,
   Layers,
   Menu,
   Network,
@@ -108,11 +107,8 @@ export function useSidebarCollapsed(): [boolean, (next: boolean) => void] {
 export function BrandMark(): ReactNode {
   return (
     <svg className="shell-ico" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M7 7l5 5 5-5M12 12v5" />
-      <circle cx="7" cy="7" r="1.6" fill="currentColor" />
-      <circle cx="17" cy="7" r="1.6" fill="currentColor" />
-      <circle cx="12" cy="17.5" r="1.6" fill="currentColor" />
-      <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+      <path d="M5 6l7 7 7-7M12 13v6" />
+      <circle cx="12" cy="13" r="2.2" fill="currentColor" />
     </svg>
   );
 }
@@ -135,18 +131,39 @@ function focusables(root: HTMLElement | null): HTMLElement[] {
 
 // ── stream status ────────────────────────────────────────────────────────────
 
+/** "Live · WebSocket", "Live · SSE" or "Stream offline", with a live LED. */
 export function StreamStatus({ mode }: { mode: LiveMode }): ReactNode {
+  const dot = useRef<HTMLSpanElement>(null);
+  const live = mode !== "off";
+  // The live LED breathes while the stream is connected.
+  useEffect(() => {
+    if (!live || !dot.current || !motionAllowed()) return;
+    const breathe = animate(dot.current, {
+      opacity: [1, 0.45, 1],
+      duration: 2400,
+      loop: true,
+      ease: "inOutSine",
+    });
+    return () => {
+      breathe.revert();
+    };
+  }, [live]);
   return (
     <span
       className="shell-stream"
       data-connected={mode !== "off"}
       title="Dashboard event stream, not router health"
     >
-      <span className="shell-dot" data-tone={mode === "off" ? "off" : "ok"} aria-hidden="true" />
+      <span
+        ref={dot}
+        className="shell-dot"
+        data-tone={mode === "off" ? "off" : "ok"}
+        data-live={mode !== "off" || undefined}
+        aria-hidden="true"
+      />
       <span className="shell-stream-label">
-        {mode === "off" ? "Stream offline" : "Live stream"}
+        {mode === "off" ? "Stream offline" : `Live · ${mode === "ws" ? "WebSocket" : "SSE"}`}
       </span>
-      {mode !== "off" && <span className="kbd2 shell-stream-protocol">{mode.toUpperCase()}</span>}
     </span>
   );
 }
@@ -171,6 +188,7 @@ interface SidebarProps {
   /** Icon-only server controls for the rail. */
   compactControls?: ReactNode;
   collapsed?: boolean;
+  /** Unused by the sidebar itself: the header's button collapses it. Kept for callers. */
   onToggleCollapsed?: () => void;
   mobileOpen?: boolean;
   /** Opens the search palette. */
@@ -194,7 +212,6 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
     controls,
     compactControls,
     collapsed = false,
-    onToggleCollapsed,
     mobileOpen = false,
     onSearch,
   } = props;
@@ -245,7 +262,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
     };
   }, [collapsed, railShown]);
 
-  // The width springs between 264 and 64 px; the new content settles in after.
+  // The width springs between 248 and 68 px; the new content settles in after.
   const firstLayout = useRef(true);
   useLayoutEffect(() => {
     if (firstLayout.current) {
@@ -260,7 +277,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
     }).add((self) => {
       if (self?.matches.reduceMotion) return;
       animate(aside, {
-        width: railShown ? [264, 64] : [64, 264],
+        width: railShown ? [248, 68] : [68, 248],
         ease: spring({ bounce: 0.12, duration: 320 }),
       });
       if (railShown)
@@ -324,11 +341,6 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
         onComplete: () => {
           track.style.height = "";
         },
-      }),
-      animate(`[aria-controls="${instance}-${id}"] .chev`, {
-        rotate: [0, 90],
-        duration: 200,
-        ease: "outQuart",
       }),
       animate(track.querySelectorAll(".it"), {
         opacity: [0, 1],
@@ -403,12 +415,6 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       commit();
       return;
     }
-    animate(`[aria-controls="${instance}-${id}"] .chev`, {
-      rotate: [90, 0],
-      duration: 180,
-      ease: "outQuart",
-      onComplete: (self) => self.revert(),
-    });
     animate(track, {
       height: [track.offsetHeight, 0],
       opacity: [1, 0],
@@ -435,6 +441,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
         <a
           href={`#${item.id}`}
           className="it shell-nav-link"
+          data-pinned={inPinned || undefined}
           data-active={active || undefined}
           aria-current={active ? "page" : undefined}
           aria-label={release ? pageLabel(item) : undefined}
@@ -446,7 +453,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
           }}
         >
           {active && <span className="shell-nav-hl" aria-hidden="true" />}
-          {renderIcon(item.id)}
+          {inPinned && renderIcon(item.id)}
           <span className="lbl">{item.label}</span>
           <span className="shell-nav-badges">
             <NewFeatureBadge view={item.id} version={version} />
@@ -493,9 +500,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
         <BrandMark />
       </span>
       <span className="brand">
-        <b>
-          MikroTik <span>MCP</span>
-        </b>
+        <b>MikroTik MCP</b>
         <small>{transport ? `Observability · ${transport}` : "Observability"}</small>
       </span>
     </a>
@@ -505,7 +510,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
     <div className="shell-sidebar-inner" ref={innerRef}>
       <div className="sb-top">
         {brand}
-        {drawer ? (
+        {drawer && (
           <button
             type="button"
             className="ib"
@@ -513,16 +518,6 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
             onClick={() => onMobileOpenChange(false)}
           >
             <X aria-hidden="true" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="ib"
-            aria-label="Collapse sidebar"
-            title={`Collapse sidebar (${shortcutLabel("B")})`}
-            onClick={onToggleCollapsed}
-          >
-            <PanelLeft aria-hidden="true" />
           </button>
         )}
       </div>
@@ -534,17 +529,13 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
         onClick={onSearch}
       >
         <Search aria-hidden="true" />
-        <span className="ph">Search pages</span>
+        <span className="ph">Jump to a page</span>
         <kbd className="kbd2">{shortcutLabel("K")}</kbd>
       </button>
       <ScrollArea className="shell-nav-scroll" viewportProps={{ ref: navigationViewport }}>
         <div className="sb-scroll">
           <section className="sec shell-pinned" aria-label="Pinned pages">
-            <div className="sec-h">
-              <Pin className="chev" aria-hidden="true" />
-              Pinned
-              <span className="n">{pins.length}</span>
-            </div>
+            <div className="ngl">Pinned</div>
             {pins.length > 0 ? (
               <div className="nav">
                 {pins.map((id) =>
@@ -567,6 +558,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
           <div className="shell-groups">
             {groups.map((group) => {
               const open = expanded.has(group.id);
+              const GroupIcon = GROUP_ICONS[group.id] ?? Layers;
               const alerting = group.views.includes("alerts") && firingCount > 0;
               return (
                 <section className="sec shell-nav-group" key={group.id}>
@@ -581,8 +573,8 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
                     aria-controls={`${instance}-${group.id}`}
                     onClick={() => toggleGroup(group.id)}
                   >
-                    <ChevronRight className="chev" aria-hidden="true" />
-                    {group.label}
+                    <GroupIcon aria-hidden="true" />
+                    <span className="lbl">{group.label}</span>
                     {alerting && (
                       <span className="pill-bad" aria-label={`${firingCount} alerts firing`}>
                         {firingCount}
@@ -593,8 +585,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
                     </span>
                   </button>
                   <div id={`${instance}-${group.id}`} className="shell-nav-track" hidden={!open}>
-                    <p className="sec-d">{group.description}</p>
-                    <div className="nav guide">{group.items.map((item) => pageRow(item))}</div>
+                    <div className="nav">{group.items.map((item) => pageRow(item))}</div>
                   </div>
                 </section>
               );
@@ -605,14 +596,27 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       <footer className="sb-foot">
         <div className="shell-instance">
           <StreamStatus mode={liveMode} />
-          <span className="shell-events">
-            {eventCount == null ? "Waiting for server" : `${num(eventCount)} events`}
+          <span
+            className="shell-events"
+            title={eventCount == null ? "Waiting for the server" : "Events recorded"}
+          >
+            {eventCount == null ? "—" : num(eventCount)}
+            <span className="sr-only"> events</span>
           </span>
         </div>
         <div className="shell-server-controls">{controls}</div>
         <div className="shell-version">
-          {releaseAvailable && <span className="newdot" role="img" aria-label="New release" />}
-          <span>MikroTik MCP {version ? `v${version}` : "—"}</span>
+          <span
+            className="shell-dot"
+            data-tone="int"
+            data-live={releaseAvailable || undefined}
+            {...(releaseAvailable
+              ? { role: "img", "aria-label": "New release" }
+              : { "aria-hidden": true })}
+          />
+          <span title={version ? `MikroTik MCP v${version}` : undefined}>
+            {version ? `v${version}` : "—"}
+          </span>
           {onReleaseNotes && (
             <button type="button" className="shell-link" onClick={onReleaseNotes}>
               What's new
@@ -679,24 +683,26 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       {pinnedViews.length > 0 && (
         <>
           <span className="rsep" aria-hidden="true" />
-          {pinnedViews.map((item) => (
-            <a
-              key={item.id}
-              href={`#${item.id}`}
-              className="ri"
-              aria-label={`${pageLabel(item)} (pinned)`}
-              title={pageLabel(item)}
-              aria-current={view === item.id ? "page" : undefined}
-              onClick={(event) => {
-                if (!plainClick(event)) return;
-                event.preventDefault();
-                choose(item.id);
-              }}
-            >
-              {renderIcon(item.id)}
-              <NewFeatureBadge view={item.id} version={version} placement="icon" />
-            </a>
-          ))}
+          <div className="rail-groups" role="group" aria-label="Pinned pages">
+            {pinnedViews.map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                className="ri"
+                aria-label={`${pageLabel(item)} (pinned)`}
+                title={pageLabel(item)}
+                aria-current={view === item.id ? "page" : undefined}
+                onClick={(event) => {
+                  if (!plainClick(event)) return;
+                  event.preventDefault();
+                  choose(item.id);
+                }}
+              >
+                {renderIcon(item.id)}
+                <NewFeatureBadge view={item.id} version={version} placement="icon" />
+              </a>
+            ))}
+          </div>
         </>
       )}
       <span className="rsep" aria-hidden="true" />
@@ -875,7 +881,7 @@ function RailGroup({
             <b>{group.label}</b>
             <small>{group.description}</small>
           </div>
-          <div className="nav guide">{children}</div>
+          <div className="nav">{children}</div>
         </div>
       )}
     </div>
@@ -1056,11 +1062,16 @@ export function ShellHeader({
       >
         {isMobile ? <Menu aria-hidden="true" /> : <PanelLeft aria-hidden="true" />}
       </button>
-      {!isMobile && <span className="vline" aria-hidden="true" />}
       <nav className="crumb" aria-label="Breadcrumb">
-        {!isMobile && <GroupIcon aria-hidden="true" />}
-        <span>{group.label}</span>
-        <ChevronRight className="sep" aria-hidden="true" />
+        {!isMobile && (
+          <>
+            <GroupIcon aria-hidden="true" />
+            <span>{group.label}</span>
+            <span className="sep" aria-hidden="true">
+              /
+            </span>
+          </>
+        )}
         <b aria-current="page">{page.label}</b>
       </nav>
       <span className="shell-header-spacer" />
@@ -1082,12 +1093,7 @@ export function ShellHeader({
         </button>
       )}
       {live}
-      {!isMobile && (
-        <>
-          <span className="vline" aria-hidden="true" />
-          <ThemeToggle className="ib" />
-        </>
-      )}
+      {!isMobile && <ThemeToggle className="ib box" />}
     </header>
   );
 }

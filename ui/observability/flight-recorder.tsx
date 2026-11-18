@@ -1,26 +1,65 @@
+import { api } from "./api";
 import { LoadingState } from "./loading-state";
 import { useEffect, useState } from "react";
-import { Radio, Pause, BookmarkPlus, Download, Settings2, Clock3 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  Activity,
+  Download,
+  Pause,
+  Pin,
+  RotateCw,
+  Shield,
+  SlidersHorizontal,
+  TriangleAlert,
+} from "lucide-react";
 import {
-  useOperations,
-  WorkspaceHeader,
-  WorkspaceError,
-  WorkspaceSafety,
-  EvidenceState,
-} from "./operations-ui";
-import type { FlightRecord, FlightSample } from "../../src/flight-recorder/model";
+  MonitorButton,
+  MonitorDialog,
+  MonitorEmpty,
+  MonitorNote,
+  MonitorPanel,
+  PageIntro,
+  RouterPicker,
+  StatusBadge,
+  StatusDot,
+  Ticker,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
+import { useOperations } from "./operations-ui";
+import { FlightSignal } from "./flight-signal";
+import type { FlightEvent, FlightRecord } from "../../src/flight-recorder/model";
+import "./monitoring.css";
 import "./flight-recorder.css";
+
+const STROKE = 1.6;
+
+function dayTime(at: number, year = false): string {
+  const d = new Date(at);
+  const day = d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    ...(year ? { year: "numeric" } : {}),
+  });
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${day}, ${time}`;
+}
+
+function clock(at: number): string {
+  return new Date(at).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+/** Router log lines that read as a loss: link down, failed handshake, timeouts. */
+const LOSS = /\b(down|fail|failed|error|lost|timeout|timed out|did not|unreachable|disconnect)/i;
+
+function eventTone(e: FlightEvent): Tone {
+  if (e.source === "operator") return "brand";
+  if (e.source === "mcp") return e.failed ? "bad" : "good";
+  return LOSS.test(e.title) ? "warn" : "good";
+}
 
 export function FlightRecorderView() {
   const w = useOperations<{ recorder: FlightRecord; toolEventsAvailable: boolean }>(
@@ -39,6 +78,15 @@ export function FlightRecorderView() {
   const samples = incident?.samples ?? r?.samples ?? [],
     events = incident?.events ?? r?.events ?? [];
   const { refresh, busy } = w;
+  // Only for the "(default)" mark in the router picker.
+  const [defaultRouter, setDefaultRouter] = useState<string>();
+  useEffect(() => {
+    const abort = new AbortController();
+    api<{ defaultDevice?: string }>("/api/devices", abort.signal)
+      .then((d) => setDefaultRouter(d?.defaultDevice))
+      .catch(() => {});
+    return () => abort.abort();
+  }, []);
   useEffect(() => {
     const t = setInterval(() => {
       if (!busy && document.visibilityState === "visible") void refresh();
@@ -67,85 +115,151 @@ export function FlightRecorderView() {
   }
   if (!w.data && w.loading && !w.error)
     return <LoadingState label="Loading workspace evidence" layout="cards" />;
+
+  const state = !r?.enabled
+    ? "paused"
+    : age === undefined || age > r.intervalSeconds * 3
+      ? "unknown"
+      : "recording";
+  const timeline = [
+    ...events.map((e) => ({
+      key: e.id,
+      at: e.at,
+      source: e.source as string,
+      title: e.title,
+      mono: e.source === "mcp",
+      tone: eventTone(e),
+      detail: e.routerTime
+        ? `Router clock: ${e.routerTime} · uncorrected`
+        : e.risk
+          ? `${e.risk} · ${e.failed ? "failed / outcome may be uncertain" : "tool completed"}`
+          : e.source === "operator"
+            ? "Manual trigger"
+            : "",
+    })),
+    ...samples
+      .filter((s) => s.gaps.length)
+      .map((s) => ({
+        key: `gap:${s.at}`,
+        at: s.at,
+        source: "coverage gap",
+        title: s.gaps.join(" "),
+        mono: false,
+        tone: "bad" as Tone,
+        detail: "Not a healthy sample",
+      })),
+  ]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 500);
+  const errors = [w.error, exportError, r?.error].filter(Boolean);
+
   return (
-    <div className="ops-workspace">
-      <WorkspaceHeader
-        eyebrow="FLIGHT RECORDER / INCIDENT EVIDENCE"
-        title="Keep the moments that matter."
-        description="A rolling memory of your network. Freeze the lead-up, follow the recovery, and investigate from evidence—not recollection."
-        device={w.device}
-        devices={w.devices}
-        onDevice={(d) => {
-          setSelected(undefined);
-          setConfigure(false);
-          setFreeze(false);
-          w.setDevice(d);
-        }}
-        busy={w.busy}
-        onRefresh={() => void w.refresh()}
-      >
-        <Button
-          variant="outline"
-          disabled={!r || w.busy}
-          onClick={() => {
-            setIntervalValue(r!.intervalSeconds);
-            setWindow(r!.windowMinutes);
-            setRetention(r!.retentionDays);
-            setConfigure(true);
-          }}
-        >
-          <Settings2 size={15} />
-          Capture settings
-        </Button>
-      </WorkspaceHeader>
-      <WorkspaceError message={w.error || exportError} />
-      <div className="flight-console">
-        <div className="flight-console__state">
-          <Radio size={24} />
-          <div>
-            <EvidenceState
-              state={
-                !r?.enabled
-                  ? "paused"
-                  : age === undefined || age > r.intervalSeconds * 3
-                    ? "unknown"
-                    : "recording"
-              }
+    <div className="flight-page">
+      <PageIntro
+        eyebrow="Flight recorder · incident evidence"
+        heading="Keep the moments that matter."
+        lead="A rolling memory of your network. Freeze the lead-up, follow the recovery, and investigate from evidence, not recollection."
+        actions={
+          <>
+            <RouterPicker
+              value={w.device}
+              routers={w.devices}
+              defaultRouter={defaultRouter}
+              disabled={w.busy}
+              onChange={(d) => {
+                setSelected(undefined);
+                setConfigure(false);
+                setFreeze(false);
+                w.setDevice(d);
+              }}
             />
-            <p>
+            <MonitorButton
+              variant="ghost"
+              aria-label="Refresh"
+              title="Refresh"
+              disabled={w.busy}
+              onClick={() => void w.refresh()}
+              icon={<RotateCw aria-hidden="true" strokeWidth={STROKE} />}
+            />
+            <MonitorButton
+              disabled={!r || w.busy}
+              icon={<SlidersHorizontal aria-hidden="true" strokeWidth={STROKE} />}
+              onClick={() => {
+                setIntervalValue(r!.intervalSeconds);
+                setWindow(r!.windowMinutes);
+                setRetention(r!.retentionDays);
+                setConfigure(true);
+              }}
+            >
+              Capture settings
+            </MonitorButton>
+          </>
+        }
+      />
+      {errors.map((message, i) => (
+        <MonitorNote
+          key={i}
+          tone="bad"
+          role="alert"
+          icon={<TriangleAlert aria-hidden="true" strokeWidth={STROKE} />}
+        >
+          {message}
+        </MonitorNote>
+      ))}
+      <section className="flight-console glass" aria-label="Recorder status">
+        <div className="flight-console-state" data-state={state}>
+          <Activity aria-hidden="true" strokeWidth={STROKE} />
+          <div className="flight-console-text">
+            <span className="flight-console-led">
+              <StatusDot
+                tone={state === "recording" ? "good" : state === "unknown" ? "warn" : "default"}
+                pulse={state === "recording"}
+              />
+              <b>
+                {state === "recording"
+                  ? "Recording"
+                  : state === "unknown"
+                    ? "Waiting for samples"
+                    : "Paused"}
+              </b>
+            </span>
+            <span className="monitor-hint">
               {age === undefined
                 ? "No samples received yet"
-                : `Last sample ${age}s ago · every ${r?.intervalSeconds}s`}
-            </p>
+                : `Last sample ${age} s ago · every ${r?.intervalSeconds} s`}
+            </span>
           </div>
         </div>
-        <div>
-          <strong>
-            {r?.windowMinutes ?? "—"}
-            <small> min</small>
-          </strong>
-          <span>Rolling window</span>
+        <div className="flight-stat">
+          <span className="flight-stat-v">
+            {r ? <Ticker value={r.windowMinutes} format={(n) => `${Math.round(n)}`} /> : "—"}{" "}
+            <small>min</small>
+          </span>
+          <span className="monitor-hint">Rolling window</span>
         </div>
-        <div>
-          <strong>{r?.incidents.length ?? "—"}</strong>
-          <span>Saved incidents</span>
+        <div className="flight-stat">
+          <span className="flight-stat-v">
+            {r ? <Ticker value={r.incidents.length} format={(n) => `${Math.round(n)}`} /> : "—"}
+          </span>
+          <span className="monitor-hint">Saved incidents</span>
         </div>
-        <div className="ops-toolbar">
-          <Button
+        <div className="flight-console-actions">
+          <MonitorButton
+            variant="primary"
             disabled={!r || w.busy}
-            variant="outline"
+            icon={<Pin aria-hidden="true" strokeWidth={STROKE} />}
             onClick={() => {
               setTitle("");
               setFreeze(true);
             }}
           >
-            <BookmarkPlus size={15} />
             Freeze incident
-          </Button>
+          </MonitorButton>
           {r?.enabled && (
-            <Button
+            <MonitorButton
               variant="ghost"
               disabled={w.busy}
+              icon={<Pause aria-hidden="true" strokeWidth={STROKE} />}
               onClick={() =>
                 void w.action("/configure", {
                   enabled: false,
@@ -155,177 +269,157 @@ export function FlightRecorderView() {
                 })
               }
             >
-              <Pause size={15} />
               Pause
-            </Button>
+            </MonitorButton>
           )}
         </div>
-      </div>
+      </section>
       {!r?.enabled && (
-        <WorkspaceSafety>
+        <MonitorNote>
           Recording is paused. Open Capture settings to enable read-only polling. Existing evidence
           remains available until its retention limit.
-        </WorkspaceSafety>
+        </MonitorNote>
       )}
-      {r?.error && <WorkspaceError message={r.error} />}
-      <div className="ops-split">
-        <aside aria-label="Incident history">
-          <ScrollArea className="h-[520px]">
-            <div className="ops-list">
-              <button
-                className="ops-list-item"
-                aria-pressed={!incident}
-                onClick={() => setSelected(undefined)}
-              >
-                <strong>Live rolling window</strong>
-                <small>Latest observations · not a packet capture</small>
-              </button>
-              {[...(r?.incidents ?? [])].reverse().map((i) => (
-                <button
-                  key={i.id}
-                  className="ops-list-item"
-                  aria-pressed={incident?.id === i.id}
-                  onClick={() => setSelected(i.id)}
+      <div className="flight-grid">
+        <MonitorPanel
+          title="Incident history"
+          description="Up to 30 per router."
+          flush
+          aria-label="Incident history"
+        >
+          <button
+            type="button"
+            className="monitor-row flight-incident"
+            data-selected={!incident || undefined}
+            aria-pressed={!incident}
+            onClick={() => setSelected(undefined)}
+          >
+            <span className="p">Live rolling window</span>
+            <span className="monitor-hint">Latest observations · not a packet capture</span>
+          </button>
+          {[...(r?.incidents ?? [])].reverse().map((i) => (
+            <button
+              key={i.id}
+              type="button"
+              className="monitor-row flight-incident"
+              data-selected={incident?.id === i.id || undefined}
+              aria-pressed={incident?.id === i.id}
+              onClick={() => setSelected(i.id)}
+            >
+              <span className="p">{i.title}</span>
+              <span className="monitor-hint">
+                {dayTime(i.at)} · {i.samples.length} samples · {i.events.length} events
+              </span>
+              <span>
+                <StatusBadge tone="good" pulse={!i.complete}>
+                  {i.complete ? "preserved" : "recording"}
+                </StatusBadge>
+              </span>
+            </button>
+          ))}
+        </MonitorPanel>
+        <div className="flight-col">
+          <MonitorPanel
+            title={incident?.title ?? "Live rolling window"}
+            description={
+              incident
+                ? `${dayTime(incident.at, true)} · ${incident.complete ? "window preserved" : "collecting two minutes of follow-up"} · host receipt time`
+                : "Host receipt time · dots show management observations; the line shows CPU when measured."
+            }
+            extra={
+              incident && (
+                <MonitorButton
+                  size="sm"
+                  disabled={w.busy}
+                  icon={<Download aria-hidden="true" strokeWidth={STROKE} />}
+                  onClick={() => void download()}
                 >
-                  <small>{new Date(i.at).toLocaleString()}</small>
-                  <strong>{i.title}</strong>
-                  <EvidenceState state={i.complete ? "preserved" : "recording"} />
-                  <small>
-                    {i.samples.length} samples · {i.events.length} events
-                  </small>
-                </button>
-              ))}
+                  Export evidence
+                </MonitorButton>
+              )
+            }
+          >
+            <div className="flight-chart-wrap">
+              {samples.length ? (
+                <FlightSignal
+                  samples={samples}
+                  frozenAt={incident?.at}
+                  drawKey={`${w.device}:${incident?.id ?? "live"}`}
+                />
+              ) : (
+                <MonitorEmpty
+                  compact
+                  icon={<Activity strokeWidth={STROKE} />}
+                  title="No timeline yet."
+                >
+                  Enable recording to collect evidence before the next incident.
+                </MonitorEmpty>
+              )}
+              <span className="monitor-legend flight-legend">
+                <span>
+                  <i data-k="ok" />
+                  Management responded
+                </span>
+                <span>
+                  <i data-k="bad" />
+                  Read failed
+                </span>
+                <span>
+                  <i data-k="skip" />
+                  Unavailable or skipped
+                </span>
+                <span>
+                  <i data-k="cpu" />
+                  CPU %
+                </span>
+              </span>
             </div>
-          </ScrollArea>
-        </aside>
-        <section className="ops-panel">
-          <div className="ops-toolbar">
-            <Clock3 size={18} />
-            <h3>{incident?.title ?? "The signal before the story"}</h3>
-            {incident && (
-              <Button variant="outline" disabled={w.busy} onClick={() => void download()}>
-                <Download size={15} />
-                Export evidence
-              </Button>
-            )}
-          </div>
-          <p className="ops-description">
-            {incident
-              ? `${new Date(incident.at).toLocaleString()} · ${incident.complete ? "Window preserved" : "Collecting two minutes of follow-up"}`
-              : "Host receipt time · dots show management observations; the line shows CPU when measured."}
-          </p>
-          <FlightSignal samples={samples} />
-          <div className="flight-legend">
-            <span>● Management responded</span>
-            <span>● Read failed</span>
-            <span>○ Unavailable / skipped</span>
-            <span>— CPU %</span>
-          </div>
-          <WorkspaceSafety>
+          </MonitorPanel>
+          <MonitorNote tone="warn" icon={<TriangleAlert aria-hidden="true" strokeWidth={STROKE} />}>
             A management timeout is not proof of a tunnel failure. Missing samples and capture gaps
-            are kept visible.{" "}
+            stay visible.{" "}
             {w.data?.toolEventsAvailable
-              ? "MCP write/failure metadata is connected."
-              : "MCP tool events unavailable: dashboard recording is disabled."}
-          </WorkspaceSafety>
-          <h3>Evidence timeline</h3>
-          <ScrollArea className="h-[360px]">
+              ? "MCP write and failure metadata is connected."
+              : "MCP tool events are unavailable: dashboard recording is off."}
+          </MonitorNote>
+          <MonitorPanel title="Evidence timeline" description="Newest first." flush>
             <ol className="flight-timeline">
-              {[
-                ...events.map((e) => ({
-                  key: e.id,
-                  at: e.at,
-                  source: e.source,
-                  title: e.title,
-                  detail: e.routerTime
-                    ? `Router clock: ${e.routerTime} · uncorrected`
-                    : e.risk
-                      ? `${e.risk} · ${e.failed ? "failed / outcome may be uncertain" : "tool completed"}`
-                      : "",
-                })),
-                ...samples
-                  .filter((s) => s.gaps.length)
-                  .map((s) => ({
-                    key: `gap:${s.at}`,
-                    at: s.at,
-                    source: "coverage gap",
-                    title: s.gaps.join(" "),
-                    detail: "Not a healthy sample",
-                  })),
-              ]
-                .sort((a, b) => b.at - a.at)
-                .slice(0, 500)
-                .map((e) => (
-                  <li key={e.key}>
-                    <time>{new Date(e.at).toLocaleTimeString()}</time>
-                    <div>
-                      <small>{e.source}</small>
-                      <strong>{e.title}</strong>
-                      <p>{e.detail}</p>
-                    </div>
-                  </li>
-                ))}
+              {timeline.map((e) => (
+                <li key={e.key} className="monitor-row flight-event">
+                  <time className="flight-event-t" dateTime={new Date(e.at).toISOString()}>
+                    {clock(e.at)}
+                  </time>
+                  <StatusDot tone={e.tone} />
+                  <span className="flight-event-main">
+                    <span className={e.mono ? "p flight-mono" : "p"}>{e.title}</span>
+                    {e.detail && <span className="monitor-hint">{e.detail}</span>}
+                  </span>
+                  <span className="monitor-chip flight-event-src">{e.source}</span>
+                </li>
+              ))}
             </ol>
-            {!events.length && !samples.some((s) => s.gaps.length) && (
-              <p className="ops-empty">
-                No events in this window. This does not prove that no changes occurred.
-              </p>
-            )}
-          </ScrollArea>
-        </section>
-      </div>
-      <Dialog open={configure} onOpenChange={setConfigure}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Capture, with clear limits.</DialogTitle>
-            <DialogDescription>
-              Read-only collection persists on this MCP host and resumes after restart. It never
-              enables router logging or changes network settings.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[55vh]">
-            <div className="ops-form">
-              <label>
-                Sample interval · seconds
-                <Input
-                  type="number"
-                  min={30}
-                  max={300}
-                  value={interval}
-                  onChange={(e) => setIntervalValue(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                Rolling window · minutes
-                <Input
-                  type="number"
-                  min={15}
-                  max={360}
-                  value={window}
-                  onChange={(e) => setWindow(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                Incident retention · days
-                <Input
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={retention}
-                  onChange={(e) => setRetention(Number(e.target.value))}
-                />
-              </label>
-              <WorkspaceSafety>
-                Up to 720 samples, 500 metadata events and 30 incidents per router. Raw log messages
-                are not stored. Logs are polled over SSH, not a lossless remote syslog stream.
-              </WorkspaceSafety>
+            <div className="monitor-foot">
+              {timeline.length
+                ? `${timeline.length} ${timeline.length === 1 ? "event" : "events"} in this window. An empty window would not prove that nothing changed.`
+                : "No events in this window. This does not prove that no changes occurred."}
             </div>
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfigure(false)}>
+          </MonitorPanel>
+        </div>
+      </div>
+      <MonitorDialog
+        open={configure}
+        onOpenChange={setConfigure}
+        title="Capture, with clear limits."
+        description="Read-only collection persists on this MCP host and resumes after restart. It never enables router logging or changes network settings."
+        width={520}
+        footer={
+          <>
+            <span className="flex-1" />
+            <MonitorButton variant="ghost" onClick={() => setConfigure(false)}>
               Cancel
-            </Button>
-            <Button
+            </MonitorButton>
+            <MonitorButton
+              variant="primary"
               disabled={
                 w.busy ||
                 interval < 30 ||
@@ -348,95 +442,104 @@ export function FlightRecorderView() {
               }}
             >
               Enable recording
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={freeze} onOpenChange={setFreeze}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Mark this moment.</DialogTitle>
-            <DialogDescription>
-              Preserve the available lead-up and, while recording, two minutes of follow-up. No new
-              router configuration is applied.
-            </DialogDescription>
-          </DialogHeader>
-          <label>
-            Incident title
-            <Input
-              value={title}
-              maxLength={120}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="VPN disconnected during a call"
+            </MonitorButton>
+          </>
+        }
+      >
+        <div className="flight-dialog-body">
+          <label className="monitor-fl">
+            <span className="monitor-label">Sample interval · seconds</span>
+            <input
+              className="monitor-input"
+              type="number"
+              min={30}
+              max={300}
+              value={interval}
+              onChange={(e) => setIntervalValue(Number(e.target.value))}
             />
           </label>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setFreeze(false)}>
+          <label className="monitor-fl">
+            <span className="monitor-label">Rolling window · minutes</span>
+            <input
+              className="monitor-input"
+              type="number"
+              min={15}
+              max={360}
+              value={window}
+              onChange={(e) => setWindow(Number(e.target.value))}
+            />
+          </label>
+          <label className="monitor-fl">
+            <span className="monitor-label">Incident retention · days</span>
+            <input
+              className="monitor-input"
+              type="number"
+              min={1}
+              max={30}
+              value={retention}
+              onChange={(e) => setRetention(Number(e.target.value))}
+            />
+          </label>
+          <MonitorNote>
+            Up to 720 samples, 500 metadata events and 30 incidents per router. Raw log messages are
+            not stored. Logs are polled over SSH, not a lossless remote syslog stream.
+          </MonitorNote>
+        </div>
+      </MonitorDialog>
+      <MonitorDialog
+        open={freeze}
+        onOpenChange={setFreeze}
+        title="Mark this moment."
+        description="Preserve the available lead-up and, while recording, two minutes of follow-up."
+        width={520}
+        footer={
+          <>
+            <span className="flex-1" />
+            <MonitorButton variant="ghost" onClick={() => setFreeze(false)}>
               Cancel
-            </Button>
-            <Button
+            </MonitorButton>
+            <MonitorButton
+              variant="primary"
               disabled={w.busy || !title.trim()}
+              icon={<Pin aria-hidden="true" strokeWidth={STROKE} />}
               onClick={async () => {
                 if (await w.action("/freeze", { title })) setFreeze(false);
               }}
             >
               Preserve window
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </MonitorButton>
+          </>
+        }
+      >
+        <div className="flight-dialog-body flight-freeze">
+          <label className="monitor-fl">
+            <span className="monitor-label">Incident title</span>
+            <input
+              className="monitor-input"
+              value={title}
+              maxLength={120}
+              autoFocus
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="VPN disconnected during a call"
+            />
+          </label>
+          <dl className="monitor-facts">
+            <dt>Lead-up kept</dt>
+            <dd>
+              Last {r?.windowMinutes ?? "—"} min · {r?.samples.length ?? 0} samples
+            </dd>
+            <dt>Follow-up</dt>
+            <dd>{r?.enabled ? "Two more minutes while recording" : "None while paused"}</dd>
+            <dt>Router</dt>
+            <dd>
+              <span className="flight-mono">{w.device}</span>
+            </dd>
+          </dl>
+          <MonitorNote tone="good" icon={<Shield aria-hidden="true" strokeWidth={STROKE} />}>
+            No router configuration is applied. Evidence stays on this MCP host.
+          </MonitorNote>
+        </div>
+      </MonitorDialog>
     </div>
-  );
-}
-function FlightSignal({ samples }: { samples: FlightSample[] }) {
-  if (!samples.length)
-    return (
-      <div className="flight-empty">
-        No timeline yet.<span>Enable recording to collect evidence before the next incident.</span>
-      </div>
-    );
-  const start = samples[0].at,
-    span = Math.max(1, samples.at(-1)!.at - start),
-    x = (s: FlightSample) => 12 + ((s.at - start) / span) * 976;
-  return (
-    <svg
-      className="flight-signal"
-      viewBox="0 0 1000 160"
-      preserveAspectRatio="none"
-      role="img"
-      aria-label={`${samples.length} management observations and available CPU samples`}
-    >
-      <line x1="12" x2="988" y1="136" y2="136" stroke="var(--border)" />
-      {samples.map((s, i) => (
-        <g key={s.at}>
-          <circle
-            cx={x(s)}
-            cy="145"
-            r="3"
-            fill={
-              s.reachable === true
-                ? "var(--chart-2)"
-                : s.reachable === false
-                  ? "var(--destructive)"
-                  : "var(--muted-foreground)"
-            }
-          />
-          {s.cpu !== undefined && <circle cx={x(s)} cy={124 - s.cpu} r="2" fill="var(--primary)" />}
-          {i > 0 &&
-            s.cpu !== undefined &&
-            samples[i - 1].cpu !== undefined &&
-            s.at - samples[i - 1].at <= 300000 && (
-              <line
-                x1={x(samples[i - 1])}
-                y1={124 - samples[i - 1].cpu!}
-                x2={x(s)}
-                y2={124 - s.cpu}
-                stroke="var(--primary)"
-                strokeWidth="2"
-              />
-            )}
-        </g>
-      ))}
-    </svg>
   );
 }

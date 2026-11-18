@@ -1,163 +1,159 @@
-/* Service Health page. Tokens only; shared parts live in monitoring.css. */
+/* Service Health page, after the Mon-ServiceHealth board. Tokens only; shared parts live in monitoring.css. */
 
-.sc-intro-controls {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+.sc-page {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 18px;
 }
-.sc-router {
+/* The board's panel title keeps a 220px basis, so controls wrap under it when
+   tight. MonitorPanel's flex-1 utility drops that basis; restore it here. */
+.sc-page .monitor-panel-head > .min-w-0 {
+  flex: 1 1 220px;
+}
+
+/* The board's hero graphic column is 440px wide. */
+.sc-page .monitor-head[data-layout="verdict"][data-aside] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
+}
+
+/* "Last 20 runs per contract": one row of run bars per contract. */
+.sc-matrix {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow: hidden;
+  padding: 16px 18px;
   line-height: 21px;
 }
-/* The board's .select: 32px, 6px radius, hairline, mono value. */
-.sc-router .sc-select.sc-select {
-  height: 32px;
-  min-width: 180px;
-  gap: 8px;
-  border: 0;
-  /* !important: the trigger animates its corners inline. */
-  border-radius: 6px !important;
-  background: var(--overlay-02);
-  box-shadow: inset 0 0 0 1px var(--input);
-  padding: 0 10px 0 12px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 21px;
-  white-space: nowrap;
-}
-.sc-router .sc-select > span:last-child {
-  color: inherit;
-}
-.sc-router .sc-select svg {
-  stroke-width: 1.5;
-}
-.sc-router .sc-select-value {
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-.sc-label {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 510;
-}
-
-.sc-columns {
+.sc-matrix-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
 }
-.sc-list {
-  flex: 1 1 340px;
+.sc-matrix-head > .monitor-label {
+  flex: 1;
 }
-.sc-detail {
-  flex: 2 1 520px;
+.sc-matrix-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 7px 0;
+}
+.sc-matrix-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
-/* Contract list rows. */
+/* A run strip: one bar per run, oldest on the left. */
+.sc-strip {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+.sc-strip > i {
+  display: block;
+  width: var(--bar-w);
+  height: var(--bar-h);
+  border-radius: 3px;
+  background: var(--sig);
+  opacity: 0.75;
+}
+.sc-strip > i[data-status="fail"] {
+  background: var(--destructive);
+  opacity: 1;
+}
+.sc-strip > i[data-status="unknown"],
+.sc-strip > i[data-status="none"] {
+  height: calc(var(--bar-h) - 6px);
+  background: var(--text-faint);
+  opacity: 1;
+}
+.sc-strip > i[data-status="none"] {
+  opacity: 0.4;
+}
+
+/* Contracts beside the selected contract's evidence. */
+.sc-columns {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
 .sc-contract-row {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+.sc-contract-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 .sc-contract-name {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 8px;
-  color: var(--foreground);
-  font-weight: 510;
 }
 .sc-contract-meta {
-  display: block;
   padding-left: 15px;
   color: var(--muted-foreground);
   font-size: 12px;
 }
 .sc-word {
   font-size: 12px;
-  font-weight: 510;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-/* Status banner above the checks table. */
-.sc-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin: 0 20px 16px;
-  border-radius: var(--radius);
-  background: var(--overlay-03);
-  box-shadow: inset 0 0 0 1px var(--border);
-  padding: 12px 16px;
+.sc-note {
+  padding: 0 18px 14px;
 }
-.sc-banner[data-tone="bad"] {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 35%, transparent);
-}
-.sc-banner[data-tone="warn"] {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 35%, transparent);
-}
-.sc-banner[data-tone="good"] {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 30%, transparent);
-}
-.sc-banner-word {
-  color: var(--foreground);
-  font-weight: 510;
-}
-.sc-banner-text {
-  flex: 1 1 220px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-
-/* Checks table. */
 .sc-check-grid {
-  grid-template-columns: 20px minmax(0, 1.6fr) 90px 80px minmax(0, 2fr);
+  grid-template-columns: 10px minmax(0, 1fr) 54px 170px minmax(0, 1.5fr);
 }
-.sc-mono {
-  color: var(--foreground);
-  font-family: var(--font-mono);
+.sc-endpoint {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+.sc-endpoint .font-mono {
   font-size: 12px;
 }
-
-/* Earlier runs strip: one bar per run, oldest on the left. */
+.sc-ms {
+  width: 58px;
+  flex: none;
+  text-align: right;
+}
 .sc-runs {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border-top: 1px solid var(--border);
-  padding: 16px 20px;
-}
-.sc-runs-bars {
-  display: flex;
-  height: 32px;
-  align-items: flex-end;
-  gap: 4px;
-}
-.sc-runs-bars > span {
-  height: 100%;
-  flex: 1;
-  border-radius: 2px;
-  background: var(--success);
-}
-.sc-runs-bars > span[data-status="fail"] {
-  height: 60%;
-  background: var(--destructive);
-}
-.sc-runs-bars > span[data-status="unknown"] {
-  height: 80%;
-  background: var(--warning);
+  gap: 14px;
 }
 
-/* History sheet rows. */
+/* History drawer rows. */
+.sc-history {
+  display: grid;
+  gap: 12px;
+}
 .sc-history-row {
   grid-template-columns: 12px minmax(0, 1fr) auto;
   padding-inline: 16px;
 }
 
-/* New contract form. */
+/* New contract drawer. */
+.sc-form {
+  display: grid;
+  gap: 16px;
+}
 .sc-targets {
   display: grid;
   gap: 6px;
@@ -165,13 +161,39 @@
 .sc-target {
   display: flex;
   align-items: center;
-  gap: 8px;
-  border-radius: var(--radius);
-  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: 10px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
   padding: 8px 12px;
-  font-size: 13px;
-  transition: background-color 150ms ease;
 }
-.sc-target:hover {
-  background: var(--overlay-03);
+.sc-target input {
+  margin-top: 0;
+}
+
+@media (max-width: 1100px) {
+  .sc-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 899px) {
+  .sc-page {
+    gap: 14px;
+  }
+  .sc-page .monitor-head[data-layout="verdict"][data-aside] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* On a phone the checks stack: LED, endpoint and result, then time, then detail. */
+  .sc-check-grid {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+  }
+  .sc-check-grid > :nth-child(4),
+  .sc-check-grid > :nth-child(5) {
+    grid-column: 2 / -1;
+  }
+  .monitor-thead.sc-check-grid > :nth-child(n + 4) {
+    display: none;
+  }
+  .sc-runs .flex-1 {
+    display: none;
+  }
 }

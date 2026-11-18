@@ -5,22 +5,46 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { CircleAlert, X } from "lucide-react";
+import { Copy, ExternalLink, TriangleAlert, X } from "lucide-react";
 import { clock } from "./format";
-import { formatBytes, formatMs, MonitorButton, RiskBadge, StatusDot } from "./monitoring-ui";
+import {
+  formatBytes,
+  formatMs,
+  MonitorButton,
+  MonitorNote,
+  RiskBadge,
+  StatusDot,
+} from "./monitoring-ui";
 import { toast } from "./toast-action";
 import type { ToolEvent } from "./types";
 
-function prettyInput(input: string): string {
+/**
+ * The input as pretty JSON with keys and string values coloured, as on the
+ * board. Input that is not JSON comes back as plain text.
+ */
+function prettyInput(input: string): ReactNode {
+  let text: string;
   try {
-    return JSON.stringify(JSON.parse(input), null, 2);
+    text = JSON.stringify(JSON.parse(input), null, 2);
   } catch {
     return input;
   }
+  const parts: ReactNode[] = [];
+  const re = /("(?:\\.|[^"\\])*")(\s*:)?/g;
+  let last = 0;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(
+      <span key={m.index} className={m[2] ? "k" : "a"}>
+        {m[1]}
+      </span>,
+    );
+    if (m[2]) parts.push(m[2]);
+    last = m.index + m[0].length;
+  }
+  parts.push(text.slice(last));
+  return parts;
 }
-
-const PRE =
-  "bg-overlay-03 text-fg-secondary m-0 max-h-56 overflow-auto rounded-[6px] p-3 font-mono text-[12px] leading-[21px] break-words whitespace-pre-wrap shadow-[inset_0_0_0_1px_var(--border)]";
 
 export function FeedInspector({
   event,
@@ -57,66 +81,73 @@ export function FeedInspector({
   ].filter(Boolean);
 
   return (
-    <aside className="feed-inspector" aria-label={`Call details: ${event.tool}`}>
-      <div className="flex flex-col gap-2 border-b px-5 py-4">
+    <aside className="live-feed-inspector" aria-label={`Call details: ${event.tool}`}>
+      <div className="flex flex-col gap-2 border-b px-[18px] py-4">
         <div className="flex items-center gap-2">
           <StatusDot tone={event.isError ? "bad" : "good"} />
           <span
             className={
               event.isError
-                ? "text-destructive text-[13px] font-[510]"
-                : "text-success text-[13px] font-[510]"
+                ? "text-destructive text-[13px] font-medium"
+                : "text-success text-[13px] font-medium"
             }
           >
             {event.isError ? "Failed" : "Succeeded"}
           </span>
           <span className="flex-1" />
-          <MonitorButton
-            size="sm"
-            variant="ghost"
+          <button
+            type="button"
+            className="monitor-icon-btn"
             aria-label="Close call details"
-            icon={<X />}
             onClick={onClose}
-          />
+          >
+            <X aria-hidden="true" />
+          </button>
         </div>
-        <h2 className="text-emphasis font-mono text-[14px] font-medium break-all">{event.tool}</h2>
+        <h2 className="text-emphasis font-mono text-[15px] font-medium break-all">{event.tool}</h2>
         <p className="text-muted-foreground text-[12px]">{where.join(" · ")}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <RiskBadge risk={event.risk} />
-          <span className="monitor-badge text-fg-secondary font-mono text-[11px]" title={event.id}>
+          <span className="monitor-chip" title={event.id}>
             ID {event.id.slice(0, 8)}
           </span>
         </div>
       </div>
-      <div className="flex flex-col gap-4 px-5 py-4">
+      <div className="flex flex-col gap-[14px] px-[18px] py-4">
         {event.isError && (
-          <div className="monitor-note text-fg-secondary text-[12px]" data-tone="bad">
-            <CircleAlert className="text-destructive" aria-hidden="true" />
-            <span className="min-w-0 break-words">{event.error ?? "The call failed."}</span>
-          </div>
+          <MonitorNote tone="bad" icon={<TriangleAlert aria-hidden="true" />}>
+            <span className="break-words">{event.error ?? "The call failed."}</span>
+          </MonitorNote>
         )}
         {!event.isError && event.reason && (
-          <div className="monitor-note text-fg-secondary text-[12px]">
-            <span className="min-w-0 break-words">{event.reason}</span>
-          </div>
+          <MonitorNote>
+            <span className="break-words">{event.reason}</span>
+          </MonitorNote>
         )}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-muted-foreground text-[12px] font-[510]">Input</span>
-          <pre className={PRE}>{prettyInput(event.input) || "No input"}</pre>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-muted-foreground text-[12px] font-medium">Input</span>
+          <pre className="monitor-pre live-feed-pre break-words">
+            {prettyInput(event.input) || "No input"}
+          </pre>
         </div>
         {!event.isError && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-muted-foreground text-[12px] font-[510]">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-muted-foreground text-[12px] font-medium">
               Output · {formatBytes(event.outputBytes)}
             </span>
-            <pre className={PRE}>{event.output || "No output"}</pre>
+            <pre className="monitor-pre break-words">{event.output || "No output"}</pre>
           </div>
         )}
-        <div className="flex gap-2">
-          <MonitorButton size="sm" onClick={copyId}>
+        <div className="flex flex-wrap items-center gap-2">
+          <MonitorButton size="sm" icon={<Copy aria-hidden="true" />} onClick={copyId}>
             {copied ? "Copied" : "Copy call ID"}
           </MonitorButton>
-          <MonitorButton size="sm" variant="ghost" onClick={onOpenFull}>
+          <MonitorButton
+            size="sm"
+            variant="ghost"
+            icon={<ExternalLink aria-hidden="true" />}
+            onClick={onOpenFull}
+          >
             Open full record
           </MonitorButton>
         </div>

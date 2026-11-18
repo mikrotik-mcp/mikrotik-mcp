@@ -1,0 +1,63 @@
+/* S3 backups, from the "Rec-S3" board. Shared parts live in monitoring.css. */
+
+.s3 .mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.s3 .trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The verdict beside the size chart. */
+.s3 .monitor-head[data-layout="verdict"][data-aside] {
+  grid-template-columns: minmax(0, 1fr) 440px;
+}
+.s3-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+
+.s3-table {
+  grid-template-columns: minmax(0, 1fr) 80px 140px 320px;
+}
+.s3-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.s3-ask {
+  color: var(--destructive);
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .s3 .monitor-head[data-layout="verdict"][data-aside] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .s3-table {
+    grid-template-columns: minmax(0, 1fr) 72px;
+  }
+  .s3-table > :nth-child(3) {
+    display: none;
+  }
+  .s3-table > :nth-child(4) {
+    grid-column: 1 / -1;
+  }
+  .monitor-thead.s3-table > :nth-child(4) {
+    display: none;
+  }
+  .s3-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}

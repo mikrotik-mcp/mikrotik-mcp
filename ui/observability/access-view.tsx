@@ -2,42 +2,45 @@ import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDown,
-  ArrowRight,
+  Box,
   Check,
   CheckCheck,
+  ChevronRight,
   Clock3,
   Eye,
-  Fingerprint,
-  History,
-  LockKeyhole,
+  Pencil,
   RefreshCw,
-  Router,
   Search,
+  Server,
   ShieldCheck,
   ShieldOff,
-  SlidersHorizontal,
-  Terminal,
   Undo2,
   X,
 } from "lucide-react";
 import type { AccessConfig } from "../../src/config";
 import type { AccessPreview, AccessSettings } from "../../src/observability/access-settings";
 import { withToken } from "./api";
-import { Badge, Button, Select } from "./geist";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorDialog,
+  MonitorEmpty,
+  MonitorNote,
+  MonitorPanel,
+  MonitorSearch,
+  MonitorSelect,
+  MonitorSwitch,
+  PageIntro,
+  RiskBadge,
+  Ring,
+  Segmented,
+  StatusBadge,
+  StatusDot,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
 import { AccessToolPicker } from "./access-tool-picker";
-import { cn } from "@/lib/utils";
+import "./monitoring.css";
 import "./access-view.css";
 
 const ENDPOINT = "/api/access/settings";
@@ -67,18 +70,6 @@ async function request<T>(suffix: string, body?: unknown, signal?: AbortSignal):
       data?.error ?? `Could not load access settings (${res.status}). Check the server and retry.`,
     );
   return data as T;
-}
-
-function SectionTitle({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
-  return (
-    <header className="access-section-title">
-      <span>{icon}</span>
-      <div>
-        <h3>{title}</h3>
-        <p>{detail}</p>
-      </div>
-    </header>
-  );
 }
 
 /** The operator configures the base policy; the running process keeps its own narrowing. */
@@ -325,679 +316,813 @@ export function AccessView(): ReactNode {
         )
       : [];
 
+  const levels = ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"];
+  const ceiling = data?.effective.enabled ? scope?.maxRisk : undefined;
+  const above = ceiling
+    ? levels
+        .slice(levels.indexOf(ceiling) + 1)
+        .filter((l) => l !== "WRITE_IDEMPOTENT" || ceiling === "READ")
+    : [];
+  const configured = data?.devices ?? [];
+  const inScope = configured.filter(
+    (d) =>
+      !d.disabled &&
+      !(draft?.denyDevices ?? []).includes(d.name) &&
+      (deviceMode === "all" || (draft?.devices ?? []).includes(d.name)),
+  ).length;
+  const blockedCount = configured.filter((d) => (draft?.denyDevices ?? []).includes(d.name)).length;
+  const disabledNames = configured.filter((d) => d.disabled).map((d) => d.name);
+  // Denials over the last hour in 12 five-minute buckets, for the KPI sparkline.
+  const denialSpark = (() => {
+    const list = data?.denials ?? [];
+    if (!list.length) return undefined;
+    const bucket = 5 * 60_000;
+    const end = Math.max(now, ...list.map((d) => d.ts));
+    const out = Array.from({ length: 12 }, () => 0);
+    for (const d of list) {
+      const i = 11 - Math.floor((end - d.ts) / bucket);
+      if (i >= 0) out[i] += 1;
+    }
+    return out;
+  })();
+  const routerRows = deviceNames.filter((name) => name.toLowerCase().includes(query.toLowerCase()));
+
   return (
-    <div className="access-workspace">
-      <section className="access-intro">
-        <div className="access-intro-copy">
-          <span className="access-eyebrow">
-            <Fingerprint className="size-3.5" /> MCP permission boundary
-          </span>
-          <h2>
+    <div className="access-workspace flex min-w-0 flex-col gap-[18px]">
+      <PageIntro
+        eyebrow="MCP permission boundary"
+        verdict={
+          <>
             Give your agent room.
             <br />
-            <span>Keep the boundaries yours.</span>
-          </h2>
-          <p>
-            Choose which routers and tools this server may use. Preview the decision, then safely
-            apply your policy. No JSON required.
-          </p>
-        </div>
-        <div className="access-current" aria-label="Current enforcement">
-          <span className={cn("access-current-icon", data?.effective.enabled && "is-enforced")}>
-            {data?.effective.enabled ? <ShieldCheck /> : <ShieldOff />}
-          </span>
-          <div>
-            <span className="access-eyebrow">Applied right now</span>
-            <strong>
-              {!data
-                ? loading
-                  ? "Connecting…"
-                  : "Status unavailable"
-                : data.effective.enabled
-                  ? "Access enforced"
-                  : "Access scope off"}
-            </strong>
-            <p>
+            <span className="s">Keep the boundaries yours.</span>
+          </>
+        }
+        lead="Choose which routers and tools this server may use. Preview the decision, then apply it with a 60-second safety window. No JSON needed."
+        aside={
+          <div className="glass access-current" aria-label="Current enforcement">
+            <div className="flex items-center gap-2">
+              <StatusDot
+                tone={data ? (data.effective.enabled ? "good" : "default") : "warn"}
+                pulse={!!data?.effective.enabled}
+              />
+              <b className="text-[13px] font-semibold text-foreground">
+                {!data
+                  ? loading
+                    ? "Connecting…"
+                    : "Status unavailable"
+                  : data.effective.enabled
+                    ? "Access enforced"
+                    : "Access scope off"}
+              </b>
+              <span className="flex-1" />
+              <MonitorButton
+                size="sm"
+                variant="ghost"
+                icon={<RefreshCw aria-hidden="true" className={loading ? "animate-spin" : ""} />}
+                onClick={reload}
+                disabled={saving || (dirty && !error)}
+                aria-label="Refresh access settings"
+              />
+            </div>
+            <span className="monitor-hint">
               {data
-                ? data.narrowed
-                  ? "Includes runtime session restrictions"
-                  : "Operator-configured policy"
+                ? `${data.configured.label ? `${data.configured.label} · ` : ""}${
+                    data.narrowed
+                      ? "Includes runtime session restrictions"
+                      : "Operator-configured policy"
+                  }`
                 : "Waiting for the server's policy"}
-            </p>
+            </span>
           </div>
-          <Button
-            size="sm"
-            ghost
-            icon={<RefreshCw />}
-            loading={loading}
-            onClick={reload}
-            disabled={saving || (dirty && !error)}
-            aria-label="Refresh access settings"
-          />
-        </div>
-      </section>
+        }
+      />
 
       {error && (
-        <div role="alert" className="access-message is-error">
-          <ShieldOff className="size-4" />
-          <div>
-            {error}
-            <p>
-              Unsaved edits are not applied. If a save request timed out, refresh to verify its
-              outcome.
-            </p>
+        <MonitorNote tone="bad" role="alert" icon={<ShieldOff aria-hidden="true" />}>
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <b>{error}</b>
+              <p className="monitor-hint mt-1">
+                Unsaved edits are not applied. If a save request timed out, refresh to verify its
+                outcome.
+              </p>
+            </div>
+            <MonitorButton
+              size="sm"
+              onClick={() => {
+                setReview(false);
+                reload();
+              }}
+            >
+              Reload saved policy
+            </MonitorButton>
           </div>
-          <Button
-            size="sm"
-            ghost
-            onClick={() => {
-              setReview(false);
-              reload();
-            }}
-          >
-            Reload saved policy
-          </Button>
-        </div>
+        </MonitorNote>
       )}
       {notice && (
-        <div role="status" className="access-message">
-          <Check className="size-4" />
-          <span>{notice}</span>
-        </div>
+        <MonitorNote tone="good" role="status" icon={<Check aria-hidden="true" />}>
+          {notice}
+        </MonitorNote>
       )}
       {!data && !error && <LoadingState label="Loading permission settings" layout="form" />}
 
       {data && access && draft && (
         <>
+          <MetricStrip label="Access summary" minCell={200}>
+            <Metric
+              label="Tools allowed"
+              tone="good"
+              value={
+                <>
+                  {preview?.allowed ?? "—"}
+                  <small>/{data.tools.length}</small>
+                </>
+              }
+              hint={`for ${probeDevice || "the default router"}`}
+            />
+            <Metric
+              label="Routers in scope"
+              value={
+                <>
+                  {inScope}
+                  <small>/{configured.length}</small>
+                </>
+              }
+              hint={
+                [
+                  blockedCount ? `${blockedCount} blocked` : "",
+                  disabledNames.length
+                    ? `${disabledNames.length === 1 ? disabledNames[0] : disabledNames.length} disabled`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "No exceptions"
+              }
+            />
+            <Metric
+              label="Risk ceiling"
+              tone={ceiling ? "warn" : "default"}
+              value={data.effective.enabled ? (ceiling ?? "None") : "Off"}
+              hint={above.length ? `${above.join(" and ")} blocked` : "No risk ceiling"}
+            />
+            <Metric
+              label="Blocked calls"
+              tone={data.denials.length ? "bad" : "default"}
+              value={data.denials.length}
+              hint="In this process, since restart"
+              spark={denialSpark}
+            />
+          </MetricStrip>
+
           {pending && (
             <section className="access-pending" aria-label="Pending access change">
-              <div className="access-countdown">
-                <Clock3 />
-                {pending.owned ? `${seconds}s` : "!"}
-              </div>
-              <div>
-                <h3>
+              {pending.owned ? (
+                <Ring
+                  value={(seconds / 60) * 100}
+                  size={58}
+                  stroke={5}
+                  tone="warn"
+                  label="Time left"
+                >
+                  {`${seconds}s`}
+                </Ring>
+              ) : (
+                <Clock3 aria-hidden="true" className="size-6 text-warning" />
+              )}
+              <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                <b className="text-[15px] text-foreground">
                   {pending.owned
                     ? "Your policy is applied, but not yet permanent."
                     : "A Config Studio change is awaiting confirmation."}
-                </h3>
-                <p>
+                </b>
+                <span className="monitor-hint">
                   {pending.owned
                     ? "Keep these settings to finish, or restore the previous configuration. The server handles auto-revert even if this tab closes."
                     : "Keep or revert that change in Config Studio, then refresh this page."}
-                </p>
+                </span>
               </div>
               {pending.owned && (
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    icon={<CheckCheck />}
-                    loading={saving}
-                    onClick={() => void settle("keep")}
-                    disabled={seconds === 0}
-                  >
-                    Keep changes
-                  </Button>
-                  <Button
-                    ghost
-                    icon={<Undo2 />}
+                  <MonitorButton
+                    icon={<Undo2 aria-hidden="true" />}
                     disabled={saving || seconds === 0}
                     onClick={() => void settle("rollback")}
                   >
                     Revert now
-                  </Button>
+                  </MonitorButton>
+                  <MonitorButton
+                    variant="primary"
+                    icon={<CheckCheck aria-hidden="true" />}
+                    onClick={() => void settle("keep")}
+                    disabled={saving || seconds === 0}
+                  >
+                    Keep changes
+                  </MonitorButton>
                 </div>
               )}
             </section>
           )}
-          <div className="access-layout">
-            <div className="access-editor">
-              <fieldset disabled={locked} className="access-card access-enforcement">
-                <div className="access-switch-row">
-                  <SectionTitle
-                    icon={<SlidersHorizontal />}
-                    title="Enforcement"
-                    detail="The policy ceiling set by you, the operator."
-                  />
-                  <Switch
-                    aria-label="Enable access enforcement"
-                    checked={draft.enabled}
-                    onCheckedChange={(enabled) => update({ enabled })}
-                    disabled={locked}
-                  />
-                </div>
-                <p className="access-hint">
-                  {draft.enabled
-                    ? "Rules below will be checked before each MCP tool call."
-                    : "Rules are saved but inactive until enabled. Session restrictions and server read-only mode still apply."}
-                </p>
-                <label className="access-field">
-                  <span>
-                    Policy label <small>optional</small>
-                  </span>
-                  <Input
-                    aria-label="Policy label"
-                    value={draft.label ?? ""}
-                    maxLength={200}
-                    placeholder="e.g. Production maintenance"
-                    onChange={(e) => update({ label: e.target.value || undefined })}
-                  />
-                </label>
-                <label className="access-field">
-                  <span>Maximum risk</span>
-                  <Select
-                    aria-label="Maximum risk"
-                    value={draft.maxRisk ?? ""}
-                    options={riskOptions}
-                    onValueChange={(v) =>
-                      update({ maxRisk: (v || undefined) as AccessConfig["maxRisk"] })
-                    }
-                  />
-                </label>
-                <div className="access-quick">
-                  <span>Quick ceiling</span>
-                  <Button
-                    size="sm"
-                    ghost
-                    icon={<Eye />}
-                    onClick={() => update({ enabled: true, maxRisk: "READ" })}
-                  >
-                    Read only
-                  </Button>
-                  <Button
-                    size="sm"
-                    ghost
-                    icon={<SlidersHorizontal />}
-                    onClick={() => update({ enabled: true, maxRisk: "WRITE" })}
-                  >
-                    Routine changes
-                  </Button>
-                </div>
-                <p className="access-hint">
-                  Idempotent writes share the WRITE ceiling: safe to retry does not mean read-only.
-                  Quick ceilings preserve your device and tool rules.
-                </p>
-              </fieldset>
 
-              <fieldset disabled={locked} className="access-card">
-                <SectionTitle
-                  icon={<Router />}
-                  title="Router boundaries"
-                  detail="Allow a group, carve out exceptions. Explicit blocks always win."
-                />
-                <Select
-                  aria-label="Allowed router scope"
-                  value={deviceMode}
-                  options={[
-                    { value: "all", label: "All configured routers" },
-                    { value: "selected", label: "Only selected routers" },
-                  ]}
-                  onValueChange={setDeviceMode}
-                />
-                <div className="mt-3">
-                  <Input
-                    aria-label="Search routers"
-                    placeholder="Find a configured router…"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </div>
-                <div className="access-router-list">
-                  {deviceNames
-                    .filter((name) => name.toLowerCase().includes(query.toLowerCase()))
-                    .map((name) => {
-                      const configured = data.devices.find((d) => d.name === name);
+          <div className="access-layout">
+            <div className="flex min-w-0 flex-col gap-3.5">
+              <MonitorPanel title="Enforcement" description="The ceiling you set as the operator.">
+                <fieldset disabled={locked} className="access-fieldset">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5">
+                      <MonitorSwitch
+                        label="Enable access enforcement"
+                        checked={draft.enabled}
+                        onChange={(enabled) => update({ enabled })}
+                        disabled={locked}
+                      />
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <b className="text-[13px] font-semibold text-foreground">
+                        Enable access enforcement
+                      </b>
+                      <span className="monitor-hint">
+                        {draft.enabled
+                          ? "Rules below are checked before each MCP tool call."
+                          : "Rules are saved but inactive until enabled. Session restrictions and server read-only mode still apply."}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="grid gap-3.5 sm:grid-cols-2">
+                    <label className="monitor-fl">
+                      <span className="monitor-label">Policy label · optional</span>
+                      <input
+                        className="monitor-input"
+                        aria-label="Policy label"
+                        value={draft.label ?? ""}
+                        maxLength={200}
+                        placeholder="e.g. Production maintenance"
+                        onChange={(e) => update({ label: e.target.value || undefined })}
+                      />
+                    </label>
+                    <div className="monitor-fl">
+                      <span className="monitor-label">Maximum risk</span>
+                      <span className="access-risk-select">
+                        {draft.maxRisk && <RiskBadge risk={draft.maxRisk} short />}
+                        <MonitorSelect
+                          label="Maximum risk"
+                          value={draft.maxRisk ?? ""}
+                          options={riskOptions}
+                          onChange={(v) =>
+                            update({ maxRisk: (v || undefined) as AccessConfig["maxRisk"] })
+                          }
+                        />
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="monitor-label">Quick ceiling</span>
+                    <MonitorButton
+                      size="sm"
+                      icon={<Eye aria-hidden="true" />}
+                      onClick={() => update({ enabled: true, maxRisk: "READ" })}
+                    >
+                      Read only
+                    </MonitorButton>
+                    <MonitorButton
+                      size="sm"
+                      icon={<Pencil aria-hidden="true" />}
+                      onClick={() => update({ enabled: true, maxRisk: "WRITE" })}
+                    >
+                      Routine changes
+                    </MonitorButton>
+                  </div>
+                  <p className="monitor-hint">
+                    Idempotent writes share the WRITE ceiling: safe to retry does not mean
+                    read-only. Quick ceilings keep your router and tool rules.
+                  </p>
+                </fieldset>
+              </MonitorPanel>
+
+              <MonitorPanel
+                title="Router boundaries"
+                description="Allow a group, carve out exceptions. Explicit blocks always win."
+              >
+                <fieldset disabled={locked} className="access-fieldset gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Segmented
+                      label="Allowed router scope"
+                      value={deviceMode}
+                      onChange={setDeviceMode}
+                      options={[
+                        { value: "all", label: "All configured routers" },
+                        { value: "selected", label: "Only selected routers" },
+                      ]}
+                    />
+                    <span className="flex-1" />
+                    <MonitorSearch
+                      className="w-full sm:w-60"
+                      label="Search routers"
+                      placeholder="Find a configured router…"
+                      value={query}
+                      onChange={setQuery}
+                    />
+                  </div>
+                  <div className="access-router-list">
+                    {routerRows.map((name) => {
+                      const device = data.devices.find((d) => d.name === name);
                       const denied = draft.denyDevices.includes(name);
+                      const allowed =
+                        !denied &&
+                        !device?.disabled &&
+                        (deviceMode === "all" || draft.devices.includes(name));
+                      const tone: Tone = denied ? "bad" : allowed ? "good" : "default";
                       return (
-                        <div key={name} className={cn("access-router", denied && "is-denied")}>
-                          <span className="access-router-icon">
-                            <Router />
+                        <div key={name} className="access-router" data-tone={tone}>
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <StatusDot tone={tone} />
+                            <span className="truncate font-mono text-xs font-medium text-foreground">
+                              {name}
+                            </span>
                           </span>
-                          <div className="min-w-0 flex-1">
-                            <strong>{name}</strong>
-                            <small>
-                              {!configured
-                                ? "No longer configured · remove from rules"
-                                : configured.disabled
-                                  ? "Disabled in server config"
-                                  : denied
-                                    ? "Explicitly blocked"
-                                    : deviceMode === "all" || draft.devices.includes(name)
-                                      ? "Inside allowed group"
-                                      : "Outside allowed group"}
-                            </small>
-                          </div>
-                          <div className="access-router-checks">
-                            {deviceMode === "selected" && (
-                              <label>
-                                <Checkbox
-                                  aria-label={`Allow ${name}`}
-                                  checked={draft.devices.includes(name)}
-                                  onCheckedChange={(v) => toggle("devices", name, v === true)}
-                                  disabled={locked}
-                                />
-                                Allow
-                              </label>
-                            )}
-                            <label>
-                              <Checkbox
-                                aria-label={`Block ${name}`}
-                                checked={denied}
-                                onCheckedChange={(v) => toggle("denyDevices", name, v === true)}
-                                disabled={locked}
-                              />
+                          <span className="access-router-state text-xs" data-tone={tone}>
+                            {!device
+                              ? "No longer configured · remove from rules"
+                              : device.disabled
+                                ? "Disabled in server config"
+                                : denied
+                                  ? "Explicitly blocked"
+                                  : deviceMode === "all" || draft.devices.includes(name)
+                                    ? "Inside allowed group"
+                                    : "Outside allowed group"}
+                          </span>
+                          <span className="monitor-seg w-fit" role="group" aria-label={name}>
+                            <button
+                              type="button"
+                              className="monitor-seg-item"
+                              aria-label={`Allow ${name}`}
+                              aria-pressed={
+                                deviceMode === "selected"
+                                  ? draft.devices.includes(name) && !denied
+                                  : !denied && !device?.disabled
+                              }
+                              disabled={locked}
+                              onClick={() => {
+                                if (denied) toggle("denyDevices", name, false);
+                                if (deviceMode === "selected")
+                                  toggle("devices", name, denied || !draft.devices.includes(name));
+                              }}
+                            >
+                              Allow
+                            </button>
+                            <button
+                              type="button"
+                              className="monitor-seg-item"
+                              aria-label={`Block ${name}`}
+                              aria-pressed={denied}
+                              disabled={locked}
+                              onClick={() => toggle("denyDevices", name, !denied)}
+                            >
                               Block
-                            </label>
-                          </div>
+                            </button>
+                          </span>
                         </div>
                       );
                     })}
-                  {!deviceNames.length && (
-                    <p className="access-hint py-4">
-                      No routers configured. Add devices in Config before defining router-specific
-                      rules.
-                    </p>
-                  )}
-                  {!!deviceNames.length &&
-                    !deviceNames.some((n) => n.toLowerCase().includes(query.toLowerCase())) && (
-                      <p className="access-hint py-4">No routers match this search.</p>
-                    )}
-                </div>
-                {invalid && (
-                  <p role="alert" className="access-validation">
-                    {invalid}
-                  </p>
-                )}
-                <p className="access-hint">
-                  “All” includes future configured routers. Router state here comes from
-                  configuration, not a connectivity check.
-                </p>
-              </fieldset>
-
-              <fieldset disabled={locked} className="access-card">
-                <SectionTitle
-                  icon={<Terminal />}
-                  title="Tool rules"
-                  detail="Pick tools from the catalog, or add a * pattern that includes future matches."
-                />
-                <div className="access-rule-grid">
-                  <AccessToolPicker
-                    kind="allow"
-                    values={access.tools}
-                    tools={data.tools}
-                    onChange={(values) => setAllowText(values.join("\n"))}
-                    disabled={locked}
-                  />
-                  <AccessToolPicker
-                    kind="block"
-                    values={access.denyTools}
-                    tools={data.tools}
-                    onChange={(values) => setDenyText(values.join("\n"))}
-                    disabled={locked}
-                  />
-                </div>
-                <p className="access-hint">
-                  Patterns match tool names, not commands or arguments. All matching is
-                  case-insensitive. A risk ceiling also applies to tools on the allow-list.
-                </p>
-              </fieldset>
-            </div>
-
-            <aside className="access-inspector">
-              <section className="access-card access-preview">
-                <SectionTitle
-                  icon={<Fingerprint />}
-                  title="Permission lens"
-                  detail="A decision preview, not a tool execution."
-                />
-                <div className="access-lens-label">
-                  <Badge type={dirty ? "warning" : "secondary"}>
-                    {dirty ? "Unsaved draft" : "Saved configuration"}
-                  </Badge>
-                  <span>+ session restrictions</span>
-                </div>
-                <label className="access-field">
-                  <span>Preview target</span>
-                  <Select
-                    aria-label="Preview router"
-                    value={probeDevice}
-                    onValueChange={setProbeDevice}
-                    options={[
-                      { value: "", label: "Default router" },
-                      ...data.devices.map((d) => ({
-                        value: d.name,
-                        label: `${d.name}${d.disabled ? " · disabled" : ""}`,
-                      })),
-                    ]}
-                    disabled={saving}
-                  />
-                </label>
-                <div className="access-gates" aria-label="Draft permission boundaries">
-                  <div>
-                    <Router />
-                    <span>
-                      Router boundary
-                      <strong>
-                        {access.devices.length
-                          ? `${access.devices.length} selected`
-                          : "All configured"}
-                      </strong>
-                    </span>
-                    <small>{access.denyDevices.length} blocked</small>
-                  </div>
-                  <ArrowDown className="access-gate-link" />
-                  <div>
-                    <Terminal />
-                    <span>
-                      Tool boundary
-                      <strong>
-                        {access.tools.length
-                          ? `${access.tools.length} allow patterns`
-                          : "All tool names"}
-                      </strong>
-                    </span>
-                    <small>{access.denyTools.length} exclusions</small>
-                  </div>
-                  <ArrowDown className="access-gate-link" />
-                  <div>
-                    <ShieldCheck />
-                    <span>
-                      Risk ceiling<strong>{access.maxRisk ?? "No ceiling"}</strong>
-                    </span>
-                    <small>{access.enabled ? "Enabled" : "Inactive"}</small>
-                  </div>
-                </div>
-                <div className="access-impact" aria-live="polite">
-                  <div>
-                    <strong>{preview?.allowed ?? "—"}</strong>
-                    <span>scope allows</span>
-                  </div>
-                  <div>
-                    <strong>{preview?.blocked ?? "—"}</strong>
-                    <span>scope blocks</span>
-                  </div>
-                </div>
-                <p className="access-hint">
-                  Across {data.tools.length} catalog tools for the preview target. No-device tools
-                  ignore the router selection. Availability, approvals, tool arguments and device
-                  capabilities are separate checks.
-                </p>
-                {preview && dirty && (
-                  <div className="access-impact-diff">
-                    <span>+{preview.newlyAllowed} newly allowed</span>
-                    <span>−{preview.newlyBlocked} newly blocked</span>
-                  </div>
-                )}
-                {previewError && (
-                  <p role="alert" className="access-validation">
-                    {previewError}
-                  </p>
-                )}
-                <div className="access-probe">
-                  <h4>
-                    <Search className="size-3.5" /> Check a specific call
-                  </h4>
-                  <Input
-                    aria-label="Search tool catalog"
-                    value={toolQuery}
-                    placeholder="Search tool names…"
-                    onChange={(e) => setToolQuery(e.target.value)}
-                  />
-                  <Select
-                    aria-label="Tool to check"
-                    value={probeTool}
-                    options={toolOptions}
-                    onValueChange={setProbeTool}
-                    disabled={!data.tools.length || saving}
-                  />
-                  <small className="access-hint">
-                    {filteredTools.length > 80
-                      ? "Showing the first 80 matches. Refine your search."
-                      : `${filteredTools.length} matching tools`}
-                  </small>
-                  <div
-                    className={cn(
-                      "access-verdict",
-                      preview?.check?.allowed ? "is-allowed" : preview?.check && "is-blocked",
-                    )}
-                    role="status"
-                  >
-                    {preview?.check ? (
-                      <>
-                        <span>{preview.check.allowed ? <Check /> : <LockKeyhole />}</span>
-                        <div>
-                          <strong>
-                            {preview.check.allowed
-                              ? "Within the access boundary"
-                              : "This call would be blocked"}
-                          </strong>
-                          <p>
-                            {preview.check.reason ??
-                              "The scope permits this name, risk and target. No call was executed."}
-                          </p>
-                        </div>
-                      </>
-                    ) : (
-                      <p>
-                        {invalid
-                          ? "Complete the router selection to preview."
-                          : previewError
-                            ? "Decision unavailable."
-                            : pending
-                              ? "Confirm or revert the pending change first."
-                              : "Checking your draft…"}
+                    {!deviceNames.length && (
+                      <p className="monitor-hint py-4">
+                        No routers configured. Add devices in Config before defining router-specific
+                        rules.
                       </p>
                     )}
+                    {!!deviceNames.length && !routerRows.length && (
+                      <p className="monitor-hint py-4">No routers match this search.</p>
+                    )}
+                  </div>
+                  {invalid && (
+                    <p role="alert" className="monitor-err">
+                      {invalid}
+                    </p>
+                  )}
+                  <p className="monitor-hint">
+                    “All” includes routers you add later. Router state here comes from the config,
+                    not a connectivity check.
+                  </p>
+                </fieldset>
+              </MonitorPanel>
+
+              <MonitorPanel
+                title="Tool rules"
+                description="Pick tools from the catalog, or add a * pattern that also covers future tools."
+              >
+                <fieldset disabled={locked} className="access-fieldset">
+                  <div className="grid gap-3.5 md:grid-cols-2">
+                    <AccessToolPicker
+                      kind="allow"
+                      values={access.tools}
+                      tools={data.tools}
+                      onChange={(values) => setAllowText(values.join("\n"))}
+                      disabled={locked}
+                    />
+                    <AccessToolPicker
+                      kind="block"
+                      values={access.denyTools}
+                      tools={data.tools}
+                      onChange={(values) => setDenyText(values.join("\n"))}
+                      disabled={locked}
+                    />
+                  </div>
+                  <p className="monitor-hint">
+                    Patterns match tool names, not commands or arguments, and ignore case. The risk
+                    ceiling also applies to allowed tools.
+                  </p>
+                </fieldset>
+              </MonitorPanel>
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-3.5">
+              <MonitorPanel title="Permission lens" description="A decision preview. Nothing runs.">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <StatusBadge tone={dirty ? "warn" : "default"} dot={false}>
+                      {dirty ? "Unsaved draft" : "Saved configuration"}
+                    </StatusBadge>
+                    <span className="monitor-hint">+ session restrictions</span>
+                  </div>
+                  <div className="monitor-fl access-fl-select">
+                    <span className="monitor-label">Preview target</span>
+                    <MonitorSelect
+                      label="Preview router"
+                      value={probeDevice}
+                      onChange={setProbeDevice}
+                      options={[
+                        { value: "", label: "Default router" },
+                        ...data.devices.map((d) => ({
+                          value: d.name,
+                          label: `${d.name}${d.disabled ? " · disabled" : ""}`,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <div aria-label="Draft permission boundaries">
+                    <Gate
+                      icon={<Server aria-hidden="true" />}
+                      title="Router boundary"
+                      value={
+                        access.devices.length
+                          ? `${access.devices.length} selected`
+                          : "All configured"
+                      }
+                      sub={`${access.denyDevices.length} blocked`}
+                    />
+                    <GateLink />
+                    <Gate
+                      icon={<Box aria-hidden="true" />}
+                      title="Tool boundary"
+                      value={
+                        access.tools.length
+                          ? `${access.tools.length} allow patterns`
+                          : "All tool names"
+                      }
+                      sub={`${access.denyTools.length} exclusions`}
+                    />
+                    <GateLink />
+                    <Gate
+                      icon={<ShieldCheck aria-hidden="true" />}
+                      title="Risk ceiling"
+                      value={access.maxRisk ?? "No ceiling"}
+                      sub={access.enabled ? "Enabled" : "Inactive"}
+                      warn
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2" aria-live="polite">
+                    <div className="glass access-impact">
+                      <span className="text-success">{preview?.allowed ?? "—"}</span>
+                      <span className="monitor-hint">scope allows</span>
+                    </div>
+                    <div className="glass access-impact">
+                      <span className="text-destructive">{preview?.blocked ?? "—"}</span>
+                      <span className="monitor-hint">scope blocks</span>
+                    </div>
+                  </div>
+                  {preview && dirty && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge tone="good" dot={false}>
+                        +{preview.newlyAllowed} newly allowed
+                      </StatusBadge>
+                      <StatusBadge tone="bad" dot={false}>
+                        −{preview.newlyBlocked} newly blocked
+                      </StatusBadge>
+                    </div>
+                  )}
+                  <p className="monitor-hint">
+                    Across {data.tools.length} catalog tools for the preview target. Approvals,
+                    arguments and device capabilities are separate checks.
+                  </p>
+                  {previewError && (
+                    <p role="alert" className="monitor-err">
+                      {previewError}
+                    </p>
+                  )}
+                  <div className="flex flex-col gap-2 border-t border-line pt-3">
+                    <b className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+                      <Search aria-hidden="true" className="size-3.5" />
+                      Check a specific call
+                    </b>
+                    <MonitorSearch
+                      label="Search tool catalog"
+                      placeholder="Search tool names…"
+                      value={toolQuery}
+                      onChange={setToolQuery}
+                    />
+                    <MonitorSelect
+                      label="Tool to check"
+                      value={probeTool}
+                      options={toolOptions}
+                      onChange={setProbeTool}
+                    />
+                    <span className="monitor-hint">
+                      {filteredTools.length > 80
+                        ? "Showing the first 80 matches. Refine your search."
+                        : `${filteredTools.length} matching tools`}
+                    </span>
+                    <div role="status">
+                      {preview?.check ? (
+                        <MonitorNote
+                          tone={preview.check.allowed ? "good" : "bad"}
+                          icon={
+                            preview.check.allowed ? (
+                              <Check aria-hidden="true" />
+                            ) : (
+                              <X aria-hidden="true" />
+                            )
+                          }
+                        >
+                          <b>
+                            {preview.check.allowed
+                              ? "Within the access boundary."
+                              : "This call would be blocked."}
+                          </b>{" "}
+                          {preview.check.reason ??
+                            "The scope permits this name, risk and target. No call was run."}
+                        </MonitorNote>
+                      ) : (
+                        <p className="monitor-hint">
+                          {invalid
+                            ? "Complete the router selection to preview."
+                            : previewError
+                              ? "Decision unavailable."
+                              : pending
+                                ? "Confirm or revert the pending change first."
+                                : "Checking your draft…"}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </section>
-              <section className="access-card access-runtime">
-                <h3>
-                  <LockKeyhole className="size-4" /> Applied runtime layers
-                </h3>
-                <dl>
-                  <div>
-                    <dt>Operator policy</dt>
-                    <dd>{data.configured.enabled ? "On" : "Off"}</dd>
-                  </div>
-                  <div>
-                    <dt>Server read-only</dt>
-                    <dd>{data.readOnly ? "On · writes unavailable" : "Off"}</dd>
-                  </div>
-                  <div>
-                    <dt>Session narrowing</dt>
-                    <dd>{data.narrowed ? "Active" : "None"}</dd>
-                  </div>
-                  <div>
-                    <dt>Effective risk ceiling</dt>
-                    <dd>{data.effective.enabled ? (scope?.maxRisk ?? "None") : "Inactive"}</dd>
-                  </div>
-                  <div>
-                    <dt>Session expiry</dt>
-                    <dd>
-                      {scope?.expiresAt ? new Date(scope.expiresAt).toLocaleString() : "Not set"}
-                    </dd>
-                  </div>
+              </MonitorPanel>
+              <MonitorPanel
+                title="Applied right now"
+                description="Every layer that limits the next call."
+              >
+                <dl className="monitor-facts grid-cols-[150px_minmax(0,1fr)]">
+                  <dt>Operator policy</dt>
+                  <dd>
+                    {data.configured.enabled ? (
+                      <StatusBadge tone="good">Enforced</StatusBadge>
+                    ) : (
+                      "Off"
+                    )}
+                  </dd>
+                  <dt>Server read-only</dt>
+                  <dd>{data.readOnly ? "On · writes unavailable" : "Off"}</dd>
+                  <dt>Session narrowing</dt>
+                  <dd>
+                    {data.narrowed ? (
+                      <>
+                        <span className="font-mono">narrow_access_scope</span> · active
+                      </>
+                    ) : (
+                      "None"
+                    )}
+                  </dd>
+                  <dt>Effective ceiling</dt>
+                  <dd>
+                    {data.effective.enabled ? (
+                      scope?.maxRisk ? (
+                        <RiskBadge risk={scope.maxRisk} />
+                      ) : (
+                        "None"
+                      )
+                    ) : (
+                      "Inactive"
+                    )}
+                  </dd>
+                  <dt>Session expiry</dt>
+                  <dd>
+                    {scope?.expiresAt ? new Date(scope.expiresAt).toLocaleString() : "Not set"}
+                  </dd>
+                  <dt>Allowed routers</dt>
+                  <dd className="font-mono">
+                    {scope?.noDevices
+                      ? "None · scopes do not overlap"
+                      : scope?.devices?.join(", ") || "All configured"}
+                  </dd>
+                  <dt>Blocked routers</dt>
+                  <dd className="font-mono">{scope?.denyDevices?.join(", ") || "None"}</dd>
                 </dl>
-                <details>
-                  <summary>Inspect the effective scope</summary>
-                  <dl>
-                    <div>
-                      <dt>Allowed routers</dt>
-                      <dd>
-                        {scope?.noDevices
-                          ? "None · scopes do not overlap"
-                          : scope?.devices?.join(", ") || "All configured"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Blocked routers</dt>
-                      <dd>{scope?.denyDevices?.join(", ") || "None"}</dd>
-                    </div>
-                    <div>
-                      <dt>Allowed tools</dt>
-                      <dd>{scope?.tools?.join(", ") || "All"}</dd>
-                    </div>
-                    <div>
-                      <dt>Blocked tools</dt>
-                      <dd>{scope?.denyTools?.join(", ") || "None"}</dd>
-                    </div>
+                <details className="access-details">
+                  <summary>Allowed and blocked tools</summary>
+                  <dl className="monitor-facts mt-2 grid-cols-[150px_minmax(0,1fr)]">
+                    <dt>Allowed tools</dt>
+                    <dd className="font-mono">{scope?.tools?.join(", ") || "All"}</dd>
+                    <dt>Blocked tools</dt>
+                    <dd className="font-mono">{scope?.denyTools?.join(", ") || "None"}</dd>
                   </dl>
                   {!!scope?.toolAllowGroups?.length && (
-                    <p className="access-hint">
+                    <p className="monitor-hint mt-2">
                       Also must match each group:{" "}
                       {scope.toolAllowGroups.map((g) => `(${g.join(", ")})`).join(" AND ")}
                     </p>
                   )}
                 </details>
-                <p className="access-hint">
-                  Changes affect this server process, not a login account. Runtime narrowing is
-                  retained on save; it cannot be reset here. Expiry is set through{" "}
-                  <code>narrow_access_scope</code>, not the base policy.
+                <p className="monitor-hint mt-3">
+                  Changes affect this server process, not a login account. Runtime narrowing is kept
+                  on save; it cannot be reset here. Expiry is set through{" "}
+                  <span className="font-mono">narrow_access_scope</span>, not the base policy.
                 </p>
-              </section>
-            </aside>
+              </MonitorPanel>
+            </div>
           </div>
 
-          <footer className="access-savebar">
-            <div>
-              <span className={cn("access-save-dot", dirty && "is-dirty")} />
-              <strong>{dirty ? "You have unapplied changes" : "No unapplied changes"}</strong>
-              <small>Preview → apply → keep within 60 seconds</small>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                ghost
-                icon={<Undo2 />}
-                disabled={!dirty || locked}
-                onClick={() => {
-                  accept(data);
-                  setError("");
-                  setNotice("");
-                }}
-              >
-                Discard draft
-              </Button>
-              <Button
-                icon={<ArrowRight />}
-                disabled={!dirty || locked || !!invalid || !preview || !!previewError}
-                onClick={() => {
-                  setError("");
-                  setReview(true);
-                }}
-              >
-                Review changes
-              </Button>
-            </div>
-          </footer>
+          <section className="glass access-savebar" data-dirty={dirty || undefined}>
+            <StatusDot tone={dirty ? "warn" : "default"} />
+            <b className="text-[13px] text-foreground">
+              {dirty ? "You have unapplied changes" : "No unapplied changes"}
+            </b>
+            <span className="monitor-hint">Preview → apply → keep within 60 seconds</span>
+            <span className="flex-1" />
+            <MonitorButton
+              variant="ghost"
+              disabled={!dirty || locked}
+              onClick={() => {
+                accept(data);
+                setError("");
+                setNotice("");
+              }}
+            >
+              Discard draft
+            </MonitorButton>
+            <MonitorButton
+              variant="primary"
+              icon={<ChevronRight aria-hidden="true" />}
+              disabled={!dirty || locked || !!invalid || !preview || !!previewError}
+              onClick={() => {
+                setError("");
+                setReview(true);
+              }}
+            >
+              Review changes
+            </MonitorButton>
+          </section>
 
-          <section className="access-card access-audit">
-            <SectionTitle
-              icon={<History />}
-              title="Blocked call history"
-              detail="Recent real denials in this process. Preview checks never enter this history."
-            />
-            <Badge type="secondary">{data.denials.length} recent</Badge>
+          <MonitorPanel
+            title="Blocked call history"
+            description="Real denials in this process. Preview checks never land here. Resets on server restart."
+            extra={<StatusBadge dot={false}>{data.denials.length} recent</StatusBadge>}
+            flush
+          >
             {!data.denials.length ? (
-              <div className="access-audit-empty">
-                <ShieldCheck />
-                <div>
-                  <h4>No blocked calls recorded</h4>
-                  <p>
-                    {data.effective.enabled
-                      ? "A call appears here only when it violates the active scope."
-                      : "Access scope is off. Once enforced, rejected calls will appear here with the reason."}{" "}
-                    History is in memory and resets on server restart.
-                  </p>
-                </div>
-              </div>
+              <MonitorEmpty icon={<ShieldCheck />} title="No blocked calls recorded">
+                {data.effective.enabled
+                  ? "A call appears here only when it breaks the active scope."
+                  : "Access scope is off. Once enforced, rejected calls show here with the reason."}{" "}
+                History is in memory and resets on server restart.
+              </MonitorEmpty>
             ) : (
               <div className="access-denials">
+                <div className="monitor-thead access-denial-grid">
+                  <span>Time</span>
+                  <span>Tool</span>
+                  <span>Reason</span>
+                  <span>Router · risk · rule</span>
+                </div>
                 {data.denials.map((d, i) => (
-                  <article key={`${d.ts}-${i}`}>
-                    <span className="access-denial-icon">
-                      <X />
-                    </span>
-                    <div>
-                      <strong>{d.tool}</strong>
-                      <p>{d.reason}</p>
-                      <small>
-                        {d.device ?? "No device"} · {d.risk} · {d.rule}
-                      </small>
-                    </div>
-                    <time dateTime={new Date(d.ts).toISOString()}>
-                      {new Date(d.ts).toLocaleTimeString()}
+                  <div key={`${d.ts}-${i}`} className="monitor-row access-denial-grid" data-failed>
+                    <time
+                      className="font-mono text-xs text-muted-foreground"
+                      dateTime={new Date(d.ts).toISOString()}
+                    >
+                      {new Date(d.ts).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </time>
-                  </article>
+                    <span className="p truncate font-mono text-xs">{d.tool}</span>
+                    <span className="truncate text-destructive">{d.reason}</span>
+                    <span className="truncate font-mono text-xs text-muted-foreground">
+                      {d.device ?? "No device"} · {d.risk} · {d.rule}
+                    </span>
+                  </div>
                 ))}
               </div>
             )}
-          </section>
+          </MonitorPanel>
 
-          <Dialog
+          <MonitorDialog
             open={review}
             onOpenChange={(open) => {
               if (!saving) setReview(open);
             }}
+            width={640}
+            closeDisabled={saving}
+            title="Review access changes"
+            description="These are MCP server permissions, not RouterOS settings. Changes apply to the next calls in this process right away."
+            footer={
+              <>
+                <span className="flex-1" />
+                <MonitorButton variant="ghost" disabled={saving} onClick={() => setReview(false)}>
+                  Cancel
+                </MonitorButton>
+                <MonitorButton
+                  variant="primary"
+                  icon={<ShieldCheck aria-hidden="true" />}
+                  disabled={saving}
+                  onClick={() => void apply()}
+                >
+                  Apply for 60 seconds
+                </MonitorButton>
+              </>
+            }
           >
-            <DialogContent
-              className="sm:max-w-2xl max-h-[85svh] overflow-y-auto"
-              showCloseButton={!saving}
-            >
-              <DialogHeader>
-                <DialogTitle>Review access changes</DialogTitle>
-                <DialogDescription>
-                  These are MCP server permissions, not RouterOS settings. Changes apply to
-                  subsequent calls in this process immediately.
-                </DialogDescription>
-              </DialogHeader>
+            <div className="monitor-dialog-body flex flex-col gap-3.5">
               <div className="access-review-diff">
                 {changes.map((key) => (
                   <div key={key}>
-                    <strong>{key}</strong>
+                    <b className="font-mono text-xs text-foreground">{key}</b>
                     <del>{summarize(data.configured[key])}</del>
-                    <ArrowRight />
+                    <ChevronRight aria-hidden="true" />
                     <span>{summarize(access[key])}</span>
                   </div>
                 ))}
               </div>
               {(!access.enabled || (preview?.newlyAllowed ?? 0) > 0) && (
-                <div className="access-message is-warning">
-                  <ShieldOff className="size-4" />
-                  <p>
-                    {!access.enabled
-                      ? "You are switching off the operator's access policy. Saved rules will not restrict calls while it is off."
-                      : `${preview?.newlyAllowed} catalog tools become newly allowed for this preview target.`}{" "}
-                    Other targets may be affected too. Review every change above.
-                  </p>
-                </div>
+                <MonitorNote tone="warn" icon={<ShieldOff aria-hidden="true" />}>
+                  {!access.enabled
+                    ? "You are switching off the operator's access policy. Saved rules will not restrict calls while it is off."
+                    : `${preview?.newlyAllowed} catalog tools become newly allowed for this preview target.`}{" "}
+                  Other targets may be affected too. Review every change above.
+                </MonitorNote>
               )}
-              <p className="access-hint">
-                A backup is created and a 60-second auto-revert timer starts. You must select Keep
-                changes after applying. Existing session restrictions remain.
+              <p className="monitor-hint">
+                A backup is made and a 60-second auto-revert timer starts. Select Keep changes after
+                applying. Existing session restrictions stay.
               </p>
               {!data.fromFile && (
-                <p className="access-validation">
+                <p className="monitor-err">
                   This process was not loaded from a config file. Settings are written to the
-                  default config path, but future launches must use that file to retain them.
+                  default config path, but future launches must use that file to keep them.
                 </p>
               )}
               {error && (
-                <p role="alert" className="access-validation">
+                <p role="alert" className="monitor-err">
                   {error}
                 </p>
               )}
-              <DialogFooter>
-                <Button ghost disabled={saving} onClick={() => setReview(false)}>
-                  Cancel
-                </Button>
-                <Button icon={<ShieldCheck />} loading={saving} onClick={() => void apply()}>
-                  Apply for 60 seconds
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+            </div>
+          </MonitorDialog>
         </>
       )}
+    </div>
+  );
+}
+
+function Gate({
+  icon,
+  title,
+  value,
+  sub,
+  warn = false,
+}: {
+  icon: ReactNode;
+  title: string;
+  value: string;
+  sub: string;
+  warn?: boolean;
+}): ReactNode {
+  return (
+    <div className="access-gate">
+      <span className="access-gate-icon" data-warn={warn || undefined}>
+        {icon}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="monitor-hint">{title}</span>
+        <b className="text-[13px] font-semibold text-foreground">{value}</b>
+      </span>
+      <span className="font-mono text-xs text-muted-foreground">{sub}</span>
+    </div>
+  );
+}
+
+function GateLink(): ReactNode {
+  return (
+    <div className="flex h-3.5 justify-center" aria-hidden="true">
+      <span className="access-gate-link" />
     </div>
   );
 }

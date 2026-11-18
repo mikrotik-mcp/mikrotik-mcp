@@ -37,8 +37,9 @@ const payload: AttacksPayload = {
 
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
+// The block confirm is a dialog in a portal, so look through the whole document.
 const button = (label: string) =>
-  [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+  [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
     (b) => b.textContent?.trim() === label,
   );
 const click = async (target: HTMLButtonElement | undefined) => {
@@ -73,8 +74,8 @@ test("shows detect-only posture and incident evidence before a response is offer
   expect(host.textContent).toContain("Repeated SSH failures");
   expect(host.textContent).not.toContain("login failure");
   await click(
-    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
-      b.textContent?.includes("Repeated SSH failures"),
+    [...host.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find((b) =>
+      b.getAttribute("aria-label")?.includes("Repeated SSH failures"),
     ),
   );
   expect(host.textContent).toContain("login failure");
@@ -94,7 +95,10 @@ test("block uses a dry-run plan and requires a second explicit confirmation", as
   expect(postJson).toHaveBeenCalledExactlyOnceWith("/api/attacks/incident-1/respond", {
     confirm: false,
   });
-  expect(host.textContent).toContain("Block 198.51.100.7 on edge for 1h?");
+  const dialog = document.body.querySelector('[role="dialog"]');
+  expect(dialog?.textContent).toContain("Block this address?");
+  expect(dialog?.textContent).toContain("198.51.100.7");
+  expect(dialog?.textContent).toContain("after 1 hour");
   await click(button("Block it"));
   expect(postJson).toHaveBeenNthCalledWith(2, "/api/attacks/incident-1/respond", {
     confirm: true,
@@ -110,6 +114,7 @@ test("cancelling a dry-run never sends the confirmation request", async () => {
   await act(async () => root.render(createElement(AttacksView)));
   await click(button("Block…"));
   await click(button("Cancel"));
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
   expect(button("Block it")).toBeUndefined();
   expect(postJson).toHaveBeenCalledTimes(1);
 });

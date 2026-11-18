@@ -1,26 +1,60 @@
 import { LoadingState } from "./loading-state";
-import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Database, RefreshCw, Search } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Tooltip, Treemap, XAxis, YAxis } from "recharts";
-import type { TreemapNode } from "recharts";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  RefreshCw,
+  Search,
+  TriangleAlert,
+} from "lucide-react";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { api, withToken } from "./api";
-import { WorkspaceError } from "./operations-ui";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorEmpty,
+  MonitorNote,
+  MonitorPanel,
+  PageIntro,
+  Segmented,
+  StatusBadge,
+  useStaggerIn,
+} from "./monitoring-ui";
+import { OpenVpnBars, OpenVpnTreemap } from "./openvpn-graphics";
 import { connectionDuration } from "../../src/core/openvpn-sessions-model";
 import type { HistoryGroup, OpenVpnHistoryReport } from "../../src/observability/openvpn-history";
 
-const timestamp = (at: number) => new Date(at).toLocaleString();
-const chartConfig = { count: { label: "Connections", color: "var(--chart-1)" } };
+/** "Nov 14, 09:50" in local time. */
+const timestamp = (at: number) =>
+  new Date(at).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+const day = (at: number) =>
+  new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour12: false });
+
 type TreemapView = "person" | "ip" | "asn" | "country";
 const treemapViews: { value: TreemapView; label: string }[] = [
   { value: "person", label: "People" },
   { value: "ip", label: "Source IPs" },
   { value: "asn", label: "Networks" },
   { value: "country", label: "Countries" },
+];
+
+type Preset = 7 | 30 | 90 | "all";
+const PRESETS: { value: Preset | "custom"; label: string }[] = [
+  { value: 7, label: "7 days" },
+  { value: 30, label: "30 days" },
+  { value: 90, label: "90 days" },
+  { value: "all", label: "All recorded" },
 ];
 
 export function historyTreemapRows(rows: HistoryGroup[], total: number, useOrganization = false) {
@@ -39,114 +73,89 @@ export function historyTreemapRows(rows: HistoryGroup[], total: number, useOrgan
 export const historyTreemapPercent = (value: number, total: number) =>
   total ? Math.round((value / total) * 100) : 0;
 
-function TrafficTile({
-  x,
-  y,
-  width,
-  height,
-  name,
-  value,
-  index,
-  depth,
-  total,
-}: TreemapNode & { total: number }) {
-  if (depth === 0) return <g />;
-  const palette = [
-    "var(--chart-1)",
-    "var(--chart-2)",
-    "var(--chart-3)",
-    "var(--chart-4)",
-    "var(--chart-5)",
-  ];
+function CountryFlag({ code }: { code: string }) {
+  const [failed, setFailed] = useState(false);
+  const known = /^[a-z]{2}$/i.test(code);
   return (
-    <g>
-      <rect
-        x={x + 2}
-        y={y + 2}
-        width={Math.max(0, width - 4)}
-        height={Math.max(0, height - 4)}
-        rx={9}
-        fill={palette[index % palette.length]}
-        opacity={0.9}
-      />
-      {width > 85 && height > 38 && (
-        <>
-          <text x={x + 12} y={y + 23} fill="white" fontSize={12} fontWeight={650}>
-            {name.length > Math.floor(width / 8)
-              ? `${name.slice(0, Math.max(4, Math.floor(width / 8) - 1))}…`
-              : name}
-          </text>
-          {height > 62 && (
-            <text x={x + 12} y={y + 43} fill="white" opacity={0.85} fontSize={11}>
-              {value.toLocaleString()} · {historyTreemapPercent(value, total)}%
-            </text>
-          )}
-        </>
-      )}
-    </g>
+    <span className="monitor-chip ovpn-country" data-known={known || undefined}>
+      {known && !failed ? (
+        <img
+          width={16}
+          height={16}
+          alt=""
+          src={withToken(`/api/flag/${code.toLowerCase()}`)}
+          onError={() => setFailed(true)}
+        />
+      ) : null}
+      {known ? code.toUpperCase() : "—"}
+    </span>
   );
 }
 
+/** One breakdown panel: label, count, share, a bar against the top row, a detail line. */
 function Breakdown({
   title,
   rows,
   total,
-  countries = false,
+  kind,
 }: {
   title: string;
   rows: HistoryGroup[];
   total: number;
-  countries?: boolean;
+  kind: "country" | "ip" | "network";
 }) {
+  const top = Math.max(1, ...rows.map((r) => r.count));
   return (
-    <section className="ovpn-history-panel">
-      <header>
-        <h3>{title}</h3>
-        <small>Top 20 · connections</small>
-      </header>
-      <ScrollArea className="ovpn-breakdown-scroll">
-        {rows.length ? (
-          rows.map((row) => (
-            <div className="ovpn-breakdown" key={row.label}>
-              <div>
-                <span className="ovpn-breakdown-label">
-                  {countries && /^[a-z]{2}$/i.test(row.detail) && (
-                    <img
-                      width={18}
-                      height={18}
-                      alt=""
-                      src={withToken(`/api/flag/${row.detail.toLowerCase()}`)}
-                    />
-                  )}
-                  <span title={row.label}>{row.label}</span>
+    <MonitorPanel title={title} description="Top 20 · connections" className="ovpn-breakdown-panel">
+      {rows.length ? (
+        <div className="ovpn-breakdown-list">
+          {rows.map((row) => {
+            const label = kind === "network" ? row.detail || row.label : row.label;
+            const detail =
+              kind === "network"
+                ? row.label
+                : kind === "ip"
+                  ? row.detail || "Organization unavailable"
+                  : "";
+            const share = total ? Math.round((row.count / total) * 100) : 0;
+            return (
+              <div className="ovpn-breakdown" key={row.label}>
+                <div className="ovpn-breakdown-line">
+                  {kind === "country" && <CountryFlag code={row.detail} />}
+                  <span className="ovpn-breakdown-label" title={label}>
+                    {label}
+                  </span>
+                  <span className="ovpn-mono ovpn-tx ovpn-num">{row.count.toLocaleString()}</span>
+                  <span className="ovpn-mono ovpn-faint ovpn-share">{share}%</span>
+                </div>
+                <span
+                  className="monitor-bar ovpn-breakdown-bar"
+                  role="meter"
+                  aria-valuemin={0}
+                  aria-valuemax={Math.max(1, total)}
+                  aria-valuenow={row.count}
+                  aria-label={`${label}: ${row.count} connections`}
+                >
+                  <span data-tone="good" style={{ width: `${(row.count / top) * 100}%` }} />
                 </span>
-                <strong>
-                  {row.count.toLocaleString()}{" "}
-                  <small>{total ? Math.round((row.count / total) * 100) : 0}%</small>
-                </strong>
+                {detail && <span className="ovpn-sub">{detail}</span>}
               </div>
-              {!countries && <small>{row.detail || "Organization unavailable"}</small>}
-              <meter
-                min={0}
-                max={Math.max(1, total)}
-                value={row.count}
-                aria-label={`${row.label}: ${row.count} connections`}
-              />
-            </div>
-          ))
-        ) : (
-          <p className="ovpn-caption">No connections in this selection.</p>
-        )}
-      </ScrollArea>
-    </section>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="ovpn-sub">No connections in this selection.</p>
+      )}
+    </MonitorPanel>
   );
 }
 
-export function OpenVpnHistory({ device }: { device: string }) {
+export function OpenVpnHistory({ device, controls }: { device: string; controls?: ReactNode }) {
   const [user, setUser] = useState("");
   const [draftUser, setDraftUser] = useState("");
   const [from, setFrom] = useState<Date>();
   const [to, setTo] = useState<Date>();
+  const [preset, setPreset] = useState<Preset | "custom">("all");
   const [offset, setOffset] = useState(0);
   const [revision, setRevision] = useState(0);
   const [sample, setSample] = useState<{ key: string; data: OpenVpnHistoryReport }>();
@@ -154,6 +163,7 @@ export function OpenVpnHistory({ device }: { device: string }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [treemapView, setTreemapView] = useState<TreemapView>("person");
+  const journalRef = useRef<HTMLDivElement>(null);
   const fromMs = from?.getTime();
   const toMs = to?.getTime();
   const invalid = fromMs !== undefined && toMs !== undefined && fromMs > toMs;
@@ -195,6 +205,7 @@ export function OpenVpnHistory({ device }: { device: string }) {
       clearTimeout(timer);
     };
   }, [device, user, fromMs, toMs, offset, revision, invalid, key]);
+  useStaggerIn(journalRef, ".ovpn-journal-row", `${device}:${user}:${fromMs}:${toMs}:${offset}`);
   const total = data?.totals;
   const treemapRows =
     data && total
@@ -212,368 +223,344 @@ export function OpenVpnHistory({ device }: { device: string }) {
       : [];
   const coverage = data?.coverage;
   const stale = !!error || !coverage || now - coverage.last > 45_000;
-  function range(days?: number) {
-    setFrom(days ? new Date(now - days * 86400000) : undefined);
+  const who = user || "all users";
+  function range(value: Preset | "custom") {
+    if (value === "custom") return;
+    setPreset(value);
+    setFrom(value === "all" ? undefined : new Date(now - value * 86400000));
     setTo(undefined);
     setOffset(0);
   }
   return (
     <section className="ovpn-history" aria-label="OpenVPN connection history" aria-busy={loading}>
-      <div className="ovpn-history-heading">
-        <div>
-          <span className="ovpn-eyebrow">
-            <Database size={14} /> CONNECTION JOURNAL
-          </span>
-        </div>
-        <span className="ovpn-history-local">
-          Stored on your MCP host
-          <br />
-          <small>30s report cache · no router reads on this page</small>
-        </span>
-      </div>
-      <div className="ovpn-history-controls">
+      <PageIntro
+        eyebrow="OpenVPN · connection history"
+        heading="Every observed connection."
+        lead="Patterns, source networks and countries across all users, or one person at a time. Stored on your MCP host, so this page never reads the router."
+        actions={controls}
+      />
+      <section className="glass ovpn-history-controls" aria-label="History filters">
         <form
+          className="monitor-fl"
           onSubmit={(e) => {
             e.preventDefault();
             setUser(draftUser.trim());
             setOffset(0);
           }}
         >
-          <label htmlFor="ovpn-history-user">User · empty for everyone</label>
-          <div className="ovpn-history-user">
-            <Input
+          <label className="monitor-label" htmlFor="ovpn-history-user">
+            User · empty for everyone
+          </label>
+          <span className="monitor-input ovpn-user-field">
+            <button type="submit" className="ovpn-field-icon" aria-label="Apply user filter">
+              <Search aria-hidden="true" />
+            </button>
+            <input
               id="ovpn-history-user"
               list="ovpn-history-users"
-              placeholder="Find a username…"
+              placeholder="Find a username"
               value={draftUser}
               onChange={(e) => setDraftUser(e.target.value)}
             />
-            <Button type="submit" variant="outline" aria-label="Apply user filter">
-              <Search size={16} />
-            </Button>
-          </div>
+          </span>
           <datalist id="ovpn-history-users">
             {data?.users.map((name) => (
               <option key={name} value={name} />
             ))}
           </datalist>
         </form>
-        <div>
-          <label>From · local time</label>
+        <div className="monitor-fl">
+          <span className="monitor-label">From · local time</span>
           <DateTimePicker
             aria-label="History from"
+            className="monitor-input ovpn-date"
+            placeholder="Earliest recorded"
             value={from}
             onChange={(v) => {
               setFrom(v);
+              setPreset("custom");
               setOffset(0);
             }}
             max={to}
           />
         </div>
-        <div>
-          <label>Through · local time</label>
+        <div className="monitor-fl">
+          <span className="monitor-label">Through · local time</span>
           <DateTimePicker
             aria-label="History through"
+            className="monitor-input ovpn-date"
+            placeholder="Now"
             value={to}
             onChange={(v) => {
               setTo(v);
+              setPreset("custom");
               setOffset(0);
             }}
             min={from}
           />
         </div>
-        <Button
-          variant="outline"
-          disabled={loading || invalid}
-          onClick={() => setRevision((r) => r + 1)}
-        >
-          <RefreshCw size={15} /> Refresh
-        </Button>
-        <div className="ovpn-history-presets">
-          <span>Session start time</span>
-          {[7, 30, 90].map((days) => (
-            <Button key={days} size="sm" variant="ghost" onClick={() => range(days)}>
-              {days} days
-            </Button>
-          ))}
-          <Button size="sm" variant="ghost" onClick={() => range()}>
-            All recorded
-          </Button>
+        <div className="ovpn-range">
+          <Segmented value={preset} options={PRESETS} onChange={range} label="Session start time" />
+          <MonitorButton
+            disabled={loading || invalid}
+            onClick={() => setRevision((r) => r + 1)}
+            icon={<RefreshCw aria-hidden="true" />}
+          >
+            Refresh
+          </MonitorButton>
         </div>
-      </div>
-      {invalid && <WorkspaceError message="From must be before Through." />}
-      {error && <WorkspaceError message={error} />}
+      </section>
+      {invalid && (
+        <MonitorNote tone="bad" role="alert" icon={<TriangleAlert aria-hidden="true" />}>
+          From must be before Through.
+        </MonitorNote>
+      )}
+      {error && (
+        <MonitorNote tone="bad" role="alert" icon={<TriangleAlert aria-hidden="true" />}>
+          {error}
+        </MonitorNote>
+      )}
       {!invalid && !data && !error && (
         <LoadingState label="Reading connection history" layout="chart" />
       )}
-      {!invalid && data && (
+      {!invalid && data && total && (
         <>
-          <div className="ovpn-history-coverage" data-stale={stale} role="status">
-            <strong>
-              {coverage
-                ? stale
-                  ? "Collection delayed"
-                  : "Background collection active"
-                : "Waiting for the first successful router read"}
-            </strong>
-            <span>
-              {coverage
-                ? `Recording since ${timestamp(coverage.first)} · last read ${timestamp(coverage.last)} · ${coverage.gaps} collection gaps · ${coverage.failures} failed reads`
-                : "History begins with this installation. Keep the MCP service running to collect connections."}
-            </span>
-            <small>
-              Read-only sampling every ~15s per pass. Short connections between samples and service
-              downtime can be missed. Older history is not backfilled. Start times are estimated
-              from router uptime; country and ASN describe the source IP, not the person.
-            </small>
-          </div>
-          <div className="ovpn-history-metrics">
-            <div>
-              <span>Connections in range</span>
-              <strong>{total!.connections.toLocaleString()}</strong>
-              <small>
-                {data.allTime.toLocaleString()} all recorded · {user || "all users"}
-              </small>
-            </div>
-            <div>
-              <span>Distinct source IPs</span>
-              <strong>{total!.ips.toLocaleString()}</strong>
-              <small>{total!.users.toLocaleString()} users in selection</small>
-            </div>
-            <div>
-              <span>Networks / countries</span>
-              <strong>
-                {total!.networks} <em>/ {total!.countries}</em>
-              </strong>
-              <small>Known ASN / known country only</small>
-            </div>
-            <div>
-              <span>Recorded session time</span>
-              <strong>
-                {(total!.seconds / 3600).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                <em> h</em>
-              </strong>
-              <small>Sum of last reported uptime, not billable time</small>
-            </div>
-          </div>
-          <section className="ovpn-history-panel">
-            <header>
-              <div>
-                <h3>Connection rhythm</h3>
-                <small>
-                  Daily starts · UTC · last 90 calendar days of selection; totals cover the full
-                  range
-                </small>
-              </div>
-              <span className="ovpn-caption">{user || "All users"}</span>
-            </header>
-            {total!.connections && data.timeline.length ? (
-              <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                <BarChart
-                  accessibilityLayer
-                  data={data.timeline}
-                  margin={{ left: 0, right: 12, top: 16 }}
-                >
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="day"
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(day: string) => day.slice(5)}
-                    minTickGap={25}
-                  />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={40} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar
-                    dataKey="count"
-                    fill="var(--color-count)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={40}
-                    isAnimationActive={false}
-                  />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-              <div className="ovpn-empty">
-                No connections recorded in this range. Try another date range or user.
-              </div>
-            )}
-          </section>
-          <section
-            className="ovpn-history-panel ovpn-treemap-panel"
-            aria-label="Connection distribution treemap"
+          <MonitorNote
+            tone={coverage && !stale ? "good" : "warn"}
+            role="status"
+            icon={
+              coverage && !stale ? (
+                <Check aria-hidden="true" />
+              ) : (
+                <TriangleAlert aria-hidden="true" />
+              )
+            }
+            className="ovpn-coverage"
           >
-            <header>
-              <div>
-                <h3>Where connections come from</h3>
-                <small>Area represents connections in the selected range · top 20 plus Other</small>
-              </div>
-              <div className="ovpn-treemap-switch" role="group" aria-label="Group connections by">
-                {treemapViews.map((view) => (
-                  <button
-                    key={view.value}
-                    type="button"
-                    aria-pressed={treemapView === view.value}
-                    onClick={() => setTreemapView(view.value)}
-                  >
-                    {view.label}
-                  </button>
-                ))}
-              </div>
-            </header>
-            {treemapRows.length ? (
+            {coverage ? (
               <>
-                <div className="ovpn-treemap-chart">
-                  <Treemap
-                    style={{ width: "100%", height: "100%" }}
-                    data={treemapRows}
-                    dataKey="value"
-                    nameKey="name"
-                    aspectRatio={2.5}
-                    content={(node) => <TrafficTile {...node} total={total!.connections} />}
-                    isAnimationActive={false}
-                  >
-                    <Tooltip
-                      content={({ active, payload }) =>
-                        active && payload?.length ? (
-                          <div className="ovpn-treemap-tooltip">
-                            <strong>{String(payload[0].name)}</strong>
-                            <span>
-                              {Number(payload[0].value).toLocaleString()} connections ·{" "}
-                              {historyTreemapPercent(Number(payload[0].value), total!.connections)}%
-                            </span>
-                          </div>
-                        ) : null
-                      }
-                    />
-                  </Treemap>
-                </div>
-                <p className="ovpn-caption">
-                  {treemapRows.length} groups · {total!.connections.toLocaleString()} connections ·{" "}
-                  {user || "all users"}
-                </p>
+                <b>{stale ? "Collection delayed." : "Background collection active."}</b> Recording
+                since {day(coverage.first)} · last read {clock(coverage.last)} · {coverage.gaps}{" "}
+                collection {coverage.gaps === 1 ? "gap" : "gaps"} · {coverage.failures} failed{" "}
+                {coverage.failures === 1 ? "read" : "reads"}. Sampled every ~15 s; older history is
+                not backfilled.
               </>
             ) : (
-              <div className="ovpn-empty">No connections in this selection.</div>
+              <>
+                <b>Waiting for the first successful router read.</b> History begins with this
+                installation. Keep the MCP service running to collect connections.
+              </>
             )}
-          </section>
-          <div className="ovpn-history-breakdowns">
-            <Breakdown title="Source IPs" rows={data.ips} total={total!.connections} />
-            <Breakdown
-              title="Network organizations"
-              rows={data.networks}
-              total={total!.connections}
+          </MonitorNote>
+          <MetricStrip label="Connection history summary" className="ovpn-kpis-4">
+            <Metric
+              label="Connections in range"
+              value={total.connections.toLocaleString()}
+              hint={`${data.allTime.toLocaleString()} all recorded · ${who}`}
+              spark={
+                data.timeline.length > 1 ? data.timeline.slice(-12).map((d) => d.count) : undefined
+              }
             />
+            <Metric
+              label="Distinct source IPs"
+              value={total.ips.toLocaleString()}
+              hint={`${total.users.toLocaleString()} ${total.users === 1 ? "user" : "users"} in selection`}
+            />
+            <Metric
+              label="Networks / countries"
+              value={
+                <>
+                  {total.networks.toLocaleString()} <small>/ {total.countries}</small>
+                </>
+              }
+              hint="known ASN or country only"
+            />
+            <Metric
+              label="Recorded session time"
+              value={
+                <>
+                  {(total.seconds / 3600).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  <small>h</small>
+                </>
+              }
+              hint="sum of reported uptime, not billable"
+            />
+          </MetricStrip>
+          <MonitorPanel
+            title="Connection rhythm"
+            description="Daily starts · UTC · totals cover the full range."
+            extra={<span className="ovpn-mono ovpn-mut">{who}</span>}
+          >
+            {total.connections && data.timeline.length ? (
+              <OpenVpnBars days={data.timeline} />
+            ) : (
+              <MonitorEmpty compact icon={<CalendarDays />} title="No connections in this range">
+                Try another date range or user.
+              </MonitorEmpty>
+            )}
+          </MonitorPanel>
+          <section className="ovpn-grid-treemap">
+            <MonitorPanel
+              title="Where connections come from"
+              description="Top 20 plus Other."
+              extra={
+                <Segmented
+                  className="ovpn-treemap-switch"
+                  value={treemapView}
+                  options={treemapViews}
+                  onChange={setTreemapView}
+                  label="Group connections by"
+                />
+              }
+              aria-label="Connection distribution treemap"
+            >
+              {treemapRows.length ? (
+                <>
+                  <OpenVpnTreemap
+                    tiles={treemapRows}
+                    total={total.connections}
+                    percent={historyTreemapPercent}
+                  />
+                  <p className="monitor-hint ovpn-treemap-hint">
+                    {treemapRows.length} {treemapRows.length === 1 ? "group" : "groups"} ·{" "}
+                    {total.connections.toLocaleString()} connections · {who}. Area is the share of
+                    connections.
+                  </p>
+                </>
+              ) : (
+                <p className="ovpn-sub">No connections in this selection.</p>
+              )}
+            </MonitorPanel>
             <Breakdown
               title="Countries"
               rows={data.countries}
-              total={total!.connections}
-              countries
+              total={total.connections}
+              kind="country"
             />
-          </div>
-          <section className="ovpn-history-panel">
-            <header>
-              <div>
-                <h3>Connection journal</h3>
-                <small>Local time · end detected between last seen and first absent</small>
-              </div>
-              <span className="ovpn-caption">{total!.connections.toLocaleString()} records</span>
-            </header>
-            <ScrollArea
-              className="ovpn-history-table"
-              viewportProps={{ style: { maxHeight: 480 } }}
-            >
-              <table>
-                <thead>
-                  <tr>
-                    {[
-                      "User / source",
-                      "Network / country",
-                      "Started ≈",
-                      "Last seen",
-                      "End detected",
-                      "Reported uptime",
-                    ].map((label) => (
-                      <th key={label}>{label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.sessions.map((session) => (
-                    <tr key={session.id}>
-                      <td>
-                        <button
-                          className="ovpn-history-user-link"
-                          onClick={() => {
-                            setDraftUser(session.user);
-                            setUser(session.user);
-                            setOffset(0);
-                          }}
-                        >
-                          {session.user}
-                        </button>
-                        <code>{session.ip || "Unknown source"}</code>
-                        <small>Tunnel {session.tunnel || "not reported"}</small>
-                      </td>
-                      <td>
-                        {session.organization || session.asn || "Unknown network"}
-                        <small>
-                          {session.country || "Unknown country"}
-                          {session.asn ? ` · ${session.asn}` : ""}
-                        </small>
-                      </td>
-                      <td>
-                        {timestamp(session.started)}
-                        {coverage && session.started < coverage.first && (
-                          <small>Already connected when recording began</small>
-                        )}
-                        {!!session.uncertain && (
-                          <small className="ovpn-history-warning">
-                            Timing / continuity uncertain
-                          </small>
-                        )}
-                      </td>
-                      <td>{timestamp(session.lastSeen)}</td>
-                      <td>
-                        {session.ended
-                          ? timestamp(session.ended)
-                          : stale
-                            ? "Unknown · collector delayed"
-                            : "Present at last read"}
-                      </td>
-                      <td>
-                        <code>{connectionDuration(session.uptime)}</code>
-                      </td>
-                    </tr>
+          </section>
+          <section className="ovpn-grid-halves">
+            <Breakdown title="Source IPs" rows={data.ips} total={total.connections} kind="ip" />
+            <Breakdown
+              title="Network organizations"
+              rows={data.networks}
+              total={total.connections}
+              kind="network"
+            />
+          </section>
+          <MonitorPanel
+            title="Connection journal"
+            description="Local time · the end is detected between last seen and first absent."
+            extra={
+              <span className="ovpn-mono ovpn-mut">
+                {total.connections.toLocaleString()} records
+              </span>
+            }
+            flush
+          >
+            <div className="ovpn-journal-scroll">
+              <div ref={journalRef} role="table" aria-label="Connection journal">
+                <div role="row" className="monitor-thead ovpn-journal-grid">
+                  {[
+                    "User / source",
+                    "Network / country",
+                    "Started ≈",
+                    "Last seen",
+                    "End detected",
+                    "Uptime",
+                  ].map((label) => (
+                    <span role="columnheader" key={label}>
+                      {label}
+                    </span>
                   ))}
-                </tbody>
-              </table>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
-            {!data.sessions.length && <p className="ovpn-caption">No matching sessions.</p>}
-            <footer className="ovpn-history-pagination">
-              <small>
-                Cached at {timestamp(data.generatedAt)} · {offset + (data.sessions.length ? 1 : 0)}–
+                </div>
+                {data.sessions.map((session) => (
+                  <div
+                    role="row"
+                    className="monitor-row ovpn-journal-grid ovpn-journal-row"
+                    key={session.id}
+                  >
+                    <span role="cell" className="ovpn-stack ovpn-stack-2">
+                      <button
+                        type="button"
+                        className="ovpn-history-user-link"
+                        onClick={() => {
+                          setDraftUser(session.user);
+                          setUser(session.user);
+                          setOffset(0);
+                        }}
+                      >
+                        {session.user}
+                      </button>
+                      <span className="ovpn-mono ovpn-mut ovpn-trunc">
+                        {session.ip || "Unknown source"} · tunnel {session.tunnel || "not reported"}
+                      </span>
+                    </span>
+                    <span role="cell" className="ovpn-stack ovpn-stack-2">
+                      <span className="ovpn-trunc">
+                        {session.organization || session.asn || "Unknown network"}
+                      </span>
+                      <span className="ovpn-sub ovpn-trunc">
+                        {session.country || "Unknown country"}
+                        {session.asn ? ` · ${session.asn}` : ""}
+                      </span>
+                    </span>
+                    <span role="cell" className="ovpn-stack ovpn-stack-2">
+                      <span className="ovpn-mono">{timestamp(session.started)}</span>
+                      {!!session.uncertain && (
+                        <span className="ovpn-sub ovpn-warn-text">Timing uncertain</span>
+                      )}
+                      {coverage && session.started < coverage.first && (
+                        <span className="ovpn-sub ovpn-trunc">
+                          Already connected when recording began
+                        </span>
+                      )}
+                    </span>
+                    <span role="cell" className="ovpn-mono">
+                      {timestamp(session.lastSeen)}
+                    </span>
+                    <span role="cell">
+                      {session.ended ? (
+                        <span className="ovpn-mono">{timestamp(session.ended)}</span>
+                      ) : stale ? (
+                        <span className="ovpn-mut">Unknown · collector delayed</span>
+                      ) : (
+                        <StatusBadge tone="good">Present at last read</StatusBadge>
+                      )}
+                    </span>
+                    <span role="cell" className="ovpn-mono">
+                      {connectionDuration(session.uptime)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {!data.sessions.length && (
+              <p className="ovpn-sub ovpn-journal-empty">No matching sessions.</p>
+            )}
+            <div className="monitor-foot">
+              <span>
+                Cached at {clock(data.generatedAt)} · {offset + (data.sessions.length ? 1 : 0)}–
                 {offset + data.sessions.length}
-              </small>
-              <Button
-                variant="outline"
+              </span>
+              <span className="flex-1" />
+              <MonitorButton
                 size="sm"
+                icon={<ChevronLeft aria-hidden="true" />}
                 disabled={!offset || loading}
                 onClick={() => setOffset(Math.max(0, offset - 50))}
               >
-                <ArrowLeft size={14} /> Previous
-              </Button>
-              <Button
-                variant="outline"
+                Previous
+              </MonitorButton>
+              <MonitorButton
                 size="sm"
-                disabled={offset + 50 >= total!.connections || loading}
+                icon={<ChevronRight aria-hidden="true" />}
+                disabled={offset + 50 >= total.connections || loading}
                 onClick={() => setOffset(offset + 50)}
               >
-                Next <ArrowRight size={14} />
-              </Button>
-            </footer>
-          </section>
+                Next
+              </MonitorButton>
+            </div>
+          </MonitorPanel>
         </>
       )}
     </section>

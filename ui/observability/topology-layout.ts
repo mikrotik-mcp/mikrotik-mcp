@@ -1,5 +1,5 @@
 /**
- * Radial layout for the topology radar. Pure geometry — no React, no DOM — so it
+ * Radial layout for the topology map. Pure geometry — no React, no DOM — so it
  * can be exercised offline by `tests/topology-layout.spec.ts`.
  *
  * Devices take an even split of the circle around the hub. Each neighbour starts
@@ -22,10 +22,14 @@ export interface LayoutNode {
 /** Sentinel id for the hub; a leading space cannot collide with a RouterOS identity. */
 export const HUB_ID = " hub";
 
-export const W = 760;
-export const H = 580;
+export const W = 800;
+export const H = 650;
 export const CX = W / 2;
-export const CY = H / 2;
+/** The hub sits a little below the middle, so labels above the top row fit. */
+export const CY = 336;
+/** The rings are ellipses, wider than tall, to fill the map's landscape box. */
+export const INNER_Y = 0.75;
+export const OUTER_Y = 0.78;
 
 /** Wrap an angle into (-π, π] so a crossing at ±π doesn't fling nodes apart. */
 function wrap(a: number): number {
@@ -40,19 +44,20 @@ export function layout(
   neighbors: LayoutNode[],
   parentOf: Map<string, string>,
 ): { pos: Map<string, Pt>; rInner: number; rOuter: number } {
+  // rInner and rOuter are the rings' horizontal radii; INNER_Y and OUTER_Y flatten them.
   const pos = new Map<string, Pt>();
   const ang = new Map<string, number>();
   pos.set(HUB_ID, { x: CX, y: CY });
 
-  const rInner = devices.length <= 1 ? 110 : Math.min(150, 112 + devices.length * 7);
-  const rOuter = rInner + (devices.length <= 1 ? 140 : 110);
+  const rInner = devices.length <= 1 ? 150 : Math.min(200, 150 + devices.length * 12.5);
+  const rOuter = rInner + (devices.length <= 1 ? 190 : 150);
 
   devices.forEach((d, i) => {
     // A lone device would otherwise land on the hub, so it takes 12 o'clock.
     const a =
       devices.length === 1 ? -Math.PI / 2 : (i / devices.length) * Math.PI * 2 - Math.PI / 2;
     ang.set(d.id, a);
-    pos.set(d.id, { x: CX + rInner * Math.cos(a), y: CY + rInner * Math.sin(a) });
+    pos.set(d.id, { x: CX + rInner * Math.cos(a), y: CY + rInner * INNER_Y * Math.sin(a) });
   });
 
   // Seed each neighbour on its parent's bearing, fanned alternately above/below.
@@ -88,7 +93,7 @@ export function layout(
   }
   for (const nb of neighbors) {
     const a = angles.get(nb.id) ?? 0;
-    pos.set(nb.id, { x: CX + rOuter * Math.cos(a), y: CY + rOuter * Math.sin(a) });
+    pos.set(nb.id, { x: CX + rOuter * Math.cos(a), y: CY + rOuter * OUTER_Y * Math.sin(a) });
   }
   return { pos, rInner, rOuter };
 }

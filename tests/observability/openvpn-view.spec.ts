@@ -68,7 +68,7 @@ test("shows distinct connections, user count, uptime and filter without mutating
   expect(host.querySelectorAll(".ovpn-session")).toHaveLength(2);
   expect(host.textContent).toContain("01:00:00");
   expect(host.textContent).toContain("RADIUS authenticated");
-  expect(host.querySelectorAll(".ovpn-summary strong")[1].textContent).toBe("1");
+  expect(host.querySelectorAll(".ovpn-summary .monitor-metric-value")[1].textContent).toBe("1");
   await act(async () => {
     const input = host.querySelector("input")!;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
@@ -95,7 +95,9 @@ test("requires confirmation and sends only the selected session token, never the
   expect(dialog.textContent).toContain("management tunnel");
   expect(button("Disconnect connection").disabled).toBe(true);
   expect(postJson).not.toHaveBeenCalled();
-  await act(async () => (dialog.querySelector('[role="checkbox"]') as HTMLButtonElement).click());
+  await act(async () =>
+    (dialog.querySelector('input[type="checkbox"]') as HTMLButtonElement).click(),
+  );
   await act(async () => button("Disconnect connection").click());
   expect(postJson).toHaveBeenCalledExactlyOnceWith("/api/openvpn/disconnect?device=lab", {
     token: "ticket2",
@@ -124,7 +126,7 @@ test("expires an open confirmation without sending a disconnect", async () => {
     (host.querySelector('[aria-label="Disconnect ali session *1"]') as HTMLButtonElement).click(),
   );
   await act(async () =>
-    (document.querySelector('[role="dialog"] [role="checkbox"]') as HTMLButtonElement).click(),
+    (document.querySelector('[role="dialog"] input[type="checkbox"]') as HTMLButtonElement).click(),
   );
   expect(button("Disconnect connection").disabled).toBe(false);
   await act(async () => {
@@ -139,7 +141,7 @@ test("unreachable is not zero; read-only disables disconnect", async () => {
   await mount();
   expect(host.textContent).toContain("Connection list unavailable");
   expect(host.textContent).not.toContain("No active OpenVPN");
-  expect(host.querySelector(".ovpn-summary strong")?.textContent).toBe("—");
+  expect(host.querySelector(".ovpn-summary .monitor-metric-value")?.textContent).toBe("—");
   vi.mocked(api).mockResolvedValue({ ...snapshot, canDisconnect: false });
   await mount("readonly");
   expect((host.querySelector(".ovpn-disconnect") as HTMLButtonElement).disabled).toBe(true);
@@ -219,12 +221,12 @@ test("shows ASN organization beneath the flagged IP and includes it in disconnec
   const source = host.querySelector(".ovpn-client-source")!;
   const organization = source.querySelector(".ovpn-source-network")!;
   expect(source.querySelector(".ovpn-source-address")?.textContent).toContain("198.51.100.1");
-  expect(organization.textContent).toBe("Iran Cell Service and Communication Company");
+  expect(organization.textContent).toBe("Iran Cell Service and Communication Company · AS44244");
   expect(organization.getAttribute("title")).toContain("AS44244");
   expect(source.querySelector("img")?.getAttribute("src")).toBe("/api/flag/ir?token=example");
   await act(async () => (host.querySelector(".ovpn-disconnect") as HTMLButtonElement).click());
   expect(document.querySelector('[role="dialog"] .ovpn-source-network')?.textContent).toBe(
-    "Iran Cell Service and Communication Company",
+    "Iran Cell Service and Communication Company · AS44244",
   );
   expect(postJson).not.toHaveBeenCalled();
 });

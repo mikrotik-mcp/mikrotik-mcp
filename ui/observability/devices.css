@@ -6,27 +6,6 @@
  */
 
 /* ── Page ─────────────────────────────────────────────────────────────────── */
-/* The board's status line is 13px muted text with the count in bold. */
-.dv .monitor-status {
-  flex-wrap: wrap;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 400;
-}
-.dv .monitor-status b {
-  color: var(--foreground);
-  font-weight: 510;
-}
-.dv-of {
-  font-size: 20px;
-}
-.dv .monitor-bar > span[data-tone="warn"] {
-  background: var(--warning);
-}
-.dv .monitor-bar > span[data-tone="bad"] {
-  background: var(--destructive);
-}
-
 /* The boards' .note text is secondary; titles inside it stay foreground. */
 .dv .monitor-note,
 .dv-ed .monitor-note {
@@ -38,11 +17,18 @@
   display: none;
 }
 
-/* ── How MCP reaches each router ──────────────────────────────────────────── */
-.dv-legend-dot {
-  border-color: var(--text-faint);
+/* The boards' section_label: 11px uppercase, faint, tracked out. */
+.dv-section {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 21px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.dv-path-box {
+
+/* ── How MCP reaches each router ──────────────────────────────────────────── */
+.dv-path-box rect {
   transition: stroke 200ms ease;
 }
 
@@ -51,36 +37,74 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 16px 20px;
+  gap: 10px;
 }
 .dv-search {
-  flex: 1 1 280px;
+  width: 280px;
 }
 .dv-cols {
-  min-width: 700px;
-  grid-template-columns: minmax(170px, 1.3fr) minmax(150px, 1.1fr) 92px 92px 64px 72px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.25fr) 104px 104px 64px 84px;
 }
-.dv-phone-row {
-  min-height: 56px;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  padding: 12px 16px;
+
+/* ── Router details ───────────────────────────────────────────────────────── */
+.dv-details-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 16px 18px 14px;
 }
 .dv-details-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 24px 32px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-/* The boards' <dl> keeps the browser's 1em block margin. */
+.dv-details-grid > div {
+  min-width: 0;
+  padding: 16px 18px;
+}
+.dv-details-grid > div + div {
+  border-left: 1px solid var(--line);
+}
+.dv-res-grid {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 10px;
+  font-size: 12px;
+  line-height: 21px;
+}
+.dv-cpu {
+  border-radius: 12px;
+  padding: 10px 12px 8px;
+}
+/* Inline on the baseline like the board's svg, so the box keeps its line gap. */
+.dv-cpu-spark,
+.dv-paths {
+  display: inline;
+  width: 100%;
+  vertical-align: baseline;
+}
 .dv-facts {
-  grid-template-columns: 88px minmax(0, 1fr);
-  margin-block: 13px;
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+.dv .dv-cap-note {
+  padding: 9px 12px;
+  font-size: 12px;
+}
+@media (max-width: 1100px) {
+  .dv-details-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dv-details-grid > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
 }
 
 /* ── SSH connection pool ──────────────────────────────────────────────────── */
-.dv-pool-row {
-  grid-template-columns: minmax(160px, 1fr) 120px 120px minmax(140px, 1fr);
+.dv-pool-cols {
+  grid-template-columns: minmax(0, 1.4fr) 120px 120px minmax(0, 1fr);
 }
 
 /* ── Manage routers ───────────────────────────────────────────────────────── */
@@ -187,16 +211,22 @@
 }
 
 /* ── Add or edit a router (dialog) ────────────────────────────────────────── */
+/* The editor's eyebrow is the board's smaller 11px one. */
+.monitor-dialog:has(.dv-ed) .monitor-eyebrow {
+  margin-bottom: 2px;
+  font-size: 11px;
+}
 .dv-ed {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 24px;
+  padding: 20px 24px;
 }
 .dv-ed-side {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 16px;
-  border-right: 1px solid var(--border);
-  padding: 20px 16px 20px 20px;
+  gap: 14px;
 }
 .dv-ed-body {
   display: flex;
@@ -205,20 +235,21 @@
   gap: 16px;
   margin: 0;
   border: 0;
-  padding: 20px 24px;
+  padding: 0;
 }
 .dv-step {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
-  border-radius: 6px;
+  border-radius: 10px;
   background: transparent;
-  padding: 8px 10px;
+  padding: 9px 10px;
   text-align: left;
   cursor: pointer;
 }
 .dv-step[aria-current="step"] {
-  background: var(--accent);
+  background: var(--sig-soft);
+  box-shadow: inset 2px 0 0 var(--sig);
 }
 .dv-step:disabled {
   cursor: default;
@@ -229,23 +260,24 @@
 }
 .dv-step-n {
   display: grid;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   flex: none;
   place-items: center;
-  border-radius: 9999px;
-  box-shadow: inset 0 0 0 1px var(--input);
+  border-radius: 8px;
+  background: var(--glass-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--muted-foreground);
-  font-family: var(--font-mono);
+  font-family: var(--font-mt);
   font-size: 11px;
+  font-weight: 600;
 }
 .dv-step[aria-current="step"] .dv-step-n {
-  background: var(--chart-1);
-  box-shadow: none;
-  color: #fff;
+  background: var(--sig);
+  box-shadow: 0 0 14px var(--sig-soft);
+  color: var(--on-sig);
 }
 .dv-step[data-done] .dv-step-n {
-  background: var(--accent);
   color: var(--success);
 }
 .dv-step-n svg {
@@ -254,24 +286,37 @@
   stroke-width: 2.5;
 }
 .dv-step-label {
-  color: var(--muted-foreground);
+  color: var(--text-secondary);
   font-size: 13px;
-  font-weight: 510;
+  font-weight: 500;
+  line-height: 21px;
 }
 .dv-step[aria-current="step"] .dv-step-label {
   color: var(--foreground);
 }
-.dv-step[data-done] .dv-step-label {
-  color: var(--text-secondary);
+.dv-step-sub {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 17px;
 }
 .dv-route {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 14px;
+}
+.dv-route-link {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
   gap: 6px;
-  border-radius: 8px;
-  background: var(--overlay-02);
-  box-shadow: inset 0 0 0 1px var(--border);
-  padding: 12px;
+  margin: 0 0 0 -1px;
+}
+.dv-route-link > svg {
+  flex: none;
+  overflow: visible;
 }
 .dv-grid-2,
 .dv-grid-3,
@@ -284,7 +329,7 @@
   grid-template-columns: 1fr 1fr;
 }
 .dv-grid-3 {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .dv-grid-port {
@@ -293,30 +338,20 @@
 .dv-grid-key {
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
 }
-.dv-addr-box {
-  display: flex;
-  flex-direction: column;
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px var(--input);
-}
 .dv-addr-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px 6px 12px;
-}
-.dv-addr-row + .dv-addr-row {
-  border-top: 1px solid var(--border);
 }
 .dv-disclosure {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 6px;
+  border-radius: 10px;
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--border);
+  box-shadow: inset 0 0 0 1px var(--line);
   padding: 10px 12px;
-  color: var(--text-secondary);
+  color: var(--foreground);
   font-size: 13px;
   line-height: 21px;
   text-align: left;
@@ -330,17 +365,19 @@
   width: 16px;
   height: 16px;
   flex: none;
+  color: var(--muted-foreground);
 }
 
 /* Jump host: the picker reads as one of the form's inputs. */
 .dv-combo {
-  height: 36px;
+  height: 34px;
   min-width: 0;
   border: 0;
-  border-radius: 6px;
-  background: var(--overlay-02);
-  box-shadow: inset 0 0 0 1px var(--input);
-  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  padding: 0 10px 0 12px;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 .dv-combo:hover {
@@ -348,8 +385,8 @@
 }
 .dv-combo:focus-within {
   box-shadow:
-    inset 0 0 0 1px var(--chart-1),
-    0 0 0 3px color-mix(in srgb, var(--chart-1) 25%, transparent);
+    inset 0 0 0 1px var(--sig),
+    0 0 0 3px var(--sig-soft);
 }
 .dv-combo-input > svg {
   display: none;
@@ -367,7 +404,7 @@
 .dv-tags [data-slot="tags-input"] > span:first-child {
   color: var(--muted-foreground);
   font-size: 12px;
-  font-weight: 510;
+  font-weight: 500;
   line-height: 21px;
 }
 .dv-tags [data-slot="tags-input"] > p {
@@ -376,10 +413,10 @@
 .dv-tags [data-slot="tags-input"] [data-state][id] {
   min-height: 36px;
   border: 0;
-  border-radius: 6px;
-  background: var(--overlay-02);
-  box-shadow: inset 0 0 0 1px var(--input);
-  padding-block: 4px;
+  border-radius: 10px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  padding: 5px 8px;
   font-size: 13px;
 }
 .dv-tags [data-slot="tags-input"] input {
@@ -391,13 +428,14 @@
   height: 20px;
   gap: 2px;
   border: 0;
-  border-radius: 4px;
-  background: var(--accent);
-  padding: 0 0 0 6px;
+  border-radius: 6px;
+  background: var(--glass-2);
+  padding: 0 0 0 7px;
   color: var(--text-secondary);
+  font-family: var(--font-mt);
   font-size: 11px;
-  font-weight: 510;
-  line-height: 21px;
+  font-weight: 400;
+  line-height: 20px;
 }
 .dv-tags span:has(> button[aria-label^="Remove tag"]) > svg {
   display: none;
@@ -489,85 +527,114 @@
 /* ── Phone (the "Devices · phone" board) ──────────────────────────────────── */
 @media (max-width: 639px) {
   .dv {
-    gap: 16px;
+    gap: 14px;
   }
-  .dv .monitor-head {
-    gap: 12px;
+  .dv .monitor-head,
+  .dv .monitor-head-main {
+    gap: 8px;
   }
-  .dv .monitor-status {
-    margin-top: 4px;
+  .dv .monitor-title {
+    font-size: 26px;
+    line-height: 32px;
   }
   .dv .monitor-lead {
-    font-size: 13px;
+    display: none;
   }
-  .dv .monitor-head-controls {
-    display: grid;
-    width: 100%;
-    grid-template-columns: 1fr 1fr;
+  .dv .monitor-head-controls .dv-add-btn {
+    order: -1;
   }
-  .dv .monitor-head-controls .monitor-btn,
-  .dv-phone-actions .monitor-btn {
-    height: 36px;
-    justify-content: center;
-    padding: 0 14px;
-    font-size: 13px;
+  .dv .monitor-head-controls .monitor-btn {
+    height: 28px;
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .dv .monitor-head-controls .dv-manage-btn svg {
+    display: none;
   }
 
   .dv-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .dv-strip .monitor-metric {
-    padding: 12px 14px;
-  }
-  .dv-strip .monitor-metric-value {
-    font-size: 20px;
-  }
-  .dv-strip .monitor-metric[data-primary] .monitor-metric-value {
-    font-size: 24px;
-    line-height: 30px;
-  }
-  .dv-of {
-    font-size: 18px;
-  }
-  .dv-avg,
   .dv-paths-panel {
     display: none;
   }
 
+  /* The phone board puts search, filter and cards straight on the page. */
+  .dv-routers {
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    overflow: visible;
+  }
+  .dv-routers > .monitor-panel-head {
+    padding: 0;
+  }
+  .dv-routers > .monitor-panel-head > :first-child {
+    display: none;
+  }
+  .dv-routers .monitor-panel-extra {
+    width: 100%;
+  }
   .dv-toolbar {
     flex-direction: column;
     align-items: stretch;
-    padding: 14px 16px;
-  }
-  .dv-toolbar h2 {
-    margin-right: 0;
+    gap: 14px;
   }
   .dv-search {
-    flex: none;
+    width: 100%;
   }
   .dv-seg {
-    display: flex;
-    overflow-x: auto;
+    max-width: 100%;
+    overflow: hidden;
   }
   .dv-seg .monitor-seg-item {
-    height: 32px;
     flex: none;
   }
-
-  .dv-pool .monitor-panel-head {
-    padding: 14px 16px 10px;
-  }
-  .dv-pool .monitor-panel-desc {
+  .dv-seg .monitor-seg-item:nth-child(5)[aria-checked="false"] {
     display: none;
   }
-  .dv-pool .monitor-panel-title {
-    line-height: 21px;
+  .dv-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
   }
-  .dv-pool .monitor-row {
-    padding: 10px 16px;
+  .dv-phone-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    padding: 12px 14px;
+    text-align: left;
+    cursor: pointer;
   }
-  .dv-pool-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .dv-phone-card[data-selected] {
+    box-shadow:
+      inset 0 0 0 1px var(--sig),
+      0 0 0 3px var(--sig-soft);
+  }
+  .dv-phone-card[data-failed]:not([data-selected]) {
+    box-shadow:
+      inset 2px 0 0 var(--destructive),
+      inset 0 0 0 1px var(--line);
+  }
+  .dv-phone-card:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .dv-phone-card .monitor-meter .monitor-bar {
+    flex: 1;
+  }
+  .dv-details-phone {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+  }
+  .dv-details-phone > .grid .monitor-btn {
+    width: 100%;
   }
 
   .dv-entry {
@@ -582,11 +649,8 @@
 
   .dv-ed {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .dv-ed-side {
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 12px 16px;
+    gap: 16px;
+    padding: 16px;
   }
   .dv-ed-side nav {
     flex-direction: row;
@@ -608,9 +672,6 @@
   .dv-foot-hint {
     order: -1;
     flex-basis: 100%;
-  }
-  .dv-ed-body {
-    padding: 16px;
   }
   .dv-grid-2,
   .dv-grid-3,

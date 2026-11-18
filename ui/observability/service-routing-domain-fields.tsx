@@ -42,18 +42,22 @@ export function RoutingDomainFields({
         </span>
       ) : (
         <span id={`${id}-help`} className="monitor-hint" aria-label="Route preview">
-          <span className="font-mono">{domain.trim() || "your.domain"}</span> →{" "}
-          {primary || "choose an exit below"}
+          <span className="font-mono text-fg-secondary">{domain.trim() || "your.domain"}</span> →{" "}
+          {primary ? (
+            <span className="font-mono text-fg-secondary">{primary}</span>
+          ) : (
+            "choose an exit below"
+          )}
         </span>
       )}
       {wildcard && (
-        <div className="monitor-note mt-1" data-tone="warn">
+        <div className="monitor-note" data-tone="warn">
           <AlertTriangle aria-hidden="true" className="text-warning" />
           <div className="flex min-w-0 flex-1 flex-col gap-2 text-fg-secondary">
             <span>
-              <b className="font-[510] text-foreground">Wildcards learn addresses from DNS.</b> The
-              router adds an address when a client looks the name up, so the first connection to a
-              new address may use the main route. It matches subdomains at any depth, not{" "}
+              <b>Wildcards learn addresses from DNS.</b> The router adds an address when a client
+              looks the name up, so the first connection to a new address may use the main route. It
+              matches subdomains at any depth, not{" "}
               <span className="font-mono">{domain.trim().slice(2)}</span> itself.
             </span>
             <span>

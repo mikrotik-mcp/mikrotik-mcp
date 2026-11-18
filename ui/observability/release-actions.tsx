@@ -1,5 +1,5 @@
-import { ArrowDownToLine } from "lucide-react";
-import { Button } from "./components/ui/button";
+import { ChevronDown } from "lucide-react";
+import { MonitorButton } from "./monitoring-ui";
 
 /** A review affordance, never an installation trigger. */
 export function ReleaseDowngradeButton({
@@ -12,21 +12,19 @@ export function ReleaseDowngradeButton({
   onReview: () => void;
 }) {
   return (
-    <Button
+    <MonitorButton
       type="button"
-      variant="outline"
+      variant="danger"
       size="sm"
       disabled={disabled}
       onClick={onReview}
       className="release-downgrade"
       aria-label={`Review downgrade to v${version}`}
       title={`Review downgrade to v${version} — confirmation required`}
+      icon={<ChevronDown aria-hidden="true" />}
     >
-      <span className="release-downgrade-icon" aria-hidden="true">
-        <ArrowDownToLine size={14} />
-      </span>
-      <span>Downgrade</span>
-      <span className="release-downgrade-version">v{version}</span>
-    </Button>
+      Downgrade
+      <span className="sr-only">v{version}</span>
+    </MonitorButton>
   );
 }

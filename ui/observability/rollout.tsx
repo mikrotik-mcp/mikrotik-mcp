@@ -1,29 +1,33 @@
 /**
- * Rollout tab — the wave board for a staged fleet change.
- *
- * A rollout is minutes long and mostly waiting, so the page has to answer
+ * Rollout (the Cfg-Plan-Rollout board): the wave board for a staged fleet
+ * change. A rollout is minutes long and mostly waiting, so the page answers
  * "where is it, and can I stop it" at a glance:
  *
- *   • **Wave board** — one card per device, grouped by wave, cycling
- *     pending → applied → failed / reverted. The canary lane is marked, because
- *     it is the one that decides whether the other 49 routers get touched.
- *   • **Gate strip** between waves — health results, plus **Hold** while a run
- *     is live. That button is the difference between a demo and something people
- *     let near a fleet.
- *   • **Failure drawer** — which device, what the device said, and what the
- *     revert did.
- *   • **History** — past rollouts with their outcome.
+ *   • **Waves** left to right, the canary first, with the health gate between
+ *     each pair. **Hold** and **Abort** sit on the panel while a run is live.
+ *   • **Commands** sent to every router, with the rollout's notes.
+ *   • **Timeline** of each step, live from the server.
+ *   • **Rollouts**: past and running rollouts. Pick one to see it above.
  *
  * Live updates ride the shared `/api/stream` socket (message type `rollout`).
  */
-import { LoadingState } from "./loading-state";
+import "./plan.css";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, Pause, Play, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { api, postJson } from "./api";
-import { Panel } from "./atoms";
-import { Badge, Button, Dot } from "./geist";
-import type { GeistType } from "./geist";
 import { onRolloutUpdate } from "./hooks";
+import { LoadingState } from "./loading-state";
+import {
+  MonitorButton,
+  MonitorEmpty,
+  MonitorNote,
+  MonitorPanel,
+  PageIntro,
+  StatusBadge,
+  StatusDot,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
 import { toast } from "./toast-action";
 import type {
   RolloutDevice,
@@ -32,34 +36,49 @@ import type {
   RolloutOutcome,
   RolloutRecord,
 } from "./types";
-import { cn } from "@/lib/utils";
 
-const OUTCOME_TYPE: Record<RolloutOutcome, GeistType> = {
-  completed: "success",
-  "completed-with-failures": "warning",
-  halted: "warning",
-  reverted: "secondary",
-  "needs-attention": "error",
-  aborted: "secondary",
+/** The server sends a few more fields than the shared type names. */
+type Rollout = RolloutRecord & { soakSeconds?: number; currentWave?: number };
+
+const OUTCOME_TONE: Record<RolloutOutcome, Tone> = {
+  completed: "good",
+  "completed-with-failures": "warn",
+  halted: "warn",
+  reverted: "default",
+  "needs-attention": "bad",
+  aborted: "default",
+};
+
+const OUTCOME_LABEL: Record<RolloutOutcome, string> = {
+  completed: "completed",
+  "completed-with-failures": "completed with failures",
+  halted: "halted",
+  reverted: "reverted",
+  "needs-attention": "needs attention",
+  aborted: "aborted",
 };
 
 const OUTCOME_MEANING: Record<RolloutOutcome, string> = {
-  completed: "Every device applied the change.",
+  completed: "Every router applied the change.",
   "completed-with-failures": "The rollout finished, but a gate failed along the way.",
-  halted: "Stopped at a failed gate. The devices already changed are still changed.",
-  reverted: "Stopped and put back — the fleet is where it started.",
+  halted: "Stopped at a failed gate. The routers already changed are still changed.",
+  reverted: "Stopped and put back. The fleet is where it started.",
   "needs-attention":
-    "A revert itself failed. Restore the flagged device(s) by hand from the snapshot named below.",
-  aborted: "A human stopped it; whatever had been applied was reverted.",
+    "A revert failed. Restore the flagged routers by hand from the snapshot named below.",
+  aborted: "Someone stopped it. Whatever had been applied was reverted.",
 };
 
-const STAGE_CLASS: Record<string, string> = {
-  pending: "bg-muted/30 text-muted-foreground",
-  applied: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  failed: "bg-red-500/15 text-red-600 dark:text-red-400",
-  reverted: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  "revert-failed": "bg-red-500/25 text-red-600 dark:text-red-400 font-semibold",
-  skipped: "bg-muted/20 text-muted-foreground line-through",
+const STAGE_TONE: Record<string, Tone | undefined> = {
+  applied: "good",
+  failed: "bad",
+  "revert-failed": "bad",
+  reverted: "warn",
+};
+const STAGE_TEXT: Record<string, string> = {
+  applied: "text-success",
+  failed: "text-destructive",
+  "revert-failed": "text-destructive",
+  reverted: "text-warning",
 };
 
 function ago(ms: number): string {
@@ -70,233 +89,254 @@ function ago(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
-function WaveBoard({ rollout }: { rollout: RolloutRecord }): ReactNode {
-  const gateFor = (wave: number): RolloutGate | undefined =>
-    rollout.gates.find((g) => g.wave === wave);
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
 
+/** The wave the rollout is on: the first one with a router still pending. */
+function currentWave(r: Rollout): number {
+  if (typeof r.currentWave === "number") return r.currentWave;
+  const pending = r.waves.find((w) =>
+    r.devices.some((d) => d.wave === w.index && d.stage === "pending"),
+  );
+  return pending?.index ?? r.waves.at(-1)?.index ?? 0;
+}
+
+function DeviceCard({ device }: { device: RolloutDevice }): ReactNode {
   return (
-    <div className="space-y-3">
-      {rollout.waves.map((wave) => {
-        const gate = gateFor(wave.index);
-        const devices = wave.devices
-          .map((name) => rollout.devices.find((d) => d.device === name))
-          .filter((d): d is RolloutDevice => d !== undefined);
-        const active = rollout.outcome === undefined && devices.some((d) => d.stage === "pending");
-
-        return (
-          <div key={wave.index} className="rounded-md border p-3">
-            <div className="mb-2 flex items-center gap-2 text-sm">
-              <span className="font-medium">
-                Wave {wave.index + 1}
-                {wave.isCanary && (
-                  <span className="ml-2 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400">
-                    canary
-                  </span>
-                )}
-              </span>
-              <span className="text-xs text-muted-foreground">{devices.length} device(s)</span>
-              {active && <Dot type="warning" pulse />}
-              {gate && (
-                <Badge type={gate.ok ? "success" : "error"} className="ml-auto">
-                  gate {gate.ok ? "pass" : "fail"}
-                </Badge>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {devices.map((d) => (
-                <span
-                  key={d.device}
-                  title={d.error ?? d.stage}
-                  className={cn(
-                    "rounded-md px-2 py-1 font-mono text-xs",
-                    STAGE_CLASS[d.stage] ?? STAGE_CLASS.pending,
-                  )}
-                >
-                  {d.device}
-                </span>
-              ))}
-            </div>
-
-            {gate && !gate.ok && (
-              <ul className="mt-2 space-y-1 text-xs text-red-600 dark:text-red-400">
-                {gate.collateral && (
-                  <li className="font-medium">
-                    An UNTOUCHED device went dark — the change affected the wider fleet.
-                  </li>
-                )}
-                {gate.failures.map((f) => (
-                  <li key={f.device}>
-                    {f.device}: {f.reason}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
+    <div className="glass plan-device" title={device.error ?? device.stage}>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <StatusDot tone={STAGE_TONE[device.stage]} />
+        <span className="mono trunc">{device.device}</span>
+      </span>
+      <span className={`text-[11px] ${STAGE_TEXT[device.stage] ?? "text-faint"}`}>
+        {device.stage}
+      </span>
     </div>
   );
 }
 
-function Detail({ id, onClose }: { id: string; onClose: () => void }): ReactNode {
-  const [rollout, setRollout] = useState<RolloutRecord | null>(null);
-  const [events, setEvents] = useState<RolloutEvent[]>([]);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(() => {
-    return api<{ rollout: RolloutRecord; events: RolloutEvent[] }>(
-      `/api/rollout/${encodeURIComponent(id)}`,
-    )
-      .then((res) => {
-        setRollout(res.rollout);
-        setEvents(res.events);
-      })
-      .catch((e) => {
-        toast.error(`Failed to load rollout: ${e instanceof Error ? e.message : String(e)}`);
-      });
-  }, [id]);
-
-  useEffect(() => {
-    void load();
-    return onRolloutUpdate((u) => {
-      if (u.rolloutId === id) void load();
-    });
-  }, [id, load]);
-
-  const act = async (verb: "hold" | "resume" | "abort"): Promise<void> => {
-    setBusy(true);
-    try {
-      const res = await postJson<{ error?: string; outcome?: string; held?: boolean }>(
-        `/api/rollout/${encodeURIComponent(id)}/${verb}`,
-        {},
-      );
-      if (res.error) toast.error(res.error);
-      else toast.success(res.outcome ?? (verb === "hold" ? "Held" : "Done"));
-      await load();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (!rollout) return <LoadingState label="Loading rollout" layout="cards" />;
+function Gate({
+  gate,
+  rollout,
+  wave,
+}: {
+  gate: RolloutGate | undefined;
+  rollout: Rollout;
+  wave: number;
+}): ReactNode {
   const live = rollout.outcome === undefined;
-  const failures = rollout.devices.filter(
-    (d) => d.stage === "failed" || d.stage === "revert-failed",
-  );
-
+  let text = "waiting";
+  let cls = "text-muted-foreground";
+  if (gate?.ok) {
+    text = rollout.soakSeconds ? `gate passed · soaked ${rollout.soakSeconds}s` : "gate passed";
+    cls = "text-success";
+  } else if (gate) {
+    text = gate.collateral ? "gate failed · an untouched router went dark" : "gate failed";
+    cls = "text-destructive";
+  } else if (live && currentWave(rollout) === wave) {
+    text = "checking health";
+  }
   return (
-    <Panel
-      title={rollout.label ? `${rollout.label} — ${rollout.id}` : rollout.id}
-      extra={
-        <div className="flex items-center gap-2">
-          {live && (
-            <>
-              <Button size="sm" type="secondary" disabled={busy} onClick={() => void act("hold")}>
-                Hold
-              </Button>
-              <Button size="sm" type="secondary" disabled={busy} onClick={() => void act("resume")}>
-                Resume
-              </Button>
-              <Button size="sm" type="error" disabled={busy} onClick={() => void act("abort")}>
-                Abort
-              </Button>
-            </>
-          )}
-          <Button size="sm" type="secondary" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-      }
-    >
-      <div
-        className={cn(
-          "mb-4 rounded-md border p-3 text-sm",
-          rollout.outcome === "needs-attention" && "border-red-500/40 bg-red-500/10",
-          rollout.outcome === "completed" && "border-emerald-500/40 bg-emerald-500/10",
-          live && "border-amber-500/40 bg-amber-500/10",
-        )}
-      >
-        <div className="flex items-center gap-2 font-medium">
-          <Dot type={rollout.outcome ? OUTCOME_TYPE[rollout.outcome] : "warning"} pulse={live} />
-          {rollout.outcome ?? `IN FLIGHT — wave ${rollout.phase}`}
-        </div>
-        <p className="mt-1 text-muted-foreground">
-          {rollout.outcome
-            ? OUTCOME_MEANING[rollout.outcome]
-            : "Applying wave by wave; each wave is gated and soaked before the next."}
-        </p>
-      </div>
-
-      <WaveBoard rollout={rollout} />
-
-      {failures.length > 0 && (
-        <div className="mt-4 rounded-md border border-red-500/40 p-3 text-sm">
-          <div className="font-medium">Failures</div>
-          <ul className="mt-1 space-y-1 font-mono text-xs text-muted-foreground">
-            {failures.map((d) => (
-              <li key={d.device}>
-                {d.device} · {d.stage}
-                {d.error ? ` — ${d.error}` : ""}
-                {d.stage === "revert-failed" && d.snapshotId
-                  ? ` · restore with diff_config_snapshots ${d.snapshotId} live`
-                  : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {rollout.notes.length > 0 && (
-        <ul className="mt-4 space-y-1 text-sm text-amber-600 dark:text-amber-400">
-          {rollout.notes.map((n) => (
-            <li key={n}>• {n}</li>
-          ))}
-        </ul>
-      )}
-
-      <h4 className="mt-6 mb-2 text-sm font-medium">Commands</h4>
-      <pre className="overflow-x-auto rounded-md bg-muted/30 p-2 font-mono text-xs">
-        {rollout.commands.join("\n")}
-      </pre>
-
-      <h4 className="mt-6 mb-2 text-sm font-medium">Timeline</h4>
-      {events.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No steps recorded yet.</p>
-      ) : (
-        <ol className="space-y-1 font-mono text-xs">
-          {events.map((e) => (
-            <li key={e.seq} className="flex gap-2">
-              <span className="text-muted-foreground">{new Date(e.ts).toLocaleTimeString()}</span>
-              <span className={e.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}>
-                {e.ok ? "✓" : "✕"}
-              </span>
-              <span>
-                {e.kind}
-                {e.device ? ` ${e.device}` : ""}
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </Panel>
+    <div className="plan-gate">
+      <span className={gate ? cls : "text-faint"}>
+        <ArrowRight aria-hidden="true" />
+      </span>
+      <span className={cls}>{text}</span>
+    </div>
   );
 }
 
-export function RolloutView(): ReactNode {
-  const [rows, setRows] = useState<RolloutRecord[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+function Waves({ rollout }: { rollout: Rollout }): ReactNode {
+  const parts: ReactNode[] = [];
+  rollout.waves.forEach((wave, i) => {
+    const devices = wave.devices
+      .map((name) => rollout.devices.find((d) => d.device === name))
+      .filter((d): d is RolloutDevice => d !== undefined);
+    parts.push(
+      <div key={`w${wave.index}`} className="plan-wave">
+        <div className="flex items-center gap-2">
+          <span className="monitor-label">Wave {wave.index}</span>
+          {wave.isCanary && <span className="monitor-chip">canary</span>}
+        </div>
+        {devices.map((d) => (
+          <DeviceCard key={d.device} device={d} />
+        ))}
+      </div>,
+    );
+    if (i < rollout.waves.length - 1)
+      parts.push(
+        <Gate
+          key={`g${wave.index}`}
+          gate={rollout.gates.find((g) => g.wave === wave.index)}
+          rollout={rollout}
+          wave={wave.index}
+        />,
+      );
+  });
+  return <div className="plan-waves">{parts}</div>;
+}
+
+function Detail({
+  rollout,
+  events,
+  busy,
+  onAct,
+}: {
+  rollout: Rollout;
+  events: RolloutEvent[];
+  busy: boolean;
+  onAct: (verb: "hold" | "resume" | "abort") => void;
+}): ReactNode {
+  const live = rollout.outcome === undefined;
+  const held = rollout.phase === "held";
+  const failures = rollout.devices.filter(
+    (d) => d.stage === "failed" || d.stage === "revert-failed",
+  );
+  const failedGates = rollout.gates.filter((g) => !g.ok);
+  const tone: Tone = rollout.outcome ? OUTCOME_TONE[rollout.outcome] : "warn";
+  return (
+    <>
+      <MonitorPanel
+        title={
+          <span className="flex items-center gap-2">
+            <StatusDot tone={tone} pulse={live} />
+            {rollout.label ? `${rollout.label} · ${rollout.id}` : rollout.id}
+          </span>
+        }
+        description={
+          rollout.outcome
+            ? OUTCOME_MEANING[rollout.outcome]
+            : "The canary decides whether the other routers get touched."
+        }
+        extra={
+          live && (
+            <div className="flex flex-wrap items-center gap-2">
+              {held ? (
+                <MonitorButton
+                  variant="ghost"
+                  size="sm"
+                  icon={<Play aria-hidden="true" />}
+                  disabled={busy}
+                  onClick={() => onAct("resume")}
+                >
+                  Resume
+                </MonitorButton>
+              ) : (
+                <MonitorButton
+                  variant="ghost"
+                  size="sm"
+                  icon={<Pause aria-hidden="true" />}
+                  disabled={busy}
+                  onClick={() => onAct("hold")}
+                >
+                  Hold
+                </MonitorButton>
+              )}
+              <MonitorButton
+                variant="danger"
+                size="sm"
+                icon={<X aria-hidden="true" />}
+                disabled={busy}
+                onClick={() => onAct("abort")}
+              >
+                Abort
+              </MonitorButton>
+            </div>
+          )
+        }
+        bodyClassName="flex flex-col gap-4"
+      >
+        <Waves rollout={rollout} />
+        {failedGates.map((g) => (
+          <MonitorNote key={g.wave} tone="bad" icon={<TriangleAlert aria-hidden="true" />}>
+            <b>Gate after wave {g.wave} failed.</b>{" "}
+            {g.collateral && "A router outside the rollout went dark. "}
+            {g.failures.map((f) => `${f.device}: ${f.reason}`).join(" · ")}
+          </MonitorNote>
+        ))}
+        {failures.length > 0 && (
+          <MonitorNote tone="bad" icon={<TriangleAlert aria-hidden="true" />}>
+            {failures.map((d) => (
+              <div key={d.device} className="mono">
+                {d.device} · {d.stage}
+                {d.error ? `: ${d.error}` : ""}
+                {d.stage === "revert-failed" && d.snapshotId
+                  ? ` · restore with diff_config_snapshots ${d.snapshotId} live`
+                  : ""}
+              </div>
+            ))}
+          </MonitorNote>
+        )}
+      </MonitorPanel>
+
+      <div className="plan-cols" data-even="">
+        <MonitorPanel title="Commands" description="Sent to every router in the rollout.">
+          <div className="flex min-w-0 flex-col gap-2.5">
+            <pre className="monitor-pre overflow-x-auto whitespace-pre">
+              {rollout.commands.join("\n")}
+            </pre>
+            {rollout.notes.length > 0 && (
+              <>
+                <span className="monitor-label">Notes</span>
+                <ul className="plan-notes">
+                  {rollout.notes.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        </MonitorPanel>
+        <MonitorPanel
+          title="Timeline"
+          description="Live from the MCP server."
+          extra={live && <StatusBadge tone="good">LIVE</StatusBadge>}
+        >
+          {events.length === 0 ? (
+            <p className="monitor-hint">No steps recorded yet.</p>
+          ) : (
+            events.map((e) => (
+              <div key={e.seq} className="plan-event" title={e.detail}>
+                <span className="mono text-faint">
+                  {new Date(e.ts).toLocaleTimeString([], { hour12: false })}
+                </span>
+                <span className={e.ok ? "text-success" : "text-destructive"}>
+                  {e.ok ? "✓" : "✕"}
+                </span>
+                <span className="mono text-fg-secondary">
+                  {e.kind}
+                  {e.device ? ` ${e.device}` : ""}
+                </span>
+              </div>
+            ))
+          )}
+        </MonitorPanel>
+      </div>
+    </>
+  );
+}
+
+export function RolloutView({ switcher }: { switcher?: ReactNode }): ReactNode {
+  const [rows, setRows] = useState<Rollout[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [loadedDetail, setDetail] = useState<{ rollout: Rollout; events: RolloutEvent[] } | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
-    return api<{ rollouts: RolloutRecord[]; error?: string }>("/api/rollout")
+    return api<{ rollouts: Rollout[]; error?: string }>("/api/rollout")
       .then((res) => {
         setRows(res.rollouts);
         setError(res.error ?? null);
       })
       .catch((e) => {
         setError(e instanceof Error ? e.message : String(e));
-      });
+      })
+      .finally(() => setLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -304,64 +344,178 @@ export function RolloutView(): ReactNode {
     return onRolloutUpdate(() => void load());
   }, [load]);
 
-  const live = rows.filter((r) => r.outcome === undefined);
+  // Show the rollout picked in the list, else the first one in flight.
+  const selected = picked ?? rows.find((r) => r.outcome === undefined)?.id ?? null;
+
+  const loadDetail = useCallback(() => {
+    if (!selected) return Promise.resolve();
+    return api<{ rollout: Rollout; events: RolloutEvent[] }>(
+      `/api/rollout/${encodeURIComponent(selected)}`,
+    )
+      .then((res) => setDetail(res))
+      .catch((e) => {
+        toast.error(`Failed to load rollout: ${e instanceof Error ? e.message : String(e)}`);
+      });
+  }, [selected]);
+
+  // A detail loaded for another rollout is stale once the selection moves.
+  const detail = loadedDetail?.rollout.id === selected ? loadedDetail : null;
+
+  useEffect(() => {
+    if (!selected) return;
+    void loadDetail();
+    return onRolloutUpdate((u) => {
+      if (u.rolloutId === selected) void loadDetail();
+    });
+  }, [selected, loadDetail]);
+
+  const act = async (verb: "hold" | "resume" | "abort"): Promise<void> => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const res = await postJson<{ error?: string; outcome?: string; held?: boolean }>(
+        `/api/rollout/${encodeURIComponent(selected)}/${verb}`,
+        {},
+      );
+      if (res.error) toast.error(res.error);
+      else toast.success(res.outcome ?? (verb === "hold" ? "Held" : "Done"));
+      await loadDetail();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const r = detail?.rollout;
+  const name = r ? (r.label ?? r.id) : "";
+  const verdict = r ? (
+    r.outcome === undefined ? (
+      <>
+        {name} is <span className="w">{r.phase === "held" ? "on hold" : "in flight"}</span>, wave{" "}
+        {currentWave(r)} of {r.waves.length}.
+      </>
+    ) : r.outcome === "completed" ? (
+      <>
+        {name} <span className="s">completed</span>.
+      </>
+    ) : r.outcome === "needs-attention" ? (
+      <>
+        {name} <em>needs attention</em>.
+      </>
+    ) : r.outcome === "completed-with-failures" || r.outcome === "halted" ? (
+      <>
+        {name} <span className="w">{OUTCOME_LABEL[r.outcome]}</span>.
+      </>
+    ) : (
+      <>
+        {name} was {OUTCOME_LABEL[r.outcome]}.
+      </>
+    )
+  ) : rows.length === 0 ? (
+    "No rollouts yet."
+  ) : (
+    <>
+      {plural(rows.length, "rollout")}. <span className="s">None in flight.</span>
+    </>
+  );
 
   return (
-    <div className="space-y-4">
-      {selected && <Detail id={selected} onClose={() => setSelected(null)} />}
+    <section className="plan grid content-start gap-[18px]">
+      <PageIntro
+        eyebrow="Change plan · rollout"
+        verdict={verdict}
+        lead={
+          <>
+            Applying wave by wave. Each wave is gated and soaked before the next. Started with{" "}
+            <span className="mono">start_rollout</span>.
+          </>
+        }
+        aside={switcher}
+      />
 
-      {error && (
-        <Panel title="Rollout history">
-          <p className="text-sm text-muted-foreground">
-            The history could not be read ({error}); rollouts running right now are still shown.
-          </p>
-        </Panel>
+      {selected && !detail && <LoadingState label="Loading rollout" layout="cards" />}
+      {detail && (
+        <Detail
+          rollout={detail.rollout}
+          events={detail.events}
+          busy={busy}
+          onAct={(verb) => void act(verb)}
+        />
       )}
 
-      <Panel
+      {error && (
+        <MonitorNote tone="warn">
+          The history could not be read ({error}). Rollouts running right now still show.
+        </MonitorNote>
+      )}
+
+      <MonitorPanel
         title="Rollouts"
+        description="Past and running rollouts with their outcome."
+        flush
         extra={
-          <div className="flex items-center gap-2">
-            {live.length > 0 && <Badge type="warning">{live.length} in flight</Badge>}
-            <Button size="sm" type="secondary" onClick={() => void load()}>
-              Refresh
-            </Button>
-          </div>
+          <MonitorButton
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw aria-hidden="true" />}
+            onClick={() => void load()}
+          >
+            Refresh
+          </MonitorButton>
         }
       >
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No rollouts yet. Preview one with <span className="font-mono">plan_rollout</span>, then
-            run it with <span className="font-mono">start_rollout</span> — canary first, with a
-            health gate and soak between waves.
-          </p>
+        {!loaded ? (
+          <LoadingState label="Loading rollouts" layout="table" />
+        ) : rows.length === 0 ? (
+          <MonitorEmpty compact title="No rollouts yet">
+            Preview one with <span className="mono">plan_rollout</span>, then run it with{" "}
+            <span className="mono">start_rollout</span>: canary first, with a health gate and a soak
+            between waves.
+          </MonitorEmpty>
         ) : (
-          <ul className="divide-y divide-border">
-            {rows.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(r.id)}
-                  className="flex w-full items-center gap-3 py-2 text-left hover:bg-muted/40"
-                >
-                  <Badge type={r.outcome ? OUTCOME_TYPE[r.outcome] : "warning"}>
-                    {r.outcome ?? "LIVE"}
-                  </Badge>
-                  <span className="flex-1 truncate">
-                    {r.label ?? r.id}
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {r.devices.length} device(s) · {r.waves.length} wave(s)
-                    </span>
-                  </span>
-                  <span className="whitespace-nowrap text-xs text-muted-foreground">
-                    {ago(r.ts)}
-                  </span>
-                </button>
-              </li>
+          <>
+            <div className="monitor-thead plan-hist">
+              <span>Outcome</span>
+              <span>Rollout</span>
+              <span>Devices</span>
+              <span>Started</span>
+            </div>
+            {rows.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                className="monitor-row plan-hist"
+                data-selected={row.id === selected || undefined}
+                data-failed={row.outcome === "needs-attention" || undefined}
+                aria-pressed={row.id === selected}
+                onClick={() => setPicked(row.id)}
+              >
+                <span className="trunc">
+                  {row.outcome ? (
+                    <StatusBadge
+                      tone={OUTCOME_TONE[row.outcome]}
+                      dot={false}
+                      quiet={OUTCOME_TONE[row.outcome] === "default"}
+                    >
+                      {OUTCOME_LABEL[row.outcome]}
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge tone="warn">LIVE</StatusBadge>
+                  )}
+                </span>
+                <span className="trunc">
+                  <span className="mono p">{row.label ?? row.id}</span>
+                </span>
+                <span className="trunc">
+                  {row.devices.length} · {plural(row.waves.length, "wave")}
+                </span>
+                <span className="trunc">
+                  <span className="mono text-muted-foreground">{ago(row.ts)}</span>
+                </span>
+              </button>
             ))}
-          </ul>
+          </>
         )}
-      </Panel>
-    </div>
+      </MonitorPanel>
+    </section>
   );
 }

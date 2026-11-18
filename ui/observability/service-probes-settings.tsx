@@ -35,7 +35,7 @@ export function ServiceProbesSettings({
   return (
     <DialogPrimitive.Root open>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55" />
+        <DialogPrimitive.Overlay className="monitor-scrim fixed inset-0 z-50" />
         <DialogPrimitive.Content
           className="monitor-dialog probe-settings fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] max-w-[720px] -translate-x-1/2 -translate-y-1/2 flex-col outline-none"
           onEscapeKeyDown={(e) => e.preventDefault()}

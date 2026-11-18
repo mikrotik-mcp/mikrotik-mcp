@@ -17,8 +17,7 @@ import {
 } from "../../src/config-device-draft";
 import type { DeviceTest } from "./config-editor";
 import { api } from "./api";
-import { Badge, Button, Card, Input, Note, Select } from "./geist";
-import { Sheet } from "./sheet";
+import { Input, Select } from "./geist";
 import { DeviceEditor } from "./device-editor";
 import { ServiceProbesEditor } from "./service-probes-editor";
 import { CONFIG_SECTIONS, DEVICE_FIELDS } from "./config-spec";
@@ -26,8 +25,10 @@ import type { CfgField, CfgSection } from "./config-spec";
 import {
   MonitorButton,
   MonitorEmpty,
+  MonitorNote,
   MonitorSelect,
   MonitorSwitch,
+  StatusBadge,
   StatusDot,
 } from "./monitoring-ui";
 import { Label } from "@/components/ui/label";
@@ -204,140 +205,6 @@ const SECTION_DEFAULTS: Record<string, Cfg> = {
   s3: { prefix: "", presignExpiresIn: 3600 },
   alerts: { enabled: true, rules: [], channels: {} },
 };
-
-function sectionSummary(cfg: Cfg, s: CfgSection): string {
-  const o = sectionObj(cfg, s);
-  const pick = (k: string): string => (o[k] != null && o[k] !== "" ? str(o[k]) : "");
-  const addr = pick("host") ? `${pick("host")}:${pick("port")}` : "";
-  if (s.id === "mcp") return [pick("transport"), addr].filter(Boolean).join(" · ");
-  if (s.id === "dashboard")
-    return [addr, o.token ? "token set" : "open"].filter(Boolean).join(" · ");
-  if (s.id === "ssh")
-    return `interval ${pick("keepAliveInterval") || "?"}ms · idle ${pick("idleTimeout") || "?"}ms`;
-  if (s.id === "s3")
-    return isActive(cfg, s)
-      ? [pick("bucket"), pick("region"), pick("endpoint")].filter(Boolean).join(" · ") ||
-          "not configured"
-      : "";
-  if (s.id === "memory") return pick("dbPath");
-  if (s.id === "alerts") {
-    if (!isActive(cfg, s)) return "";
-    const chans = Object.keys(asObj(o.channels));
-    return [
-      chans.length ? chans.join(" · ") : "no channels",
-      `${arr(o.rules).length} rule${arr(o.rules).length === 1 ? "" : "s"}`,
-    ].join(" · ");
-  }
-  if (s.id === "attacks")
-    return `${pick("mode") || "detect"} · every ${pick("pollSeconds") || "?"}s · block ${pick("blockTimeout") || "?"}`;
-  if (s.id === "schedules")
-    return `${arr(o.jobs).length} job${arr(o.jobs).length === 1 ? "" : "s"} · ${pick("concurrency") || "?"} at once`;
-  if (s.id === "flows")
-    return `udp/${pick("port") || "?"} · raw ${pick("retentionHours") || "?"}h · rollups ${pick("rollupDays") || "?"}d`;
-  if (s.id === "policy")
-    return `${arr(o.paths).length} path${arr(o.paths).length === 1 ? "" : "s"}${o.includeStarterPack === false ? "" : " · starter pack"}`;
-  if (s.id === "general")
-    return `${cfg.readOnly ? "read-only" : "read-write"}${cfg.disableUpdateCheck ? " · no update check" : ""}`;
-  return "";
-}
-
-function ObjectCard({
-  cfg,
-  onChange,
-  section,
-}: {
-  cfg: Cfg;
-  onChange: (c: Cfg) => void;
-  section: CfgSection;
-}): ReactNode {
-  const [editing, setEditing] = useState(false);
-  const stash = useRef<Cfg | null>(null);
-  const active = isActive(cfg, section);
-
-  const toggle = (on: boolean): void => {
-    if (section.enable?.presence) {
-      if (on)
-        onChange({
-          ...cfg,
-          [section.path!]: stash.current ?? SECTION_DEFAULTS[section.id] ?? {},
-        });
-      else {
-        stash.current = asObj(cfg[section.path!]);
-        const next = { ...cfg };
-        delete next[section.path!];
-        onChange(next);
-        setEditing(false);
-      }
-      return;
-    }
-    onChange(setField(cfg, section, section.enable!.key ?? "enabled", on));
-  };
-
-  const summary = sectionSummary(cfg, section);
-
-  return (
-    <Card className={cn("px-4 py-3.5 transition-opacity", !active && "opacity-50")}>
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-lg leading-none" aria-hidden="true">
-          {section.icon}
-        </span>
-        <div className="min-w-0">
-          <div className="text-foreground flex items-center gap-2 text-sm font-bold">
-            {section.title}
-            {section.enable && (
-              <Badge type={active ? "success" : "secondary"}>{active ? "active" : "off"}</Badge>
-            )}
-          </div>
-          <div className="text-muted-foreground mt-0.5 max-w-[520px] truncate font-mono text-xs">
-            {summary || section.blurb}
-          </div>
-        </div>
-        <span className="flex-1" />
-        {section.enable && (
-          <Switch
-            checked={active}
-            onCheckedChange={toggle}
-            title={`${active ? "Deactivate" : "Activate"} ${section.enable.label ?? section.title}`}
-          />
-        )}
-        <Button
-          size="sm"
-          ghost
-          onClick={() => setEditing(true)}
-          disabled={section.enable?.presence && !active}
-        >
-          Edit
-        </Button>
-      </div>
-
-      {editing && (
-        <Sheet
-          title={`${section.icon} ${section.title}`}
-          subtitle={section.blurb}
-          onClose={() => setEditing(false)}
-        >
-          {section.enable && (
-            <label className="border-border bg-muted text-foreground flex items-center gap-2.5 rounded-md border px-3 py-2.5 text-[13px] font-semibold">
-              <Switch checked={active} onCheckedChange={toggle} />
-              {active ? "Active" : `Inactive — enable ${section.enable.label ?? section.title}`}
-            </label>
-          )}
-          {active ? (
-            <FieldForm
-              fields={section.fields}
-              value={sectionObj(cfg, section)}
-              onField={(k, v) => onChange(setField(cfg, section, k, v))}
-            />
-          ) : (
-            <Note type="secondary" label={false}>
-              This section is turned off. Toggle it on to edit its settings.
-            </Note>
-          )}
-        </Sheet>
-      )}
-    </Card>
-  );
-}
 
 // ── devices ──────────────────────────────────────────────────────────────────
 
@@ -762,6 +629,239 @@ export function DevicesForm({
 
 // ── modules (inline management, editing cfg.tools) ───────────────────────────
 
+// ── server settings (Wks-Config board) ──────────────────────────────────────
+
+/** One field of a server section, with "Changed from …" when it differs from the saved config. */
+function ServerFieldRow({
+  field,
+  value,
+  saved,
+  onChange,
+}: {
+  field: CfgField;
+  value: unknown;
+  saved: unknown;
+  onChange: (v: unknown) => void;
+}): ReactNode {
+  const id = `sf_${field.key.replace(/\./g, "_")}`;
+  const changed = str(value) !== str(saved);
+  const was =
+    saved == null || saved === ""
+      ? "unset"
+      : typeof saved === "boolean"
+        ? saved
+          ? "on"
+          : "off"
+        : field.type === "list"
+          ? arr(saved).join(", ") || "empty"
+          : str(saved);
+  const hint = [field.help, changed ? `Changed from ${was}.` : ""].filter(Boolean).join(" ");
+  if (field.type === "bool")
+    return (
+      <div className="flex items-start gap-3 sm:col-span-2">
+        <span className="mt-0.5">
+          <MonitorSwitch
+            checked={value === true}
+            onChange={(v) => onChange(v)}
+            label={field.label}
+          />
+        </span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <b className="text-[13px] font-semibold text-foreground">{field.label}</b>
+          {hint && <span className="monitor-hint">{hint}</span>}
+        </span>
+      </div>
+    );
+  let control: ReactNode;
+  if (field.type === "select") {
+    control = (
+      <MonitorSelect
+        label={field.label}
+        value={str(value ?? field.options?.[0] ?? "")}
+        onChange={onChange}
+        options={(field.options ?? []).map((o) => ({ value: o, label: o }))}
+      />
+    );
+  } else if (field.type === "list") {
+    control = (
+      <input
+        id={id}
+        className="monitor-input font-mono text-xs"
+        data-changed={changed || undefined}
+        placeholder={field.placeholder}
+        value={arr(value).join(", ")}
+        onChange={(e) => {
+          const items = e.target.value
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          onChange(items.length ? items : undefined);
+        }}
+      />
+    );
+  } else {
+    control = (
+      <input
+        id={id}
+        className="monitor-input font-mono text-xs"
+        data-changed={changed || undefined}
+        type={field.type === "number" ? "number" : field.type === "password" ? "password" : "text"}
+        placeholder={field.secret && value === REDACTED ? "•••• unchanged" : field.placeholder}
+        value={value == null ? "" : str(value)}
+        onChange={(e) =>
+          onChange(
+            field.type === "number"
+              ? e.target.value === ""
+                ? undefined
+                : Number(e.target.value)
+              : e.target.value,
+          )
+        }
+      />
+    );
+  }
+  return (
+    <div className="monitor-fl config-fl-select">
+      <label htmlFor={id} className="monitor-label flex items-center gap-2">
+        {field.label}
+        {field.secret && <span className="text-[10px] text-warning uppercase">secret</span>}
+      </label>
+      {control}
+      {hint && <span className="monitor-hint">{hint}</span>}
+    </div>
+  );
+}
+
+function ServerFieldForm({
+  fields,
+  value,
+  saved,
+  onField,
+}: {
+  fields: CfgField[];
+  value: Cfg;
+  saved: Cfg;
+  onField: (key: string, v: unknown) => void;
+}): ReactNode {
+  const [showAdv, setShowAdv] = useState(false);
+  const basic = fields.filter((f) => !f.advanced);
+  const adv = fields.filter((f) => f.advanced);
+  const row = (f: CfgField): ReactNode => (
+    <ServerFieldRow
+      key={f.key}
+      field={f}
+      value={getIn(value, f.key)}
+      saved={getIn(saved, f.key)}
+      onChange={(v) => onField(f.key, v)}
+    />
+  );
+  return (
+    <div className="grid gap-3.5 sm:grid-cols-2">
+      {basic.map(row)}
+      {adv.length > 0 && (
+        <>
+          <button
+            type="button"
+            className="config-adv-toggle sm:col-span-2"
+            aria-expanded={showAdv}
+            onClick={() => setShowAdv((s) => !s)}
+          >
+            {showAdv ? (
+              <ChevronDown aria-hidden="true" className="size-3" />
+            ) : (
+              <ChevronRight aria-hidden="true" className="size-3" />
+            )}
+            Advanced ({adv.length})
+          </button>
+          {showAdv && adv.map(row)}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** How many fields (and the on/off switch) of a section differ from the saved config. */
+function sectionEdits(cfg: Cfg, saved: Cfg, s: CfgSection): number {
+  if (s.kind === "deviceMap") return 0;
+  if (s.kind === "modules")
+    return (
+      Number(str(cfg.tools) !== str(saved.tools)) +
+      Number(asObj(cfg.mcp).appViews !== asObj(saved.mcp).appViews)
+    );
+  if (s.id === "serviceProbes") return Number(str(cfg[s.path ?? ""]) !== str(saved[s.path ?? ""]));
+  const a = sectionObj(cfg, s);
+  const b = sectionObj(saved, s);
+  let n = s.enable && isActive(cfg, s) !== isActive(saved, s) ? 1 : 0;
+  for (const f of s.fields) if (str(getIn(a, f.key)) !== str(getIn(b, f.key))) n += 1;
+  return n;
+}
+
+function SectionCard({
+  cfg,
+  saved,
+  onChange,
+  section,
+  edits,
+}: {
+  cfg: Cfg;
+  saved: Cfg;
+  onChange: (c: Cfg) => void;
+  section: CfgSection;
+  edits: number;
+}): ReactNode {
+  const stash = useRef<Cfg | null>(null);
+  const active = isActive(cfg, section);
+  const toggle = (on: boolean): void => {
+    if (section.enable?.presence) {
+      if (on)
+        onChange({
+          ...cfg,
+          [section.path!]: stash.current ?? SECTION_DEFAULTS[section.id] ?? {},
+        });
+      else {
+        stash.current = asObj(cfg[section.path!]);
+        const next = { ...cfg };
+        delete next[section.path!];
+        onChange(next);
+      }
+      return;
+    }
+    onChange(setField(cfg, section, section.enable!.key ?? "enabled", on));
+  };
+  return (
+    <section className="glass config-section" aria-label={section.title}>
+      <div className="flex flex-wrap items-center gap-2">
+        <b className="text-[15px] font-semibold text-foreground">{section.title}</b>
+        {edits > 0 && (
+          <StatusBadge tone="warn" dot={false}>
+            {edits} edit{edits === 1 ? "" : "s"}
+          </StatusBadge>
+        )}
+        <span className="flex-1" />
+        {section.enable && (
+          <MonitorSwitch
+            checked={active}
+            onChange={toggle}
+            label={`${active ? "Deactivate" : "Activate"} ${section.enable.label ?? section.title}`}
+          />
+        )}
+      </div>
+      {active ? (
+        <ServerFieldForm
+          fields={section.fields}
+          value={sectionObj(cfg, section)}
+          saved={sectionObj(saved, section)}
+          onField={(k, v) => onChange(setField(cfg, section, k, v))}
+        />
+      ) : (
+        <MonitorNote>This section is turned off. Turn it on to edit its settings.</MonitorNote>
+      )}
+    </section>
+  );
+}
+
+// ── tool modules section ─────────────────────────────────────────────────────
+
 interface ModuleItem {
   slug: string;
   label: string;
@@ -780,7 +880,15 @@ function moduleEnabled(tools: Cfg, m: ModuleItem): boolean {
   return em.includes(m.slug) || eg.includes(m.group);
 }
 
-function ModulesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }): ReactNode {
+function ModulesCard({
+  cfg,
+  onChange,
+  edits,
+}: {
+  cfg: Cfg;
+  onChange: (c: Cfg) => void;
+  edits: number;
+}): ReactNode {
   const [catalog, setCatalog] = useState<ModuleItem[] | null>(null);
   const [query, setQuery] = useState("");
   useEffect(() => {
@@ -821,71 +929,56 @@ function ModulesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
   const enabledCount = (catalog ?? []).filter((m) => moduleEnabled(tools, m)).length;
 
   return (
-    <Card className="px-4 py-3.5">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-lg leading-none" aria-hidden="true">
-          🧩
-        </span>
-        <div className="min-w-0">
-          <div className="text-foreground flex items-center gap-2 text-sm font-bold">
-            Tool Modules
-          </div>
-          <div className="text-muted-foreground mt-0.5 max-w-[520px] truncate font-mono text-xs">
-            {catalog ? `${enabledCount}/${catalog.length} modules enabled` : "loading…"} · applied
-            on Save
-          </div>
-        </div>
+    <section className="glass config-section" aria-label="Tool Modules">
+      <div className="flex flex-wrap items-center gap-2">
+        <b className="text-[15px] font-semibold text-foreground">Tool Modules</b>
+        {edits > 0 && (
+          <StatusBadge tone="warn" dot={false}>
+            {edits} edit{edits === 1 ? "" : "s"}
+          </StatusBadge>
+        )}
         <span className="flex-1" />
-        <Input
-          placeholder="Filter modules…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="max-w-[190px]"
+        <span className="monitor-label">App Views</span>
+        <MonitorSwitch
+          checked={asObj(cfg.mcp).appViews === true}
+          onChange={(c) => onChange({ ...cfg, mcp: { ...asObj(cfg.mcp), appViews: c } })}
+          label="MCP App Views"
         />
-        <label className="inline-flex items-center gap-1.5">
-          <Switch
-            checked={asObj(cfg.mcp).appViews === true}
-            onCheckedChange={(c) => onChange({ ...cfg, mcp: { ...asObj(cfg.mcp), appViews: c } })}
-            title="MCP App Views"
-          />
-          <span className="text-muted-foreground text-[11px]">App Views</span>
-        </label>
       </div>
-      <div className="mt-3 grid max-h-[440px] gap-[18px] overflow-auto">
+      <p className="monitor-hint">
+        {catalog ? `${enabledCount}/${catalog.length} modules on` : "Loading…"} · applied on Save
+      </p>
+      <input
+        className="monitor-input"
+        aria-label="Filter modules"
+        placeholder="Filter modules…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="flex max-h-[440px] flex-col gap-3.5 overflow-auto">
         {[...groups.entries()].map(([group, items]) => (
-          <div key={group} className="grid gap-2">
-            <div className="text-muted-foreground mt-2 mb-0.5 font-bold text-[11px] tracking-[0.05em] uppercase">
-              {group}
-            </div>
+          <div key={group} className="flex flex-col gap-2">
+            <span className="monitor-label">{group}</span>
             {items.map((m) => {
               const on = moduleEnabled(tools, m);
               return (
                 <label
                   key={m.slug}
-                  className={cn(
-                    "bg-muted hover:border-brand/40 flex cursor-pointer items-start gap-2.5 rounded-md border px-[11px] py-[9px] transition-colors select-none",
-                    on ? "border-brand/50 bg-brand/10" : "border-border",
-                  )}
+                  className="config-module"
+                  data-on={on || undefined}
                   title={m.description}
                 >
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() => toggle(m, !on)}
-                    className="accent-brand mt-0.5 cursor-pointer"
-                  />
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="text-foreground flex flex-wrap items-center gap-[7px] text-xs font-semibold">
-                      {m.label}
-                      <code className="text-muted-foreground bg-background border-border rounded border px-1.5 py-px font-mono text-[10px]">
-                        {m.slug}
-                      </code>
-                    </span>
-                    <span className="text-muted-foreground text-[11px] leading-[1.35]">
-                      {m.description}
-                    </span>
+                  <span className="mt-px">
+                    <MonitorSwitch checked={on} onChange={() => toggle(m, !on)} label={m.label} />
                   </span>
-                  <span className="text-muted-foreground pt-px font-mono text-[10px] whitespace-nowrap">
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <b className="text-[13px] font-semibold text-foreground">{m.label}</b>
+                      <span className="monitor-chip">{m.slug}</span>
+                    </span>
+                    <span className="monitor-hint">{m.description}</span>
+                  </span>
+                  <span className="font-mono text-xs whitespace-nowrap text-muted-foreground">
                     {m.toolCount} tool{m.toolCount === 1 ? "" : "s"}
                   </span>
                 </label>
@@ -894,27 +987,88 @@ function ModulesCard({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }
           </div>
         ))}
         {catalog && modules.length === 0 && (
-          <span className="text-muted-foreground text-[11px]">No modules match “{query}”.</span>
+          <span className="monitor-hint">No modules match “{query}”.</span>
         )}
       </div>
-    </Card>
+    </section>
   );
 }
 
 // ── the form ─────────────────────────────────────────────────────────────────
 
-export function ConfigForm({ cfg, onChange }: { cfg: Cfg; onChange: (c: Cfg) => void }): ReactNode {
+/**
+ * Server settings: a section list on the left, the chosen section's fields on
+ * the right, and `below` (the diff) under them. `baseline` is the saved config,
+ * for edit counts and "Changed from …" hints.
+ */
+export function ConfigForm({
+  cfg,
+  onChange,
+  baseline,
+  below,
+}: {
+  cfg: Cfg;
+  onChange: (c: Cfg) => void;
+  baseline?: Cfg;
+  below?: ReactNode;
+}): ReactNode {
+  const saved = baseline ?? cfg;
+  const [sel, setSel] = useState(
+    () => CONFIG_SECTIONS.find((s) => s.kind !== "deviceMap")?.id ?? "",
+  );
+  const section = CONFIG_SECTIONS.find((s) => s.id === sel);
+  const edits = new Map(CONFIG_SECTIONS.map((s) => [s.id, sectionEdits(cfg, saved, s)]));
+  const ledTone = (s: CfgSection): "warn" | "good" | "default" =>
+    (edits.get(s.id) ?? 0) > 0
+      ? "warn"
+      : s.kind === "deviceMap" || s.kind === "modules" || isActive(cfg, s)
+        ? "good"
+        : "default";
   return (
-    <div className="mt-1 grid min-w-0 grid-cols-1 gap-3.5">
-      {CONFIG_SECTIONS.filter((s) => s.kind !== "deviceMap").map((s) =>
-        s.id === "serviceProbes" ? (
-          <ServiceProbesEditor key={s.id} cfg={cfg} onChange={onChange} />
-        ) : s.kind === "modules" ? (
-          <ModulesCard key={s.id} cfg={cfg} onChange={onChange} />
+    <div className="config-form-grid">
+      <nav className="config-nav" aria-label="Config sections">
+        {CONFIG_SECTIONS.map((s) => {
+          const n = edits.get(s.id) ?? 0;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              className="config-nav-item"
+              aria-current={s.id === sel ? "true" : undefined}
+              onClick={() => setSel(s.id)}
+            >
+              <StatusDot tone={ledTone(s)} />
+              <span className="min-w-0 flex-1 truncate">{s.title}</span>
+              {n > 0 && <span className="font-mono text-[11px] text-warning">{n}</span>}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="flex min-w-0 flex-col gap-3.5">
+        {!section ? null : section.kind === "deviceMap" ? (
+          <MonitorNote>
+            Router connections, credentials and order are managed on the{" "}
+            <a className="config-link" href="#devices">
+              Devices page
+            </a>
+            . This editor only changes server settings.
+          </MonitorNote>
+        ) : section.id === "serviceProbes" ? (
+          <ServiceProbesEditor cfg={cfg} onChange={onChange} />
+        ) : section.kind === "modules" ? (
+          <ModulesCard cfg={cfg} onChange={onChange} edits={edits.get(section.id) ?? 0} />
         ) : (
-          <ObjectCard key={s.id} cfg={cfg} onChange={onChange} section={s} />
-        ),
-      )}
+          <SectionCard
+            key={section.id}
+            cfg={cfg}
+            saved={saved}
+            onChange={onChange}
+            section={section}
+            edits={edits.get(section.id) ?? 0}
+          />
+        )}
+        {below}
+      </div>
     </div>
   );
 }

@@ -65,7 +65,7 @@ test("history renders coverage and grouped metrics, drills into a user and never
   root = createRoot(host);
   await act(async () => root.render(h(OpenVpnHistory, { device: "home" })));
   expect(host.textContent).toContain("2 collection gaps");
-  expect(host.textContent).toContain("Timing / continuity uncertain");
+  expect(host.textContent).toContain("Timing uncertain");
   expect(host.textContent).toContain("AS13335");
   expect(host.textContent).toContain("Where connections come from");
   await act(async () =>
@@ -74,9 +74,9 @@ test("history renders coverage and grouped metrics, drills into a user and never
   expect(
     host
       .querySelector<HTMLButtonElement>(".ovpn-treemap-switch button:nth-child(3)")!
-      .getAttribute("aria-pressed"),
+      .getAttribute("aria-checked"),
   ).toBe("true");
-  expect(host.querySelectorAll('[data-slot="scroll-area"]').length).toBe(4);
+  expect(host.querySelectorAll(".ovpn-breakdown-panel").length).toBe(3);
   await act(async () => host.querySelector<HTMLButtonElement>(".ovpn-history-user-link")!.click());
   expect(vi.mocked(api).mock.calls.some(([url]) => url.includes("user=demo"))).toBe(true);
   expect(vi.mocked(api).mock.calls.every(([url]) => url.startsWith("/api/openvpn/history?"))).toBe(

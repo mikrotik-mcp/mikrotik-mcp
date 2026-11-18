@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Globe,
+  LoaderCircle,
+  Play,
+  RefreshCw,
+  Search,
+  TriangleAlert,
+  Wifi,
+} from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { api, postJson } from "./api";
@@ -12,6 +22,7 @@ import {
   MonitorEmpty,
   MonitorPanel,
   PageIntro,
+  RouterPicker,
   Segmented,
   StatusBadge,
   StatusDot,
@@ -30,10 +41,10 @@ const STATE_LABEL: Record<Finding["state"], string> = {
   unknown: "Unknown",
 };
 
-// The API reports how sure a finding is, not how bad it is, so the dot shows the evidence type.
+// Teal = measured now, amber = fits the evidence, grey = could not check.
 const STATE_TONE: Record<Finding["state"], Tone> = {
-  observed: "default",
-  suspected: "brand",
+  observed: "good",
+  suspected: "warn",
   unknown: "default",
 };
 
@@ -73,6 +84,18 @@ function lasts(minutes: number): string {
   return minutes >= 60 && minutes % 60 === 0 ? `${minutes / 60} h` : `${minutes} min`;
 }
 
+/** How much of a temporary change has run, 0 to 100. */
+function elapsed(p: PolicyPlan, now: number): number {
+  const start = p.startsAt ?? p.createdAt;
+  if (!p.endsAt || p.endsAt <= start) return 0;
+  return Math.max(0, Math.min(100, ((now - start) / (p.endsAt - start)) * 100));
+}
+
+/** Locally administered MACs are the random ones phones use for privacy. */
+function privateMac(mac: string): boolean {
+  return /^.[26ae]/i.test(mac);
+}
+
 function clientName(c: HomeClient | undefined): string {
   return c?.name || c?.hostname || "Unnamed device";
 }
@@ -81,15 +104,6 @@ function ChevronIcon() {
   return (
     <svg className="home-icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg className="home-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }
@@ -112,6 +126,7 @@ function Picker({
   onChange,
   disabled = false,
   mono = false,
+  icon,
   className,
 }: {
   label: string;
@@ -121,6 +136,7 @@ function Picker({
   disabled?: boolean;
   /** The whole value in mono (router names). */
   mono?: boolean;
+  icon?: ReactNode;
   className?: string;
 }) {
   const current = items.find((i) => i.value === value);
@@ -128,6 +144,7 @@ function Picker({
     <label className={cn("home-field", className)}>
       <span className="home-label">{label}</span>
       <span className="home-select" data-disabled={disabled || undefined}>
+        {icon}
         <span className="home-select-value">
           {current ? (
             <span className={mono ? "home-mono" : undefined}>
@@ -162,11 +179,13 @@ function Field({
   label,
   value,
   onChange,
+  icon,
   ...rest
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  icon?: ReactNode;
   type?: string;
   min?: number;
   max?: number;
@@ -177,6 +196,7 @@ function Field({
     <label className="home-field">
       <span className="home-label">{label}</span>
       <span className="home-input">
+        {icon}
         <input
           {...rest}
           aria-label={label}
@@ -188,9 +208,18 @@ function Field({
   );
 }
 
+/** The routers the page can work on, and which one is in use. */
+interface RouterChoice {
+  routers: string[];
+  defaultRouter: string;
+  device: string;
+  onDevice: (name: string) => void;
+}
+
 export function HomeInternetView() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [devices, setDevices] = useState<string[]>([]),
+    [defaultRouter, setDefaultRouter] = useState(""),
     [device, setDevice] = useState(""),
     [error, setError] = useState("");
   useEffect(() => {
@@ -199,6 +228,7 @@ export function HomeInternetView() {
       .then((r) => {
         if (!cancelled) {
           setDevices(r.devices.map((d) => d.name));
+          setDefaultRouter(r.defaultDevice);
           setDevice(r.defaultDevice || r.devices[0]?.name || "");
         }
       })
@@ -211,36 +241,225 @@ export function HomeInternetView() {
       cancelled = true;
     };
   }, []);
+  const choice: RouterChoice = { routers: devices, defaultRouter, device, onDevice: setDevice };
   return (
     <div className="home-internet">
-      <PageIntro
-        controls={
-          <Picker
-            label="Router"
-            className="home-router"
-            mono
-            value={device}
-            items={devices.map((d) => ({ value: d, label: d }))}
-            onChange={setDevice}
+      {device ? (
+        <Workspace key={device} choice={choice} />
+      ) : (
+        <>
+          <PageIntro
+            eyebrow="Home Internet"
+            verdict="Find what slows a device down."
+            lead="Checks are read-only. The router changes only after you review a preview."
+            actions={
+              <RouterPicker
+                value={device}
+                onChange={setDevice}
+                routers={devices}
+                defaultRouter={defaultRouter}
+                disabled={!devices.length}
+              />
+            }
           />
-        }
-      >
-        Find what slows a device down. Checks are read-only; the router changes only after you
-        review a preview.
-      </PageIntro>
-      {error && (
-        <p role="alert" className="monitor-note" data-tone="bad">
-          <TriangleAlert className="text-destructive" />
-          {error}
-        </p>
+          {error && (
+            <p role="alert" className="monitor-note" data-tone="bad">
+              <TriangleAlert className="text-destructive" />
+              {error}
+            </p>
+          )}
+          {initialLoading && <LoadingState label="Loading home network" layout="cards" />}
+        </>
       )}
-      {initialLoading && <LoadingState label="Loading home network" layout="cards" />}
-      {device && <Workspace key={device} device={device} />}
     </div>
   );
 }
 
-function Workspace({ device }: { device: string }) {
+const PATH_LABEL: Record<string, string> = {
+  DNS: "Router DNS",
+  Internet: "Internet path · main",
+};
+// The area's cause, as the header names it.
+const CAUSE_LABEL: Record<string, string> = {
+  "Wi-Fi": "Wi-Fi signal",
+  Router: "Router load",
+  Internet: "The internet path",
+  Bandwidth: "A bandwidth limit",
+};
+// Order of the hops from the device out to the internet.
+const PATH_ORDER = ["Wi-Fi", "Router", "DNS", "Internet", "Bandwidth"];
+
+const HOP_COLOR: Record<Finding["state"], string> = {
+  observed: "var(--sig)",
+  suspected: "var(--warning)",
+  unknown: "var(--text-faint)",
+};
+
+const HOP_TONE: Record<Finding["state"], Tone> = {
+  observed: "good",
+  suspected: "warn",
+  unknown: "default",
+};
+
+/** The first sentence of a finding's detail, for the one-line hop. */
+function firstSentence(text: string): string {
+  const end = text.indexOf(". ");
+  return end === -1 ? text.replace(/\.$/, "") : text.slice(0, end);
+}
+
+interface Hop {
+  key: string;
+  label: ReactNode;
+  sub: ReactNode;
+  title: string;
+  state: Finding["state"];
+}
+
+/** The header graphic: the device, each checked hop, then the app. */
+function PathChain({
+  diagnosis,
+  client,
+  device,
+  target,
+}: {
+  diagnosis: Diagnosis | undefined;
+  client: HomeClient | undefined;
+  device: string;
+  target: string;
+}): ReactNode {
+  const root = useRef<HTMLDivElement>(null);
+  useStaggerIn(root, ".home-hop", diagnosis?.at);
+  const head = (
+    <div className="home-chain-head">
+      <span className="home-label">Path from the device to {diagnosis?.target ?? target}</span>
+      {diagnosis && <span className="home-mono home-mut">checked {clock(diagnosis.at)}</span>}
+    </div>
+  );
+  if (!diagnosis)
+    return (
+      <div className="home-chain">
+        {head}
+        <MonitorEmpty compact icon={<Search />} title="No check yet">
+          Pick a device and a website, then press Check connection.
+        </MonitorEmpty>
+      </div>
+    );
+  const rank = (area: string) => {
+    const i = PATH_ORDER.indexOf(area);
+    return i === -1 ? PATH_ORDER.length : i;
+  };
+  const hops: Hop[] = [
+    {
+      key: "device",
+      label: client ? clientName(client) : diagnosis.client,
+      sub: (
+        <>
+          <span className="home-mono">{diagnosis.client}</span>
+          {client ? (client.present ? " · lease bound" : " · no lease at the last scan") : ""}
+        </>
+      ),
+      title: diagnosis.client,
+      state: client?.present ? "observed" : "unknown",
+    },
+    ...[...diagnosis.findings]
+      .sort((a, b) => rank(a.area) - rank(b.area))
+      .map((f) => ({
+        key: f.area,
+        label: f.area === "Router" ? device : (PATH_LABEL[f.area] ?? f.area),
+        sub: firstSentence(f.detail),
+        title: f.detail,
+        state: f.state,
+      })),
+    {
+      key: "app",
+      label: "App on the device",
+      sub: "Not checked from the router",
+      title: "The router cannot see inside the app.",
+      state: "unknown",
+    },
+  ];
+  return (
+    <div className="home-chain" ref={root}>
+      {head}
+      {hops.map((h, i) => (
+        <div key={h.key} className="home-hop">
+          {i < hops.length - 1 && (
+            <span
+              className="home-hop-line"
+              style={{ background: HOP_COLOR[hops[i + 1].state] }}
+              aria-hidden="true"
+            />
+          )}
+          <span
+            className="home-hop-node"
+            style={{ boxShadow: `inset 0 0 0 1.5px ${HOP_COLOR[h.state]}` }}
+            aria-hidden="true"
+          >
+            <StatusDot tone={HOP_TONE[h.state]} />
+          </span>
+          <span className="home-hop-text">
+            <span className="home-hop-label">{h.label}</span>
+            <span className="home-hop-sub" title={h.title}>
+              {h.sub}
+            </span>
+          </span>
+          <StatusBadge tone={STATE_TONE[h.state]} dot={false}>
+            {STATE_LABEL[h.state]}
+          </StatusBadge>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Findings plus the app on the device, which the router never checks. */
+function tallies(diagnosis: Diagnosis) {
+  const count = (state: Finding["state"]) =>
+    diagnosis.findings.filter((f) => f.state === state).length;
+  const observed = count("observed");
+  const suspected = count("suspected");
+  const unknown = count("unknown") + 1;
+  const total = observed + suspected + unknown;
+  return {
+    total,
+    text: `The router checked ${total} ${total === 1 ? "thing" : "things"}: ${observed} observed, ${suspected} suspected, ${unknown} it could not check.`,
+  };
+}
+
+/** The header's answer line for the last check. */
+function verdictLine(diagnosis: Diagnosis | undefined, name: string): ReactNode {
+  if (!diagnosis) return "Find what slows a device down.";
+  const causes = diagnosis.findings.filter((f) => f.state === "suspected");
+  const cause = (f: Finding, lower: boolean) => {
+    const text = CAUSE_LABEL[f.area] ?? f.area;
+    return (
+      <span key={f.area} className="w">
+        {lower ? text.charAt(0).toLowerCase() + text.slice(1) : text}
+      </span>
+    );
+  };
+  if (causes.length === 0)
+    return (
+      <>
+        {name} is slow. <span className="s">Nothing the router checked</span> looks wrong.
+      </>
+    );
+  if (causes.length === 1)
+    return (
+      <>
+        {name} is slow. {cause(causes[0], false)} is the likely cause.
+      </>
+    );
+  return (
+    <>
+      {name} is slow. {cause(causes[0], false)} and {cause(causes[1], true)}
+      {causes.length > 2 ? " and more" : ""} may be the cause.
+    </>
+  );
+}
+
+function Workspace({ choice }: { choice: RouterChoice }) {
+  const { device } = choice;
   const [tab, setTab] = useState<Tab>("diagnosis");
   const [clients, setClients] = useState<HomeClient[]>([]),
     [policies, setPolicies] = useState<PolicyPlan[]>([]),
@@ -369,10 +588,12 @@ function Workspace({ device }: { device: string }) {
     <MonitorPanel
       title="Temporary change"
       description="Saved status, not live proof"
-      className={current ? "home-temp-panel" : undefined}
       extra={
         current && (
-          <StatusBadge tone={POLICY_STATUS[current.status].tone}>
+          <StatusBadge
+            tone={current.status === "active" ? "good" : POLICY_STATUS[current.status].tone}
+            dot
+          >
             {POLICY_STATUS[current.status].label}
           </StatusBadge>
         )
@@ -385,21 +606,30 @@ function Workspace({ device }: { device: string }) {
             <PolicySentence policy={current} client={byMac.get(current.input.mac)} />
           </p>
           <dl className="home-temp-times">
-            <div>
+            <div className="glass">
               <dt>Started</dt>
               <dd>{clock(current.startsAt ?? current.createdAt)}</dd>
             </div>
-            <div>
+            <div className="glass">
               <dt>Lasts</dt>
               <dd>{lasts(current.input.minutes)}</dd>
             </div>
-            <div>
+            <div className="glass">
               <dt>Ends in</dt>
               <dd className="home-warn">
                 {current.endsAt ? inMinutes(current.endsAt, now) : "Unknown"}
               </dd>
             </div>
           </dl>
+          {current.endsAt && (
+            <span className="monitor-bar" aria-hidden="true">
+              <span
+                data-tone="warn"
+                // Elapsed share of the change; data-driven, so not a utility class.
+                style={{ width: `${elapsed(current, now)}%` }}
+              />
+            </span>
+          )}
           {current.error && <p className="home-temp-error">{current.error}</p>}
           {undo?.id === current.id && undo.from === "panel" ? (
             <UndoConfirm
@@ -417,7 +647,12 @@ function Workspace({ device }: { device: string }) {
               >
                 Undo now
               </MonitorButton>
-              <MonitorButton variant="ghost" size="sm" onClick={showHistory}>
+              <MonitorButton
+                variant="ghost"
+                size="sm"
+                icon={<ChevronRight />}
+                onClick={showHistory}
+              >
                 View history
               </MonitorButton>
             </div>
@@ -449,9 +684,51 @@ function Workspace({ device }: { device: string }) {
     />
   );
 
+  const checked = clients.find((c) => c.ip === diagnosis?.client);
+  const checkedName = checked ? clientName(checked) : (diagnosis?.client ?? "");
+
   return (
     <>
-      <MetricStrip label="Home summary" minCell={200}>
+      <PageIntro
+        eyebrow={`Home Internet · ${device}`}
+        verdict={verdictLine(diagnosis, checkedName)}
+        lead={
+          diagnosis
+            ? `${tallies(diagnosis).text} Nothing on the router changed.`
+            : "Checks are read-only. The router changes only after you review a preview."
+        }
+        actions={
+          <>
+            <RouterPicker
+              value={device}
+              onChange={choice.onDevice}
+              routers={choice.routers}
+              defaultRouter={choice.defaultRouter}
+            />
+            <MonitorButton variant="primary" icon={<Search />} disabled={!!busy} onClick={discover}>
+              Discover devices & paths
+            </MonitorButton>
+            <MonitorButton
+              variant="ghost"
+              icon={<RefreshCw />}
+              disabled={!!busy}
+              onClick={() => void run("Loading saved data", load)}
+            >
+              Refresh saved data
+            </MonitorButton>
+            <span className="home-last-scan">
+              {lastScan ? `Last scan ${ago(lastScan, now)}` : "Not scanned yet"}
+            </span>
+          </>
+        }
+        aside={
+          <div className="glass overflow-hidden">
+            <PathChain diagnosis={diagnosis} client={checked} device={device} target={target} />
+          </div>
+        }
+      />
+
+      <MetricStrip label="Home summary" minCell={200} className="home-kpis">
         <Metric
           label="Devices"
           value={<Ticker value={clients.length} format={count} />}
@@ -466,7 +743,17 @@ function Workspace({ device }: { device: string }) {
         <Metric
           label="Routing tables"
           value={scanned ? <Ticker value={tables.length} format={count} /> : "—"}
-          hint={scanned ? tables.join(", ") || "None ready" : "Run discovery first"}
+          hint={
+            scanned ? (
+              tables.length ? (
+                <span className="font-mono">{tables.join(", ")}</span>
+              ) : (
+                "None ready"
+              )
+            ) : (
+              "Run discovery first"
+            )
+          }
         />
         <Metric
           label="Temporary changes"
@@ -497,20 +784,7 @@ function Workspace({ device }: { device: string }) {
           ]}
         />
         <span className="home-tabs-spacer" />
-        <span className="home-last-scan">
-          {lastScan ? `Last scan ${ago(lastScan, now)}` : "Not scanned yet"}
-        </span>
-        <MonitorButton
-          variant="ghost"
-          size="sm"
-          disabled={!!busy}
-          onClick={() => void run("Loading saved data", load)}
-        >
-          Refresh saved data
-        </MonitorButton>
-        <MonitorButton size="sm" icon={<SearchIcon />} disabled={!!busy} onClick={discover}>
-          Discover devices & paths
-        </MonitorButton>
+        <span className="home-last-scan">Scans run only when you ask</span>
       </div>
 
       {(busy || error || notice) && (
@@ -586,7 +860,7 @@ function Workspace({ device }: { device: string }) {
               Discard preview
             </MonitorButton>
             <MonitorButton
-              variant="inverse"
+              variant="primary"
               disabled={!!busy || !approved || now > preview.previewExpiresAt}
               onClick={() =>
                 void run("Applying approved policy", async () => {
@@ -615,9 +889,10 @@ function Workspace({ device }: { device: string }) {
               title="Check a slow connection"
               description="Looks at the router, DNS, Wi-Fi and a few small probes. Nothing is changed."
             >
-              <div className="home-form">
+              <div className="home-form home-check-form">
                 <Picker
                   label="Device"
+                  icon={<Wifi className="home-icon" aria-hidden="true" />}
                   value={client}
                   items={options}
                   onChange={setClient}
@@ -625,13 +900,14 @@ function Workspace({ device }: { device: string }) {
                 />
                 <Field
                   label="Website or IPv4"
+                  icon={<Globe className="home-icon" aria-hidden="true" />}
                   value={target}
                   onChange={setTarget}
                   placeholder="example.com"
                 />
                 <MonitorButton
-                  variant="inverse"
-                  className="home-btn-tall"
+                  variant="primary"
+                  icon={<Play />}
                   disabled={!!busy || !selected?.ip || !target}
                   onClick={() =>
                     void run("Checking the connection", async () => {
@@ -674,28 +950,34 @@ function Workspace({ device }: { device: string }) {
                     : "Run discovery to list devices."}
                 </MonitorEmpty>
               ) : (
-                newClients.map((c) => (
-                  <div key={c.mac} className="monitor-row home-new-row">
-                    <span className="min-w-0">
-                      <span className="home-name">{clientName(c)}</span>
-                      <span className="home-mono-line">
-                        {c.mac}
-                        {c.ip ? ` · ${c.ip}` : ""}
-                      </span>
-                    </span>
-                    <MonitorButton
-                      size="sm"
-                      disabled={!!busy}
-                      onClick={() => {
-                        setEditing(c.mac);
-                        chooseClient(c.mac);
-                        setTab("people");
-                      }}
-                    >
-                      Name
-                    </MonitorButton>
+                <>
+                  <div className="monitor-thead home-new-row">
+                    <span>Device</span>
+                    <span />
                   </div>
-                ))
+                  {newClients.map((c) => (
+                    <div key={c.mac} className="monitor-row home-new-row">
+                      <span className="home-two">
+                        <span className="p home-mono truncate">{clientName(c)}</span>
+                        <span className="home-two-sub truncate">
+                          <span className="home-mono">{c.mac}</span>
+                          {c.ip ? ` · ${c.ip}` : privateMac(c.mac) ? " · private MAC" : ""}
+                        </span>
+                      </span>
+                      <MonitorButton
+                        size="sm"
+                        disabled={!!busy}
+                        onClick={() => {
+                          setEditing(c.mac);
+                          chooseClient(c.mac);
+                          setTab("people");
+                        }}
+                      >
+                        Name
+                      </MonitorButton>
+                    </div>
+                  ))}
+                </>
               )}
             </MonitorPanel>
           </div>
@@ -766,8 +1048,7 @@ function Workspace({ device }: { device: string }) {
               />
               {duration}
               <MonitorButton
-                variant="inverse"
-                className="home-btn-tall"
+                variant="primary"
                 disabled={!!busy || !selected}
                 onClick={() =>
                   void run("Checking policy prerequisites", async () => {
@@ -842,8 +1123,7 @@ function Workspace({ device }: { device: string }) {
               </fieldset>
               <div>
                 <MonitorButton
-                  variant="inverse"
-                  className="home-btn-tall"
+                  variant="primary"
                   disabled={!!busy || !selectedTables.length}
                   onClick={() =>
                     void run("Comparing internet paths", async () => {
@@ -941,8 +1221,7 @@ function Workspace({ device }: { device: string }) {
               />
               {duration}
               <MonitorButton
-                variant="inverse"
-                className="home-btn-tall"
+                variant="primary"
                 disabled={!!busy || !client || !routeTable}
                 onClick={() =>
                   void run("Preparing path preview", async () => {
@@ -1050,27 +1329,41 @@ function Report({
         </MonitorEmpty>
       </MonitorPanel>
     );
-  const tally = (state: Finding["state"]) =>
-    diagnosis.findings.filter((f) => f.state === state).length;
   const suspected = diagnosis.findings.find((f) => f.state === "suspected");
-  const unknown = tally("unknown");
+  // Likely causes first, as on the board; the sort keeps the API's order otherwise.
+  const rows: Finding[] = [
+    ...diagnosis.findings.filter((f) => f.state === "suspected"),
+    ...diagnosis.findings.filter((f) => f.state !== "suspected"),
+    {
+      area: "Device",
+      state: "unknown",
+      title: "App health on the device",
+      detail: "The router cannot see inside the app. Check the app itself if the rest is clean.",
+      next: "",
+    },
+  ];
   return (
     <MonitorPanel
       title="Connection report"
       description={`${client ? clientName(client) : diagnosis.client} to ${diagnosis.target} · checked ${clock(diagnosis.at)}`}
-      extra={suspected && <StatusBadge tone="warn">Suspected: {suspected.area}</StatusBadge>}
+      extra={
+        suspected && (
+          <StatusBadge tone="warn" dot={false}>
+            Suspected: {suspected.area}
+          </StatusBadge>
+        )
+      }
       flush
     >
       <p className="home-summary">
-        The router checked {diagnosis.findings.length}{" "}
-        {diagnosis.findings.length === 1 ? "thing" : "things"}: {tally("observed")} observed,{" "}
-        {tally("suspected")} suspected, {unknown} it could not check. App health on the device is
-        not verified.
+        {tallies(diagnosis).text} App health on the device is not verified.
       </p>
-      {diagnosis.findings.map((f) => (
+      {rows.map((f) => (
         <div key={`${f.area}-${f.title}`} className="monitor-row home-finding">
           <span className="home-finding-state">
-            <StatusBadge tone={STATE_TONE[f.state]}>{STATE_LABEL[f.state]}</StatusBadge>
+            <StatusBadge tone={STATE_TONE[f.state]} dot={false}>
+              {STATE_LABEL[f.state]}
+            </StatusBadge>
           </span>
           <span className="home-finding-body">
             <span className="home-name">{f.title}</span>
@@ -1108,26 +1401,19 @@ function PolicySentence({
   policy: PolicyPlan;
   client: HomeClient | undefined;
 }): ReactNode {
-  const name = clientName(client);
-  const until = policy.endsAt ? ` until ${clock(policy.endsAt)}` : "";
+  const who = (
+    <>
+      <b>{clientName(client)}</b> <span className="home-mono home-mut">{policy.ip}</span>
+    </>
+  );
   if (policy.input.action === "route")
     return (
       <>
-        {name} goes through <span className="home-mono">{policy.input.table}</span>
-        {until}.
+        Traffic for {who} goes through <span className="home-mono">{policy.input.table}</span>.
       </>
     );
-  if (policy.input.action === "priority")
-    return (
-      <>
-        {name} gets meeting priority{until}.
-      </>
-    );
-  return (
-    <>
-      {name} is paused{until}.
-    </>
-  );
+  if (policy.input.action === "priority") return <>Meeting priority is on for {who}.</>;
+  return <>Routed access is paused for {who}.</>;
 }
 
 function UndoConfirm({

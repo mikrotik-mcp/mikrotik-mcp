@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, Search } from "lucide-react";
+import { AlertTriangle, Check, RefreshCw, Search } from "lucide-react";
 import type { AddressSetRevision, SetReference } from "../../src/address-sets/model";
 import type { RouterRoutingSnapshot } from "../../src/service-routing/inventory";
 import { api, postJson } from "./api";
@@ -200,18 +200,18 @@ export function AddressSets({
   const left = Math.max(0, Math.floor(((revision?.plan?.expiresAt ?? 0) - now) / 1000));
   const shownPrefixes = revision?.prefixes.filter((p) => p.includes(search.trim())) ?? [];
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+    <div className="sr-stack grid min-w-0 grid-cols-[minmax(0,1fr)]">
       {error && (
         <div className="monitor-note" data-tone="bad" role="alert">
           <AlertTriangle aria-hidden="true" className="text-destructive" />
           <span className="flex-1 text-fg-secondary">{error}</span>
         </div>
       )}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(460px,100%),1fr))] items-start gap-6">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(460px,100%),1fr))] items-start gap-3.5">
         <MonitorPanel
           title="Compose a revision"
           description="Combine two lists of CIDRs into one compact set. Nothing reaches the router until you publish."
-          extra={<span className="monitor-badge">Local draft</span>}
+          extra={<StatusBadge dot={false}>Local draft</StatusBadge>}
         >
           <fieldset disabled={busy} className="m-0 grid min-w-0 gap-4 border-0 p-0">
             <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-3 max-sm:grid-cols-1">
@@ -294,9 +294,9 @@ export function AddressSets({
               </p>
             )}
             {composition && (
-              <div className="flex flex-col gap-2 rounded-lg bg-overlay-02 px-3.5 py-3 shadow-[inset_0_0_0_1px_var(--border)]">
+              <div className="glass flex flex-col gap-2 rounded-[14px] px-4 py-3.5">
                 <span className="text-[13px] text-foreground">
-                  <b className="font-[590]">
+                  <b className="font-semibold text-emphasis">
                     {composition.prefixes.length}{" "}
                     {composition.prefixes.length === 1 ? "prefix" : "prefixes"}
                   </b>{" "}
@@ -308,7 +308,7 @@ export function AddressSets({
                   aria-label="Composed prefixes"
                 >
                   {composition.prefixes.map((p) => (
-                    <span key={p} className="monitor-chip font-mono">
+                    <span key={p} className="monitor-chip">
                       {p}
                     </span>
                   ))}
@@ -329,7 +329,8 @@ export function AddressSets({
               </MonitorButton>
               <MonitorButton
                 size="sm"
-                variant="inverse"
+                variant="primary"
+                icon={<Check />}
                 disabled={busy || !device}
                 onClick={() => void save()}
               >
@@ -343,7 +344,13 @@ export function AddressSets({
           title="Revision library"
           description={`Every saved revision for ${device}, newest first.`}
           extra={
-            <MonitorButton size="sm" variant="ghost" disabled={busy} onClick={() => void refresh()}>
+            <MonitorButton
+              size="sm"
+              variant="ghost"
+              icon={<RefreshCw />}
+              disabled={busy}
+              onClick={() => void refresh()}
+            >
               Refresh
             </MonitorButton>
           }
@@ -459,7 +466,7 @@ export function AddressSets({
                   />
                 </label>
                 <div
-                  className="flex max-h-[216px] flex-col overflow-y-auto rounded-md shadow-[inset_0_0_0_1px_var(--border)]"
+                  className="flex max-h-[216px] flex-col overflow-y-auto rounded-[10px] shadow-[inset_0_0_0_1px_var(--line)]"
                   tabIndex={0}
                   aria-label="Revision prefixes"
                 >
@@ -468,7 +475,7 @@ export function AddressSets({
                       key={p}
                       className={
                         i
-                          ? "flex justify-between gap-3 border-t border-border px-3 py-1.5 text-[12px]"
+                          ? "flex justify-between gap-3 border-t border-line px-3 py-1.5 text-[12px]"
                           : "flex justify-between gap-3 px-3 py-1.5 text-[12px]"
                       }
                     >
@@ -498,9 +505,9 @@ export function AddressSets({
                 <fieldset
                   disabled={busy}
                   aria-label="Before you publish"
-                  className="m-0 flex min-w-0 flex-col gap-2.5 border-0 border-t border-solid border-border p-0 pt-4"
+                  className="m-0 flex min-w-0 flex-col gap-2.5 border-0 border-t border-solid border-line p-0 pt-4"
                 >
-                  <span className="monitor-label">Before you publish</span>
+                  <span className="sr-eyebrow">Before you publish</span>
                   {(revision.delta?.large || revision.prefixes.some((p) => p.endsWith("/0"))) && (
                     <CheckRow
                       checked={allowLargeChange}
@@ -594,12 +601,7 @@ export function AddressSets({
       </div>
 
       {revision?.plan && (
-        <section
-          className="monitor-panel"
-          style={{
-            boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--chart-1) 35%, transparent)",
-          }}
-        >
+        <section className="sr-plan monitor-panel">
           <header className="monitor-panel-head">
             <div className="min-w-0 flex-1">
               <h2 className="monitor-panel-title">
@@ -635,7 +637,7 @@ export function AddressSets({
             <div className="flex gap-2">
               <MonitorButton
                 size="sm"
-                variant="inverse"
+                variant="primary"
                 disabled={busy || !consent || revision.plan.expiresAt < now}
                 onClick={() => void apply()}
               >
@@ -650,7 +652,7 @@ export function AddressSets({
         </section>
       )}
 
-      <p className="text-[12px] text-muted-foreground">
+      <p className="monitor-hint">
         A published revision can be rolled back from the library: pick it and choose Preview
         rollback.
       </p>

@@ -17,7 +17,6 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { api, deleteEvents, postJson } from "./api";
 import {
-  BookOpen,
   Check,
   Globe2,
   HelpCircle,
@@ -46,10 +45,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { buttonVariants } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { toast, Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
-import { Panel } from "./atoms";
 import { ToolCallLookup } from "./tool-call-lookup";
 import { DEFAULT_FEED_LIMIT, FEED_LIMITS } from "./prefs";
 import {
@@ -75,10 +72,19 @@ import { ChangePlanView } from "./change-plan";
 import { OverviewView } from "./overview";
 import { FeedInspector } from "./feed-inspector";
 import {
+  CallsPerMinute,
+  FeedFilterSelects,
+  FeedPhoneRows,
+  FeedStatusLine,
+  LiveHeading,
+  PhoneSwitch,
+} from "./live-feed";
+import {
   formatMs,
   MonitorButton,
   MonitorEmpty,
   MonitorPageProvider,
+  MonitorPanel,
   MonitorSearch,
   MonitorSelect,
   PageIntro,
@@ -110,7 +116,6 @@ import { selectConfigScope } from "../../src/config-device-draft";
 import { DevicesView } from "./devices-view";
 import { DetailDrawer } from "./detail-drawer";
 import { clock, FEED_CAP, num, sval } from "./format";
-import { Button, Select } from "./geist";
 import { JsonView } from "./highlight";
 import { useLiveStream, useReveals } from "./hooks";
 import { DriftView } from "./drift";
@@ -634,8 +639,8 @@ async function reloadServer(hard: boolean): Promise<void> {
 }
 
 /**
- * Sidebar server controls: Reload config, and Restart behind a confirm dialog.
- * `compact` is the rail's single icon button for Reload config.
+ * Sidebar server controls: Reload (the config), and Restart behind a confirm
+ * dialog. `compact` is the rail's single icon button for Reload.
  */
 function ReloadServerButton({ compact = false }: { compact?: boolean }): ReactNode {
   const [busy, setBusy] = useState(false);
@@ -670,9 +675,10 @@ function ReloadServerButton({ compact = false }: { compact?: boolean }): ReactNo
         disabled={busy}
         onClick={() => void run(false)}
         title="Re-read the config from disk and apply it live (no downtime)"
+        aria-label="Reload config"
         icon={<RefreshCw aria-hidden="true" />}
       >
-        Reload config
+        Reload
       </MonitorButton>
       <AlertDialog>
         <AlertDialogTrigger asChild>
@@ -1586,12 +1592,12 @@ function App(): ReactNode {
   ];
 
   const cur = VIEWS.find((v) => v.id === view) ?? VIEWS[0];
-  // Monitoring and Network pages draw their own header from the boards.
+  // Every page draws its own Signal header (PageIntro) from its board.
   const group = viewGroup(view);
-  const isMonitoring = group.id === "monitoring" || group.id === "network";
+  const isMonitoring = true;
   const monitorPage: MonitorPageInfo | null = isMonitoring
     ? {
-        eyebrow: group.id === "network" ? "Network" : "Monitoring",
+        eyebrow: group.label,
         title: cur.label,
         helpOpen: helpOpen.has(view),
         onToggleHelp: () => toggleHelp(view),
@@ -1601,7 +1607,7 @@ function App(): ReactNode {
 
   return (
     <div
-      className="dashboard-shell bg-background text-foreground"
+      className="dashboard-shell text-foreground"
       ref={rootRef}
       data-view={view}
       data-nav-collapsed={sidebarCollapsed}
@@ -1671,38 +1677,30 @@ function App(): ReactNode {
         <main
           id="dashboard-content"
           tabIndex={-1}
-          className="shell-main flex min-w-0 flex-col gap-6"
+          className="shell-main flex min-w-0 flex-col"
           data-view={view}
         >
+          {/* Pages not yet on PageIntro get the same header look from the shell. */}
           {!isMonitoring && (
-            <header className="shell-page-header flex flex-wrap items-center gap-3">
-              <div className="shell-page-title">
-                <span className="shell-page-icon" aria-hidden="true">
-                  <NavIcon name={view} />
-                </span>
-                <div className="min-w-0">
-                  <span className="shell-eyebrow">
-                    {viewGroup(view).label} / {cur.label}
-                  </span>
-                  <div className="shell-page-heading">
-                    <h1>{cur.label}</h1>
-                    <NewFeatureBadge view={view} version={meta?.version} placement="page" />
-                  </div>
-                  <p className="text-muted-foreground">{cur.sub}</p>
+            <header className="shell-page-header monitor-head">
+              <div className="monitor-head-main">
+                <p className="monitor-eyebrow">{viewGroup(view).label}</p>
+                <div className="shell-page-heading">
+                  <h1 className="monitor-title">{cur.label}</h1>
+                  <NewFeatureBadge view={view} version={meta?.version} placement="page" />
                 </div>
+                <p className="monitor-lead">{cur.sub}</p>
               </div>
-              <span className="flex-1" />
-              <Button
-                size="sm"
-                ghost
-                type={helpOpen.has(view) ? "accent" : "default"}
-                onClick={() => toggleHelp(view)}
+              <button
+                type="button"
+                className="monitor-icon-btn"
+                aria-label="About this page"
                 aria-expanded={helpOpen.has(view)}
                 title="About this page"
-                icon={<HelpCircle />}
+                onClick={() => toggleHelp(view)}
               >
-                Help
-              </Button>
+                <HelpCircle aria-hidden="true" />
+              </button>
             </header>
           )}
 
@@ -1723,6 +1721,7 @@ function App(): ReactNode {
                     status={feedStatus}
                     errors={feedErrors}
                     feed={feed}
+                    devices={devices?.devices}
                     onOpen={(e) => void openDetail(e)}
                     onRefresh={() => void refreshDashboard()}
                   />
@@ -1787,21 +1786,7 @@ function App(): ReactNode {
                 )}
 
                 {/* ── Packets ── */}
-                {view === "packets" && (
-                  <section className="grid content-start gap-[18px]">
-                    <Panel
-                      title="Packet capture"
-                      className="reveal"
-                      extra={
-                        <span className="text-muted-foreground text-[11px]">
-                          live TZSP decode · /tool sniffer streaming
-                        </span>
-                      }
-                    >
-                      <PacketCapture />
-                    </Panel>
-                  </section>
-                )}
+                {view === "packets" && <PacketCapture />}
 
                 {/* ── Snapshots ── */}
                 {view === "snapshots" && <SnapshotsView />}
@@ -1853,33 +1838,62 @@ function App(): ReactNode {
                 {/* ── Config ── */}
                 {view === "config" &&
                   (config ? (
-                    <section className="grid content-start gap-[18px]">
-                      <Panel
-                        title="Configuration"
-                        className="reveal"
-                        extra={
-                          <span className="flex items-center gap-1.5">
-                            <Button
-                              size="sm"
-                              ghost
+                    <section className="config-page flex min-w-0 flex-col gap-[18px]">
+                      <PageIntro
+                        eyebrow="Server settings"
+                        heading="Configuration"
+                        tone="good"
+                        status={
+                          <>
+                            <b>Loaded</b>
+                            <span>from the server · secrets redacted</span>
+                          </>
+                        }
+                        lead="The effective configuration, and a safe editor that previews every change and reverts it unless you keep it."
+                        actions={
+                          <>
+                            <MonitorButton
+                              variant="ghost"
                               onClick={() => setGuideOpen(true)}
                               title="Every config option, documented from the schema"
-                              icon={<BookOpen />}
+                              icon={<HelpCircle aria-hidden="true" />}
                             >
                               Field guide
-                            </Button>
-                            <Button
-                              size="sm"
-                              ghost
+                            </MonitorButton>
+                            <MonitorButton
                               disabled={editingConfig}
                               onClick={() => setEditingConfig(true)}
-                              title="Edit the config JSON with autocomplete, validation and safe-apply"
-                              icon={editingConfig ? undefined : <Pencil />}
+                              title="Edit the config with validation, a diff and safe-apply"
+                              icon={<Pencil aria-hidden="true" />}
                             >
-                              Edit config
-                            </Button>
-                          </span>
+                              {editingConfig ? "Editing…" : "Edit config"}
+                            </MonitorButton>
+                          </>
                         }
+                      />
+                      <section className="glass config-chips" aria-label="Configuration summary">
+                        {(
+                          [
+                            ["transport", sval(mcp.transport)],
+                            ["read-only", config.readOnly ? "yes" : "no"],
+                            ["dashboard", `${sval(dash.host)}:${sval(dash.port)}`],
+                            ["capture", dash.captureBody ? "on" : "off"],
+                            ["s3", config.s3 ? "configured" : "off"],
+                            ["ssh pool", ssh.keepAlive !== false ? "on" : "off"],
+                            ["alerts", config.alerts ? "on" : "off"],
+                            ["attacks", attacks.enabled ? sval(attacks.mode) : "off"],
+                            ["schedules", schedules.enabled ? "on" : "off"],
+                            ["flows", flows.enabled ? `udp/${sval(flows.port)}` : "off"],
+                          ] as const
+                        ).map(([k, v]) => (
+                          <span key={k} className="monitor-chip">
+                            <span className="text-faint">{k}</span> {v}
+                          </span>
+                        ))}
+                      </section>
+                      <MonitorPanel
+                        title="Edit configuration"
+                        description="Draft changes, check the diff, then save with an undo window."
                       >
                         {editingConfig ? (
                           <ConfigEditor
@@ -1894,99 +1908,66 @@ function App(): ReactNode {
                             }}
                           />
                         ) : (
-                          <>
-                            <div className="text-muted-foreground mb-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-                              <span>transport: {sval(mcp.transport)}</span>
-                              <span>read-only: {config.readOnly ? "yes" : "no"}</span>
-                              <span>
-                                dashboard: {sval(dash.host)}:{sval(dash.port)}
-                              </span>
-                              <span>capture: {dash.captureBody ? "on" : "off"}</span>
-                              <span>s3: {config.s3 ? "configured" : "off"}</span>
-                              <span>ssh pool: {ssh.keepAlive !== false ? "on" : "off"}</span>
-                              <span>alerts: {config.alerts ? "on" : "off"}</span>
-                              <span>attacks: {attacks.enabled ? sval(attacks.mode) : "off"}</span>
-                              <span>schedules: {schedules.enabled ? "on" : "off"}</span>
-                              <span>
-                                flows: {flows.enabled ? `udp/${sval(flows.port)}` : "off"}
-                              </span>
-                            </div>
-                            <details>
-                              <summary className="cursor-pointer text-sm">
-                                Server configuration (secrets redacted)
-                              </summary>
+                          <div className="flex flex-col gap-3">
+                            <details className="config-json">
+                              <summary>Server configuration (secrets redacted)</summary>
                               <JsonView
                                 value={selectConfigScope(config, "server")}
                                 maxHeight={340}
                               />
                             </details>
-                            <p className="mt-3 text-xs text-muted-foreground">
-                              Router connections, credentials and ordering are managed on the{" "}
-                              <a
-                                className="text-primary underline underline-offset-4"
-                                href="#devices"
-                              >
+                            <p className="monitor-hint">
+                              Router connections, credentials and order are managed on the{" "}
+                              <a className="config-link" href="#devices">
                                 Devices page
                               </a>
-                              .
+                              . This editor only changes server settings.
                             </p>
-                          </>
+                          </div>
                         )}
-                      </Panel>
-
-                      <Panel
-                        title="Dashboard preferences"
-                        className="reveal"
-                        extra={
-                          <span className="text-muted-foreground text-[11px]">
-                            saved to <code>dashboard.feedLimit</code> in the config
-                          </span>
-                        }
-                      >
-                        <div className="flex flex-wrap items-center gap-3">
-                          <div className="flex min-w-0 flex-col">
-                            {/* The Select carries its own aria-label; this is a caption. */}
-                            <Label className="text-[12.5px]">Live Feed rows</Label>
-                            <span className="text-muted-foreground text-[11px]">
-                              How many matching calls the feed table renders. Up to {num(FEED_CAP)}{" "}
-                              are kept in memory regardless; this only bounds what is drawn.
+                      </MonitorPanel>
+                      <div className="config-bottom">
+                        <MonitorPanel
+                          title="Version history"
+                          description="Point-in-time snapshots. Diff or restore any of them."
+                          flush
+                        >
+                          <ConfigHistoryPanel
+                            onRestored={() =>
+                              void api<Record<string, unknown>>("/api/config")
+                                .then(setConfig)
+                                .catch(() => {})
+                            }
+                          />
+                        </MonitorPanel>
+                        <MonitorPanel title="Dashboard preferences">
+                          <div className="flex flex-col gap-2.5">
+                            <div className="monitor-fl config-fl-select">
+                              <span className="monitor-label">Live Feed rows</span>
+                              <MonitorSelect
+                                label="Live Feed rows"
+                                value={String(feedLimit)}
+                                onChange={(v) => void setFeedLimit(Number(v))}
+                                options={FEED_LIMITS.map((n) => ({
+                                  value: String(n),
+                                  label: `${num(n)} rows${n === DEFAULT_FEED_LIMIT ? " (default)" : ""}`,
+                                }))}
+                              />
+                              <span className="monitor-hint">
+                                How many matching calls the feed draws. Up to {num(FEED_CAP)} stay
+                                in memory either way.
+                              </span>
+                            </div>
+                            <span className="monitor-hint">
+                              Saved to <span className="font-mono">dashboard.feedLimit</span>
                             </span>
                           </div>
-                          <span className="flex-1" />
-                          <Select
-                            size="sm"
-                            aria-label="Live Feed rows"
-                            value={String(feedLimit)}
-                            onValueChange={(v) => void setFeedLimit(Number(v))}
-                            options={FEED_LIMITS.map((n) => ({
-                              value: String(n),
-                              label: `${num(n)} rows${n === DEFAULT_FEED_LIMIT ? " (default)" : ""}`,
-                            }))}
-                          />
-                        </div>
-                      </Panel>
-
-                      <Panel
-                        title="Version history"
-                        className="reveal"
-                        extra={
-                          <span className="text-muted-foreground text-[11px]">
-                            point-in-time snapshots · diff &amp; restore
-                          </span>
-                        }
-                      >
-                        <ConfigHistoryPanel
-                          onRestored={() =>
-                            void api<Record<string, unknown>>("/api/config")
-                              .then(setConfig)
-                              .catch(() => {})
-                          }
-                        />
-                      </Panel>
+                        </MonitorPanel>
+                      </div>
 
                       {guideOpen && (
                         <Sheet
-                          title="📖 Field guide"
+                          title="Field guide"
                           subtitle="Every config option, documented from the schema"
                           onClose={() => setGuideOpen(false)}
                         >
@@ -2010,12 +1991,11 @@ function App(): ReactNode {
 
                 {/* ── Live Feed ── */}
                 {view === "feed" && (
-                  <section className="grid content-start gap-6">
+                  <section className="live-feed-page grid content-start gap-[18px]">
                     <PageIntro
-                      small
-                      tone={liveMode === "off" ? "default" : paused ? "warn" : "good"}
-                      live={liveMode !== "off" && !paused}
-                      title={liveMode === "off" ? "Offline" : paused ? "Paused" : "Live"}
+                      eyebrow="Every tool call, in real time"
+                      heading={<LiveHeading offline={liveMode === "off"} paused={paused} />}
+                      status={<FeedStatusLine events={feed} offline={liveMode === "off"} />}
                       controls={
                         <>
                           {selectedIds.size > 0 &&
@@ -2045,7 +2025,8 @@ function App(): ReactNode {
                                 icon={<Trash2 />}
                                 onClick={() => setConfirmingDelete(true)}
                               >
-                                Delete selected
+                                Delete {selectedIds.size}{" "}
+                                {selectedIds.size === 1 ? "call" : "calls"}
                               </MonitorButton>
                             ))}
                           <MonitorButton
@@ -2071,64 +2052,71 @@ function App(): ReactNode {
                           </MonitorButton>
                         </>
                       }
-                    >
-                      {liveMode === "off"
-                        ? "reconnecting on its own; calls are still recorded"
-                        : `${num(feed.length)} calls in memory`}
-                    </PageIntro>
+                    />
 
                     {feedLoading && !feed.length ? (
                       <LoadingState label="Loading tool call history" />
                     ) : (
-                      <section className="monitor-panel reveal" aria-label="Tool calls">
-                        <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+                      <CallsPerMinute events={feed} />
+                    )}
+                    {feedLoading && !feed.length ? null : (
+                      <section
+                        className="monitor-panel live-feed-panel reveal"
+                        aria-label="Tool calls"
+                      >
+                        <div className="live-feed-filters flex flex-wrap items-center gap-2 px-[18px] py-[14px]">
                           <MonitorSearch
-                            className="flex-[1_1_320px]"
+                            className="flex-[1_1_300px]"
                             label="Filter tool calls"
                             placeholder="Search tool, input, error or call ID"
                             value={filter.q}
                             onChange={(q) => setFilter((f) => ({ ...f, q }))}
                           />
-                          <MonitorSelect
-                            label="Tool"
-                            value={filter.tool}
-                            onChange={(tool) => setFilter((f) => ({ ...f, tool }))}
-                            options={[
-                              { value: "", label: "All tools" },
-                              ...(meta?.tools ?? []).map((t) => ({ value: t, label: t })),
-                            ]}
-                          />
-                          <MonitorSelect
-                            label="Risk"
-                            value={filter.risk}
-                            onChange={(risk) => setFilter((f) => ({ ...f, risk }))}
-                            options={[
-                              { value: "", label: "Any risk" },
-                              ...RISK_LEVELS.map((r) => ({ value: r, label: r })),
-                            ]}
-                          />
-                          <MonitorSelect
-                            label="Device"
-                            value={filter.device}
-                            onChange={(device) => setFilter((f) => ({ ...f, device }))}
-                            options={[
-                              { value: "", label: "All devices" },
-                              ...(meta?.devices ?? []).map((d) => ({ value: d, label: d })),
-                            ]}
-                          />
-                          <Segmented
-                            label="Result"
-                            value={filter.status}
-                            onChange={(status) => setFilter((f) => ({ ...f, status }))}
-                            options={[
-                              { value: "", label: "All" },
-                              { value: "ok", label: "OK" },
-                              { value: "error", label: "Failed" },
-                            ]}
-                          />
+                          <FeedFilterSelects
+                            segmented={
+                              <Segmented
+                                label="Result"
+                                value={filter.status}
+                                onChange={(status) => setFilter((f) => ({ ...f, status }))}
+                                options={[
+                                  { value: "", label: "All" },
+                                  { value: "ok", label: "OK" },
+                                  { value: "error", label: "Failed" },
+                                ]}
+                              />
+                            }
+                          >
+                            <MonitorSelect
+                              label="Tool"
+                              value={filter.tool}
+                              onChange={(tool) => setFilter((f) => ({ ...f, tool }))}
+                              options={[
+                                { value: "", label: "All tools" },
+                                ...(meta?.tools ?? []).map((t) => ({ value: t, label: t })),
+                              ]}
+                            />
+                            <MonitorSelect
+                              label="Risk"
+                              value={filter.risk}
+                              onChange={(risk) => setFilter((f) => ({ ...f, risk }))}
+                              options={[
+                                { value: "", label: "Any risk" },
+                                ...RISK_LEVELS.map((r) => ({ value: r, label: r })),
+                              ]}
+                            />
+                            <MonitorSelect
+                              label="Device"
+                              value={filter.device}
+                              onChange={(device) => setFilter((f) => ({ ...f, device }))}
+                              options={[
+                                { value: "", label: "All devices" },
+                                ...(meta?.devices ?? []).map((d) => ({ value: d, label: d })),
+                              ]}
+                            />
+                          </FeedFilterSelects>
                         </div>
 
-                        <div className="flex flex-wrap border-t">
+                        <div className="live-feed-body flex flex-wrap border-t">
                           <div className="min-w-0 flex-[999_1_560px] overflow-x-auto">
                             {visible.length === 0 ? (
                               hasFilters ? (
@@ -2171,103 +2159,119 @@ function App(): ReactNode {
                                 </MonitorEmpty>
                               )
                             ) : (
-                              <div className="feed-table max-h-[64vh] overflow-y-auto">
-                                <div className={`monitor-thead feed-grid border-t-0`}>
-                                  <span>
-                                    <input
-                                      type="checkbox"
-                                      className="m-0"
-                                      aria-label="Select all shown calls"
-                                      checked={allShownSelected}
-                                      ref={(el) => {
-                                        if (el) el.indeterminate = someShownSelected;
-                                      }}
-                                      onChange={toggleSelectAll}
-                                    />
-                                  </span>
-                                  <span>Time</span>
-                                  <span>Tool</span>
-                                  <span>Risk</span>
-                                  <span>Device</span>
-                                  <span className="text-right">Duration</span>
-                                  <span>Result</span>
-                                </div>
-                                {shownRows.map((e) => (
-                                  <div
-                                    key={e.id}
-                                    role="button"
-                                    tabIndex={0}
-                                    aria-label={`${e.tool}, ${e.isError ? "failed" : "ok"}, ${clock(e.ts)}`}
-                                    className="monitor-row feed-grid"
-                                    data-failed={e.isError || undefined}
-                                    data-selected={
-                                      inspected?.id === e.id || selectedIds.has(e.id) || undefined
-                                    }
-                                    onClick={() => void inspect(e)}
-                                    onKeyDown={(ev) => {
-                                      if (ev.key === "Enter" || ev.key === " ") {
-                                        ev.preventDefault();
-                                        void inspect(e);
-                                      }
-                                    }}
-                                  >
-                                    <span>
+                              <PhoneSwitch
+                                phone={
+                                  <FeedPhoneRows
+                                    rows={shownRows}
+                                    hhmm={hhmm}
+                                    onOpen={(e) => void inspect(e)}
+                                  />
+                                }
+                              >
+                                <div className="feed-table max-h-[64vh] overflow-y-auto">
+                                  <div className="monitor-thead live-feed-grid">
+                                    <span className="monitor-check">
                                       <input
                                         type="checkbox"
-                                        className="m-0"
-                                        aria-label="Select call (Shift-click selects a range)"
-                                        checked={selectedIds.has(e.id)}
-                                        onPointerDown={(ev) => {
-                                          shiftHeldRef.current = ev.shiftKey;
+                                        aria-label="Select all shown calls"
+                                        checked={allShownSelected}
+                                        ref={(el) => {
+                                          if (el) el.indeterminate = someShownSelected;
                                         }}
-                                        onClick={(ev) => ev.stopPropagation()}
-                                        onChange={() => selectRow(e.id)}
+                                        onChange={toggleSelectAll}
                                       />
                                     </span>
-                                    <span className="text-muted-foreground font-mono text-[12px]">
-                                      {hhmm(e.ts)}
-                                    </span>
-                                    <span
-                                      className="text-foreground truncate font-mono text-[12px]"
-                                      title={`${e.tool} · call ID ${e.id}`}
-                                    >
-                                      {e.tool}
-                                    </span>
-                                    <span>
-                                      <RiskBadge risk={e.risk} short />
-                                    </span>
-                                    <span className="text-muted-foreground truncate font-mono text-[12px]">
-                                      {e.device ?? "—"}
-                                    </span>
-                                    <span className="text-fg-secondary text-right tabular-nums">
-                                      {formatMs(e.durationMs)}
-                                    </span>
-                                    <span className="flex min-w-0 items-center gap-2">
-                                      <StatusDot tone={e.isError ? "bad" : "good"} />
-                                      <span
-                                        className={cn(
-                                          "truncate",
-                                          e.isError ? "text-destructive" : "text-fg-secondary",
-                                        )}
-                                      >
-                                        {e.isError
-                                          ? (e.error ?? "Failed")
-                                          : e.reason || e.output || "OK"}
-                                      </span>
-                                    </span>
+                                    <span>Time</span>
+                                    <span>Tool</span>
+                                    <span>Risk</span>
+                                    <span>Device</span>
+                                    <span className="text-right">Duration</span>
+                                    <span>Result</span>
                                   </div>
-                                ))}
-                              </div>
+                                  {shownRows.map((e) => (
+                                    <div
+                                      key={e.id}
+                                      role="button"
+                                      tabIndex={0}
+                                      aria-label={`${e.tool}, ${e.isError ? "failed" : "ok"}, ${clock(e.ts)}`}
+                                      className="monitor-row live-feed-grid"
+                                      data-failed={
+                                        (e.isError && inspected?.id !== e.id) || undefined
+                                      }
+                                      data-selected={inspected?.id === e.id || undefined}
+                                      onClick={() => void inspect(e)}
+                                      onKeyDown={(ev) => {
+                                        if (ev.key === "Enter" || ev.key === " ") {
+                                          ev.preventDefault();
+                                          void inspect(e);
+                                        }
+                                      }}
+                                    >
+                                      <span className="monitor-check">
+                                        <input
+                                          type="checkbox"
+                                          aria-label="Select call (Shift-click selects a range)"
+                                          checked={selectedIds.has(e.id)}
+                                          onPointerDown={(ev) => {
+                                            shiftHeldRef.current = ev.shiftKey;
+                                          }}
+                                          onClick={(ev) => ev.stopPropagation()}
+                                          onChange={() => selectRow(e.id)}
+                                        />
+                                      </span>
+                                      <span className="text-muted-foreground font-mono text-[12px]">
+                                        {hhmm(e.ts)}
+                                      </span>
+                                      <span
+                                        className="p truncate font-mono text-[12px]"
+                                        title={`${e.tool} · call ID ${e.id}`}
+                                      >
+                                        {e.tool}
+                                      </span>
+                                      <span>
+                                        <RiskBadge risk={e.risk} short />
+                                      </span>
+                                      <span className="text-muted-foreground truncate font-mono text-[12px]">
+                                        {e.device ?? "—"}
+                                      </span>
+                                      <span className="text-fg-secondary text-right tabular-nums">
+                                        {formatMs(e.durationMs)}
+                                      </span>
+                                      <span className="flex min-w-0 items-center gap-2">
+                                        <StatusDot tone={e.isError ? "bad" : "good"} />
+                                        <span
+                                          className={cn(
+                                            "truncate",
+                                            e.isError ? "text-destructive" : "text-fg-secondary",
+                                          )}
+                                        >
+                                          {e.isError
+                                            ? (e.error ?? "Failed")
+                                            : e.reason || e.output || "OK"}
+                                        </span>
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </PhoneSwitch>
                             )}
                             <div className="monitor-foot">
-                              <span className="tabular-nums">
-                                Showing {num(shownRows.length)} of {num(feed.length)} in memory
-                              </span>
-                              <span className="flex-1" />
-                              <span>Need an older call?</span>
+                              <PhoneSwitch
+                                phone={
+                                  <span className="flex-1 tabular-nums">
+                                    {num(shownRows.length)} of {num(feed.length)}
+                                  </span>
+                                }
+                              >
+                                <span className="tabular-nums">
+                                  Showing {num(shownRows.length)} of {num(feed.length)} in memory
+                                </span>
+                                <span className="flex-1" />
+                                <span>Need an older call?</span>
+                              </PhoneSwitch>
                               <button
                                 type="button"
-                                className="text-brand font-[510] hover:underline"
+                                className="text-brand font-medium hover:underline"
                                 aria-expanded={lookupOpen}
                                 onClick={() => setLookupOpen((o) => !o)}
                               >

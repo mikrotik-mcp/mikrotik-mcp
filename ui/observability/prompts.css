@@ -1,0 +1,170 @@
+@layer theme, base, components, utilities;
+/* Prompts (Wks-Prompts board): category list, workflow cards and the step bar. */
+@layer components {
+  .prompts-cat {
+    display: flex;
+    height: 30px;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    padding: 0 10px;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .prompts-cat:hover {
+    background: var(--overlay-03);
+  }
+  .prompts-cat[aria-checked="true"] {
+    background: var(--glass-2);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--foreground);
+  }
+  .prompts-cat:focus-visible,
+  .prompts-card:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+
+  .prompts-cards {
+    display: flex;
+    max-height: 560px;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    border-top: 1px solid var(--line);
+    padding: 8px;
+  }
+  .prompts-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+    padding: 11px 12px;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .prompts-card:hover {
+    background: var(--overlay-03);
+  }
+  .prompts-card[aria-pressed="true"] {
+    background: var(--sig-soft);
+    box-shadow: inset 0 0 0 1px var(--sig);
+  }
+  .prompts-card-cat {
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .prompts-steps {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .prompts-step {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: 10px;
+  }
+  .prompts-step b {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .prompts-step[data-state="done"] b,
+  .prompts-step[data-state="current"] b {
+    color: var(--foreground);
+  }
+  .prompts-step-dot {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    flex: none;
+    place-items: center;
+    border-radius: 99px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text-faint);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .prompts-step[data-state="done"] .prompts-step-dot {
+    background: var(--sig);
+    box-shadow: none;
+    color: var(--on-sig);
+  }
+  .prompts-step[data-state="current"] .prompts-step-dot {
+    box-shadow: inset 0 0 0 1.5px var(--sig);
+    color: var(--success);
+  }
+  .prompts-step-line {
+    width: 36px;
+    height: 2px;
+    flex: none;
+    border-radius: 2px;
+    background: var(--line-2);
+  }
+  .prompts-step-line[data-done] {
+    background: var(--sig);
+    box-shadow: 0 0 8px var(--sig);
+  }
+  @media (max-width: 760px) {
+    .prompts-steps {
+      flex-wrap: wrap;
+    }
+    .prompts-step {
+      flex: 1 1 40%;
+    }
+    .prompts-step-line {
+      display: none;
+    }
+  }
+
+  textarea.monitor-input.prompts-request {
+    min-height: 70px;
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 20px;
+  }
+  .prompts-bare {
+    min-width: 0;
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    font: inherit;
+    outline: none;
+  }
+  .prompts-bare::placeholder {
+    color: var(--muted-foreground);
+  }
+  .prompts-link {
+    color: var(--brand);
+    font-weight: 500;
+  }
+  .prompts-link:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .prompts-pre .k {
+    color: var(--brand);
+  }
+  .prompts-pre .a {
+    color: var(--success);
+  }
+}

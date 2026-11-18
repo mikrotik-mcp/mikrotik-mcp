@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { BackupsView } from "../../ui/observability/backups";
 import { api, postJson } from "../../ui/observability/api";
+import { toast } from "../../ui/observability/toast-action";
 
 vi.hoisted(() => Reflect.deleteProperty(Element.prototype, "animate"));
 vi.mock("../../ui/observability/api", () => ({
@@ -22,8 +23,9 @@ const data = {
 };
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
+// The restore dialog renders in a portal, so look in the whole document.
 const button = (label: string) =>
-  [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+  [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (b) => b.textContent?.trim() === label,
   );
 
@@ -55,12 +57,12 @@ afterEach(async () => {
 
 test("vault shows device-scoped host backups and loads body only on request", async () => {
   await act(async () => root.render(createElement(BackupsView)));
-  expect(host.textContent).toContain("Local backup vault");
+  expect(host.textContent).toContain("Backups · local config vault");
   expect(host.textContent).toContain("safe.rsc");
   expect(host.textContent).toContain("/tmp/fixture-backups");
   expect(api).toHaveBeenCalledWith("/api/backups");
   expect(api).not.toHaveBeenCalledWith("/api/backups/get?name=safe.rsc");
-  await act(async () => button("view")!.click());
+  await act(async () => button("View")!.click());
   expect(host.textContent).toContain("/ip address print");
   expect(postJson).not.toHaveBeenCalled();
 });
@@ -76,20 +78,21 @@ test("create backup sends explicit safe export options and never defaults to sec
     compact: false,
     terse: false,
   });
-  expect(host.textContent).toContain("Created new.rsc");
+  expect(toast.success).toHaveBeenCalledWith("Backup created");
 });
 
 test("restore requires explicit selection and a dry-run keeps confirm=false", async () => {
   await act(async () => root.render(createElement(BackupsView)));
   expect(button("Dry-run")).toBeUndefined();
-  await act(async () => button("restore")!.click());
-  expect(host.textContent).toContain("Restore safe.rsc");
+  await act(async () => button("Restore")!.click());
+  expect(document.body.textContent).toContain("Restore a backup");
+  expect(document.body.textContent).toContain("safe.rsc");
   await act(async () => button("Dry-run")!.click());
   expect(postJson).toHaveBeenCalledExactlyOnceWith("/api/backups/restore", {
     name: "safe.rsc",
     device: "fixture",
     confirm: false,
   });
-  expect(host.textContent).toContain("Dry-run OK");
+  expect(document.body.textContent).toContain("Dry-run OK");
   expect(button("Restore (commit)")).toBeTruthy();
 });

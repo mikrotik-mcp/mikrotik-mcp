@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Route } from "lucide-react";
 import {
   Combobox,
   ComboboxContent,
@@ -138,11 +139,18 @@ export function DeviceJumpHost({
       >
         <ComboboxTrigger className="dv-combo">
           <span className="flex min-w-0 items-center gap-2">
+            <Route aria-hidden="true" className="text-muted-foreground size-4 flex-none" />
             <ComboboxInput
               aria-label="Jump via device or address"
               placeholder="Direct, or search routers and addresses"
-              wrapperClassName="dv-combo-input flex-none"
-              className={cn("h-9 font-mono text-[12px]", value !== "direct" && "dv-fit")}
+              wrapperClassName={cn(
+                "dv-combo-input",
+                value === "direct" ? "min-w-0 flex-1" : "flex-none",
+              )}
+              className={cn(
+                "h-8 text-[13px]",
+                value !== "direct" && "dv-fit font-mono text-[12px]",
+              )}
             />
             {summary && (
               <span className="text-muted-foreground truncate text-[12px] leading-[21px]">

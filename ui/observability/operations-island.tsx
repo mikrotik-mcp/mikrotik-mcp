@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { animate, createScope, svg } from "animejs";
 import {
   islandAge,
@@ -225,8 +225,14 @@ export function OperationsIsland(props: OperationsIslandProps): ReactNode {
           props.onEvent(event);
         }}
       >
-        <span className="shell-dot" data-tone={event.isError ? "bad" : "ok"} aria-hidden="true" />
-        <span className="isl-tool">{event.tool}</span>
+        {event.isError ? (
+          <AlertTriangle className="isl-ico" data-tone="bad" aria-hidden="true" />
+        ) : (
+          <Check className="isl-ico" aria-hidden="true" />
+        )}
+        <span className="isl-tool" data-failed={event.isError || undefined}>
+          {event.tool}
+        </span>
         <span className="sr-only">{event.isError ? "failed" : "completed"}</span>
         <span className="r">
           {event.device ?? "Server"} · {hhmm(islandCompletedAt(event))}
@@ -260,11 +266,15 @@ export function OperationsIsland(props: OperationsIslandProps): ReactNode {
         aria-controls="operations-island-panel"
         onClick={() => (open ? close() : setOpen(true))}
       >
-        <span className="shell-dot" data-tone={TONE[signal.kind]} aria-hidden="true" />
+        <span
+          className="shell-dot"
+          data-tone={TONE[signal.kind]}
+          data-live={connected || undefined}
+          aria-hidden="true"
+        />
         <b>{props.mode === "off" ? "Offline" : props.paused ? "Paused" : "Live"}</b>
         {!props.compact && (
           <>
-            {props.mode !== "off" && <span className="mut">{props.mode.toUpperCase()}</span>}
             {spark}
             <span className="num mut">{perMinute}</span>
             {open ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}

@@ -1,0 +1,662 @@
+/*
+ * Security pages (Attacks, Vulnerabilities, Policies), after the approved
+ * Sec-* boards. Layout only; colours come from tailwind.css tokens.
+ */
+
+.sec-page {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+  line-height: 21px;
+}
+.sec-mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.sec-mut {
+  color: var(--muted-foreground);
+}
+.sec-faint {
+  color: var(--text-faint);
+}
+.sec-tx2 {
+  color: var(--text-secondary);
+}
+.sec-tx {
+  color: var(--foreground);
+}
+.sec-ok {
+  color: var(--success);
+}
+.sec-warn {
+  color: var(--warning);
+}
+.sec-bad {
+  color: var(--destructive);
+}
+.sec-acc {
+  color: var(--brand);
+}
+.sec-num {
+  font-variant-numeric: tabular-nums;
+}
+.sec-trunc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sec-col {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.sec-flex {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.sec-sp {
+  flex: 1;
+}
+.sec-end {
+  display: flex;
+  justify-content: flex-end;
+}
+.sec-grid {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+.sec-grid > * {
+  min-width: 0;
+}
+.sec-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+/* A failed row without the selected tint (the boards' .row.fail). */
+.monitor-row.sec-fail {
+  box-shadow: inset 2px 0 0 var(--destructive);
+}
+.sec-pill-led {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 9px;
+}
+.sec-panel-pad {
+  padding: 0 18px 16px;
+}
+
+/* ── Attacks ──────────────────────────────────────────────────────────────── */
+.sec-hero-aside {
+  height: 300px;
+}
+.sec-hero-hint {
+  flex-basis: 100%;
+  margin-top: 2px;
+}
+.sec-bars-x {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.sec-donut {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.sec-donut ul {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  list-style: none;
+}
+.sec-donut li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sec-inc-cols {
+  grid-template-columns: 20px 84px 92px 150px minmax(0, 1fr) 200px 110px 100px;
+}
+.sec-caret {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  padding: 0;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.sec-caret svg {
+  width: 16px;
+  height: 16px;
+}
+.sec-caret:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.sec-inc-row {
+  cursor: pointer;
+}
+.sec-inc-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 18px;
+  border-top: 1px solid var(--line);
+  padding: 4px 18px 18px 46px;
+}
+.sec-inc-detail[data-tone="bad"] {
+  background: linear-gradient(90deg, var(--bad-soft), transparent 60%);
+}
+.sec-inc-detail[data-tone="warn"] {
+  background: linear-gradient(90deg, var(--warn-soft), transparent 60%);
+}
+.sec-inc-detail > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding-top: 14px;
+}
+.sec-inc-detail > div:first-child {
+  gap: 12px;
+}
+.sec-inc-detail > div:last-child {
+  gap: 8px;
+}
+.sec-stages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sec-todo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  list-style: none;
+}
+.sec-evidence {
+  max-height: 190px;
+  overflow-y: auto;
+}
+.sec-evidence .r {
+  color: var(--destructive);
+}
+.sec-evidence .a {
+  color: var(--success);
+}
+.sec-evidence .k {
+  color: var(--brand);
+}
+.sec-attackers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sec-attacker {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.sec-attacker[data-blocked] {
+  opacity: 0.5;
+}
+.sec-attacker .monitor-bar {
+  height: 8px;
+}
+.sec-attacker .monitor-bar > span[data-tone="muted"] {
+  background: var(--text-faint);
+}
+.sec-src-cols {
+  grid-template-columns: 120px minmax(0, 1fr) 70px 120px 80px 74px;
+}
+.sec-src-cols > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sec-chips {
+  display: flex;
+  gap: 4px;
+  overflow: hidden;
+}
+.sec-resp-cols {
+  grid-template-columns: 12px 120px 84px minmax(0, 1fr) 92px;
+}
+.sec-schedule-copy {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 19px;
+}
+.sec-schedule-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+.sec-schedule-fields .monitor-select,
+.sec-schedule-fields .monitor-select select {
+  width: 100%;
+}
+.sec-schedule-mono select {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.sec-schedule-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.sec-link {
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 500;
+}
+.sec-detector {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--line);
+  padding: 9px 0;
+}
+.sec-detector > span:first-child {
+  font-size: 13px;
+}
+.sec-block-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 12px;
+  background: var(--bad-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 35%, transparent);
+  padding: 14px 16px;
+}
+.sec-block-head .monitor-dot {
+  box-shadow:
+    0 0 0 4px var(--bad-soft),
+    var(--glow) var(--destructive);
+}
+.sec-block-ip {
+  color: var(--text-emphasis);
+  font-family: var(--font-mt);
+  font-size: 16px;
+}
+.sec-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.monitor-facts.sec-facts {
+  grid-template-columns: 130px minmax(0, 1fr);
+}
+
+/* The phone layout (Sec-Attacks-Phone) replaces a few parts below 640px. */
+.sec-phone,
+.sec-phone-i {
+  display: none;
+}
+.sec-phone-head {
+  flex-direction: column;
+  gap: 6px;
+}
+.sec-phone-head h1 {
+  color: var(--text-emphasis);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.025em;
+}
+.sec-phone-head h1 em {
+  color: var(--destructive);
+  font-style: normal;
+}
+.sec-phone-head h1 .s {
+  color: var(--success);
+}
+.sec-phone-controls {
+  gap: 8px;
+}
+.monitor-row.sec-card {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 12px 14px;
+}
+.sec-card-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.sec-card-foot {
+  gap: 8px;
+}
+
+/* ── Vulnerabilities ──────────────────────────────────────────────────────── */
+.sec-checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sec-checks .monitor-check {
+  cursor: pointer;
+}
+.sec-dev-cols {
+  grid-template-columns: 10px minmax(0, 1fr) 110px minmax(0, 1fr) 220px;
+}
+.sec-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sec-finding {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) minmax(0, 0.9fr);
+  gap: 20px;
+  padding: 18px;
+}
+.sec-finding[data-mitigated] {
+  opacity: 0.6;
+}
+.sec-finding-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.sec-finding-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.sec-finding-main h3 {
+  margin: 0;
+  color: var(--text-emphasis);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+}
+.sec-finding-main p {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.sec-finding-main > .sec-card-line {
+  flex-wrap: wrap;
+}
+.sec-finding-id {
+  white-space: nowrap;
+  color: var(--text-emphasis);
+  font-family: var(--font-mt);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sec-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+}
+.sec-refs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--brand);
+  font-weight: 500;
+}
+.sec-refs svg {
+  width: 13px;
+  height: 13px;
+}
+.sec-finding-side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.sec-fix {
+  font-size: 13px;
+}
+.sec-path {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sec-path-chip {
+  color: var(--foreground);
+}
+.sec-path-chip svg {
+  width: 12px;
+  height: 12px;
+}
+.sec-version {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.sec-version b {
+  color: var(--success);
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+
+/* ── Policies ─────────────────────────────────────────────────────────────── */
+.sec-comp {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.sec-comp-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+.sec-comp-card .sec-col {
+  gap: 6px;
+}
+.sec-comp-name {
+  font-size: 13px;
+}
+.sec-matrix-cols {
+  grid-template-columns: minmax(0, 1fr) repeat(var(--cols, 3), 96px);
+}
+.sec-matrix-cols > .sec-mono {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.monitor-row.sec-matrix-row {
+  min-height: 40px;
+}
+.sec-cell {
+  height: 14px;
+  border-radius: 4px;
+  background: var(--line-2);
+}
+.sec-cell[data-status="pass"] {
+  background: var(--sig);
+  opacity: 0.75;
+}
+.sec-cell[data-status="fail"] {
+  background: var(--destructive);
+}
+.sec-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+}
+.sec-file-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 15px;
+}
+.sec-errt {
+  padding-left: 15px;
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 17px;
+}
+.sec-ngl {
+  padding: 12px 18px 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sec-fd-cols {
+  grid-template-columns: 20px 74px minmax(0, 1fr) 150px;
+}
+.sec-fd-open {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 18px 16px 46px;
+}
+.sec-fd-open > p {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.sec-fd-fix {
+  color: var(--text-secondary);
+}
+.sec-validator textarea.monitor-input {
+  width: 100%;
+  min-height: 190px;
+}
+.sec-validator-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1099px) {
+  .sec-inc-cols {
+    grid-template-columns: 20px 84px 92px 150px minmax(0, 1fr) 100px;
+  }
+  .sec-inc-cols > :nth-child(6),
+  .sec-inc-cols > :nth-child(7) {
+    display: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .sec-page {
+    gap: 14px;
+  }
+  .sec-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .sec-inc-detail {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 18px;
+  }
+  .sec-finding {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .sec-finding-side {
+    grid-column: 1 / -1;
+  }
+  .sec-comp {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sec-dev-cols {
+    grid-template-columns: 10px minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .sec-dev-cols > :nth-child(4),
+  .sec-dev-cols > :nth-child(5) {
+    display: none;
+  }
+  .sec-src-cols {
+    grid-template-columns: 120px minmax(0, 1fr) 40px;
+  }
+  .sec-src-cols > :nth-child(n + 4) {
+    display: none;
+  }
+  .sec-resp-cols {
+    grid-template-columns: 12px minmax(0, 1fr) 84px;
+  }
+  .sec-resp-cols > :nth-child(3),
+  .sec-resp-cols > :nth-child(4) {
+    display: none;
+  }
+  .sec-matrix-cols {
+    grid-template-columns: minmax(0, 1fr) repeat(var(--cols, 3), 56px);
+  }
+  .sec-fd-cols {
+    grid-template-columns: 20px 74px minmax(0, 1fr);
+  }
+  .sec-fd-cols > :nth-child(4) {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .sec-wide {
+    display: none !important;
+  }
+  .sec-phone {
+    display: flex;
+  }
+  .sec-phone-i {
+    display: inline;
+  }
+  .monitor-row.sec-phone {
+    display: grid;
+  }
+  .monitor-strip.sec-phone {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* The phone board puts the incidents right under the scan controls. */
+  .sec-phone-late {
+    order: 1;
+  }
+  .sec-schedule-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sec-donut {
+    flex-wrap: wrap;
+  }
+  .sec-page > .monitor-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sec-finding {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .sec-finding-score {
+    flex-direction: row;
+  }
+  .sec-path {
+    flex-wrap: wrap;
+  }
+}

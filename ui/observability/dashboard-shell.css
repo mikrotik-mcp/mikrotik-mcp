@@ -1,5 +1,6 @@
 /* Dashboard shell: sidebar, rail, phone drawer, header, search palette.
-   Values come from the approved Shell boards (kit.css "Shell" section). */
+   Values come from the approved Signal boards (signal.css "shell" and the
+   Shell-Rail, Shell-Search, Shell-Live and Shell-Phone boards). */
 .dashboard-shell {
   display: flex;
   min-height: 100dvh;
@@ -17,7 +18,7 @@
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -27,13 +28,13 @@
 
 /* ── shared pieces ───────────────────────────────────────────────────────── */
 .ib {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   flex: none;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--muted-foreground);
   padding: 0;
@@ -43,48 +44,72 @@
     color 150ms;
 }
 .ib:hover {
-  background: var(--accent);
+  background: var(--glass-2);
   color: var(--foreground);
+}
+.ib.box {
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.ib.box:hover {
+  background: var(--glass-2);
 }
 .kbd2 {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   height: 20px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--border);
-  font-family: var(--font-sans);
+  padding: 0 6px;
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  font-family: var(--font-mt);
   font-size: 11px;
-  font-weight: 510;
-  color: var(--muted-foreground);
+  font-weight: 400;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
+/* The shell's LED: `data-live` adds the live halo. */
 .shell-dot {
   display: inline-block;
   width: 7px;
   height: 7px;
   flex: none;
-  border-radius: 9999px;
+  border-radius: 9px;
   background: var(--text-faint);
 }
 .shell-dot[data-tone="ok"] {
-  background: var(--success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);
+  background: var(--sig);
+  box-shadow: var(--glow) var(--sig);
 }
 .shell-dot[data-tone="warn"] {
   background: var(--warning);
+  box-shadow: var(--glow) var(--warning);
 }
 .shell-dot[data-tone="bad"] {
   background: var(--destructive);
+  box-shadow: var(--glow) var(--destructive);
+}
+.shell-dot[data-tone="int"] {
+  background: var(--brand);
+  box-shadow: var(--glow) var(--brand);
+}
+.shell-dot[data-live][data-tone="ok"] {
+  box-shadow:
+    0 0 0 4px var(--sig-soft),
+    var(--glow) var(--sig);
+}
+.shell-dot[data-live][data-tone="int"] {
+  box-shadow:
+    0 0 0 4px var(--acc-soft),
+    var(--glow) var(--brand);
 }
 .shell-link {
   border: 0;
   padding: 0;
   background: none;
   font: inherit;
-  font-weight: 510;
+  font-weight: 500;
   color: var(--brand);
   cursor: pointer;
 }
@@ -97,51 +122,47 @@
   height: 18px;
   padding: 0 6px;
   border-radius: 9999px;
-  background: color-mix(in srgb, var(--destructive) 16%, transparent);
+  background: var(--bad-soft);
   color: var(--destructive);
   font-size: 11px;
-  font-weight: 590;
+  font-weight: 600;
 }
 .cnt {
-  font-family: var(--font-mono);
+  font-family: var(--font-mt);
   font-size: 11px;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
-.newdot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 9999px;
-  background: var(--chart-1);
-}
 
-/* ── sidebar ─────────────────────────────────────────────────────────────── */
+/* ── sidebar (the boards' .side) ─────────────────────────────────────────── */
 .sb {
   position: sticky;
   top: 0;
   z-index: 20;
   flex: none;
-  width: 264px;
+  width: 248px;
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--card);
-  box-shadow: inset -1px 0 0 var(--border);
+  background: var(--shell-sidebar);
+  box-shadow: inset -1px 0 0 var(--line);
+  backdrop-filter: blur(14px);
   color: var(--foreground);
   line-height: 21px;
 }
 .shell-sidebar-inner {
   display: flex;
   flex-direction: column;
+  gap: 12px;
   flex: 1;
   min-height: 0;
+  padding: 16px 12px 12px;
 }
 .sb-top {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 12px 10px 14px;
+  padding: 0 4px;
 }
 .shell-brand {
   display: flex;
@@ -151,20 +172,21 @@
   min-width: 0;
   color: inherit;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 9px;
 }
+/* The glowing brand mark. */
 .logo {
   width: 30px;
   height: 30px;
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  background: var(--accent);
+  border-radius: 9px;
+  background: var(--glass-2);
   box-shadow:
-    inset 0 0 0 1px var(--input),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  color: var(--brand);
+    inset 0 0 0 1px var(--line-2),
+    0 0 24px var(--sig-soft);
+  color: var(--sig);
 }
 .sb .logo svg {
   width: 18px;
@@ -178,33 +200,31 @@
 }
 .brand b {
   font-size: 14px;
-  line-height: 18px;
-  font-weight: 590;
+  line-height: 21px;
+  font-weight: 600;
   color: var(--text-emphasis);
   letter-spacing: -0.01em;
 }
-.brand b span {
-  color: var(--brand);
-}
 .brand small {
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 11px;
+  line-height: 21px;
   color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* "Jump to a page" (the boards' .cmd). */
 .sb-search {
-  margin: 4px 12px 8px;
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
-  height: 32px;
-  padding: 0 6px 0 10px;
+  height: 34px;
+  padding: 0 8px 0 10px;
   border: 0;
-  border-radius: 6px;
-  background: var(--overlay-02);
-  box-shadow: inset 0 0 0 1px var(--input);
+  border-radius: 10px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--muted-foreground);
   font: inherit;
   font-size: 13px;
@@ -213,7 +233,7 @@
   transition: background-color 150ms;
 }
 .sb-search:hover {
-  background: var(--overlay-03);
+  background: var(--glass-2);
 }
 .sb-search .ph {
   flex: 1;
@@ -221,15 +241,16 @@
 .shell-nav-scroll {
   flex: 1;
   min-height: 0;
+  margin: 0 -12px;
 }
 .shell-nav-scroll [data-slot="scroll-area-viewport"] > div {
   display: block !important;
 }
 .sb-scroll {
-  padding: 4px 8px 12px;
+  padding: 0 12px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 1px;
 }
 .sec {
   display: flex;
@@ -239,30 +260,47 @@
 .shell-groups {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
+/* Small uppercase label: "Pinned". */
+.ngl {
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  line-height: 21px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+/* A group row (the boards' .ng): icon, name, alert badge, page count. */
 .sec-h {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  margin-top: 4px;
   padding: 0 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   font: inherit;
   font-size: 12px;
-  font-weight: 510;
-  line-height: normal;
-  color: var(--muted-foreground);
+  font-weight: 500;
+  line-height: 21px;
+  /* The boards' link reset paints rows in the body colour, not tx2. */
+  color: var(--foreground);
   text-align: left;
 }
-.sb .sec-h svg.chev,
-.sb .sec-h .chev {
-  width: 12px;
-  height: 12px;
-  color: var(--text-faint);
-  flex: none;
+.sb .sec-h svg {
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
+.sec-h .lbl {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .shell-group-heading {
   cursor: pointer;
@@ -272,10 +310,14 @@
 }
 .shell-group-heading:hover {
   background: var(--overlay-03);
-  color: var(--text-secondary);
+  color: var(--foreground);
 }
-.shell-group-heading[data-open="true"] .chev {
-  transform: rotate(90deg);
+.shell-group-heading[data-open="true"] {
+  color: var(--foreground);
+}
+.sb .shell-group-heading[data-open="true"] svg,
+.sb .shell-group-heading[data-active="true"] svg {
+  color: var(--success);
 }
 .sec-h .n {
   margin-left: auto;
@@ -285,14 +327,13 @@
 }
 .sec-h .pill-bad {
   margin-left: auto;
-  margin-right: 4px;
 }
 .sec-h .pill-bad + .n {
-  margin-left: 0;
+  margin-left: 6px;
 }
 .sec-d {
   margin: 0;
-  padding: 0 8px 6px 26px;
+  padding: 0 8px 6px;
   font-size: 12px;
   line-height: 16px;
   color: var(--text-faint);
@@ -312,34 +353,35 @@
   flex-direction: column;
   gap: 1px;
 }
-.nav.guide::before {
-  content: "";
-  position: absolute;
-  left: 19px;
-  top: 4px;
-  bottom: 4px;
-  width: 1px;
-  background: var(--border);
-}
 .shell-nav-row {
   position: relative;
   min-width: 0;
 }
+/* A page row (the boards' .ni): a small dot, the name, a count. */
 .it {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   height: 32px;
-  padding: 0 8px;
-  border-radius: 6px;
+  padding: 0 10px 0 31px;
+  border-radius: 8px;
   font-size: 13px;
-  /* The boards render rows in the body colour (their link reset wins over tx2). */
   color: var(--foreground);
   text-decoration: none;
   transition:
     background-color 150ms,
     color 150ms;
+}
+.it::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: 15px;
+  width: 5px;
+  height: 5px;
+  border-radius: 9px;
+  background: var(--line-2);
 }
 .it > :not(.shell-nav-hl) {
   position: relative;
@@ -348,6 +390,13 @@
   width: 16px;
   height: 16px;
   color: var(--muted-foreground);
+}
+/* Pinned rows carry the page icon instead of the dot. */
+.it[data-pinned] {
+  padding-left: 10px;
+}
+.it[data-pinned]::before {
+  display: none;
 }
 .it .lbl {
   flex: 1;
@@ -362,31 +411,26 @@
 }
 .it[data-active] {
   color: var(--text-emphasis);
-  font-weight: 510;
 }
 .it[data-active]:hover {
   background: transparent;
 }
-.it[data-active] > svg {
-  color: var(--brand);
+.it[data-active]::before {
+  z-index: 1;
+  background: var(--sig);
+  box-shadow: var(--glow) var(--sig);
 }
+.it[data-active] > svg {
+  color: var(--success);
+}
+/* The active highlight: a teal wash and edge that slide to the new page. */
 .shell-nav-hl {
   position: absolute;
   inset: 0;
-  border-radius: 6px;
-  background: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--sig-soft), transparent);
+  box-shadow: inset 2px 0 0 var(--sig);
   pointer-events: none;
-}
-.shell-nav-hl::before {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
-  background: var(--chart-1);
 }
 .shell-nav-badges {
   display: inline-flex;
@@ -408,7 +452,7 @@
   border: 0;
   border-radius: 6px;
   padding: 0;
-  background: var(--card);
+  background: var(--surface-2);
   color: var(--text-faint);
   cursor: pointer;
   opacity: 0;
@@ -422,11 +466,11 @@
   height: 13px;
 }
 .shell-pin-toggle[aria-pressed="true"] {
-  color: var(--brand);
+  color: var(--success);
 }
 .shell-pin-toggle:hover {
-  background: var(--accent);
-  color: var(--brand);
+  background: var(--surface-3);
+  color: var(--success);
 }
 .shell-nav-row:hover .shell-pin-toggle,
 .shell-nav-row:focus-within .shell-pin-toggle {
@@ -461,12 +505,16 @@
 .shell-pin-hint {
   padding-left: 8px;
 }
+/* The footer card (the boards' .sfoot). */
 .sb-foot {
-  padding: 10px 12px 12px;
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  box-shadow: inset 0 1px 0 var(--border);
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 .shell-instance {
   display: flex;
@@ -479,20 +527,16 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-.shell-instance .shell-dot {
-  width: 6px;
-  height: 6px;
+  min-width: 0;
 }
 .shell-stream-label {
-  color: var(--foreground);
-}
-.shell-stream-protocol {
-  height: 18px;
+  white-space: nowrap;
 }
 .shell-events {
   margin-left: auto;
-  color: var(--muted-foreground);
+  font-family: var(--font-mt);
+  font-size: 12px;
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 .srv {
@@ -501,12 +545,11 @@
 }
 .srv .monitor-btn {
   flex: 1;
-  justify-content: center;
 }
 .shell-version {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   color: var(--muted-foreground);
 }
@@ -516,11 +559,13 @@
 
 /* ── rail ────────────────────────────────────────────────────────────────── */
 .sb.rail {
-  width: 64px;
+  width: 68px;
   align-items: center;
+  gap: 12px;
+  padding: 16px 0 12px;
 }
 .rail .sb-top {
-  padding: 14px 0 10px;
+  padding: 0;
   justify-content: center;
 }
 .rail .shell-brand {
@@ -529,12 +574,12 @@
 .ri {
   position: relative;
   width: 40px;
-  height: 36px;
+  height: 38px;
   flex: none;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0;
   background: transparent;
   color: var(--muted-foreground);
@@ -551,26 +596,21 @@
   background: var(--overlay-03);
   color: var(--foreground);
 }
+/* The rail's search button carries an outline, as on the board. */
+.rail > .ri[aria-haspopup="dialog"] {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
 span.ri {
   cursor: default;
 }
 span.ri:hover {
   background: transparent;
 }
-.ri.on {
-  background: var(--accent);
-  color: var(--brand);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-.ri.on::before {
-  content: "";
-  position: absolute;
-  left: -12px;
-  top: 9px;
-  bottom: 9px;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
-  background: var(--chart-1);
+.ri.on,
+.ri[aria-current="page"] {
+  background: var(--sig-soft);
+  color: var(--success);
+  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 .ri .bdot {
   position: absolute;
@@ -580,10 +620,10 @@ span.ri:hover {
   height: 6px;
   border-radius: 9999px;
   background: var(--destructive);
-  box-shadow: 0 0 0 2px var(--card);
+  box-shadow: 0 0 0 2px var(--background);
 }
 .ri .bdot[data-tone="int"] {
-  background: var(--chart-1);
+  background: var(--brand);
 }
 .ri .feature-new-dot {
   top: 6px;
@@ -595,13 +635,12 @@ span.ri:hover {
   width: 24px;
   height: 1px;
   flex: none;
-  background: var(--border);
-  margin: 6px 0;
+  background: var(--line);
 }
 .rail-groups {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
 }
 .rail-spacer {
@@ -610,33 +649,33 @@ span.ri:hover {
 .rail-foot {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   align-items: center;
   width: 100%;
-  padding: 8px 0 12px;
-  box-shadow: inset 0 1px 0 var(--border);
 }
+/* A rail group's pages, beside its icon. */
 .fly {
   position: fixed;
-  left: 72px;
+  left: 76px;
   z-index: 50;
-  width: 232px;
-  padding: 6px;
-  border-radius: 10px;
-  background: var(--muted);
+  width: 240px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--surface-2);
   box-shadow:
-    inset 0 0 0 1px var(--input),
-    0 16px 40px rgba(0, 0, 0, 0.4);
+    inset 0 0 0 1px var(--line-2),
+    var(--shadow-overlay);
+  backdrop-filter: blur(14px);
   text-align: left;
 }
 .fly-h {
   display: flex;
   flex-direction: column;
-  padding: 6px 8px 8px;
+  padding: 6px 10px 8px;
 }
 .fly-h b {
   font-size: 13px;
-  font-weight: 590;
+  font-weight: 700;
   color: var(--foreground);
 }
 .fly-h small {
@@ -653,40 +692,43 @@ span.ri:hover {
 .shell-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
 }
 .shell-drawer {
   position: fixed;
   top: 0;
   bottom: 0;
   left: 0;
-  width: 300px;
+  width: 304px;
   max-width: 88vw;
   display: flex;
-  box-shadow: 0 0 48px rgba(0, 0, 0, 0.5);
+  background: var(--background);
+  font-size: 14px;
+  line-height: 21px;
   outline: none;
 }
 .shell-drawer .sb {
   position: relative;
   width: 100%;
   height: 100%;
+  background: var(--surface-2);
 }
 
-/* ── header ──────────────────────────────────────────────────────────────── */
+/* ── header (the boards' .top) ───────────────────────────────────────────── */
 .hd {
   position: sticky;
   top: 0;
   z-index: 30;
   flex: none;
-  height: 56px;
+  height: 60px;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 20px 0 16px;
-  background: color-mix(in srgb, var(--background) 82%, transparent);
-  backdrop-filter: blur(12px);
-  box-shadow: inset 0 -1px 0 var(--border);
+  padding: 0 28px;
+  background: color-mix(in srgb, var(--background) 70%, transparent);
+  backdrop-filter: blur(14px);
+  box-shadow: inset 0 -1px 0 var(--line);
   color: var(--foreground);
   line-height: 21px;
 }
@@ -700,33 +742,27 @@ span.ri:hover {
 .shell-header-spacer {
   flex: 1;
 }
-.vline {
-  width: 1px;
-  height: 20px;
-  flex: none;
-  background: var(--input);
-}
 .crumb {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   font-size: 13px;
   color: var(--muted-foreground);
 }
-.crumb svg {
-  width: 14px;
-  height: 14px;
+.hd .crumb svg {
+  width: 15px;
+  height: 15px;
 }
 .crumb .sep {
-  color: var(--text-faint);
+  opacity: 0.5;
 }
 .crumb span {
   white-space: nowrap;
 }
 .crumb b {
   color: var(--foreground);
-  font-weight: 510;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -736,13 +772,13 @@ span.ri:hover {
   align-items: center;
   gap: 8px;
   width: 260px;
-  height: 32px;
+  height: 34px;
   flex: none;
-  padding: 0 6px 0 10px;
+  padding: 0 8px 0 12px;
   border: 0;
   border-radius: 9999px;
-  background: var(--overlay-03);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--muted-foreground);
   font: inherit;
   font-size: 13px;
@@ -751,13 +787,13 @@ span.ri:hover {
   transition: background-color 150ms;
 }
 .hsearch:hover {
-  background: var(--accent);
+  background: var(--glass-2);
 }
 .hsearch .ph {
   flex: 1;
 }
 
-/* ── search palette ──────────────────────────────────────────────────────── */
+/* ── search palette (Shell-Search board) ─────────────────────────────────── */
 .shell-palette-root {
   position: fixed;
   inset: 0;
@@ -765,16 +801,16 @@ span.ri:hover {
 }
 .pal {
   position: fixed;
-  top: 112px;
+  top: 110px;
   left: 0;
   right: 0;
   margin: 0 auto;
-  width: min(640px, calc(100vw - 32px));
-  border-radius: 12px;
-  background: var(--muted);
+  width: min(620px, calc(100vw - 32px));
+  border-radius: 18px;
+  background: var(--surface-2);
   box-shadow:
-    inset 0 0 0 1px var(--input),
-    0 24px 64px rgba(0, 0, 0, 0.5);
+    inset 0 0 0 1px var(--line-2),
+    var(--shadow-overlay);
   overflow: hidden;
   color: var(--foreground);
   font-size: 14px;
@@ -783,11 +819,11 @@ span.ri:hover {
 .pal-in {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 52px;
-  padding: 0 16px;
-  box-shadow: inset 0 -1px 0 var(--border);
-  font-size: 15px;
+  gap: 12px;
+  height: 56px;
+  padding: 0 18px;
+  box-shadow: inset 0 -1px 0 var(--line);
+  font-size: 16px;
   color: var(--foreground);
 }
 .pal .pal-in svg {
@@ -804,7 +840,7 @@ span.ri:hover {
   background: transparent;
   color: inherit;
   font: inherit;
-  caret-color: var(--brand);
+  caret-color: var(--sig);
   outline: none;
 }
 .pal-in input::placeholder {
@@ -817,42 +853,40 @@ span.ri:hover {
   padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 .pal-g > .label {
-  padding: 10px 8px 6px;
-  font-size: 12px;
-  font-weight: 510;
-  color: var(--muted-foreground);
-}
-.pal-g > .label[data-first="true"] {
-  padding-top: 4px;
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 .pal-hl {
   position: absolute;
   top: 0;
   left: 8px;
   right: 8px;
-  border-radius: 8px;
-  background: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: 10px;
+  background: var(--sig-soft);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   pointer-events: none;
 }
 .pal-r {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 40px;
+  gap: 12px;
+  height: 42px;
   flex: none;
-  padding: 0 10px;
-  border-radius: 8px;
+  padding: 0 12px;
+  border-radius: 10px;
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
 }
 .pal .pal-r svg {
-  color: var(--muted-foreground);
+  color: currentColor;
 }
 .pal-t {
   white-space: nowrap;
@@ -862,7 +896,7 @@ span.ri:hover {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--text-faint);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 .pal-r .r {
@@ -871,35 +905,32 @@ span.ri:hover {
   flex: none;
   gap: 4px;
   align-items: center;
-  color: var(--text-faint);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 .pal-r.on {
   color: var(--text-emphasis);
 }
-.pal .pal-r.on > svg {
-  color: var(--brand);
-}
 .pal-r mark {
   background: none;
-  color: var(--brand);
-  font-weight: 590;
+  color: var(--success);
+  font-weight: 600;
 }
 .pal-f {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
-  height: 40px;
-  padding: 0 16px;
-  box-shadow: inset 0 1px 0 var(--border);
-  background: var(--overlay-02);
+  padding: 14px 24px;
+  box-shadow: inset 0 1px 0 var(--line);
+  background: var(--glass);
   font-size: 12px;
   color: var(--muted-foreground);
 }
 .pal-f > span {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 .pal-f .pal-count {
   margin-left: auto;
@@ -913,12 +944,13 @@ span.ri:hover {
 }
 .shell-nav-empty strong {
   color: var(--foreground);
-  font-weight: 510;
+  font-weight: 500;
 }
 
-/* ── main column ─────────────────────────────────────────────────────────── */
+/* ── main column (the boards' .content) ──────────────────────────────────── */
 .shell-main {
-  padding: 28px 32px;
+  gap: 18px;
+  padding: 26px 28px 28px;
 }
 /* Native fieldsets and intrinsic select labels must not widen mobile grids. */
 .shell-main :where(form, fieldset, label, .grid) {
@@ -932,54 +964,9 @@ span.ri:hover {
   min-width: 0;
   overflow: hidden;
 }
+/* The header for pages not yet on PageIntro: the same eyebrow, title and lead. */
 .shell-page-header {
-  position: relative;
-  /* With the content padding this keeps the old 36px gap under the header. */
-  padding-block: 8px 25px;
-  border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
-}
-.shell-page-title {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  min-width: 0;
-}
-.shell-page-icon {
-  color: var(--brand);
-  background: var(--shell-selected);
-  border: 1px solid color-mix(in srgb, var(--brand) 25%, var(--border));
-  border-radius: 14px;
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-.shell-page-icon svg {
-  width: 25px;
-  height: 25px;
-}
-.shell-eyebrow {
-  display: block;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-  font-size: 9px;
-  letter-spacing: 1.6px;
-  font-weight: 600;
-  margin-bottom: 5px;
-}
-.shell-page-title h1 {
-  font-family: var(--font-sans);
-  font-size: clamp(24px, 2.4vw, 32px);
-  font-weight: 650;
-  letter-spacing: -1.1px;
-  line-height: 1.25;
-}
-.shell-page-title p {
-  font-size: 12px;
-  margin-top: 5px;
-  max-width: 60ch;
 }
 .dashboard-panel,
 .dashboard-stat {
@@ -988,21 +975,19 @@ span.ri:hover {
 .dashboard-stat {
   position: relative;
   overflow: hidden;
-  border-top-color: color-mix(in srgb, var(--brand) 40%, var(--border));
 }
 .dashboard-stat > p {
-  font-size: 10px;
-  letter-spacing: 0.7px;
+  font-size: 12px;
   text-transform: none;
 }
 .dashboard-stat > div {
-  letter-spacing: -0.8px;
+  letter-spacing: -0.02em;
   font-weight: 600;
 }
 .dashboard-stat > div small {
   display: block;
   margin: 4px 0 0;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0;
   font-weight: 400;
 }
@@ -1011,10 +996,10 @@ span.ri:hover {
   top: 8px;
   left: 8px;
   transform: translateY(-150%);
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--sig);
+  color: var(--on-sig);
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   z-index: 100;
 }
 .shell-skip-link:focus {
@@ -1023,7 +1008,7 @@ span.ri:hover {
 /* Composite fields own their focus treatment. Do not draw a second outline
    around the inner input on top of BeUI's ring or a search group's outline. */
 :is(.dashboard-shell, .shell-drawer, .pal) :focus-visible:not(input[data-slot="input"], input) {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
@@ -1063,9 +1048,6 @@ span.ri:hover {
   .shell-main {
     padding-inline: 24px;
   }
-  .shell-page-icon {
-    display: none;
-  }
 }
 @media (max-width: 1099px) {
   .cap .sp,
@@ -1073,51 +1055,25 @@ span.ri:hover {
     display: none;
   }
 }
+/* Phones (Shell-Phone board). */
 @media (max-width: 899px) {
   .hd {
+    height: 56px;
     padding: 0 12px;
-    gap: 8px;
   }
   .hd .ib {
     width: 36px;
     height: 36px;
   }
   .shell-main {
-    padding: 20px 16px;
-    gap: 16px;
+    gap: 14px;
+    padding: 18px 16px;
   }
   .pal {
     top: 16px;
   }
   .pal-f > span:not(.pal-count) {
     display: none;
-  }
-  .shell-page-header {
-    padding-block: 0 20px;
-  }
-  .shell-page-title {
-    width: 100%;
-  }
-  .shell-page-title h1 {
-    font-size: 27px;
-  }
-  .shell-page-header > span.flex-1 {
-    display: none;
-  }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .shell-page-icon {
-    animation: shell-arrive 350ms ease-out both;
-  }
-  @keyframes shell-arrive {
-    from {
-      opacity: 0.4;
-      transform: translateY(5px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 }
 @media (prefers-reduced-motion: reduce) {

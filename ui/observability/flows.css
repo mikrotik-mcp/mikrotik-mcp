@@ -1,15 +1,21 @@
-/* Flows page. Tokens only; shared parts live in monitoring.css. */
+/* Flows page, after the Mon-Flows board. Tokens only; shared parts live in monitoring.css. */
 
-.flows-columns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
+.flows-page {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 18px;
 }
-.flows-talkers {
-  flex: 3 1 560px;
+/* The board's panel title keeps a 220px basis, so controls wrap under it when
+   tight. MonitorPanel's flex-1 utility drops that basis; restore it here. */
+.flows-page .monitor-panel-head > .min-w-0 {
+  flex: 1 1 220px;
 }
-.flows-side {
-  flex: 2 1 340px;
+
+/* The board's hero graphic column is 440px wide. */
+.flows-page .monitor-head[data-layout="verdict"][data-aside] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
 }
 
 /* The board's .mono: 12px, colour from the row. */
@@ -18,33 +24,68 @@
   font-size: 12px;
 }
 
-/* Top talkers: rank, key, share bar, bytes, share. */
-.flows-talker-grid {
-  grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 2fr) 76px 48px;
+/* Exporter radar beside the header. Hovering a node dims the others. */
+.flows-radar-box {
+  height: 300px;
+  overflow: hidden;
+}
+.flows-radar-node {
+  transition: opacity 150ms ease;
+}
+.flows-radar:has(.flows-radar-node:hover) .flows-radar-node:not(:hover) {
+  opacity: 0.35;
 }
 
-/* Protocols. */
+/* Bytes over time. */
+/* Inline like the board's chart, which leaves a line's descender gap under it. */
+.flows-chart {
+  display: inline;
+  overflow: visible;
+  vertical-align: baseline;
+}
+.flows-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* Top talkers beside protocols and exporters. */
+.flows-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+.flows-side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+.flows-talker-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 70px 44px;
+}
+.flows-bar.monitor-bar {
+  width: 100%;
+  height: 6px;
+}
+
+/* Protocols: the donut and its legend. */
 .flows-protocols {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 0 20px 20px;
+  align-items: center;
+  gap: 18px;
 }
-.flows-share {
-  display: flex;
-  height: 10px;
-  gap: 2px;
-  overflow: hidden;
-  border-radius: 9999px;
-}
-.flows-share > span {
-  min-width: 2px;
-  transition: width 320ms cubic-bezier(0.25, 1, 0.5, 1);
+.flows-protocols > svg {
+  flex: none;
 }
 .flows-legend {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
   font-size: 13px;
 }
 .flows-legend > li {
@@ -52,72 +93,79 @@
   align-items: center;
   gap: 8px;
 }
-
-/* Exporters, under Protocols in the same panel. */
-.flows-subhead {
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
+.flows-legend i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 3px;
 }
-.flows-exporter {
-  grid-template-columns: minmax(0, 1fr) auto;
-  row-gap: 4px;
+
+/* Exporters. */
+.flows-exporter-grid {
+  grid-template-columns: 150px minmax(0, 1fr);
 }
 .flows-exporter-name {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
-.flows-exporter-stats {
-  grid-column: 1 / -1;
-  padding-left: 15px;
-  color: var(--muted-foreground);
+.flows-exporter-status {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
   font-size: 12px;
 }
-
-/* Bytes over time. */
-/* Inline like the board's svg, so the axis sits the same distance below. */
-.flows-chart {
-  display: inline;
-  vertical-align: baseline;
-  overflow: visible;
-}
-.flows-chart-peak,
-.flows-chart-base {
-  stroke: var(--chart-grid);
-}
-.flows-chart-peak {
-  stroke-dasharray: 2 4;
-}
-.flows-chart-area {
-  fill: var(--chart-1);
-  opacity: 0.18;
-}
-.flows-chart-line {
-  fill: none;
-  stroke: var(--chart-1);
-  stroke-width: 2;
-}
-.flows-chart-hit {
-  fill: transparent;
-}
-.flows-chart-hit:hover {
-  fill: var(--overlay-03);
-}
-.flows-chart-axis {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+.flows-exporter-status > :first-child {
+  font-weight: 500;
 }
 
 /* Busiest conversations. */
 .flows-conv-grid {
-  grid-template-columns: minmax(0, 1.4fr) 24px minmax(0, 1.6fr) 80px 90px;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr) 150px 80px;
 }
 .flows-arrow {
+  display: inline;
   width: 16px;
   height: 16px;
+  vertical-align: baseline;
+}
+
+@media (max-width: 1100px) {
+  .flows-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 899px) {
+  .flows-page {
+    gap: 14px;
+  }
+  .flows-page .monitor-head[data-layout="verdict"][data-aside] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .flows-exporter-grid {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+  }
+  /* The group-by control is wider than a phone panel; it scrolls sideways. */
+  .flows-page .monitor-panel-extra {
+    max-width: 100%;
+  }
+  .flows-page .monitor-panel-extra .monitor-seg {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .flows-page .monitor-panel-extra .monitor-seg-item {
+    flex: none;
+  }
+  /* On a phone the port column folds away; the tooltip keeps it. */
+  .flows-conv-grid {
+    grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) 64px;
+  }
+  .flows-conv-grid > :nth-child(4) {
+    display: none;
+  }
+  .flows-talker-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 64px 40px;
+  }
 }

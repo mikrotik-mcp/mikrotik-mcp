@@ -1,15 +1,31 @@
 /**
- * Drift Guard dashboard view — fleet-wide golden-config drift detection,
- * per-device diff viewer with change attribution, and baseline management.
+ * Drift Guard (the Cfg-Drift board): fleet-wide golden-config drift. One card
+ * per router, a detail panel with the score, the sections that moved, who
+ * moved them (from the router log) and the unified diff, and the baselines
+ * each router is checked against. Setting a baseline opens a dialog
+ * (Cfg-Drift-SetBaseline).
  */
-import { LoadingState } from "./loading-state";
-import { UnifiedDiff } from "./diff-view";
+import "./drift.css";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { Archive, Check, ChevronDown, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { api, deleteJson, postJson } from "./api";
-import { Panel, StatCard } from "./atoms";
-import { Badge, Button, Dot, Input, Select } from "./geist";
-import type { GeistType } from "./geist";
+import { DiffPre, ScoreRing } from "./config-charts";
+import { LoadingState } from "./loading-state";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorDialog,
+  MonitorEmpty,
+  MonitorNote,
+  MonitorPanel,
+  PageIntro,
+  StatusBadge,
+  StatusDot,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
+import { toast } from "./toast-action";
 import type {
   DriftAttribution,
   DriftBaseline,
@@ -17,22 +33,29 @@ import type {
   DriftReport,
   DriftSection,
 } from "./types";
-import { toast } from "./toast-action";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function clock(ms: number): string {
-  const d = new Date(ms);
-  return d.toLocaleString();
+  return new Date(ms).toLocaleString();
+}
+
+function shortDate(ms: number): string {
+  return new Date(ms).toLocaleString([], {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function day(ms: number): string {
+  return new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function hhmm(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function ago(ms: number): string {
@@ -43,22 +66,31 @@ function ago(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
-/** Status → Geist semantic variant, shared by the status badge/dot. */
-const STATUS_TYPE: Record<string, GeistType> = {
-  "in-sync": "success",
-  drifted: "warning",
-  unknown: "secondary",
-  "no-baseline": "secondary",
-};
+function size(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
-const STATUS_LABELS: Record<string, string> = {
-  "in-sync": "In Sync",
+function shortSha(sha: string): string {
+  return sha.length > 10 ? `${sha.slice(0, 4)}…${sha.slice(-4)}` : sha;
+}
+
+type Status = DriftDeviceStatus["status"];
+const STATUS_TONE: Record<Status, Tone> = {
+  "in-sync": "good",
+  drifted: "warn",
+  unknown: "bad",
+  "no-baseline": "default",
+};
+const STATUS_LABEL: Record<Status, string> = {
+  "in-sync": "In sync",
   drifted: "Drifted",
   unknown: "Unknown",
-  "no-baseline": "No Baseline",
+  "no-baseline": "No baseline",
 };
 
-// ── Snapshot picker for setting baselines from the dashboard ─────────────
+// ── Set baseline dialog ─────────────────────────────────────────────────────
 
 interface SnapshotMeta {
   id: string;
@@ -69,8 +101,16 @@ interface SnapshotMeta {
   sha: string;
 }
 
-function SetBaselineForm({ device, onDone }: { device: string; onDone: () => void }): ReactNode {
-  const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
+function SetBaselineDialog({
+  device,
+  onClose,
+  onDone,
+}: {
+  device: string;
+  onClose: () => void;
+  onDone: () => void;
+}): ReactNode {
+  const [snapshots, setSnapshots] = useState<SnapshotMeta[] | null>(null);
   const [selected, setSelected] = useState("");
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
@@ -79,13 +119,15 @@ function SetBaselineForm({ device, onDone }: { device: string; onDone: () => voi
   useEffect(() => {
     void api<{ device: string; snapshots: SnapshotMeta[] }>(
       `/api/drift/history/${encodeURIComponent(device)}?limit=20`,
-    ).then((r) => {
-      setSnapshots(r.snapshots);
-      if (r.snapshots.length > 0) setSelected(r.snapshots[0]!.id);
-    });
+    )
+      .then((r) => {
+        setSnapshots(r.snapshots);
+        if (r.snapshots.length > 0) setSelected(r.snapshots[0]!.id);
+      })
+      .catch(() => setSnapshots([]));
   }, [device]);
 
-  const submit = async () => {
+  const submit = async (): Promise<void> => {
     if (!selected) return;
     setLoading(true);
     setMsg("");
@@ -105,136 +147,150 @@ function SetBaselineForm({ device, onDone }: { device: string; onDone: () => voi
     }
   };
 
-  if (snapshots.length === 0) {
-    return (
-      <div className="p-2">
-        <span className="text-muted-foreground text-[11px]">
-          No snapshots for this device. Capture one with capture_config_snapshot first.
-        </span>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-wrap items-center gap-2 p-2">
-      <Select
-        value={selected}
-        onValueChange={setSelected}
-        aria-label="Baseline snapshot"
-        className="min-w-[200px] flex-1"
-        options={snapshots.map((s) => ({
-          value: s.id,
-          label: `${s.id} — ${clock(s.ts)} — ${s.lines} lines${s.label ? ` "${s.label}"` : ""}`,
-        }))}
-      />
-      <Input
-        placeholder="Label (optional)"
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        className="w-40"
-      />
-      <Button size="sm" onClick={() => void submit()} disabled={loading || !selected}>
-        {loading ? "Setting..." : "Set as Baseline"}
-      </Button>
-      {msg && <span className="text-destructive text-xs">{msg}</span>}
-    </div>
+    <MonitorDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={`Set baseline for ${device}`}
+      description="Drift checks compare the live config against this snapshot."
+      dismissible={false}
+      closeDisabled={loading}
+      footer={
+        <>
+          <MonitorButton variant="ghost" onClick={onClose} disabled={loading}>
+            Cancel
+          </MonitorButton>
+          <span className="flex-1" />
+          <MonitorButton
+            variant="primary"
+            icon={<Check aria-hidden="true" />}
+            disabled={loading || !selected}
+            aria-busy={loading || undefined}
+            onClick={() => void submit()}
+          >
+            {loading ? "Setting…" : "Set as baseline"}
+          </MonitorButton>
+        </>
+      }
+    >
+      <div className="drift-dialog flex flex-col gap-4">
+        <div className="monitor-fl">
+          <span className="monitor-label">Baseline snapshot</span>
+          {snapshots === null ? (
+            <LoadingState label="Loading snapshots" layout="form" />
+          ) : snapshots.length === 0 ? (
+            <span className="monitor-hint">
+              No snapshots for this router. Capture one with capture_config_snapshot first.
+            </span>
+          ) : (
+            <span className="monitor-select drift-select">
+              <Archive aria-hidden="true" className="drift-select-icon" />
+              <select
+                aria-label="Baseline snapshot"
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+              >
+                {snapshots.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {[device, s.label ?? s.id, shortDate(s.ts), size(s.bytes)].join(" · ")}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden="true" />
+            </span>
+          )}
+          <span className="monitor-hint">
+            Pick a known-good export. Capture one with capture_config_snapshot if the list is empty.
+          </span>
+        </div>
+        <label className="monitor-fl">
+          <span className="monitor-label">Label (optional)</span>
+          <input
+            className="monitor-input"
+            placeholder="golden-7.16"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </label>
+        <MonitorNote>
+          Setting a baseline replaces the old one. Nothing on the router changes.
+        </MonitorNote>
+        {msg && <span className="monitor-err">{msg}</span>}
+      </div>
+    </MonitorDialog>
   );
 }
 
-// ── Diff viewer ─────────────────────────────────────────────────────────────
-
-const DiffViewer = UnifiedDiff;
-
-// ── Section breakdown bars ──────────────────────────────────────────────────
+// ── Detail parts ────────────────────────────────────────────────────────────
 
 function SectionBars({ sections }: { sections: DriftSection[] }): ReactNode {
-  if (sections.length === 0) return null;
-  const maxChanges = Math.max(...sections.map((s) => s.added + s.removed), 1);
+  const max = Math.max(1, ...sections.map((s) => s.added + s.removed));
   return (
-    <div className="flex flex-col gap-1.5">
-      {sections.slice(0, 15).map((s) => {
-        return (
-          <div key={s.path} className="flex items-center gap-2">
-            <span className="w-[220px] truncate text-[11px] text-foreground" title={s.path}>
-              {s.path}
-            </span>
-            <div className="flex h-3.5 flex-1 overflow-hidden rounded-[3px] bg-muted">
-              {/* Widths are data-driven, so they stay inline. */}
-              <div
-                className="h-full bg-success"
-                style={{ width: `${(s.added / maxChanges) * 100}%` }}
-              />
-              <div
-                className="h-full bg-destructive"
-                style={{ width: `${(s.removed / maxChanges) * 100}%` }}
-              />
-            </div>
-            <span className="min-w-[60px] text-[11px] text-muted-foreground">
-              +{s.added} -{s.removed}
-            </span>
-          </div>
-        );
-      })}
-    </div>
+    <>
+      {sections.map((s) => (
+        <div key={s.path} className="drift-section" title={s.hunks}>
+          <span className="mono trunc text-fg-secondary">{s.path}</span>
+          <span className="drift-section-bars">
+            {s.added > 0 && (
+              <span className="monitor-bar" style={{ flex: s.added }}>
+                <span data-tone="good" />
+              </span>
+            )}
+            {s.removed > 0 && (
+              <span className="monitor-bar" style={{ flex: s.removed }}>
+                <span data-tone="bad" />
+              </span>
+            )}
+            <span style={{ flex: max - s.added - s.removed }} />
+          </span>
+          <span className="mono">
+            <span className="text-success">+{s.added}</span>{" "}
+            <span className="text-destructive">−{s.removed}</span>
+          </span>
+        </div>
+      ))}
+    </>
   );
 }
 
-// ── Attribution table ───────────────────────────────────────────────────────
-
-function AttributionTable({ attributions }: { attributions: DriftAttribution[] }): ReactNode {
-  if (attributions.length === 0) {
-    return (
-      <span className="text-muted-foreground text-[11px]">
-        No config-related log entries found.
-      </span>
-    );
-  }
+function Attribution({ rows }: { rows: DriftAttribution[] }): ReactNode {
   return (
-    <div className="max-h-[250px] overflow-auto">
-      <Table className="text-[11px]">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Time</TableHead>
-            <TableHead>User</TableHead>
-            <TableHead>Action</TableHead>
-            <TableHead>Section</TableHead>
-            <TableHead>Log</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {attributions.map((a, i) => (
-            <TableRow key={i}>
-              <TableCell className="whitespace-nowrap">{a.timestamp ?? "—"}</TableCell>
-              <TableCell>{a.user ?? "—"}</TableCell>
-              <TableCell>
-                <span className="rounded bg-muted px-1.5 py-px text-[10px]">{a.action ?? "?"}</span>
-              </TableCell>
-              <TableCell className="max-w-[160px] truncate" title={a.section}>
-                {a.section}
-              </TableCell>
-              <TableCell className="max-w-[300px] truncate text-muted-foreground" title={a.logLine}>
-                {a.logLine}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <div className="monitor-thead drift-attr">
+        <span>Time</span>
+        <span>User</span>
+        <span>Action</span>
+        <span>Section</span>
+        <span>Log</span>
+      </div>
+      {rows.map((a, i) => (
+        <div key={`${a.section}-${i}`} className="monitor-row drift-attr">
+          <span className="mono trunc text-muted-foreground">{a.timestamp ?? "—"}</span>
+          <span className="mono trunc">{a.user ?? "—"}</span>
+          <span className="trunc">{a.action ?? "—"}</span>
+          <span className="mono trunc">{a.section}</span>
+          <span className="mono trunc" title={a.logLine}>
+            {a.logLine}
+          </span>
+        </div>
+      ))}
+    </>
   );
 }
-
-// ── Device detail panel ─────────────────────────────────────────────────────
 
 function DeviceDetail({
   device,
+  report,
+  onReport,
   onClose,
   onChanged,
 }: {
   device: string;
+  report: DriftReport | undefined;
+  onReport: (r: DriftReport) => void;
   onClose: () => void;
   onChanged: () => void;
 }): ReactNode {
-  const [report, setReport] = useState<DriftReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -245,18 +301,15 @@ function DeviceDetail({
       const r = await api<DriftReport | { error: string }>(
         `/api/drift/check/${encodeURIComponent(device)}`,
       );
-      if ("error" in r) {
-        setError(r.error);
-      } else {
-        setReport(r);
-      }
+      if ("error" in r) setError(r.error);
+      else onReport(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
     setLoading(false);
-  }, [device]);
+  }, [device, onReport]);
 
-  const promote = async () => {
+  const promote = async (): Promise<void> => {
     const res = await postJson<{ ok?: boolean; error?: string }>("/api/drift/baseline", {
       device,
       snapshotId: report?.baselineId,
@@ -270,96 +323,209 @@ function DeviceDetail({
     }
   };
 
-  const remove = async () => {
+  const remove = async (): Promise<void> => {
     await deleteJson<{ ok?: boolean }>(`/api/drift/baseline/${encodeURIComponent(device)}`, {});
     toast.success("Baseline removed");
     onChanged();
   };
 
+  const drifted = report !== undefined && !report.identical;
+
   return (
-    <Panel
-      title={`${device} — Drift Detail`}
-      className="reveal"
+    <MonitorPanel
+      title={`${device} · drift detail`}
+      description="Live export compared with the golden baseline."
+      flush
       extra={
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => void check()} disabled={loading}>
-            {loading ? "Checking..." : "Check Now"}
-          </Button>
-          <Button size="sm" type="error" ghost onClick={() => void remove()}>
-            Remove Baseline
-          </Button>
-          <Button size="sm" type="secondary" onClick={onClose}>
+        <div className="flex flex-wrap items-center gap-2">
+          <MonitorButton
+            variant="primary"
+            size="sm"
+            icon={<RefreshCw aria-hidden="true" />}
+            disabled={loading}
+            aria-busy={loading || undefined}
+            onClick={() => void check()}
+          >
+            {loading ? "Checking…" : "Check now"}
+          </MonitorButton>
+          <MonitorButton
+            variant="ghost"
+            size="sm"
+            icon={<Trash2 aria-hidden="true" />}
+            onClick={() => void remove()}
+          >
+            Remove baseline
+          </MonitorButton>
+          <MonitorButton
+            variant="ghost"
+            size="sm"
+            icon={<X aria-hidden="true" />}
+            onClick={onClose}
+          >
             Close
-          </Button>
+          </MonitorButton>
         </div>
       }
     >
-      {error && <div className="text-destructive">{error}</div>}
-
-      {report && (
-        <div>
-          {/* Summary bar */}
-          <div className="mb-3 flex items-center gap-6 border-b border-border py-3">
-            <div className="flex items-center gap-1.5">
-              <Dot type={report.identical ? "success" : "warning"} />
-              <strong>{report.identical ? "In Sync" : "Drifted"}</strong>
+      <div className="flex flex-col gap-4 px-[18px] pb-4">
+        {error && (
+          <MonitorNote tone="bad" role="alert">
+            {error}
+          </MonitorNote>
+        )}
+        {loading && !report && <LoadingState label="Checking drift" layout="cards" />}
+        {!report && !loading && !error && (
+          <MonitorEmpty compact title="Not checked yet">
+            Press Check now to compare the live config with the golden baseline.
+          </MonitorEmpty>
+        )}
+        {report && (
+          <div className="glass drift-summary">
+            <ScoreRing
+              value={drifted ? report.score : 100}
+              size={54}
+              stroke={5}
+              fontSize={14}
+              tone={drifted ? "warn" : "good"}
+              label={`Drift score ${report.score} of 100`}
+            >
+              {report.score}
+            </ScoreRing>
+            <div className="flex flex-col gap-0.5">
+              <b className={`text-[15px] ${drifted ? "text-warning" : "text-success"}`}>
+                {drifted ? "Drifted" : "In sync"}
+              </b>
+              <span className="monitor-hint">score {report.score}/100</span>
             </div>
-            {!report.identical && (
-              <>
-                <div>
-                  Score: <strong>{report.score}</strong>/100
-                </div>
-                <div className="text-success">+{report.summary.added}</div>
-                <div className="text-destructive">-{report.summary.removed}</div>
-                <div className="text-muted-foreground text-[11px]">
-                  {report.summary.unchanged} unchanged
-                </div>
-                <Button size="sm" onClick={() => void promote()}>
-                  Promote as Baseline
-                </Button>
-              </>
+            <span className="mono big text-success">+{report.summary.added}</span>
+            <span className="mono big text-destructive">−{report.summary.removed}</span>
+            <span className="text-[12px] text-muted-foreground">
+              {report.summary.unchanged} unchanged
+            </span>
+            <span className="flex-1" />
+            <span className="monitor-hint" title={clock(report.capturedAt)}>
+              Checked {hhmm(report.capturedAt)}
+            </span>
+            {drifted && (
+              <MonitorButton
+                size="sm"
+                icon={<Check aria-hidden="true" />}
+                onClick={() => void promote()}
+              >
+                Promote as baseline
+              </MonitorButton>
             )}
-            <div className="text-muted-foreground ml-auto text-[11px]">
-              Checked: {clock(report.capturedAt)}
-            </div>
           </div>
-
-          {/* Section breakdown */}
-          {report.sections.length > 0 && (
-            <div className="mb-4">
-              <h4 className="mt-0 mb-2 text-[13px]">Sections with drift</h4>
-              <SectionBars sections={report.sections} />
-            </div>
-          )}
-
-          {/* Change attribution */}
-          {report.attributions.length > 0 && (
-            <div className="mb-4">
-              <h4 className="mt-0 mb-2 text-[13px]">Change attribution</h4>
-              <AttributionTable attributions={report.attributions} />
-            </div>
-          )}
-
-          {/* Unified diff */}
-          {!report.identical && (
-            <div>
-              <h4 className="mt-0 mb-2 text-[13px]">Unified diff</h4>
-              <DiffViewer unified={report.unified} />
-            </div>
-          )}
+        )}
+        {report && report.sections.length > 0 && (
+          <div className="monitor-fl">
+            <span className="monitor-label">Sections with drift</span>
+            <SectionBars sections={report.sections} />
+          </div>
+        )}
+      </div>
+      {report && report.attributions.length > 0 && (
+        <>
+          <div className="px-[18px] pb-1.5">
+            <span className="monitor-label">Change attribution · from the router log</span>
+          </div>
+          <Attribution rows={report.attributions} />
+        </>
+      )}
+      {drifted && (
+        <div className="drift-diff-block">
+          <span className="monitor-label">Unified diff</span>
+          <DiffPre text={report.unified} className="drift-diff" />
         </div>
       )}
-
-      {!report && !loading && !error && (
-        <p className="text-muted-foreground text-center text-[11px]">
-          Click "Check Now" to run a live drift check against the golden baseline.
-        </p>
-      )}
-    </Panel>
+    </MonitorPanel>
   );
 }
 
 // ── Main view ───────────────────────────────────────────────────────────────
+
+function FleetCard({
+  d,
+  selected,
+  report,
+  onPick,
+  onSetBaseline,
+}: {
+  d: DriftDeviceStatus;
+  selected: boolean;
+  report: DriftReport | undefined;
+  onPick: () => void;
+  onSetBaseline: () => void;
+}): ReactNode {
+  const tone = STATUS_TONE[d.status];
+  const body = (
+    <>
+      <div className="flex items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <StatusDot tone={tone} />
+          <span className="mono trunc text-foreground">{d.device}</span>
+        </span>
+        <span className="flex-1" />
+        <StatusBadge tone={tone} dot={false} quiet={tone === "default"}>
+          {STATUS_LABEL[d.status]}
+        </StatusBadge>
+      </div>
+      <div className="drift-card-lines">
+        {d.baseline ? (
+          <>
+            Baseline: {ago(d.baseline.setAt)}
+            {d.baseline.label && (
+              <>
+                <br />
+                Label: {d.baseline.label}
+              </>
+            )}
+            {d.error && (
+              <>
+                <br />
+                <span className="text-destructive">{d.error}</span>
+              </>
+            )}
+          </>
+        ) : (
+          "Nothing to compare against yet."
+        )}
+      </div>
+      {d.status === "in-sync" && (
+        <span className="monitor-bar">
+          <span data-tone="good" style={{ width: "100%" }} />
+        </span>
+      )}
+      {d.status === "drifted" && report && !report.identical && (
+        <span className="monitor-bar">
+          <span data-tone="warn" style={{ width: `${Math.max(2, report.score)}%` }} />
+        </span>
+      )}
+    </>
+  );
+  if (d.status === "no-baseline")
+    return (
+      <div className="glass drift-card">
+        {body}
+        <span>
+          <MonitorButton size="sm" icon={<Plus aria-hidden="true" />} onClick={onSetBaseline}>
+            Set baseline
+          </MonitorButton>
+        </span>
+      </div>
+    );
+  return (
+    <button
+      type="button"
+      className="glass drift-card"
+      data-selected={selected || undefined}
+      aria-pressed={selected}
+      onClick={onPick}
+    >
+      {body}
+    </button>
+  );
+}
 
 export function DriftView(): ReactNode {
   const [initialLoading, setInitialLoading] = useState(true);
@@ -367,6 +533,7 @@ export function DriftView(): ReactNode {
   const [baselines, setBaselines] = useState<DriftBaseline[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [showSetBaseline, setShowSetBaseline] = useState<string | null>(null);
+  const [reports, setReports] = useState<Record<string, DriftReport>>({});
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
@@ -391,96 +558,124 @@ export function DriftView(): ReactNode {
     return () => clearInterval(interval);
   }, [load]);
 
-  if (error && devices.length === 0) {
-    return (
-      <Panel className="reveal">
-        <p className="text-destructive">{error}</p>
-      </Panel>
-    );
-  }
-
-  const withBaseline = devices.filter((d) => d.status !== "no-baseline");
+  const onReport = useCallback((r: DriftReport) => {
+    setReports((prev) => ({ ...prev, [r.device]: r }));
+  }, []);
 
   if (initialLoading) return <LoadingState label="Loading drift baselines" />;
+
+  const withBaseline = devices.filter((d) => d.status !== "no-baseline");
+  const noBaseline = devices.filter((d) => d.status === "no-baseline");
+  const inSync = devices.filter((d) => d.status === "in-sync");
+  const drifted = devices.filter((d) => d.status === "drifted");
+  const unknown = devices.filter((d) => d.status === "unknown");
+  const names = (list: DriftDeviceStatus[]): string => list.map((d) => d.device).join(", ");
+  const firstReport = drifted[0] ? reports[drifted[0].device] : undefined;
+
+  const verdict =
+    drifted.length === 1 ? (
+      <>
+        <span className="w">{drifted[0]!.device}</span> has drifted from its baseline.
+      </>
+    ) : drifted.length > 1 ? (
+      <>
+        <span className="w">{drifted.length} routers</span> have drifted from their baselines.
+      </>
+    ) : withBaseline.length === 0 ? (
+      "No baselines set yet."
+    ) : unknown.length === withBaseline.length ? (
+      <>
+        <em>No router</em> could be checked.
+      </>
+    ) : (
+      <>
+        <span className="s">Every checked router</span> matches its baseline.
+      </>
+    );
+
+  const leadParts: string[] = [];
+  if (firstReport && !firstReport.identical) {
+    const changed = firstReport.summary.added + firstReport.summary.removed;
+    const top = [...firstReport.sections].sort(
+      (a, b) => b.added + b.removed - (a.added + a.removed),
+    )[0];
+    leadParts.push(
+      `${changed} line${changed === 1 ? "" : "s"} changed since ${day(firstReport.baselineTs)}${top ? `, mostly in ${top.path}` : ""}.`,
+    );
+  }
+  if (unknown.length > 0) leadParts.push(`${names(unknown)} could not be checked.`);
+  if (leadParts.length === 0)
+    leadParts.push("Each router's live config is compared with its golden snapshot.");
+
+  const driftHint = drifted[0]
+    ? `${drifted[0].device}${firstReport ? ` · score ${firstReport.score}` : ""}${drifted.length > 1 ? ` +${drifted.length - 1}` : ""}`
+    : "none";
+
   return (
-    <>
-      {/* Stats row */}
-      <div className="reveal grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard k="Devices" v={String(devices.length)} />
-        <StatCard k="With Baseline" v={String(withBaseline.length)} />
-        <StatCard k="In Sync" v={String(devices.filter((d) => d.status === "in-sync").length)} />
-        <StatCard k="Drifted" v={String(devices.filter((d) => d.status === "drifted").length)} />
-      </div>
+    <section className="drift grid content-start gap-[18px]">
+      <PageIntro
+        eyebrow="Drift Guard · golden baselines"
+        verdict={verdict}
+        lead={leadParts.join(" ")}
+      />
 
-      {/* Fleet overview cards */}
-      <Panel title="Fleet Drift Overview" className="reveal">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-          {devices.map((d) => (
-            <div
-              key={d.device}
-              onClick={() => {
-                if (d.status !== "no-baseline") setSelectedDevice(d.device);
-              }}
-              className={cn(
-                "rounded-lg border bg-card p-4 transition-colors",
-                selectedDevice === d.device ? "border-brand" : "border-border",
-                d.status !== "no-baseline"
-                  ? "cursor-pointer hover:border-brand/40"
-                  : "cursor-default",
-              )}
-            >
-              <div className="mb-2 flex justify-between">
-                <strong className="text-sm">{d.device}</strong>
-                <Badge type={STATUS_TYPE[d.status]}>{STATUS_LABELS[d.status]}</Badge>
-              </div>
-              {d.baseline && (
-                <div className="text-muted-foreground text-[11px]">
-                  <div>Baseline: {ago(d.baseline.setAt)}</div>
-                  {d.baseline.label && <div>Label: {d.baseline.label}</div>}
-                </div>
-              )}
-              {d.status === "no-baseline" && (
-                <Button
-                  size="sm"
-                  className="mt-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowSetBaseline(d.device);
-                  }}
-                >
-                  Set Baseline
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      </Panel>
-
-      {/* Set baseline form */}
-      {showSetBaseline && (
-        <Panel
-          title={`Set baseline for ${showSetBaseline}`}
-          className="reveal"
-          extra={
-            <Button size="sm" type="secondary" onClick={() => setShowSetBaseline(null)}>
-              Cancel
-            </Button>
-          }
-        >
-          <SetBaselineForm
-            device={showSetBaseline}
-            onDone={() => {
-              setShowSetBaseline(null);
-              void load();
-            }}
-          />
-        </Panel>
+      {error && (
+        <MonitorNote tone="bad" role="alert">
+          {error}
+        </MonitorNote>
       )}
 
-      {/* Device detail panel */}
+      <MetricStrip label="Drift counts">
+        <Metric label="Devices" value={String(devices.length)} hint="in the fleet" />
+        <Metric
+          label="With baseline"
+          value={String(withBaseline.length)}
+          hint={
+            noBaseline.length === 0
+              ? "all have one"
+              : `${names(noBaseline)} ${noBaseline.length === 1 ? "has" : "have"} none`
+          }
+        />
+        <Metric
+          label="In sync"
+          value={String(inSync.length)}
+          hint={inSync.length > 0 ? names(inSync) : "none"}
+          tone={inSync.length > 0 ? "good" : "default"}
+        />
+        <Metric
+          label="Drifted"
+          value={String(drifted.length)}
+          hint={driftHint}
+          tone={drifted.length > 0 ? "warn" : "default"}
+        />
+      </MetricStrip>
+
+      <MonitorPanel title="Fleet" description="Pick a router to see what changed.">
+        {devices.length === 0 ? (
+          <MonitorEmpty compact title="No routers yet">
+            Add a router to start using Drift Guard.
+          </MonitorEmpty>
+        ) : (
+          <div className="drift-fleet">
+            {devices.map((d) => (
+              <FleetCard
+                key={d.device}
+                d={d}
+                selected={selectedDevice === d.device}
+                report={reports[d.device]}
+                onPick={() => setSelectedDevice(d.device)}
+                onSetBaseline={() => setShowSetBaseline(d.device)}
+              />
+            ))}
+          </div>
+        )}
+      </MonitorPanel>
+
       {selectedDevice && (
         <DeviceDetail
           device={selectedDevice}
+          report={reports[selectedDevice]}
+          onReport={onReport}
           onClose={() => setSelectedDevice(null)}
           onChanged={() => {
             setSelectedDevice(null);
@@ -489,75 +684,64 @@ export function DriftView(): ReactNode {
         />
       )}
 
-      {/* Baseline manager table */}
       {baselines.length > 0 && (
-        <Panel title="Baseline Manager" className="reveal">
-          <div className="overflow-x-auto">
-            <Table className="text-xs">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Device</TableHead>
-                  <TableHead>Snapshot ID</TableHead>
-                  <TableHead>Set At</TableHead>
-                  <TableHead>Set By</TableHead>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>SHA</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {baselines.map((b) => (
-                  <TableRow key={b.device}>
-                    <TableCell>
-                      <strong>{b.device}</strong>
-                    </TableCell>
-                    <TableCell className="font-mono text-[11px]">{b.snapshotId}</TableCell>
-                    <TableCell title={clock(b.setAt)}>{ago(b.setAt)}</TableCell>
-                    <TableCell>{b.setBy}</TableCell>
-                    <TableCell>{b.label ?? "—"}</TableCell>
-                    <TableCell>
-                      {b.snapshot
-                        ? `${b.snapshot.lines} lines / ${b.snapshot.bytes} bytes`
-                        : "deleted"}
-                    </TableCell>
-                    <TableCell className="font-mono text-[10px]">
-                      {b.snapshot?.sha?.slice(0, 8) ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        type="error"
-                        ghost
-                        onClick={() => {
-                          void deleteJson(
-                            `/api/drift/baseline/${encodeURIComponent(b.device)}`,
-                            {},
-                          ).then(() => {
-                            toast.success("Baseline removed");
-                            void load();
-                          });
-                        }}
-                      >
-                        Remove
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+        <MonitorPanel
+          title="Baselines"
+          description="The golden snapshot each router is checked against."
+          flush
+        >
+          <div className="monitor-thead drift-base">
+            <span>Device</span>
+            <span>Snapshot</span>
+            <span>Set at</span>
+            <span>Set by</span>
+            <span>Label</span>
+            <span>Size</span>
+            <span>SHA</span>
           </div>
-        </Panel>
+          {baselines.map((b) => {
+            const status = devices.find((d) => d.device === b.device)?.status ?? "unknown";
+            return (
+              <button
+                key={b.device}
+                type="button"
+                className="monitor-row drift-base"
+                data-selected={selectedDevice === b.device || undefined}
+                aria-pressed={selectedDevice === b.device}
+                onClick={() => setSelectedDevice(b.device)}
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <StatusDot tone={STATUS_TONE[status]} />
+                  <span className="mono p trunc">{b.device}</span>
+                </span>
+                <span className="mono trunc">{b.snapshotId}</span>
+                <span className="mono trunc text-muted-foreground" title={clock(b.setAt)}>
+                  {shortDate(b.setAt)}
+                </span>
+                <span className="mono trunc">{b.setBy}</span>
+                <span className="trunc">{b.label ?? <span className="text-faint">—</span>}</span>
+                <span className="mono trunc">
+                  {b.snapshot ? size(b.snapshot.bytes) : "deleted"}
+                </span>
+                <span className="mono trunc text-faint" title={b.snapshot?.sha}>
+                  {b.snapshot?.sha ? shortSha(b.snapshot.sha) : "—"}
+                </span>
+              </button>
+            );
+          })}
+        </MonitorPanel>
       )}
 
-      {/* Empty state */}
-      {devices.length === 0 && !error && (
-        <Panel className="reveal">
-          <p className="text-muted-foreground text-center text-[11px]">
-            No devices configured. Add devices to start using Drift Guard.
-          </p>
-        </Panel>
+      {showSetBaseline && (
+        <SetBaselineDialog
+          device={showSetBaseline}
+          onClose={() => setShowSetBaseline(null)}
+          onDone={() => {
+            setShowSetBaseline(null);
+            void load();
+          }}
+        />
       )}
-    </>
+    </section>
   );
 }

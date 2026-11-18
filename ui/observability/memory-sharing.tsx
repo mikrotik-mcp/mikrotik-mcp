@@ -4,11 +4,7 @@ import type { Entity } from "../../src/memory/types";
 import type { MemoryPage, MemoryScope, MemoryScopeKind } from "../../src/memory/knowledge";
 import { api } from "./api";
 import { saveMemory } from "./memory-editors";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { MonitorButton, MonitorNote, MonitorPanel } from "./monitoring-ui";
 import "./memory-sharing.css";
 
 const scopes = [
@@ -35,16 +31,31 @@ const scopes = [
   },
 ] as const;
 
-export function MemoryScopeBadge({ scope = "device" }: { scope?: MemoryScopeKind }) {
+/** "Device", "Group" or "Shared". */
+export function scopeLabel(scope: MemoryScopeKind = "device"): string {
+  return scopes.find((s) => s.value === scope)?.title ?? "Device";
+}
+
+/**
+ * The memory's sharing scope as a pill. `detail` adds who inherits it, in
+ * indigo: "Device · only this entity".
+ */
+export function MemoryScopeBadge({
+  scope = "device",
+  detail = false,
+}: {
+  scope?: MemoryScopeKind;
+  detail?: boolean;
+}) {
   const meta = scopes.find((s) => s.value === scope)!;
-  const Icon = meta.icon;
   return (
-    <Badge asChild variant="outline">
-      <span className="memory-scope-badge" data-scope={scope}>
-        <Icon size={12} />
-        {meta.title}
-      </span>
-    </Badge>
+    <span
+      className="monitor-badge memory-scope-badge"
+      data-tone={detail ? "brand" : undefined}
+      data-scope={scope}
+    >
+      {detail ? `${meta.title} · ${meta.hint.toLowerCase()}` : meta.title}
+    </span>
   );
 }
 
@@ -183,18 +194,18 @@ function ScopeForm({
         {record && <MemoryScopeBadge scope={record.scope} />}
       </div>
       {error && (
-        <div className="memory-error" role="alert">
+        <MonitorNote tone="bad" role="alert">
           {error}{" "}
-          <Button
+          <MonitorButton
             type="button"
             size="sm"
-            variant="outline"
+            variant="glass"
             disabled={busy}
             onClick={() => setReload((v) => v + 1)}
           >
             Reload scope
-          </Button>
-        </div>
+          </MonitorButton>
+        </MonitorNote>
       )}
       <fieldset disabled={!record || busy} className="memory-sharing-fields">
         <div className="memory-scope-options" role="group" aria-label="Memory sharing scope">
@@ -232,8 +243,8 @@ function ScopeForm({
                 <span key={member}>
                   <Router size={13} />
                   {member}
-                  <Button
-                    size="icon-xs"
+                  <MonitorButton
+                    size="sm"
                     type="button"
                     variant="ghost"
                     aria-label={`Remove member ${member}`}
@@ -244,11 +255,12 @@ function ScopeForm({
                     }}
                   >
                     <X size={12} />
-                  </Button>
+                  </MonitorButton>
                 </span>
               ))}
             </div>
-            <Input
+            <input
+              className="monitor-input"
               aria-label="Search group members"
               value={query}
               maxLength={500}
@@ -263,11 +275,12 @@ function ScopeForm({
                 {memberError}
               </p>
             )}
-            <ScrollArea className="memory-members-scroll">
+            <div className="memory-members-scroll">
               <div className="memory-member-list">
                 {choices?.items.map((item) => (
-                  <label key={item.name}>
-                    <Checkbox
+                  <label key={item.name} className="monitor-check">
+                    <input
+                      type="checkbox"
                       aria-label={`Include ${item.name}`}
                       checked={members.includes(item.name)}
                       disabled={
@@ -275,7 +288,8 @@ function ScopeForm({
                         (item.memoryScope ?? "device") !== "device" ||
                         (!members.includes(item.name) && members.length >= 100)
                       }
-                      onCheckedChange={(checked) => {
+                      onChange={(e) => {
+                        const checked = e.target.checked;
                         setMembers((old) =>
                           checked ? [...old, item.name] : old.filter((m) => m !== item.name),
                         );
@@ -295,30 +309,30 @@ function ScopeForm({
                   <p>No matching entities. Create the device entity first.</p>
                 )}
               </div>
-            </ScrollArea>
+            </div>
             {choices && choices.total > 50 && (
               <div className="memory-page-controls">
-                <Button
+                <MonitorButton
                   type="button"
                   size="sm"
-                  variant="outline"
+                  variant="glass"
                   disabled={!offset}
                   onClick={() => setOffset((v) => v - 50)}
                 >
                   Previous members
-                </Button>
+                </MonitorButton>
                 <span>
                   {offset + 1}–{Math.min(offset + 50, choices.total)} / {choices.total}
                 </span>
-                <Button
+                <MonitorButton
                   type="button"
                   size="sm"
-                  variant="outline"
+                  variant="glass"
                   disabled={offset + 50 >= choices.total}
                   onClick={() => setOffset((v) => v + 50)}
                 >
                   Next members
-                </Button>
+                </MonitorButton>
               </div>
             )}
           </section>
@@ -341,11 +355,12 @@ function ScopeForm({
           </div>
         </div>
         {scope !== "device" && (
-          <label className="memory-sharing-confirm">
-            <Checkbox
+          <label className="memory-sharing-confirm monitor-check">
+            <input
+              type="checkbox"
               aria-label="Confirm sharing all entity memories"
               checked={confirmed}
-              onCheckedChange={(v) => setConfirmed(v === true)}
+              onChange={(e) => setConfirmed(e.target.checked)}
             />
             <span>
               I reviewed this entity’s knowledge and intend to share all of it{" "}
@@ -354,9 +369,13 @@ function ScopeForm({
           </label>
         )}
         <footer className="memory-inline-actions">
-          <Button type="submit" disabled={busy || !record || (scope !== "device" && !confirmed)}>
+          <MonitorButton
+            variant="primary"
+            type="submit"
+            disabled={busy || !record || (scope !== "device" && !confirmed)}
+          >
             {busy ? "Saving scope…" : "Save sharing scope"}
-          </Button>
+          </MonitorButton>
           {saved && (
             <span className="memory-verified-label" role="status">
               <ShieldCheck size={14} /> Sharing scope saved
@@ -385,21 +404,17 @@ export function MemorySharing({
 }) {
   const [name, setName] = useState(entity);
   return (
-    <section className="memory-sharing">
-      <header className="memory-sharing-intro">
-        <div>
-          <div className="memory-eyebrow">
-            <Globe2 size={14} /> SHARED KNOWLEDGE, CLEAR BOUNDARIES
-          </div>
-          <h2>One lesson. The right routers.</h2>
-          <p>
-            Share safeguards across your fleet without mixing one router’s settings with another’s.
-          </p>
-        </div>
-        <Button variant="outline" onClick={onCreate}>
-          <Plus size={15} /> New policy entity
-        </Button>
-      </header>
+    <MonitorPanel
+      title="One lesson. The right routers."
+      description="Share safeguards across your fleet without mixing one router’s settings with another’s."
+      extra={
+        <MonitorButton size="sm" onClick={onCreate} icon={<Plus aria-hidden="true" />}>
+          New policy entity
+        </MonitorButton>
+      }
+      className="memory-sharing"
+      bodyClassName="flex flex-col gap-4"
+    >
       <div
         className="memory-inheritance-strip"
         aria-label="Device recall includes shared, group and device memory"
@@ -429,7 +444,8 @@ export function MemorySharing({
       >
         <label className="memory-field">
           <span>Policy or device entity</span>
-          <Input
+          <input
+            className="monitor-input font-mono text-xs"
             required
             maxLength={200}
             value={name}
@@ -437,16 +453,16 @@ export function MemorySharing({
             placeholder="Exact entity name, e.g. fleet-policy"
           />
         </label>
-        <Button type="submit" variant="outline">
+        <MonitorButton type="submit" variant="glass">
           Inspect scope
-        </Button>
+        </MonitorButton>
       </form>
       <div className="memory-inline-actions">
         {entities.slice(0, 12).map((item) => (
-          <Button
+          <MonitorButton
             key={item.name}
             size="sm"
-            variant={entity === item.name ? "secondary" : "ghost"}
+            variant={entity === item.name ? "glass" : "ghost"}
             onClick={() => {
               setName(item.name);
               onSelect(item.name);
@@ -454,7 +470,7 @@ export function MemorySharing({
           >
             {item.name}
             <MemoryScopeBadge scope={item.memoryScope} />
-          </Button>
+          </MonitorButton>
         ))}
       </div>
       {entity ? (
@@ -465,11 +481,10 @@ export function MemorySharing({
           each router’s local facts scoped to that router.
         </p>
       )}
-      <p className="memory-sharing-boundary">
-        <ShieldCheck size={15} />
+      <MonitorNote icon={<ShieldCheck aria-hidden="true" />}>
         Local database only. Sharing controls relevance, not permissions or tenant isolation. Memory
         never authorizes router changes.
-      </p>
-    </section>
+      </MonitorNote>
+    </MonitorPanel>
   );
 }

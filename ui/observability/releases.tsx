@@ -5,41 +5,41 @@
  * self-restarts the server onto it.
  */
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
+  AlertTriangle,
   Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Copy,
   ExternalLink,
   RefreshCw,
-  RotateCw,
-  Sparkles,
 } from "lucide-react";
 import { api, postJson } from "./api";
 import { LoadingState } from "./loading-state";
-import { Button, Note } from "./geist";
 import { MARKDOWN } from "./whats-new";
 import { renderMarkdown } from "./markdown";
 import { toast } from "./toast-action";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorDialog,
+  MonitorNote,
+  MonitorPanel,
+  PageIntro,
+  StatusBadge,
+} from "./monitoring-ui";
 import { ReleaseDowngradeButton } from "./release-actions";
+import { VersionLane } from "./release-lane";
+import "./monitoring.css";
 import "./releases.css";
 
 type Relation = "current" | "newer" | "older";
 
-interface ReleaseItem {
+export interface ReleaseItem {
   version: string;
   name: string;
   body: string;
@@ -80,19 +80,44 @@ function fmtDate(iso: string): string {
   }
 }
 
+/** "2 min ago" split into the number and its unit, for the KPI card. */
+function agoParts(ts: number, now = Date.now()): [string, string] {
+  const s = Math.max(0, Math.round((now - ts) / 1000));
+  if (s < 60) return [String(s), "s ago"];
+  const m = Math.round(s / 60);
+  if (m < 60) return [String(m), "min ago"];
+  const h = Math.round(m / 60);
+  if (h < 48) return [String(h), "h ago"];
+  return [String(Math.round(h / 24)), "days ago"];
+}
+
 /** What installing this version means relative to the running one. */
-function verb(rel: Relation): { label: string; icon: ReactNode } {
-  if (rel === "current") return { label: "Reinstall", icon: <RotateCw className="size-3.5" /> };
-  if (rel === "newer") return { label: "Upgrade", icon: <ArrowUp className="size-3.5" /> };
-  return { label: "Downgrade", icon: <ArrowDown className="size-3.5" /> };
+function verb(rel: Relation): { label: string; icon: ReactNode; what: string } {
+  if (rel === "current")
+    return {
+      label: "Reinstall",
+      icon: <RefreshCw aria-hidden="true" />,
+      what: "Installs this version again and restarts the server.",
+    };
+  if (rel === "newer")
+    return {
+      label: "Upgrade",
+      icon: <ChevronUp aria-hidden="true" />,
+      what: "Installs a newer version and restarts the server.",
+    };
+  return {
+    label: "Downgrade",
+    icon: <ChevronDown aria-hidden="true" />,
+    what: "Installs an older version and restarts the server.",
+  };
 }
 
 /** Markdown release notes — sanitized/escaped by renderMarkdown (same as whats-new). */
 function Notes({ body }: { body: string }): ReactNode {
-  if (!body.trim()) return <p className="text-muted-foreground text-xs">No release notes.</p>;
+  if (!body.trim()) return <p className="monitor-hint">No release notes.</p>;
   return (
     <div
-      className={cn(MARKDOWN)}
+      className={cn(MARKDOWN, "release-notes")}
       // eslint-disable-next-line react/no-danger -- HTML is escaped in renderMarkdown
       dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }}
     />
@@ -163,225 +188,261 @@ export function ReleasesView(): ReactNode {
     }
   }
 
-  const latest = data?.releases.find((r) => r.version === data.latestVersion) ?? null;
-
-  const hero = useMemo(() => {
-    if (!data) return null;
-    return (
-      <div className="relative overflow-hidden rounded-xl border bg-card p-6">
-        <div className="from-brand/10 pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-gradient-to-br to-transparent blur-2xl" />
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-muted-foreground text-[11px] font-medium tracking-[0.18em] uppercase">
-              Running version
-            </span>
-            <div className="flex items-baseline gap-3">
-              <span className="text-foreground text-[40px] leading-none font-extrabold tracking-tight">
-                v{data.currentVersion}
-              </span>
-              {data.updateAvailable ? (
-                <span className="bg-brand/10 text-brand ring-brand/30 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1">
-                  <Sparkles className="size-3.5" /> v{data.latestVersion} available
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-500 ring-1 ring-emerald-500/30">
-                  <Check className="size-3.5" /> Up to date
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => {
-                setLoading(true);
-                void load();
-              }}
-              title="Re-check for updates"
-            >
-              <RefreshCw className="size-3.5" /> Re-check
-            </Button>
-            {data.updateAvailable && latest && (
-              <Button
-                onClick={() => setPending(latest)}
-                disabled={busy}
-                className="bg-brand text-brand-foreground hover:bg-brand/90 border-transparent"
-              >
-                <ArrowUp className="size-3.5" /> Upgrade to latest
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }, [data, latest, busy, load]);
-
   if (loading) {
     return <LoadingState label="Loading releases" layout="cards" />;
   }
   if (error || !data) {
     return (
-      <div className="p-4">
-        <Note type="error" label="Couldn't load releases">
-          {error ?? "No data."} Check network access to GitHub.
-        </Note>
-      </div>
+      <MonitorNote tone="bad" role="alert" icon={<AlertTriangle aria-hidden="true" />}>
+        <b>Couldn't load releases.</b> {error ?? "No data."} Check network access to GitHub.
+      </MonitorNote>
     );
   }
 
+  const latest = data.releases.find((r) => r.version === data.latestVersion) ?? null;
+  const ahead = data.releases.filter((r) => r.relation === "newer" && !r.prerelease).length;
+  const pre = data.releases.filter((r) => r.prerelease).length;
+  const [agoN, agoUnit] = agoParts(data.fetchedAt);
+  const recheck = (): void => {
+    setLoading(true);
+    void load();
+  };
+
   return (
-    <div className="flex flex-col gap-5">
-      {hero}
+    <div className="releases-page flex min-w-0 flex-col gap-[18px]">
+      <PageIntro
+        eyebrow="Running version"
+        verdict={
+          <>
+            v{data.currentVersion}.{" "}
+            {data.updateAvailable && data.latestVersion ? (
+              <span className="s">v{data.latestVersion} is available.</span>
+            ) : (
+              <span className="s">You are up to date.</span>
+            )}
+          </>
+        }
+        lead="Update, downgrade or read any version's notes. Installing relaunches the server and drops this connection for a moment."
+        aside={
+          <div className="release-hero-actions">
+            <MonitorButton
+              variant="ghost"
+              onClick={recheck}
+              title="Re-check for updates"
+              icon={<RefreshCw aria-hidden="true" />}
+            >
+              Re-check
+            </MonitorButton>
+            {data.updateAvailable && latest && (
+              <MonitorButton
+                variant="primary"
+                onClick={() => setPending(latest)}
+                disabled={busy}
+                icon={<ChevronUp aria-hidden="true" />}
+              >
+                Upgrade to latest
+              </MonitorButton>
+            )}
+          </div>
+        }
+      />
+      {data.releases.length > 1 && (
+        <section className="glass release-lane-wrap" aria-label="Version lane">
+          <VersionLane releases={data.releases} latest={data.latestVersion} />
+        </section>
+      )}
+      <MetricStrip label="Release summary" minCell={200}>
+        <Metric label="Running" value={`v${data.currentVersion}`} hint={`Package ${PKG}`} />
+        <Metric
+          label="Latest"
+          tone={data.updateAvailable ? "good" : "default"}
+          value={data.latestVersion ? `v${data.latestVersion}` : "—"}
+          hint={
+            ahead
+              ? `${ahead} stable release${ahead === 1 ? "" : "s"} ahead`
+              : "You run the latest stable"
+          }
+        />
+        <Metric
+          label="Releases listed"
+          value={data.releases.length}
+          hint={`${pre} pre-release${pre === 1 ? "" : "s"}`}
+        />
+        <Metric
+          label="Checked"
+          value={
+            <>
+              {agoN}
+              <small>{agoUnit}</small>
+            </>
+          }
+          hint="From GitHub releases"
+        />
+      </MetricStrip>
 
       {log && (
-        <div className="rounded-lg border bg-card p-3">
-          <div className="text-muted-foreground mb-1.5 text-[11px] font-semibold tracking-wide uppercase">
-            Install log
-          </div>
-          <pre className="text-muted-foreground max-h-52 overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
-            {log}
-          </pre>
-        </div>
+        <MonitorPanel title="Install log">
+          <pre className="monitor-pre max-h-52 overflow-auto">{log}</pre>
+        </MonitorPanel>
       )}
 
-      <ol className="release-timeline" aria-label="Release history">
-        {data.releases.map((r) => {
-          const isOpen = expanded.has(r.version);
-          const isCurrent = r.relation === "current";
-          const isLatest = r.version === data.latestVersion;
-          const v = verb(r.relation);
-          return (
-            <li key={r.version}>
-              <div className="release-timeline-rail" aria-hidden="true">
-                <span className="release-timeline-node" data-relation={r.relation}>
-                  {isCurrent ? <Check className="size-3" /> : <i />}
-                </span>
-              </div>
-
-              <div
-                className={cn(
-                  "min-w-0 rounded-lg border bg-card transition-colors",
-                  isCurrent && "border-emerald-500/40",
-                  isLatest && !isCurrent && "border-brand/40",
-                )}
-              >
-                <div className="release-row-header flex flex-wrap items-center gap-x-3 gap-y-1.5 p-3.5">
-                  <button
-                    type="button"
-                    onClick={() => toggle(r.version)}
-                    className="flex items-baseline gap-2 text-left"
-                    title={isOpen ? "Hide notes" : "Show notes"}
+      <MonitorPanel
+        title="Release history"
+        description="Newest first. Open notes to read what changed."
+      >
+        <ol className="release-timeline" aria-label="Release history">
+          {data.releases.map((r, i) => {
+            const isOpen = expanded.has(r.version);
+            const isCurrent = r.relation === "current";
+            const isLatest = r.version === data.latestVersion;
+            const v = verb(r.relation);
+            return (
+              <li key={r.version}>
+                <div className="release-timeline-rail" aria-hidden="true">
+                  <span
+                    className="release-timeline-node"
+                    data-relation={r.relation}
+                    data-latest={isLatest || undefined}
                   >
-                    <span className="text-foreground text-lg font-bold tracking-tight">
-                      v{r.version}
-                    </span>
-                    <span className="text-muted-foreground text-xs">{fmtDate(r.publishedAt)}</span>
-                  </button>
-
-                  {isCurrent && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500 uppercase">
-                      current
-                    </span>
-                  )}
-                  {isLatest && !isCurrent && (
-                    <span className="bg-brand/10 text-brand rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase">
-                      latest
-                    </span>
-                  )}
-                  {r.prerelease && (
-                    <span className="text-muted-foreground rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase">
-                      pre-release
-                    </span>
-                  )}
-
-                  <span className="flex-1" />
-
-                  <a
-                    href={r.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
-                    title="Open on GitHub"
-                  >
-                    <ExternalLink className="size-3.5" />
-                  </a>
-                  <Button onClick={() => toggle(r.version)}>
-                    {isOpen ? "Hide notes" : "Notes"}
-                  </Button>
-                  {r.relation === "older" ? (
-                    <ReleaseDowngradeButton
-                      version={r.version}
-                      disabled={busy}
-                      onReview={() => setPending(r)}
-                    />
-                  ) : (
-                    <Button
-                      onClick={() => setPending(r)}
-                      disabled={busy}
-                      className={cn(
-                        r.relation === "newer" &&
-                          "bg-brand text-brand-foreground hover:bg-brand/90 border-transparent",
-                      )}
-                      title={`${v.label} to v${r.version}`}
+                    {isCurrent && <Check />}
+                  </span>
+                  {i < data.releases.length - 1 && <span className="release-timeline-line" />}
+                </div>
+                <div
+                  className="glass release-card"
+                  data-current={isCurrent || undefined}
+                  data-latest={(isLatest && !isCurrent) || undefined}
+                >
+                  <div className="release-row-header">
+                    <button
+                      type="button"
+                      onClick={() => toggle(r.version)}
+                      className="release-version"
+                      title={isOpen ? "Hide notes" : "Show notes"}
                     >
-                      {v.icon} {v.label}
-                    </Button>
+                      <b>v{r.version}</b>
+                      <span>{fmtDate(r.publishedAt)}</span>
+                    </button>
+                    {isLatest && (
+                      <StatusBadge tone="good" dot={false}>
+                        latest
+                      </StatusBadge>
+                    )}
+                    {isCurrent && <StatusBadge tone="good">current</StatusBadge>}
+                    {r.prerelease && <StatusBadge dot={false}>pre-release</StatusBadge>}
+                    <span className="flex-1" />
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="monitor-icon-btn"
+                      title="Open on GitHub"
+                      aria-label={`Open v${r.version} on GitHub`}
+                    >
+                      <ExternalLink aria-hidden="true" />
+                    </a>
+                    <MonitorButton
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => toggle(r.version)}
+                      aria-expanded={isOpen}
+                      icon={
+                        isOpen ? (
+                          <ChevronUp aria-hidden="true" />
+                        ) : (
+                          <ChevronDown aria-hidden="true" />
+                        )
+                      }
+                    >
+                      {isOpen ? "Hide notes" : "Notes"}
+                    </MonitorButton>
+                    {r.relation === "older" ? (
+                      <ReleaseDowngradeButton
+                        version={r.version}
+                        disabled={busy}
+                        onReview={() => setPending(r)}
+                      />
+                    ) : (
+                      <MonitorButton
+                        size="sm"
+                        variant={r.relation === "newer" ? "primary" : "glass"}
+                        onClick={() => setPending(r)}
+                        disabled={busy}
+                        title={`${v.label} to v${r.version}`}
+                        icon={v.icon}
+                      >
+                        {v.label}
+                      </MonitorButton>
+                    )}
+                  </div>
+                  {isOpen && (
+                    <div className="release-notes-wrap">
+                      <Notes body={r.body} />
+                    </div>
                   )}
                 </div>
+              </li>
+            );
+          })}
+        </ol>
+      </MonitorPanel>
 
-                {isOpen && (
-                  <div className="border-t px-4 py-3.5">
-                    <Notes body={r.body} />
-                  </div>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-
-      <AlertDialog open={pending !== null} onOpenChange={(o) => !o && setPending(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pending ? `${verb(pending.relation).label} to v${pending.version}?` : ""}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This runs{" "}
-              <code className="text-brand bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
-                bun i -g {PKG}@{pending?.version}
-              </code>{" "}
-              on the server, then the server relaunches on that version and this connection drops
-              briefly. Reconnect after.
-              {pending?.relation === "older" && (
-                <>
-                  {" "}
-                  <b className="text-destructive">Downgrade</b> — a newer config may not load on an
-                  older build; snapshot first if unsure.
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className={cn(
-                buttonVariants({
-                  variant: pending?.relation === "older" ? "destructive" : "default",
-                }),
-                "gap-1.5",
-              )}
+      <MonitorDialog
+        open={pending !== null}
+        onOpenChange={(o) => !o && setPending(null)}
+        confirm
+        title={pending ? `${verb(pending.relation).label} to v${pending.version}?` : ""}
+        description={pending ? verb(pending.relation).what : undefined}
+        footer={
+          <>
+            <span className="flex-1" />
+            <MonitorButton onClick={() => setPending(null)}>Cancel</MonitorButton>
+            <MonitorButton
+              variant={pending?.relation === "older" ? "danger" : "primary"}
+              icon={pending ? verb(pending.relation).icon : null}
               onClick={() => pending && void install(pending.version)}
             >
-              {pending ? verb(pending.relation).icon : null}
               {pending ? verb(pending.relation).label : "Install"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </MonitorButton>
+          </>
+        }
+      >
+        {pending && (
+          <div className="monitor-dialog-body flex flex-col gap-4">
+            <p className="text-sm leading-[22px] text-fg-secondary">
+              This runs the command below on the server. The server then relaunches on v
+              {pending.version} and this connection drops for a moment. Reconnect after.
+            </p>
+            <pre className="monitor-pre">
+              <span className="text-success">$</span> bun i -g {PKG}@{pending.version}
+            </pre>
+            <div className="release-swap">
+              <div className="glass">
+                <span className="monitor-hint">Now</span>
+                <b>v{data.currentVersion}</b>
+              </div>
+              <ChevronRight
+                aria-hidden="true"
+                className={pending.relation === "older" ? "text-destructive" : "text-success"}
+              />
+              <div className="glass" data-tone={pending.relation === "older" ? "bad" : "good"}>
+                <span className="monitor-hint">After restart</span>
+                <b>v{pending.version}</b>
+              </div>
+            </div>
+            {pending.relation === "older" && (
+              <MonitorNote tone="bad" icon={<AlertTriangle aria-hidden="true" />}>
+                <b>Downgrade.</b> A newer config may not load on an older build. Save a config
+                checkpoint first if you are unsure.
+              </MonitorNote>
+            )}
+          </div>
+        )}
+      </MonitorDialog>
 
-      <p className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
-        <Copy className="size-3" /> Prefer the CLI? Run{" "}
-        <code className="bg-muted rounded px-1.5 py-0.5 font-mono">bun i -g {PKG}@latest</code>
+      <p className="monitor-hint flex flex-wrap items-center gap-1.5">
+        <Copy aria-hidden="true" className="size-[13px]" /> Prefer the CLI? Run{" "}
+        <span className="monitor-chip">bun i -g {PKG}@latest</span>
       </p>
     </div>
   );

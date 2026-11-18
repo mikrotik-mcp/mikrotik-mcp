@@ -1,29 +1,21 @@
+/**
+ * Tunnel bandwidth, after the approved Signal boards: saved tests, throughput
+ * history per test, retained runs, the test form in a drawer and a confirm
+ * before any traffic starts.
+ */
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible } from "radix-ui";
-import { ChevronDown } from "lucide-react";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+  Check,
+  ChevronRight,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  TriangleAlert,
+  Trash2,
+  X,
+} from "lucide-react";
 import type {
   BandwidthInventory,
   BandwidthJob,
@@ -32,7 +24,27 @@ import type {
   BandwidthState,
 } from "../../src/bandwidth/types";
 import { api, postJson } from "./api";
-import { WorkspaceError, WorkspaceSafety } from "./operations-ui";
+import {
+  Metric,
+  MetricStrip,
+  MonitorButton,
+  MonitorDialog,
+  MonitorEmpty,
+  MonitorNote,
+  MonitorPanel,
+  MonitorSwitch,
+  PageIntro,
+  Segmented,
+  StatusBadge,
+  StatusDot,
+  Ticker,
+} from "./monitoring-ui";
+import type { Tone } from "./monitoring-ui";
+import { ThroughputChart } from "./bandwidth-chart";
+import type { ThroughputPoint } from "./bandwidth-chart";
+import { FormCheck, FormField, FormSelect } from "./path-fields";
+import "./monitoring.css";
+import "./bandwidth.css";
 
 type Draft = Omit<BandwidthJob, "nextRunAt">;
 const emptyJob: Draft = {
@@ -56,9 +68,19 @@ const emptyJob: Draft = {
   intervalSeconds: 300,
   enabled: false,
 };
-const chartConfig = {
-  tx: { label: "Source TX Mbps", color: "var(--chart-1)" },
-  rx: { label: "Source RX Mbps", color: "var(--chart-2)" },
+
+const WINDOWS = [
+  { value: "1", label: "1 h" },
+  { value: "24", label: "24 h" },
+  { value: "168", label: "7 d" },
+  { value: "all", label: "All" },
+];
+
+const RUN_TONE: Record<BandwidthRun["status"], Tone> = {
+  ok: "good",
+  running: "brand",
+  failed: "bad",
+  interrupted: "warn",
 };
 
 /** Preserve unsuccessful or absent observations as gaps, including in comparisons. */
@@ -81,48 +103,37 @@ export function bandwidthStatistics(runs: BandwidthRun[], key: "txBps" | "rxBps"
     max: values.length ? Math.max(...values) : null,
   };
 }
-/** Report measured zero distinctly from missing evidence. */
-function rate(value: number | null): string {
+/** Mbps without the unit; a dash for missing evidence, never zero. */
+function mbps(value: number | null): string {
   return value === null
-    ? "Missing"
-    : `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} Mbps`;
+    ? "—"
+    : value.toLocaleString(undefined, { maximumFractionDigits: value < 10 ? 2 : 0 });
 }
-/** Reuse dashboard selects while keeping every control associated with its label. */
-function Choice({
-  label,
-  value,
-  values = [],
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: string;
-  values?: string[];
-  options?: { value: string; label: string; disabled?: boolean }[];
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="grid gap-2 text-sm">
-      {label}
-      <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger aria-label={label}>
-          <SelectValue placeholder="Select…" />
-        </SelectTrigger>
-        <SelectContent>
-          {(options ?? values.map((value) => ({ value, label: value, disabled: false }))).map(
-            (option) => (
-              <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                {option.label}
-              </SelectItem>
-            ),
-          )}
-        </SelectContent>
-      </Select>
-    </label>
-  );
+/** "14:00". */
+function clock(at: number): string {
+  return new Date(at).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
 }
+/** "17 Nov": the boards write dates day first. */
+function dayMonth(at: number): string {
+  const d = new Date(at);
+  return `${d.getDate()} ${d.toLocaleDateString("en", { month: "short" })}`;
+}
+/** "14:00" today, "17 Nov, 14:00" before. */
+function stamp(at: number, now: number): string {
+  const day = new Date(at).toDateString() === new Date(now).toDateString();
+  if (day) return clock(at);
+  return `${dayMonth(at)}, ${clock(at)}`;
+}
+const DIRECTION_TEXT: Record<BandwidthJob["direction"], string> = {
+  both: "both directions",
+  transmit: "transmit from the source",
+  receive: "receive at the source",
+};
+
 /** Cancel obsolete router selections and expose only inventory for the current device. */
 function useBandwidthInventory(device: string) {
   const [attempt, setAttempt] = useState(0);
@@ -167,10 +178,11 @@ export function BandwidthView(): ReactNode {
   const [observedAt, setObservedAt] = useState(() => Date.now());
   const [confirmation, setConfirmation] = useState<{ kind: "run" | "delete"; job: BandwidthJob }>();
   const [draft, setDraft] = useState<Draft>(() => ({ ...emptyJob, id: crypto.randomUUID() }));
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [preflight, setPreflight] = useState<BandwidthPreflight>();
-  const sourceInventory = useBandwidthInventory(draft.source);
-  const destinationInventory = useBandwidthInventory(draft.destination);
+  const sourceInventory = useBandwidthInventory(drawerOpen ? draft.source : "");
+  const destinationInventory = useBandwidthInventory(drawerOpen ? draft.destination : "");
   const sourceAddresses =
     sourceInventory.data?.addresses.filter(
       (address) => address.interface === draft.sourceInterface,
@@ -185,6 +197,7 @@ export function BandwidthView(): ReactNode {
       (address) => address.address === draft.destinationAddress,
     );
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [pollError, setPollError] = useState("");
   const [busy, setBusy] = useState(false);
   const [ack, setAck] = useState(false);
@@ -231,16 +244,17 @@ export function BandwidthView(): ReactNode {
     setAck(false);
   }
   /** Serialise explicit actions so double clicks cannot start duplicate traffic. */
-  async function action(work: () => Promise<void>) {
+  async function action(work: () => Promise<void>, report = setError) {
     if (actionLock.current) return;
     actionLock.current = true;
     setBusy(true);
     setError("");
+    setFormError("");
     setNotice("");
     try {
       await work();
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : "Bandwidth operation failed.");
+      if (mounted.current) report(e instanceof Error ? e.message : "Bandwidth operation failed.");
     } finally {
       actionLock.current = false;
       if (mounted.current) setBusy(false);
@@ -261,12 +275,29 @@ export function BandwidthView(): ReactNode {
     setAck(false);
     setEditing(!!job);
     setError("");
+    setFormError("");
+    setAdvancedOpen(false);
     if (job) {
       const { nextRunAt: _next, ...saved } = job;
       setDraft(saved);
     } else setDraft({ ...emptyJob, id: crypto.randomUUID() });
+    setDrawerOpen(true);
   }
-  const filtered = (state?.runs ?? [])
+  function save() {
+    if (!ack || !endpointsReady) return;
+    void action(async () => {
+      await post("save", { job: draft, acknowledgeImpact: true });
+      await refresh();
+      setEditing(true);
+      setAck(false);
+      setDrawerOpen(false);
+      setNotice(`Saved ${draft.name}.`);
+    }, setFormError);
+  }
+
+  const runs = state?.runs ?? [];
+  const jobs = state?.jobs ?? [];
+  const filtered = runs
     .filter(
       (r) =>
         (!selected.length || selected.includes(r.job.id)) &&
@@ -274,618 +305,458 @@ export function BandwidthView(): ReactNode {
     )
     .sort((a, b) => a.startedAt - b.startedAt);
   const tests = new Map<string, string>();
-  for (const job of state?.jobs ?? []) tests.set(job.id, job.name);
-  for (const run of state?.runs ?? [])
+  for (const job of jobs) tests.set(job.id, job.name);
+  for (const run of runs)
     if (!tests.has(run.job.id)) tests.set(run.job.id, `${run.job.name} (deleted)`);
   const visibleTests = [...tests].filter(([id]) => !selected.length || selected.includes(id));
-  return (
-    <div className="space-y-6">
-      <AlertDialog
-        open={!!confirmation}
-        onOpenChange={(open) => {
-          if (!open) setConfirmation(undefined);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmation?.kind === "run" ? "Run bandwidth test?" : "Delete test definition?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmation?.kind === "run"
-                ? `${confirmation.job.name}: generate ${confirmation.job.protocol.toUpperCase()} traffic for ${confirmation.job.durationSeconds}s (${confirmation.job.direction}), up to source TX ${confirmation.job.localTxBps} bps and remote TX ${confirmation.job.remoteTxBps} bps. This can disrupt service. The expected path is not forced.`
-                : `${confirmation?.job.name ?? ""}: remove this saved definition. Retained run history stays available.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busy}
-              onClick={() => {
-                if (!confirmation) return;
-                const { kind, job } = confirmation;
-                void action(async () => {
-                  await post(kind, {
-                    id: job.id,
-                    ...(kind === "run" ? { acknowledgeImpact: true } : {}),
-                  });
-                  await refresh();
-                  if (kind === "delete" && draft.id === job.id) edit();
-                  setNotice(
-                    kind === "run"
-                      ? `Started ${job.name}; follow saved history for the result.`
-                      : `Deleted ${job.name}; history retained.`,
-                  );
-                });
-              }}
-            >
-              {confirmation?.kind === "run" ? "Acknowledge impact & run" : "Delete definition"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
-      <header className="space-y-2">
-        <h2 className="text-xl font-semibold">Tunnel bandwidth</h2>
-        <p className="text-sm text-muted-foreground">
-          Save multiple bounded tests, compare source TX/RX and review retained history. History
-          refreshes every 5 seconds without router I/O. Concurrency: {state?.concurrency ?? "…"}.
-        </p>
-      </header>
-      <WorkspaceSafety>
-        Tests generate traffic and can disrupt service or consume CPU. Source interface and address
-        describe the expected main IPv4 route, not a binding. The path is not forced; policy routing
-        and firewall rules may affect it. Runtime destination credentials are used; this page never
+  // Header and KPI figures, from retained runs only.
+  const byTime = [...runs].sort((a, b) => a.startedAt - b.startedAt);
+  const lastGood = byTime.filter((r) => bandwidthMeasurement(r, "txBps") !== null).at(-1);
+  const lastGoodTx = bandwidthMeasurement(lastGood, "txBps");
+  const day = runs.filter((r) => r.startedAt >= observedAt - 86400000);
+  const dayMeasured = day.filter((r) => r.status === "ok").length;
+  const dayFailed = day.filter((r) => r.status === "failed" || r.status === "interrupted");
+  const failedNames = [...new Set(dayFailed.map((r) => r.job.name))];
+  const lastGoodSpark = lastGood
+    ? byTime
+        .filter((r) => r.job.id === lastGood.job.id)
+        .map((r) => bandwidthMeasurement(r, "txBps"))
+        .filter((v): v is number => v !== null)
+        .slice(-8)
+    : [];
+
+  const from =
+    hours === "all"
+      ? Math.min(observedAt, ...filtered.map((r) => r.startedAt))
+      : observedAt - Number(hours) * 3600000;
+  const span = observedAt - from;
+  const axis = Array.from({ length: 7 }, (_, i) => {
+    if (i === 6) return "now";
+    const at = from + (span * i) / 6;
+    return span > 36 * 3600000 ? dayMonth(at) : clock(at);
+  });
+
+  const heading = !state ? undefined : (
+    <>
+      {jobs.length === 0
+        ? "No saved tests yet."
+        : `${jobs.length} saved ${jobs.length === 1 ? "test" : "tests"}.`}{" "}
+      {lastGoodTx !== null ? (
+        <>
+          <span className="s">{mbps(lastGoodTx)} Mbps</span> on the last good run.
+        </>
+      ) : (
+        "No good run yet."
+      )}
+    </>
+  );
+
+  const runJob = confirmation?.kind === "run" ? confirmation.job : undefined;
+  const deleteJob = confirmation?.kind === "delete" ? confirmation.job : undefined;
+  function confirm() {
+    if (!confirmation) return;
+    const { kind, job } = confirmation;
+    void action(async () => {
+      await post(kind, {
+        id: job.id,
+        ...(kind === "run" ? { acknowledgeImpact: true } : {}),
+      });
+      await refresh();
+      if (kind === "delete" && draft.id === job.id) {
+        setEditing(false);
+        setDraft({ ...emptyJob, id: crypto.randomUUID() });
+      }
+      setConfirmation(undefined);
+      setNotice(
+        kind === "run"
+          ? `Started ${job.name}. Follow saved history for the result.`
+          : `Deleted ${job.name}. Its history stays.`,
+      );
+    });
+  }
+
+  const inventoryLines = (
+    [
+      ["Source", draft.source, sourceInventory],
+      ["Destination", draft.destination, destinationInventory],
+    ] as const
+  ).flatMap(([label, device, inventory]) =>
+    !device
+      ? []
+      : inventory.loading
+        ? [
+            <span key={label} role="status" className="monitor-hint">
+              Loading {label.toLowerCase()} inventory…
+            </span>,
+          ]
+        : inventory.error
+          ? [
+              <span key={label} role="alert" className="monitor-err">
+                {label}: {inventory.error}
+              </span>,
+            ]
+          : inventory.data && !inventory.data.addresses.length
+            ? [
+                <span key={label} className="monitor-hint text-warning">
+                  {label === "Source"
+                    ? "No usable source IPv4 addresses. Interfaces without an enabled address cannot be selected."
+                    : "No usable destination IPv4 addresses. Configure the router separately before creating a test."}
+                </span>,
+              ]
+            : [],
+  );
+  const inventoryFailed = !!sourceInventory.error || !!destinationInventory.error;
+
+  return (
+    <div className="bw-page">
+      <PageIntro
+        eyebrow="Tunnel bandwidth"
+        heading={heading}
+        lead={`Save bounded tests, compare source TX and RX, and review retained history. History refreshes every 5 seconds without touching a router. Concurrency: ${state?.concurrency ?? "…"}.`}
+        actions={
+          <MonitorButton
+            variant="primary"
+            icon={<Plus aria-hidden="true" />}
+            disabled={busy}
+            onClick={() => edit()}
+          >
+            New test
+          </MonitorButton>
+        }
+      />
+      <MonitorNote tone="warn" icon={<TriangleAlert aria-hidden="true" />}>
+        <b>Tests generate traffic.</b> They can disrupt service or load the CPU. Source interface
+        and address describe the expected main IPv4 route; the path is not forced. This page never
         changes the bandwidth server or firewall.
-      </WorkspaceSafety>
-      <WorkspaceError message={error || pollError} />
-      {notice && <p role="status">{notice}</p>}
+      </MonitorNote>
+      {(error || pollError) && (
+        <MonitorNote tone="bad" role="alert">
+          {error || pollError}
+        </MonitorNote>
+      )}
+      {notice && (
+        <MonitorNote tone="good" role="status">
+          {notice}
+        </MonitorNote>
+      )}
       {!state && (
-        <p role="status">
+        <MonitorNote role="status">
           {pollError
             ? "Saved tests unavailable. Retrying every 5 seconds."
             : "Loading saved tests and history…"}
-        </p>
+        </MonitorNote>
       )}
       {state && (
-        <section className="space-y-3" aria-label="Saved bandwidth tests">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Saved tests</h3>
-            <Button variant="outline" disabled={busy} onClick={() => edit()}>
-              New test
-            </Button>
-          </div>
-          {!state.jobs.length && (
-            <p className="text-muted-foreground">
-              No saved tests. Create a disabled test below, check its expected route, then
-              explicitly run it.
-            </p>
-          )}
-          <div className="grid gap-3 md:grid-cols-2">
-            {state.jobs.map((job) => (
-              <article key={job.id} className="rounded-xl border border-border p-4 space-y-3">
-                <h4 className="font-semibold">{job.name}</h4>
-                <p className="text-sm">
-                  {job.source} → {job.destination} · {job.sourceInterface} ·{" "}
-                  {job.destinationAddress}
-                </p>
-                <p className="text-sm">
-                  {job.protocol.toUpperCase()} · {job.direction} · {job.durationSeconds}s ·{" "}
-                  {job.enabled
-                    ? `Every ${job.intervalSeconds}s; next ${new Date(job.nextRunAt).toLocaleString()}`
-                    : "Schedule disabled"}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" disabled={busy} onClick={() => edit(job)}>
-                    Edit {job.name}
-                  </Button>
-                  {job.enabled && (
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        void action(async () => {
-                          const { nextRunAt: _next, ...saved } = job;
-                          await post("save", {
-                            job: { ...saved, enabled: false },
-                            acknowledgeImpact: true,
-                          });
-                          await refresh();
-                          setNotice(`Disabled ${job.name}.`);
-                        })
-                      }
+        <>
+          <MetricStrip label="Bandwidth summary" minCell={200}>
+            <Metric
+              label="Saved tests"
+              value={<Ticker value={jobs.length} format={(n) => String(Math.round(n))} />}
+              hint={`${jobs.filter((j) => j.enabled).length} on a schedule`}
+            />
+            <Metric
+              label="Runs in 24 h"
+              value={<Ticker value={day.length} format={(n) => String(Math.round(n))} />}
+              hint={`${dayMeasured} measured`}
+            />
+            <Metric
+              label="Failed or interrupted"
+              value={<Ticker value={dayFailed.length} format={(n) => String(Math.round(n))} />}
+              hint={failedNames.length ? failedNames.join(", ") : "None in 24 h"}
+              tone={dayFailed.length ? "bad" : "default"}
+            />
+            <Metric
+              label="Latest source TX"
+              value={
+                lastGoodTx === null ? (
+                  "—"
+                ) : (
+                  <>
+                    {mbps(lastGoodTx)}
+                    <small>Mbps</small>
+                  </>
+                )
+              }
+              hint={
+                lastGood
+                  ? `${lastGood.job.name} · ${stamp(lastGood.startedAt, observedAt)}`
+                  : "No measured run yet"
+              }
+              spark={lastGoodSpark}
+            />
+          </MetricStrip>
+
+          <section className="bw-tests" aria-label="Saved bandwidth tests">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-[14px] font-semibold text-foreground">Saved tests</h2>
+              <span className="monitor-hint">
+                Run asks you to confirm the traffic impact first.
+              </span>
+            </div>
+            {!jobs.length ? (
+              <div className="glass">
+                <MonitorEmpty
+                  icon={<Plus />}
+                  title="No saved tests"
+                  action={
+                    <MonitorButton
+                      size="sm"
+                      icon={<Plus aria-hidden="true" />}
+                      onClick={() => edit()}
                     >
-                      Disable {job.name}
-                    </Button>
-                  )}
-                  <Button
-                    disabled={
-                      busy || state.runs.some((r) => r.job.id === job.id && r.status === "running")
-                    }
-                    onClick={() => setConfirmation({ kind: "run", job })}
-                  >
-                    Run {job.name}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => setConfirmation({ kind: "delete", job })}
-                  >
-                    Delete {job.name}
-                  </Button>
+                      New test
+                    </MonitorButton>
+                  }
+                >
+                  Create a test, check readiness, then run it when you choose.
+                </MonitorEmpty>
+              </div>
+            ) : (
+              <div className="bw-test-grid">
+                {jobs.map((job) => {
+                  const latest = byTime.filter((r) => r.job.id === job.id).at(-1);
+                  const running = runs.some((r) => r.job.id === job.id && r.status === "running");
+                  return (
+                    <article key={job.id} className="glass bw-test">
+                      <div className="flex items-center gap-2">
+                        <b className="min-w-0 flex-1 truncate font-mono text-[13px] font-bold text-foreground">
+                          {job.name}
+                        </b>
+                        {latest && (
+                          <StatusBadge
+                            tone={RUN_TONE[latest.status]}
+                            pulse={latest.status === "running"}
+                          >
+                            {latest.status === "ok"
+                              ? `ok · ${clock(latest.startedAt)}`
+                              : latest.status}
+                          </StatusBadge>
+                        )}
+                      </div>
+                      <span className="truncate font-mono text-[12px] text-fg-secondary">
+                        {job.source} → {job.destination}
+                      </span>
+                      <span className="truncate font-mono text-[12px] text-muted-foreground">
+                        {job.sourceInterface} · {job.sourceAddress} → {job.destinationAddress}
+                      </span>
+                      <span className="text-[13px] text-fg-secondary">
+                        {job.protocol.toUpperCase()} · {job.direction} · {job.durationSeconds} s ·{" "}
+                        {job.enabled ? (
+                          <span className="text-success">
+                            Every {job.intervalSeconds} s; next {clock(job.nextRunAt)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">Schedule disabled</span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-1.5 pt-1">
+                        {running ? (
+                          <MonitorButton
+                            size="sm"
+                            className="bw-running"
+                            icon={<Play aria-hidden="true" />}
+                            disabled
+                            aria-label={`Run ${job.name}`}
+                          >
+                            Running…
+                          </MonitorButton>
+                        ) : (
+                          <MonitorButton
+                            size="sm"
+                            variant="primary"
+                            icon={<Play aria-hidden="true" />}
+                            disabled={busy}
+                            aria-label={`Run ${job.name}`}
+                            onClick={() => setConfirmation({ kind: "run", job })}
+                          >
+                            Run
+                          </MonitorButton>
+                        )}
+                        <MonitorButton
+                          size="sm"
+                          icon={<Pencil aria-hidden="true" />}
+                          disabled={busy}
+                          aria-label={`Edit ${job.name}`}
+                          onClick={() => edit(job)}
+                        >
+                          Edit
+                        </MonitorButton>
+                        {job.enabled && (
+                          <MonitorButton
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            aria-label={`Disable ${job.name}`}
+                            onClick={() =>
+                              void action(async () => {
+                                const { nextRunAt: _next, ...saved } = job;
+                                await post("save", {
+                                  job: { ...saved, enabled: false },
+                                  acknowledgeImpact: true,
+                                });
+                                await refresh();
+                                setNotice(`Disabled ${job.name}.`);
+                              })
+                            }
+                          >
+                            Disable
+                          </MonitorButton>
+                        )}
+                        <span className="flex-1" />
+                        <MonitorButton
+                          size="sm"
+                          variant="ghost"
+                          icon={<Trash2 aria-hidden="true" />}
+                          disabled={busy}
+                          aria-label={`Delete ${job.name}`}
+                          title="Delete"
+                          onClick={() => setConfirmation({ kind: "delete", job })}
+                        />
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
+      <MonitorPanel
+        title="Throughput history and comparison"
+        description="TX leaves the source router; RX arrives at it. Failed or missing results are gaps, never zero. Different protocols, durations or caps are not like-for-like."
+        extra={
+          <Segmented label="History window" value={hours} options={WINDOWS} onChange={setHours} />
+        }
+        aria-label="Bandwidth throughput history"
+      >
+        <div className="flex flex-col gap-3.5">
+          {tests.size > 0 && (
+            <div role="group" aria-label="Tests" className="flex flex-wrap items-center gap-4">
+              <span className="monitor-label">Tests</span>
+              {[...tests].map(([id, name]) => (
+                <FormCheck
+                  key={id}
+                  label={name}
+                  checked={selected.includes(id)}
+                  onChange={(checked) =>
+                    setSelected((s) => (checked ? [...s, id] : s.filter((v) => v !== id)))
+                  }
+                >
+                  {name}
+                </FormCheck>
+              ))}
+              <span className="monitor-hint">None selected shows all.</span>
+            </div>
+          )}
+          {!filtered.length && (
+            <MonitorEmpty compact title="No retained runs match this selection and time window." />
+          )}
+          {visibleTests.map(([id, name]) => {
+            const testRuns = filtered.filter((r) => r.job.id === id);
+            // A test with no run in the window has nothing to chart.
+            if (!testRuns.length) return null;
+            const latest = testRuns.at(-1);
+            const successes = testRuns.filter((r) => r.status === "ok").length;
+            const failures = testRuns.filter(
+              (r) => r.status === "failed" || r.status === "interrupted",
+            ).length;
+            const points: ThroughputPoint[] = testRuns.map((r) => ({
+              at: r.startedAt,
+              tx: bandwidthMeasurement(r, "txBps"),
+              rx: bandwidthMeasurement(r, "rxBps"),
+              failed: r.status === "failed" || r.status === "interrupted",
+            }));
+            return (
+              <article key={id} className="flex flex-col gap-3.5">
+                <b className="font-mono text-[13px] font-bold text-foreground">{name}</b>
+                <div className="bw-history">
+                  <div className="flex min-w-0 flex-col gap-3.5">
+                    <ThroughputChart
+                      points={points}
+                      from={from}
+                      to={observedAt}
+                      labels={axis}
+                      drawKey={`${id}-${hours}`}
+                    />
+                    <span className="monitor-legend">
+                      <span>
+                        <i className="bg-sig" />
+                        Source TX Mbps
+                      </span>
+                      <span>
+                        <i className="bg-brand" />
+                        Source RX Mbps
+                      </span>
+                      <span>
+                        <i className="bg-destructive" />
+                        failed run · gap, not zero
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-2.5">
+                    <div className="glass flex flex-col gap-1 px-3.5 py-3">
+                      <span className="monitor-hint">
+                        Latest ·{" "}
+                        {latest
+                          ? `${stamp(latest.startedAt, observedAt)} · ${latest.status}`
+                          : "no run"}
+                      </span>
+                      <span className="bw-latest tabular-nums">
+                        {mbps(bandwidthMeasurement(latest, "txBps"))} <small>Mbps TX</small> ·{" "}
+                        {mbps(bandwidthMeasurement(latest, "rxBps"))} <small>RX</small>
+                      </span>
+                      <span className="monitor-hint">
+                        Successful {successes} · failed or interrupted {failures} · running{" "}
+                        {testRuns.length - successes - failures}
+                      </span>
+                    </div>
+                    <div className="glass overflow-hidden">
+                      <table className="bw-table bw-stats">
+                        <caption>Selected window · source view, Mbps</caption>
+                        <thead>
+                          <tr className="monitor-thead">
+                            {["Direction", "Runs", "Min", "Mean", "Max"].map((h) => (
+                              <th scope="col" key={h}>
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(["txBps", "rxBps"] as const).map((key) => {
+                            const stats = bandwidthStatistics(testRuns, key);
+                            return (
+                              <tr key={key} className="monitor-row">
+                                <th scope="row">Source {key === "txBps" ? "TX" : "RX"}</th>
+                                <td>{stats.count}</td>
+                                <td>{mbps(stats.min)}</td>
+                                <td>{mbps(stats.mean)}</td>
+                                <td>{mbps(stats.max)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </article>
-            ))}
-          </div>
-        </section>
-      )}
-      <form
-        className="rounded-xl border border-border p-4 space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!ack || !endpointsReady) return;
-          void action(async () => {
-            await post("save", { job: draft, acknowledgeImpact: true });
-            await refresh();
-            setEditing(true);
-            setAck(false);
-            setNotice(`Saved ${draft.name}.`);
-          });
-        }}
-      >
-        <h3 className="font-semibold">{editing ? "Edit test" : "Create test"}</h3>
-        <fieldset disabled={busy} className="grid gap-4 md:grid-cols-2">
-          <legend className="sr-only">Bandwidth test definition</legend>
-          <label className="grid gap-2 text-sm">
-            Name
-            <Input required value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
-          </label>
-          <Choice
-            label="Source router"
-            value={draft.source}
-            values={state?.devices ?? []}
-            onChange={(source) => {
-              patch({ source, sourceInterface: "", sourceAddress: "" });
-            }}
-          />
-          <Choice
-            label="Destination router"
-            value={draft.destination}
-            values={state?.devices ?? []}
-            onChange={(destination) => patch({ destination, destinationAddress: "" })}
-          />
-          <Choice
-            label="Expected source interface"
-            value={draft.sourceInterface}
-            disabled={busy || sourceInventory.loading || !sourceInventory.data}
-            options={sourceInventory.data?.interfaces.map((iface) => {
-              const hasAddress = sourceInventory.data!.addresses.some(
-                (address) => address.interface === iface.name,
-              );
-              const reason = iface.disabled
-                ? "disabled"
-                : !iface.running
-                  ? "not running"
-                  : !hasAddress
-                    ? "no usable IPv4 address"
-                    : "";
-              return {
-                value: iface.name,
-                label: `${iface.name}${reason ? ` — ${reason}` : ""}`,
-                disabled: !!reason,
-              };
-            })}
-            onChange={(sourceInterface) => patch({ sourceInterface, sourceAddress: "" })}
-          />
-          <Choice
-            label="Expected source IPv4"
-            value={draft.sourceAddress}
-            values={[...new Set(sourceAddresses.map((address) => address.address))]}
-            disabled={busy || !usableSource || !sourceAddresses.length}
-            onChange={(sourceAddress) => patch({ sourceAddress })}
-          />
-          <Choice
-            label="Destination IPv4 (explicit)"
-            value={draft.destinationAddress}
-            options={[
-              ...new Map(
-                destinationInventory.data?.addresses.map((address) => [
-                  address.address,
-                  { value: address.address, label: `${address.address} — ${address.interface}` },
-                ]) ?? [],
-              ).values(),
-            ]}
-            disabled={
-              busy || destinationInventory.loading || !destinationInventory.data?.addresses.length
-            }
-            onChange={(destinationAddress) => patch({ destinationAddress })}
-          />
-          <div className="space-y-2 text-sm md:col-span-2">
-            <p className="text-muted-foreground">
-              Selecting a router reads its interfaces and IPv4 addresses. Inventory is cached for 30
-              seconds; every test still performs fresh preflight.
-            </p>
-            {(
-              [
-                ["Source", draft.source, sourceInventory],
-                ["Destination", draft.destination, destinationInventory],
-              ] as const
-            ).map(
-              ([label, device, inventory]) =>
-                device && (
-                  <div key={label} className="flex flex-wrap items-center gap-2">
-                    {inventory.loading ? (
-                      <span role="status">Loading {label.toLowerCase()} inventory…</span>
-                    ) : inventory.error ? (
-                      <span role="alert">
-                        {label}: {inventory.error}
-                      </span>
-                    ) : (
-                      inventory.data && (
-                        <span className="text-muted-foreground">
-                          {label}: {inventory.data.interfaces.length} interfaces ·{" "}
-                          {inventory.data.addresses.length} usable IPv4 addresses
-                        </span>
-                      )
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={busy || inventory.loading}
-                      onClick={inventory.retry}
-                    >
-                      {inventory.error
-                        ? `Retry ${label.toLowerCase()} inventory`
-                        : `Refresh ${label.toLowerCase()} inventory`}
-                    </Button>
-                  </div>
-                ),
-            )}
-            {sourceInventory.data && !sourceInventory.data.addresses.length && (
-              <p>
-                No usable source IPv4 addresses. Interfaces without an enabled address cannot be
-                selected.
-              </p>
-            )}
-            {destinationInventory.data && !destinationInventory.data.addresses.length && (
-              <p>
-                No usable destination IPv4 addresses. Configure the router separately before
-                creating a test.
-              </p>
-            )}
-          </div>
-          <Choice
-            label="Protocol"
-            value={draft.protocol}
-            values={["tcp", "udp"]}
-            onChange={(protocol) => patch({ protocol: protocol as Draft["protocol"] })}
-          />
-          <Choice
-            label="Direction (from source)"
-            value={draft.direction}
-            values={["transmit", "receive", "both"]}
-            onChange={(direction) => patch({ direction: direction as Draft["direction"] })}
-          />
-          {(
-            [
-              { key: "durationSeconds", label: "Duration (seconds)", min: 5, max: 60 },
-              {
-                key: "intervalSeconds",
-                label: "Schedule interval (seconds)",
-                min: 300,
-                max: 604800,
-              },
-              {
-                key: "localTxBps",
-                label: "Source TX limit (bits/second)",
-                min: 1,
-                max: 100000000000,
-              },
-              {
-                key: "remoteTxBps",
-                label: "Remote TX / source RX limit (bits/second)",
-                min: 1,
-                max: 100000000000,
-              },
-            ] as const
-          ).map((field) => (
-            <label key={field.key} className="grid gap-2 text-sm">
-              {field.label}
-              <Input
-                type="number"
-                required
-                step={1}
-                min={field.min}
-                max={field.max}
-                value={draft[field.key]}
-                onChange={(e) => patch({ [field.key]: e.target.valueAsNumber })}
-              />
-            </label>
-          ))}
-          <Collapsible.Root
-            open={advancedOpen}
-            onOpenChange={setAdvancedOpen}
-            className="rounded-lg border bg-muted/20 md:col-span-2"
-          >
-            <Collapsible.Trigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-auto w-full justify-between p-4 text-left"
-                disabled={busy}
-              >
-                <span className="grid gap-1">
-                  <span className="font-medium">Advanced Options</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    Packet sizes, connections, reporting and payload
-                  </span>
-                </span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className={`h-4 w-4 shrink-0 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
-                />
-              </Button>
-            </Collapsible.Trigger>
-            <Collapsible.Content
-              forceMount
-              hidden={!advancedOpen}
-              onInvalidCapture={() => setAdvancedOpen(true)}
-              className="border-t p-4"
-            >
-              <p className="mb-4 text-sm text-muted-foreground">
-                Packet sizes apply to UDP; connection count applies to TCP. Saved values are kept
-                when this section is collapsed.
-              </p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-2 text-sm md:col-span-2">
-                  Test ID (automatic)
-                  <Input value={draft.id} readOnly className="font-mono text-xs" />
-                </label>
-                {(
-                  [
-                    {
-                      key: "localUdpTxSize",
-                      label: "Source UDP TX size (bytes)",
-                      min: 28,
-                      max: 64000,
-                    },
-                    {
-                      key: "remoteUdpTxSize",
-                      label: "Remote UDP TX size (bytes)",
-                      min: 28,
-                      max: 64000,
-                    },
-                    { key: "connectionCount", label: "TCP connection count", min: 1, max: 255 },
-                    {
-                      key: "reportIntervalSeconds",
-                      label: "Report interval (seconds)",
-                      min: 0.02,
-                      max: 5,
-                    },
-                  ] as const
-                ).map((field) => (
-                  <label key={field.key} className="grid gap-2 text-sm">
-                    {field.label}
-                    <Input
-                      type="number"
-                      required
-                      step={field.key === "reportIntervalSeconds" ? 0.001 : 1}
-                      min={field.min}
-                      max={field.max}
-                      value={draft[field.key]}
-                      onChange={(e) => patch({ [field.key]: e.target.valueAsNumber })}
-                    />
-                  </label>
-                ))}
-                <label className="flex items-center gap-2 text-sm md:col-span-2">
-                  <Checkbox
-                    checked={draft.randomData}
-                    disabled={busy}
-                    onCheckedChange={(checked) => patch({ randomData: checked === true })}
-                    aria-label="Generate random data"
-                  />
-                  Generate random data
-                </label>
-              </div>
-            </Collapsible.Content>
-          </Collapsible.Root>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={draft.enabled}
-              disabled={busy}
-              aria-label="Enable recurring traffic (off by default)"
-              onCheckedChange={(checked) => patch({ enabled: checked === true })}
-            />
-            Enable recurring traffic (off by default)
-          </label>
-        </fieldset>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={
-              busy ||
-              !draft.source ||
-              !draft.destination ||
-              !draft.destinationAddress ||
-              !draft.sourceAddress ||
-              !draft.sourceInterface
-            }
-            onClick={() =>
-              void action(async () => {
-                setPreflight(await post<BandwidthPreflight>("preflight", { job: draft }));
-              })
-            }
-          >
-            Check readiness (live reads)
-          </Button>
+            );
+          })}
         </div>
-        {preflight && (
-          <div role="status" className="space-y-2">
-            <strong>{preflight.ready ? "Ready at last check" : "Not ready"}</strong>
-            <ul>
-              {preflight.checks.map((c, i) => (
-                <li key={i}>
-                  {c.ok ? "Pass" : "Fail"} · {c.name}: {c.message}
-                </li>
-              ))}
-            </ul>
-            <p>{preflight.warning}</p>
-          </div>
-        )}
-        <p className="text-sm text-muted-foreground">
-          Readiness checks source address/interface, destination ownership, active main IPv4 route
-          and expected interface/preferred source when present, plus bandwidth server and runtime
-          authentication. It does not configure either router.
-        </p>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={ack}
-            aria-label="I acknowledge the traffic impact"
-            disabled={busy}
-            onCheckedChange={(checked) => setAck(checked === true)}
-            required
-          />
-          I acknowledge the traffic impact
-          {draft.enabled ? " of enabling this recurring test" : "; this definition stays disabled"}.
-        </label>
-        <Button type="submit" disabled={busy || !ack || !endpointsReady}>
-          Save test
-        </Button>
-      </form>
-      <section className="space-y-4" aria-label="Bandwidth throughput history">
-        <h3 className="font-semibold">Throughput history & comparison</h3>
-        <Choice
-          label="History window"
-          value={hours}
-          values={["1", "24", "168", "all"]}
-          onChange={setHours}
-        />
-        <p className="text-sm text-muted-foreground">
-          Window in hours. TX leaves the source router; RX arrives at the source. Missing/failed
-          results are gaps, never zero. Statistics use all retained runs per selected test within
-          this window. Failed and missing measurements are excluded from rate statistics. Different
-          protocols, durations or rate caps are not like-for-like comparisons; edited test settings
-          can also differ between retained runs.
-        </p>
-        <fieldset className="flex flex-wrap gap-4">
-          <legend>Select tests (none selected means all)</legend>
-          {[...tests].map(([id, name]) => (
-            <label key={id} className="flex gap-2 items-center text-sm">
-              <Checkbox
-                checked={selected.includes(id)}
-                aria-label={name}
-                onCheckedChange={(checked) =>
-                  setSelected((s) => (checked === true ? [...s, id] : s.filter((v) => v !== id)))
-                }
-              />
-              {name}
-            </label>
-          ))}
-        </fieldset>
-        {!filtered.length && (
-          <p role="status">No retained runs match this selection and time window.</p>
-        )}
-        {visibleTests.map(([id, name]) => {
-          const runs = filtered.filter((r) => r.job.id === id);
-          const latest = runs.at(-1);
-          const successes = runs.filter((r) => r.status === "ok").length;
-          const failures = runs.filter(
-            (r) => r.status === "failed" || r.status === "interrupted",
-          ).length;
-          return (
-            <article key={id} className="rounded-xl border border-border p-4 space-y-2">
-              <h4 className="font-semibold">{name}</h4>
-              <p className="text-sm">
-                Latest source TX: {rate(bandwidthMeasurement(latest, "txBps"))} · Source RX:{" "}
-                {rate(bandwidthMeasurement(latest, "rxBps"))} ·{" "}
-                {latest?.status ?? "No run in window"}
-              </p>
-              <p className="text-sm">
-                Successful: {successes} · Failed/interrupted: {failures} · Running:{" "}
-                {runs.length - successes - failures}
-              </p>
-              <table className="w-full text-left text-sm">
-                <caption className="text-left">
-                  Selected window statistics — source perspective
-                </caption>
-                <thead>
-                  <tr>
-                    {["Direction", "Measured runs", "Min", "Mean", "Max"].map((heading) => (
-                      <th scope="col" key={heading}>
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(["txBps", "rxBps"] as const).map((key) => {
-                    const stats = bandwidthStatistics(runs, key);
-                    return (
-                      <tr key={key}>
-                        <th scope="row">Source {key === "txBps" ? "TX" : "RX"}</th>
-                        <td>{stats.count}</td>
-                        <td>{rate(stats.min)}</td>
-                        <td>{rate(stats.mean)}</td>
-                        <td>{rate(stats.max)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {runs.length > 0 && (
-                <ChartContainer config={chartConfig} className="h-[220px] w-full aspect-auto">
-                  <LineChart
-                    accessibilityLayer
-                    data={runs.map((r) => ({
-                      at: r.startedAt,
-                      tx: bandwidthMeasurement(r, "txBps"),
-                      rx: bandwidthMeasurement(r, "rxBps"),
-                    }))}
-                  >
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="at"
-                      type="number"
-                      domain={["dataMin", "dataMax"]}
-                      tickFormatter={(t) => new Date(t).toLocaleTimeString()}
-                    />
-                    <YAxis unit=" Mbps" width={80} domain={[0, "auto"]} />
-                    <ChartTooltip
-                      content={
-                        <ChartTooltipContent
-                          labelFormatter={(v) => new Date(Number(v)).toLocaleString()}
-                        />
-                      }
-                    />
-                    <Line
-                      dataKey="tx"
-                      stroke="var(--color-tx)"
-                      connectNulls={false}
-                      isAnimationActive={false}
-                    />
-                    <Line
-                      dataKey="rx"
-                      stroke="var(--color-rx)"
-                      connectNulls={false}
-                      isAnimationActive={false}
-                    />
-                  </LineChart>
-                </ChartContainer>
-              )}
-            </article>
-          );
-        })}
-        {filtered.length > 0 && (
+      </MonitorPanel>
+
+      {filtered.length > 0 && (
+        <MonitorPanel title="Retained runs" description="Source view, Mbps. Newest first." flush>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="text-left py-2">Retained runs — source perspective, Mbps</caption>
+            <table className="bw-table bw-runs">
               <thead>
-                <tr>
+                <tr className="monitor-thead">
                   {["Test", "Started", "Status", "Source TX", "Source RX", "Loss", "Result"].map(
                     (h) => (
-                      <th className="p-2" scope="col" key={h}>
+                      <th scope="col" key={h}>
                         {h}
                       </th>
                     ),
@@ -894,27 +765,532 @@ export function BandwidthView(): ReactNode {
               </thead>
               <tbody>
                 {[...filtered].reverse().map((r) => (
-                  <tr key={r.id} className="border-t border-border">
-                    <th scope="row" className="p-2">
+                  <tr
+                    key={r.id}
+                    className="monitor-row"
+                    data-selected={r.status === "running" || undefined}
+                    data-failed={r.status === "failed" || undefined}
+                  >
+                    <th scope="row" className="p truncate font-mono text-[12px]">
                       {r.job.name}
                     </th>
-                    <td className="p-2">{new Date(r.startedAt).toLocaleString()}</td>
-                    <td className="p-2">
-                      {r.status} · {r.trigger}
+                    <td className="font-mono text-[12px] text-muted-foreground">
+                      {stamp(r.startedAt, observedAt)}
                     </td>
-                    <td className="p-2">{rate(bandwidthMeasurement(r, "txBps"))}</td>
-                    <td className="p-2">{rate(bandwidthMeasurement(r, "rxBps"))}</td>
-                    <td className="p-2">
-                      {r.status === "ok" ? (r.lostPackets ?? "Missing") : "Missing"}
+                    <td>
+                      <span className="inline-flex min-w-0 items-center gap-2">
+                        <StatusDot tone={RUN_TONE[r.status]} />
+                        <span className="truncate">
+                          {r.status} · {r.trigger}
+                        </span>
+                      </span>
                     </td>
-                    <td className="p-2">{r.message}</td>
+                    <td className="tabular-nums">{mbps(bandwidthMeasurement(r, "txBps"))}</td>
+                    <td className="tabular-nums">{mbps(bandwidthMeasurement(r, "rxBps"))}</td>
+                    <td className="tabular-nums">
+                      {r.status === "ok"
+                        ? (r.lostPackets ?? "Missing")
+                        : r.status === "running"
+                          ? "—"
+                          : "Missing"}
+                    </td>
+                    <td
+                      className={
+                        r.status === "failed"
+                          ? "truncate text-destructive"
+                          : r.status === "interrupted"
+                            ? "truncate text-warning"
+                            : r.status === "running"
+                              ? "truncate text-muted-foreground"
+                              : "truncate"
+                      }
+                      title={r.message}
+                    >
+                      {r.message || (r.status === "running" ? "Collecting" : "Completed")}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </MonitorPanel>
+      )}
+
+      <MonitorDialog
+        variant="drawer"
+        open={drawerOpen}
+        onOpenChange={(open) => {
+          if (!open && !busy) setDrawerOpen(false);
+        }}
+        dismissible={false}
+        closeDisabled={busy}
+        title={editing ? "Edit test" : "New test"}
+        description="Readiness uses live reads. Saving never configures either router."
+        footer={
+          <>
+            <MonitorButton variant="ghost" disabled={busy} onClick={() => setDrawerOpen(false)}>
+              Cancel
+            </MonitorButton>
+            <span className="flex-1" />
+            <MonitorButton
+              type="submit"
+              form="bw-test-form"
+              variant="primary"
+              icon={<Check aria-hidden="true" />}
+              disabled={busy || !ack || !endpointsReady}
+            >
+              Save test
+            </MonitorButton>
+          </>
+        }
+      >
+        <form
+          id="bw-test-form"
+          className="monitor-dialog-body"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+        >
+          <fieldset disabled={busy} className="flex min-w-0 flex-col gap-3">
+            <legend className="sr-only">Bandwidth test definition</legend>
+            {formError && (
+              <MonitorNote tone="bad" role="alert">
+                {formError}
+              </MonitorNote>
+            )}
+            <FormField label="Name">
+              <input
+                required
+                className="monitor-input font-mono text-[12px]"
+                value={draft.name}
+                onChange={(e) => patch({ name: e.target.value })}
+              />
+            </FormField>
+            <div className="bw-pair">
+              <FormField label="Source router">
+                <FormSelect
+                  mono
+                  label="Source router"
+                  value={draft.source}
+                  options={(state?.devices ?? []).map((d) => ({ value: d, label: d }))}
+                  onChange={(source) => patch({ source, sourceInterface: "", sourceAddress: "" })}
+                />
+              </FormField>
+              <FormField label="Destination router">
+                <FormSelect
+                  mono
+                  label="Destination router"
+                  value={draft.destination}
+                  options={(state?.devices ?? []).map((d) => ({ value: d, label: d }))}
+                  onChange={(destination) => patch({ destination, destinationAddress: "" })}
+                />
+              </FormField>
+            </div>
+            <div className="bw-pair">
+              <FormField label="Expected source interface">
+                <FormSelect
+                  mono
+                  label="Expected source interface"
+                  value={draft.sourceInterface}
+                  disabled={busy || sourceInventory.loading || !sourceInventory.data}
+                  options={(sourceInventory.data?.interfaces ?? []).map((iface) => {
+                    const hasAddress = sourceInventory.data!.addresses.some(
+                      (address) => address.interface === iface.name,
+                    );
+                    const reason = iface.disabled
+                      ? "disabled"
+                      : !iface.running
+                        ? "not running"
+                        : !hasAddress
+                          ? "no usable IPv4 address"
+                          : "";
+                    return {
+                      value: iface.name,
+                      label: `${iface.name}${reason ? ` — ${reason}` : ""}`,
+                      disabled: !!reason,
+                    };
+                  })}
+                  onChange={(sourceInterface) => patch({ sourceInterface, sourceAddress: "" })}
+                />
+              </FormField>
+              <FormField label="Expected source IPv4">
+                <FormSelect
+                  mono
+                  label="Expected source IPv4"
+                  value={draft.sourceAddress}
+                  disabled={busy || !usableSource || !sourceAddresses.length}
+                  options={[...new Set(sourceAddresses.map((a) => a.address))].map((a) => ({
+                    value: a,
+                    label: a,
+                  }))}
+                  onChange={(sourceAddress) => patch({ sourceAddress })}
+                />
+              </FormField>
+            </div>
+            <div className="monitor-fl">
+              <FormField label="Destination IPv4 (explicit)">
+                <FormSelect
+                  mono
+                  label="Destination IPv4 (explicit)"
+                  value={draft.destinationAddress}
+                  disabled={
+                    busy ||
+                    destinationInventory.loading ||
+                    !destinationInventory.data?.addresses.length
+                  }
+                  options={[
+                    ...new Map(
+                      destinationInventory.data?.addresses.map((address) => [
+                        address.address,
+                        {
+                          value: address.address,
+                          label: address.address,
+                        },
+                      ]) ?? [],
+                    ).values(),
+                  ]}
+                  onChange={(destinationAddress) => patch({ destinationAddress })}
+                />
+              </FormField>
+              <span className="monitor-hint">
+                Interfaces and addresses read from both routers · cached 30 s.{" "}
+                <button
+                  type="button"
+                  className="bw-link"
+                  disabled={busy || sourceInventory.loading || destinationInventory.loading}
+                  onClick={() => {
+                    if (draft.source) sourceInventory.retry();
+                    if (draft.destination) destinationInventory.retry();
+                  }}
+                >
+                  {inventoryFailed ? "Retry inventory" : "Refresh inventory"}
+                </button>
+              </span>
+              {inventoryLines}
+            </div>
+            <div className="bw-pair">
+              <FormField label="Protocol" group>
+                <Segmented
+                  label="Protocol"
+                  value={draft.protocol}
+                  options={[
+                    { value: "tcp", label: "TCP" },
+                    { value: "udp", label: "UDP" },
+                  ]}
+                  onChange={(protocol) => patch({ protocol })}
+                />
+              </FormField>
+              <FormField label="Direction from source" group>
+                <Segmented
+                  label="Direction from source"
+                  value={draft.direction}
+                  options={[
+                    { value: "transmit", label: "transmit" },
+                    { value: "receive", label: "receive" },
+                    { value: "both", label: "both" },
+                  ]}
+                  onChange={(direction) => patch({ direction })}
+                />
+              </FormField>
+            </div>
+            <div className="bw-pair">
+              {(
+                [
+                  {
+                    key: "durationSeconds",
+                    label: "Duration · seconds",
+                    min: 5,
+                    max: 60,
+                    hint: "5 to 60",
+                  },
+                  {
+                    key: "intervalSeconds",
+                    label: "Schedule interval · seconds",
+                    min: 300,
+                    max: 604800,
+                  },
+                  {
+                    key: "localTxBps",
+                    label: "Source TX limit · bits/s",
+                    min: 1,
+                    max: 100000000000,
+                  },
+                  {
+                    key: "remoteTxBps",
+                    label: "Remote TX limit · bits/s",
+                    min: 1,
+                    max: 100000000000,
+                  },
+                ] as const
+              ).map((field) => (
+                <FormField
+                  key={field.key}
+                  label={field.label}
+                  hint={"hint" in field ? field.hint : undefined}
+                >
+                  <input
+                    type="number"
+                    required
+                    step={1}
+                    min={field.min}
+                    max={field.max}
+                    className="monitor-input font-mono text-[12px]"
+                    value={draft[field.key]}
+                    onChange={(e) => patch({ [field.key]: e.target.valueAsNumber })}
+                  />
+                </FormField>
+              ))}
+            </div>
+            <div className="glass overflow-hidden">
+              <button
+                type="button"
+                className="bw-disclosure"
+                aria-expanded={advancedOpen}
+                aria-controls="bw-advanced"
+                onClick={() => setAdvancedOpen((open) => !open)}
+              >
+                <ChevronRight aria-hidden="true" data-open={advancedOpen || undefined} />
+                <span className="flex-1">Packet sizes, connections, reporting and payload</span>
+              </button>
+              <div
+                id="bw-advanced"
+                hidden={!advancedOpen}
+                onInvalidCapture={() => setAdvancedOpen(true)}
+                className="flex flex-col gap-3 border-t border-line px-[18px] pt-3 pb-4"
+              >
+                <p className="monitor-hint">
+                  Packet sizes apply to UDP; connection count applies to TCP. Values are kept while
+                  this section is closed.
+                </p>
+                <FormField label="Test ID (automatic)">
+                  <input
+                    value={draft.id}
+                    readOnly
+                    className="monitor-input font-mono text-[12px] text-muted-foreground"
+                  />
+                </FormField>
+                <div className="bw-pair">
+                  {(
+                    [
+                      {
+                        key: "localUdpTxSize",
+                        label: "Source UDP TX size · bytes",
+                        min: 28,
+                        max: 64000,
+                      },
+                      {
+                        key: "remoteUdpTxSize",
+                        label: "Remote UDP TX size · bytes",
+                        min: 28,
+                        max: 64000,
+                      },
+                      { key: "connectionCount", label: "TCP connection count", min: 1, max: 255 },
+                      {
+                        key: "reportIntervalSeconds",
+                        label: "Report interval · seconds",
+                        min: 0.02,
+                        max: 5,
+                      },
+                    ] as const
+                  ).map((field) => (
+                    <FormField key={field.key} label={field.label}>
+                      <input
+                        type="number"
+                        required
+                        step={field.key === "reportIntervalSeconds" ? 0.001 : 1}
+                        min={field.min}
+                        max={field.max}
+                        className="monitor-input font-mono text-[12px]"
+                        value={draft[field.key]}
+                        onChange={(e) => patch({ [field.key]: e.target.valueAsNumber })}
+                      />
+                    </FormField>
+                  ))}
+                </div>
+                <FormCheck
+                  checked={draft.randomData}
+                  disabled={busy}
+                  label="Generate random data"
+                  onChange={(randomData) => patch({ randomData })}
+                >
+                  Generate random data
+                </FormCheck>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex">
+                <MonitorSwitch
+                  label="Enable recurring traffic"
+                  checked={draft.enabled}
+                  disabled={busy}
+                  onChange={(enabled) => patch({ enabled })}
+                />
+              </span>
+              <span className="text-[13px] text-foreground">
+                Enable recurring traffic
+                <span className="monitor-hint block">
+                  Off by default. Runs every {draft.intervalSeconds} s once saved.
+                </span>
+              </span>
+            </div>
+            <div className="glass flex flex-col gap-1.5 px-3.5 py-3" role="status">
+              <span className="flex items-center gap-2">
+                <b
+                  className={
+                    !preflight
+                      ? "text-[13px] font-bold text-muted-foreground"
+                      : preflight.ready
+                        ? "text-[13px] font-bold text-success"
+                        : "text-[13px] font-bold text-destructive"
+                  }
+                >
+                  {!preflight
+                    ? "Not checked yet"
+                    : preflight.ready
+                      ? "Ready at last check"
+                      : "Not ready"}
+                </b>
+                <span className="flex-1" />
+                <MonitorButton
+                  size="sm"
+                  icon={<RefreshCw aria-hidden="true" />}
+                  disabled={
+                    busy ||
+                    !draft.source ||
+                    !draft.destination ||
+                    !draft.destinationAddress ||
+                    !draft.sourceAddress ||
+                    !draft.sourceInterface
+                  }
+                  onClick={() =>
+                    void action(async () => {
+                      setPreflight(await post<BandwidthPreflight>("preflight", { job: draft }));
+                    }, setFormError)
+                  }
+                >
+                  Check readiness
+                </MonitorButton>
+              </span>
+              {preflight?.checks.map((c, i) => (
+                <span key={i} className="bw-check" data-ok={c.ok || undefined}>
+                  {c.ok ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
+                  <span className="sr-only">{c.ok ? "Pass" : "Fail"}: </span>
+                  {c.message || c.name}
+                </span>
+              ))}
+              {preflight?.warning && <span className="monitor-hint">{preflight.warning}</span>}
+            </div>
+            <FormCheck
+              checked={ack}
+              disabled={busy}
+              label="I acknowledge the traffic impact"
+              onChange={setAck}
+            >
+              I acknowledge the traffic impact
+            </FormCheck>
+          </fieldset>
+        </form>
+      </MonitorDialog>
+
+      <MonitorDialog
+        open={!!runJob}
+        onOpenChange={(open) => {
+          if (!open && !busy) setConfirmation(undefined);
+        }}
+        closeDisabled={busy}
+        width={520}
+        title="Run bandwidth test?"
+        description="Traffic starts as soon as you confirm. Follow saved history for the result."
+        footer={
+          <>
+            <span className="flex-1" />
+            <MonitorButton
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setConfirmation(undefined)}
+            >
+              Cancel
+            </MonitorButton>
+            <MonitorButton
+              variant="danger"
+              icon={<Play aria-hidden="true" />}
+              disabled={busy}
+              onClick={confirm}
+            >
+              Acknowledge impact and run
+            </MonitorButton>
+          </>
+        }
+      >
+        {runJob && (
+          <div className="monitor-dialog-body flex flex-col gap-3.5">
+            <dl className="monitor-facts">
+              <dt>Test</dt>
+              <dd className="font-mono text-[12px] text-foreground">{runJob.name}</dd>
+              <dt>Path</dt>
+              <dd className="font-mono text-[12px]">
+                {runJob.source} → {runJob.destination} · {runJob.sourceInterface}
+              </dd>
+              <dt>Traffic</dt>
+              <dd>
+                {runJob.protocol.toUpperCase()} for {runJob.durationSeconds} s,{" "}
+                {DIRECTION_TEXT[runJob.direction]}
+              </dd>
+              <dt>Source TX limit</dt>
+              <dd className="font-mono text-[12px]">
+                {runJob.localTxBps.toLocaleString("en-US")} bps
+              </dd>
+              <dt>Remote TX limit</dt>
+              <dd className="font-mono text-[12px]">
+                {runJob.remoteTxBps.toLocaleString("en-US")} bps
+              </dd>
+            </dl>
+            <MonitorNote tone="bad" icon={<TriangleAlert aria-hidden="true" />}>
+              <b>This can disrupt service.</b> The expected path is not forced; policy routing and
+              firewall rules may send traffic elsewhere.
+            </MonitorNote>
+          </div>
         )}
-      </section>
+      </MonitorDialog>
+
+      <MonitorDialog
+        open={!!deleteJob}
+        onOpenChange={(open) => {
+          if (!open && !busy) setConfirmation(undefined);
+        }}
+        closeDisabled={busy}
+        width={520}
+        title="Delete test definition?"
+        description="Retained run history stays available."
+        footer={
+          <>
+            <span className="flex-1" />
+            <MonitorButton
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setConfirmation(undefined)}
+            >
+              Cancel
+            </MonitorButton>
+            <MonitorButton
+              variant="danger"
+              icon={<Trash2 aria-hidden="true" />}
+              disabled={busy}
+              onClick={confirm}
+            >
+              Delete definition
+            </MonitorButton>
+          </>
+        }
+      >
+        {deleteJob && (
+          <p className="monitor-dialog-body text-[13px] text-fg-secondary">
+            Remove <b className="font-mono text-[12px] text-foreground">{deleteJob.name}</b>. No
+            router changes.
+          </p>
+        )}
+      </MonitorDialog>
     </div>
   );
 }

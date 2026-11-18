@@ -1,0 +1,265 @@
+/* Simulator page, after the approved Simulator board. Layout only; colours come from tailwind.css tokens. */
+
+.sim-page {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+  line-height: 21px;
+}
+
+/* Two columns side by side on a wide screen, one column below that. */
+.sim-split,
+.sim-pair {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  gap: 14px;
+}
+@media (min-width: 1280px) {
+  .sim-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  }
+  .sim-pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.sim-col {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.sim-fields {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .sim-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.sim-state {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+.sim-state .monitor-seg {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* The verdict: a toned note with the answer in 18px capitals. */
+.sim-verdict.monitor-note {
+  flex-direction: column;
+  gap: 4px;
+}
+.sim-verdict-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+}
+.sim-verdict-head b {
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+.sim-verdict-unknown {
+  color: var(--warning);
+  font-size: 12px;
+}
+
+/* Traversal: one row per rule the packet met, a coloured edge on the left. */
+.sim-trav {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sim-step {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 0 8px 8px 0;
+  box-shadow: inset 2px 0 0 var(--line-2);
+  padding: 6px 10px;
+}
+.sim-step[data-tone="good"] {
+  box-shadow: inset 2px 0 0 var(--sig);
+}
+.sim-step[data-tone="bad"] {
+  box-shadow: inset 2px 0 0 var(--destructive);
+}
+.sim-step[data-diverged] {
+  background: var(--warn-soft);
+  box-shadow: inset 2px 0 0 var(--warning);
+}
+.sim-step-where {
+  color: var(--muted-foreground);
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.sim-step-note {
+  color: var(--foreground);
+  font-size: 13px;
+}
+.sim-step-raw {
+  overflow-wrap: anywhere;
+  color: var(--text-faint);
+  font-family: var(--font-mt);
+  font-size: 11px;
+}
+
+.sim-nat.glass {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+}
+.sim-nat > span {
+  /* The board sets this mono line inside 14px text, which makes each line 22px tall. */
+  line-height: 22px;
+  color: var(--text-secondary);
+  font-family: var(--font-mt);
+  font-size: 11px;
+}
+
+/* Text inputs show their value in mono, like the board's `inp(…, mono=True)`. */
+.sim-page input.sim-input.monitor-input {
+  font-family: var(--font-mt);
+  font-size: 12px;
+  line-height: 21px;
+}
+
+.sim-mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+
+/* Proposed change: the commands on the left, before and after on the right. */
+.sim-change {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+.sim-compare {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+@media (min-width: 1100px) {
+  .sim-change {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+}
+@media (min-width: 640px) {
+  .sim-compare {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Reachability: rule chip, the rule, and why it can never match. */
+.sim-reach-kpis {
+  padding: 0 18px 14px;
+}
+.sim-reach-kpis .monitor-strip {
+  grid-template-columns: 1fr 1fr;
+}
+.sim-reach-row.monitor-row {
+  grid-template-columns: 96px minmax(0, 1fr) 120px;
+}
+.sim-reach-row[data-shadowed] {
+  opacity: 0.75;
+}
+.sim-reach-row[data-disabled] {
+  opacity: 0.5;
+}
+.sim-reach-row[data-shadowed] .monitor-chip {
+  color: var(--warning);
+}
+.sim-reach-raw {
+  overflow: hidden;
+  min-width: 0;
+  font-family: var(--font-mt);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sim-reach-row[data-shadowed] .sim-reach-raw {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+.sim-reach-why {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.sim-reach-row[data-shadowed] .sim-reach-why {
+  color: var(--warning);
+}
+@media (max-width: 639px) {
+  .sim-reach-row.monitor-row {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+  .sim-reach-why {
+    grid-column: 2;
+  }
+}
+
+/* Policy verifier. */
+.sim-verify-grid {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+.sim-verify-selects {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .sim-verify-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sim-verify-selects {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+/* A select that fills its field and shows its value in mono, like the board's `sel(…, mono)`. */
+.sim-select-full .monitor-select,
+.sim-select-full select {
+  width: 100%;
+  min-width: 0;
+}
+.sim-select-full select {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.sim-result.monitor-note {
+  flex-direction: column;
+  gap: 6px;
+}
+.sim-result-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+}
+.sim-fieldset {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}

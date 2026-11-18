@@ -93,11 +93,11 @@ afterEach(async () => {
 test("client inventory distinguishes blocked and static leases and filters by address", async () => {
   await act(async () => root.render(createElement(ClientsView)));
   expect(host.textContent).toContain("2 total · 1 static · 1 blocked");
-  expect(host.querySelectorAll("tbody tr")).toHaveLength(2);
+  expect(host.querySelectorAll('[role="row"].clients-row')).toHaveLength(2);
   expect(host.textContent).toContain("laptop");
   expect(host.textContent).toContain("No counter");
   const filter = host.querySelector<HTMLInputElement>(
-    'input[placeholder="Filter IP / MAC / name…"]',
+    'input[placeholder="Filter by IP, MAC or name"]',
   )!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
@@ -106,7 +106,7 @@ test("client inventory distinguishes blocked and static leases and filters by ad
     );
     filter.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(host.querySelectorAll("tbody tr")).toHaveLength(1);
+  expect(host.querySelectorAll('[role="row"].clients-row')).toHaveLength(1);
   expect(host.textContent).toContain("laptop");
   expect(host.textContent).not.toContain("phone");
   expect(postJson).not.toHaveBeenCalled();

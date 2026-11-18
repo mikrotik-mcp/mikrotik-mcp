@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CopyButton } from "./atoms";
-import { Badge, Button, Note } from "./geist";
+import { MonitorButton, MonitorNote, StatusBadge } from "./monitoring-ui";
 
 /** Uniform 8-character passwords, conditioned on including all four character classes. */
 export function generateUserPassword(): string {
@@ -60,15 +60,15 @@ export function UserCreatedDialog({
       }}
     >
       <DialogContent
-        className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[540px] motion-reduce:animate-none"
+        className="monitor-dialog max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[540px] motion-reduce:animate-none"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           onCloseAutoFocus();
         }}
       >
-        <DialogHeader className="gap-3 border-b border-border p-6 text-left sm:p-8">
+        <DialogHeader className="monitor-dialog-head flex-col gap-3 text-left">
           <div className="flex items-center gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-success/25 bg-success/10 text-success">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sig-soft text-success">
               {user.warning ? (
                 <TriangleAlert className="size-5 text-warning" />
               ) : (
@@ -76,30 +76,30 @@ export function UserCreatedDialog({
               )}
             </span>
             <div className="min-w-0">
-              <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                User Manager · account receipt
-              </p>
-              <DialogTitle className="text-xl">User created</DialogTitle>
+              <p className="monitor-eyebrow">User Manager · account receipt</p>
+              <DialogTitle>User created</DialogTitle>
             </div>
           </div>
           <DialogDescription>
             Save the credentials below before closing this window.
           </DialogDescription>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{user.device}</Badge>
+            <StatusBadge tone="good" dot={false}>
+              {user.device}
+            </StatusBadge>
             <span className="text-xs text-muted-foreground">
               {user.warning ? "Profile needs attention" : "Creation confirmed"}
             </span>
           </div>
         </DialogHeader>
-        <div className="grid gap-5 p-6 sm:px-8">
+        <div className="monitor-dialog-body grid gap-4">
           {user.warning && (
-            <Note type="warning" label="Check the profile">
-              {user.warning}
-            </Note>
+            <MonitorNote tone="warn">
+              <b>Check the profile.</b> {user.warning}
+            </MonitorNote>
           )}
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="border-b border-dashed border-border px-4 py-3">
+          <div className="glass overflow-hidden">
+            <div className="border-b border-dashed border-line px-4 py-3">
               <p className="mb-1 text-xs text-muted-foreground">Username</p>
               <p className="select-text break-all font-mono text-lg font-semibold" dir="ltr">
                 {user.name}
@@ -114,7 +114,7 @@ export function UserCreatedDialog({
                 <code
                   aria-label="Created user password"
                   dir="ltr"
-                  className="select-text break-all text-2xl font-semibold tracking-wider text-brand"
+                  className="select-text break-all font-mono text-2xl font-semibold tracking-wider text-success"
                 >
                   {user.password || "Not provided"}
                 </code>
@@ -142,10 +142,10 @@ export function UserCreatedDialog({
             ))}
           </dl>
         </div>
-        <DialogFooter className="border-t border-border bg-card/50 px-6 py-4 sm:px-8">
-          <Button type="accent" onClick={onClose}>
+        <DialogFooter className="monitor-dialog-foot">
+          <MonitorButton variant="primary" onClick={onClose}>
             Done
-          </Button>
+          </MonitorButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

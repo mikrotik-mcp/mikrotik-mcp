@@ -1,10 +1,10 @@
-/* Home Internet page. Shared monitor-* parts live in monitoring.css; tokens only. */
+/* Home Internet page, from the "Mon-HomeInternet" board. Shared monitor-* parts live in monitoring.css; tokens only. */
 
 .home-internet {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
   color: var(--foreground);
   font-size: 14px;
   line-height: 21px;
@@ -25,14 +25,14 @@
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 .home-link {
   color: var(--brand);
-  font-size: 13px;
-  font-weight: 510;
+  font-size: inherit;
+  font-weight: 500;
   cursor: pointer;
 }
 .home-link:hover {
@@ -42,8 +42,72 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-.monitor-btn.home-btn-tall {
-  height: 36px;
+
+/* ── Header: the board's hop list beside the verdict ───────────────────────── */
+@media (min-width: 900px) {
+  .home-internet .monitor-head[data-layout="verdict"][data-aside] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
+  }
+}
+.home-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+}
+.home-chain-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-chain-head .home-label {
+  flex: 1;
+}
+.home-hop {
+  position: relative;
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 12px;
+}
+.home-hop-line {
+  position: absolute;
+  top: 30px;
+  bottom: -12px;
+  left: 15px;
+  width: 2px;
+  opacity: 0.45;
+}
+.home-hop-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--surface-2);
+}
+.home-hop-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.home-hop-label,
+.home-hop-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-hop-label {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.home-hop-sub {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
 /* ── Fields ────────────────────────────────────────────────────────────────── */
@@ -58,28 +122,29 @@
 .home-select {
   position: relative;
   display: flex;
-  height: 36px;
+  height: 34px;
   min-width: 0;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  border-radius: 6px;
-  background: var(--overlay-02);
-  box-shadow: inset 0 0 0 1px var(--input);
+  border-radius: 10px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   padding: 0 10px 0 12px;
   color: var(--text-secondary);
   font-size: 13px;
   white-space: nowrap;
 }
 .home-select:focus-within {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
+  box-shadow:
+    inset 0 0 0 1px var(--sig),
+    0 0 0 3px var(--sig-soft);
 }
 .home-select[data-disabled] {
   opacity: 0.5;
 }
 .home-select-value {
   min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -95,13 +160,6 @@
 .home-select select:disabled {
   cursor: default;
 }
-.home-router {
-  flex: none;
-}
-.home-router .home-select {
-  height: 32px;
-  min-width: 200px;
-}
 /* The board's .field. */
 .home-input {
   display: flex;
@@ -109,38 +167,45 @@
   min-width: 0;
   align-items: center;
   gap: 8px;
-  border-radius: 6px;
-  background: var(--overlay-02);
-  box-shadow: inset 0 0 0 1px var(--input);
+  border-radius: 10px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   padding: 0 12px;
   color: var(--muted-foreground);
   font-size: 13px;
 }
 .home-input:focus-within {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
+  box-shadow:
+    inset 0 0 0 1px var(--sig),
+    0 0 0 3px var(--sig-soft);
 }
 .home-input input {
   min-width: 0;
   flex: 1;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--foreground);
   font-size: 13px;
+  line-height: 21px;
   outline: none;
 }
 .home-input input::placeholder {
-  color: var(--text-faint);
+  color: var(--muted-foreground);
 }
 .home-label {
   color: var(--muted-foreground);
   font-size: 12px;
-  font-weight: 510;
+  font-weight: 500;
 }
 .home-form {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px;
+}
+/* The board's check form: device, website, then the button. */
+.home-check-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
 }
 .home-stack {
   display: flex;
@@ -164,7 +229,7 @@
 }
 .home-hint a {
   color: var(--brand);
-  font-weight: 510;
+  font-weight: 500;
 }
 .home-hint-gap {
   margin-top: 12px;
@@ -176,38 +241,29 @@
   gap: 8px;
 }
 
-/* ── Tab row ───────────────────────────────────────────────────────────────── */
+/* ── KPIs and the tab row ──────────────────────────────────────────────────── */
+.home-internet .home-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 .home-tabs {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
-/* Board: when the row is tight (phones) the tabs shrink and their text wraps. */
-.home-tabs .monitor-seg {
-  overflow-x: visible;
-}
-.home-tabs .monitor-seg-item {
-  height: 32px;
-  flex: 0 1 auto;
-  padding: 0 14px;
-  line-height: 1;
-  white-space: normal;
-}
-/* The board's .badge at 18px, without a dot. */
+/* The board's warn pill at 18px. */
 .home-tab-badge {
   display: inline-flex;
   height: 18px;
   align-items: center;
   gap: 6px;
-  margin-left: 6px;
-  border-radius: 9999px;
-  background: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--border);
-  padding: 0 8px;
-  color: var(--text-secondary);
+  margin-left: 4px;
+  border-radius: 99px;
+  background: var(--warn-soft);
+  padding: 0 6px;
+  color: var(--warning);
   font-size: 11px;
-  font-weight: 510;
+  font-weight: 500;
   white-space: nowrap;
 }
 .home-tabs-spacer {
@@ -233,23 +289,17 @@
 
 /* ── Two columns ───────────────────────────────────────────────────────────── */
 .home-cols {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  align-items: start;
+  gap: 14px;
 }
 .home-main,
 .home-side {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 16px;
-}
-.home-main {
-  flex: 2 1 560px;
-}
-.home-side {
-  flex: 1 1 300px;
+  gap: 14px;
 }
 
 /* ── Row text ──────────────────────────────────────────────────────────────── */
@@ -260,6 +310,7 @@
   align-items: center;
   gap: 4px 8px;
   color: var(--foreground);
+  font-weight: 500;
 }
 .home-detail {
   display: block;
@@ -277,18 +328,29 @@
   white-space: nowrap;
 }
 .home-summary {
-  padding: 0 20px 16px;
-  color: var(--foreground);
-  font-size: 15px;
-  line-height: 23px;
+  padding: 0 18px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
   text-wrap: pretty;
+}
+/* Two lines in a cell: the name, then a muted detail. */
+.home-two {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+.home-two-sub {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
 /* ── Connection report ─────────────────────────────────────────────────────── */
 .home-finding {
-  grid-template-columns: 96px minmax(0, 1fr) auto;
+  grid-template-columns: 96px minmax(0, 1fr) 70px;
   grid-template-areas: "state body area";
   align-items: start;
+  padding-block: 12px;
 }
 .home-finding-state {
   display: flex;
@@ -296,21 +358,25 @@
   justify-self: start;
 }
 .home-finding-body {
+  display: flex;
   min-width: 0;
+  flex-direction: column;
+  gap: 2px;
   grid-area: body;
+}
+.home-finding-body .home-detail {
+  line-height: 17px;
+}
+.home-finding-body .home-next {
+  color: var(--text-secondary);
+  line-height: 21px;
 }
 .home-finding-area {
   grid-area: area;
   color: var(--muted-foreground);
   font-family: var(--font-mt);
   font-size: 12px;
-}
-.home-next {
-  margin-top: 2px;
-  color: var(--foreground);
-}
-.monitor-foot.home-report-foot {
-  gap: 8px;
+  text-align: right;
 }
 .home-legend {
   flex: 1 1 240px;
@@ -322,24 +388,35 @@
   flex-direction: column;
   gap: 12px;
 }
-/* Board: an inset warning ring over the normal hairline. */
-.home-temp-panel {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 35%, transparent);
-}
 .home-temp-line {
   color: var(--text-secondary);
+  font-size: 13px;
+}
+.home-temp-line b {
+  color: var(--foreground);
 }
 .home-temp-times {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  font-size: 12px;
+  margin: 0;
+}
+.home-temp-times > div {
+  border-radius: 12px;
+  padding: 10px 12px;
 }
 .home-temp-times dt {
   color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
 }
 .home-temp-times dd {
+  margin: 0;
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
+}
+.home-temp-times dd.home-warn {
+  color: var(--warning);
 }
 .home-temp-error {
   display: block;
@@ -350,8 +427,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-radius: var(--radius);
-  background: var(--overlay-03);
+  border-radius: 12px;
+  background: var(--bad-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 40%, transparent);
   padding: 10px 12px;
   font-size: 13px;
@@ -394,15 +471,16 @@
   height: 32px;
   align-items: center;
   gap: 8px;
-  border-radius: 9999px;
-  background: var(--overlay-02);
-  box-shadow: inset 0 0 0 1px var(--input);
+  border-radius: 99px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   padding: 0 12px;
+  font-size: 13px;
   cursor: pointer;
   transition: background-color 150ms ease;
 }
 .home-table-option:hover {
-  background: var(--overlay-03);
+  background: var(--glass-2);
 }
 .home-path-grid {
   grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(64px, 0.6fr)) auto;
@@ -444,7 +522,7 @@
   color: var(--muted-foreground);
   cursor: pointer;
   font-size: 12px;
-  font-weight: 510;
+  font-weight: 500;
 }
 .home-commands summary:hover {
   color: var(--foreground);
@@ -452,13 +530,13 @@
 .home-commands pre {
   margin-top: 8px;
   overflow-x: auto;
-  border-radius: var(--radius);
-  background: var(--overlay-03);
-  box-shadow: inset 0 0 0 1px var(--border);
-  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  padding: 12px 14px;
   font-family: var(--font-mt);
   font-size: 12px;
-  line-height: 18px;
+  line-height: 19px;
   white-space: pre;
 }
 .home-consent {
@@ -475,9 +553,36 @@
   scroll-margin-top: 16px;
 }
 
-/* ── Phones ────────────────────────────────────────────────────────────────── */
-/* The board's own rows wrap through flex-wrap; these cover the other tabs. */
+/* ── Narrow screens ────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .home-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home-internet .home-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 @media (max-width: 639px) {
+  .home-check-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home-check-form > button {
+    justify-self: start;
+  }
+  .home-finding {
+    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-areas:
+      "state body"
+      "state area";
+    row-gap: 4px;
+  }
+  .home-finding-area {
+    text-align: left;
+  }
+  .home-tabs .monitor-seg {
+    max-width: 100%;
+    overflow-x: auto;
+  }
   .home-client {
     grid-template-columns: minmax(0, 1fr);
   }

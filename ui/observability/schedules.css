@@ -1,175 +1,202 @@
-/* Schedules page, after the approved Schedules board. Layout only; colours come from tailwind.css tokens. */
+/* Schedules page and its job editor, after the Mon-Schedules and
+   Mon-Schedules-JobEditor boards. Tokens only; shared parts live in monitoring.css. */
 
 .sched-page {
-  display: flex;
+  display: grid;
   min-width: 0;
-  flex-direction: column;
-  gap: 24px;
-  line-height: 21px;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 18px;
+}
+/* The board's panel title keeps a 220px basis, so controls wrap under it. */
+.sched-page .monitor-panel-head > .min-w-0 {
+  flex: 1 1 220px;
+}
+/* The board's calendar column beside the verdict is 340px wide. */
+.sched-page .monitor-head[data-layout="verdict"][data-aside] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+}
+/* The board's .mono in the lead: 12px. */
+.sched-page .monitor-lead .mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+
+.sched-mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.sched-small {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
 .sched-split {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
-}
-.sched-jobs {
-  flex: 1 1 360px;
-}
-.sched-chart {
-  flex: 2 1 520px;
-}
-.sched-regressions {
-  flex: 2 1 480px;
-}
-.sched-calendar {
-  flex: 1 1 320px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  align-items: start;
+  gap: 14px;
 }
 
-.sched-meta {
-  display: block;
+/* ── Last 5 weeks, beside the verdict ──────────────────────────────────────── */
+.sched-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  line-height: 21px;
   overflow: hidden;
-  padding-left: 15px;
-  color: var(--muted-foreground);
+  padding: 16px 18px;
+}
+.sched-calendar-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sched-calendar-label {
+  flex: 1;
+  color: var(--foreground);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 500;
+}
+.sched-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+.sched-weekday {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-align: center;
+}
+.sched-day {
+  display: block;
+  height: 30px;
+  border-radius: 6px;
+}
+.sched-day[data-today] {
+  box-shadow: 0 0 0 2px var(--foreground);
+}
+:is(.sched-day, .sched-calendar-legend i)[data-state="clean"] {
+  background: var(--sig);
+}
+.sched-day[data-state="clean"] {
+  opacity: 0.55;
+}
+:is(.sched-day, .sched-calendar-legend i)[data-state="more"] {
+  background: var(--warning);
+}
+.sched-day[data-state="more"] {
+  opacity: 0.9;
+}
+:is(.sched-day, .sched-calendar-legend i)[data-state="failed"] {
+  background: var(--destructive);
+}
+.sched-day[data-state="none"] {
+  background: var(--line);
+}
+.sched-calendar-legend i[data-state="none"] {
+  background: var(--line-2);
+}
+.monitor-legend.sched-calendar-legend {
+  gap: 10px;
+  font-size: 11px;
+}
+.monitor-legend.sched-calendar-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
 }
 
 /* ── Jobs ──────────────────────────────────────────────────────────────────── */
-.sched-job-row {
+.sched-job-grid {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 .sched-job-main {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  border-radius: var(--radius-sm);
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
-/* The board marks the picked job with the brand indigo edge. */
-.monitor-row.sched-job-row[data-selected] {
-  box-shadow: inset 2px 0 0 var(--chart-1);
-}
 .sched-job-main:focus-visible {
+  border-radius: 6px;
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-
-/* ── Posture chart ─────────────────────────────────────────────────────────── */
-.sched-legend {
-  display: flex;
-  gap: 12px;
-  color: var(--muted-foreground);
+.sched-meta {
+  display: block;
+  padding-left: 15px;
   font-size: 12px;
 }
-.sched-legend > span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+
+/* ── Posture chart ─────────────────────────────────────────────────────────── */
+.sched-sev-key[data-sev="critical"],
 .sched-bar[data-sev="critical"] {
+  background: var(--destructive);
   fill: var(--destructive);
 }
+.sched-sev-key[data-sev="high"],
 .sched-bar[data-sev="high"] {
+  background: var(--warning);
   fill: var(--warning);
 }
+.sched-sev-key[data-sev="medium"],
 .sched-bar[data-sev="medium"] {
-  fill: var(--chart-1);
-  opacity: 0.7;
+  background: var(--brand);
+  fill: var(--brand);
 }
-.sched-bar[data-sev="low"] {
-  fill: var(--muted-foreground);
-  opacity: 0.6;
-}
+.sched-sev-key[data-sev="low"],
+.sched-bar[data-sev="low"],
+.sched-sev-key[data-sev="info"],
 .sched-bar[data-sev="info"] {
+  background: var(--text-faint);
   fill: var(--text-faint);
-  opacity: 0.6;
+}
+.sched-bar {
+  opacity: 0.9;
 }
 /* Inline, as on the board: the chart sits on a text line, which adds the descender gap. */
 .sched-posture-svg {
   display: inline;
   vertical-align: baseline;
 }
-.sched-summary {
-  color: var(--text-secondary);
-  font-size: 13px;
-  text-wrap: pretty;
-}
-.sched-summary-chart {
-  margin-top: 8px;
+.sched-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
 }
 
-/* ── Regressions ───────────────────────────────────────────────────────────── */
-.sched-reg-row {
-  grid-template-columns: 16px 88px minmax(0, 1fr) auto;
+/* ── Regressions and run history ───────────────────────────────────────────── */
+.sched-reg-grid {
+  grid-template-columns: 82px minmax(0, 1fr) 64px;
 }
-.sched-reg-chevron {
-  width: 16px;
-  height: 16px;
-  color: var(--muted-foreground);
-  transition: transform 150ms ease;
-}
-.sched-reg[data-open] .sched-reg-chevron {
-  transform: rotate(90deg);
-}
-.sched-reg-sev {
-  justify-self: start;
+button.sched-reg-grid {
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  font-family: inherit;
 }
 .sched-reg-detail {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 0 20px 12px 48px;
+  padding: 0 18px 12px 112px;
+  color: var(--text-secondary);
   font-size: 13px;
 }
-
-/* ── Day grid ──────────────────────────────────────────────────────────────── */
-.sched-calendar-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.sched-calendar-body .sched-legend {
-  flex-wrap: wrap;
-}
-.sched-days {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
-}
-.sched-day {
-  display: block;
-  aspect-ratio: 1;
-  border-radius: 4px;
-  background: var(--accent);
-}
-.sched-day[data-state="clean"] {
-  background: color-mix(in srgb, var(--success) 55%, transparent);
-}
-.sched-day[data-state="more"] {
-  background: color-mix(in srgb, var(--warning) 60%, transparent);
-}
-.sched-day[data-state="failed"] {
-  background: transparent;
-  box-shadow: inset 0 0 0 2px var(--destructive);
-}
-.sched-day-key {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+.sched-run-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 92px 52px 96px;
 }
 
-/* ── Run history ───────────────────────────────────────────────────────────── */
-.sched-run-row {
-  grid-template-columns:
-    minmax(0, 1.2fr) minmax(0, 0.8fr) 112px 56px
-    minmax(0, 1.6fr);
-}
-
-/* ── Empty state: the tools a job can run ──────────────────────────────────── */
 .sched-tools {
   display: grid;
   gap: 6px;
@@ -181,32 +208,98 @@
   flex-direction: column;
 }
 
-/* Run history is not on the board; on phones it stacks into two lines. */
+/* ── Job editor ────────────────────────────────────────────────────────────── */
+.sched-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sched-form-grid {
+  display: grid;
+  gap: 12px;
+}
+.sched-form-grid[data-cols="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.sched-form-grid[data-cols="devices"] {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+}
+.sched-auditors {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.monitor-choice.sched-auditor {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.sched-bare {
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--foreground);
+  font: inherit;
+  outline: none;
+}
+.sched-bare.sched-mono {
+  font-family: var(--font-mt);
+  font-size: 12px;
+}
+.sched-bare::placeholder {
+  color: var(--muted-foreground);
+}
+.sched-retain {
+  max-width: 4ch;
+  flex: none;
+}
+.sched-field-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted-foreground);
+}
+.sched-picks,
+.sched-notify {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.sched-notify {
+  gap: 18px;
+  padding-top: 4px;
+}
+.sched-dialog-foot-note {
+  flex: 1;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+/* ── Narrow screens ────────────────────────────────────────────────────────── */
+@media (max-width: 899px) {
+  .sched-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 639px) {
-  .monitor-thead.sched-run-row {
+  .sched-run-grid {
+    grid-template-columns: minmax(0, 1fr) 52px 88px;
+  }
+  .sched-run-grid > :nth-child(2),
+  .sched-run-grid > :nth-child(3) {
     display: none;
   }
-  .sched-run-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    row-gap: 2px;
+  .sched-reg-detail {
+    padding-left: 18px;
   }
-  .sched-run-device {
-    grid-column: 1;
-    grid-row: 2;
-    color: var(--muted-foreground);
-    font-size: 12px;
+  .sched-form-grid[data-cols] {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .sched-run-at {
-    grid-column: 2;
-    grid-row: 2;
-    font-size: 12px;
-  }
-  .sched-run-took {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .sched-run-result {
-    grid-column: 1 / -1;
-    grid-row: 3;
+  .sched-dialog-foot-note {
+    flex-basis: 100%;
   }
 }

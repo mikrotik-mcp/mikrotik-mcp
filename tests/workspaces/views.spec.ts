@@ -119,7 +119,7 @@ test("support export requires review, escapes markup, and a new report resets ac
   expect(button("Download HTML").disabled).toBe(true);
   expect(host.querySelector("pre")?.textContent).toContain("<script>unsafe</script>");
   expect(host.querySelector("script")).toBeNull();
-  const review = [...host.querySelectorAll<HTMLElement>('[role="checkbox"]')].at(-1)!;
+  const review = [...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].at(-1)!;
   await act(async () => review.click());
   expect(button("Download HTML").disabled).toBe(false);
   await act(async () => button("Prepare private preview").click());
@@ -147,15 +147,23 @@ test("saved migration approval gates both write actions", async () => {
   });
   await act(async () => root.render(h(RouterMigrationView)));
   expect(postJson).not.toHaveBeenCalled();
-  const trigger = host.querySelector<HTMLElement>('[aria-label="Saved migration"]')!;
-  await act(async () => trigger.click());
-  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((o) =>
-    o.textContent?.includes("old → new"),
-  )!;
-  await act(async () => option.click());
+  // The saved-plan picker is a native select.
+  const picker = host.querySelector<HTMLSelectElement>('select[aria-label="Saved migration"]')!;
+  const option = [...picker.options].find((o) => o.textContent?.includes("old → new"))!;
+  await act(async () => {
+    // React tracks the value; set it through the native setter so onChange fires.
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(
+      picker,
+      option.value,
+    );
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   expect(button("Rehearse & roll back").disabled).toBe(true);
   expect(button("Back up & stage inactive").disabled).toBe(true);
-  const approval = host.querySelector<HTMLElement>('[role="checkbox"]')!;
+  // The approval box, not the section checkboxes of the preview form.
+  const approval = [...host.querySelectorAll<HTMLLabelElement>("label.monitor-check")]
+    .find((l) => l.textContent?.includes("I reviewed the exact target commands"))!
+    .querySelector<HTMLInputElement>('input[type="checkbox"]')!;
   await act(async () => approval.click());
   expect(button("Back up & stage inactive").disabled).toBe(false);
 });
