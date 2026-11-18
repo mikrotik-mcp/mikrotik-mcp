@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const macServerTools: ToolModule = [
   // ── MAC-Telnet server ───────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ export const macServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing mac-server sessions");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/tool mac-server session print${whereClause(filters)}`,

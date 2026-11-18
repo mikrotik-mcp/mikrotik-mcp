@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const switchSettingsTools: ToolModule = [
   defineTool({
@@ -23,8 +23,8 @@ export const switchSettingsTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing switches");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.type_filter) filters.push(`type~"${a.type_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.type_filter) filters.push(`type~${quoted(a.type_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface ethernet switch print${whereClause(filters)}`,
@@ -51,12 +51,12 @@ export const switchSettingsTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting switch details: switch_id=${a.switch_id}`);
       let result = await executeMikrotikCommand(
-        `/interface ethernet switch print detail where .id="${a.switch_id}"`,
+        `/interface ethernet switch print detail where .id=${quoted(a.switch_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/interface ethernet switch print detail where name="${a.switch_id}"`,
+          `/interface ethernet switch print detail where name=${quoted(a.switch_id)}`,
           ctx,
         );
       }
@@ -102,8 +102,8 @@ export const switchSettingsTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Updating switch: switch_id=${a.switch_id}`);
       const selector = a.switch_id.startsWith("*")
-        ? `.id="${a.switch_id}"`
-        : `name="${a.switch_id}"`;
+        ? `.id=${quoted(a.switch_id)}`
+        : `name=${quoted(a.switch_id)}`;
       const base = `/interface ethernet switch set [find ${selector}]`;
       const cmd = new Cmd(base)
         .opt("name", a.name)
@@ -120,7 +120,7 @@ export const switchSettingsTools: ToolModule = [
       const result = await executeMikrotikCommand(built, ctx);
       if (looksLikeError(result)) return `Failed to update switch: ${result}`;
 
-      const detailSelector = a.name ? `name="${a.name}"` : selector;
+      const detailSelector = a.name ? `name=${quoted(a.name)}` : selector;
       const details = await executeMikrotikCommand(
         `/interface ethernet switch print detail where ${detailSelector}`,
         ctx,

@@ -14,6 +14,7 @@ import {
   isEmpty,
   Cmd,
   unsetFragments,
+  quoted,
 } from "../core/routeros";
 
 interface AddDnsStaticArgs {
@@ -111,7 +112,7 @@ async function addDnsStatic(a: AddDnsStaticArgs, ctx: ToolContext): Promise<stri
   }
 
   const details = await executeMikrotikCommand(
-    `/ip dns static print detail where name="${a.name}"`,
+    `/ip dns static print detail where name=${quoted(a.name)}`,
     ctx,
   );
   return details.trim()
@@ -333,9 +334,9 @@ export const dnsTools: ToolModule = [
       ctx.info(`Listing static DNS entries with filters: name=${a.name_filter}`);
 
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
-      if (a.type_filter) filters.push(`type="${a.type_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
+      if (a.type_filter) filters.push(`type=${quoted(a.type_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.regexp_only) filters.push('regexp!=""');
 

@@ -58,6 +58,31 @@ export function quoteValue(value: string | number | boolean): string {
   return `"${escaped}"`;
 }
 
+/**
+ * A value as a RouterOS string literal, ALWAYS in double quotes: for the places
+ * where the console grammar needs a string, such as a `where name="…"` filter,
+ * a `[find comment~"…"]` match or a `key="…"` argument written by hand.
+ *
+ * Never write `name="${value}"` in a command. A `"` in the value would close
+ * the string there, and the rest of the value would run as RouterOS commands.
+ * Write `name=${quoted(value)}`.
+ *
+ * It escapes the same characters as {@link quoteValue}. A `$` becomes `\$`,
+ * so `$[…]` and `$(…)` inside the value are text, not command substitution.
+ */
+export function quoted(value: string | number | boolean): string {
+  const escaped = String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/\t/g, "\\t");
+  // The sanitizer for the ssh2 exec channel: see the note in quoteValue.
+  // codeql[js/shell-command-constructed-from-input]
+  return `"${escaped}"`;
+}
+
 export function yesno(value: boolean): "yes" | "no" {
   return value ? "yes" : "no";
 }

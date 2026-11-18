@@ -9,7 +9,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError } from "../core/routeros";
+import { looksLikeError, quoted } from "../core/routeros";
 
 /** The least-congested (freq, usage%) from `/interface wireless frequency-monitor`. */
 export function pickBestFrequency(monitor: string): { frequency: number; usePct: number } | null {
@@ -60,7 +60,7 @@ export const wifiOptimizerTools: ToolModule = [
         return `RF SURVEY — best channel on ${a.interface} is ${best.frequency} MHz (${best.usePct}% busy). Set apply=true to tune the radio to it.`;
       }
       const set = await executeMikrotikCommand(
-        `/interface wireless set [find name="${a.interface}"] frequency=${best.frequency}`,
+        `/interface wireless set [find name=${quoted(a.interface)}] frequency=${best.frequency}`,
         ctx,
       );
       if (looksLikeError(set))

@@ -12,6 +12,7 @@ import {
   commandUnsupported,
   quoteValue,
   Cmd,
+  quoted,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -82,7 +83,7 @@ export const routingBgpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing BGP connections");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
       const result = await executeMikrotikCommand(
         `/routing bgp connection print detail${whereClause(filters)}`,
         ctx,
@@ -105,7 +106,7 @@ export const routingBgpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting BGP connection: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing bgp connection print detail where name="${a.name}"`,
+        `/routing bgp connection print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -255,7 +256,7 @@ export const routingBgpTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to add BGP connection: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing bgp connection print detail where name="${a.name}"`,
+        `/routing bgp connection print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `BGP connection '${a.name}' added successfully:\n\n${details}`;
@@ -309,7 +310,7 @@ export const routingBgpTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating BGP connection: ${a.name}`);
-      const base = `/routing bgp connection set [find name="${a.name}"]`;
+      const base = `/routing bgp connection set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("remote.address", a.remote_address)
         .opt("remote.as", a.remote_as)
@@ -354,7 +355,7 @@ export const routingBgpTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update BGP connection: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing bgp connection print detail where name="${a.name}"`,
+        `/routing bgp connection print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `BGP connection '${a.name}' updated successfully:\n\n${details}`;
@@ -374,7 +375,7 @@ export const routingBgpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing BGP connection: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing bgp connection remove [find name="${a.name}"]`,
+        `/routing bgp connection remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -399,7 +400,7 @@ export const routingBgpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Setting BGP connection ${a.name} enabled=${a.enabled}`);
       const result = await executeMikrotikCommand(
-        `/routing bgp connection set [find name="${a.name}"] disabled=${yesno(!a.enabled)}`,
+        `/routing bgp connection set [find name=${quoted(a.name)}] disabled=${yesno(!a.enabled)}`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -514,7 +515,7 @@ export const routingBgpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing BGP template: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing bgp template remove [find name="${a.name}"]`,
+        `/routing bgp template remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -566,7 +567,7 @@ export const routingBgpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing BGP advertisements");
       const filters: string[] = [];
-      if (a.peer_filter) filters.push(`peer~"${a.peer_filter}"`);
+      if (a.peer_filter) filters.push(`peer~${quoted(a.peer_filter)}`);
       const result = await executeMikrotikCommand(
         `/routing bgp advertisements print${whereClause(filters)}`,
         ctx,

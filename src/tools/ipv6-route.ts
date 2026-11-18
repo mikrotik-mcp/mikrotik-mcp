@@ -3,7 +3,15 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, whereClause, routeTypeArg, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  yesno,
+  whereClause,
+  routeTypeArg,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  quoted,
+} from "../core/routeros";
 import type { ToolContext } from "../core/context";
 
 /** Same v7 reality as `/ip route`: bare `blackhole`, no unreachable/prohibit. */
@@ -58,7 +66,7 @@ async function addIpv6Route(a: AddIpv6RouteArgs, ctx: ToolContext): Promise<stri
     return `Failed to add IPv6 route: ${result}`;
   }
   const details = await executeMikrotikCommand(
-    `/ipv6 route print detail where dst-address="${a.dst_address}"`,
+    `/ipv6 route print detail where dst-address=${quoted(a.dst_address)}`,
     ctx,
   );
   return details.trim()
@@ -169,9 +177,9 @@ export const ipv6RouteTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing IPv6 routes");
       const filters: string[] = [];
-      if (a.dst_filter) filters.push(`dst-address~"${a.dst_filter}"`);
-      if (a.gateway_filter) filters.push(`gateway~"${a.gateway_filter}"`);
-      if (a.routing_table_filter) filters.push(`routing-table="${a.routing_table_filter}"`);
+      if (a.dst_filter) filters.push(`dst-address~${quoted(a.dst_filter)}`);
+      if (a.gateway_filter) filters.push(`gateway~${quoted(a.gateway_filter)}`);
+      if (a.routing_table_filter) filters.push(`routing-table=${quoted(a.routing_table_filter)}`);
       if (a.active_only) filters.push("active=yes");
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");
@@ -199,12 +207,12 @@ export const ipv6RouteTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IPv6 route details: route_id=${a.route_id}`);
       let result = await executeMikrotikCommand(
-        `/ipv6 route print detail where .id="${a.route_id}"`,
+        `/ipv6 route print detail where .id=${quoted(a.route_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/ipv6 route print detail where dst-address="${a.route_id}"`,
+          `/ipv6 route print detail where dst-address=${quoted(a.route_id)}`,
           ctx,
         );
       }
@@ -231,13 +239,13 @@ export const ipv6RouteTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IPv6 route: route_id=${a.route_id}`);
       const count = await executeMikrotikCommand(
-        `/ipv6 route print count-only where .id="${a.route_id}"`,
+        `/ipv6 route print count-only where .id=${quoted(a.route_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `IPv6 route '${a.route_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ipv6 route remove [find .id="${a.route_id}"]`,
+        `/ipv6 route remove [find .id=${quoted(a.route_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove IPv6 route: ${result}`;

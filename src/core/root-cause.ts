@@ -11,6 +11,7 @@
  * live device.
  */
 import { isIpAddress, isPrivateIp } from "../utils/ip";
+import { quoted } from "./routeros";
 
 // ── Diagnostic dimensions ───────────────────────────────────────────────────
 
@@ -874,7 +875,7 @@ function suggestedMtu(type: string, pppoeWan: boolean): number | undefined {
  */
 function mtuFixCommand(iface: InterfaceSnapshot, mtu: number): string {
   const o = tunnelOverhead(iface.type);
-  if (o?.path) return `${o.path} set [find name="${iface.name}"] mtu=${mtu}`;
+  if (o?.path) return `${o.path} set [find name=${quoted(iface.name)}] mtu=${mtu}`;
   return (
     `# ${iface.name} (${o?.label ?? iface.type}): set max-mtu=${mtu} max-mru=${mtu} on the ` +
     "client interface, or on the server settings for an inbound session"
@@ -902,7 +903,7 @@ function correlateRootCauses(
         "cables, SFP modules, and remote switch ports.",
       confidence: "high",
       evidence: evidence.filter((e) => e.dimension === "interfaces" && e.severity === "critical"),
-      fixes: downIfaces.map((i) => `/interface enable [find name="${i.name}"]`),
+      fixes: downIfaces.map((i) => `/interface enable [find name=${quoted(i.name)}]`),
       dimensions: ["interfaces", "connectivity"],
     });
   }
@@ -1059,7 +1060,10 @@ function correlateRootCauses(
           "the target device may be powered off, on a different VLAN, or the cable is disconnected.",
         confidence: "high",
         evidence: evidence.filter((e) => e.dimension === "arp_dhcp" && e.severity !== "ok"),
-        fixes: [`/ping ${data.target} count=3`, `/ip arp print where address="${data.target}"`],
+        fixes: [
+          `/ping ${data.target} count=3`,
+          `/ip arp print where address=${quoted(data.target)}`,
+        ],
         dimensions: ["arp_dhcp"],
       });
     }
@@ -1080,7 +1084,7 @@ function correlateRootCauses(
         "Traffic destined for remote networks over these tunnels will be black-holed.",
       confidence: "high",
       evidence: evidence.filter((e) => e.dimension === "vpn" && e.severity === "critical"),
-      fixes: realDownTunnels.map((t) => `/interface enable [find name="${t.name}"]`),
+      fixes: realDownTunnels.map((t) => `/interface enable [find name=${quoted(t.name)}]`),
       dimensions: ["vpn"],
     });
   }
@@ -1140,7 +1144,7 @@ function correlateRootCauses(
       evidence: evidence.filter((e) => e.dimension === "vpn" && e.severity === "warning"),
       fixes: mtu.keepaliveOff.map(
         (p) =>
-          `/interface wireguard peers set [find public-key="${p.publicKey}"] persistent-keepalive=25s`,
+          `/interface wireguard peers set [find public-key=${quoted(p.publicKey)}] persistent-keepalive=25s`,
       ),
       dimensions: ["vpn"],
     });

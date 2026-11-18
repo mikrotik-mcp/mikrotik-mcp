@@ -11,7 +11,7 @@ import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 const ArpMode = z.enum(["enabled", "disabled", "proxy-arp", "reply-only"]);
 const LoopProtect = z.enum(["default", "on", "off"]);
@@ -75,7 +75,7 @@ export const vlanTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create VLAN interface: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface vlan print detail where name="${a.name}"`,
+        `/interface vlan print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -102,9 +102,9 @@ export const vlanTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing VLAN interfaces");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
       if (a.vlan_id_filter !== undefined) filters.push(`vlan-id=${a.vlan_id_filter}`);
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 
       const result = await executeMikrotikCommand(
@@ -129,7 +129,7 @@ export const vlanTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting VLAN interface details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface vlan print detail where name="${a.name}"`,
+        `/interface vlan print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -177,7 +177,7 @@ export const vlanTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating VLAN interface: name=${a.name}`);
-      const cmd = new Cmd(`/interface vlan set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/interface vlan set [find name=${quoted(a.name)}]`)
         .opt("name", a.new_name)
         .opt("vlan-id", a.vlan_id)
         .opt("interface", a.interface)
@@ -202,7 +202,7 @@ export const vlanTools: ToolModule = [
 
       const target = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/interface vlan print detail where name="${target}"`,
+        `/interface vlan print detail where name=${quoted(target)}`,
         ctx,
       );
       return `VLAN interface updated successfully:\n\n${details}`;
@@ -222,13 +222,13 @@ export const vlanTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing VLAN interface: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface vlan print count-only where name="${a.name}"`,
+        `/interface vlan print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `VLAN interface '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface vlan remove [find name="${a.name}"]`,
+        `/interface vlan remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove VLAN interface: ${result}`;

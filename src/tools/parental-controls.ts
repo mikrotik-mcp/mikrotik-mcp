@@ -11,7 +11,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, looksLikeError } from "../core/routeros";
+import { Cmd, looksLikeError, quoted } from "../core/routeros";
 
 export interface PolicyOptions {
   name: string;
@@ -55,14 +55,14 @@ export function buildPolicyCommands(o: PolicyOptions): { label: string; commands
         .set("name", `${tag}-block`)
         .set("start-time", o.blockStart)
         .set("interval", "1d")
-        .set("on-event", `/ip firewall filter enable [find comment="${tag}"]`)
+        .set("on-event", `/ip firewall filter enable [find comment=${quoted(tag)}]`)
         .set("comment", tag)
         .build(),
       new Cmd("/system scheduler add")
         .set("name", `${tag}-allow`)
         .set("start-time", o.blockEnd)
         .set("interval", "1d")
-        .set("on-event", `/ip firewall filter disable [find comment="${tag}"]`)
+        .set("on-event", `/ip firewall filter disable [find comment=${quoted(tag)}]`)
         .set("comment", tag)
         .build(),
     ],
@@ -145,10 +145,10 @@ export const parentalControlsTools: ToolModule = [
       const tag = `parental-${a.name}`;
       ctx.info(`Removing parental policy ${tag}`);
       const steps: [string, string][] = [
-        ["schedulers", `/system scheduler remove [find comment="${tag}"]`],
-        ["firewall rule", `/ip firewall filter remove [find comment="${tag}"]`],
-        ["dns sinkholes", `/ip dns static remove [find comment="${tag}"]`],
-        ["address-list", `/ip firewall address-list remove [find comment="${tag}"]`],
+        ["schedulers", `/system scheduler remove [find comment=${quoted(tag)}]`],
+        ["firewall rule", `/ip firewall filter remove [find comment=${quoted(tag)}]`],
+        ["dns sinkholes", `/ip dns static remove [find comment=${quoted(tag)}]`],
+        ["address-list", `/ip firewall address-list remove [find comment=${quoted(tag)}]`],
       ];
       const cleared: string[] = [];
       for (const [label, cmd] of steps) {

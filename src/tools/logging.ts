@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const systemLoggingTools: ToolModule = [
   defineTool({
@@ -35,7 +35,7 @@ export const systemLoggingTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add logging rule: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/system logging print detail where topics="${a.topics}"`,
+        `/system logging print detail where topics=${quoted(a.topics)}`,
         ctx,
       );
       return details.trim()
@@ -60,8 +60,8 @@ export const systemLoggingTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing logging rules");
       const filters: string[] = [];
-      if (a.topics_filter) filters.push(`topics~"${a.topics_filter}"`);
-      if (a.action_filter) filters.push(`action="${a.action_filter}"`);
+      if (a.topics_filter) filters.push(`topics~${quoted(a.topics_filter)}`);
+      if (a.action_filter) filters.push(`action=${quoted(a.action_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/system logging print${whereClause(filters)}`,
@@ -88,13 +88,13 @@ export const systemLoggingTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing logging rule: rule_id=${a.rule_id}`);
       const count = await executeMikrotikCommand(
-        `/system logging print count-only where .id="${a.rule_id}"`,
+        `/system logging print count-only where .id=${quoted(a.rule_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `Logging rule '${a.rule_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/system logging remove [find .id="${a.rule_id}"]`,
+        `/system logging remove [find .id=${quoted(a.rule_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove logging rule: ${result}`;
@@ -182,7 +182,7 @@ export const systemLoggingTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add logging action: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/system logging action print detail where name="${a.name}"`,
+        `/system logging action print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -206,7 +206,7 @@ export const systemLoggingTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing logging actions");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/system logging action print${whereClause(filters)}`,
@@ -234,13 +234,13 @@ export const systemLoggingTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing logging action: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/system logging action print count-only where name="${a.name}"`,
+        `/system logging action print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `Logging action '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/system logging action remove [find name="${a.name}"]`,
+        `/system logging action remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove logging action: ${result}`;

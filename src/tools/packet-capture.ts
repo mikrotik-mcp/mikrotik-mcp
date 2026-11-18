@@ -15,7 +15,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, Cmd } from "../core/routeros";
+import { looksLikeError, Cmd, quoted } from "../core/routeros";
 import { capture, DEFAULT_TZSP_PORT } from "../observability/capture";
 
 const MIRROR_TAG = "mcp-capture";
@@ -171,7 +171,7 @@ export const packetCaptureTools: ToolModule = [
       await executeMikrotikCommand("/tool sniffer stop", ctx);
       await executeMikrotikCommand("/tool sniffer set streaming-enabled=no", ctx);
       await executeMikrotikCommand(
-        `/ip firewall mangle remove [find action=sniff-tzsp and comment="${MIRROR_TAG}"]`,
+        `/ip firewall mangle remove [find action=sniff-tzsp and comment=${quoted(MIRROR_TAG)}]`,
         ctx,
       );
       const stats = capture.stats();

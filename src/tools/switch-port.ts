@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 const VlanMode = z.enum(["disabled", "optional", "enabled", "secure"]);
 const VlanHeader = z.enum(["leave-as-is", "always-strip", "add-if-missing"]);
@@ -29,8 +29,8 @@ export const switchPortTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing switch ports");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.switch_filter) filters.push(`switch="${a.switch_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.switch_filter) filters.push(`switch=${quoted(a.switch_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface ethernet switch port print${whereClause(filters)}`,
@@ -58,12 +58,12 @@ export const switchPortTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting switch port details: port_id=${a.port_id}`);
       let result = await executeMikrotikCommand(
-        `/interface ethernet switch port print detail where .id="${a.port_id}"`,
+        `/interface ethernet switch port print detail where .id=${quoted(a.port_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/interface ethernet switch port print detail where name="${a.port_id}"`,
+          `/interface ethernet switch port print detail where name=${quoted(a.port_id)}`,
           ctx,
         );
       }
@@ -99,7 +99,9 @@ export const switchPortTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating switch port: port_id=${a.port_id}`);
-      const selector = a.port_id.startsWith("*") ? `.id="${a.port_id}"` : `name="${a.port_id}"`;
+      const selector = a.port_id.startsWith("*")
+        ? `.id=${quoted(a.port_id)}`
+        : `name=${quoted(a.port_id)}`;
       const base = `/interface ethernet switch port set [find ${selector}]`;
       const cmd = new Cmd(base)
         .opt("default-vlan-id", a.default_vlan_id)

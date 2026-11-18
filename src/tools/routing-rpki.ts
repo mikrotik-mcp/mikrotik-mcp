@@ -11,6 +11,7 @@ import {
   isEmpty,
   commandUnsupported,
   Cmd,
+  quoted,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -33,7 +34,7 @@ export const routingRpkiTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing RPKI sessions");
       const filters: string[] = [];
-      if (a.group_filter) filters.push(`group="${a.group_filter}"`);
+      if (a.group_filter) filters.push(`group=${quoted(a.group_filter)}`);
       const result = await executeMikrotikCommand(
         `/routing rpki print detail${whereClause(filters)}`,
         ctx,

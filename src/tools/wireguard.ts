@@ -10,7 +10,7 @@ import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 import { notFoundMessage, ruleResolver } from "./_resolve-rule-id";
 
 /**
@@ -63,7 +63,7 @@ export const wireguardTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create WireGuard interface: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface wireguard print detail where name="${a.name}"`,
+        `/interface wireguard print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -91,7 +91,7 @@ export const wireguardTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing WireGuard interfaces");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.running_only) filters.push("running=yes");
 
@@ -119,7 +119,7 @@ export const wireguardTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting WireGuard interface details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface wireguard print detail where name="${a.name}"`,
+        `/interface wireguard print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -148,8 +148,8 @@ export const wireguardTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info("Reading WireGuard status (interfaces + peers)");
-      const ifFilters = a.interface_filter ? [`name="${a.interface_filter}"`] : [];
-      const peerFilters = a.interface_filter ? [`interface="${a.interface_filter}"`] : [];
+      const ifFilters = a.interface_filter ? [`name=${quoted(a.interface_filter)}`] : [];
+      const peerFilters = a.interface_filter ? [`interface=${quoted(a.interface_filter)}`] : [];
       const interfaces = await executeMikrotikCommand(
         `/interface wireguard print${whereClause(ifFilters)}`,
         ctx,
@@ -186,7 +186,7 @@ export const wireguardTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating WireGuard interface: name=${a.name}`);
-      const base = `/interface wireguard set [find name="${a.name}"]`;
+      const base = `/interface wireguard set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("name", a.new_name)
         .opt("listen-port", a.listen_port)
@@ -204,7 +204,7 @@ export const wireguardTools: ToolModule = [
 
       const lookupName = a.new_name ? a.new_name : a.name;
       const details = await executeMikrotikCommand(
-        `/interface wireguard print detail where name="${lookupName}"`,
+        `/interface wireguard print detail where name=${quoted(lookupName)}`,
         ctx,
       );
       return `WireGuard interface updated successfully:\n\n${details}`;
@@ -224,7 +224,7 @@ export const wireguardTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing WireGuard interface: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface wireguard print count-only where name="${a.name}"`,
+        `/interface wireguard print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `WireGuard interface '${a.name}' not found.`;
@@ -237,13 +237,13 @@ export const wireguardTools: ToolModule = [
       // can only be cleaned up by internal .id.
       const peerCount = (
         await executeMikrotikCommand(
-          `/interface wireguard peers print count-only where interface="${a.name}"`,
+          `/interface wireguard peers print count-only where interface=${quoted(a.name)}`,
           ctx,
         )
       ).trim();
       if (peerCount !== "0" && !looksLikeError(peerCount)) {
         const peerResult = await executeMikrotikCommand(
-          `/interface wireguard peers remove [find interface="${a.name}"]`,
+          `/interface wireguard peers remove [find interface=${quoted(a.name)}]`,
           ctx,
         );
         if (looksLikeError(peerResult)) {
@@ -255,7 +255,7 @@ export const wireguardTools: ToolModule = [
       }
 
       const result = await executeMikrotikCommand(
-        `/interface wireguard remove [find name="${a.name}"]`,
+        `/interface wireguard remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove WireGuard interface: ${result}`;
@@ -278,7 +278,7 @@ export const wireguardTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling WireGuard interface: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface wireguard enable [find name="${a.name}"]`,
+        `/interface wireguard enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable WireGuard interface: ${result}`;
@@ -299,7 +299,7 @@ export const wireguardTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling WireGuard interface: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface wireguard disable [find name="${a.name}"]`,
+        `/interface wireguard disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable WireGuard interface: ${result}`;
@@ -406,7 +406,7 @@ export const wireguardTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add WireGuard peer: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface wireguard peers print detail where interface="${a.interface}" public-key="${a.public_key}"`,
+        `/interface wireguard peers print detail where interface=${quoted(a.interface)} public-key=${quoted(a.public_key)}`,
         ctx,
       );
       return details.trim()
@@ -435,7 +435,7 @@ export const wireguardTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing WireGuard peers");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 
       const result = await executeMikrotikCommand(

@@ -20,7 +20,7 @@ import { createContext } from "../core/context";
 import { DANGEROUS, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { getConfig } from "../core/runtime";
-import { Cmd, looksLikeError } from "../core/routeros";
+import { Cmd, looksLikeError, quoted } from "../core/routeros";
 
 /** Mesh address for the device at `index`: the prefix with its last octet replaced. */
 function meshAddress(prefix: string, index: number): { ip: string; len: string } {
@@ -134,7 +134,7 @@ export const wireguardMeshTools: ToolModule = [
       for (const n of nodes) {
         const dctx = createContext(undefined, n.name);
         const have = await executeMikrotikCommand(
-          `/interface wireguard print count-only where name="${iface}"`,
+          `/interface wireguard print count-only where name=${quoted(iface)}`,
           dctx,
         );
         if (have.trim() === "0") {
@@ -145,14 +145,14 @@ export const wireguardMeshTools: ToolModule = [
           if (looksLikeError(add)) return `Failed to create interface on ${n.name}: ${add}`;
         }
         const detail = await executeMikrotikCommand(
-          `/interface wireguard print detail where name="${iface}"`,
+          `/interface wireguard print detail where name=${quoted(iface)}`,
           dctx,
         );
         const key = parsePublicKey(detail);
         if (!key) return `Could not read WireGuard public key on ${n.name}. Aborting.`;
         pub[n.name] = key;
         const addrHave = await executeMikrotikCommand(
-          `/ip address print count-only where interface="${iface}"`,
+          `/ip address print count-only where interface=${quoted(iface)}`,
           dctx,
         );
         if (addrHave.trim() === "0") {

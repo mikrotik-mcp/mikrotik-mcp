@@ -26,7 +26,7 @@ import { READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { isYes } from "../utils/yes";
 import { resolveDeviceName } from "../core/runtime";
-import { isEmpty, quoteValue } from "../core/routeros";
+import { isEmpty, quoteValue, quoted } from "../core/routeros";
 import { parseKeyValues, parsePercent, parseRecords, parseSize } from "../core/routeros-parse";
 import { isIpAddress, isIpLike } from "../utils/ip";
 import { num } from "../utils/num";
@@ -591,7 +591,7 @@ export const rootCauseTools: ToolModule = [
         filters.push('topics~"error|warning|critical|firewall|system|interface|dhcp|ospf|bgp"');
       }
       if (a.keyword) {
-        filters.push(`message~"${a.keyword}"`);
+        filters.push(`message~${quoted(a.keyword)}`);
       }
 
       const where = filters.length > 0 ? ` where ${filters.join(" ")}` : "";

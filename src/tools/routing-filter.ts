@@ -11,6 +11,7 @@ import {
   isEmpty,
   commandUnsupported,
   Cmd,
+  quoted,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -35,7 +36,7 @@ export const routingFilterTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing routing filter rules");
       const filters: string[] = [];
-      if (a.chain_filter) filters.push(`chain="${a.chain_filter}"`);
+      if (a.chain_filter) filters.push(`chain=${quoted(a.chain_filter)}`);
       const result = await executeMikrotikCommand(
         `/routing filter rule print detail${whereClause(filters)}`,
         ctx,
@@ -211,7 +212,7 @@ export const routingFilterTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing routing filter num-lists");
       const filters: string[] = [];
-      if (a.list_filter) filters.push(`list="${a.list_filter}"`);
+      if (a.list_filter) filters.push(`list=${quoted(a.list_filter)}`);
       const result = await executeMikrotikCommand(
         `/routing filter num-list print detail${whereClause(filters)}`,
         ctx,

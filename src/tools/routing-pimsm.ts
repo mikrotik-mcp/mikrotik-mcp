@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
+import { looksLikeError, isEmpty, commandUnsupported, Cmd, quoted } from "../core/routeros";
 
 const UNSUPPORTED =
   "PIM-SM is not available on this device (requires RouterOS v7 with the routing/multicast package).";
@@ -103,7 +103,7 @@ export const routingPimsmTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to add PIM-SM instance: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing pimsm instance print detail where name="${a.name}"`,
+        `/routing pimsm instance print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `PIM-SM instance '${a.name}' added successfully:\n\n${details}`;
@@ -127,7 +127,7 @@ export const routingPimsmTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing PIM-SM instance: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing pimsm instance remove [find name="${a.name}"]`,
+        `/routing pimsm instance remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;

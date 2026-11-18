@@ -12,6 +12,7 @@ import {
   isEmpty,
   Cmd,
   unsetFragments,
+  quoted,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
@@ -432,8 +433,9 @@ export const firewallMangleTools: ToolModule = [
       const filters: string[] = [];
       if (a.chain_filter) filters.push(`chain=${a.chain_filter}`);
       if (a.action_filter) filters.push(`action=${a.action_filter}`);
-      if (a.connection_mark_filter) filters.push(`connection-mark="${a.connection_mark_filter}"`);
-      if (a.packet_mark_filter) filters.push(`packet-mark="${a.packet_mark_filter}"`);
+      if (a.connection_mark_filter)
+        filters.push(`connection-mark=${quoted(a.connection_mark_filter)}`);
+      if (a.packet_mark_filter) filters.push(`packet-mark=${quoted(a.packet_mark_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");

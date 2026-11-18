@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const ipv6DhcpServerTools: ToolModule = [
   // ── Server ────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ export const ipv6DhcpServerTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to create DHCPv6 server: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ipv6 dhcp-server print detail where name="${a.name}"`,
+        `/ipv6 dhcp-server print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `DHCPv6 server created successfully:\n\n${details}`;
@@ -102,8 +102,8 @@ export const ipv6DhcpServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing DHCPv6 servers");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
 
@@ -130,7 +130,7 @@ export const ipv6DhcpServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting DHCPv6 server details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-server print detail where name="${a.name}"`,
+        `/ipv6 dhcp-server print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -152,13 +152,13 @@ export const ipv6DhcpServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing DHCPv6 server: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ipv6 dhcp-server print count-only where name="${a.name}"`,
+        `/ipv6 dhcp-server print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `DHCPv6 server '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-server remove [find name="${a.name}"]`,
+        `/ipv6 dhcp-server remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove DHCPv6 server: ${result}`;
@@ -210,7 +210,7 @@ export const ipv6DhcpServerTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add DHCPv6 binding: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ipv6 dhcp-server binding print detail where duid="${a.duid}"`,
+        `/ipv6 dhcp-server binding print detail where duid=${quoted(a.duid)}`,
         ctx,
       );
       return details.trim()
@@ -237,8 +237,8 @@ export const ipv6DhcpServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing DHCPv6 bindings");
       const filters: string[] = [];
-      if (a.server_filter) filters.push(`server="${a.server_filter}"`);
-      if (a.duid_filter) filters.push(`duid~"${a.duid_filter}"`);
+      if (a.server_filter) filters.push(`server=${quoted(a.server_filter)}`);
+      if (a.duid_filter) filters.push(`duid~${quoted(a.duid_filter)}`);
       if (a.dynamic_only) filters.push("dynamic=yes");
 
       const result = await executeMikrotikCommand(
@@ -268,18 +268,18 @@ export const ipv6DhcpServerTools: ToolModule = [
       ctx.info(`Removing DHCPv6 binding: binding_id=${a.binding_id}`);
       let byId = true;
       let count = await executeMikrotikCommand(
-        `/ipv6 dhcp-server binding print count-only where .id="${a.binding_id}"`,
+        `/ipv6 dhcp-server binding print count-only where .id=${quoted(a.binding_id)}`,
         ctx,
       );
       if (count.trim() === "0") {
         byId = false;
         count = await executeMikrotikCommand(
-          `/ipv6 dhcp-server binding print count-only where duid="${a.binding_id}"`,
+          `/ipv6 dhcp-server binding print count-only where duid=${quoted(a.binding_id)}`,
           ctx,
         );
         if (count.trim() === "0") return `DHCPv6 binding '${a.binding_id}' not found.`;
       }
-      const selector = byId ? `.id="${a.binding_id}"` : `duid="${a.binding_id}"`;
+      const selector = byId ? `.id=${quoted(a.binding_id)}` : `duid=${quoted(a.binding_id)}`;
       const result = await executeMikrotikCommand(
         `/ipv6 dhcp-server binding remove [find ${selector}]`,
         ctx,
@@ -320,7 +320,7 @@ export const ipv6DhcpServerTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add DHCPv6 option: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ipv6 dhcp-server option print detail where name="${a.name}"`,
+        `/ipv6 dhcp-server option print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -342,7 +342,7 @@ export const ipv6DhcpServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing DHCPv6 options");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/ipv6 dhcp-server option print${whereClause(filters)}`,
@@ -367,13 +367,13 @@ export const ipv6DhcpServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing DHCPv6 option: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ipv6 dhcp-server option print count-only where name="${a.name}"`,
+        `/ipv6 dhcp-server option print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `DHCPv6 option '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-server option remove [find name="${a.name}"]`,
+        `/ipv6 dhcp-server option remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove DHCPv6 option: ${result}`;

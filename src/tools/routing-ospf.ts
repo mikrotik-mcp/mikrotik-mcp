@@ -4,7 +4,14 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  looksLikeError,
+  isEmpty,
+  commandUnsupported,
+  Cmd,
+  quoted,
+} from "../core/routeros";
 
 const UNSUPPORTED =
   "OSPF is not available on this device (requires RouterOS v7 with the routing package).";
@@ -83,7 +90,7 @@ export const routingOspfTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to add OSPF instance: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing ospf instance print detail where name="${a.name}"`,
+        `/routing ospf instance print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `OSPF instance '${a.name}' added successfully:\n\n${details}`;
@@ -118,7 +125,7 @@ export const routingOspfTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating OSPF instance: ${a.name}`);
-      const base = `/routing ospf instance set [find name="${a.name}"]`;
+      const base = `/routing ospf instance set [find name=${quoted(a.name)}]`;
       const cmd = new Cmd(base)
         .opt("router-id", a.router_id)
         .opt("redistribute", a.redistribute)
@@ -140,7 +147,7 @@ export const routingOspfTools: ToolModule = [
       if (commandUnsupported(result)) return UNSUPPORTED;
       if (looksLikeError(result)) return `Failed to update OSPF instance: ${result}`;
       const details = await executeMikrotikCommand(
-        `/routing ospf instance print detail where name="${a.name}"`,
+        `/routing ospf instance print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `OSPF instance '${a.name}' updated successfully:\n\n${details}`;
@@ -162,7 +169,7 @@ export const routingOspfTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing OSPF instance: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing ospf instance remove [find name="${a.name}"]`,
+        `/routing ospf instance remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -250,7 +257,7 @@ export const routingOspfTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing OSPF area: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/routing ospf area remove [find name="${a.name}"]`,
+        `/routing ospf area remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (commandUnsupported(result)) return UNSUPPORTED;
@@ -516,7 +523,7 @@ export const routingOspfTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing OSPF LSAs");
       const filters: string[] = [];
-      if (a.area_filter) filters.push(`area="${a.area_filter}"`);
+      if (a.area_filter) filters.push(`area=${quoted(a.area_filter)}`);
       const result = await executeMikrotikCommand(
         `/routing ospf lsa print${whereClause(filters)}`,
         ctx,

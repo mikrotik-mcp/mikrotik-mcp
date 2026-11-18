@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import type { ToolModule } from "../core/registry";
 import { READ, defineTool, withRequires } from "../core/registry";
-import { looksLikeError, isEmpty, commandUnsupported } from "../core/routeros";
+import { looksLikeError, isEmpty, commandUnsupported, quoted } from "../core/routeros";
 
 /**
  * Devices without PoE-out hardware have no `/interface ethernet poe` menu, so
@@ -62,7 +62,7 @@ const poeToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing PoE configuration");
       let cmd = "/interface ethernet poe print";
-      if (a.interface_filter) cmd += ` where name~"${a.interface_filter}"`;
+      if (a.interface_filter) cmd += ` where name~${quoted(a.interface_filter)}`;
       const result = await executeMikrotikCommand(cmd, ctx);
       if (commandUnsupported(result)) return NO_POE;
       if (looksLikeError(result)) return `Failed to list PoE configuration: ${result}`;
@@ -83,7 +83,7 @@ const poeToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting PoE settings for: ${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface ethernet poe print detail where name="${a.name}"`,
+        `/interface ethernet poe print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(result)) return NO_POE;

@@ -13,7 +13,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, looksLikeError } from "../core/routeros";
+import { Cmd, looksLikeError, quoted } from "../core/routeros";
 
 /** Generate a WireGuard (Curve25519/X25519) keypair as base64 strings. */
 export function generateWireGuardKeypair(): { privateKey: string; publicKey: string } {
@@ -73,7 +73,7 @@ export const vpnOnboardTools: ToolModule = [
 
       // Read the server's public key for the client config.
       const detail = await executeMikrotikCommand(
-        `/interface wireguard print detail where name="${a.interface}"`,
+        `/interface wireguard print detail where name=${quoted(a.interface)}`,
         ctx,
       );
       const serverPub = detail.match(/public-key="?([A-Za-z0-9+/]{42,44}=)"?/)?.[1];

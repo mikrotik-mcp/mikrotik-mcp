@@ -11,6 +11,7 @@ import {
   isEmpty,
   Cmd,
   unsetFragments,
+  quoted,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { ruleResolver } from "./_resolve-rule-id";
@@ -235,8 +236,8 @@ export const ipv6FirewallRawTools: ToolModule = [
       const filters: string[] = [];
       if (a.chain_filter) filters.push(`chain=${a.chain_filter}`);
       if (a.action_filter) filters.push(`action=${a.action_filter}`);
-      if (a.src_address_filter) filters.push(`src-address~"${a.src_address_filter}"`);
-      if (a.dst_address_filter) filters.push(`dst-address~"${a.dst_address_filter}"`);
+      if (a.src_address_filter) filters.push(`src-address~${quoted(a.src_address_filter)}`);
+      if (a.dst_address_filter) filters.push(`dst-address~${quoted(a.dst_address_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
       if (a.dynamic_only) filters.push("dynamic=yes");

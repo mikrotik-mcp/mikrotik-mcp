@@ -10,7 +10,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const queueInterfaceTools: ToolModule = [
   defineTool({
@@ -30,8 +30,8 @@ export const queueInterfaceTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing queue interfaces");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface~"${a.interface_filter}"`);
-      if (a.queue_filter) filters.push(`queue~"${a.queue_filter}"`);
+      if (a.interface_filter) filters.push(`interface~${quoted(a.interface_filter)}`);
+      if (a.queue_filter) filters.push(`queue~${quoted(a.queue_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/queue interface print${whereClause(filters)}`,
@@ -58,12 +58,12 @@ export const queueInterfaceTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting queue interface: interface_id=${a.interface_id}`);
       let result = await executeMikrotikCommand(
-        `/queue interface print detail where .id="${a.interface_id}"`,
+        `/queue interface print detail where .id=${quoted(a.interface_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/queue interface print detail where interface="${a.interface_id}"`,
+          `/queue interface print detail where interface=${quoted(a.interface_id)}`,
           ctx,
         );
       }
@@ -92,8 +92,8 @@ export const queueInterfaceTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Updating queue interface: interface_id=${a.interface_id}`);
       const selector = a.interface_id.startsWith("*")
-        ? `.id="${a.interface_id}"`
-        : `interface="${a.interface_id}"`;
+        ? `.id=${quoted(a.interface_id)}`
+        : `interface=${quoted(a.interface_id)}`;
       const cmd = new Cmd(`/queue interface set [find ${selector}]`)
         .set("queue", a.queue)
         .unset(a.unset)

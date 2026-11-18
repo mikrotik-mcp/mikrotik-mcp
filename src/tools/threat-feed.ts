@@ -12,7 +12,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, looksLikeError } from "../core/routeros";
+import { Cmd, looksLikeError, quoted } from "../core/routeros";
 
 const FEED_TAG = "threat-feed";
 
@@ -40,7 +40,7 @@ export const threatFeedTools: ToolModule = [
     async handler(a, ctx) {
       const id = `${FEED_TAG}-${a.name}`;
       const rsc = `${id}.rsc`;
-      const source = `/tool fetch url="${a.url}" dst-path=${rsc}; :delay 5s; /import file-name=${rsc}`;
+      const source = `/tool fetch url=${quoted(a.url)} dst-path=${rsc}; :delay 5s; /import file-name=${rsc}`;
       const commands = [
         new Cmd("/system script add").set("name", id).set("source", source).build(),
         new Cmd("/system scheduler add")
@@ -92,8 +92,8 @@ export const threatFeedTools: ToolModule = [
       const id = `${FEED_TAG}-${a.name}`;
       ctx.info(`Removing threat feed ${id}`);
       const steps: [string, string][] = [
-        ["scheduler", `/system scheduler remove [find name="${id}"]`],
-        ["script", `/system script remove [find name="${id}"]`],
+        ["scheduler", `/system scheduler remove [find name=${quoted(id)}]`],
+        ["script", `/system script remove [find name=${quoted(id)}]`],
         ["raw drop", `/ip firewall raw remove [find comment~"${FEED_TAG}: drop ${a.name}"]`],
       ];
       const removed: string[] = [];

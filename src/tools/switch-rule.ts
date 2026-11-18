@@ -11,6 +11,7 @@ import {
   isEmpty,
   Cmd,
   unsetFragments,
+  quoted,
 } from "../core/routeros";
 import type { ToolContext } from "../core/context";
 import { executeRuleCreate, readCreatedRule } from "./_create-rule";
@@ -217,8 +218,8 @@ export const switchRuleTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing switch rules");
       const filters: string[] = [];
-      if (a.switch_filter) filters.push(`switch="${a.switch_filter}"`);
-      if (a.ports_filter) filters.push(`ports~"${a.ports_filter}"`);
+      if (a.switch_filter) filters.push(`switch=${quoted(a.switch_filter)}`);
+      if (a.ports_filter) filters.push(`ports~${quoted(a.ports_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 
       const result = await executeMikrotikCommand(

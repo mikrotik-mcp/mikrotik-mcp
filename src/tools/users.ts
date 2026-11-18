@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 import { redactSecrets } from "../utils";
 
 const VALID_POLICIES = [
@@ -57,13 +57,13 @@ async function runUpdateUser(
 
   if (updates.length === 0) return "No updates specified.";
 
-  const cmd = `/user set [find name="${a.name}"] ${updates.join(" ")}`;
+  const cmd = `/user set [find name=${quoted(a.name)}] ${updates.join(" ")}`;
   const result = await executeMikrotikCommand(cmd, ctx);
   if (looksLikeError(result)) return `Failed to update user: ${result}`;
 
   const detailsName = a.new_name ?? a.name;
   const details = await executeMikrotikCommand(
-    `/user print detail where name="${detailsName}"`,
+    `/user print detail where name=${quoted(detailsName)}`,
     ctx,
   );
   return `User updated successfully:\n\n${redactSecrets(details)}`;
@@ -114,7 +114,7 @@ export const userTools: ToolModule = [
       }
 
       const details = await executeMikrotikCommand(
-        `/user print detail where name="${a.name}"`,
+        `/user print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (details.trim()) return `User created successfully:\n\n${redactSecrets(details)}`;
@@ -140,8 +140,8 @@ export const userTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Listing users with filters: name=${a.name_filter}, group=${a.group_filter}`);
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.group_filter) filters.push(`group="${a.group_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.group_filter) filters.push(`group=${quoted(a.group_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 
       const result = await executeMikrotikCommand(`/user print${whereClause(filters)}`, ctx);
@@ -161,7 +161,10 @@ export const userTools: ToolModule = [
     inputSchema: { name: z.string() },
     async handler(a, ctx) {
       ctx.info(`Getting user details: name=${a.name}`);
-      const result = await executeMikrotikCommand(`/user print detail where name="${a.name}"`, ctx);
+      const result = await executeMikrotikCommand(
+        `/user print detail where name=${quoted(a.name)}`,
+        ctx,
+      );
       if (isEmpty(result)) return `User '${a.name}' not found.`;
       return `USER DETAILS:\n\n${redactSecrets(result)}`;
     },
@@ -206,12 +209,15 @@ export const userTools: ToolModule = [
       if (a.name.toLowerCase() === "admin") return "Cannot remove the admin user.";
 
       const count = await executeMikrotikCommand(
-        `/user print count-only where name="${a.name}"`,
+        `/user print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `User '${a.name}' not found.`;
 
-      const result = await executeMikrotikCommand(`/user remove [find name="${a.name}"]`, ctx);
+      const result = await executeMikrotikCommand(
+        `/user remove [find name=${quoted(a.name)}]`,
+        ctx,
+      );
       if (looksLikeError(result)) return `Failed to remove user: ${result}`;
       return `User '${a.name}' removed successfully.`;
     },
@@ -291,7 +297,7 @@ export const userTools: ToolModule = [
       }
 
       const details = await executeMikrotikCommand(
-        `/user group print detail where name="${a.name}"`,
+        `/user group print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (details.trim()) return `User group created successfully:\n\n${details}`;
@@ -314,8 +320,8 @@ export const userTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Listing user groups with filters: name=${a.name_filter}`);
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.policy_filter) filters.push(`policy~"${a.policy_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.policy_filter) filters.push(`policy~${quoted(a.policy_filter)}`);
 
       const result = await executeMikrotikCommand(`/user group print${whereClause(filters)}`, ctx);
       if (isEmpty(result)) return "No user groups found matching the criteria.";
@@ -334,7 +340,7 @@ export const userTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting user group details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/user group print detail where name="${a.name}"`,
+        `/user group print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (isEmpty(result)) return `User group '${a.name}' not found.`;
@@ -374,13 +380,13 @@ export const userTools: ToolModule = [
 
       if (updates.length === 0) return "No updates specified.";
 
-      const cmd = `/user group set [find name="${a.name}"] ${updates.join(" ")}`;
+      const cmd = `/user group set [find name=${quoted(a.name)}] ${updates.join(" ")}`;
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update user group: ${result}`;
 
       const detailsName = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/user group print detail where name="${detailsName}"`,
+        `/user group print detail where name=${quoted(detailsName)}`,
         ctx,
       );
       return `User group updated successfully:\n\n${details}`;
@@ -404,14 +410,14 @@ export const userTools: ToolModule = [
       if (BUILTIN_GROUPS.includes(a.name)) return `Cannot remove built-in group '${a.name}'.`;
 
       const count = await executeMikrotikCommand(
-        `/user group print count-only where name="${a.name}"`,
+        `/user group print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `User group '${a.name}' not found.`;
 
       // Check if group is in use
       const usersCount = await executeMikrotikCommand(
-        `/user print count-only where group="${a.name}"`,
+        `/user print count-only where group=${quoted(a.name)}`,
         ctx,
       );
       if (usersCount.trim() !== "0") {
@@ -419,7 +425,7 @@ export const userTools: ToolModule = [
       }
 
       const result = await executeMikrotikCommand(
-        `/user group remove [find name="${a.name}"]`,
+        `/user group remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove user group: ${result}`;
@@ -491,7 +497,7 @@ export const userTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Setting SSH keys for user: ${a.username}`);
-      const cmd = `/user ssh-keys import user="${a.username}" public-key-file="${a.key_file}"`;
+      const cmd = `/user ssh-keys import user=${quoted(a.username)} public-key-file=${quoted(a.key_file)}`;
       const result = await executeMikrotikCommand(cmd, ctx);
       if (!result.trim() || result.toLowerCase().includes("imported")) {
         return `SSH key imported successfully for user '${a.username}'.`;
@@ -511,7 +517,7 @@ export const userTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Listing SSH keys for user: ${a.username}`);
       const result = await executeMikrotikCommand(
-        `/user ssh-keys print where user="${a.username}"`,
+        `/user ssh-keys print where user=${quoted(a.username)}`,
         ctx,
       );
       if (isEmpty(result)) return `No SSH keys found for user '${a.username}'.`;

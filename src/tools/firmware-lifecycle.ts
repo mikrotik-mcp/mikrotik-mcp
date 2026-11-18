@@ -30,7 +30,7 @@ import { DANGEROUS, READ, WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { listDevices, resolveDeviceName } from "../core/runtime";
 import { invalidateCapabilities } from "../core/capability-cache";
-import { Cmd, isEmpty, looksLikeError } from "../core/routeros";
+import { Cmd, isEmpty, looksLikeError, quoted } from "../core/routeros";
 import { parseKeyValues, parseRecords } from "../core/routeros-parse";
 import { safe } from "../utils/safe-exec";
 
@@ -402,7 +402,7 @@ export const firmwareLifecycleTools: ToolModule = [
 
         // Remove any existing upgrade scheduler
         await executeMikrotikCommand(
-          `/system scheduler remove [find name="${schedulerName}"]`,
+          `/system scheduler remove [find name=${quoted(schedulerName)}]`,
           ctx,
         );
 

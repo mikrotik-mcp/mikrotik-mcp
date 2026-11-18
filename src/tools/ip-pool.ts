@@ -4,7 +4,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, quoteValue, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 interface UpdatePoolArgs {
   name: string;
@@ -21,7 +21,7 @@ async function updatePool(
   ctx: Parameters<typeof executeMikrotikCommand>[1],
 ): Promise<string> {
   ctx.info(`Updating IP pool: name=${a.name}`);
-  const base = `/ip pool set [find name="${a.name}"]`;
+  const base = `/ip pool set [find name=${quoted(a.name)}]`;
   const cmd = new Cmd(base);
   if (a.new_name) cmd.set("name", a.new_name);
   if (a.ranges) cmd.set("ranges", a.ranges);
@@ -38,7 +38,7 @@ async function updatePool(
 
   const detailsName = a.new_name || a.name;
   const details = await executeMikrotikCommand(
-    `/ip pool print detail where name="${detailsName}"`,
+    `/ip pool print detail where name=${quoted(detailsName)}`,
     ctx,
   );
   return `IP pool updated successfully:\n\n${details}`;
@@ -80,7 +80,7 @@ export const ipPoolTools: ToolModule = [
       if (t) {
         if (t.includes("*") || /^\d+$/.test(t)) {
           const details = await executeMikrotikCommand(
-            `/ip pool print detail where name="${a.name}"`,
+            `/ip pool print detail where name=${quoted(a.name)}`,
             ctx,
           );
           return details.trim()
@@ -90,7 +90,7 @@ export const ipPoolTools: ToolModule = [
         return `Failed to create IP pool: ${result}`;
       }
       const details = await executeMikrotikCommand(
-        `/ip pool print detail where name="${a.name}"`,
+        `/ip pool print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -121,8 +121,8 @@ export const ipPoolTools: ToolModule = [
       if (a.include_used) cmd += " detail";
 
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.ranges_filter) filters.push(`ranges~"${a.ranges_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.ranges_filter) filters.push(`ranges~${quoted(a.ranges_filter)}`);
       cmd += whereClause(filters);
 
       const result = await executeMikrotikCommand(cmd, ctx);
@@ -139,7 +139,7 @@ export const ipPoolTools: ToolModule = [
             if (nameStart > 5 && nameEnd > nameStart) {
               const poolName = line.slice(nameStart, nameEnd);
               const usedCount = await executeMikrotikCommand(
-                `/ip pool used print count-only where pool="${poolName}"`,
+                `/ip pool used print count-only where pool=${quoted(poolName)}`,
                 ctx,
               );
               if (/^\d+$/.test(usedCount.trim()))
@@ -168,13 +168,13 @@ export const ipPoolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting IP pool details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ip pool print detail where name="${a.name}"`,
+        `/ip pool print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (isEmpty(result)) return `IP pool '${a.name}' not found.`;
 
       const usedCount = await executeMikrotikCommand(
-        `/ip pool used print count-only where pool="${a.name}"`,
+        `/ip pool used print count-only where pool=${quoted(a.name)}`,
         ctx,
       );
       if (/^\d+$/.test(usedCount.trim())) {
@@ -227,13 +227,13 @@ export const ipPoolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing IP pool: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ip pool print count-only where name="${a.name}"`,
+        `/ip pool print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `IP pool '${a.name}' not found.`;
 
       const usedCount = await executeMikrotikCommand(
-        `/ip pool used print count-only where pool="${a.name}"`,
+        `/ip pool used print count-only where pool=${quoted(a.name)}`,
         ctx,
       );
       if (usedCount.trim() !== "0") {
@@ -241,14 +241,17 @@ export const ipPoolTools: ToolModule = [
       }
 
       const dhcpCount = await executeMikrotikCommand(
-        `/ip dhcp-server print count-only where address-pool="${a.name}"`,
+        `/ip dhcp-server print count-only where address-pool=${quoted(a.name)}`,
         ctx,
       );
       if (dhcpCount.trim() !== "0") {
         return `Cannot remove IP pool '${a.name}': It is used by ${dhcpCount.trim()} DHCP server(s).`;
       }
 
-      const result = await executeMikrotikCommand(`/ip pool remove [find name="${a.name}"]`, ctx);
+      const result = await executeMikrotikCommand(
+        `/ip pool remove [find name=${quoted(a.name)}]`,
+        ctx,
+      );
       if (looksLikeError(result)) return `Failed to remove IP pool: ${result}`;
       return `IP pool '${a.name}' removed successfully.`;
     },
@@ -273,10 +276,10 @@ export const ipPoolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Listing used IP pool addresses: pool=${a.pool_name}, address=${a.address_filter}`);
       const filters: string[] = [];
-      if (a.pool_name) filters.push(`pool="${a.pool_name}"`);
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
-      if (a.mac_filter) filters.push(`mac-address~"${a.mac_filter}"`);
-      if (a.info_filter) filters.push(`info~"${a.info_filter}"`);
+      if (a.pool_name) filters.push(`pool=${quoted(a.pool_name)}`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
+      if (a.mac_filter) filters.push(`mac-address~${quoted(a.mac_filter)}`);
+      if (a.info_filter) filters.push(`info~${quoted(a.info_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/ip pool used print${whereClause(filters)}`,
@@ -310,7 +313,7 @@ export const ipPoolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Expanding IP pool: name=${a.name}, additional_ranges=${a.additional_ranges}`);
       const current = await executeMikrotikCommand(
-        `/ip pool print detail where name="${a.name}"`,
+        `/ip pool print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (!current || current.includes("no such item")) return `IP pool '${a.name}' not found.`;

@@ -16,7 +16,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { DESTRUCTIVE, READ, WRITE, WRITE_IDEMPOTENT, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, isEmpty, looksLikeError, yesno } from "../core/routeros";
+import { Cmd, isEmpty, looksLikeError, yesno, quoted } from "../core/routeros";
 import { getConfig, resolveDeviceName } from "../core/runtime";
 import {
   applicationName,
@@ -261,7 +261,7 @@ export const trafficFlowTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add traffic-flow target: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ip traffic-flow target print detail where dst-address="${a.dst_address}"`,
+        `/ip traffic-flow target print detail where dst-address=${quoted(a.dst_address)}`,
         ctx,
       );
       const note =
@@ -287,13 +287,13 @@ export const trafficFlowTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing traffic-flow target ${a.dst_address}`);
       const count = await executeMikrotikCommand(
-        `/ip traffic-flow target print count-only where dst-address="${a.dst_address}"`,
+        `/ip traffic-flow target print count-only where dst-address=${quoted(a.dst_address)}`,
         ctx,
       );
       if (count.trim() === "0") return `No traffic-flow target for '${a.dst_address}'.`;
 
       const result = await executeMikrotikCommand(
-        `/ip traffic-flow target remove [find dst-address="${a.dst_address}"]`,
+        `/ip traffic-flow target remove [find dst-address=${quoted(a.dst_address)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove traffic-flow target: ${result}`;

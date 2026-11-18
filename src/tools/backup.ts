@@ -15,7 +15,7 @@ import {
 import { deviceDateStamp } from "../core/datestamp";
 import { WRITE, READ, defineTool, DANGEROUS } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { Cmd, isEmpty, looksLikeError } from "../core/routeros";
+import { Cmd, isEmpty, looksLikeError, quoted } from "../core/routeros";
 import { getDevice, resolveDeviceName } from "../core/runtime";
 import { deviceSlug } from "../core/slug";
 import { isMacTelnetDevice } from "../core/transport";
@@ -133,9 +133,9 @@ export const backupTools: ToolModule = [
 
       if (a.name_filter) {
         if (a.include_exports) {
-          cmd = `/file print where (type=backup or type=script) and name~"${a.name_filter}"`;
+          cmd = `/file print where (type=backup or type=script) and name~${quoted(a.name_filter)}`;
         } else {
-          cmd = `/file print where type=backup and name~"${a.name_filter}"`;
+          cmd = `/file print where type=backup and name~${quoted(a.name_filter)}`;
         }
       }
 
@@ -369,7 +369,7 @@ export const backupTools: ToolModule = [
       // Confirm the bytes landed: a successful SFTP write should surface the file
       // in /file by the same name (RouterOS lists uploaded files there).
       const verify = await executeMikrotikCommand(
-        `/file print count-only where name="${a.filename}"`,
+        `/file print count-only where name=${quoted(a.filename)}`,
         ctx,
       );
       if (verify.trim() === "0") {

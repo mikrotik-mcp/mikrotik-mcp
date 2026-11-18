@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, isEmpty, commandUnsupported } from "../core/routeros";
+import { whereClause, isEmpty, commandUnsupported, quoted } from "../core/routeros";
 
 const UNSUPPORTED =
   "Routing next-hops are not available on this device (requires RouterOS v7 with the routing package).";
@@ -33,7 +33,7 @@ export const routingNexthopTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing routing next-hops");
       const filters: string[] = [];
-      if (a.gateway_filter) filters.push(`gateway~"${a.gateway_filter}"`);
+      if (a.gateway_filter) filters.push(`gateway~${quoted(a.gateway_filter)}`);
       if (a.active_only) filters.push("active=yes");
       const result = await executeMikrotikCommand(
         `/routing nexthop print detail${whereClause(filters)}`,

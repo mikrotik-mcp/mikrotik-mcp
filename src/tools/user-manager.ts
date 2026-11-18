@@ -18,7 +18,14 @@ import {
   withRequires,
 } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, commandUnsupported, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  looksLikeError,
+  isEmpty,
+  commandUnsupported,
+  Cmd,
+  quoted,
+} from "../core/routeros";
 import { redactSecrets } from "../utils";
 
 const NOT_AVAILABLE = "User Manager is not available on this device (package not installed).";
@@ -132,7 +139,7 @@ const userManagerToolsDefs: ToolModule = [
       if (looksLikeError(result)) return `Failed to add User Manager user: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/user-manager user print detail where name="${a.name}"`,
+        `/user-manager user print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -157,7 +164,7 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing User Manager users");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/user-manager user print${whereClause(filters)}`,
@@ -184,7 +191,7 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting User Manager user details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/user-manager user print detail where name="${a.name}"`,
+        `/user-manager user print detail where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(result)) return NOT_AVAILABLE;
@@ -219,7 +226,7 @@ const userManagerToolsDefs: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating User Manager user: name=${a.name}`);
-      const cmd = new Cmd(`/user-manager user set [find name="${a.name}"]`)
+      const cmd = new Cmd(`/user-manager user set [find name=${quoted(a.name)}]`)
         .opt("name", a.new_name)
         .opt("password", a.password)
         .opt("group", a.group)
@@ -239,7 +246,7 @@ const userManagerToolsDefs: ToolModule = [
 
       const target = a.new_name ?? a.name;
       const details = await executeMikrotikCommand(
-        `/user-manager user print detail where name="${target}"`,
+        `/user-manager user print detail where name=${quoted(target)}`,
         ctx,
       );
       return `User Manager user updated successfully:\n\n${redactSecrets(details)}`;
@@ -259,14 +266,14 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing User Manager user: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/user-manager user print count-only where name="${a.name}"`,
+        `/user-manager user print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(count)) return NOT_AVAILABLE;
       if (count.trim() === "0") return `User Manager user '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/user-manager user remove [find name="${a.name}"]`,
+        `/user-manager user remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove User Manager user: ${result}`;
@@ -312,7 +319,7 @@ const userManagerToolsDefs: ToolModule = [
       if (looksLikeError(result)) return `Failed to add User Manager profile: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/user-manager profile print detail where name="${a.name}"`,
+        `/user-manager profile print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -336,7 +343,7 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing User Manager profiles");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/user-manager profile print${whereClause(filters)}`,
@@ -363,14 +370,14 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing User Manager profile: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/user-manager profile print count-only where name="${a.name}"`,
+        `/user-manager profile print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(count)) return NOT_AVAILABLE;
       if (count.trim() === "0") return `User Manager profile '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/user-manager profile remove [find name="${a.name}"]`,
+        `/user-manager profile remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove User Manager profile: ${result}`;
@@ -423,7 +430,7 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing User Manager user-profiles");
       const filters: string[] = [];
-      if (a.user_filter) filters.push(`user~"${a.user_filter}"`);
+      if (a.user_filter) filters.push(`user~${quoted(a.user_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/user-manager user-profile print${whereClause(filters)}`,
@@ -476,7 +483,7 @@ const userManagerToolsDefs: ToolModule = [
       if (looksLikeError(result)) return `Failed to add User Manager router: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/user-manager router print detail where name="${a.name}"`,
+        `/user-manager router print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -500,7 +507,7 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing User Manager routers");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/user-manager router print${whereClause(filters)}`,
@@ -527,14 +534,14 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing User Manager router: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/user-manager router print count-only where name="${a.name}"`,
+        `/user-manager router print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(count)) return NOT_AVAILABLE;
       if (count.trim() === "0") return `User Manager router '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/user-manager router remove [find name="${a.name}"]`,
+        `/user-manager router remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove User Manager router: ${result}`;
@@ -616,7 +623,7 @@ const userManagerToolsDefs: ToolModule = [
       if (looksLikeError(result)) return `Failed to add User Manager limitation: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/user-manager limitation print detail where name="${a.name}"`,
+        `/user-manager limitation print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -640,7 +647,7 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing User Manager limitations");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/user-manager limitation print${whereClause(filters)}`,
@@ -667,14 +674,14 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing User Manager limitation: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/user-manager limitation print count-only where name="${a.name}"`,
+        `/user-manager limitation print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (commandUnsupported(count)) return NOT_AVAILABLE;
       if (count.trim() === "0") return `User Manager limitation '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/user-manager limitation remove [find name="${a.name}"]`,
+        `/user-manager limitation remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove User Manager limitation: ${result}`;
@@ -701,7 +708,7 @@ const userManagerToolsDefs: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing User Manager sessions");
       const filters: string[] = [];
-      if (a.user_filter) filters.push(`user~"${a.user_filter}"`);
+      if (a.user_filter) filters.push(`user~${quoted(a.user_filter)}`);
       if (a.active_only) filters.push("active=yes");
 
       const result = await executeMikrotikCommand(

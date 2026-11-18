@@ -15,6 +15,7 @@ import {
   isEmpty,
   commandUnsupported,
   Cmd,
+  quoted,
 } from "../core/routeros";
 import { notFoundMessage, ruleResolver } from "./_resolve-rule-id";
 
@@ -108,7 +109,7 @@ async function addRoute(
     return `Failed to add route: ${result}`;
   }
   const details = await executeMikrotikCommand(
-    `/ip route print detail where dst-address="${a.dst_address}" and gateway="${a.gateway}"`,
+    `/ip route print detail where dst-address=${quoted(a.dst_address)} and gateway=${quoted(a.gateway)}`,
     ctx,
   );
   return details.trim()
@@ -213,10 +214,10 @@ export const routeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Listing routes with filters: dst=${a.dst_filter}, gateway=${a.gateway_filter}`);
       const filters: string[] = [];
-      if (a.dst_filter) filters.push(`dst-address~"${a.dst_filter}"`);
-      if (a.gateway_filter) filters.push(`gateway~"${a.gateway_filter}"`);
+      if (a.dst_filter) filters.push(`dst-address~${quoted(a.dst_filter)}`);
+      if (a.gateway_filter) filters.push(`gateway~${quoted(a.gateway_filter)}`);
       const tableFilter = a.routing_table_filter ?? a.routing_mark_filter;
-      if (tableFilter) filters.push(`routing-table="${tableFilter}"`);
+      if (tableFilter) filters.push(`routing-table=${quoted(tableFilter)}`);
       if (a.distance_filter !== undefined) filters.push(`distance=${a.distance_filter}`);
       if (a.active_only) filters.push("active=yes");
       if (a.disabled_only) filters.push("disabled=yes");
@@ -421,8 +422,9 @@ export const routeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting routing table: table=${a.table_name}`);
       const filters: string[] = [];
-      if (a.table_name && a.table_name !== "main") filters.push(`routing-table="${a.table_name}"`);
-      if (a.protocol_filter) filters.push(`protocol="${a.protocol_filter}"`);
+      if (a.table_name && a.table_name !== "main")
+        filters.push(`routing-table=${quoted(a.table_name)}`);
+      if (a.protocol_filter) filters.push(`protocol=${quoted(a.protocol_filter)}`);
       if (a.active_only) filters.push("active=yes");
 
       const result = await executeMikrotikCommand(`/ip route print${whereClause(filters)}`, ctx);

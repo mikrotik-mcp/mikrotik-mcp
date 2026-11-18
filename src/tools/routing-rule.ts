@@ -11,6 +11,7 @@ import {
   isEmpty,
   commandUnsupported,
   Cmd,
+  quoted,
 } from "../core/routeros";
 
 const UNSUPPORTED =
@@ -37,7 +38,7 @@ export const routingRuleTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing routing rules");
       const filters: string[] = [];
-      if (a.table_filter) filters.push(`table="${a.table_filter}"`);
+      if (a.table_filter) filters.push(`table=${quoted(a.table_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       const result = await executeMikrotikCommand(
         `/routing rule print detail${whereClause(filters)}`,

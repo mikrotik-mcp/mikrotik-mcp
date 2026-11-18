@@ -4,7 +4,7 @@ import { interfaceName } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 import { redactSecrets } from "../utils";
 
 const UseIpsecServer = z.enum(["yes", "no", "required"]);
@@ -169,7 +169,7 @@ export const l2tpTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create L2TP client: ${redactSecrets(result)}`;
 
       const details = await executeMikrotikCommand(
-        `/interface l2tp-client print detail where name="${a.name}"`,
+        `/interface l2tp-client print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -194,7 +194,7 @@ export const l2tpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing L2TP clients");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface l2tp-client print${whereClause(filters)}`,
@@ -219,7 +219,7 @@ export const l2tpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting L2TP client details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface l2tp-client print detail where name="${a.name}"`,
+        `/interface l2tp-client print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -241,13 +241,13 @@ export const l2tpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing L2TP client: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface l2tp-client print count-only where name="${a.name}"`,
+        `/interface l2tp-client print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `L2TP client '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface l2tp-client remove [find name="${a.name}"]`,
+        `/interface l2tp-client remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove L2TP client: ${result}`;
@@ -269,7 +269,7 @@ export const l2tpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling L2TP client: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface l2tp-client enable [find name="${a.name}"]`,
+        `/interface l2tp-client enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable L2TP client: ${result}`;
@@ -291,7 +291,7 @@ export const l2tpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling L2TP client: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface l2tp-client disable [find name="${a.name}"]`,
+        `/interface l2tp-client disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable L2TP client: ${result}`;

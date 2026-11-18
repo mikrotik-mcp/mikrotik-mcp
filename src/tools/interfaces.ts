@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, quoted } from "../core/routeros";
 
 const InterfaceType = z.enum([
   "ether",
@@ -21,7 +21,7 @@ const InterfaceType = z.enum([
 ]);
 
 async function verify(name: string, ctx: Parameters<typeof executeMikrotikCommand>[1]) {
-  return executeMikrotikCommand(`/interface print detail where name="${name}"`, ctx);
+  return executeMikrotikCommand(`/interface print detail where name=${quoted(name)}`, ctx);
 }
 
 export const interfaceTools: ToolModule = [
@@ -45,8 +45,8 @@ export const interfaceTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing all interfaces");
       const filters: string[] = [];
-      if (a.type_filter) filters.push(`type="${a.type_filter}"`);
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.type_filter) filters.push(`type=${quoted(a.type_filter)}`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
       if (a.running_only) filters.push("running=yes");
       if (a.disabled_only) filters.push("disabled=yes");
 
@@ -90,7 +90,10 @@ export const interfaceTools: ToolModule = [
     inputSchema: { name: z.string() },
     async handler(a, ctx) {
       ctx.info(`Enabling interface: name=${a.name}`);
-      const result = await executeMikrotikCommand(`/interface enable [find name="${a.name}"]`, ctx);
+      const result = await executeMikrotikCommand(
+        `/interface enable [find name=${quoted(a.name)}]`,
+        ctx,
+      );
       if (looksLikeError(result)) return `Failed to enable interface '${a.name}': ${result}`;
       const details = await verify(a.name, ctx);
       return isEmpty(details)
@@ -112,7 +115,7 @@ export const interfaceTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling interface: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface disable [find name="${a.name}"]`,
+        `/interface disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable interface '${a.name}': ${result}`;

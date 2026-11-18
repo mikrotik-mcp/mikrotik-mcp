@@ -10,7 +10,14 @@ import { executeMikrotikCommand } from "../core/connector";
 import { dnsResolveCommand } from "../core/dns-resolve";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, flattenLiveOutput, Cmd } from "../core/routeros";
+import {
+  whereClause,
+  looksLikeError,
+  isEmpty,
+  flattenLiveOutput,
+  Cmd,
+  quoted,
+} from "../core/routeros";
 
 export const networkToolTools: ToolModule = [
   defineTool({
@@ -204,7 +211,7 @@ export const networkToolTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add netwatch: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/tool netwatch print detail where host="${a.host}"`,
+        `/tool netwatch print detail where host=${quoted(a.host)}`,
         ctx,
       );
       return details.trim()
@@ -228,7 +235,7 @@ export const networkToolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing netwatch entries");
       const filters: string[] = [];
-      if (a.host_filter) filters.push(`host~"${a.host_filter}"`);
+      if (a.host_filter) filters.push(`host~${quoted(a.host_filter)}`);
       const result = await executeMikrotikCommand(
         `/tool netwatch print${whereClause(filters)}`,
         ctx,
@@ -252,7 +259,7 @@ export const networkToolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting netwatch details for host ${a.host}`);
       const result = await executeMikrotikCommand(
-        `/tool netwatch print detail where host="${a.host}"`,
+        `/tool netwatch print detail where host=${quoted(a.host)}`,
         ctx,
       );
       return isEmpty(result)
@@ -274,13 +281,13 @@ export const networkToolTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing netwatch for host ${a.host}`);
       const count = await executeMikrotikCommand(
-        `/tool netwatch print count-only where host="${a.host}"`,
+        `/tool netwatch print count-only where host=${quoted(a.host)}`,
         ctx,
       );
       if (count.trim() === "0") return `Netwatch entry for '${a.host}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/tool netwatch remove [find host="${a.host}"]`,
+        `/tool netwatch remove [find host=${quoted(a.host)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove netwatch: ${result}`;

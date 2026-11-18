@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 const Authoritative = z.enum(["yes", "no", "after-2sec-delay"]);
 
@@ -88,7 +88,7 @@ export const dhcpTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create DHCP server: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ip dhcp-server print detail where name="${a.name}"`,
+        `/ip dhcp-server print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `DHCP server created successfully:\n\n${details}`;
@@ -116,8 +116,8 @@ export const dhcpTools: ToolModule = [
       );
 
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
       if (a.invalid_only) filters.push("invalid=yes");
 
@@ -143,7 +143,7 @@ export const dhcpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting DHCP server details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ip dhcp-server print detail where name="${a.name}"`,
+        `/ip dhcp-server print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -214,7 +214,7 @@ export const dhcpTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create DHCP network: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ip dhcp-server network print detail where address="${a.network}"`,
+        `/ip dhcp-server network print detail where address=${quoted(a.network)}`,
         ctx,
       );
       return `DHCP network created successfully:\n\n${details}`;
@@ -252,7 +252,7 @@ export const dhcpTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create DHCP pool: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ip pool print detail where name="${a.name}"`,
+        `/ip pool print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return `DHCP pool created successfully:\n\n${details}`;
@@ -273,13 +273,13 @@ export const dhcpTools: ToolModule = [
       ctx.info(`Removing DHCP server: name=${a.name}`);
 
       const count = await executeMikrotikCommand(
-        `/ip dhcp-server print count-only where name="${a.name}"`,
+        `/ip dhcp-server print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `DHCP server '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip dhcp-server remove [find name="${a.name}"]`,
+        `/ip dhcp-server remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove DHCP server: ${result}`;

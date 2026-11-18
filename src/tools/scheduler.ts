@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const schedulerTools: ToolModule = [
   defineTool({
@@ -49,7 +49,7 @@ export const schedulerTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create scheduler: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/system scheduler print detail where name="${a.name}"`,
+        `/system scheduler print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -73,7 +73,7 @@ export const schedulerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing schedulers");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/system scheduler print${whereClause(filters)}`,
@@ -97,7 +97,7 @@ export const schedulerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting scheduler details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/system scheduler print detail where name="${a.name}"`,
+        `/system scheduler print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -119,13 +119,13 @@ export const schedulerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing scheduler: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/system scheduler print count-only where name="${a.name}"`,
+        `/system scheduler print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `Scheduler '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/system scheduler remove [find name="${a.name}"]`,
+        `/system scheduler remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove scheduler: ${result}`;
@@ -145,7 +145,7 @@ export const schedulerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling scheduler: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/system scheduler enable [find name="${a.name}"]`,
+        `/system scheduler enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable scheduler: ${result}`;
@@ -165,7 +165,7 @@ export const schedulerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling scheduler: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/system scheduler disable [find name="${a.name}"]`,
+        `/system scheduler disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable scheduler: ${result}`;
@@ -217,7 +217,7 @@ export const schedulerTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add script: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/system script print detail where name="${a.name}"`,
+        `/system script print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -241,7 +241,7 @@ export const schedulerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing scripts");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/system script print${whereClause(filters)}`,
@@ -264,13 +264,13 @@ export const schedulerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing script: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/system script print count-only where name="${a.name}"`,
+        `/system script print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `Script '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/system script remove [find name="${a.name}"]`,
+        `/system script remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove script: ${result}`;
@@ -292,7 +292,7 @@ export const schedulerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Running script: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/system script run [find name="${a.name}"]`,
+        `/system script run [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to run script: ${result}`;

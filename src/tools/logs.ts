@@ -9,7 +9,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { isEmpty } from "../core/routeros";
+import { isEmpty, quoted } from "../core/routeros";
 import { tailLines, orMatch } from "../utils";
 import type { ToolContext } from "../core/context";
 
@@ -38,13 +38,13 @@ async function runGetLogs(o: GetLogsOptions, ctx: ToolContext): Promise<string> 
   if (o.topics) {
     // Handle multiple topics separated by comma
     const topicList = o.topics.split(",").map((t) => t.trim());
-    const topicFilter = topicList.map((t) => `topics~"${t}"`).join(" or ");
+    const topicFilter = topicList.map((t) => `topics~${quoted(t)}`).join(" or ");
     if (topicList.length > 1) filters.push(`(${topicFilter})`);
     else filters.push(topicFilter);
   }
 
-  if (o.action) filters.push(`action="${o.action}"`);
-  if (o.message_filter) filters.push(`message~"${o.message_filter}"`);
+  if (o.action) filters.push(`action=${quoted(o.action)}`);
+  if (o.message_filter) filters.push(`message~${quoted(o.message_filter)}`);
   if (o.prefix_filter) filters.push(`message~"^${o.prefix_filter}"`);
   if (o.time_filter) filters.push(`time > ([:timestamp] - ${o.time_filter})`);
 
@@ -263,7 +263,7 @@ export const logTools: ToolModule = [
       const securityTopics = ["system", "firewall", "warning", "error"];
       const securityKeywords = "(login|logout|failed|denied|blocked|attack|invalid|unauthorized)";
 
-      let cmd = `/log print where ${orMatch("topics", securityTopics)} and message~"${securityKeywords}"`;
+      let cmd = `/log print where ${orMatch("topics", securityTopics)} and message~${quoted(securityKeywords)}`;
 
       if (a.time_filter) cmd += ` and time > ([:timestamp] - ${a.time_filter})`;
 
@@ -319,7 +319,7 @@ export const logTools: ToolModule = [
       const topics = ["info", "warning", "error", "system", "dhcp", "firewall", "interface"];
       for (const topic of topics) {
         const count = await executeMikrotikCommand(
-          `/log print count-only where topics~"${topic}"`,
+          `/log print count-only where topics~${quoted(topic)}`,
           ctx,
         );
         const c = count.trim();
@@ -372,7 +372,7 @@ export const logTools: ToolModule = [
       let cmd = `/log print file=${filename}`;
 
       const filters: string[] = [];
-      if (a.topics) filters.push(`topics~"${a.topics}"`);
+      if (a.topics) filters.push(`topics~${quoted(a.topics)}`);
       if (a.time_filter) filters.push(`time > ([:timestamp] - ${a.time_filter})`);
 
       if (filters.length) cmd += ` where ${filters.join(" and ")}`;
@@ -413,8 +413,8 @@ export const logTools: ToolModule = [
       // `duration` seconds. RouterOS `print` has no `limit=`, so the output is
       // capped client-side via tailLines().
       const filters: string[] = [];
-      if (a.topics) filters.push(`topics~"${a.topics}"`);
-      if (a.action) filters.push(`action="${a.action}"`);
+      if (a.topics) filters.push(`topics~${quoted(a.topics)}`);
+      if (a.action) filters.push(`action=${quoted(a.action)}`);
       filters.push(`time > ([:timestamp] - ${duration}s)`);
 
       const cmd = `/log print where ${filters.join(" and ")}`;

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const bandwidthServerTools: ToolModule = [
   defineTool({
@@ -91,7 +91,7 @@ export const bandwidthServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing bandwidth-server sessions");
       const filters: string[] = [];
-      if (a.user_filter) filters.push(`user~"${a.user_filter}"`);
+      if (a.user_filter) filters.push(`user~${quoted(a.user_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/tool bandwidth-server session print${whereClause(filters)}`,

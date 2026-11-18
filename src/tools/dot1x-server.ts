@@ -4,7 +4,15 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  yesno,
+  whereClause,
+  quoteValue,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  quoted,
+} from "../core/routeros";
 
 const AuthTypes = z.enum(["dot1x", "mac-auth", "dot1x,mac-auth"]);
 const MacAuthMode = z.enum(["mac-as-username", "mac-as-username-and-password"]);
@@ -65,7 +73,7 @@ export const dot1xServerTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add dot1x server: ${result}`;
       const details = await executeMikrotikCommand(
-        `/interface dot1x server print detail where interface="${a.interface}"`,
+        `/interface dot1x server print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return details.trim()
@@ -90,7 +98,7 @@ export const dot1xServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing dot1x servers");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 
       const result = await executeMikrotikCommand(
@@ -119,12 +127,12 @@ export const dot1xServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting dot1x server: server_id=${a.server_id}`);
       let result = await executeMikrotikCommand(
-        `/interface dot1x server print detail where .id="${a.server_id}"`,
+        `/interface dot1x server print detail where .id=${quoted(a.server_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/interface dot1x server print detail where interface="${a.server_id}"`,
+          `/interface dot1x server print detail where interface=${quoted(a.server_id)}`,
           ctx,
         );
       }
@@ -164,8 +172,8 @@ export const dot1xServerTools: ToolModule = [
         return "Specify either reauth_period (RouterOS 7.25+) or reauth_timeout (older RouterOS), not both.";
       ctx.info(`Updating dot1x server: server_id=${a.server_id}`);
       const selector = a.server_id.startsWith("*")
-        ? `.id="${a.server_id}"`
-        : `interface="${a.server_id}"`;
+        ? `.id=${quoted(a.server_id)}`
+        : `interface=${quoted(a.server_id)}`;
       const base = `/interface dot1x server set [find ${selector}]`;
       const cmd = new Cmd(base)
         .opt("auth-types", a.auth_types)
@@ -208,8 +216,8 @@ export const dot1xServerTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing dot1x server: server_id=${a.server_id}`);
       const selector = a.server_id.startsWith("*")
-        ? `.id="${a.server_id}"`
-        : `interface="${a.server_id}"`;
+        ? `.id=${quoted(a.server_id)}`
+        : `interface=${quoted(a.server_id)}`;
       const count = await executeMikrotikCommand(
         `/interface dot1x server print count-only where ${selector}`,
         ctx,

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const ipv6DhcpRelayTools: ToolModule = [
   defineTool({
@@ -41,7 +41,7 @@ export const ipv6DhcpRelayTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add DHCPv6 relay: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ipv6 dhcp-relay print detail where name="${a.name}"`,
+        `/ipv6 dhcp-relay print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -68,8 +68,8 @@ export const ipv6DhcpRelayTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing DHCPv6 relays");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 
       const result = await executeMikrotikCommand(
@@ -95,7 +95,7 @@ export const ipv6DhcpRelayTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting DHCPv6 relay details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-relay print detail where name="${a.name}"`,
+        `/ipv6 dhcp-relay print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -117,7 +117,7 @@ export const ipv6DhcpRelayTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling DHCPv6 relay: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-relay enable [find name="${a.name}"]`,
+        `/ipv6 dhcp-relay enable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable DHCPv6 relay: ${result}`;
@@ -138,7 +138,7 @@ export const ipv6DhcpRelayTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling DHCPv6 relay: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-relay disable [find name="${a.name}"]`,
+        `/ipv6 dhcp-relay disable [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable DHCPv6 relay: ${result}`;
@@ -160,13 +160,13 @@ export const ipv6DhcpRelayTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing DHCPv6 relay: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/ipv6 dhcp-relay print count-only where name="${a.name}"`,
+        `/ipv6 dhcp-relay print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `DHCPv6 relay '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ipv6 dhcp-relay remove [find name="${a.name}"]`,
+        `/ipv6 dhcp-relay remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove DHCPv6 relay: ${result}`;

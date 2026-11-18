@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const certificateTools: ToolModule = [
   defineTool({
@@ -22,7 +22,7 @@ export const certificateTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing certificates");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(`/certificate print${whereClause(filters)}`, ctx);
       return isEmpty(result)
@@ -44,7 +44,7 @@ export const certificateTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting certificate details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/certificate print detail where name="${a.name}"`,
+        `/certificate print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result)
@@ -107,7 +107,7 @@ export const certificateTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create certificate: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/certificate print detail where name="${a.name}"`,
+        `/certificate print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -149,7 +149,7 @@ export const certificateTools: ToolModule = [
       // router (each device has its own certificate store). Diagnose that
       // clearly instead of letting RouterOS emit a cryptic error.
       const templateCount = await executeMikrotikCommand(
-        `/certificate print count-only where name="${a.name}"`,
+        `/certificate print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (templateCount.trim() === "0") {
@@ -161,7 +161,7 @@ export const certificateTools: ToolModule = [
       }
       if (a.ca) {
         const caCount = await executeMikrotikCommand(
-          `/certificate print count-only where name="${a.ca}"`,
+          `/certificate print count-only where name=${quoted(a.ca)}`,
           ctx,
         );
         if (caCount.trim() === "0") {
@@ -192,13 +192,13 @@ export const certificateTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing certificate: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/certificate print count-only where name="${a.name}"`,
+        `/certificate print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `Certificate '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/certificate remove [find name="${a.name}"]`,
+        `/certificate remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove certificate: ${result}`;

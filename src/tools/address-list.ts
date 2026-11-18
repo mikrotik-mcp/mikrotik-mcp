@@ -8,7 +8,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const addressListTools: ToolModule = [
   defineTool({
@@ -41,7 +41,7 @@ export const addressListTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add address-list entry: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/ip firewall address-list print detail where list="${a.list}" address="${a.address}"`,
+        `/ip firewall address-list print detail where list=${quoted(a.list)} address=${quoted(a.address)}`,
         ctx,
       );
       return details.trim()
@@ -68,8 +68,8 @@ export const addressListTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing address-list entries");
       const filters: string[] = [];
-      if (a.list_filter) filters.push(`list~"${a.list_filter}"`);
-      if (a.address_filter) filters.push(`address~"${a.address_filter}"`);
+      if (a.list_filter) filters.push(`list~${quoted(a.list_filter)}`);
+      if (a.address_filter) filters.push(`address~${quoted(a.address_filter)}`);
       if (a.dynamic_only) filters.push("dynamic=yes");
       const result = await executeMikrotikCommand(
         `/ip firewall address-list print${whereClause(filters)}`,
@@ -95,7 +95,7 @@ export const addressListTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting address-list entry ${a.entry_id}`);
       const result = await executeMikrotikCommand(
-        `/ip firewall address-list print detail where .id="${a.entry_id}"`,
+        `/ip firewall address-list print detail where .id=${quoted(a.entry_id)}`,
         ctx,
       );
       return isEmpty(result)
@@ -119,13 +119,13 @@ export const addressListTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing address-list entry ${a.entry_id}`);
       const count = await executeMikrotikCommand(
-        `/ip firewall address-list print count-only where .id="${a.entry_id}"`,
+        `/ip firewall address-list print count-only where .id=${quoted(a.entry_id)}`,
         ctx,
       );
       if (count.trim() === "0") return `Address-list entry '${a.entry_id}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/ip firewall address-list remove [find .id="${a.entry_id}"]`,
+        `/ip firewall address-list remove [find .id=${quoted(a.entry_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove address-list entry: ${result}`;
@@ -149,7 +149,7 @@ export const addressListTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Enabling address-list entry ${a.entry_id}`);
       const result = await executeMikrotikCommand(
-        `/ip firewall address-list enable [find .id="${a.entry_id}"]`,
+        `/ip firewall address-list enable [find .id=${quoted(a.entry_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to enable address-list entry: ${result}`;
@@ -172,7 +172,7 @@ export const addressListTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Disabling address-list entry ${a.entry_id}`);
       const result = await executeMikrotikCommand(
-        `/ip firewall address-list disable [find .id="${a.entry_id}"]`,
+        `/ip firewall address-list disable [find .id=${quoted(a.entry_id)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to disable address-list entry: ${result}`;

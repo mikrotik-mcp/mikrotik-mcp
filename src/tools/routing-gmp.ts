@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, isEmpty, commandUnsupported } from "../core/routeros";
+import { whereClause, isEmpty, commandUnsupported, quoted } from "../core/routeros";
 
 const UNSUPPORTED =
   "GMP is not available on this device (requires RouterOS v7 with the routing/multicast package).";
@@ -45,8 +45,8 @@ export const routingGmpTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing GMP group memberships");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
-      if (a.group_filter) filters.push(`group~"${a.group_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
+      if (a.group_filter) filters.push(`group~${quoted(a.group_filter)}`);
       const result = await executeMikrotikCommand(
         `/routing gmp group print detail${whereClause(filters)}`,
         ctx,

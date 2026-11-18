@@ -3,7 +3,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, Cmd, quoted } from "../core/routeros";
 
 export const ipDhcpClientTools: ToolModule = [
   defineTool({
@@ -21,7 +21,7 @@ export const ipDhcpClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing DHCP clients");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface~"${a.interface_filter}"`);
+      if (a.interface_filter) filters.push(`interface~${quoted(a.interface_filter)}`);
       const result = await executeMikrotikCommand(
         `/ip dhcp-client print${whereClause(filters)}`,
         ctx,
@@ -42,7 +42,7 @@ export const ipDhcpClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting DHCP client: ${a.interface}`);
       const result = await executeMikrotikCommand(
-        `/ip dhcp-client print detail where interface="${a.interface}"`,
+        `/ip dhcp-client print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return isEmpty(result)
@@ -101,7 +101,7 @@ export const ipDhcpClientTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add DHCP client: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ip dhcp-client print detail where interface="${a.interface}"`,
+        `/ip dhcp-client print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return `DHCP client added on '${a.interface}':\n\n${details}`;
@@ -140,7 +140,7 @@ export const ipDhcpClientTools: ToolModule = [
     },
     async handler(a, ctx) {
       ctx.info(`Updating DHCP client on ${a.interface}`);
-      const base = `/ip dhcp-client set [find interface="${a.interface}"]`;
+      const base = `/ip dhcp-client set [find interface=${quoted(a.interface)}]`;
       const cmd = new Cmd(base)
         .bool("add-default-route", a.add_default_route)
         .opt("default-route-distance", a.default_route_distance)
@@ -156,7 +156,7 @@ export const ipDhcpClientTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to update DHCP client: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ip dhcp-client print detail where interface="${a.interface}"`,
+        `/ip dhcp-client print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return `DHCP client updated:\n\n${details}`;
@@ -179,12 +179,12 @@ export const ipDhcpClientTools: ToolModule = [
       const action = a.release ? "release" : "renew";
       ctx.info(`${action} DHCP lease on ${a.interface}`);
       const result = await executeMikrotikCommand(
-        `/ip dhcp-client ${action} [find interface="${a.interface}"]`,
+        `/ip dhcp-client ${action} [find interface=${quoted(a.interface)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to ${action} DHCP lease: ${result}`;
       const details = await executeMikrotikCommand(
-        `/ip dhcp-client print detail where interface="${a.interface}"`,
+        `/ip dhcp-client print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return `DHCP lease ${action}ed on '${a.interface}':\n\n${details}`;
@@ -203,12 +203,12 @@ export const ipDhcpClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing DHCP client on ${a.interface}`);
       const count = await executeMikrotikCommand(
-        `/ip dhcp-client print count-only where interface="${a.interface}"`,
+        `/ip dhcp-client print count-only where interface=${quoted(a.interface)}`,
         ctx,
       );
       if (count.trim() === "0") return `No DHCP client on '${a.interface}'.`;
       const result = await executeMikrotikCommand(
-        `/ip dhcp-client remove [find interface="${a.interface}"]`,
+        `/ip dhcp-client remove [find interface=${quoted(a.interface)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove DHCP client: ${result}`;

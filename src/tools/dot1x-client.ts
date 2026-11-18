@@ -4,7 +4,15 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { yesno, whereClause, quoteValue, looksLikeError, isEmpty, Cmd } from "../core/routeros";
+import {
+  yesno,
+  whereClause,
+  quoteValue,
+  looksLikeError,
+  isEmpty,
+  Cmd,
+  quoted,
+} from "../core/routeros";
 
 export const dot1xClientTools: ToolModule = [
   defineTool({
@@ -50,7 +58,7 @@ export const dot1xClientTools: ToolModule = [
       const result = await executeMikrotikCommand(cmd, ctx);
       if (looksLikeError(result)) return `Failed to add dot1x client: ${result}`;
       const details = await executeMikrotikCommand(
-        `/interface dot1x client print detail where interface="${a.interface}"`,
+        `/interface dot1x client print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return details.trim()
@@ -80,8 +88,8 @@ export const dot1xClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing dot1x clients");
       const filters: string[] = [];
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
-      if (a.status_filter) filters.push(`status~"${a.status_filter}"`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
+      if (a.status_filter) filters.push(`status~${quoted(a.status_filter)}`);
       if (a.disabled_only) filters.push("disabled=yes");
 
       const result = await executeMikrotikCommand(
@@ -110,12 +118,12 @@ export const dot1xClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting dot1x client: client_id=${a.client_id}`);
       let result = await executeMikrotikCommand(
-        `/interface dot1x client print detail where .id="${a.client_id}"`,
+        `/interface dot1x client print detail where .id=${quoted(a.client_id)}`,
         ctx,
       );
       if (isEmpty(result)) {
         result = await executeMikrotikCommand(
-          `/interface dot1x client print detail where interface="${a.client_id}"`,
+          `/interface dot1x client print detail where interface=${quoted(a.client_id)}`,
           ctx,
         );
       }
@@ -150,8 +158,8 @@ export const dot1xClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Updating dot1x client: client_id=${a.client_id}`);
       const selector = a.client_id.startsWith("*")
-        ? `.id="${a.client_id}"`
-        : `interface="${a.client_id}"`;
+        ? `.id=${quoted(a.client_id)}`
+        : `interface=${quoted(a.client_id)}`;
       const base = `/interface dot1x client set [find ${selector}]`;
       const cmd = new Cmd(base)
         .opt("eap-methods", a.eap_methods)
@@ -191,8 +199,8 @@ export const dot1xClientTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing dot1x client: client_id=${a.client_id}`);
       const selector = a.client_id.startsWith("*")
-        ? `.id="${a.client_id}"`
-        : `interface="${a.client_id}"`;
+        ? `.id=${quoted(a.client_id)}`
+        : `interface=${quoted(a.client_id)}`;
       const count = await executeMikrotikCommand(
         `/interface dot1x client print count-only where ${selector}`,
         ctx,

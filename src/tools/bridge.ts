@@ -11,7 +11,7 @@ import { interfaceName, unsetProperties } from "../core/schema";
 import { executeMikrotikCommand } from "../core/connector";
 import { WRITE_IDEMPOTENT, WRITE, READ, DESTRUCTIVE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { whereClause, looksLikeError, isEmpty, quoteValue, Cmd } from "../core/routeros";
+import { whereClause, looksLikeError, isEmpty, quoteValue, Cmd, quoted } from "../core/routeros";
 
 const ProtocolMode = z.enum(["none", "rstp", "stp", "mstp"]);
 const ArpMode = z.enum(["disabled", "enabled", "proxy-arp", "reply-only", "local-proxy-arp"]);
@@ -142,7 +142,7 @@ export const bridgeTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to create bridge: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface bridge print detail where name="${a.name}"`,
+        `/interface bridge print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return details.trim()
@@ -168,7 +168,7 @@ export const bridgeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing bridges");
       const filters: string[] = [];
-      if (a.name_filter) filters.push(`name~"${a.name_filter}"`);
+      if (a.name_filter) filters.push(`name~${quoted(a.name_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface bridge print${whereClause(filters)}`,
@@ -191,7 +191,7 @@ export const bridgeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Getting bridge details: name=${a.name}`);
       const result = await executeMikrotikCommand(
-        `/interface bridge print detail where name="${a.name}"`,
+        `/interface bridge print detail where name=${quoted(a.name)}`,
         ctx,
       );
       return isEmpty(result) ? `Bridge '${a.name}' not found.` : `BRIDGE DETAILS:\n\n${result}`;
@@ -339,13 +339,13 @@ export const bridgeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing bridge: name=${a.name}`);
       const count = await executeMikrotikCommand(
-        `/interface bridge print count-only where name="${a.name}"`,
+        `/interface bridge print count-only where name=${quoted(a.name)}`,
         ctx,
       );
       if (count.trim() === "0") return `Bridge '${a.name}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface bridge remove [find name="${a.name}"]`,
+        `/interface bridge remove [find name=${quoted(a.name)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove bridge: ${result}`;
@@ -461,7 +461,7 @@ export const bridgeTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to add bridge port: ${result}`;
 
       const details = await executeMikrotikCommand(
-        `/interface bridge port print detail where interface="${a.interface}"`,
+        `/interface bridge port print detail where interface=${quoted(a.interface)}`,
         ctx,
       );
       return details.trim()
@@ -488,8 +488,8 @@ export const bridgeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing bridge ports");
       const filters: string[] = [];
-      if (a.bridge_filter) filters.push(`bridge="${a.bridge_filter}"`);
-      if (a.interface_filter) filters.push(`interface="${a.interface_filter}"`);
+      if (a.bridge_filter) filters.push(`bridge=${quoted(a.bridge_filter)}`);
+      if (a.interface_filter) filters.push(`interface=${quoted(a.interface_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface bridge port print${whereClause(filters)}`,
@@ -517,13 +517,13 @@ export const bridgeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info(`Removing bridge port: interface=${a.interface}`);
       const count = await executeMikrotikCommand(
-        `/interface bridge port print count-only where interface="${a.interface}"`,
+        `/interface bridge port print count-only where interface=${quoted(a.interface)}`,
         ctx,
       );
       if (count.trim() === "0") return `Bridge port for interface '${a.interface}' not found.`;
 
       const result = await executeMikrotikCommand(
-        `/interface bridge port remove [find interface="${a.interface}"]`,
+        `/interface bridge port remove [find interface=${quoted(a.interface)}]`,
         ctx,
       );
       if (looksLikeError(result)) return `Failed to remove bridge port: ${result}`;
@@ -547,7 +547,7 @@ export const bridgeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing bridge hosts");
       const filters: string[] = [];
-      if (a.bridge_filter) filters.push(`bridge="${a.bridge_filter}"`);
+      if (a.bridge_filter) filters.push(`bridge=${quoted(a.bridge_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface bridge host print${whereClause(filters)}`,
@@ -614,7 +614,7 @@ export const bridgeTools: ToolModule = [
     async handler(a, ctx) {
       ctx.info("Listing bridge VLANs");
       const filters: string[] = [];
-      if (a.bridge_filter) filters.push(`bridge="${a.bridge_filter}"`);
+      if (a.bridge_filter) filters.push(`bridge=${quoted(a.bridge_filter)}`);
 
       const result = await executeMikrotikCommand(
         `/interface bridge vlan print${whereClause(filters)}`,
