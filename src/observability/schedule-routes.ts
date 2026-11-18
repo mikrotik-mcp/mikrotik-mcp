@@ -27,6 +27,7 @@ import { armJob, forgetJob, nextRunOf, runJob } from "../schedule/runner";
 import { liveExecutor, primeRiskIndex, runnerOptions } from "../schedule/session";
 import { scheduleStore } from "../schedule/store";
 import type { ScheduleJob, ScheduleRun } from "../schedule/store";
+import { clientError } from "./http-error";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -118,7 +119,7 @@ export async function scheduleRoutes(req: Request, url: URL): Promise<Response |
   try {
     store = await scheduleStore();
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e), jobs: [] }, 503);
+    return json({ error: clientError(e), jobs: [] }, 503);
   }
 
   const now = Date.now();

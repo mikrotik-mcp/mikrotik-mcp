@@ -27,6 +27,7 @@ import {
 import { toRecord } from "../rollout/store";
 import type { RolloutRecord } from "../rollout/store";
 import { liveRolloutUpdates, publishRollout } from "./rollout-hub";
+import { clientError } from "./http-error";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -50,7 +51,7 @@ export async function rolloutRoutes(req: Request, url: URL): Promise<Response | 
 
   let storeError: string | undefined;
   const store = await rolloutStore().catch((e: unknown) => {
-    storeError = e instanceof Error ? e.message : String(e);
+    storeError = clientError(e);
     return null;
   });
 

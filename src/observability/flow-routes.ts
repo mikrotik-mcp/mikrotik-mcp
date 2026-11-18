@@ -17,6 +17,7 @@ import type { TalkerDimension } from "../flows/aggregate";
 import { getFlowCollector } from "../flows/collector";
 import type { FlowRecord } from "../flows/decode";
 import { flowStore } from "../tools/traffic-flow";
+import { clientError } from "./http-error";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -77,7 +78,7 @@ export async function flowRoutes(req: Request, url: URL): Promise<Response | nul
   try {
     records = (await flowStore()).query({ from, to, address, limit: 200_000 });
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e), records: [] }, 200);
+    return json({ error: clientError(e), records: [] }, 200);
   }
 
   if (p === "/api/flows/top") {

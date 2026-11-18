@@ -24,6 +24,7 @@ import { validatePolicyText } from "../policy/schema";
 import { rememberReport } from "../policy/session";
 import { policyResults, recordPolicyResult } from "../policy/results";
 import { currentPolicySet } from "../tools/policy";
+import { clientError } from "./http-error";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -64,7 +65,7 @@ export async function policyRoutes(req: Request, url: URL): Promise<Response | n
     try {
       results = await policyResults(device, limit);
     } catch (e) {
-      return json({ results: [], error: e instanceof Error ? e.message : String(e) });
+      return json({ results: [], error: clientError(e) });
     }
     return json({ results });
   }
@@ -113,7 +114,7 @@ export async function policyRoutes(req: Request, url: URL): Promise<Response | n
         });
       } catch (e) {
         // One unreachable router must not abort a fleet sweep.
-        reports.push({ device, error: e instanceof Error ? e.message : String(e) });
+        reports.push({ device, error: clientError(e) });
       }
     }
     return json({ reports });

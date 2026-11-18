@@ -16,6 +16,7 @@ import { dropTxn, getTxn, listTxns, persistTxn, txnStore } from "../txn/session"
 import { toRecord } from "../txn/store";
 import type { TxnRecord } from "../txn/store";
 import { liveTxnUpdates } from "./txn-hub";
+import { clientError } from "./http-error";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 function json(body: unknown, status = 200): Response {
@@ -36,7 +37,7 @@ export async function txnRoutes(req: Request, url: URL): Promise<Response | null
   // not 500 the page — live transactions are still worth showing.
   let storeError: string | undefined;
   const store = await txnStore().catch((e: unknown) => {
-    storeError = e instanceof Error ? e.message : String(e);
+    storeError = clientError(e);
     return null;
   });
 

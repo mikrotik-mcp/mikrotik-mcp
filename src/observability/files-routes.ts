@@ -34,6 +34,7 @@ import type { Risk } from "./event";
 import { recordToolCall } from "./recorder";
 import { addJob, listJobs, removeJob, runDueJobs, runJob } from "./files-schedules";
 import { listTrash, openTrash, purgeTrash, stash, trashEnabled } from "./files-trash";
+import { clientError } from "./http-error";
 
 /**
  * Why the Files page is unavailable, or `null` when it may be used. The page is
@@ -1423,7 +1424,7 @@ export function createFilesRoutes(options: { denied: () => string | null }) {
     } catch (error) {
       if (error instanceof DashboardInputError) return json({ error: error.message }, error.status);
       logger.warn(`Files route ${key} failed: ${message(error)}`);
-      return json({ error: message(error) }, 502);
+      return json({ error: clientError(error) }, 502);
     }
   };
 }
