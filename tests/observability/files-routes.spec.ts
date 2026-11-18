@@ -116,7 +116,8 @@ vi.mock("../../src/core/connector", () => ({
     if (fetch && !command.includes("unreachable"))
       routers.beta!.disk.set(`/${fetch[2]}`, routers.alpha!.disk.get(`/${fetch[1]}`) as Buffer);
     if (command.includes("unreachable")) return "failure: connection timeout";
-    return command.includes("bad.rsc") ? "failure: bad command name" : "";
+    if (command.includes("bad.rsc")) return "Script Error: found 1 error(s) in import file";
+    return command.includes("dry-run") ? "No syntax errors found in the import file" : "";
   },
 }));
 vi.mock("../../src/core/context", () => ({ createContext: () => ({}) }));
@@ -262,6 +263,27 @@ describe("changes", () => {
         isError: false,
       }),
     );
+  });
+  test("a write that the router never answers ends with an error, not a wait", async () => {
+    vi.useFakeTimers();
+    try {
+      const { sftp, disk } = fakeSftp({});
+      // A router that takes the bytes and never confirms them: a lost connection.
+      sftp.createWriteStream = (() => new Writable({ write() {} })) as never;
+      const written = files.writeStream(
+        sftp as never,
+        "/x.bin",
+        (async function* () {
+          yield new Uint8Array(10);
+        })(),
+      );
+      const outcome = written.catch((error: Error) => error.message);
+      await vi.advanceTimersByTimeAsync(files.WRITE_ANSWER_MS + 11_000);
+      expect(await outcome).toContain("did not answer for 60 seconds");
+      expect(disk.has("/x.bin")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   test("a failed upload leaves no partial file", async () => {
     routers.beta = fakeSftp({}, { failWrites: true });
@@ -608,14 +630,18 @@ describe("router-made files and import", () => {
   });
   test("an import is a dry run unless the caller says otherwise", async () => {
     commands.length = 0;
-    await call("POST", "/api/files/import", { device: "alpha", path: "/flash/config.rsc" });
+    const dry = await call("POST", "/api/files/import", {
+      device: "alpha",
+      path: "/flash/config.rsc",
+    });
+    expect(await dry.json()).toEqual(expect.objectContaining({ ok: true, dryRun: true }));
     await call("POST", "/api/files/import", {
       device: "alpha",
       path: "/flash/config.rsc",
       dryRun: false,
     });
     expect(commands).toEqual([
-      "/import file-name=flash/config.rsc verbose=yes dry-run=yes",
+      "/import file-name=flash/config.rsc verbose=yes dry-run",
       "/import file-name=flash/config.rsc verbose=yes",
     ]);
     const failed = await call("POST", "/api/files/import", { device: "alpha", path: "/bad.rsc" });

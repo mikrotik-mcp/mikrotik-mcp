@@ -55,6 +55,13 @@ the GitHub release notes.
 - `dashboard.files` (`--dashboard-files`, `MIKROTIK_DASHBOARD__FILES`, default
   `true`) turns the page off.
 
+### Fixed
+
+- **Terminal:** an idle Shell pane closed after about one minute. The SSH
+  library sent keepalive requests that RouterOS does not answer, and then
+  closed the session. The shell now uses no SSH keepalive; its own 30-minute
+  idle limit stays.
+
 ## 6.15.0
 
 ### Added

@@ -255,6 +255,28 @@ export async function* zipStream(
 /** A ZIP without ZIP64 holds less than 4 GiB; stay well under it. */
 const MAX_ZIP_BYTES = 2 * 1024 ** 3;
 
+/** The size of one SFTP write. */
+const WRITE_BYTES = 32 * 1024;
+/** A write with no answer for this long means the connection to the router is lost. */
+export const WRITE_ANSWER_MS = 60_000;
+
+/** `work`, or an error when the router does not answer in `ms`. */
+function answered<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `The router did not answer for ${Math.round(ms / 1000)} seconds. The connection is probably lost.`,
+          ),
+        ),
+      ms,
+    );
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Copy a byte stream into a file on a router, with backpressure. A failed or
  * stopped copy removes the partial file: half of a package or a backup is worse
@@ -277,18 +299,44 @@ export async function writeStream(
   out.on("error", (error: Error) => {
     failure = error;
   });
+  // Two ways a copy ends that the source does not report: the caller stops it,
+  // or the router's connection closes. Without these, the copy waits for ever.
+  const stopped = new Promise<never>((_, reject) => {
+    if (signal?.aborted) reject(new Error("Stopped."));
+    signal?.addEventListener("abort", () => reject(new Error("Stopped.")), { once: true });
+  });
+  const closed = new Promise<never>((_, reject) => {
+    out.once("close", () =>
+      reject(failure ?? new Error("The connection to the router closed before the end.")),
+    );
+  });
+  stopped.catch(() => {});
+  closed.catch(() => {});
+  const iterator = source[Symbol.asyncIterator]();
   let total = options.start ?? 0;
   try {
-    for await (const chunk of source) {
-      if (signal?.aborted) throw new Error("Stopped.");
+    for (;;) {
+      const next = await Promise.race([iterator.next(), stopped, closed]);
+      if (next.done) break;
       if (failure) throw failure;
-      total += chunk.byteLength;
-      if (!out.write(chunk))
-        await new Promise<void>((resolve) => {
-          out.once("drain", resolve);
-          out.once("error", () => resolve());
-        });
-      onBytes?.(total);
+      // One small write at a time, each confirmed by the router. A browser upload
+      // arrives in pieces of up to 1 MiB, and RouterOS stops answering when such
+      // a piece is sent as many SFTP requests at once.
+      for (let at = 0; at < next.value.byteLength; at += WRITE_BYTES) {
+        const piece = next.value.subarray(at, at + WRITE_BYTES);
+        await Promise.race([
+          answered(
+            new Promise<void>((resolve, reject) => {
+              out.write(piece, (error) => (error ? reject(error) : resolve()));
+            }),
+            WRITE_ANSWER_MS,
+          ),
+          stopped,
+          closed,
+        ]);
+        total += piece.byteLength;
+        onBytes?.(total);
+      }
     }
     if (failure) throw failure;
     await new Promise<void>((resolve, reject) => {
@@ -297,8 +345,14 @@ export async function writeStream(
     });
     return total;
   } catch (error) {
+    void iterator.return?.()?.catch(() => {});
     out.destroy();
-    if (!options.keep) await call<void>((done) => sftp.unlink(path, done)).catch(() => {});
+    // On a lost connection the removal gets no answer either: do not wait long for it.
+    if (!options.keep)
+      await answered(
+        call<void>((done) => sftp.unlink(path, done)),
+        10_000,
+      ).catch(() => {});
     throw error;
   }
 }
@@ -444,8 +498,9 @@ async function open(device: string): Promise<Session> {
   const client = new MikroTikSSHClient({
     ...sshOptionsOf(dc),
     jump: resolveJump(dc),
-    keepAliveInterval: 15_000,
-    keepAliveCountMax: 3,
+    // No SSH keepalive: RouterOS does not answer the keepalive request, so the
+    // client would end a healthy session after interval × count, in the middle
+    // of a long transfer. A lost connection is found by the write watchdog.
   });
   if (!(await client.connect()))
     throw new DashboardInputError(
@@ -454,12 +509,13 @@ async function open(device: string): Promise<Session> {
     );
   try {
     const sftp = await client.sftp();
-    const drop = (): void => {
-      sessions.delete(device);
+    const drop = (why: string): void => {
+      if (sessions.delete(device))
+        logger.info(`Files: the SFTP session to '${device}' ended (${why})`);
       client.disconnect();
     };
-    sftp.on("close", drop);
-    sftp.on("error", drop);
+    sftp.on("close", () => drop("closed"));
+    sftp.on("error", (error: Error) => drop(error.message));
     return { client, sftp, users: 0, idle: undefined };
   } catch (error) {
     client.disconnect();
@@ -1102,6 +1158,14 @@ export function createFilesRoutes(options: { denied: string | null }) {
               req.signal,
             );
           });
+          // A browser that left early gives a shorter body, with no error.
+          const expected = Number(req.headers.get("content-length"));
+          if (expected > 0 && bytes !== expected) {
+            await withSftp(device, (sftp) => call<void>((done) => sftp.unlink(file, done))).catch(
+              () => {},
+            );
+            throw new Error(`The upload stopped at ${bytes} of ${expected} bytes.`);
+          }
           audit(device, "WRITE", started, { upload: file }, `${bytes} bytes`);
           return json({ ok: true, bytes });
         } catch (error) {
@@ -1132,9 +1196,11 @@ export function createFilesRoutes(options: { denied: string | null }) {
           try {
             const done = await withSftp(source.device, (reader) =>
               withSftp(target.device, async (writer) => {
-                const stats = await call<{ size: number; isDirectory: () => boolean }>((done) =>
-                  reader.stat(source.path, done),
-                );
+                const stats = await call<{
+                  size: number;
+                  mtime: number;
+                  isDirectory: () => boolean;
+                }>((done) => reader.stat(source.path, done));
                 if (stats.isDirectory()) throw new Error("A directory cannot be copied.");
                 let last = 0;
                 const progress = (done: number): void => {
@@ -1167,8 +1233,15 @@ export function createFilesRoutes(options: { denied: string | null }) {
                     (found) => found.size,
                     () => -1,
                   );
-                let offset = resumable ? Math.max(await sizeOf(part), 0) : 0;
-                if (offset > stats.size) offset = 0;
+                // Continue only from a part that is not older than the source: an
+                // older one was made from another version of the file.
+                const left = resumable
+                  ? await call<{ size: number; mtime: number }>((done) =>
+                      writer.stat(part, done),
+                    ).catch(() => null)
+                  : null;
+                const offset =
+                  left && left.size <= stats.size && left.mtime >= stats.mtime ? left.size : 0;
                 send({ t: "start", total: stats.size, via: "relay", resumed: offset });
                 // The hash of what passes through, when the copy starts at the first byte.
                 const passing = offset === 0 ? createHash("sha256") : null;
@@ -1292,15 +1365,27 @@ export function createFilesRoutes(options: { denied: string | null }) {
         if (!/\.rsc$/i.test(file))
           throw new DashboardInputError(400, "Only a .rsc file is imported.");
         const dryRun = body.dryRun !== false;
+        // `dry-run` is a flag without a value; RouterOS refuses `dry-run=yes`.
         const command = new Cmd("/import")
           .set("file-name", file)
           .raw("verbose=yes")
-          .flag("dry-run", dryRun)
+          .raw(dryRun ? "dry-run" : undefined)
           .build();
-        const output = await executeMikrotikCommand(command, createContext(undefined, device), {
-          maxMs: 120_000,
-        });
-        const failed = looksLikeError(output);
+        let output: string;
+        let failed: boolean;
+        try {
+          output = await executeMikrotikCommand(command, createContext(undefined, device), {
+            maxMs: 120_000,
+          });
+          // The dry run says "No syntax errors found"; a real run names a "Script Error".
+          failed = dryRun
+            ? !/no syntax errors found/i.test(output)
+            : /script error/i.test(output) || looksLikeError(output);
+        } catch (error) {
+          // A script with an error ends the command with a failure: that is the answer.
+          output = message(error);
+          failed = true;
+        }
         audit(
           device,
           dryRun ? "READ" : "DANGEROUS",

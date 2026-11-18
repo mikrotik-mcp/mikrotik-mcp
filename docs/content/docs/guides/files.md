@@ -86,7 +86,7 @@ The server relays the copy: it reads the file from the source router and writes 
 
 ### Large files
 
-A copy larger than 8 MiB is written to `<name>.part` and renamed when it is complete. If the copy fails or you stop it, the `.part` file stays, and **Try again** continues from it.
+A copy larger than 8 MiB is written to `<name>.part` and renamed when it is complete. If the copy fails or you stop it, the `.part` file stays, and **Try again** continues from it. A `.part` file that is older than the source file is not used: the copy starts again.
 
 ### Checksum and Verify
 
@@ -120,7 +120,7 @@ The archive button of a pane has **Backup now** (`/system backup save`) and **Ex
 
 **Import…** on a `.rsc` file runs the script on its router:
 
-1. The router does a dry run (`/import … dry-run`). It reports the errors and changes nothing.
+1. The router does a dry run (`/import file-name=… verbose=yes dry-run`). It reports each syntax error with its line, and changes nothing.
 2. **Run the import…**, then **Yes, change _router_**, runs the script.
 
 ## Recycle bin
@@ -199,7 +199,11 @@ Every upload, download, copy, read, rename, new folder, delete, backup, export, 
 
 ## How it works
 
-All file operations use SFTP, the file subsystem of the RouterOS SSH server. The server keeps one SFTP session for each router while the page is in use, and closes it after one minute without use. The SSH user of the router needs the `ftp` policy, and the `sensitive` policy to read backup files.
+All file operations use SFTP, the file subsystem of the RouterOS SSH server. The server keeps one SFTP session for each router while the page is in use, and closes it after one minute without use.
+
+- The server writes a file in pieces of 32 KiB and waits for the router to confirm each piece. If the router gives no answer for 60 seconds, the transfer fails with a message, and the partial file is removed.
+- The session uses no SSH keepalive. RouterOS does not answer the keepalive request of the SSH library, which would then close a healthy session in the middle of a long transfer.
+- An upload that the browser stops, or that arrives shorter than its declared size, is refused and removed. The SSH user of the router needs the `ftp` policy, and the `sensitive` policy to read backup files.
 
 ## API
 
