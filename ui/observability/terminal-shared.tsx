@@ -38,18 +38,18 @@ export function SharedView({ id }: { id: string }): ReactNode {
 
   return (
     <div className="term-page">
-      <div className="term-toolbar">
-        <span className="term-toolbar-label">
+      <div className="term-bar">
+        <span className="term-chip" data-on="true">
           <Eye size={14} /> Shared view{view ? ` · ${view.device}` : ""} · read only
         </span>
         {view && (
-          <span className="term-toolbar-label">
+          <span className="term-chip">
             since {new Date(view.since).toLocaleTimeString()} · {count} command
             {count === 1 ? "" : "s"}
           </span>
         )}
       </div>
-      <div className="term-dock term-shared">
+      <div className="term-shared">
         {error && <div className="term-banner">{error}</div>}
         {view && count === 0 && (
           <div className="term-welcome">
@@ -58,24 +58,26 @@ export function SharedView({ id }: { id: string }): ReactNode {
           </div>
         )}
         {view?.entries.map((entry) => (
-          <article key={entry.id} className="term-block" data-status={entry.ok ? "ok" : "error"}>
-            <header className="term-block-head">
-              <span className="term-prompt">
-                <span className="term-prompt-device">{entry.device}</span>
-                <span className="term-prompt-mark">&gt;</span>
+          <article key={entry.id} className="term-blk" data-status={entry.ok ? "ok" : "error"}>
+            <header className="term-blk-h">
+              <span className="pr" title={entry.device}>
+                ›
               </span>
-              <code className="term-block-command">{entry.command}</code>
-              <span className="term-block-meta">
-                <span className="term-chip" data-tone={entry.ok ? "ok" : "err"}>
-                  {entry.ok ? `${entry.ms} ms` : "failed"}
-                </span>
-                <time className="term-time">{new Date(entry.ts).toLocaleTimeString()}</time>
+              <code className="cmd">{entry.command}</code>
+              <span className="sp" />
+              <span className="term-ch" data-tone={entry.ok ? "ok" : "bad"}>
+                {entry.ok ? `✓ ${entry.ms} ms` : "✕ failed"}
               </span>
+              <time className="term-ch">{new Date(entry.ts).toLocaleTimeString()}</time>
             </header>
             {entry.output && (
-              <pre className="term-output">{cleanOutput(entry.output).trimEnd()}</pre>
+              <pre className="term-blk-o">{cleanOutput(entry.output).trimEnd()}</pre>
             )}
-            {entry.error && <div className="term-error">{entry.error}</div>}
+            {entry.error && (
+              <pre className="term-blk-o">
+                <span className="err">{entry.error}</span>
+              </pre>
+            )}
           </article>
         ))}
         <div ref={end} />

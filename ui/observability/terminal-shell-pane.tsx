@@ -7,10 +7,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { IDockviewPanelProps } from "dockview-react";
-import { Plug, RotateCw, TriangleAlert } from "lucide-react";
+import { RotateCw, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { withToken } from "./api";
+import { Led } from "./kit";
+import { followTheme, xtermFont, xtermTheme } from "./terminal-xterm";
 
 type Link = "connecting" | "online" | "closed";
 const TOKEN = new URLSearchParams(location.search).get("token") ?? "";
@@ -24,10 +26,6 @@ const post = (path: string, body: unknown, signal?: AbortSignal): Promise<Respon
     },
     body: JSON.stringify(body),
   });
-
-/** A CSS variable of the terminal page, read once for the xterm theme. */
-const ink = (element: Element, name: string): string =>
-  getComputedStyle(element).getPropertyValue(name).trim();
 
 export function ShellPane(
   props: IDockviewPanelProps<{ device: string; color?: string }>,
@@ -46,16 +44,13 @@ export function ShellPane(
     setError("");
     const term = new Terminal({
       cursorBlink: true,
-      fontFamily: ink(element, "--term-mono") || "monospace",
-      fontSize: 13,
+      fontFamily: xtermFont(element),
+      fontSize: 12.5,
+      lineHeight: 1.2,
       scrollback: 5000,
-      theme: {
-        background: ink(element, "--term-bg"),
-        foreground: ink(element, "--term-ink"),
-        cursor: ink(element, "--term-accent"),
-        selectionBackground: ink(element, "--term-line"),
-      },
+      theme: xtermTheme(element),
     });
+    const unfollow = followTheme(term, element);
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(element);
@@ -113,6 +108,7 @@ export function ShellPane(
     return () => {
       // Aborting the stream closes the session on the server.
       abort.abort();
+      unfollow();
       observer.disconnect();
       typing.dispose();
       resizing.dispose();
@@ -126,30 +122,33 @@ export function ShellPane(
       data-link={link}
       data-pane-color={props.params.color || undefined}
     >
-      <header className="term-status">
+      <header className="term-st">
         <span className="term-link" data-link={link === "closed" ? "reconnecting" : link}>
-          <span className="term-dot" />
-          {link === "online" && "interactive shell"}
-          {link === "connecting" && "opening shell…"}
-          {link === "closed" && "session closed"}
+          <Led tone={link === "online" ? "ok" : link === "connecting" ? "warn" : "bad"} />
+          <b>
+            {link === "online" && "interactive shell"}
+            {link === "connecting" && "opening shell…"}
+            {link === "closed" && "session closed"}
+          </b>
         </span>
-        <span className="term-stat term-identity">{device}</span>
-        {size && <span className="term-stat">{size}</span>}
+        <span className="term-st-id">{device}</span>
+        {size && <span>{size}</span>}
         <span
-          className="term-stat"
+          className="term-st-rec"
           title="What the router prints is recorded (toolbar: Recordings). Typed keys are not."
         >
-          <Plug size={11} /> output recorded
+          ● output recorded
         </span>
-        <span className="term-status-actions">
-          <button
-            type="button"
-            onClick={() => setAttempt((n) => n + 1)}
-            title="Close this session and open a new one"
-          >
-            <RotateCw size={12} /> {link === "closed" ? "reconnect" : "restart"}
-          </button>
-        </span>
+        <span className="sp" />
+        <button
+          type="button"
+          className="term-ib"
+          onClick={() => setAttempt((n) => n + 1)}
+          aria-label={link === "closed" ? "Reconnect" : "Restart"}
+          title={link === "closed" ? "Open a new session" : "Close this session and open a new one"}
+        >
+          <RotateCw size={14} />
+        </button>
       </header>
       {error && (
         <div className="term-banner">

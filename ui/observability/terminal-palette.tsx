@@ -2,17 +2,20 @@
  * Command palette (Ctrl+Shift+P): every action of the terminal page in one
  * searchable list, for work without the mouse.
  */
-import { Command } from "lucide-react";
+import { CircleHelp, Search, SquareTerminal, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Kbd } from "./kit";
+import { popIn } from "./kit/motion";
 import { paneRegistry, terminalApi, workspace } from "./terminal-lib";
 
 export interface PaletteAction {
   id: string;
-  /** What the action does, e.g. "Open terminal: home-ax3". */
+  /** What the action does, e.g. "Open a shell on home-ax3". */
   label: string;
-  /** Group shown on the right: Panes, Favourites, Workspaces, … */
+  /** The heading it is listed under: Open, Panes, Favourites, … */
   group: string;
+  icon?: ReactNode;
   run: () => void;
 }
 
@@ -35,10 +38,15 @@ export function CommandPalette({
 }): ReactNode {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
-  const list = useRef<HTMLUListElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLInputElement>(null);
   // "?" starts a question: known commands and MCP tools whose words match it.
   const asking = query.startsWith("?");
   const [answers, setAnswers] = useState<PaletteAction[]>([]);
+  useEffect(() => {
+    if (card.current) return popIn(card.current, card.current.querySelectorAll(".term-pal-i"));
+  }, []);
   useEffect(() => {
     const question = query.slice(1).trim();
     if (!asking || question.length < 3) {
@@ -55,6 +63,7 @@ export function CommandPalette({
               id: `cmd:${command}`,
               label: command,
               group: "Put in the input",
+              icon: <SquareTerminal size={14} />,
               run: () =>
                 (paneRegistry.get(workspace.activePane) ?? paneRegistry.all()[0])?.insert(command),
             })),
@@ -62,6 +71,7 @@ export function CommandPalette({
               id: `tool:${tool.name}`,
               label: `${tool.title} (${tool.name})`,
               group: "MCP tool · copy name",
+              icon: <Wrench size={14} />,
               run: () => void navigator.clipboard.writeText(tool.name),
             })),
           ]),
@@ -78,6 +88,14 @@ export function CommandPalette({
     [actions, query, asking, answers],
   );
   const marked = Math.min(index, Math.max(0, shown.length - 1));
+  // Listed under their group headings, in the order the groups first appear.
+  const grouped = useMemo(() => {
+    const byGroup = new Map<string, { action: PaletteAction; at: number }[]>();
+    shown.forEach((action, at) =>
+      byGroup.set(action.group, [...(byGroup.get(action.group) ?? []), { action, at }]),
+    );
+    return [...byGroup];
+  }, [shown]);
 
   useEffect(() => {
     list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
@@ -91,7 +109,7 @@ export function CommandPalette({
 
   return (
     <div
-      className="term-modal term-palette-back"
+      className="term-modal term-pal-back"
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
@@ -99,15 +117,16 @@ export function CommandPalette({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="term-palette">
-        <label>
-          <Command size={15} />
+      <div className="term-pal" ref={card}>
+        <label className="term-pal-in">
+          <Search size={15} />
           {/* kit-exempt: command palette search, drives the result list keys */}
           <input
+            ref={field}
             // eslint-disable-next-line jsx-a11y/no-autofocus -- the palette opens on a key press
             autoFocus
             value={query}
-            placeholder="Type an action, a router, a favourite…  ·  ? to ask in words"
+            placeholder="Type an action, a router or a favourite"
             spellCheck={false}
             aria-label="Search actions"
             onChange={(event) => {
@@ -124,31 +143,60 @@ export function CommandPalette({
               }
             }}
           />
+          <Kbd>Esc</Kbd>
         </label>
-        <ul ref={list} role="listbox">
+        <div ref={list} role="listbox" aria-label="Actions" className="term-pal-list">
           {shown.length === 0 && (
-            <li className="term-palette-empty">
+            <p className="term-pal-empty">
               {asking
                 ? "Type what you want to do. Matching is by words: earlier commands, favourites and MCP tools."
                 : "No action matches."}
-            </li>
+            </p>
           )}
-          {shown.map((action, i) => (
-            <li
-              key={action.id}
-              role="option"
-              aria-selected={i === marked}
-              onMouseEnter={() => setIndex(i)}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                choose(action);
-              }}
-            >
-              <span>{action.label}</span>
-              <small>{action.group}</small>
-            </li>
+          {grouped.map(([group, items]) => (
+            <div key={group} role="group" aria-label={group}>
+              <div className="term-pal-g">{group}</div>
+              {items.map(({ action, at }) => (
+                <div
+                  key={action.id}
+                  role="option"
+                  tabIndex={-1}
+                  aria-selected={at === marked}
+                  className="term-pal-i"
+                  onMouseEnter={() => setIndex(at)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    choose(action);
+                  }}
+                >
+                  {action.icon}
+                  <span className="t">{action.label}</span>
+                  {at === marked && <span className="m">↵</span>}
+                </div>
+              ))}
+            </div>
           ))}
-        </ul>
+          {!asking && (
+            <>
+              <div className="term-pal-g">Ask</div>
+              <div
+                role="option"
+                tabIndex={-1}
+                aria-selected={false}
+                className="term-pal-i"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setQuery("? ");
+                  field.current?.focus();
+                }}
+              >
+                <CircleHelp size={14} />
+                <span className="t">Type ? and a question: “? show wifi clients”</span>
+                <span className="m">router commands and MCP tools</span>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

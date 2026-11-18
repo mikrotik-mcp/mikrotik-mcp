@@ -84,7 +84,7 @@ export function PaneTab(
       }}
       title="Right-click to rename or colour this pane"
     >
-      <span className="term-tab-dot" />
+      <span className="term-tab-sw" />
       <span className="term-tab-title">{title}</span>
       <button
         type="button"
@@ -96,14 +96,14 @@ export function PaneTab(
           api.close();
         }}
       >
-        <X size={12} />
+        <X size={13} />
       </button>
       {menu &&
         page &&
         createPortal(
           <div
             ref={box}
-            className="term-tab-menu"
+            className="kit-menu term-tab-menu"
             role="menu"
             aria-label="Pane title and colour"
             style={{ left: menu.x, top: menu.y }}

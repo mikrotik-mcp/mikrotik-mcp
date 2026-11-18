@@ -7,48 +7,62 @@
  */
 import type { IDockviewPanelProps } from "dockview-react";
 import {
-  BellRing,
-  Check,
   ArrowDownToLine,
+  BellRing,
+  CalendarDays,
   ChartLine,
+  Check,
   ChevronDown,
   ChevronRight,
   CircleHelp,
   Copy,
+  CornerDownLeft,
   Download,
   Ellipsis,
+  Eraser,
+  Eye,
+  FileCode2,
   GitCompareArrows,
   History,
-  CornerDownLeft,
-  Eraser,
-  FileCode2,
-  Eye,
-  EyeOff,
+  Pencil,
   Pin,
+  Play,
   RotateCw,
-  Settings2,
   Share2,
+  Shield,
   ShieldCheck,
+  SlidersHorizontal,
   Square,
-  Table2,
-  Undo2,
   Star,
+  Table2,
+  Trash2,
   TriangleAlert,
+  Undo2,
   X,
 } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { createPortal } from "react-dom";
 import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
-import { Select } from "./geist";
-import { Field, LineHover, Switch, TextInput, tipProps } from "./kit";
+import {
+  arrive,
+  Field,
+  Kbd,
+  Led,
+  LineHover,
+  Menu,
+  Select,
+  Switch,
+  TextInput,
+  tipProps,
+} from "./kit";
 import type { Span } from "./terminal-highlight";
 import { deviceSpans, hasSyntaxError, loadHighlighter, staticSpans } from "./terminal-highlight";
 import type {
@@ -59,6 +73,8 @@ import type {
   RunEnd,
   SyntaxHelp,
 } from "./terminal-lib";
+import type { PointItem } from "./terminal-menu";
+import { PointMenu, Pop, Shimmer } from "./terminal-menu";
 import { RecordTable } from "./terminal-table";
 import {
   applyPipes,
@@ -87,18 +103,12 @@ import {
   workspace,
 } from "./terminal-lib";
 
-interface MenuItem {
-  action: string;
-  label: string;
-  hint?: string;
-  disabled?: boolean;
-  danger?: boolean;
-}
-type KeyboardEvent_ = globalThis.KeyboardEvent;
 type BlockStatus = "running" | "ok" | "error" | "stopped";
 interface Block {
   id: number;
   ts: number;
+  /** When the current run started (for the "running · 7 s" chip). */
+  started?: number;
   command: string;
   output: string;
   status: BlockStatus;
@@ -121,6 +131,8 @@ interface Block {
   table?: boolean;
   /** Line numbers that differ from the previous run (watch mode). */
   changed?: Set<number>;
+  /** The previous text of each changed line, for "▲ from 32%". */
+  changedFrom?: Record<number, string>;
   runs: number;
 }
 type Link = "connecting" | "online" | "reconnecting";
@@ -143,7 +155,12 @@ const MAX_BLOCK_CHARS = 400_000;
 const WATCH_CHOICES = [2000, 5000, 15_000, 60_000];
 /** Longest a command may run before it is stopped. */
 const LIMIT_CHOICES = [30_000, 120_000, 600_000];
-const seconds = (ms: number): string => (ms < 60_000 ? `${ms / 1000}s` : `${ms / 60_000}m`);
+/** "5 s", "2 min". */
+const seconds = (ms: number): string => (ms < 60_000 ? `${ms / 1000} s` : `${ms / 60_000} min`);
+const clockTime = (ts: number): string =>
+  new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+const latencyTone = (ms: number | undefined): string =>
+  ms === undefined ? "idle" : ms < 80 ? "good" : ms < 300 ? "fair" : "slow";
 let nextBlockId = 1;
 
 const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -181,12 +198,14 @@ function Spans({ lines }: { lines: Span[][] }): ReactNode {
 function Sparkline({ values }: { values: number[] }): ReactNode {
   if (values.length < 2) return null;
   const max = Math.max(...values, 1);
+  const min = Math.min(...values);
+  const span = max - min || 1;
   const step = 56 / (values.length - 1);
   const points = values
-    .map((v, i) => `${(i * step).toFixed(1)},${(15 - (v / max) * 13).toFixed(1)}`)
+    .map((v, i) => `${(i * step).toFixed(1)},${(12 - ((v - min) / span) * 10).toFixed(1)}`)
     .join(" ");
   return (
-    <svg className="term-spark" viewBox="0 0 56 16" aria-hidden="true">
+    <svg className="term-spark" viewBox="0 0 56 14" aria-hidden="true">
       <polyline points={points} />
     </svg>
   );
@@ -210,7 +229,7 @@ function SeriesChart({ values }: { values: number[] }): ReactNode {
           height={64}
           points={xy}
           band={Math.max(8, Math.min(32, step))}
-          color="var(--term-accent)"
+          color="var(--sig)"
           label={`Watched value over ${values.length} runs`}
           card={(i) => {
             const prev = values[i - 1];
@@ -218,7 +237,7 @@ function SeriesChart({ values }: { values: number[] }): ReactNode {
             return {
               title: `Run ${i + 1} of ${values.length}`,
               rows: [
-                { label: "Value", value: String(values[i]), color: "var(--term-accent)" },
+                { label: "Value", value: String(values[i]), color: "var(--sig)" },
                 { label: "Range", value: `${low} – ${high}` },
               ],
               foot:
@@ -242,82 +261,42 @@ function SeriesChart({ values }: { values: number[] }): ReactNode {
   );
 }
 
-/** An icon button that opens a small panel under it; closes on Escape or a click outside. */
-function PaneMenu({
-  label,
-  icon,
-  marked,
-  closeOnPick,
-  children,
-}: {
-  label: string;
-  icon: ReactNode;
-  /** Show a dot on the button: something in the panel is not at its default. */
-  marked?: boolean;
-  /** Close after any button inside is clicked (an action list). */
-  closeOnPick?: boolean;
-  children: ReactNode;
-}): ReactNode {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLSpanElement>(null);
+/** Seconds since `since`, counting while it is shown. */
+function Elapsed({ since }: { since: number }): ReactNode {
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!open) return;
-    const onDown = (event: MouseEvent): void => {
-      const target = event.target as Element;
-      // A Select opened from the panel renders outside it: that is not "outside".
-      if (box.current?.contains(target) || target.closest?.("[data-radix-popper-content-wrapper]"))
-        return;
-      setOpen(false);
-    };
-    const onKey = (event: globalThis.KeyboardEvent): void => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("mousedown", onDown, true);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onDown, true);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  return (
-    <span className="term-pop" ref={box}>
-      <button
-        type="button"
-        className="term-icon"
-        data-on={open}
-        aria-expanded={open}
-        aria-label={label}
-        title={label}
-        onClick={() => setOpen((on) => !on)}
-      >
-        {icon}
-        {marked && <i className="term-pop-mark" />}
-      </button>
-      {open && (
-        <div
-          className="term-pop-panel"
-          role="group"
-          aria-label={label}
-          data-list={closeOnPick}
-          onClick={(event) => {
-            if (closeOnPick && (event.target as Element).closest("button")) setOpen(false);
-          }}
-        >
-          {children}
-        </div>
-      )}
-    </span>
-  );
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const s = Math.max(0, Math.round((now - since) / 1000));
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
 }
 
-const latencyTone = (ms: number | undefined): string =>
-  ms === undefined ? "idle" : ms < 80 ? "good" : ms < 300 ? "fair" : "slow";
+/** "▲ from 32%" when the first changed word of a line is a number. */
+function changeNote(before: string | undefined, after: string): ReactNode {
+  if (before === undefined) return null;
+  const a = before.trim().split(/\s+/);
+  const b = after.trim().split(/\s+/);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (a[i] === b[i]) continue;
+    const was = Number.parseFloat(a[i] ?? "");
+    const now = Number.parseFloat(b[i] ?? "");
+    if (Number.isNaN(was) || Number.isNaN(now) || was === now) return null;
+    return <span className="g">{`   ${now > was ? "▲" : "▼"} from ${a[i]}`}</span>;
+  }
+  return null;
+}
+
+/** Header lines of a print: "Flags: …", "Columns: …" and the column titles. */
+const HEAD_LINE = /^\s*(Flags|Columns):|^\s*#?\s*[A-Z][A-Z0-9-]+(\s{2,}[A-Z][A-Z0-9-]+)+\s*$/;
+/** "   uptime: 2d21h", the detail form of a print. */
+const KEY_LINE = /^(\s*)([\w.-]+:)(\s.*)?$/;
 
 function BlockViewBase({
   block,
   device,
-  starred,
   watching,
+  watchEvery,
   comparing,
   cursor,
   onAction,
@@ -326,8 +305,8 @@ function BlockViewBase({
 }: {
   block: Block;
   device: string;
-  starred: boolean;
   watching: boolean;
+  watchEvery: number;
   onMenu: (block: Block, x: number, y: number) => void;
   onToken: (token: OutputToken, x: number, y: number) => void;
   /** This block is the first side of a comparison. */
@@ -336,56 +315,82 @@ function BlockViewBase({
   cursor: boolean;
   onAction: (action: string, block: Block) => void;
 }) {
-  const [copied, setCopied] = useState("");
-  const copy = (what: "output" | "command"): void => {
-    void navigator.clipboard
-      .writeText(what === "output" ? block.output : block.command)
-      .then(() => {
-        setCopied(what);
-        setTimeout(() => setCopied(""), 1200);
-      });
+  const [copied, setCopied] = useState(false);
+  const root = useRef<HTMLElement>(null);
+  // A new block slides in.
+  useLayoutEffect(() => {
+    if (root.current) arrive(root.current);
+  }, []);
+  const copy = (): void => {
+    void navigator.clipboard.writeText(block.output).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
   };
   const isScript = /(?:^|\s)export(?:\s|$)/.test(block.command);
   const body = useMemo(() => {
     if (!block.output) return null;
-    const changed = block.changed;
-    if (changed?.size) {
-      return block.output.split("\n").map((line, i) => (
-        // eslint-disable-next-line react/no-array-index-key
-        <span key={i} className={changed.has(i) ? "term-line-changed" : undefined}>
-          {line}
-          {"\n"}
-        </span>
-      ));
-    }
     if (isScript && block.output.length < 60_000)
       return <Spans lines={staticSpans(block.output)} />;
     if (block.output.length > 120_000) return block.output;
+    const changed = block.changed;
+    const lines = block.output.split("\n");
     // IP and MAC addresses open a menu of commands about them.
-    return tokenize(block.output).map((part, i) =>
-      typeof part === "string" ? (
-        part
+    const paint = (line: string, row: number): ReactNode => {
+      if (HEAD_LINE.test(line)) return <span className="f">{line}</span>;
+      const parts = tokenize(line).map((part, i) =>
+        typeof part === "string" ? (
+          part
+        ) : (
+          <span
+            // eslint-disable-next-line react/no-array-index-key -- the same address may repeat
+            key={`${row}-${i}`}
+            className="tok"
+            role="button"
+            tabIndex={-1}
+            onClick={(event) => onToken(part, event.clientX, event.clientY)}
+          >
+            {part.value}
+          </span>
+        ),
+      );
+      const kv = parts.length === 1 && typeof parts[0] === "string" ? KEY_LINE.exec(line) : null;
+      if (!kv) return parts;
+      return (
+        <>
+          {kv[1]}
+          <span className="k">{kv[2]}</span>
+          {kv[3] && <span className="v">{kv[3]}</span>}
+        </>
+      );
+    };
+    return lines.map((line, i) =>
+      changed?.has(i) ? (
+        // eslint-disable-next-line react/no-array-index-key -- lines have no identity
+        <span key={i} className="chg">
+          {paint(line, i)}
+          {changeNote(block.changedFrom?.[i], line)}
+        </span>
       ) : (
-        <span
-          // eslint-disable-next-line react/no-array-index-key -- the same address may repeat
-          key={i}
-          className="term-token"
-          role="button"
-          tabIndex={-1}
-          onClick={(event) => onToken(part, event.clientX, event.clientY)}
-        >
-          {part.value}
+        // eslint-disable-next-line react/no-array-index-key
+        <span key={i}>
+          {paint(line, i)}
+          {i < lines.length - 1 && !changed?.has(i + 1) ? "\n" : ""}
         </span>
       ),
     );
-  }, [block.output, block.changed, isScript, onToken]);
+  }, [block.output, block.changed, block.changedFrom, isScript, onToken]);
 
+  const isPrint = /\bprint\b/.test(block.command) && block.status === "ok";
   return (
     <article
-      className="term-block"
+      ref={root}
+      className="term-blk"
       data-status={block.status}
+      data-watch={watching || undefined}
       data-block-id={block.id}
       data-cursor={cursor || undefined}
+      data-comparing={comparing || undefined}
       onContextMenu={(event) => {
         // Shift + right-click keeps the browser's own menu.
         if (event.shiftKey) return;
@@ -393,159 +398,164 @@ function BlockViewBase({
         onMenu(block, event.clientX, event.clientY);
       }}
     >
-      <header className="term-block-head">
+      <header className="term-blk-h">
         <button
           type="button"
           className="term-fold"
           onClick={() => onAction("fold", block)}
           aria-label={block.collapsed ? "Show output" : "Hide output"}
         >
-          {block.collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+          {block.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
         </button>
-        <span className="term-prompt">
-          <span className="term-prompt-device">{device}</span>
-          <span className="term-prompt-mark">&gt;</span>
+        <span className="pr" title={device}>
+          ›
         </span>
-        <code className="term-block-command">
+        <code className="cmd">
           <Spans lines={staticSpans(block.command)} />
         </code>
-        <span className="term-block-meta">
-          {block.status === "running" && (
-            <span className="term-chip" data-tone="run">
-              <span className="term-pulse" /> {block.note ?? "running"}
-            </span>
-          )}
-          {block.status === "ok" && (
-            <span className="term-chip" data-tone="ok">
-              {block.ms} ms
-            </span>
-          )}
-          {block.status === "stopped" && (
-            <span className="term-chip" data-tone="stop">
-              stopped · {block.ms} ms
-            </span>
-          )}
-          {block.status === "error" && (
-            <span className="term-chip" data-tone="err">
-              failed · {block.ms} ms
-            </span>
-          )}
-          {block.runs > 1 && <span className="term-chip">×{block.runs}</span>}
-          {block.undo && (
-            <button
-              type="button"
-              className="term-chip term-chip-button"
-              onClick={() => onAction("undo", block)}
-              title={`Put the opposite command in the input: ${block.undo}`}
-            >
-              <Undo2 size={11} /> undo
-            </button>
-          )}
-          {block.snapshot && (
-            <button
-              type="button"
-              className="term-chip term-chip-button"
-              onClick={() => onAction("changes", block)}
-              title="A snapshot was stored before this command. Show what differs from it now."
-            >
-              <History size={11} /> what changed?
-            </button>
-          )}
-          {block.alert && (
-            <span className="term-chip" data-tone="alert" title={block.alert}>
-              <BellRing size={11} /> {block.alert}
-            </span>
-          )}
-          <time className="term-time">{new Date(block.ts).toLocaleTimeString()}</time>
-        </span>
-        <span className="term-actions">
-          {/* Stop and Run again never share a place: a late click on Stop
-              must not run a finished command a second time. */}
-          {block.status === "running" && (
-            <button
-              type="button"
-              className="term-stop"
-              onClick={() => onAction("stop", block)}
-              title="Stop (Ctrl+C)"
-            >
-              <Square size={13} /> Stop
-            </button>
-          )}
+        <span className="sp" />
+        {watching && block.status !== "running" && (
+          <span className="term-ch" data-tone="w">
+            watch · {seconds(watchEvery)} · ×{block.runs}
+          </span>
+        )}
+        {block.status === "running" && (
+          <span className="term-ch" data-tone="r">
+            {block.note ?? (
+              <>
+                running · <Elapsed since={block.started ?? block.ts} />
+              </>
+            )}
+          </span>
+        )}
+        {block.status === "ok" && (
+          <span className="term-ch" data-tone="ok">
+            ✓ {block.ms} ms
+          </span>
+        )}
+        {block.status === "stopped" && <span className="term-ch">stopped · {block.ms} ms</span>}
+        {block.status === "error" && (
+          <span className="term-ch" data-tone="bad">
+            ✕ failed · {block.ms} ms
+          </span>
+        )}
+        {block.runs > 1 && !watching && <span className="term-ch">×{block.runs}</span>}
+        {block.undo && (
           <button
             type="button"
-            disabled={block.status === "running"}
-            onClick={() => onAction("rerun", block)}
-            title="Run again"
+            className="term-ch term-ch-btn"
+            onClick={() => onAction("undo", block)}
+            title={`Put the opposite command in the input: ${block.undo}`}
           >
-            <RotateCw size={13} />
+            <Undo2 size={11} /> undo
           </button>
+        )}
+        {block.snapshot && (
+          <button
+            type="button"
+            className="term-ch term-ch-btn"
+            onClick={() => onAction("changes", block)}
+            title="A snapshot was stored before this command. Show what differs from it now."
+          >
+            <History size={11} /> what changed?
+          </button>
+        )}
+        {block.alert && (
+          <span className="term-ch" data-tone="bad" title={block.alert}>
+            <BellRing size={11} /> {block.alert}
+          </span>
+        )}
+        {block.status !== "running" && (
+          <time className="term-ch term-time" dateTime={new Date(block.ts).toISOString()}>
+            {clockTime(block.ts)}
+          </time>
+        )}
+        <span className="acts">
+          {/* Stop and Run again never share a click: a late click on Stop must
+              not run a finished command a second time. */}
+          {block.status === "running" ? (
+            <button type="button" onClick={() => onAction("stop", block)} title="Stop (Ctrl+C)">
+              <Square size={13} />
+            </button>
+          ) : watching ? (
+            <button type="button" onClick={() => onAction("watch", block)} title="Stop watching">
+              <Square size={13} />
+            </button>
+          ) : (
+            <button type="button" onClick={() => onAction("rerun", block)} title="Run again">
+              <Play size={13} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onAction("watch", block)}
             title={watching ? "Stop watching" : "Watch: run again on a timer and mark what changed"}
-            data-on={watching}
+            data-on={watching || undefined}
           >
-            {watching ? <EyeOff size={13} /> : <Eye size={13} />}
+            <Eye size={13} />
           </button>
-          {/\bprint\b/.test(block.command) && block.status === "ok" && (
+          {isPrint && (
             <button
               type="button"
               onClick={() => onAction("table", block)}
               title={block.table ? "Show as text" : "Show as a table"}
-              data-on={Boolean(block.table)}
+              data-on={block.table || undefined}
             >
               <Table2 size={13} />
             </button>
           )}
+          {block.status !== "error" && (
+            <button
+              type="button"
+              className="wide"
+              onClick={() => onAction("chart", block)}
+              title="Chart a number of this block while it is watched"
+              data-on={(block.series?.length ?? 0) > 1 || undefined}
+            >
+              <ChartLine size={13} />
+            </button>
+          )}
+          {block.status !== "running" && block.status !== "error" && (
+            <button
+              type="button"
+              className="wide"
+              onClick={() => onAction("pin", block)}
+              title={block.pinned ? "Unpin" : "Pin to the top of the pane"}
+              data-on={block.pinned || undefined}
+            >
+              <Pin size={13} />
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => onAction("compare", block)}
-            title={
-              comparing
-                ? "Picked for comparison. Pick another block, in any pane, to see the differences."
-                : "Compare this output with another block"
-            }
-            data-on={comparing}
+            onClick={copy}
+            disabled={!block.output && !block.error}
+            title="Copy output"
           >
-            <GitCompareArrows size={13} />
-          </button>
-          <button type="button" onClick={() => copy("output")} title="Copy output">
-            {copied === "output" ? <Check size={13} /> : <Copy size={13} />}
-          </button>
-          <button type="button" onClick={() => copy("command")} title="Copy command">
-            {copied === "command" ? <Check size={13} /> : <CornerDownLeft size={13} />}
-          </button>
-          <button
-            type="button"
-            onClick={() => onAction("star", block)}
-            title={starred ? "Remove from favourites" : "Add to favourites"}
-            data-on={starred}
-          >
-            <Star size={13} fill={starred ? "currentColor" : "none"} />
-          </button>
-          <button type="button" onClick={() => onAction("save", block)} title="Save as a text file">
-            <Download size={13} />
-          </button>
-          <button type="button" onClick={() => onAction("remove", block)} title="Remove block">
-            <X size={13} />
+            {copied ? <Check size={13} /> : <Copy size={13} />}
           </button>
         </span>
       </header>
+      {block.status === "running" && (
+        <div className="term-blk-prog" aria-hidden="true">
+          <Shimmer />
+        </div>
+      )}
       {!block.collapsed && (
         <>
           {block.series && block.series.length > 1 && <SeriesChart values={block.series} />}
           {block.table && block.output ? (
             <RecordTable output={block.output} />
           ) : (
-            body !== null && <pre className="term-output">{body}</pre>
+            body !== null && <pre className="term-blk-o">{body}</pre>
           )}
           {block.status !== "running" && !block.output && !block.error && (
-            <div className="term-empty">no output</div>
+            <div className="term-blk-empty">no output</div>
           )}
           {block.error && (
-            <div className="term-error">
-              <TriangleAlert size={13} /> {block.error}
-            </div>
+            <pre className="term-blk-o">
+              <span className="err">{block.error}</span>
+            </pre>
           )}
         </>
       )}
@@ -564,6 +574,7 @@ export function TerminalPane(
     paneStorage.load<Block>(props.api.id).map((block) => ({
       ...block,
       changed: undefined,
+      changedFrom: undefined,
       note: undefined,
       status: block.status === "running" ? "stopped" : block.status,
       id: nextBlockId++,
@@ -633,7 +644,8 @@ export function TerminalPane(
     draft: "",
   });
   const scroller = useRef<HTMLDivElement>(null);
-  const menuBox = useRef<HTMLDivElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const chartField = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState<{ id: number; x: number; y: number; selection: string } | null>(
     null,
   );
@@ -757,6 +769,7 @@ export function TerminalPane(
       if (previous)
         patch(id, (b) => ({
           status: "running",
+          started: Date.now(),
           error: undefined,
           note: undefined,
           runs: b.runs + 1,
@@ -764,7 +777,15 @@ export function TerminalPane(
       else
         setBlocks((list) => [
           ...list,
-          { id, ts: Date.now(), command, output: "", status: "running", runs: 1 },
+          {
+            id,
+            ts: Date.now(),
+            started: Date.now(),
+            command,
+            output: "",
+            status: "running",
+            runs: 1,
+          },
         ]);
       // `… | grep x | count` filters the output here; the router gets the command only.
       const sent = splitPipes(command);
@@ -817,17 +838,22 @@ export function TerminalPane(
         options.quiet && result.ok ? readNumber(output, chartKeyRef.current) : undefined;
       patch(id, (b) => {
         let changed: Set<number> | undefined;
+        let changedFrom: Record<number, string> | undefined;
         if (options.quiet && b.output && b.output !== output) {
           const before = b.output.split("\n");
           const differing = new Set<number>();
+          changedFrom = {};
           output.split("\n").forEach((line, i) => {
-            if (line !== before[i]) differing.add(i);
+            if (line === before[i]) return;
+            differing.add(i);
+            if (before[i] !== undefined) changedFrom![i] = before[i]!;
           });
           changed = differing;
         }
         return {
           output,
           changed,
+          changedFrom,
           alert,
           undo: !result.ok
             ? undefined
@@ -1029,74 +1055,13 @@ export function TerminalPane(
     // A click that ends a text selection is a copy gesture, not a menu request.
     if (window.getSelection()?.toString()) return;
     setMenu(null);
-    setTokenMenu({
-      token,
-      x: Math.min(x, window.innerWidth - 300),
-      y: Math.min(y + 6, window.innerHeight - 240),
-    });
+    setTokenMenu({ token, x, y });
   }, []);
   // ── context menu of a block ─────────────────────────────────────────────
   const openMenu = useCallback((block: Block, x: number, y: number): void => {
-    setMenu({
-      id: block.id,
-      x: Math.min(x, window.innerWidth - 250),
-      y: Math.min(y, window.innerHeight - 420),
-      selection: window.getSelection()?.toString() ?? "",
-    });
+    setTokenMenu(null);
+    setMenu({ id: block.id, x, y, selection: window.getSelection()?.toString() ?? "" });
   }, []);
-  useEffect(() => {
-    if (!menu && !tokenMenu) return;
-    const onDown = (event: MouseEvent): void => {
-      if (!menuBox.current?.contains(event.target as Node)) closeMenus();
-    };
-    const onKey = (event: KeyboardEvent_): void => {
-      if (event.key === "Escape") closeMenus();
-    };
-    const close = closeMenus;
-    window.addEventListener("mousedown", onDown, true);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("blur", close);
-    return () => {
-      window.removeEventListener("mousedown", onDown, true);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("blur", close);
-    };
-  }, [menu, tokenMenu]);
-  const menuItems = (block: Block): (MenuItem | null)[] => [
-    ...(menu?.selection
-      ? [{ action: "copy-selection", label: "Copy selected text" } satisfies MenuItem, null]
-      : []),
-    block.status === "running"
-      ? { action: "stop", label: "Stop", hint: "Ctrl+C", danger: true }
-      : { action: "rerun", label: "Run again" },
-    { action: "edit", label: "Edit in the input" },
-    null,
-    { action: "copy-output", label: "Copy output", disabled: !block.output },
-    { action: "copy-command", label: "Copy command" },
-    { action: "save", label: "Save as a text file" },
-    null,
-    {
-      action: "star",
-      label: starred.has(block.command) ? "Remove from favourites" : "Add to favourites",
-    },
-    { action: "watch", label: watch === block.id ? "Stop watching" : "Watch (run on a timer)" },
-    { action: "pin", label: block.pinned ? "Unpin" : "Pin to the top of the pane" },
-    { action: "schedule", label: "Schedule this command…" },
-    {
-      action: "table",
-      label: block.table ? "Show as text" : "Show as a table",
-      disabled: !block.output,
-    },
-    {
-      action: "compare",
-      label: comparePick ? "Compare with the picked block" : "Compare with another block…",
-      disabled: !block.output,
-    },
-    ...(block.snapshot ? [{ action: "changes", label: "What changed since the snapshot?" }] : []),
-    null,
-    { action: "fold", label: block.collapsed ? "Show output" : "Hide output" },
-    { action: "remove", label: "Remove block", danger: true },
-  ];
 
   const onAction = useCallback(
     (action: string, block: Block): void => {
@@ -1124,7 +1089,12 @@ export function TerminalPane(
       else if (action === "save")
         downloadText(`${device}-${block.id}.txt`, exportSession(device, [block], "txt"));
       else if (action === "watch") setWatch((current) => (current === block.id ? null : block.id));
-      else if (action === "remove") {
+      else if (action === "chart") {
+        // A chart needs runs: watch the block, then name the number to chart.
+        setWatch(block.id);
+        setSettingsOpen(true);
+        setTimeout(() => chartField.current?.focus(), 60);
+      } else if (action === "remove") {
         running.current.get(block.id)?.abort();
         setWatch((current) => (current === block.id ? null : current));
         setBlocks((list) => list.filter((b) => b.id !== block.id));
@@ -1303,8 +1273,8 @@ export function TerminalPane(
       key={block.id}
       block={block}
       device={device}
-      starred={starred.has(block.command)}
       watching={watch === block.id}
+      watchEvery={watchEvery}
       comparing={comparePick === `${paneId}:${block.id}`}
       cursor={cursorBlock === block.id}
       onAction={onAction}
@@ -1313,7 +1283,6 @@ export function TerminalPane(
     />
   );
   const menuBlock = menu ? blocks.find((b) => b.id === menu.id) : undefined;
-  const page = document.querySelector(".term-page");
   const fromRouter =
     input.trim() && tokens.for === input ? deviceSpans(input, tokens.classes) : null;
   const syntaxError = fromRouter !== null && hasSyntaxError(tokens.classes);
@@ -1388,6 +1357,157 @@ export function TerminalPane(
     downloadText(`${device}-${stamp}.${format}`, exportSession(device, blocks, format));
   };
 
+  const copyText = (text: string): void => void navigator.clipboard.writeText(text);
+  /** Everything a block can do, for its right-click menu. */
+  const blockMenu = (block: Block, selection: string): PointItem[][] => [
+    [
+      ...(selection
+        ? [
+            {
+              label: "Copy selected text",
+              icon: <Copy size={14} />,
+              onSelect: () => copyText(selection),
+            },
+          ]
+        : []),
+      block.status === "running"
+        ? {
+            label: "Stop",
+            icon: <Square size={14} />,
+            danger: true,
+            onSelect: () => onAction("stop", block),
+          }
+        : {
+            label: "Run again",
+            icon: <Play size={14} />,
+            shortcut: "R",
+            onSelect: () => onAction("rerun", block),
+          },
+      {
+        label: "Edit in the input",
+        icon: <Pencil size={14} />,
+        onSelect: () => {
+          setInput(block.command);
+          field.current?.focus();
+        },
+      },
+      {
+        label: watch === block.id ? "Stop watching" : `Watch every ${seconds(watchEvery)}`,
+        icon: <Eye size={14} />,
+        onSelect: () => onAction("watch", block),
+      },
+      {
+        label: block.table ? "Show as text" : "Show as a table",
+        icon: <Table2 size={14} />,
+        disabled: !block.output,
+        onSelect: () => onAction("table", block),
+      },
+      {
+        label: comparePick ? "Compare with the picked block" : "Compare with…",
+        icon: <GitCompareArrows size={14} />,
+        disabled: !block.output,
+        onSelect: () => onAction("compare", block),
+      },
+      {
+        label: "Schedule…",
+        icon: <CalendarDays size={14} />,
+        onSelect: () => onAction("schedule", block),
+      },
+    ],
+    [
+      {
+        label: "Copy output",
+        icon: <Copy size={14} />,
+        shortcut: "Ctrl C",
+        disabled: !block.output,
+        onSelect: () => copyText(block.output),
+      },
+      {
+        label: "Copy command",
+        icon: <CornerDownLeft size={14} />,
+        onSelect: () => copyText(block.command),
+      },
+      {
+        label: "Save as .txt",
+        icon: <Download size={14} />,
+        onSelect: () => onAction("save", block),
+      },
+      {
+        label: starred.has(block.command) ? "Remove from favourites" : "Add to favourites",
+        icon: <Star size={14} />,
+        onSelect: () => onAction("star", block),
+      },
+      {
+        label: block.pinned ? "Unpin" : "Pin to the top of the pane",
+        icon: <Pin size={14} />,
+        onSelect: () => onAction("pin", block),
+      },
+      ...(block.snapshot
+        ? [
+            {
+              label: "What changed since the snapshot?",
+              icon: <History size={14} />,
+              onSelect: () => onAction("changes", block),
+            },
+          ]
+        : []),
+      {
+        label: block.collapsed ? "Show output" : "Hide output",
+        icon: block.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />,
+        onSelect: () => onAction("fold", block),
+      },
+    ],
+    [
+      {
+        label: "Remove",
+        icon: <Trash2 size={14} />,
+        danger: true,
+        onSelect: () => onAction("remove", block),
+      },
+    ],
+  ];
+
+  /** A key from the phone key row, sent to the command line as if typed. */
+  const press = (key: string, ctrlKey = false): void => {
+    const area = field.current;
+    if (!area) return;
+    area.focus();
+    area.dispatchEvent(
+      new KeyboardEvent("keydown", { key, ctrlKey, bubbles: true, cancelable: true }),
+    );
+  };
+  const typeChar = (ch: string): void => {
+    const area = field.current;
+    const at = area?.selectionStart ?? input.length;
+    setInput(input.slice(0, at) + ch + input.slice(area?.selectionEnd ?? at));
+    requestAnimationFrame(() => {
+      area?.focus();
+      area?.setSelectionRange(at + ch.length, at + ch.length);
+    });
+  };
+
+  const badText = fromRouter
+    ? fromRouter
+        .flat()
+        .filter((span) => span.bad)
+        .map((span) => span.text)
+        .join("")
+        .trim()
+    : "";
+  const caretCol = input
+    .slice(0, field.current?.selectionStart ?? input.length)
+    .split("\n")
+    .at(-1)?.length;
+  const others = workspace.broadcast
+    ? paneRegistry
+        .all()
+        .filter((pane) => pane.id !== paneId)
+        .filter(
+          (pane) =>
+            !workspace.broadcast?.devices || workspace.broadcast.devices.includes(pane.device),
+        ).length
+    : 0;
+
   return (
     <section
       className="term-pane"
@@ -1399,20 +1519,23 @@ export function TerminalPane(
         workspace.activePane = paneId;
       }}
     >
-      <header className="term-status">
+      <header className="term-st">
         <span
           className="term-link"
           data-link={conn.link}
           title={conn.link === "reconnecting" ? `Attempt ${conn.attempt}` : undefined}
         >
-          <span className="term-dot" />
-          {conn.link === "online" && "connected"}
-          {conn.link === "connecting" && "connecting…"}
-          {conn.link === "reconnecting" && `retry in ${retryIn}s`}
+          <Led tone={conn.link === "online" ? "ok" : conn.link === "connecting" ? "warn" : "bad"} />
+          <b>
+            {conn.link === "online" && "connected"}
+            {conn.link === "connecting" && "connecting…"}
+            {conn.link === "reconnecting" && `retry in ${retryIn} s`}
+          </b>
         </span>
-        {conn.identity && <span className="term-identity">{conn.identity}</span>}
+        {conn.identity && <span className="term-st-id">{conn.identity}</span>}
+        {conn.transport && <span className="term-st-tr">{conn.transport.toUpperCase()}</span>}
         <span
-          className="term-stat"
+          className="term-lat"
           data-tone={latencyTone(last)}
           {...tipProps(() => {
             const l = conn.latency;
@@ -1439,177 +1562,208 @@ export function TerminalPane(
             };
           })}
         >
-          {last === undefined ? "— ms" : `${last} ms`}
           <Sparkline values={conn.latency} />
+          <span>{last === undefined ? "— ms" : `${last} ms`}</span>
         </span>
-        <span className="term-status-end">
-          {stats.active > 0 && (
-            <span className="term-chip" data-tone="run">
-              <span className="term-pulse" /> {stats.active} running
-            </span>
-          )}
-          {stats.failed > 0 && (
-            <span className="term-chip" data-tone="err" title="Failed commands in this pane">
-              {stats.failed} failed
-            </span>
-          )}
-          {watch !== null && (
-            <span className="term-chip" data-tone="run" title="A block is being watched">
-              <Eye size={11} /> {seconds(watchEvery)}
-            </span>
-          )}
-          {conn.safeMode ? (
-            <span className="term-safe" role="group" aria-label="Safe Mode">
-              <ShieldCheck size={12} /> SAFE
-              <button
-                type="button"
-                disabled={safeBusy}
-                onClick={() => void safeMode("commit")}
-                title="Keep the changes made in Safe Mode"
-              >
-                Commit
-              </button>
-              <button
-                type="button"
-                disabled={safeBusy}
-                onClick={() => void safeMode("rollback")}
-                title="Undo every change made since Safe Mode started"
-              >
-                Roll back
-              </button>
-            </span>
-          ) : (
+        <span className="sp" />
+        {conn.safeMode && (
+          <span className="term-st-chip" data-tone="safe" role="group" aria-label="Safe Mode">
+            <ShieldCheck size={12} /> Safe Mode
             <button
               type="button"
-              className="term-icon"
-              disabled={safeBusy || conn.link !== "online"}
-              onClick={() => void safeMode("enable")}
-              aria-label="Start Safe Mode"
-              title="Safe Mode: the router undoes your uncommitted changes if this session is lost. Changes run through one Safe Mode session until you commit or roll back."
+              disabled={safeBusy}
+              onClick={() => void safeMode("commit")}
+              title="Keep the changes made in Safe Mode"
             >
-              <ShieldCheck size={14} />
+              Commit
             </button>
-          )}
-          <PaneMenu
-            label="Pane settings"
-            icon={<Settings2 size={14} />}
-            marked={guard || !autoRetry}
+            <button
+              type="button"
+              disabled={safeBusy}
+              onClick={() => void safeMode("rollback")}
+              title="Undo every change made since Safe Mode started"
+            >
+              Roll back
+            </button>
+          </span>
+        )}
+        {!conn.safeMode && (
+          <button
+            type="button"
+            className="term-ib"
+            disabled={safeBusy || conn.link !== "online"}
+            onClick={() => void safeMode("enable")}
+            aria-label="Start Safe Mode"
+            title="Safe Mode: the router undoes your uncommitted changes if this session is lost. Changes run through one Safe Mode session until you commit or roll back."
           >
-            <label className="term-pop-row">
-              <span>
-                <b>Auto-retry</b>
-                <small>
-                  Only when the router was not reached, or the command only reads. A change that may
-                  already have run is never sent twice.
-                </small>
-              </span>
-              <Switch checked={autoRetry} onCheckedChange={setAutoRetry} aria-label="Auto-retry" />
-            </label>
-            <label className="term-pop-row">
-              <span>
-                <b>Snapshot before changes</b>
-                <small>Stored on this computer. If it fails, the command does not run.</small>
-              </span>
-              <Switch
-                checked={guard}
-                onCheckedChange={setGuard}
-                aria-label="Snapshot before changes"
-              />
-            </label>
-            <div className="term-pop-row">
-              <span>
-                <b>Time limit</b>
-                <small>A command is stopped after this long.</small>
-              </span>
-              <Select
-                size="sm"
-                className="term-select"
-                aria-label="Command time limit"
-                value={String(limit)}
-                onValueChange={(value) => setLimit(Number(value))}
-                options={LIMIT_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
-              />
-            </div>
-            <div className="term-pop-row">
-              <span>
-                <b>Watch every</b>
-                <small>How often a watched block runs again.</small>
-              </span>
-              <Select
-                size="sm"
-                className="term-select"
-                aria-label="Watch interval"
-                value={String(watchEvery)}
-                onValueChange={(value) => setWatchEvery(Number(value))}
-                options={WATCH_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
-              />
-            </div>
-            <Field
-              className="p-2"
-              label={
-                <>
-                  <ChartLine size={12} /> Chart a number of the watched block
-                </>
-              }
+            <Shield size={14} />
+          </button>
+        )}
+        <Pop
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          label="Pane settings"
+          width={320}
+          trigger={
+            <button
+              type="button"
+              className="term-ib"
+              data-on={settingsOpen || undefined}
+              aria-label="Pane settings"
+              title="Pane settings"
             >
-              <TextInput
-                size="sm"
-                mono
-                value={chartKey}
-                placeholder="cpu-load"
-                spellCheck={false}
-                onChange={setChartKey}
-              />
-            </Field>
-            <Field
-              className="p-2"
-              label={
-                <>
-                  <BellRing size={12} /> Alert when the watched block…
-                </>
-              }
+              <SlidersHorizontal size={14} />
+              {(guard || !autoRetry) && <i className="term-ib-mark" />}
+            </button>
+          }
+        >
+          <div className="term-pop-row">
+            <span>
+              <b>Auto-retry</b>
+              <small>
+                Only when the router was not reached, or the command only reads. A change that may
+                already have run is never sent twice.
+              </small>
+            </span>
+            <Switch checked={autoRetry} onCheckedChange={setAutoRetry} aria-label="Auto-retry" />
+          </div>
+          <div className="term-pop-row">
+            <span>
+              <b>Snapshot before changes</b>
+              <small>Stored on this computer. If it fails, the command does not run.</small>
+            </span>
+            <Switch
+              checked={guard}
+              onCheckedChange={setGuard}
+              aria-label="Snapshot before changes"
+            />
+          </div>
+          <div className="term-pop-row">
+            <span>
+              <b>Time limit</b>
+              <small>A command is stopped after this long.</small>
+            </span>
+            <Select
+              size="sm"
+              label="Command time limit"
+              value={String(limit)}
+              onChange={(value) => setLimit(Number(value))}
+              options={LIMIT_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
+              style={{ width: 96 }}
+            />
+          </div>
+          <div className="term-pop-row">
+            <span>
+              <b>Watch every</b>
+              <small>How often a watched block runs again.</small>
+            </span>
+            <Select
+              size="sm"
+              label="Watch interval"
+              value={String(watchEvery)}
+              onChange={(value) => setWatchEvery(Number(value))}
+              options={WATCH_CHOICES.map((ms) => ({ value: String(ms), label: seconds(ms) }))}
+              style={{ width: 96 }}
+            />
+          </div>
+          <Field
+            className="term-pop-row term-pop-field"
+            label={
+              <>
+                <ChartLine size={12} /> Chart a number of the watched block
+              </>
+            }
+          >
+            <TextInput
+              ref={chartField}
+              size="sm"
+              mono
+              value={chartKey}
+              placeholder="cpu-load"
+              spellCheck={false}
+              onChange={setChartKey}
+            />
+          </Field>
+          <Field
+            className="term-pop-row term-pop-field"
+            label={
+              <>
+                <BellRing size={12} /> Alert when the watched block…
+              </>
+            }
+          >
+            <TextInput
+              size="sm"
+              mono
+              value={alertRule}
+              placeholder="changed · cpu-load > 80 · /down|error/"
+              spellCheck={false}
+              onChange={setAlertRule}
+            />
+          </Field>
+          <p className="term-pop-foot">
+            {conn.transport ?? "not connected"} · {stats.total} command
+            {stats.total === 1 ? "" : "s"}
+            {stats.failed > 0 && ` · ${stats.failed} failed`}
+          </p>
+        </Pop>
+        <Menu
+          label="More actions"
+          trigger={
+            <button
+              type="button"
+              className="term-ib"
+              aria-label="More actions"
+              title="More actions"
             >
-              <TextInput
-                size="sm"
-                mono
-                value={alertRule}
-                placeholder="changed · cpu-load > 80 · /down|error/"
-                spellCheck={false}
-                onChange={setAlertRule}
-              />
-            </Field>
-            <p className="term-pop-foot">
-              {conn.transport ?? "not connected"} · {stats.total} command
-              {stats.total === 1 ? "" : "s"}
-              {stats.failed > 0 && ` · ${stats.failed} failed`}
-            </p>
-          </PaneMenu>
-          <PaneMenu label="More actions" icon={<Ellipsis size={15} />} closeOnPick>
-            <button type="button" onClick={() => scriptStore.open(paneId)}>
-              <FileCode2 size={13} /> Run a script…
+              <Ellipsis size={15} />
             </button>
-            <button type="button" onClick={() => void shareView()}>
-              <Share2 size={13} /> Share a read-only view
-            </button>
-            <button type="button" onClick={() => probeNow.current()}>
-              <RotateCw size={13} /> Check the connection now
-            </button>
-            <hr />
-            <button type="button" onClick={() => exportAs("txt")}>
-              <Download size={13} /> Save transcript (.txt)
-            </button>
-            <button type="button" onClick={() => exportAs("md")}>
-              <Download size={13} /> Save report (.md)
-            </button>
-            <button type="button" onClick={() => exportAs("rsc")}>
-              <Download size={13} /> Save commands that ran (.rsc)
-            </button>
-            <hr />
-            <button type="button" onClick={clear}>
-              <Eraser size={13} /> Clear this pane <small>Ctrl+L</small>
-            </button>
-          </PaneMenu>
-        </span>
+          }
+          groups={[
+            [
+              {
+                label: "Run a script…",
+                icon: <FileCode2 size={14} />,
+                onSelect: () => scriptStore.open(paneId),
+              },
+              {
+                label: "Share a read-only view",
+                icon: <Share2 size={14} />,
+                onSelect: () => void shareView(),
+              },
+              {
+                label: "Check the connection now",
+                icon: <RotateCw size={14} />,
+                onSelect: () => probeNow.current(),
+              },
+            ],
+            [
+              {
+                label: "Save transcript (.txt)",
+                icon: <Download size={14} />,
+                onSelect: () => exportAs("txt"),
+              },
+              {
+                label: "Save report (.md)",
+                icon: <Download size={14} />,
+                onSelect: () => exportAs("md"),
+              },
+              {
+                label: "Save commands that ran (.rsc)",
+                icon: <Download size={14} />,
+                onSelect: () => exportAs("rsc"),
+              },
+            ],
+            [
+              {
+                label: "Clear this pane",
+                icon: <Eraser size={14} />,
+                shortcut: "Ctrl L",
+                onSelect: clear,
+              },
+            ],
+          ]}
+        />
       </header>
 
       {conn.link === "reconnecting" && conn.error && (
@@ -1688,114 +1842,85 @@ export function TerminalPane(
           </button>
         )}
       </div>
-      {tokenMenu &&
-        page &&
-        createPortal(
-          <div
-            ref={menuBox}
-            className="term-context"
-            role="menu"
-            aria-label={`Commands for ${tokenMenu.token.value}`}
-            style={{ left: tokenMenu.x, top: tokenMenu.y }}
-          >
-            <span className="term-context-title">{tokenMenu.token.value}</span>
-            {tokenCommands(tokenMenu.token).map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                title={item.command}
-                onClick={() => {
-                  setTokenMenu(null);
-                  setInput(item.command);
-                  field.current?.focus();
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
-            <hr />
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                void navigator.clipboard.writeText(tokenMenu.token.value);
-                setTokenMenu(null);
-              }}
-            >
-              Copy
-            </button>
-          </div>,
-          page,
-        )}
-      {menuBlock &&
-        menu &&
-        page &&
-        createPortal(
-          <div
-            ref={menuBox}
-            className="term-context"
-            role="menu"
-            aria-label="Block actions"
-            style={{ left: menu.x, top: menu.y }}
-          >
-            {menuItems(menuBlock).map((item, i) =>
-              item === null ? (
-                // eslint-disable-next-line react/no-array-index-key -- separators have no identity
-                <hr key={`rule-${i}`} />
-              ) : (
-                <button
-                  key={item.action}
-                  type="button"
-                  role="menuitem"
-                  disabled={item.disabled}
-                  data-danger={item.danger}
-                  onClick={() => {
-                    setMenu(null);
-                    if (item.action === "copy-selection")
-                      void navigator.clipboard.writeText(menu.selection);
-                    else if (item.action === "copy-output")
-                      void navigator.clipboard.writeText(menuBlock.output);
-                    else if (item.action === "copy-command")
-                      void navigator.clipboard.writeText(menuBlock.command);
-                    else if (item.action === "edit") {
-                      setInput(menuBlock.command);
-                      field.current?.focus();
-                    } else onAction(item.action, menuBlock);
-                  }}
-                >
-                  {item.label}
-                  {item.hint && <small>{item.hint}</small>}
-                </button>
-              ),
-            )}
-          </div>,
-          page,
-        )}
+
+      <PointMenu
+        at={tokenMenu}
+        onClose={() => setTokenMenu(null)}
+        label={`Commands for ${tokenMenu?.token.value ?? ""}`}
+        head={tokenMenu && <b>{tokenMenu.token.value}</b>}
+        width={280}
+        groups={
+          tokenMenu
+            ? [
+                tokenCommands(tokenMenu.token).map((item) => ({
+                  label: item.label,
+                  onSelect: () => {
+                    setInput(item.command);
+                    field.current?.focus();
+                  },
+                })),
+                [
+                  {
+                    label: "Copy",
+                    icon: <Copy size={14} />,
+                    onSelect: () => copyText(tokenMenu.token.value),
+                  },
+                ],
+              ]
+            : []
+        }
+      />
+      <PointMenu
+        at={menu && menuBlock ? menu : null}
+        onClose={closeMenus}
+        label="Block actions"
+        head={
+          menuBlock && (
+            <>
+              <b>{menuBlock.command}</b>
+              <span>
+                {device}
+                {menuBlock.ms !== undefined && ` · ${menuBlock.ms} ms`} · {clockTime(menuBlock.ts)}
+              </span>
+            </>
+          )
+        }
+        groups={menuBlock && menu ? blockMenu(menuBlock, menu.selection) : []}
+      />
 
       {confirm && (
-        <div className="term-confirm" role="alertdialog" aria-label="Confirm command">
-          <TriangleAlert size={15} />
-          <span>
-            <b>{confirm.word}</b> changes or removes configuration on <b>{device}</b>
-            {workspace.broadcast && ` and on the other panes of “${workspace.broadcast.label}”`}.
-            Run it?
+        <div className="term-cf" role="alertdialog" aria-label="Confirm command">
+          <span className="ic">
+            <TriangleAlert size={15} />
           </span>
+          <div>
+            <b>
+              <code>{confirm.word}</code> changes configuration on {device}
+            </b>
+            {others > 0 && (
+              <small>
+                and on the {others} other pane{others === 1 ? "" : "s"} you broadcast to.
+              </small>
+            )}
+          </div>
+          <span className="sp" />
           <button
             type="button"
-            className="term-danger"
-            onClick={() => void submit(confirm.command, { confirmed: true })}
-          >
-            Run
-          </button>
-          <button
-            type="button"
+            className="term-act"
             onClick={() => {
               setInput(confirm.command);
               setConfirm(null);
             }}
           >
             Cancel
+          </button>
+          <button
+            type="button"
+            className="term-act"
+            data-tone="bad"
+            onClick={() => void submit(confirm.command, { confirmed: true })}
+          >
+            Run it
           </button>
         </div>
       )}
@@ -1810,94 +1935,100 @@ export function TerminalPane(
             setFill(null);
             void submit(filled);
           }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setFill(null);
+          }}
         >
-          <code>
-            <Spans lines={staticSpans(fillSnippet(fill.command, fill.values))} />
-          </code>
-          <div>
-            {snippetFields(fill.command).map((item, i) => (
-              <label key={item.name}>
-                {item.name}
-                {/* kit-exempt: snippet placeholder in the command line flow; terminal.css .term-fill input styles it */}
-                <input
-                  // eslint-disable-next-line jsx-a11y/no-autofocus -- the form opens on a key press
-                  autoFocus={i === 0}
-                  value={fill.values[item.name] ?? ""}
-                  placeholder={item.fallback}
-                  spellCheck={false}
-                  onChange={(event) =>
-                    setFill({
-                      ...fill,
-                      values: { ...fill.values, [item.name]: event.target.value },
-                    })
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") setFill(null);
-                  }}
-                />
-              </label>
-            ))}
-            <button type="submit" className="term-go">
-              Run
-            </button>
+          <div className="term-fill-hd">
+            Fill in the snippet
             <button
               type="button"
+              className="term-ib"
+              aria-label="Cancel"
+              title="Cancel (Esc)"
               onClick={() => {
                 setInput(fill.command);
                 setFill(null);
               }}
             >
-              Cancel
+              <X size={14} />
+            </button>
+          </div>
+          <code className="pv">
+            {fill.command.split(/(\{\{[^}]*\}\})/).map((part, i) => {
+              const name = /^\{\{([^}=]+)/.exec(part)?.[1]?.trim();
+              return name ? (
+                // eslint-disable-next-line react/no-array-index-key -- a name may repeat
+                <u key={i}>{fill.values[name] || name}</u>
+              ) : (
+                part
+              );
+            })}
+          </code>
+          <div className="term-fill-row">
+            {snippetFields(fill.command).map((item, i) => (
+              <TextInput
+                key={item.name}
+                size="sm"
+                mono
+                prefix={item.name}
+                label={item.name}
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- the form opens on a key press
+                autoFocus={i === 0}
+                value={fill.values[item.name] ?? ""}
+                placeholder={item.fallback}
+                spellCheck={false}
+                wrapClassName="term-fill-in"
+                onChange={(value) =>
+                  setFill({ ...fill, values: { ...fill.values, [item.name]: value } })
+                }
+              />
+            ))}
+            <button type="submit" className="term-act" data-tone="go">
+              Run
             </button>
           </div>
         </form>
       )}
 
-      {showHelp && helpItems.length > 0 && !completions && (
-        <div className="term-help" aria-label="Help from the router">
-          {helpItems.slice(0, 24).map((item, i) => (
-            // eslint-disable-next-line react/no-array-index-key -- notes have no symbol
-            <span key={`${item.symbol}-${i}`} data-nested={item.nested}>
-              {item.symbol && <b>{item.symbol}</b>}
-              {item.text}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <footer className="term-input" data-error={syntaxError}>
-        <span className="term-prompt">
-          <span className="term-prompt-device">{device}</span>
-          <span className="term-prompt-mark">&gt;</span>
-        </span>
-        <div className="term-editor">
-          <pre className="term-editor-paint" aria-hidden="true">
-            <Spans lines={inputSpans} />
-            {ghost && <span className="term-ghost">{ghost.slice(input.length)}</span>}
-            {"​"}
-          </pre>
-          {/* kit-exempt: the terminal command line, not a form field */}
-          <textarea
-            ref={field}
-            value={input}
-            rows={Math.min(8, input.split("\n").length)}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            aria-label={`Command for ${device}`}
-            placeholder="/ip address print"
-            onChange={(event) => {
-              setInput(event.target.value);
-              setCompletions(null);
-              // Typing ends a walk through the blocks or the history.
-              recall.current.index = -1;
-              setCursorBlock(null);
-            }}
-            onKeyDown={onKeyDown}
-            onBlur={() => setTimeout(() => setCompletions(null), 150)}
-          />
+      <footer className="term-inp" data-error={syntaxError || undefined}>
+        <div className="term-inp-line">
+          <span className="pr">›</span>
+          <div className="term-editor">
+            <pre className="term-editor-paint" aria-hidden="true">
+              <Spans lines={inputSpans} />
+              {ghost && <span className="gh">{ghost.slice(input.length)}</span>}
+              {"​"}
+            </pre>
+            {/* kit-exempt: the terminal command line, not a form field */}
+            <textarea
+              ref={field}
+              value={input}
+              rows={Math.min(8, input.split("\n").length)}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              aria-label={`Command for ${device}`}
+              placeholder="Type a command, or ↑ for the last one"
+              onChange={(event) => {
+                setInput(event.target.value);
+                setCompletions(null);
+                // Typing ends a walk through the blocks or the history.
+                recall.current.index = -1;
+                setCursorBlock(null);
+              }}
+              onKeyDown={onKeyDown}
+              onBlur={() => setTimeout(() => setCompletions(null), 150)}
+            />
+          </div>
+          {ghost && <span className="hint">→ accept</span>}
           {completions && (
-            <ul className="term-complete" role="listbox" ref={completeList}>
+            <ul
+              className="term-cmp"
+              role="listbox"
+              ref={completeList}
+              style={{ left: `min(calc(${caretCol ?? 0}ch + 24px), calc(100% - 412px))` }}
+            >
               {completions.items.map((item, i) => (
                 <li
                   key={`${item.completion}-${item.style}`}
@@ -1909,41 +2040,128 @@ export function TerminalPane(
                     applyCompletion(item);
                   }}
                 >
-                  <span>{item.completion}</span>
-                  <small>{helpText.get(item.completion) || item.style}</small>
+                  <b>{item.completion}</b>
+                  <span>{helpText.get(item.completion) ?? ""}</span>
+                  <small>{item.style}</small>
                 </li>
               ))}
-              <li className="term-complete-hint" aria-hidden="true">
-                ↑↓ move · Tab accept · Esc close
+              <li className="ft" aria-hidden="true">
+                <Kbd>↑</Kbd>
+                <Kbd>↓</Kbd> move <Kbd>Tab</Kbd> accept <Kbd>Esc</Kbd> close
               </li>
             </ul>
           )}
         </div>
-        <button
-          type="button"
-          className="term-star-input"
-          data-on={showHelp}
-          onClick={() => setShowHelp((on) => !on)}
-          title="Help from the router for the word being typed"
-        >
-          <CircleHelp size={13} />
-        </button>
-        <button
-          type="button"
-          className="term-star-input"
-          disabled={!input.trim()}
-          data-on={starred.has(input.trim())}
-          onClick={() => void favoritesStore.toggle(input.trim())}
-          title="Save what is typed as a favourite. Use {{name}} or {{name=default}} for values asked at run time."
-        >
-          <Star size={13} fill={starred.has(input.trim()) ? "currentColor" : "none"} />
-        </button>
-        <span
-          className="term-check"
-          data-state={fromRouter === null ? "idle" : syntaxError ? "bad" : "ok"}
-        >
-          {fromRouter === null ? "" : syntaxError ? "router: syntax error" : "router: syntax ok"}
-        </span>
+        <div className="term-inp-ft">
+          <span
+            className="term-check"
+            data-state={fromRouter === null ? "idle" : syntaxError ? "bad" : "ok"}
+          >
+            {fromRouter === null
+              ? ""
+              : syntaxError
+                ? `router: syntax error${badText ? ` at “${badText}”` : ""}`
+                : "router: syntax ok"}
+          </span>
+          <span className="sp" />
+          <span>
+            <Kbd>Tab</Kbd> complete
+          </span>
+          <span>
+            <Kbd>↑</Kbd> blocks
+          </span>
+          <span>
+            <Kbd>Shift</Kbd>
+            <Kbd>↵</Kbd> new line
+          </span>
+          <button
+            type="button"
+            className="term-ib sm"
+            data-on={showHelp || undefined}
+            onClick={() => setShowHelp((on) => !on)}
+            aria-label="Help from the router"
+            title="Help from the router for the word being typed"
+          >
+            <CircleHelp size={13} />
+          </button>
+          <button
+            type="button"
+            className="term-ib sm"
+            disabled={!input.trim()}
+            data-on={starred.has(input.trim()) || undefined}
+            onClick={() => void favoritesStore.toggle(input.trim())}
+            aria-label="Save as a favourite"
+            title="Save what is typed as a favourite. Use {{name}} or {{name=default}} for values asked at run time."
+          >
+            <Star size={13} fill={starred.has(input.trim()) ? "currentColor" : "none"} />
+          </button>
+        </div>
+        {showHelp && helpItems.length > 0 && (
+          <div className="term-helps" aria-label="Help from the router">
+            {helpItems.slice(0, 24).map((item, i) => (
+              // eslint-disable-next-line react/no-array-index-key -- notes have no symbol
+              <span key={`${item.symbol}-${i}`} data-nested={item.nested}>
+                {item.symbol && <b>{item.symbol}</b>}
+                {item.text}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="term-keys" role="group" aria-label="Keys">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => press("Tab")}
+          >
+            Tab
+          </button>
+          <button
+            type="button"
+            aria-label="Up"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => press("ArrowUp")}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            aria-label="Down"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => press("ArrowDown")}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => typeChar("|")}
+          >
+            |
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => typeChar("/")}
+          >
+            /
+          </button>
+          <button
+            type="button"
+            aria-label="Stop the running command"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => press("c", true)}
+          >
+            ^C
+          </button>
+          <button
+            type="button"
+            className="go"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => press("Enter")}
+          >
+            Run
+          </button>
+        </div>
       </footer>
     </section>
   );

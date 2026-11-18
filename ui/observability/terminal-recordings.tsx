@@ -7,11 +7,13 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { Pause, Play, RotateCcw, Trash2, Video, X } from "lucide-react";
+import { CircleDot, Pause, Play, RotateCcw, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, deleteJson, withToken } from "./api";
-import { SearchInput, Slider } from "./kit";
+import { SearchInput, Segmented, Select, Slider } from "./kit";
+import { popIn } from "./kit/motion";
+import { followTheme, xtermFont, xtermTheme } from "./terminal-xterm";
 import { cleanOutput } from "./terminal-lib";
 
 interface Recording {
@@ -80,8 +82,6 @@ const day = (ts: number): string => {
   if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
   return date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 };
-const ink = (element: Element, name: string): string =>
-  getComputedStyle(element).getPropertyValue(name).trim();
 
 function Player({ recording, cast }: { recording: Recording; cast: string }): ReactNode {
   const frames = useMemo(() => parseCast(cast), [cast]);
@@ -103,16 +103,13 @@ function Player({ recording, cast }: { recording: Recording; cast: string }): Re
     const created = new Terminal({
       disableStdin: true,
       cursorBlink: false,
-      fontFamily: ink(element, "--term-mono") || "monospace",
+      fontFamily: xtermFont(element),
       fontSize: 12.5,
+      lineHeight: 1.2,
       scrollback: 10_000,
-      theme: {
-        background: ink(element, "--term-bg"),
-        foreground: ink(element, "--term-ink"),
-        cursor: ink(element, "--term-accent"),
-        selectionBackground: ink(element, "--term-line"),
-      },
+      theme: xtermTheme(element),
     });
+    const unfollow = followTheme(created, element);
     // Sized to the player, not to the recorded window: the session must fit here.
     const fit = new FitAddon();
     created.loadAddon(fit);
@@ -131,6 +128,7 @@ function Player({ recording, cast }: { recording: Recording; cast: string }): Re
     setAt(0);
     setPlaying(true);
     return () => {
+      unfollow();
       observer.disconnect();
       term.current = null;
       created.dispose();
@@ -197,23 +195,26 @@ function Player({ recording, cast }: { recording: Recording; cast: string }): Re
 
   return (
     <section className="term-player">
-      <header>
-        <span className="term-player-dot" />
-        <b>{recording.device}</b>
-        <span>
-          {day(recording.started)} · {new Date(recording.started).toLocaleTimeString()}
+      <header className="term-mod-hd">
+        <b className="term-player-dev">{recording.device}</b>
+        <span className="m">
+          {new Date(recording.started).toLocaleString([], {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          })}{" "}
+          · {clock(total, total < 10)} · {bytes(recording.bytes)}
         </span>
-        <span>{clock(total, total < 10)} long</span>
-        <span>{bytes(recording.bytes)}</span>
+        <span className="sp" />
         <SearchInput
           size="sm"
-          mono
-          wrapClassName="ml-auto w-60"
+          wrapClassName="term-player-search"
           value={query}
-          placeholder="Search this recording…"
+          placeholder="Search the recording"
           spellCheck={false}
-          label="Search this recording"
-          aria-label="Search this recording"
+          label="Search the recording"
           onChange={setQuery}
           end={needle && <small>{hits.length === 300 ? "300+" : hits.length}</small>}
         />
@@ -237,7 +238,7 @@ function Player({ recording, cast }: { recording: Recording; cast: string }): Re
           </ol>
         )}
       </div>
-      <footer>
+      <footer className="term-player-ctl">
         <button
           type="button"
           className="term-player-play"
@@ -250,11 +251,9 @@ function Player({ recording, cast }: { recording: Recording; cast: string }): Re
         >
           {playing ? <Pause size={15} /> : ended ? <RotateCcw size={15} /> : <Play size={15} />}
         </button>
-        <span className="term-player-time">
-          {clock(at, total < 10)} / {clock(total, total < 10)}
-        </span>
+        <span className="term-player-time">{clock(at, total < 10)}</span>
         <Slider
-          className="min-w-[60px] flex-1"
+          className="term-player-seek"
           showLabel={false}
           min={0}
           max={Math.max(total, 0.01)}
@@ -264,28 +263,33 @@ function Player({ recording, cast }: { recording: Recording; cast: string }): Re
           format={(n) => clock(n, total < 10)}
           onChange={(value) => seek(typeof value === "number" ? value : value[0])}
         />
-        <span className="term-player-speeds" role="group" aria-label="Speed">
-          {[1, 2, 4, 8].map((value) => (
-            <button
-              key={value}
-              type="button"
-              data-on={speed === value}
-              onClick={() => setSpeed(value)}
-            >
-              {value}×
-            </button>
-          ))}
-        </span>
+        <span className="term-player-time">{clock(total, total < 10)}</span>
+        <Segmented
+          size="sm"
+          label="Speed"
+          className="term-player-speed"
+          value={String(speed)}
+          onChange={(value) => setSpeed(Number(value))}
+          options={["1", "2", "4", "8"].map((value) => ({ value, label: `${value}×` }))}
+        />
       </footer>
     </section>
   );
 }
 
-export function RecordingsDialog({ onClose }: { onClose: () => void }): ReactNode {
+export function RecordingsDialog({
+  devices = [],
+  onClose,
+}: {
+  /** Router names for the filter; recordings of other routers are listed too. */
+  devices?: string[];
+  onClose: () => void;
+}): ReactNode {
   const [items, setItems] = useState<Recording[] | null>(null);
   const [open, setOpen] = useState<Recording | null>(null);
   const [cast, setCast] = useState("");
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState("*");
+  const card = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback((): void => {
     api<{ recordings: Recording[] }>("/api/terminal/recordings")
@@ -296,6 +300,9 @@ export function RecordingsDialog({ onClose }: { onClose: () => void }): ReactNod
       .catch(() => setItems([]));
   }, []);
   useEffect(refresh, [refresh]);
+  useEffect(() => {
+    if (card.current) return popIn(card.current);
+  }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === "Escape") onClose();
@@ -317,9 +324,8 @@ export function RecordingsDialog({ onClose }: { onClose: () => void }): ReactNod
     };
   }, [open]);
 
-  const shown = (items ?? []).filter((item) =>
-    item.device.toLowerCase().includes(filter.trim().toLowerCase()),
-  );
+  const shown = (items ?? []).filter((item) => filter === "*" || item.device === filter);
+  const routers = [...new Set([...devices, ...(items ?? []).map((item) => item.device)])];
   // Group the list by day, newest first.
   const groups = useMemo(() => {
     const byDay = new Map<string, Recording[]>();
@@ -338,58 +344,67 @@ export function RecordingsDialog({ onClose }: { onClose: () => void }): ReactNod
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="term-modal-card term-recordings">
-        <header>
-          <span className="term-recordings-badge">
-            <Video size={16} />
+      <div className="term-mod term-recordings" ref={card}>
+        <header className="term-mod-hd">
+          <CircleDot size={16} />
+          <h2>Recordings</h2>
+          <span className="m">
+            What the router printed in each shell. Typed keys are not recorded.
           </span>
-          <div>
-            <strong>Shell recordings</strong>
-            <p>What the router printed in each interactive shell. Typed keys are not recorded.</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)">
-            <X size={16} />
+          <span className="sp" />
+          <button
+            type="button"
+            className="term-ib"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close (Esc)"
+          >
+            <X size={15} />
           </button>
         </header>
-        <div className="term-recordings-body">
-          <aside>
-            <div className="mx-2.5">
-              <SearchInput
+        <div className="term-pl">
+          <aside className="term-pl-l">
+            <div className="term-pl-filter">
+              <Select
                 size="sm"
-                mono
+                label="Recordings of"
                 value={filter}
-                placeholder="Filter by router…"
-                spellCheck={false}
-                label="Filter recordings by router"
-                aria-label="Filter recordings by router"
                 onChange={setFilter}
-                end={items && <small>{shown.length}</small>}
+                options={[
+                  { value: "*", label: "Every router" },
+                  ...routers.map((name) => ({ value: name, label: name })),
+                ]}
               />
             </div>
-            <div className="term-recordings-list">
+            <div className="term-pl-list">
               {items?.length === 0 && (
-                <p className="term-recordings-none">
-                  No recording yet. Open a <b>Shell</b> terminal: each session is recorded here.
+                <p className="term-pl-none">
+                  No recording yet. Open a <b>Shell</b> console: each session is recorded here.
                 </p>
               )}
               {groups.map(([label, list]) => (
                 <section key={label}>
-                  <h4>{label}</h4>
+                  <h4 className="term-pl-g">{label}</h4>
                   {list.map((item) => (
-                    <div key={item.id} className="term-recording" data-on={open?.id === item.id}>
+                    <div
+                      key={item.id}
+                      className="term-pl-it"
+                      data-on={open?.id === item.id || undefined}
+                    >
                       <button type="button" onClick={() => setOpen(item)}>
-                        <b>{item.device}</b>
-                        <span>
+                        {item.device}
+                        <small>
                           {new Date(item.started).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
-                          })}
-                          <i>{bytes(item.bytes)}</i>
-                        </span>
+                            hour12: false,
+                          })}{" "}
+                          · {bytes(item.bytes)}
+                        </small>
                       </button>
                       <button
                         type="button"
-                        className="term-recording-delete"
+                        className="term-ib"
                         aria-label={`Delete the recording of ${item.device}`}
                         title="Delete this recording"
                         onClick={() => {
@@ -411,7 +426,7 @@ export function RecordingsDialog({ onClose }: { onClose: () => void }): ReactNod
             <Player key={open.id} recording={open} cast={cast} />
           ) : (
             <section className="term-player term-player-empty">
-              <Video size={30} />
+              <CircleDot size={28} />
               <p>{open ? "Loading the recording…" : "Pick a recording to play it."}</p>
             </section>
           )}

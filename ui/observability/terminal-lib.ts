@@ -280,6 +280,8 @@ export const workspace = {
   onCommandDone: (() => {}) as () => void,
   /** Called when a pane stars or unstars a command. */
   onFavoritesChanged: (() => {}) as () => void,
+  /** Opens another pane on a router, in the given dockview group (the tab strip's "+"). */
+  onAddPane: undefined as ((device: string, group: string) => void) | undefined,
 };
 
 const LAYOUT_KEY = "mikrotik-mcp.terminal.layout.v1";

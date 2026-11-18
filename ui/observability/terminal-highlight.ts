@@ -21,8 +21,8 @@ export interface Span {
 }
 
 /**
- * Syntax inks, defined in terminal.css (`--term-syn-*`): paths cyan, commands
- * violet, arguments green, close to the RouterOS console.
+ * Syntax inks, defined in terminal.css (`--term-syn-*`): paths indigo, words
+ * bright, `where` and strings amber, as on the Signal terminal boards.
  */
 const ink = (name: string): string => `var(--term-syn-${name})`;
 const INK = {
@@ -48,9 +48,10 @@ const theme = {
     { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: INK.comment } },
     { scope: ["entity.name.tag", "meta.prompt"], settings: { foreground: INK.path } },
     {
-      scope: ["support.function", "entity.name.function", "keyword.other.where"],
+      scope: ["support.function", "entity.name.function"],
       settings: { foreground: INK.command },
     },
+    { scope: ["keyword.other.where"], settings: { foreground: INK.keyword } },
     { scope: ["support.type.property-name"], settings: { foreground: INK.argument } },
     { scope: ["string", "punctuation.definition.string"], settings: { foreground: INK.string } },
     { scope: ["constant.numeric", "constant.language"], settings: { foreground: INK.number } },

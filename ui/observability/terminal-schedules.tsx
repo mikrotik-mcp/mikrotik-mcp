@@ -3,12 +3,11 @@
  * repeat, also when no browser is open. Results go to the command history.
  * Only reads can be scheduled; the server refuses anything else.
  */
-import { CalendarClock, Trash2, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { CalendarDays, Trash2, X } from "lucide-react";
+import type { ReactNode, Ref } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { api, deleteJson, postJson } from "./api";
-import { Select } from "./geist";
-import { DateTimePicker, TextInput } from "./kit";
+import { DateTimePicker, Field, Select, TextInput } from "./kit";
 import { isReadCommand } from "./terminal-lib";
 
 interface Schedule {
@@ -37,11 +36,16 @@ export function ScheduleDrawer({
   devices,
   draft,
   onClose,
+  onCount,
+  ref,
 }: {
   devices: string[];
   /** A command to start the form with (from a block's menu). */
   draft: string;
   onClose: () => void;
+  /** Told the number of schedules after each refresh, for the toolbar count. */
+  onCount?: (count: number) => void;
+  ref?: Ref<HTMLElement>;
 }): ReactNode {
   const [items, setItems] = useState<Schedule[]>([]);
   const [command, setCommand] = useState(draft);
@@ -52,9 +56,12 @@ export function ScheduleDrawer({
 
   const refresh = useCallback((): void => {
     api<{ schedules: Schedule[] }>("/api/terminal/schedules")
-      .then((r) => setItems(r.schedules))
+      .then((r) => {
+        setItems(r.schedules);
+        onCount?.(r.schedules.length);
+      })
       .catch(() => {});
-  }, []);
+  }, [onCount]);
   useEffect(() => {
     refresh();
     const timer = setInterval(refresh, 15_000);
@@ -64,114 +71,122 @@ export function ScheduleDrawer({
 
   const readable = !command.trim() || isReadCommand(command);
   return (
-    <aside className="term-drawer" aria-label="Scheduled commands">
-      <header>
-        <strong>
-          <CalendarClock size={14} /> Scheduled commands
-        </strong>
-        <button type="button" onClick={onClose} aria-label="Close">
-          <X size={14} />
-        </button>
-      </header>
-      <form
-        className="term-schedule-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError("");
-          void postJson<{ error?: string }>("/api/terminal/schedules", {
-            device,
-            command,
-            everyMs,
-            at: at ? at.getTime() : undefined,
-          }).then((answer) => {
-            if (answer.error) setError(answer.error);
-            else {
-              setCommand("");
-              refresh();
-            }
-          });
-        }}
-      >
-        <TextInput
-          size="sm"
-          mono
-          value={command}
-          placeholder="/system resource print"
-          spellCheck={false}
-          label="Command to schedule"
-          aria-label="Command to schedule"
-          onChange={setCommand}
-        />
-        <div>
-          <Select
-            size="sm"
-            className="term-select"
-            aria-label="Router"
-            value={device}
-            onValueChange={setDevice}
-            options={devices.map((name) => ({ value: name, label: name }))}
-          />
-          <Select
-            size="sm"
-            className="term-select"
-            aria-label="Repeat"
-            value={String(everyMs)}
-            onValueChange={(value) => setEveryMs(Number(value))}
-            options={REPEATS.map(([label, value]) => ({ value: String(value), label }))}
-          />
+    <aside ref={ref} className="term-dw" aria-label="Scheduled commands">
+      <div className="term-dw-hd">
+        <div className="term-dw-title">
+          <CalendarDays size={16} />
+          <b>Scheduled</b>
+          <span className="sp" />
+          <button type="button" className="term-ib" onClick={onClose} aria-label="Close">
+            <X size={15} />
+          </button>
         </div>
-        {/* Not a <label>: a label would forward its click to the picker and close it again. */}
-        <span className="term-field">
-          first run
-          <DateTimePicker
-            className="flex-1"
-            value={at}
-            onChange={setAt}
-            label="First run (empty: now)"
-            placeholder="now"
+        <form
+          className="term-dw-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError("");
+            void postJson<{ error?: string }>("/api/terminal/schedules", {
+              device,
+              command,
+              everyMs,
+              at: at ? at.getTime() : undefined,
+            }).then((answer) => {
+              if (answer.error) setError(answer.error);
+              else {
+                setCommand("");
+                refresh();
+              }
+            });
+          }}
+        >
+          <TextInput
+            mono
+            value={command}
+            placeholder="/system resource print"
+            spellCheck={false}
+            label="Command to schedule"
+            invalid={!readable}
+            onChange={setCommand}
           />
-        </span>
-        <button type="submit" disabled={!command.trim() || !readable}>
-          Schedule
-        </button>
-        <p data-bad={!readable || Boolean(error)}>
-          {error ||
-            (readable
-              ? "The server runs it, also with the browser closed. Results go to the history."
-              : "Only commands that read (print, export, ping, traceroute) can be scheduled.")}
-        </p>
-      </form>
-      <ol className="term-rows">
-        {items.length === 0 && <li className="term-rows-empty">Nothing is scheduled.</li>}
+          <div className="term-dw-filters">
+            <Select
+              size="sm"
+              label="Router"
+              value={device}
+              onChange={setDevice}
+              options={devices.map((name) => ({ value: name, label: name }))}
+            />
+            <Select
+              size="sm"
+              label="Repeat"
+              value={String(everyMs)}
+              onChange={(value) => setEveryMs(Number(value))}
+              options={REPEATS.map(([label, value]) => ({ value: String(value), label }))}
+            />
+          </div>
+          <Field label="First run">
+            <DateTimePicker
+              value={at}
+              onChange={setAt}
+              label="First run (empty: now)"
+              placeholder="now"
+            />
+          </Field>
+          <div className="term-dw-submit">
+            <p data-bad={!readable || Boolean(error) || undefined}>
+              {error ||
+                (readable
+                  ? "The server runs it, also with the browser closed. Results go to the history."
+                  : "Only commands that read (print, export, ping, traceroute) can be scheduled.")}
+            </p>
+            <button
+              type="submit"
+              className="term-act"
+              data-tone="go"
+              disabled={!command.trim() || !readable}
+            >
+              Schedule
+            </button>
+          </div>
+        </form>
+      </div>
+      <ol className="term-dw-rows">
+        {items.length === 0 && <li className="term-dw-empty">Nothing is scheduled.</li>}
         {items.map((item) => (
-          <li key={item.id} data-ok={item.lastOk === null ? undefined : String(item.lastOk)}>
-            <code className="term-code">{item.command}</code>
-            <div className="term-row-meta">
-              <span className="term-row-device">{item.device}</span>
-              <span>{repeatLabel(item.everyMs)}</span>
-              <span>
+          <li
+            key={item.id}
+            className="term-hrow"
+            data-ok={item.lastOk === null ? undefined : String(item.lastOk)}
+          >
+            <div className="term-hrow-main">
+              <code className="term-code">{item.command}</code>
+              <span className="m">
+                {item.device} · {repeatLabel(item.everyMs)} ·{" "}
                 {item.nextRun === null
                   ? "done"
                   : `next ${new Date(item.nextRun).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}`}
               </span>
+              {item.lastRun !== null && (
+                <span className="m" data-bad={!item.lastOk || undefined}>
+                  last {new Date(item.lastRun).toLocaleTimeString()} ·{" "}
+                  {item.lastOk ? item.lastNote : `failed: ${item.lastNote}`}
+                </span>
+              )}
             </div>
-            {item.lastRun !== null && (
-              <div className="term-row-meta">
-                last {new Date(item.lastRun).toLocaleTimeString()} ·{" "}
-                {item.lastOk ? item.lastNote : `failed: ${item.lastNote}`}
-              </div>
-            )}
-            <div className="term-row-actions">
+            <span className="a">
               <button
                 type="button"
+                className="term-ib"
                 title="Delete this schedule"
+                aria-label="Delete this schedule"
                 onClick={() =>
                   void deleteJson("/api/terminal/schedules", { id: item.id }).then(refresh)
                 }
               >
-                <Trash2 size={12} /> Delete
+                <Trash2 size={13} />
               </button>
-            </div>
+            </span>
           </li>
         ))}
       </ol>

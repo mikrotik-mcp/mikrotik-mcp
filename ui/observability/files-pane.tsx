@@ -6,52 +6,40 @@
  */
 import type { IDockviewPanelProps } from "dockview-react";
 import {
-  Archive,
   ArrowDownToLine,
+  ArrowLeftRight,
   ArrowUp,
   ArrowUpFromLine,
-  ChevronRight,
-  CornerLeftUp,
   Eye,
-  File,
   FileArchive,
-  FileCode2,
-  FileImage,
-  FileKey2,
-  FileText,
   Fingerprint,
-  Folder,
-  FolderPlus,
+  Plus,
   GitCompareArrows,
-  Globe,
   HardDrive,
-  LifeBuoy,
-  Package,
+  MoreHorizontal,
   Pencil,
   Play,
+  Radio,
   RefreshCw,
-  Send,
   Star,
   Trash2,
+  Upload,
   Vault,
   X,
 } from "lucide-react";
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
-import { bytes } from "./format";
-import { Select } from "./geist";
-import type { FileEntry, FileKind, RouterSystem } from "./files-lib";
+import type { FileEntry, RouterSystem } from "./files-lib";
 import {
   DRAG_TYPE,
-  bookmarkStore,
   analysisStore,
+  bookmarkStore,
   broadcastStore,
-  droppedFiles,
   canPreview,
   compareStore,
   conflicts,
   dragState,
+  droppedFiles,
   filePanes,
   filesApi,
   filesBus,
@@ -59,29 +47,29 @@ import {
   isBookmarked,
   joinPath,
   kindOf,
-  tailStore,
-  toggleBookmark,
   packageWarnings,
   parentOf,
   pickForCompare,
+  tailStore,
+  toggleBookmark,
   transferQueue,
   uploadTargets,
   viewerStore,
-  when,
 } from "./files-lib";
-
-const ICONS: Record<FileKind, typeof File> = {
-  folder: Folder,
-  backup: FileArchive,
-  script: FileCode2,
-  package: Package,
-  text: FileText,
-  key: FileKey2,
-  support: LifeBuoy,
-  web: Globe,
-  image: FileImage,
-  file: File,
-};
+import { rise } from "./files-motion";
+import {
+  KindTile,
+  Strip,
+  activePaneStore,
+  fleetStore,
+  size,
+  stamp,
+  usageStore,
+  viewerSiblings,
+  viewerTab,
+} from "./files-parts";
+import type { MenuItem, RowAction } from "./kit";
+import { Menu, RowMenu, RowMore, TextInput } from "./kit";
 
 type SortKey = "name" | "size" | "mtime";
 
@@ -92,19 +80,63 @@ interface PendingDrop {
   start: (skip: Set<string>) => void;
 }
 
-export function FilesPane(
-  props: IDockviewPanelProps<{
-    device: string;
-    path?: string;
-    readOnly?: boolean;
-    trash?: boolean;
-    s3?: boolean;
-  }>,
-): ReactNode {
-  const { api } = props;
-  const device = props.params.device;
-  const readOnly = props.params.readOnly === true;
-  const [path, setPath] = useState(props.params.path ?? "/");
+export interface PaneProps {
+  id: string;
+  device: string;
+  path: string;
+  readOnly: boolean;
+  trash: boolean;
+  s3: boolean;
+  /** The phone layout: no tools row, no column heads, no date column. */
+  phone?: boolean;
+  active?: boolean;
+  onPath?: (path: string) => void;
+  onFocus?: () => void;
+}
+
+/** Opens a file in the viewer drawer, with the files beside it for J / K. */
+export function openInViewer(
+  device: string,
+  dir: string,
+  name: string,
+  siblings: FileEntry[],
+  tab = "view",
+): void {
+  const files = siblings.filter((entry) => !entry.dir);
+  viewerSiblings.set({
+    device,
+    dir,
+    names: files.map((entry) => entry.name),
+    meta: Object.fromEntries(
+      files.map((entry) => [
+        entry.name,
+        { size: entry.size, mtime: entry.mtime, preview: canPreview(entry) },
+      ]),
+    ),
+  });
+  viewerTab.set(tab);
+  viewerStore.set({ device, path: joinPath(dir, name) });
+}
+
+/** The drag image: the count and what a drop would do, next to the pointer. */
+function dragGhost(event: DragEvent, count: number, total: number): void {
+  const ghost = document.createElement("div");
+  ghost.className = "fp-ghost";
+  const badge = document.createElement("span");
+  badge.className = "c";
+  badge.textContent = String(count);
+  ghost.append(
+    badge,
+    `Copy ${count} ${count === 1 ? "file" : "files"}${total ? ` · ${size(total)}` : ""}`,
+  );
+  document.body.append(ghost);
+  event.dataTransfer.setDragImage(ghost, 14, 18);
+  setTimeout(() => ghost.remove(), 0);
+}
+
+export function FilesPane(props: PaneProps): ReactNode {
+  const { id, device, readOnly, phone = false, onPath, onFocus } = props;
+  const [path, setPath] = useState(props.path);
   const [entries, setEntries] = useState<FileEntry[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -123,13 +155,16 @@ export function FilesPane(
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState("");
-  const [menu, setMenu] = useState<{ entry: FileEntry; x: number; y: number } | null>(null);
   const bookmarks = useSyncExternalStore(bookmarkStore.subscribe, bookmarkStore.get);
   const anchor = useRef<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
   const reveal = useRef<string | undefined>(undefined);
   const others = useSyncExternalStore(filePanes.subscribe, filePanes.all);
   const broadcasting = useSyncExternalStore(broadcastStore.subscribe, broadcastStore.get);
+
+  // The parent can move this pane to another folder (a bookmark, a workspace).
+  useEffect(() => setPath(props.path), [props.path]);
 
   const load = useCallback(
     (dir: string): void => {
@@ -168,14 +203,21 @@ export function FilesPane(
 
   useEffect(() => {
     load(path);
-    api.updateParameters({ ...api.getParameters(), path });
-  }, [api, load, path]);
+    onPath?.(path);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onPath is the parent's setter
+  }, [load, path]);
+
+  // Rows arrive in a stagger each time a folder is read.
+  useEffect(() => rise(rowsRef.current, ".fp-r"), [entries]);
 
   useEffect(() => {
     const refreshUsage = (): void => {
       filesApi
         .usage(device)
-        .then(setUsage)
+        .then((answer) => {
+          setUsage(answer);
+          usageStore.set(device, answer);
+        })
         .catch(() => {});
     };
     refreshUsage();
@@ -187,7 +229,7 @@ export function FilesPane(
   }, [device, load, path]);
 
   useEffect(() => {
-    filePanes.set(api.id, {
+    filePanes.set(id, {
       device,
       path,
       reveal: (dir, name) => {
@@ -195,26 +237,15 @@ export function FilesPane(
           reveal.current = name;
           load(path);
         } else open(dir, name);
-        api.setActive();
+        onFocus?.();
       },
     });
-  }, [api, device, load, open, path]);
-  useEffect(() => () => filePanes.remove(api.id), [api.id]);
-
-  // The row menu closes on a click anywhere, and on Escape.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onFocus is the parent's
+  }, [id, device, load, open, path]);
+  useEffect(() => () => filePanes.remove(id), [id]);
   useEffect(() => {
-    if (!menu) return;
-    const close = (): void => setMenu(null);
-    const onKey = (event: globalThis.KeyboardEvent): void => {
-      if (event.key === "Escape") close();
-    };
-    window.addEventListener("click", close);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [menu]);
+    if (props.active) activePaneStore.set({ id, device, path });
+  }, [props.active, id, device, path]);
 
   useEffect(() => {
     if (!notice) return;
@@ -238,6 +269,7 @@ export function FilesPane(
     [shown, selected],
   );
   const chosenFiles = chosen.filter((entry) => !entry.dir);
+  const chosenBytes = chosenFiles.reduce((sum, e) => sum + e.size, 0);
 
   const pick = (
     entry: FileEntry,
@@ -260,10 +292,18 @@ export function FilesPane(
       setSelected(next);
     } else setSelected(new Set([entry.name]));
   };
+  const toggle = (name: string): void => {
+    const next = new Set(selected);
+    if (!next.delete(name)) next.add(name);
+    setSelected(next);
+  };
+
+  const view = (entry: FileEntry, tab = "view"): void =>
+    openInViewer(device, path, entry.name, shown, tab);
 
   const activate = (entry: FileEntry): void => {
     if (entry.dir) open(joinPath(path, entry.name));
-    else if (canPreview(entry)) viewerStore.set({ device, path: joinPath(path, entry.name) });
+    else if (canPreview(entry)) view(entry);
     else transferQueue.download(device, joinPath(path, entry.name), entry.size);
   };
 
@@ -381,6 +421,12 @@ export function FilesPane(
     else setRenaming(null);
   };
 
+  const startRename = (name: string): void => {
+    setCreating(false);
+    setDraft(name);
+    setRenaming(name);
+  };
+
   const onKey = (event: KeyboardEvent): void => {
     if ((event.target as HTMLElement).tagName === "INPUT") return;
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
@@ -390,25 +436,219 @@ export function FilesPane(
     else if (event.key === "Enter" && chosen.length === 1 && chosen[0]) activate(chosen[0]);
     else if ((event.key === "Delete" || event.key === "Backspace") && chosen.length && !readOnly)
       setConfirmDelete(true);
-    else if (event.key === "F2" && chosen.length === 1 && chosen[0] && !readOnly) {
-      setDraft(chosen[0].name);
-      setRenaming(chosen[0].name);
-    }
+    else if (event.key === "F2" && chosen.length === 1 && chosen[0] && !readOnly)
+      startRename(chosen[0].name);
   };
 
   const crumbs = path.split("/").filter(Boolean);
   const used = usage.total && usage.free !== undefined ? 1 - usage.free / usage.total : null;
+  const fleet = useSyncExternalStore(fleetStore.subscribe, fleetStore.get);
   const targets = useMemo(() => {
     const seen = new Set<string>();
-    return others
+    // On a phone only one pane is open: offer the root of every other router.
+    const candidates = phone
+      ? fleet.names.filter((name) => name !== device).map((name) => ({ device: name, path: "/" }))
+      : others;
+    return candidates
       .filter((pane) => !(pane.device === device && pane.path === path))
-      .map((pane) => ({
-        value: `${pane.device}\n${pane.path}`,
-        label: `${pane.device}:${pane.path}`,
-      }))
-      .filter((option) => !seen.has(option.value) && seen.add(option.value));
-  }, [others, device, path]);
-  const dragLabel =
+      .map((pane) => ({ device: pane.device, dir: pane.path, key: `${pane.device}\n${pane.path}` }))
+      .filter((option) => !seen.has(option.key) && seen.add(option.key));
+  }, [others, fleet, phone, device, path]);
+  const sortBy = (key: SortKey): void =>
+    setSort((now) => ({ key, down: now.key === key ? !now.down : key !== "name" }));
+  const copyText = (text: string): void =>
+    void navigator.clipboard?.writeText(text).catch(() => {});
+
+  const downloadChosen = (): void => {
+    for (const entry of chosenFiles)
+      transferQueue.download(device, joinPath(path, entry.name), entry.size);
+  };
+  const copyTo = (to: { device: string; dir: string }): void => {
+    for (const entry of chosenFiles)
+      transferQueue.copy(
+        { device, path: joinPath(path, entry.name), size: entry.size },
+        { device: to.device, dir: to.dir },
+      );
+  };
+  const zip = (): void =>
+    transferQueue.downloadZip(
+      device,
+      path,
+      chosen.map((entry) => joinPath(path, entry.name)),
+      chosenFiles.length === chosen.length ? chosenBytes : 0,
+    );
+  const toVault = (s3: boolean): void => {
+    setBusy(true);
+    filesApi
+      .saveToVault(
+        device,
+        chosenFiles.map((entry) => joinPath(path, entry.name)),
+        s3,
+      )
+      .then((names) => setNotice(`Saved to the vault${s3 ? " and S3" : ""}:\n${names.join("\n")}`))
+      .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  const checksum = (name: string): void => {
+    setBusy(true);
+    filesApi
+      .hash({ device, path: joinPath(path, name) })
+      .then((sha) => {
+        copyText(sha);
+        setNotice(`sha256 of ${name} (copied):\n${sha}`);
+      })
+      .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  const compare = (): void => {
+    const refs = chosenFiles.map((entry) => ({ device, path: joinPath(path, entry.name) }));
+    if (refs.length === 2) compareStore.set(refs);
+    else if (refs[0]) pickForCompare(refs[0]);
+  };
+  const makeOnRouter = (kind: "backup" | "export"): void => {
+    setBusy(true);
+    filesApi
+      .make(device, kind)
+      .then((file) => setNotice(`${device} made ${file}.`))
+      .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  const one = chosen.length === 1 ? chosen[0] : undefined;
+  const canZip = chosen.length > 1 || chosen.some((entry) => entry.dir);
+  const canCompare =
+    chosenFiles.length > 0 && chosenFiles.length <= 2 && chosenFiles.every(canPreview);
+
+  /** Everything the selection bar can do beyond its visible buttons. */
+  const moreItems: MenuItem[][] = [
+    [
+      ...(one && !one.dir && canPreview(one)
+        ? [{ label: "View", icon: <Eye />, onSelect: () => view(one) }]
+        : []),
+      ...(one && !one.dir
+        ? [{ label: "Checksum", icon: <Fingerprint />, onSelect: () => checksum(one.name) }]
+        : []),
+      ...(canCompare ? [{ label: "Compare", icon: <GitCompareArrows />, onSelect: compare }] : []),
+      ...(props.s3 && chosenFiles.length > 0
+        ? [{ label: "Save to the vault and S3", icon: <Vault />, onSelect: () => toVault(true) }]
+        : []),
+    ],
+    readOnly
+      ? []
+      : [
+          ...(one && /\.rsc$/i.test(one.name)
+            ? [
+                {
+                  label: "Import…",
+                  icon: <Play />,
+                  onSelect: () => importStore.set({ device, path: joinPath(path, one.name) }),
+                },
+              ]
+            : []),
+          ...(one
+            ? [{ label: "Rename", icon: <Pencil />, onSelect: () => startRename(one.name) }]
+            : []),
+        ],
+    [
+      {
+        label: "Clear the selection",
+        icon: <X />,
+        shortcut: "Esc",
+        onSelect: () => setSelected(new Set()),
+      },
+      ...(readOnly
+        ? []
+        : [
+            {
+              label: "Delete…",
+              icon: <Trash2 />,
+              danger: true,
+              onSelect: () => setConfirmDelete(true),
+            },
+          ]),
+    ],
+  ].filter((group) => group.length > 0);
+
+  /** The row menu of one file: the same actions as the selection bar and the old menu. */
+  const rowActions = (entry: FileEntry): RowAction[] => {
+    const full = joinPath(path, entry.name);
+    const list: RowAction[] = [];
+    if (!entry.dir && canPreview(entry)) {
+      list.push({
+        label: "Download",
+        icon: <ArrowDownToLine />,
+        onSelect: () => transferQueue.download(device, full, entry.size),
+      });
+      list.push({
+        label: "Compare with…",
+        icon: <GitCompareArrows />,
+        onSelect: () => pickForCompare({ device, path: full }),
+      });
+    }
+    if (!entry.dir && canPreview(entry))
+      list.push({
+        label: "Follow (live tail)",
+        icon: <Radio />,
+        onSelect: () => tailStore.set({ device, path: full }),
+      });
+    if (entry.dir)
+      list.push({
+        label: isBookmarked(bookmarks, device, full)
+          ? "Remove the bookmark"
+          : "Bookmark this folder",
+        icon: <Star />,
+        onSelect: () => toggleBookmark(device, full),
+      });
+    if (!readOnly && /\.rsc$/i.test(entry.name))
+      list.push({
+        label: "Import…",
+        icon: <Play />,
+        onSelect: () => importStore.set({ device, path: full }),
+      });
+    if (!readOnly) {
+      list.push({
+        label: "Rename",
+        icon: <Pencil />,
+        shortcut: "F2",
+        onSelect: () => startRename(entry.name),
+      });
+      list.push({
+        label: "Delete…",
+        icon: <Trash2 />,
+        danger: true,
+        onSelect: () => {
+          if (!selected.has(entry.name)) setSelected(new Set([entry.name]));
+          setConfirmDelete(true);
+        },
+      });
+    }
+    return list;
+  };
+
+  const selectionActions: RowAction[] = [
+    {
+      label: "Download",
+      icon: <ArrowDownToLine />,
+      onSelect: downloadChosen,
+      disabled: chosenFiles.length === 0,
+    },
+    ...(canZip ? [{ label: "Download as ZIP", icon: <FileArchive />, onSelect: zip }] : []),
+    ...(chosenFiles.length > 0
+      ? [{ label: "Save to the vault", icon: <Vault />, onSelect: () => toVault(false) }]
+      : []),
+    ...(readOnly
+      ? []
+      : [
+          {
+            label: "Delete…",
+            icon: <Trash2 />,
+            danger: true,
+            onSelect: () => setConfirmDelete(true),
+          },
+        ]),
+  ];
+
+  const dropLabel =
     over === null
       ? ""
       : dragState.current
@@ -416,57 +656,81 @@ export function FilesPane(
         : broadcasting
           ? "Drop to upload to every open router"
           : "Drop to upload";
-  const sortBy = (key: SortKey): void =>
-    setSort((now) => ({ key, down: now.key === key ? !now.down : key !== "name" }));
 
   return (
-    <div
-      className="files-pane"
-      data-over={over !== null}
+    <section
+      className="fp"
+      data-active={props.active || undefined}
+      data-phone={phone || undefined}
+      data-over={over === "" || undefined}
+      onPointerDown={onFocus}
       onDragOver={(event) => onDragOver(event, "")}
       onDragLeave={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(null);
       }}
       onDrop={(event) => onDrop(event, path)}
     >
-      <header className="files-head">
-        <nav className="files-crumbs" aria-label="Folder">
-          <button type="button" onClick={() => open("/")} title={`${device}: root`}>
-            <HardDrive size={13} />
-            <span>{device}</span>
+      <nav className="fp-crumb" aria-label="Folder">
+        <HardDrive size={13} strokeWidth={1.7} aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => open("/")}
+          title={`${device}: root`}
+          data-last={crumbs.length === 0 || undefined}
+        >
+          <span>/</span>
+        </button>
+        {crumbs.map((part, index) => (
+          // eslint-disable-next-line react/no-array-index-key -- a path may repeat a name
+          <span key={index} className="seg">
+            <i aria-hidden="true">/</i>
+            <button
+              type="button"
+              data-last={index === crumbs.length - 1 || undefined}
+              onClick={() => open(`/${crumbs.slice(0, index + 1).join("/")}`)}
+            >
+              <span>{part}</span>
+            </button>
+          </span>
+        ))}
+      </nav>
+
+      {!phone && (
+        <div className="fp-tools">
+          <button
+            type="button"
+            className="fp-ib"
+            disabled={path === "/"}
+            onClick={() => open(parentOf(path))}
+            aria-label="Up one folder"
+            title="Up one folder"
+          >
+            <ArrowUp size={14} />
           </button>
-          {crumbs.map((part, index) => (
-            // eslint-disable-next-line react/no-array-index-key -- a path may repeat a name
-            <span key={index}>
-              <ChevronRight size={12} />
-              <button
-                type="button"
-                onClick={() => open(`/${crumbs.slice(0, index + 1).join("/")}`)}
-              >
-                {part}
-              </button>
-            </span>
-          ))}
-        </nav>
-        <div className="files-actions">
-          <input
-            className="files-filter"
+          <button
+            type="button"
+            className="fp-ib"
+            onClick={() => load(path)}
+            aria-label="Reload"
+            title="Reload"
+            data-spin={busy || undefined}
+          >
+            <RefreshCw size={16} />
+          </button>
+          <TextInput
+            size="sm"
+            wrapClassName="fp-filter"
             value={filter}
+            onChange={setFilter}
             placeholder="Filter this folder"
-            aria-label="Filter this folder"
-            onChange={(event) => setFilter(event.target.value)}
+            label="Filter this folder"
+            icon={<SearchIcon />}
           />
           <button
             type="button"
-            disabled={path === "/"}
-            onClick={() => open(parentOf(path))}
-            title="Up one folder"
-          >
-            <CornerLeftUp size={14} />
-          </button>
-          <button
-            type="button"
-            data-on={isBookmarked(bookmarks, device, path)}
+            className="fp-ib"
+            data-on={isBookmarked(bookmarks, device, path) || undefined}
+            aria-pressed={isBookmarked(bookmarks, device, path)}
             onClick={() => toggleBookmark(device, path)}
             title={
               isBookmarked(bookmarks, device, path) ? "Remove the bookmark" : "Bookmark this folder"
@@ -474,63 +738,29 @@ export function FilesPane(
           >
             <Star size={14} />
           </button>
-          <button type="button" onClick={() => load(path)} title="Reload" data-spin={busy}>
-            <RefreshCw size={14} />
-          </button>
           {!readOnly && (
             <>
               <button
                 type="button"
+                className="fp-ib"
                 title="New folder"
+                aria-label="New folder"
                 onClick={() => {
                   setDraft("");
                   setRenaming(null);
                   setCreating(true);
                 }}
               >
-                <FolderPlus size={14} />
+                <Plus size={16} />
               </button>
-              <details className="files-more">
-                <summary title="Backup, export and storage">
-                  <Archive size={14} />
-                </summary>
-                <div>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.currentTarget.closest("details")?.removeAttribute("open");
-                      analysisStore.set(device);
-                    }}
-                  >
-                    Analyse the storage
-                  </button>
-                  {(["backup", "export"] as const).map((kind) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      onClick={(event) => {
-                        event.currentTarget.closest("details")?.removeAttribute("open");
-                        setBusy(true);
-                        filesApi
-                          .make(device, kind)
-                          .then((file) => setNotice(`${device} made ${file}.`))
-                          .catch((e: unknown) =>
-                            setNotice(e instanceof Error ? e.message : String(e)),
-                          )
-                          .finally(() => setBusy(false));
-                      }}
-                    >
-                      {kind === "backup" ? "Backup now (.backup)" : "Export now (.rsc)"}
-                    </button>
-                  ))}
-                </div>
-              </details>
               <button
                 type="button"
-                className="files-upload"
+                className="fp-ib"
+                title="Upload"
+                aria-label="Upload"
                 onClick={() => picker.current?.click()}
               >
-                <ArrowUpFromLine size={14} /> <span>Upload</span>
+                <Upload size={14} />
               </button>
               <input
                 ref={picker}
@@ -547,142 +777,206 @@ export function FilesPane(
               />
             </>
           )}
+          <Menu
+            label={`More for ${device}`}
+            trigger={
+              <button type="button" className="fp-ib" aria-label={`More for ${device}`}>
+                <MoreHorizontal size={14} />
+              </button>
+            }
+            groups={[
+              [{ label: "Analyse the storage", onSelect: () => analysisStore.set(device) }],
+              readOnly
+                ? []
+                : [
+                    { label: "Backup now (.backup)", onSelect: () => makeOnRouter("backup") },
+                    { label: "Export now (.rsc)", onSelect: () => makeOnRouter("export") },
+                  ],
+            ].filter((group) => group.length > 0)}
+          />
         </div>
-      </header>
+      )}
 
       {used !== null && (
-        <div className="files-usage" title="Storage of the router">
+        <div className="fp-store" title="Storage of the router">
           <span>
-            <i style={{ width: `${Math.round(used * 100)}%` }} data-high={used > 0.85} />
+            <b>{size(usage.free ?? 0)}</b> free of {size(usage.total ?? 0)}
           </span>
-          <small>
-            {bytes(usage.free ?? 0)} free of {bytes(usage.total ?? 0)}
-            {usage.arch && ` · ${usage.arch} · ${usage.version ?? ""}`}
-          </small>
+          <span className="tr" aria-hidden="true">
+            <i
+              style={{ width: `${Math.round(used * 100)}%` }}
+              data-high={used > 0.85 || undefined}
+            />
+          </span>
+          {!phone && <span>{Math.round(used * 100)}%</span>}
         </div>
       )}
 
       {notice && (
-        <div className="files-strip" data-tone="warn" role="status">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice("")} aria-label="Dismiss">
-            <X size={13} />
-          </button>
-        </div>
+        <Strip
+          tone="warn"
+          className="fp-note"
+          actions={
+            <button
+              type="button"
+              className="fp-ib"
+              onClick={() => setNotice("")}
+              aria-label="Dismiss"
+            >
+              <X size={13} />
+            </button>
+          }
+        >
+          {notice}
+        </Strip>
       )}
       {packageCheck && (
-        <div
-          className="files-strip"
-          data-tone="danger"
+        <Strip
+          tone="danger"
           role="alertdialog"
-          aria-label="Package check"
+          label="Package check"
+          className="fp-note"
+          actions={
+            <>
+              <button type="button" className="fp-act" onClick={() => setPackageCheck(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="fp-act"
+                data-tone="danger"
+                onClick={() => {
+                  packageCheck.go();
+                  setPackageCheck(null);
+                }}
+              >
+                Upload anyway
+              </button>
+            </>
+          }
         >
-          <span>{packageCheck.warnings.join("\n")}</span>
-          <button
-            type="button"
-            onClick={() => {
-              packageCheck.go();
-              setPackageCheck(null);
-            }}
-          >
-            Upload anyway
-          </button>
-          <button type="button" onClick={() => setPackageCheck(null)}>
-            Cancel
-          </button>
-        </div>
+          {packageCheck.warnings.join("\n")}
+        </Strip>
       )}
       {pending && (
-        <div className="files-strip" data-tone="warn" role="alertdialog" aria-label="Replace files">
-          <span>
-            <strong>{pending.existing.length}</strong> already in {pending.dir}:{" "}
-            {pending.existing.slice(0, 3).join(", ")}
-            {pending.existing.length > 3 && "…"}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              pending.start(new Set());
-              setPending(null);
-            }}
-          >
-            Replace
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              pending.start(new Set(pending.existing));
-              setPending(null);
-            }}
-          >
-            Skip these
-          </button>
-          <button type="button" onClick={() => setPending(null)}>
-            Cancel
-          </button>
-        </div>
+        <Strip
+          tone="warn"
+          role="alertdialog"
+          label="Replace files"
+          className="fp-note"
+          actions={
+            <>
+              <button type="button" className="fp-act" onClick={() => setPending(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="fp-act"
+                onClick={() => {
+                  pending.start(new Set(pending.existing));
+                  setPending(null);
+                }}
+              >
+                Skip these
+              </button>
+              <button
+                type="button"
+                className="fp-act"
+                data-tone="primary"
+                onClick={() => {
+                  pending.start(new Set());
+                  setPending(null);
+                }}
+              >
+                Replace
+              </button>
+            </>
+          }
+        >
+          <b>{pending.existing.length}</b> already in {pending.dir}:{" "}
+          {pending.existing.slice(0, 3).join(", ")}
+          {pending.existing.length > 3 && "…"}
+        </Strip>
       )}
       {confirmDelete && chosen.length > 0 && (
-        <div
-          className="files-strip"
-          data-tone="danger"
+        <Strip
+          tone="danger"
           role="alertdialog"
-          aria-label="Delete files"
+          label="Delete files"
+          icon={<Trash2 size={14} />}
+          className="fp-note"
+          actions={
+            <>
+              <button type="button" className="fp-act" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="fp-act"
+                data-tone="danger"
+                onClick={() =>
+                  act(
+                    filesApi.remove(
+                      device,
+                      chosen.map((entry) => joinPath(path, entry.name)),
+                    ),
+                  )
+                }
+              >
+                Delete from {device}
+              </button>
+            </>
+          }
         >
-          <span>
-            Delete <strong>{chosen.length}</strong> from {device}? Folders go with everything in
-            them.{" "}
-            {props.params.trash
-              ? "Files up to 64 MiB stay in the recycle bin for 7 days."
-              : "This cannot be undone."}
-          </span>
-          <button
-            type="button"
-            data-danger="true"
-            onClick={() =>
-              act(
-                filesApi.remove(
-                  device,
-                  chosen.map((entry) => joinPath(path, entry.name)),
-                ),
-              )
-            }
-          >
-            Delete
-          </button>
-          <button type="button" onClick={() => setConfirmDelete(false)}>
-            Cancel
-          </button>
-        </div>
+          Delete <b>{chosen.length}</b>? Folders go with everything in them.{" "}
+          {props.trash
+            ? "Files up to 64 MiB stay in the recycle bin for 7 days."
+            : "This cannot be undone."}
+        </Strip>
       )}
 
-      <div className="files-cols" role="row">
-        {(["name", "size", "mtime"] as const).map((key) => (
-          <button key={key} type="button" onClick={() => sortBy(key)} data-on={sort.key === key}>
-            {key === "mtime" ? "Modified" : key === "size" ? "Size" : "Name"}
-            {sort.key === key && <ArrowUp size={11} data-down={sort.down} />}
-          </button>
-        ))}
-      </div>
+      {!phone && (
+        <div className="fp-th">
+          <span />
+          {(["name", "size", "mtime"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => sortBy(key)}
+              data-on={sort.key === key || undefined}
+              data-col={key}
+              aria-label={`Sort by ${key === "mtime" ? "modified" : key}`}
+            >
+              {key === "mtime" ? "Modified" : key === "size" ? "Size" : "Name"}
+              {sort.key === key && (sort.down ? " ↓" : " ↑")}
+            </button>
+          ))}
+          <span />
+        </div>
+      )}
 
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the list takes the keyboard */}
       <div
-        className="files-rows"
+        ref={rowsRef}
+        className="fp-rows"
         role="listbox"
+        aria-label={`Files of ${device}:${path}`}
         aria-multiselectable
         tabIndex={0}
         onKeyDown={onKey}
       >
         {creating && (
-          <div className="files-row" data-kind="folder">
-            <Folder size={15} />
-            <input
+          <div className="fp-r" data-kind="folder">
+            <KindTile kind="folder" />
+            <TextInput
+              size="sm"
+              wrapClassName="fp-name-in"
               // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by a click
               autoFocus
               value={draft}
               placeholder="Folder name"
-              aria-label="Folder name"
-              onChange={(event) => setDraft(event.target.value)}
+              label="Folder name"
+              onChange={setDraft}
               onBlur={() => setCreating(false)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") submitDraft();
@@ -693,76 +987,138 @@ export function FilesPane(
         )}
         {shown.map((entry) => {
           const kind = kindOf(entry);
-          const Icon = ICONS[kind];
+          const full = joinPath(path, entry.name);
+          const isSelected = selected.has(entry.name);
           return (
-            <div
+            <RowMenu
               key={entry.name}
-              className="files-row"
-              role="option"
-              tabIndex={-1}
-              aria-selected={selected.has(entry.name)}
-              data-kind={kind}
-              data-over={over === entry.name}
-              draggable={renaming !== entry.name}
-              onClick={(event) => pick(entry, event)}
-              onDoubleClick={() => activate(entry)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                if (!selected.has(entry.name)) setSelected(new Set([entry.name]));
-                setMenu({
-                  entry,
-                  x: Math.min(event.clientX, window.innerWidth - 230),
-                  y: Math.min(event.clientY, window.innerHeight - 330),
-                });
+              title={entry.name}
+              sub={`${device}:${path}`}
+              onOpen={
+                entry.dir ? undefined : () => view(entry, canPreview(entry) ? "view" : "details")
+              }
+              opens={
+                entry.dir
+                  ? [{ label: "Open", onSelect: () => open(full) }]
+                  : canPreview(entry)
+                    ? []
+                    : [
+                        {
+                          label: "Download",
+                          icon: <ArrowDownToLine />,
+                          onSelect: () => activate(entry),
+                        },
+                      ]
+              }
+              cells={{
+                name: { value: entry.name, sort: () => sortBy("name") },
+                size: { value: entry.dir ? "" : size(entry.size), sort: () => sortBy("size") },
+                mtime: { value: stamp(entry.mtime), sort: () => sortBy("mtime") },
               }}
-              onKeyDown={(event) => {
-                if (event.key === " ") pick(entry, event);
+              copies={[
+                { label: "Path", value: `${device}:${full}` },
+                ...(/\.rsc$/i.test(entry.name)
+                  ? [{ label: "Import command", value: `/import file-name=${full.slice(1)}` }]
+                  : []),
+              ]}
+              select={{ selected: isSelected, toggle: () => toggle(entry.name) }}
+              actions={rowActions(entry)}
+              selection={{
+                count: chosen.length,
+                summary: chosenBytes ? size(chosenBytes) : undefined,
+                actions: selectionActions,
+                clear: () => setSelected(new Set()),
               }}
-              onDragStart={(event) => {
-                const group = selected.has(entry.name) ? chosen : [entry];
-                dragState.current = { device, dir: path, entries: group };
-                event.dataTransfer.setData(DRAG_TYPE, String(group.length));
-                event.dataTransfer.effectAllowed = "copy";
-              }}
-              onDragEnd={() => {
-                dragState.current = null;
-              }}
-              onDragOver={entry.dir ? (event) => onDragOver(event, entry.name) : undefined}
-              onDrop={entry.dir ? (event) => onDrop(event, joinPath(path, entry.name)) : undefined}
             >
-              <Icon size={15} />
-              {renaming === entry.name ? (
-                <input
-                  // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by a click
-                  autoFocus
-                  value={draft}
-                  aria-label="New name"
-                  onFocus={(event) => event.target.select()}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onBlur={() => setRenaming(null)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") submitDraft();
-                    if (event.key === "Escape") setRenaming(null);
-                  }}
-                />
-              ) : (
-                <span className="files-name" title={entry.name}>
-                  {entry.name}
+              <div
+                className="fp-r"
+                role="option"
+                tabIndex={-1}
+                aria-selected={isSelected}
+                data-kind={kind}
+                data-drop={over === entry.name || undefined}
+                data-drop-label={
+                  over === entry.name
+                    ? dragState.current
+                      ? `Drop to copy into ${entry.name}`
+                      : `Drop to upload into ${entry.name}`
+                    : undefined
+                }
+                draggable={renaming !== entry.name}
+                onClick={(event) => pick(entry, event)}
+                onDoubleClick={() => activate(entry)}
+                onContextMenu={() => {
+                  if (!selected.has(entry.name)) setSelected(new Set([entry.name]));
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === " ") pick(entry, event);
+                }}
+                onDragStart={(event) => {
+                  const group = isSelected ? chosen : [entry];
+                  dragState.current = { device, dir: path, entries: group };
+                  event.dataTransfer.setData(DRAG_TYPE, String(group.length));
+                  event.dataTransfer.effectAllowed = "copy";
+                  dragGhost(
+                    event,
+                    group.length,
+                    group.filter((e) => !e.dir).reduce((sum, e) => sum + e.size, 0),
+                  );
+                }}
+                onDragEnd={() => {
+                  dragState.current = null;
+                }}
+                onDragOver={entry.dir ? (event) => onDragOver(event, entry.name) : undefined}
+                onDrop={entry.dir ? (event) => onDrop(event, full) : undefined}
+              >
+                <span data-col="kind">
+                  <KindTile kind={kind} />
                 </span>
-              )}
-              <span className="files-size">{entry.dir ? "—" : bytes(entry.size)}</span>
-              <span className="files-time">{when(entry.mtime)}</span>
-            </div>
+                {renaming === entry.name ? (
+                  <TextInput
+                    size="sm"
+                    wrapClassName="fp-name-in"
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- opened by a click
+                    autoFocus
+                    value={draft}
+                    label="New name"
+                    onFocus={(event) => event.target.select()}
+                    onChange={setDraft}
+                    onBlur={() => setRenaming(null)}
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                      if (event.key === "Enter") submitDraft();
+                      if (event.key === "Escape") setRenaming(null);
+                    }}
+                  />
+                ) : (
+                  <span className="n" data-col="name" title={entry.name}>
+                    {entry.name}
+                  </span>
+                )}
+                <span className="z" data-col="size">
+                  {entry.dir ? "—" : size(entry.size)}
+                </span>
+                {!phone && (
+                  <span className="d" data-col="mtime">
+                    {stamp(entry.mtime)}
+                  </span>
+                )}
+                <span className="mo">
+                  <RowMore />
+                </span>
+              </div>
+            </RowMenu>
           );
         })}
-        {entries === null && <p className="files-empty">Reading {device}…</p>}
+        {entries === null && <p className="fp-empty">Reading {device}…</p>}
         {entries !== null && error && (
-          <p className="files-empty" data-tone="danger">
+          <p className="fp-empty" data-tone="danger">
             {error}
           </p>
         )}
         {entries !== null && !error && shown.length === 0 && !creating && (
-          <p className="files-empty">
+          <p className="fp-empty">
             {filter
               ? "No name matches the filter."
               : "This folder is empty. Drop files here to upload."}
@@ -771,255 +1127,149 @@ export function FilesPane(
       </div>
 
       {chosen.length > 0 && (
-        <footer className="files-selection">
-          <span>
-            <strong>{chosen.length}</strong> selected
-            {chosenFiles.length > 0 &&
-              ` · ${bytes(chosenFiles.reduce((sum, e) => sum + e.size, 0))}`}
-          </span>
+        <footer className="fp-sel" aria-label={`${chosen.length} selected`}>
+          <b>{chosen.length}</b>
+          <span className="t">selected{chosenFiles.length > 0 && ` · ${size(chosenBytes)}`}</span>
           <button
             type="button"
+            className="fp-act"
             disabled={chosenFiles.length === 0}
-            onClick={() => {
-              for (const entry of chosenFiles)
-                transferQueue.download(device, joinPath(path, entry.name), entry.size);
-            }}
+            onClick={downloadChosen}
+            aria-label="Download"
           >
-            <ArrowDownToLine size={13} /> Download
+            <ArrowDownToLine size={phone ? 13 : 16} />
+            {!phone && "Download"}
           </button>
-          {(chosen.length > 1 || chosen.some((entry) => entry.dir)) && (
-            <button
-              type="button"
-              title="Download the selection, folders included, as one ZIP archive"
-              onClick={() =>
-                transferQueue.downloadZip(
-                  device,
-                  path,
-                  chosen.map((entry) => joinPath(path, entry.name)),
-                  chosenFiles.length === chosen.length
-                    ? chosenFiles.reduce((sum, entry) => sum + entry.size, 0)
-                    : 0,
-                )
-              }
-            >
-              <FileArchive size={13} /> ZIP
-            </button>
-          )}
-          {chosen.length === 1 && chosen[0] && canPreview(chosen[0]) && (
-            <button
-              type="button"
-              onClick={() =>
-                viewerStore.set({ device, path: joinPath(path, chosen[0]?.name ?? "") })
-              }
-            >
-              <Eye size={13} /> View
-            </button>
-          )}
-          {chosenFiles.length === 1 && chosen.length === 1 && (
-            <button
-              type="button"
-              title="SHA-256 of the file on the router"
-              onClick={() => {
-                const name = chosenFiles[0]?.name ?? "";
-                setBusy(true);
-                filesApi
-                  .hash({ device, path: joinPath(path, name) })
-                  .then((sha) => {
-                    void navigator.clipboard?.writeText(sha).catch(() => {});
-                    setNotice(`sha256 of ${name} (copied):\n${sha}`);
-                  })
-                  .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              <Fingerprint size={13} /> Checksum
-            </button>
-          )}
-          {chosenFiles.length > 0 &&
-            (props.params.s3 ? [false, true] : [false]).map((s3) => (
-              <button
-                key={String(s3)}
-                type="button"
-                title={
-                  s3
-                    ? "Copy the selected files to the backup vault of the server and to S3"
-                    : "Copy the selected files to the backup vault of the server"
-                }
-                onClick={() => {
-                  setBusy(true);
-                  filesApi
-                    .saveToVault(
-                      device,
-                      chosenFiles.map((entry) => joinPath(path, entry.name)),
-                      s3,
-                    )
-                    .then((names) =>
-                      setNotice(`Saved to the vault${s3 ? " and S3" : ""}:\n${names.join("\n")}`),
-                    )
-                    .catch((e: unknown) => setNotice(e instanceof Error ? e.message : String(e)))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                <Vault size={13} /> {s3 ? "S3" : "Vault"}
-              </button>
-            ))}
-          {chosenFiles.length > 0 && chosenFiles.length <= 2 && chosenFiles.every(canPreview) && (
-            <button
-              type="button"
-              title="Compare two text files, on one router or on two"
-              onClick={() => {
-                const refs = chosenFiles.map((entry) => ({
-                  device,
-                  path: joinPath(path, entry.name),
-                }));
-                if (refs.length === 2) compareStore.set(refs);
-                else if (refs[0]) pickForCompare(refs[0]);
-              }}
-            >
-              <GitCompareArrows size={13} /> Compare
-            </button>
-          )}
           {!readOnly && (
-            <>
-              {targets.length > 0 && chosenFiles.length > 0 && (
-                <span className="files-send">
-                  <Send size={13} />
-                  <Select
-                    size="sm"
-                    className="term-select"
-                    aria-label="Copy the selected files to"
-                    placeholder="Copy to…"
-                    value=""
-                    options={targets}
-                    onValueChange={(value) => {
-                      const [toDevice = "", toDir = "/"] = value.split("\n");
-                      for (const entry of chosenFiles)
-                        transferQueue.copy(
-                          { device, path: joinPath(path, entry.name), size: entry.size },
-                          { device: toDevice, dir: toDir },
-                        );
-                    }}
-                  />
-                </span>
-              )}
-              {chosen.length === 1 && chosen[0] && /\.rsc$/i.test(chosen[0].name) && (
+            <Menu
+              label="Copy the selected files to"
+              trigger={
                 <button
                   type="button"
-                  title="Check this script on the router, then run it"
-                  onClick={() =>
-                    importStore.set({ device, path: joinPath(path, chosen[0]?.name ?? "") })
-                  }
+                  className="fp-act"
+                  disabled={targets.length === 0 || chosenFiles.length === 0}
+                  aria-label="Copy to"
+                  title={targets.length === 0 ? "Open another pane to copy into it" : undefined}
                 >
-                  <Play size={13} /> Import…
+                  <ArrowLeftRight size={13} />
+                  {!phone && "Copy to"}
                 </button>
-              )}
-              {chosen.length === 1 && chosen[0] && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCreating(false);
-                    setDraft(chosen[0]?.name ?? "");
-                    setRenaming(chosen[0]?.name ?? null);
-                  }}
-                >
-                  <Pencil size={13} /> Rename
-                </button>
-              )}
-              <button type="button" data-danger="true" onClick={() => setConfirmDelete(true)}>
-                <Trash2 size={13} /> Delete
-              </button>
-            </>
+              }
+              groups={[
+                targets.map((to) => ({
+                  label: `${to.device}:${to.dir}`,
+                  onSelect: () => copyTo(to),
+                })),
+              ]}
+            />
           )}
-          <button
-            type="button"
-            onClick={() => setSelected(new Set())}
-            aria-label="Clear the selection"
-          >
-            <X size={13} />
-          </button>
+          {!phone && canZip && (
+            <button
+              type="button"
+              className="fp-ib"
+              onClick={zip}
+              aria-label="Download as ZIP"
+              title="Download the selection, folders included, as one ZIP archive"
+            >
+              <FileArchive size={14} />
+            </button>
+          )}
+          {chosenFiles.length > 0 && (
+            <button
+              type="button"
+              className={phone ? "fp-act" : "fp-ib"}
+              onClick={() => toVault(false)}
+              aria-label="Save to the vault"
+              title="Copy the selected files to the backup vault of the server"
+            >
+              <Vault size={phone ? 13 : 14} />
+            </button>
+          )}
+          <Menu
+            label="More for the selection"
+            trigger={
+              <button
+                type="button"
+                className={phone ? "fp-act" : "fp-ib"}
+                aria-label="More for the selection"
+              >
+                <MoreHorizontal size={phone ? 13 : 14} />
+              </button>
+            }
+            groups={
+              phone && canZip
+                ? [
+                    [{ label: "Download as ZIP", icon: <FileArchive />, onSelect: zip }],
+                    ...moreItems,
+                  ]
+                : moreItems
+            }
+          />
         </footer>
       )}
 
-      {menu &&
-        createPortal(
-          <div
-            className="files-menu"
-            role="menu"
-            aria-label={menu.entry.name}
-            style={{ left: menu.x, top: menu.y }}
-          >
-            {(() => {
-              const { entry } = menu;
-              const full = joinPath(path, entry.name);
-              const copyText = (text: string): void =>
-                void navigator.clipboard?.writeText(text).catch(() => {});
-              const items: ([string, () => void, boolean?] | null)[] = [
-                [
-                  entry.dir ? "Open" : canPreview(entry) ? "View" : "Download",
-                  () => activate(entry),
-                ],
-                entry.dir || !canPreview(entry)
-                  ? null
-                  : ["Download", () => transferQueue.download(device, full, entry.size)],
-                entry.dir || !canPreview(entry)
-                  ? null
-                  : ["Compare with…", () => pickForCompare({ device, path: full })],
-                entry.dir || kindOf(entry) !== "text"
-                  ? null
-                  : ["Follow (live tail)", () => tailStore.set({ device, path: full })],
-                entry.dir ? ["Bookmark this folder", () => toggleBookmark(device, full)] : null,
-                ["Copy the path", () => copyText(`${device}:${full}`)],
-                /\.rsc$/i.test(entry.name)
-                  ? [
-                      "Copy the import command",
-                      () => copyText(`/import file-name=${full.slice(1)}`),
-                    ]
-                  : null,
-                readOnly || !/\.rsc$/i.test(entry.name)
-                  ? null
-                  : ["Import…", () => importStore.set({ device, path: full })],
-                readOnly
-                  ? null
-                  : [
-                      "Rename",
-                      () => {
-                        setCreating(false);
-                        setDraft(entry.name);
-                        setRenaming(entry.name);
-                      },
-                    ],
-                readOnly ? null : ["Delete…", () => setConfirmDelete(true), true],
-              ];
-              return items.map(
-                (item) =>
-                  item && (
-                    <button
-                      key={item[0]}
-                      type="button"
-                      role="menuitem"
-                      data-danger={item[2] === true}
-                      onClick={item[1]}
-                    >
-                      {item[0]}
-                    </button>
-                  ),
-              );
-            })()}
-          </div>,
-          document.querySelector(".files-page") ?? document.body,
-        )}
-
-      {over !== null && (
-        <div className="files-drop" aria-hidden="true">
-          <div>
-            <ArrowUpFromLine size={26} />
-            <strong>{dragLabel}</strong>
-            <span>
-              to {device}:{over ? joinPath(path, over) : path}
-            </span>
-          </div>
+      {over === "" && (
+        <div className="fp-drop" aria-hidden="true">
+          <ArrowUpFromLine size={15} />
+          <b>{dropLabel}</b>
+          <span>
+            to {device}:{path}
+          </span>
         </div>
       )}
-    </div>
+    </section>
+  );
+}
+
+function SearchIcon(): ReactNode {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+/** A pane inside dockview: the pane keeps the panel's folder and active state. */
+export function FilesDockPane(
+  props: IDockviewPanelProps<{
+    device: string;
+    path?: string;
+    readOnly?: boolean;
+    trash?: boolean;
+    s3?: boolean;
+  }>,
+): ReactNode {
+  const { api, params } = props;
+  const [active, setActive] = useState(api.isActive);
+  useEffect(() => {
+    const sub = api.onDidActiveChange((event) => setActive(event.isActive));
+    return () => sub.dispose();
+  }, [api]);
+  const onPath = useCallback(
+    (path: string) => api.updateParameters({ ...api.getParameters(), path }),
+    [api],
+  );
+  return (
+    <FilesPane
+      id={api.id}
+      device={params.device}
+      path={params.path ?? "/"}
+      readOnly={params.readOnly === true}
+      trash={params.trash === true}
+      s3={params.s3 === true}
+      active={active}
+      onPath={onPath}
+      onFocus={() => api.setActive()}
+    />
   );
 }

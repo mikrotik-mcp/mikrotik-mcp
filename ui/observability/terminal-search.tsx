@@ -6,7 +6,7 @@
  * Matches are painted with the CSS Custom Highlight API, which marks text
  * ranges without changing the DOM, so the panes render exactly as before.
  */
-import { ArrowDown, ArrowUp, Filter, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Filter, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SearchInput } from "./kit";
@@ -42,7 +42,7 @@ export function findMatches(text: string, pattern: RegExp, limit = 5000): [numbe
   return found;
 }
 
-const SEARCHED = ".term-block-command, .term-output, .term-error";
+const SEARCHED = ".term-blk-h .cmd, .term-blk-o";
 const MISS = "data-find-miss";
 const highlights = (): HighlightRegistry | undefined =>
   typeof CSS !== "undefined" && "highlights" in CSS ? CSS.highlights : undefined;
@@ -87,8 +87,7 @@ function rangesIn(element: Element, pattern: RegExp, budget: number): Range[] {
 function clearMarks(): void {
   highlights()?.delete("term-find");
   highlights()?.delete("term-find-active");
-  for (const block of document.querySelectorAll(`.term-block[${MISS}]`))
-    block.removeAttribute(MISS);
+  for (const block of document.querySelectorAll(`.term-blk[${MISS}]`)) block.removeAttribute(MISS);
 }
 
 export function FindBar({
@@ -141,7 +140,7 @@ export function FindBar({
           ? panes
           : panes.filter((pane) => pane.dataset.paneId === workspace.activePane).slice(0, 1);
         for (const pane of scope.length ? scope : panes.slice(0, 1)) {
-          for (const block of pane.querySelectorAll(".term-block")) {
+          for (const block of pane.querySelectorAll(".term-blk")) {
             const before = found.length;
             for (const target of block.querySelectorAll(SEARCHED))
               found.push(...rangesIn(target, pattern, 5000 - found.length));
@@ -193,17 +192,16 @@ export function FindBar({
     setOptions((current) => ({ ...current, [name]: !current[name] }));
 
   return (
-    <div className="term-find" role="search" data-invalid={invalid}>
-      <div ref={field} className="min-w-0 flex-[0_1_420px]">
+    <div className="term-findb" role="search" data-invalid={invalid || undefined}>
+      <div ref={field} className="term-findb-f">
         <SearchInput
           size="sm"
           mono
           invalid={invalid}
           value={query}
-          placeholder="Find in terminal output…"
+          placeholder="Find in the output"
           spellCheck={false}
           label="Find in terminals"
-          aria-label="Find in terminals"
           onChange={setQuery}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -211,76 +209,89 @@ export function FindBar({
               step(event.shiftKey ? -1 : 1);
             } else if (event.key === "Escape") onClose();
           }}
-          end={
-            <>
-              {query && (
-                <button type="button" onClick={() => setQuery("")} aria-label="Clear" title="Clear">
-                  <X size={13} />
-                </button>
-              )}
-              <button
-                type="button"
-                data-on={options.matchCase}
-                onClick={() => toggle("matchCase")}
-                title="Match case"
-              >
-                Cc
-              </button>
-              <button
-                type="button"
-                data-on={options.words}
-                onClick={() => toggle("words")}
-                title="Words"
-              >
-                W
-              </button>
-              <button
-                type="button"
-                data-on={options.regex}
-                onClick={() => toggle("regex")}
-                title="Regular expression"
-              >
-                .*
-              </button>
-            </>
-          }
         />
       </div>
-      <span className="term-find-count" data-empty={Boolean(query) && total === 0}>
+      <span className="c" data-empty={(Boolean(query) && total === 0) || undefined}>
         {invalid
           ? "bad pattern"
           : total === 0
-            ? "0 results"
-            : `${index + 1}/${total}${total >= 5000 ? "+" : ""}`}
+            ? "0 / 0"
+            : `${index + 1} / ${total}${total >= 5000 ? "+" : ""}`}
       </span>
       <button
         type="button"
-        onClick={() => step(-1)}
-        disabled={!total}
-        title="Previous (Shift+Enter)"
+        className="o"
+        aria-pressed={options.matchCase}
+        onClick={() => toggle("matchCase")}
+        title="Match case"
       >
-        <ArrowUp size={14} />
-      </button>
-      <button type="button" onClick={() => step(1)} disabled={!total} title="Next (Enter)">
-        <ArrowDown size={14} />
+        Aa
       </button>
       <button
         type="button"
-        data-on={filter}
+        className="o"
+        aria-pressed={options.words}
+        onClick={() => toggle("words")}
+        title="Whole words"
+      >
+        W
+      </button>
+      <button
+        type="button"
+        className="o"
+        aria-pressed={options.regex}
+        onClick={() => toggle("regex")}
+        title="Regular expression"
+      >
+        .*
+      </button>
+      <button
+        type="button"
+        className="o"
+        aria-pressed={everyPane}
+        onClick={() => setEveryPane((on) => !on)}
+        title={everyPane ? "Searching every console" : "Searching the active console"}
+      >
+        All terminals
+      </button>
+      <button
+        type="button"
+        className="term-ib"
+        aria-pressed={filter}
+        data-on={filter || undefined}
         onClick={() => setFilter((on) => !on)}
         title="Show only the blocks that match"
+        aria-label="Show only the blocks that match"
       >
         <Filter size={14} />
       </button>
-      <span className="term-find-scope" role="group" aria-label="Search in">
-        <button type="button" data-on={!everyPane} onClick={() => setEveryPane(false)}>
-          This terminal
-        </button>
-        <button type="button" data-on={everyPane} onClick={() => setEveryPane(true)}>
-          All terminals
-        </button>
-      </span>
-      <button type="button" className="term-find-close" onClick={onClose} title="Close (Esc)">
+      <button
+        type="button"
+        className="term-ib"
+        onClick={() => step(-1)}
+        disabled={!total}
+        title="Previous (Shift+Enter)"
+        aria-label="Previous"
+      >
+        <ChevronUp size={15} />
+      </button>
+      <button
+        type="button"
+        className="term-ib"
+        onClick={() => step(1)}
+        disabled={!total}
+        title="Next (Enter)"
+        aria-label="Next"
+      >
+        <ChevronDown size={15} />
+      </button>
+      <button
+        type="button"
+        className="term-ib"
+        onClick={onClose}
+        title="Close (Esc)"
+        aria-label="Close"
+      >
         <X size={15} />
       </button>
     </div>

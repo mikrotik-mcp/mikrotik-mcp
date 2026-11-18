@@ -210,4 +210,5 @@ test("a recording is read frame by frame, and a cut-off last line is skipped", a
       [61.5, "c"],
     ]),
   ).toEqual([0, 1, 3]);
-});
+  // The first import loads xterm.js and the kit; under a full parallel run it can pass 5 s.
+}, 20_000);

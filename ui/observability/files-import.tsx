@@ -3,10 +3,11 @@
  * dry run, which reports the errors and changes nothing; the real import needs
  * a second, explicit click.
  */
-import { Play, ShieldCheck, X } from "lucide-react";
+import { Play, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { filesApi, importStore } from "./files-lib";
+import { Dialog, Strip } from "./files-parts";
 
 export function ImportDialog(): ReactNode {
   const file = useSyncExternalStore(importStore.subscribe, importStore.get);
@@ -44,60 +45,55 @@ export function ImportDialog(): ReactNode {
   const shown = result ?? check;
 
   return (
-    <div className="term-modal" role="dialog" aria-modal="true" aria-label="Import a script">
-      <div className="term-modal-card files-viewer">
-        <header>
-          <strong>
-            <Play size={15} /> Import {file.path}
-          </strong>
-          <span className="files-viewer-meta">on {file.device}</span>
-          <span className="files-viewer-actions">
-            <button type="button" onClick={() => importStore.set(null)} aria-label="Close">
-              <X size={16} />
-            </button>
-          </span>
-        </header>
-        {!shown && !error && (
-          <p className="files-empty">The router is checking the script (dry run)…</p>
-        )}
-        {error && (
-          <p className="files-empty" data-tone="danger">
-            {error}
-          </p>
-        )}
-        {shown && (
-          <>
-            <div className="files-strip" data-tone={shown.ok ? "ok" : "danger"} role="status">
-              <span>
-                <ShieldCheck size={13} />{" "}
-                {result
-                  ? result.ok
-                    ? "The import ran."
-                    : "The import stopped with an error."
-                  : check?.ok
-                    ? "Dry run: the router accepts every line. Nothing was changed."
-                    : "Dry run: the router found an error. Nothing was changed."}
-              </span>
-              {!result && !armed && (
-                <button type="button" onClick={() => setArmed(true)}>
-                  Run the import…
-                </button>
-              )}
-              {!result && armed && (
+    <Dialog
+      label="Import a script"
+      icon={<Play size={16} />}
+      title={`Import ${file.path}`}
+      meta={`on ${file.device}`}
+      onClose={() => importStore.set(null)}
+    >
+      {!shown && !error && <p className="fl-empty">The router is checking the script (dry run)…</p>}
+      {error && <Strip tone="danger">{error}</Strip>}
+      {shown && (
+        <>
+          <Strip
+            tone={shown.ok ? "ok" : "danger"}
+            icon={<ShieldCheck size={15} />}
+            actions={
+              !result &&
+              (armed ? (
                 <>
-                  <button type="button" data-danger="true" disabled={running} onClick={run}>
-                    {running ? "Importing…" : `Yes, change ${file.device}`}
-                  </button>
-                  <button type="button" onClick={() => setArmed(false)}>
+                  <button type="button" className="fp-act" onClick={() => setArmed(false)}>
                     Cancel
                   </button>
+                  <button
+                    type="button"
+                    className="fp-act"
+                    data-tone="danger"
+                    disabled={running}
+                    onClick={run}
+                  >
+                    {running ? "Importing…" : `Yes, change ${file.device}`}
+                  </button>
                 </>
-              )}
-            </div>
-            <pre className="files-code">{shown.output || "(no output)"}</pre>
-          </>
-        )}
-      </div>
-    </div>
+              ) : (
+                <button type="button" className="fp-act" onClick={() => setArmed(true)}>
+                  Run the import…
+                </button>
+              ))
+            }
+          >
+            {result
+              ? result.ok
+                ? "The import ran."
+                : "The import stopped with an error."
+              : check?.ok
+                ? "Dry run: the router accepts every line. Nothing was changed."
+                : "Dry run: the router found an error. Nothing was changed."}
+          </Strip>
+          <pre className="fl-out">{shown.output || "(no output)"}</pre>
+        </>
+      )}
+    </Dialog>
   );
 }

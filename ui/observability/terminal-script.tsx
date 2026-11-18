@@ -1,11 +1,12 @@
 /**
  * Script runner: several commands, one per line, run in order in one pane.
- * "Check" asks the router to validate each line without running anything.
+ * "Check syntax" asks the router to validate each line without running anything.
  */
-import { FileCode2, Play, ShieldCheck, TriangleAlert, X } from "lucide-react";
+import { Pencil, Play, Square, Table2, TriangleAlert, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useRef, useState, useSyncExternalStore } from "react";
-import { Checkbox, TextArea } from "./kit";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Checkbox, Switch, TextArea } from "./kit";
+import { popIn } from "./kit/motion";
 import { hasSyntaxError } from "./terminal-highlight";
 import {
   destructiveWord,
@@ -25,6 +26,29 @@ type LineState =
   | "failed"
   | "skipped";
 
+/** The mark in the circle before a line. */
+const MARK: Record<LineState, { tone: string; mark: string }> = {
+  idle: { tone: "wait", mark: "" },
+  checking: { tone: "run", mark: "•" },
+  valid: { tone: "ok", mark: "✓" },
+  invalid: { tone: "bad", mark: "!" },
+  running: { tone: "run", mark: "•" },
+  ok: { tone: "ok", mark: "✓" },
+  failed: { tone: "bad", mark: "!" },
+  skipped: { tone: "wait", mark: "" },
+};
+/** The word at the end of a line. */
+const WORD: Record<LineState, string> = {
+  idle: "waiting",
+  checking: "checking",
+  valid: "syntax ok",
+  invalid: "syntax error",
+  running: "running",
+  ok: "",
+  failed: "failed",
+  skipped: "skipped",
+};
+
 export function ScriptDialog(): ReactNode {
   const paneId = useSyncExternalStore(scriptStore.subscribe, scriptStore.get);
   const [text, setText] = useState("");
@@ -33,7 +57,14 @@ export function ScriptDialog(): ReactNode {
   const [stopOnError, setStopOnError] = useState(true);
   const [reviewed, setReviewed] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** Show the lines and their states instead of the editor. */
+  const [showLines, setShowLines] = useState(false);
   const cancelled = useRef(false);
+  const card = useRef<HTMLDivElement>(null);
+  const open = Boolean(paneId);
+  useEffect(() => {
+    if (open && card.current) return popIn(card.current);
+  }, [open]);
 
   if (!paneId) return null;
   const pane = paneRegistry.get(paneId);
@@ -46,6 +77,7 @@ export function ScriptDialog(): ReactNode {
   const reset = (state: LineState): void => {
     setStates(lines.map(() => state));
     setNotes(lines.map(() => ""));
+    setShowLines(true);
   };
 
   const check = async (): Promise<void> => {
@@ -85,102 +117,136 @@ export function ScriptDialog(): ReactNode {
     }
     setBusy(false);
   };
+  const close = (): void => {
+    cancelled.current = true;
+    scriptStore.close();
+  };
 
   return (
-    <div className="term-modal" role="dialog" aria-modal="true" aria-label="Run a script">
-      <div className="term-modal-card term-script">
-        <header>
-          <strong>
-            <FileCode2 size={15} /> Script for {pane?.device ?? "a closed pane"}
-          </strong>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={() => {
-              cancelled.current = true;
-              scriptStore.close();
-            }}
-          >
-            <X size={16} />
+    <div
+      className="term-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Run a script"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !busy) close();
+      }}
+    >
+      <div className="term-mod term-script" ref={card}>
+        <header className="term-mod-hd">
+          <Table2 size={16} />
+          <h2>Run a script on {pane?.device ?? "a closed pane"}</h2>
+          <span className="m">
+            {lines.length} line{lines.length === 1 ? "" : "s"}
+            {risky.length > 0 &&
+              ` · ${risky.length} change${risky.length === 1 ? "s" : ""} configuration`}
+          </span>
+          <span className="sp" />
+          <button type="button" className="term-ib" aria-label="Close" onClick={close}>
+            <X size={15} />
           </button>
         </header>
-        <TextArea
-          mono
-          value={text}
-          spellCheck={false}
-          placeholder={
-            "# One command per line. Lines that start with # are skipped.\n/ip address print\n/interface print where running"
-          }
-          aria-label="Script"
-          disabled={busy}
-          onChange={(value) => {
-            setText(value);
-            setStates([]);
-            setReviewed(false);
-          }}
-        />
-        {lines.length > 0 && (
-          <ol className="term-script-lines">
-            {lines.map((line, index) => (
-              // eslint-disable-next-line react/no-array-index-key -- the same command may appear twice
-              <li key={index} data-state={states[index] ?? "idle"}>
-                <code>{line}</code>
-                <span>
-                  {states[index] && states[index] !== "idle" ? states[index] : ""}
-                  {notes[index] ? ` · ${notes[index]}` : ""}
-                </span>
-              </li>
-            ))}
+        {showLines && lines.length > 0 ? (
+          <ol className="term-scr">
+            {lines.map((line, index) => {
+              const state = states[index] ?? "idle";
+              return (
+                // eslint-disable-next-line react/no-array-index-key -- the same command may appear twice
+                <li key={index} className="term-scr-l" data-cur={state === "running" || undefined}>
+                  <span className="s" data-tone={MARK[state].tone}>
+                    {MARK[state].mark}
+                  </span>
+                  <code>{line}</code>
+                  <span
+                    className="t"
+                    data-bad={state === "failed" || state === "invalid" || undefined}
+                  >
+                    {notes[index] || WORD[state]}
+                  </span>
+                </li>
+              );
+            })}
           </ol>
-        )}
-        {risky.length > 0 && (
-          <label className="term-script-risk">
-            <Checkbox
-              aria-label="I reviewed the lines that change or remove configuration"
-              checked={reviewed}
-              onCheckedChange={setReviewed}
+        ) : (
+          <div className="term-script-edit">
+            <TextArea
+              mono
+              rows={7}
+              value={text}
+              spellCheck={false}
+              placeholder={
+                "# One command per line. Lines that start with # are skipped.\n/ip address print\n/interface print where running"
+              }
+              aria-label="Script"
+              disabled={busy}
+              onChange={(value) => {
+                setText(value);
+                setStates([]);
+                setReviewed(false);
+              }}
             />
-            <TriangleAlert size={14} />
-            {risky.length} line{risky.length > 1 ? "s" : ""} change or remove configuration (
-            {risky.map((line) => destructiveWord(line)).join(", ")}). I reviewed them.
-          </label>
+          </div>
         )}
-        <footer>
-          <label>
-            <Checkbox
-              aria-label="Stop at the first error"
-              checked={stopOnError}
-              onCheckedChange={setStopOnError}
-            />
-            Stop at the first error
-          </label>
+        <div className="term-strip" data-tone={risky.length > 0 ? "warn" : undefined}>
+          {risky.length > 0 && (
+            <>
+              <span className="i">
+                <TriangleAlert size={15} />
+              </span>
+              <Checkbox
+                tone="warn"
+                checked={reviewed}
+                onCheckedChange={setReviewed}
+                label={
+                  risky.length === 1
+                    ? "I reviewed the line that changes configuration"
+                    : `I reviewed the ${risky.length} lines that change configuration`
+                }
+              />
+            </>
+          )}
+          <span className="sp" />
+          <Switch
+            checked={stopOnError}
+            onCheckedChange={setStopOnError}
+            label="Stop at the first error"
+          />
+          {showLines && !busy && (
+            <button type="button" className="term-act" onClick={() => setShowLines(false)}>
+              <Pencil size={12} /> Edit
+            </button>
+          )}
           <button
             type="button"
+            className="term-act"
             disabled={busy || !lines.length || !pane}
             onClick={() => void check()}
           >
-            <ShieldCheck size={14} /> Check syntax
+            Check syntax
           </button>
           {busy ? (
             <button
               type="button"
+              className="term-act"
+              data-tone="go"
               onClick={() => {
                 cancelled.current = true;
               }}
             >
-              Stop after this line
+              <Square size={11} /> Stop after this line
             </button>
           ) : (
             <button
               type="button"
-              className="term-go"
+              className="term-act"
+              data-tone="go"
               disabled={!lines.length || !pane || (risky.length > 0 && !reviewed)}
               onClick={() => void run()}
             >
-              <Play size={14} /> Run {lines.length} line{lines.length === 1 ? "" : "s"}
+              <Play size={12} /> Run {lines.length} line{lines.length === 1 ? "" : "s"}
             </button>
           )}
-        </footer>
+        </div>
       </div>
     </div>
   );

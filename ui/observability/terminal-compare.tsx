@@ -31,13 +31,18 @@ export function CompareDialog(): ReactNode {
   if (changes) {
     return (
       <div className="term-modal" role="dialog" aria-modal="true" aria-label="What changed">
-        <div className="term-modal-card">
-          <header>
-            <strong>
-              <GitCompareArrows size={15} /> {changes.title}
-            </strong>
-            <button type="button" onClick={changesStore.close} aria-label="Close">
-              <X size={16} />
+        <div className="term-mod term-diff">
+          <header className="term-mod-hd">
+            <GitCompareArrows size={16} />
+            <h2>{changes.title}</h2>
+            <span className="sp" />
+            <button
+              type="button"
+              className="term-ib"
+              onClick={changesStore.close}
+              aria-label="Close"
+            >
+              <X size={15} />
             </button>
           </header>
           <UnifiedDiff unified={changes.text} maxHeight={560} />
@@ -53,7 +58,7 @@ export function CompareDialog(): ReactNode {
         <span>
           Comparing <code>{first.label}</code> — pick a second block, in any pane.
         </span>
-        <button type="button" onClick={compareStore.clear}>
+        <button type="button" className="term-act" onClick={compareStore.clear}>
           Cancel
         </button>
       </div>
@@ -61,18 +66,18 @@ export function CompareDialog(): ReactNode {
   }
   return (
     <div className="term-modal" role="dialog" aria-modal="true" aria-label="Differences">
-      <div className="term-modal-card">
-        <header>
-          <strong>
-            <GitCompareArrows size={15} /> Differences
-          </strong>
+      <div className="term-mod term-diff">
+        <header className="term-mod-hd">
+          <GitCompareArrows size={16} />
+          <h2>Differences</h2>
           <span className="term-compare-sum">
             <b data-kind="add">+{diff.summary.added}</b>
             <b data-kind="del">−{diff.summary.removed}</b>
             {diff.summary.unchanged} unchanged
           </span>
-          <button type="button" onClick={compareStore.clear} aria-label="Close">
-            <X size={16} />
+          <span className="sp" />
+          <button type="button" className="term-ib" onClick={compareStore.clear} aria-label="Close">
+            <X size={15} />
           </button>
         </header>
         <div className="term-compare-sides">

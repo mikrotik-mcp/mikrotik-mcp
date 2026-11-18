@@ -609,6 +609,14 @@ export const transferQueue = {
     transfers = keep;
     for (const listener of transferListeners) listener();
   },
+  /** Removes one finished, failed or stopped transfer from the list. */
+  dismiss(id: string): void {
+    const item = transfers.find((t) => t.id === id);
+    if (!item || item.status === "queued" || item.status === "active") return;
+    jobs.delete(id);
+    transfers = transfers.filter((t) => t.id !== id);
+    for (const listener of transferListeners) listener();
+  },
 
   /** Browser → router. `fetch` reports no upload progress, so this uses XHR. */
   upload(device: string, dir: string, file: File): void {
