@@ -35,6 +35,13 @@ import type {
   MacTelnetSessionOptions,
 } from "@tikoci/centrs/protocols";
 
+/** The text without the line ends at its end. A loop, not a pattern: a pattern backtracks on many line ends. */
+function stripLineEnd(text: string): string {
+  let end = text.length;
+  while (end > 0 && (text[end - 1] === "\n" || text[end - 1] === "\r")) end -= 1;
+  return text.slice(0, end);
+}
+
 const ESC = "\x1B";
 const enc = new TextEncoder();
 
@@ -156,7 +163,7 @@ export function emulateScreen(text: string): string[] {
  */
 export function extractCommandOutput(raw: string, command?: string): string {
   // Submission terminators are not echoed command text and must not consume output.
-  command = command?.replace(/[\r\n]+$/, "");
+  command = command === undefined ? undefined : stripLineEnd(command);
   const lines = emulateScreen(raw);
   let start = 1;
   if (command !== undefined && lines.length > 0) {
@@ -296,7 +303,7 @@ export class MacTelnetConsole {
   async run(cli: string): Promise<ConsoleCommandResult> {
     this.assertOpen();
     // Submit exactly once, even when callers provide a newline-terminated command.
-    cli = cli.replace(/[\r\n]+$/, "");
+    cli = stripLineEnd(cli);
     this.buffer = "";
     this.session.sendInput(enc.encode(`${cli}\r`));
     await this.waitFor(

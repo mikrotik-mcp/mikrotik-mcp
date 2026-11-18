@@ -32,7 +32,11 @@ export interface ParsedVersion {
  */
 export function parseVersion(raw: string | undefined): ParsedVersion | null {
   if (!raw) return null;
-  const cleaned = raw.trim().replace(/\s*\(.*\)$/, ""); // strip "(stable)" etc.
+  // Strip "(stable)" etc. by position, and refuse an over-long string, so no
+  // pattern can backtrack on hostile input from a device.
+  const paren = raw.indexOf("(");
+  const cleaned = (paren >= 0 ? raw.slice(0, paren) : raw).trim();
+  if (cleaned.length > 64) return null;
   const m = cleaned.match(/^(\d+)\.(\d+)(?:\.(\d+))?(.*)$/);
   if (!m) return null;
   return {
