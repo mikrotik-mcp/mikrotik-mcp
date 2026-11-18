@@ -74,6 +74,14 @@ test("nonzero exit cannot be masked by partial stdout", async () => {
   expect((await result).message).toMatch(/exit code 1.*failure: rejected/s);
 });
 
+test("an unknown menu is returned as text, although RouterOS exits non-zero", async () => {
+  const s = session();
+  const result = s.client.run("/caps-man manager print");
+  s.channel.stderr.emit("data", Buffer.from("bad command name caps-man (line 1 column 2)"));
+  s.channel.emit("close", 1);
+  expect(await result).toBe("bad command name caps-man (line 1 column 2)");
+});
+
 test("normal close without optional exit status remains supported", async () => {
   const s = session();
   const result = s.client.run("/system identity print");

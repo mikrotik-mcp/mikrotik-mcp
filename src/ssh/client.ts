@@ -21,6 +21,7 @@ import type { ConnectConfig, ClientChannel, SFTPWrapper } from "ssh2";
 import { logger } from "../logger";
 import type { EndpointOptions } from "../core/device-endpoints";
 import { endpointAddress } from "../core/device-endpoints";
+import { commandUnsupported } from "../core/routeros";
 
 /**
  * How long a one-shot `run()` may go with NO output and NO channel close before
@@ -492,9 +493,21 @@ export class MikroTikSSHClient {
             if (settled) return;
             // Exit status is optional in SSH; a normal close without it is valid.
             if ((typeof code === "number" && code !== 0) || signal) {
+              const text =
+                decodeOutput(Buffer.concat(stderrBuf)) || decodeOutput(Buffer.concat(stdout));
+              // Newer RouterOS exits non-zero when the parser does not know the
+              // menu ("bad command name"). Callers test for that text with
+              // commandUnsupported() to learn that a feature is absent, so it is
+              // an answer, not a failure: return it as older versions did.
+              if (!signal && commandUnsupported(text)) {
+                settled = true;
+                clearTimers();
+                resolve(text);
+                return;
+              }
               fail(
                 new Error(
-                  `MikroTik command failed (${signal ? `signal ${signal}` : `exit code ${code}`}): ${decodeOutput(Buffer.concat(stderrBuf)) || decodeOutput(Buffer.concat(stdout))}`,
+                  `MikroTik command failed (${signal ? `signal ${signal}` : `exit code ${code}`}): ${text}`,
                 ),
               );
             } else finish();
