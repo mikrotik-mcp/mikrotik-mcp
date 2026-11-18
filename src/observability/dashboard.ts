@@ -1683,7 +1683,7 @@ export async function runDashboard(
   // Files deleted or replaced on the Files page are kept here for a week.
   setTrashDir(cfg.dbPath === ":memory:" ? undefined : join(dirname(cfg.dbPath), "files-trash"));
   setJobsFile(cfg.dbPath === ":memory:" ? undefined : join(dirname(cfg.dbPath), "files-jobs.json"));
-  const filesRoutes = createFilesRoutes({ denied: filesAccess(cfg) });
+  const filesRoutes = createFilesRoutes({ denied: () => filesAccess(getConfig().dashboard) });
 
   /** Route all dashboard API requests; exceptions bubble to the caller. */
   async function dashboardRoute(

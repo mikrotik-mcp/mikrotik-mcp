@@ -34,16 +34,17 @@ import type { Risk } from "./event";
 import { recordToolCall } from "./recorder";
 import { addJob, listJobs, removeJob, runDueJobs, runJob } from "./files-schedules";
 import { listTrash, openTrash, purgeTrash, stash, trashEnabled } from "./files-trash";
-import { terminalAccess } from "./terminal-routes";
 
-/** Why the Files page is unavailable, or `null` when it may be used. */
-export function filesAccess(cfg: { host: string; token?: string; files?: boolean }): string | null {
-  if (cfg.files === false) return "The Files page is turned off (dashboard.files = false).";
-  if (terminalAccess({ host: cfg.host, token: cfg.token }) === null) return null;
-  return (
-    "The Files page reads and writes files on your routers, so it needs a protected dashboard. " +
-    "Set a dashboard token (--dashboard-token) or bind the dashboard to 127.0.0.1 (--dashboard-host)."
-  );
+/**
+ * Why the Files page is unavailable, or `null` when it may be used. The page is
+ * on unless `dashboard.files` is false; it does not need a token or a loopback
+ * bind. Whoever can open the dashboard can then read and change router files,
+ * so an operator on an untrusted network sets a token or turns the page off.
+ */
+export function filesAccess(cfg: { files?: boolean } | undefined): string | null {
+  return cfg?.files === false
+    ? "The Files page is turned off. Turn it on in Config → Dashboard (dashboard.files)."
+    : null;
 }
 
 export interface FileEntry {
@@ -783,9 +784,11 @@ const deviceOf = (value: unknown): string => {
   return name;
 };
 
-export function createFilesRoutes(options: { denied: string | null }) {
-  if (options.denied === null && !jobTimer) {
+/** `denied` is asked on each request, so a change in the settings applies at once. */
+export function createFilesRoutes(options: { denied: () => string | null }) {
+  if (!jobTimer) {
     jobTimer = setInterval(() => {
+      if (options.denied() !== null) return;
       void runDueJobs(routerNames(), collectToVault, dropFromVault).catch((error) =>
         logger.warn(`Scheduled file jobs did not run: ${message(error)}`),
       );
@@ -798,16 +801,17 @@ export function createFilesRoutes(options: { denied: string | null }) {
     if (!path.startsWith("/api/files/")) return null;
     const key = `${req.method} ${path}`;
     const readOnly = getConfig().readOnly;
+    const denied = options.denied();
 
     if (key === "GET /api/files/state")
       return json({
-        enabled: options.denied === null,
-        reason: options.denied,
+        enabled: denied === null,
+        reason: denied,
         readOnly,
         trash: trashEnabled(),
         s3: isS3Configured(),
       });
-    if (options.denied !== null) return json({ error: options.denied }, 403);
+    if (denied !== null) return json({ error: denied }, 403);
 
     try {
       if (key === "GET /api/files/list") {

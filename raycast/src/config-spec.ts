@@ -17,6 +17,8 @@ export interface CfgField {
   options?: string[];
   placeholder?: string;
   help?: string;
+  /** For a switch: its state when the config has no value (the server default). */
+  defaultOn?: boolean;
   /** Hidden under an "Advanced" disclosure by default. */
   advanced?: boolean;
   /** Secret: prefilled with the «redacted» sentinel; blank = keep existing. */
@@ -268,6 +270,13 @@ export const CONFIG_SECTIONS: CfgSection[] = [
       },
       { key: "captureBody", label: "Capture tool input/output", type: "bool" },
       { key: "redactInput", label: "Redact input bodies", type: "bool" },
+      {
+        key: "files",
+        label: "Files page",
+        type: "bool",
+        defaultOn: true,
+        help: "Browse, upload, download and copy router files. It needs no token: anyone who can open this dashboard can read and change router files, backups included. Set an access token, or turn this off, on a network you do not trust.",
+      },
       { key: "dbPath", label: "Database path", type: "text", advanced: true },
       {
         key: "maxEvents",

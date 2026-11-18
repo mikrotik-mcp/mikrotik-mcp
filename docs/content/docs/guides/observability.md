@@ -96,19 +96,19 @@ Then open **http://127.0.0.1:9090/** in a browser on the same machine.
 
 ## Configuration
 
-| Env var                              | Flag                         | Default                     | Meaning                                                                                |
-| ------------------------------------ | ---------------------------- | --------------------------- | -------------------------------------------------------------------------------------- |
-| `MIKROTIK_DASHBOARD__ENABLED`        | `--dashboard`                | `false`                     | Master switch. When off, zero overhead and no SQLite is loaded.                        |
-| `MIKROTIK_DASHBOARD__HOST`           | `--dashboard-host`           | `0.0.0.0`                   | Set to loopback for local-only access.                                                 |
-| `MIKROTIK_DASHBOARD__PORT`           | `--dashboard-port`           | `9090`                      | Bind port.                                                                             |
-| `MIKROTIK_DASHBOARD__DB_PATH`        | `--dashboard-db`             | `~/.mikrotik-mcp/events.db` | SQLite file (per-user home on Win/macOS/Linux); `:memory:` for an ephemeral store.     |
-| `MIKROTIK_DASHBOARD__MAX_EVENTS`     | `--dashboard-max-events`     | `100000`                    | Retention cap; older rows are pruned.                                                  |
-| `MIKROTIK_DASHBOARD__CAPTURE_BODY`   | `--dashboard-capture-body`   | `true`                      | Record bodies; input redaction is a separate setting.                                  |
-| `MIKROTIK_DASHBOARD__REDACT_INPUT`   | `--dashboard-redact-input`   | `false`                     | Enable to mask credential fields before persisting input.                              |
-| `MIKROTIK_DASHBOARD__MAX_BODY_BYTES` | `--dashboard-max-body-bytes` | `16384`                     | Per-body truncation budget.                                                            |
-| `MIKROTIK_DASHBOARD__TOKEN`          | `--dashboard-token`          | _(none)_                    | Optional bearer token; when set, the page, API and WebSocket all require it.           |
-| `MIKROTIK_DASHBOARD__TERMINAL`       | `--dashboard-terminal`       | `true`                      | Serve the [Terminal](/docs/guides/terminal). It also needs a token or a loopback bind. |
-| `MIKROTIK_DASHBOARD__FILES`          | `--dashboard-files`          | `true`                      | Serve the [Files](/docs/guides/files) page. It also needs a token or a loopback bind.  |
+| Env var                              | Flag                         | Default                     | Meaning                                                                                                            |
+| ------------------------------------ | ---------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `MIKROTIK_DASHBOARD__ENABLED`        | `--dashboard`                | `false`                     | Master switch. When off, zero overhead and no SQLite is loaded.                                                    |
+| `MIKROTIK_DASHBOARD__HOST`           | `--dashboard-host`           | `0.0.0.0`                   | Set to loopback for local-only access.                                                                             |
+| `MIKROTIK_DASHBOARD__PORT`           | `--dashboard-port`           | `9090`                      | Bind port.                                                                                                         |
+| `MIKROTIK_DASHBOARD__DB_PATH`        | `--dashboard-db`             | `~/.mikrotik-mcp/events.db` | SQLite file (per-user home on Win/macOS/Linux); `:memory:` for an ephemeral store.                                 |
+| `MIKROTIK_DASHBOARD__MAX_EVENTS`     | `--dashboard-max-events`     | `100000`                    | Retention cap; older rows are pruned.                                                                              |
+| `MIKROTIK_DASHBOARD__CAPTURE_BODY`   | `--dashboard-capture-body`   | `true`                      | Record bodies; input redaction is a separate setting.                                                              |
+| `MIKROTIK_DASHBOARD__REDACT_INPUT`   | `--dashboard-redact-input`   | `false`                     | Enable to mask credential fields before persisting input.                                                          |
+| `MIKROTIK_DASHBOARD__MAX_BODY_BYTES` | `--dashboard-max-body-bytes` | `16384`                     | Per-body truncation budget.                                                                                        |
+| `MIKROTIK_DASHBOARD__TOKEN`          | `--dashboard-token`          | _(none)_                    | Optional bearer token; when set, the page, API and WebSocket all require it.                                       |
+| `MIKROTIK_DASHBOARD__TERMINAL`       | `--dashboard-terminal`       | `true`                      | Serve the [Terminal](/docs/guides/terminal). It also needs a token or a loopback bind.                             |
+| `MIKROTIK_DASHBOARD__FILES`          | `--dashboard-files`          | `true`                      | Serve the [Files](/docs/guides/files) page. It needs no token: set one, or turn this off, on an untrusted network. |
 
 A `dashboard` block in the JSON config file provides the baseline. Explicit environment variables and CLI flags override it:
 
@@ -142,7 +142,7 @@ See the [terminal guide](/docs/guides/terminal).
 
 The **Files** page shows the files of every router side by side. You can search all open routers at once, upload and download with drag and drop, and copy a file from one router to another; the server relays the copy over SFTP.
 
-Like the terminal, it is served only when the dashboard has a token or listens on loopback. Turn it off with `--dashboard-files=false`. Every operation is saved to the audit feed as the tool `dashboard_files`.
+It is on by default and needs no token, so anyone who can open the dashboard can use it. Turn it off in **Config → Dashboard → Files page** or with `--dashboard-files=false`. Every operation is saved to the audit feed as the tool `dashboard_files`.
 
 See the [files guide](/docs/guides/files).
 

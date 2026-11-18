@@ -122,13 +122,9 @@ vi.mock("../../src/core/connector", () => ({
 }));
 vi.mock("../../src/core/context", () => ({ createContext: () => ({}) }));
 vi.mock("../../src/observability/recorder", () => ({ recordToolCall: audit }));
-vi.mock("../../src/observability/terminal-routes", () => ({
-  terminalAccess: (cfg: { host: string; token?: string }) =>
-    cfg.token || cfg.host === "127.0.0.1" ? null : "needs protection",
-}));
 
 const files = await import("../../src/observability/files-routes");
-const routes = files.createFilesRoutes({ denied: null });
+const routes = files.createFilesRoutes({ denied: () => null });
 const call = (method: string, path: string, body?: unknown, raw?: string) =>
   routes(
     new Request(`http://dash.test${path}`, {
@@ -170,11 +166,24 @@ describe("paths", () => {
   });
 });
 
-test("the page needs a protected dashboard, and can be turned off", () => {
-  expect(files.filesAccess({ host: "127.0.0.1" })).toBeNull();
-  expect(files.filesAccess({ host: "0.0.0.0", token: "t" })).toBeNull();
-  expect(files.filesAccess({ host: "0.0.0.0" })).toContain("protected dashboard");
-  expect(files.filesAccess({ host: "127.0.0.1", files: false })).toContain("turned off");
+test("the page is on without a token, and the setting turns it off", () => {
+  expect(files.filesAccess({})).toBeNull();
+  expect(files.filesAccess(undefined)).toBeNull();
+  expect(files.filesAccess({ files: true })).toBeNull();
+  expect(files.filesAccess({ files: false })).toContain("turned off");
+});
+
+test("the setting is read on each request", async () => {
+  let off = false;
+  const live = files.createFilesRoutes({ denied: () => (off ? "off" : null) });
+  const list = () =>
+    live(
+      new Request("http://dash.test/api/files/list?device=alpha&path=/"),
+      new URL("http://dash.test/api/files/list?device=alpha&path=/"),
+    ) as Promise<Response>;
+  expect((await list()).status).toBe(200);
+  off = true;
+  expect((await list()).status).toBe(403);
 });
 
 test("a listing puts folders first, then names in order", async () => {
@@ -653,7 +662,7 @@ describe("router-made files and import", () => {
 });
 
 test("a locked page answers only its state", async () => {
-  const locked = files.createFilesRoutes({ denied: "locked" });
+  const locked = files.createFilesRoutes({ denied: () => "locked" });
   const state = (await locked(
     new Request("http://dash.test/api/files/state"),
     new URL("http://dash.test/api/files/state"),

@@ -102,6 +102,12 @@ Destructive commands ask for confirmation, a read-only server runs reads only, a
 
 ## Dashboard files
 
-The dashboard's [Files](/docs/guides/files) page reads and writes router files from the browser, and files can hold secrets (backups, exports, keys). It has the same protection as the terminal: it is served only when the dashboard has a token (`--dashboard-token`) or listens on loopback, and `--dashboard-files=false` turns it off.
+The dashboard's [Files](/docs/guides/files) page reads and writes router files from the browser, and files can hold secrets (backups, exports, keys).
+
+Unlike the terminal, the page is on by default and needs no token and no loopback bind. Anyone who can reach the dashboard port can use it. On a network that you do not trust, do one of these:
+
+- set a dashboard token (`--dashboard-token`);
+- bind the dashboard to loopback (`--dashboard-host 127.0.0.1`);
+- turn the page off: **Config → Dashboard → Files page**, or `--dashboard-files=false`.
 
 A read-only server lists, searches and downloads only. Paths that contain `..` are refused, uploads from another origin are refused, and every operation is written to the audit feed. File contents are not recorded.

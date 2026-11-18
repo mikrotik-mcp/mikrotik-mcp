@@ -488,7 +488,8 @@ export const DashboardConfigSchema = z.object({
   terminal: z.boolean().default(true),
   /**
    * Serve the dashboard Files page (browse, upload, download and copy router
-   * files). Like the terminal, it also needs a token or a loopback bind.
+   * files). It needs no token and no loopback bind: on an untrusted network,
+   * set `token` or turn this off.
    */
   files: z.boolean().default(true),
 });

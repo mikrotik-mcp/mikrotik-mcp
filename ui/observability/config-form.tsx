@@ -105,7 +105,7 @@ function FieldRow({
       />
     );
   } else if (field.type === "bool") {
-    control = <Switch checked={value === true} onCheckedChange={onChange} />;
+    control = <Switch checked={(value ?? field.defaultOn) === true} onCheckedChange={onChange} />;
   } else if (field.type === "select") {
     control = (
       <Select

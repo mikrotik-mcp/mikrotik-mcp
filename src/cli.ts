@@ -97,8 +97,9 @@ OBSERVABILITY DASHBOARD  (optional; real-time feed + analytics of every tool cal
   --dashboard-terminal      Serve the Terminal page (default true). It also needs
                             a dashboard token or a loopback bind
                                                            (MIKROTIK_DASHBOARD__TERMINAL)
-  --dashboard-files         Serve the Files page (default true). Same protection
-                            as the Terminal page   (MIKROTIK_DASHBOARD__FILES)
+  --dashboard-files         Serve the Files page (default true). It needs no token:
+                            set one, or turn this off, on an untrusted network
+                                                           (MIKROTIK_DASHBOARD__FILES)
 `;
 
 function warnIfPlaintextPasswordInContainer(anyPassword: boolean): void {

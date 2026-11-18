@@ -5,14 +5,18 @@ description: The files of every router in the browser — side-by-side panes, se
 
 The **Files** page of the [dashboard](/docs/guides/observability) shows the files of your routers, as the Files window of WinBox does. You open one pane for each router, side by side, and move files between your computer and the routers, or from one router to another.
 
-## Turn it on
+## Turn it on or off
 
-The page reads and writes files on your routers, and files can hold secrets (backups, exports, keys). It is served only when one of these is true:
+The page is on by default. It does not need a dashboard token and it does not need a loopback bind.
 
-- the dashboard has a token (`--dashboard-token`), or
-- the dashboard listens on loopback (`--dashboard-host 127.0.0.1`).
+> **Warning:** Anyone who can open the dashboard can read and change the files of your routers, and files can hold secrets (backups, exports, keys). The dashboard listens on `0.0.0.0` by default. On a network that you do not trust, set a dashboard token (`--dashboard-token`), or turn the page off.
 
-If not, the page shows **Files is locked**. To turn the page off, set `--dashboard-files=false` (`MIKROTIK_DASHBOARD__FILES=false`).
+To turn the page off or on:
+
+- in the dashboard: **Config → Dashboard → Files page**. The change applies at once, with no restart;
+- or with `--dashboard-files=false` (`MIKROTIK_DASHBOARD__FILES=false`).
+
+When it is off, the page shows **Files is turned off**.
 
 | Server mode            | What the page can do                                  |
 | ---------------------- | ----------------------------------------------------- |

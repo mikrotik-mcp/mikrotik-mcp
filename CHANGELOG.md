@@ -24,9 +24,11 @@ the GitHub release notes.
   - Rename, new folder and delete (with confirmation). A name that already
     exists asks before it is replaced. A stopped or failed upload leaves no
     partial file on the router.
-  - Served only on a protected dashboard (token or loopback), like the
-    Terminal. A read-only server lists, searches and downloads only. Every
-    operation reaches the audit feed as `dashboard_files`.
+  - On by default, with no token and no loopback bind needed. Anyone who can
+    open the dashboard can use it: set a dashboard token, or turn the page off,
+    on a network you do not trust. A read-only server lists, searches and
+    downloads only. Every operation reaches the audit feed as
+    `dashboard_files`.
   - View and edit text files in the browser, with RouterOS colours for `.rsc`,
     and compare two files, also on two routers.
   - Whole folders: drop a folder to upload it, drag a folder to copy it, and
@@ -53,7 +55,8 @@ the GitHub release notes.
   - A right-click menu on rows, folder bookmarks and saved workspaces.
   - Follow (live tail) for a file that grows.
 - `dashboard.files` (`--dashboard-files`, `MIKROTIK_DASHBOARD__FILES`, default
-  `true`) turns the page off.
+  `true`) turns the page off or on. It is a switch in **Config → Dashboard**,
+  and a change applies with no restart.
 
 ### Fixed
 

@@ -5,7 +5,7 @@ description: "The files of every router — search, upload, download, copy betwe
 
 ## Open the files of a router
 
-Open **Router configuration → Files** (`#files`). Click a router beside **Open files of**. Each router opens in its own pane, side by side. If the page shows **Files is locked**, the dashboard has no token and does not listen on loopback: see [Turn it on](/docs/guides/files#turn-it-on).
+Open **Router configuration → Files** (`#files`). Click a router beside **Open files of**. Each router opens in its own pane, side by side. If the page shows **Files is turned off**, turn it on in **Config → Dashboard → Files page**: see [Turn it on or off](/docs/guides/files#turn-it-on-or-off).
 
 ## Move files
 
