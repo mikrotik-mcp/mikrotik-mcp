@@ -1673,7 +1673,7 @@ export async function runDashboard(
   // The terminal's history database opens on the first terminal request.
   let terminalStore: Promise<TerminalStore> | undefined;
   const terminalRoutes = createTerminalRoutes({
-    denied: terminalAccess(cfg),
+    denied: () => terminalAccess(getConfig().dashboard),
     store: () =>
       (terminalStore ??= openTerminalStore(
         cfg.dbPath === ":memory:" ? ":memory:" : join(dirname(cfg.dbPath), "terminal.db"),

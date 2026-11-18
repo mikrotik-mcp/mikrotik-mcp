@@ -6,8 +6,8 @@
  * behave as they do for a tool call. Each command is written to the audit feed
  * and to the terminal history.
  *
- * This is arbitrary command execution on a router. It is served only when the
- * dashboard has a token or listens on loopback (see {@link terminalAccess}).
+ * This is arbitrary command execution on a router. It is on by default and is
+ * turned off with `dashboard.terminal` (see {@link terminalAccess}).
  */
 import { createContext } from "../core/context";
 import { bypassesSafeMode, executeMikrotikCommand } from "../core/connector";
@@ -33,20 +33,17 @@ import { z } from "zod";
 import { configSnapshotTools } from "../tools/config-snapshot";
 import { toolGatewayTools } from "../tools/tool-gateway";
 
-const LOOPBACK = new Set(["127.0.0.1", "localhost", "::1"]);
-
-/** Why the terminal is unavailable, or `null` when it may be used. */
-export function terminalAccess(cfg: {
-  host: string;
-  token?: string;
-  terminal?: boolean;
-}): string | null {
-  if (cfg.terminal === false) return "The terminal is turned off (dashboard.terminal = false).";
-  if (cfg.token || LOOPBACK.has(cfg.host)) return null;
-  return (
-    "The terminal runs any command on your routers, so it needs a protected dashboard. " +
-    "Set a dashboard token (--dashboard-token) or bind the dashboard to 127.0.0.1 (--dashboard-host)."
-  );
+/**
+ * Why the terminal is unavailable, or `null` when it may be used. The terminal
+ * is on unless `dashboard.terminal` is false; it does not need a token or a
+ * loopback bind. Whoever can open the dashboard can then run any command on
+ * the routers, so an operator on an untrusted network sets a token or turns
+ * the page off.
+ */
+export function terminalAccess(cfg: { terminal?: boolean } | undefined): string | null {
+  return cfg?.terminal === false
+    ? "The terminal is turned off. Turn it on in Config → Dashboard (dashboard.terminal)."
+    : null;
 }
 
 /** Commands are capped here unless the caller asks for longer (max 10 minutes). */
@@ -227,8 +224,8 @@ export async function runDueSchedules(store: TerminalStore, now = Date.now()): P
 }
 
 interface TerminalRouteOptions {
-  /** Why the terminal is unavailable, or `null`. */
-  denied: string | null;
+  /** Why the terminal is unavailable, or `null`. Asked on each request, so a change in the settings applies at once. */
+  denied: () => string | null;
   /** Opened on first use. */
   store: () => Promise<TerminalStore>;
 }
@@ -255,8 +252,9 @@ async function snapshotTool(
 }
 
 export function createTerminalRoutes(options: TerminalRouteOptions) {
-  if (options.denied === null && !schedulerTimer) {
+  if (!schedulerTimer) {
     schedulerTimer = setInterval(() => {
+      if (options.denied() !== null) return;
       void options
         .store()
         .then((store) => runDueSchedules(store))
@@ -399,14 +397,15 @@ export function createTerminalRoutes(options: TerminalRouteOptions) {
     const path = url.pathname;
     if (!path.startsWith("/api/terminal")) return null;
     const key = `${req.method} ${path}`;
+    const denied = options.denied();
 
     if (key === "GET /api/terminal/state")
       return json({
-        enabled: options.denied === null,
-        reason: options.denied,
+        enabled: denied === null,
+        reason: denied,
         readOnly: getConfig().readOnly,
       });
-    if (options.denied !== null) return json({ error: options.denied }, 403);
+    if (denied !== null) return json({ error: denied }, 403);
 
     try {
       if (key === "GET /api/terminal/history") {

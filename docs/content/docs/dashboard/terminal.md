@@ -10,7 +10,7 @@ Open **Router configuration → Terminal** (`#terminal`). Beside **New terminal*
 - **Blocks** — each command is a block with its output and its actions. Every command is recorded.
 - **Shell** — a real RouterOS console, for menus, prompts and live monitors.
 
-**All routers** opens one pane for each router. If the page shows **Terminal is locked**, the dashboard has no token and does not listen on loopback: see [Turn it on](/docs/guides/terminal#turn-it-on).
+**All routers** opens one pane for each router. If the page shows **Terminal is turned off**, turn it on in **Config → Dashboard → Terminal page**: see [Turn it on](/docs/guides/terminal#turn-it-on).
 
 ## Arrange the panes
 
