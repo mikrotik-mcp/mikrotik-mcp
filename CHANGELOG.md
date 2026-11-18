@@ -65,6 +65,29 @@ the GitHub release notes.
   latency, identity, RouterOS version, board and uptime. It shows at any log
   level, and never prints a password or the dashboard token.
 
+### Security
+
+- **RouterOS command injection through tool arguments** (GHSA-63gj-jfjx-xf7g,
+  GHSA-r4cq-vhjf-mppv, GHSA-2g58-43c8-4w2m, GHSA-p524-m32j-hf32). A tool
+  argument was written into a device command without escaping, at about 800
+  places. A value with a `"`, or a space and a `;`, ran as RouterOS commands
+  on the router. READ tools did this too, so read-only mode and the READ risk
+  ceiling did not hold. Every argument is now written with `quoted()` or
+  `quoteValue()`, or checked when the console needs it bare (a duration, a
+  menu path). A test calls every tool of the catalog with a hostile value in
+  each free-text argument and reads the commands that reach the router.
+- **READ tools that changed the router** (GHSA-p524-m32j-hf32).
+  `firmware_check` no longer sets the update channel; use `firmware_stage`.
+  `create_export`, `export_section`, `export_logs`, `export_dns_config` and
+  `export_user_config` write a file on the router and are now WRITE tools, so
+  a read-only server does not offer them.
+- Log tools accept only a RouterOS time (`30m`, `1h`, `1d12h`) for
+  `time_filter`, and a threat feed name must be a plain identifier.
+- Dashboard routes send a sanitised, single-line error message.
+- Three regular expressions that took quadratic time on hostile input are
+  replaced, and two partial escapes are completed.
+- Vulnerable packages are updated in the Raycast lockfile and the docs site.
+
 ### Changed
 
 - **The Terminal page no longer needs a token or a loopback bind.** Like the
