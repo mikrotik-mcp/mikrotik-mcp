@@ -398,7 +398,13 @@ test("ignores an old router's pending duplicate when the selected router changes
     return original(path, abort);
   });
   await userAction("Duplicate");
-  await choose("Router", "remote");
+  // The duplicate dialog holds focus, so switch routers with the closed picker's typeahead.
+  await act(async () => {
+    kitControl(/^Router$/).dispatchEvent(
+      new KeyboardEvent("keydown", { key: "r", bubbles: true, cancelable: true }),
+    );
+  });
+  expect(kitValue(/^Router$/)).toContain("remote");
   expect(signal?.aborted).toBe(true);
   await act(async () => resolve({ available: true, rows: assignments }));
   await click(button("Users"));
