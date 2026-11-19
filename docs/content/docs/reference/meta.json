@@ -120,6 +120,7 @@
     "address-sets",
     "connected-devices",
     "firewall-audit",
+    "zone-firewall",
     "attack",
     "security-shield",
     "security-hardening",

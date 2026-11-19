@@ -1061,6 +1061,14 @@
       "tools": ["firewall_audit"]
     },
     {
+      "slug": "zone-firewall",
+      "label": "Zone Firewall",
+      "group": "Security",
+      "description": "Zone-based firewall: name zones (sets of interfaces) and the traffic allowed between them; the tools compile interface lists and filter rules, apply them in Safe Mode, and remove the whole design again.",
+      "alwaysOn": false,
+      "tools": ["design_zone_firewall", "remove_zone_firewall"]
+    },
+    {
       "slug": "attack",
       "label": "Attack Detection",
       "group": "Security",
@@ -6607,6 +6615,22 @@
         "visibility": ["model", "app"],
         "automatic": false
       }
+    },
+    {
+      "name": "design_zone_firewall",
+      "module": "zone-firewall",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "remove_zone_firewall",
+      "module": "zone-firewall",
+      "group": "Security",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
     },
     {
       "name": "scan_for_attacks",

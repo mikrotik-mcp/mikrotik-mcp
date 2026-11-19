@@ -54,6 +54,7 @@ import { firewallNatTools } from "./firewall-nat";
 import { firewallMangleTools } from "./firewall-mangle";
 import { firmwareLifecycleTools } from "./firmware-lifecycle";
 import { firmwareRepoTools } from "./firmware-repo";
+import { zoneFirewallTools } from "./zone-firewall";
 import { portForwardTools } from "./port-forward";
 import { interfaceTools } from "./interfaces";
 import { ipAddressTools } from "./ip-address";
@@ -770,6 +771,16 @@ export const moduleCatalog: ModuleInfo[] = [
       "Plain-language firewall audit: shadowed/unreachable rules, broad accepts, missing " +
       "default-drop, duplicates and dead rules, with a risk score (`firewall_audit`).",
     tools: firewallAuditTools,
+  },
+  {
+    label: "Zone Firewall",
+    slug: "zone-firewall",
+    group: "Security",
+    description:
+      "Zone-based firewall: name zones (sets of interfaces) and the traffic allowed between " +
+      "them; the tools compile interface lists and filter rules, apply them in Safe Mode, and " +
+      "remove the whole design again.",
+    tools: zoneFirewallTools,
   },
   {
     label: "Attack Detection",

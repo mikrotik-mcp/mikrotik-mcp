@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "remove_zone_firewall",
+  "type": "object",
+  "properties": {
+    "apply": {
+      "default": false,
+      "description": "false = count only; true = remove",
+      "type": "boolean"
+    }
+  },
+  "required": ["apply"],
+  "additionalProperties": false
+}

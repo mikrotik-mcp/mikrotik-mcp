@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "design_zone_firewall",
+  "type": "object",
+  "properties": {
+    "zones": {
+      "minItems": 1,
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Zone name: lowercase letters, digits, '-'"
+          },
+          "interfaces": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Interfaces in this zone"
+          }
+        },
+        "required": ["name", "interfaces"],
+        "additionalProperties": false
+      }
+    },
+    "policies": {
+      "default": [],
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Source zone, or 'router'"
+          },
+          "to": {
+            "type": "string",
+            "description": "Destination zone, or 'router'"
+          },
+          "action": {
+            "default": "accept",
+            "type": "string",
+            "enum": ["accept", "drop", "reject"]
+          },
+          "protocol": {
+            "type": "string",
+            "enum": ["tcp", "udp", "icmp"]
+          },
+          "ports": {
+            "description": "Destination ports, e.g. '443' or '80,443'",
+            "type": "string"
+          },
+          "note": {
+            "description": "A short note for the rule comment",
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": ["from", "to", "action"],
+        "additionalProperties": false
+      }
+    },
+    "protect_router": {
+      "default": false,
+      "description": "Also drop traffic to the router itself that no policy allows",
+      "type": "boolean"
+    },
+    "apply": {
+      "default": false,
+      "description": "false = show the commands; true = apply",
+      "type": "boolean"
+    }
+  },
+  "required": ["zones", "policies", "protect_router", "apply"],
+  "additionalProperties": false
+}
