@@ -327,6 +327,20 @@ export const AuditConfigSchema = z.object({
     .optional(),
 });
 
+/**
+ * Git mirror for configuration snapshots: each snapshot is written as
+ * `<device>.rsc` in `dir`, committed, and optionally pushed.
+ */
+export const GitMirrorConfigSchema = z.object({
+  dir: z.string().min(1),
+  commit: z.boolean().default(true),
+  push: z.boolean().default(false),
+  /** Put the menu sections in a fixed order (for reading and diffing only). */
+  sortSections: z.boolean().default(false),
+  /** `Name <email>` for the commits. */
+  author: z.string().optional(),
+});
+
 export const AlertChannelsSchema = z.object({
   slack: z.object({ url: z.string().url() }).optional(),
   discord: z.object({ url: z.string().url() }).optional(),
@@ -647,6 +661,7 @@ export const MikrotikConfigSchema = z.object({
   /** Alerting: rules + delivery channels. Absent unless configured (opt-in). */
   alerts: AlertsConfigSchema.optional(),
   audit: AuditConfigSchema.optional(),
+  gitMirror: GitMirrorConfigSchema.optional(),
   /** NetFlow/IPFIX collection (opt-in; binds a UDP port only when enabled). */
   flows: FlowsConfigSchema.default(() => FlowsConfigSchema.parse({})),
   /** Policy-as-code rule files (read-only linting against config snapshots). */
@@ -749,6 +764,7 @@ export function parseFlags(argv: string[]): Record<string, string> {
 const PASSTHROUGH_BLOCKS = [
   "alerts",
   "audit",
+  "gitMirror",
   "flows",
   "policy",
   "schedules",

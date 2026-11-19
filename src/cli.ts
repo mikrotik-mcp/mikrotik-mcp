@@ -27,6 +27,7 @@ import { allToolModules } from "./tools";
 import { createSyslogSink } from "./observability/audit-syslog";
 import { runDashboard } from "./observability/dashboard";
 import { setAuditSink } from "./observability/recorder";
+import { configureGitMirror } from "./snapshots/git-mirror";
 import { runHttp } from "./transport/http";
 import { runStdio } from "./transport/stdio";
 import { VERSION, SERVER_NAME } from "./version";
@@ -289,6 +290,10 @@ async function main(): Promise<void> {
       `Audit export: syslog ${cfg.audit.syslog.protocol}://${cfg.audit.syslog.host}:${cfg.audit.syslog.port}`,
     );
   }
+
+  // Git mirror: every stored snapshot also goes to a Git working directory.
+  configureGitMirror(cfg.gitMirror);
+  if (cfg.gitMirror) logger.info(`Git mirror for snapshots: ${cfg.gitMirror.dir}`);
 
   // Scheduled audits: opt-in via the `schedules` config block. The first tick
   // only arms each job, so starting the server never fires a nightly audit at

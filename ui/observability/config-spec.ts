@@ -310,6 +310,38 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     fields: [{ key: "dbPath", label: "Database path", type: "text" }],
   },
   {
+    id: "gitMirror",
+    title: "Git mirror",
+    icon: "🌿",
+    kind: "object",
+    path: "gitMirror",
+    enable: { presence: true, label: "Git mirror" },
+    blurb:
+      "Write every configuration snapshot to a Git working directory, one file for each router, and commit it. The repository holds router configuration: keep it private.",
+    fields: [
+      {
+        key: "dir",
+        label: "Directory",
+        type: "text",
+        help: "Created when missing. 'git init' is run when it is not a repository.",
+      },
+      { key: "commit", label: "Commit", type: "bool", help: "Off writes the files only." },
+      {
+        key: "push",
+        label: "Push",
+        type: "bool",
+        help: "Run 'git push' after each commit. The repository needs a remote and credentials.",
+      },
+      {
+        key: "sortSections",
+        label: "Sort sections",
+        type: "bool",
+        help: "A fixed section order stops false diffs. A sorted file is not for import.",
+      },
+      { key: "author", label: "Commit author", type: "text", placeholder: "Name <email>" },
+    ],
+  },
+  {
     id: "audit",
     title: "Audit export",
     icon: "🧾",

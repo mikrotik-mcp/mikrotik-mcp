@@ -8,7 +8,8 @@ A **Bun-native MCP server** that exposes MikroTik **RouterOS** (over SSH) as sev
 hundred risk-annotated tools, one module per RouterOS scope, so an MCP client can
 read and configure a router in natural language. Runs on **Bun ≥ 1.3** — there is no
 npm/Node build; do not introduce `child_process`/OS-shell usage (all device I/O is
-SSH via `ssh2`). The live tool/module counts are whatever the catalog
+SSH via `ssh2`). One host-side exception exists: the optional Git mirror
+(`src/snapshots/git-mirror.ts`) runs the host's `git` with an argument list, no shell. The live tool/module counts are whatever the catalog
 (`src/tools/index.ts`) holds.
 
 ## Commands

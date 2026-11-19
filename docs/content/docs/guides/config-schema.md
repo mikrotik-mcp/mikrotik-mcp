@@ -720,6 +720,37 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
 }
 ```
 
+## gitMirror
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "commit": {
+      "default": true,
+      "type": "boolean"
+    },
+    "push": {
+      "default": false,
+      "type": "boolean"
+    },
+    "sortSections": {
+      "default": false,
+      "type": "boolean"
+    },
+    "author": {
+      "type": "string"
+    }
+  },
+  "required": ["dir", "commit", "push", "sortSections"],
+  "additionalProperties": false
+}
+```
+
 ## flows
 
 ```json

@@ -55,3 +55,39 @@ line-diff engine.
 - Sensitive values are hidden unless you pass `show_sensitive=true`.
 - The snapshot body returned by `get_config_snapshot` is itself a RouterOS `.rsc`
   script suitable for review or manual re-application.
+
+## Git mirror
+
+Every stored snapshot can also go to a Git working directory: one file for each
+router (`<device>.rsc`), a commit for each change, and optionally a push. Any
+Git host then shows the history and the diff of every router.
+
+```json
+{ "gitMirror": { "dir": "/srv/router-configs", "commit": true, "push": false } }
+```
+
+| Setting        | Default | Meaning                                                                   |
+| -------------- | ------- | ------------------------------------------------------------------------- |
+| `dir`          |         | The working directory. It is created, and `git init` is run, when needed. |
+| `commit`       | `true`  | Off writes the files only.                                                |
+| `push`         | `false` | Run `git push` after each commit.                                         |
+| `sortSections` | `false` | Put the menu sections in a fixed order.                                   |
+| `author`       |         | `Name <email>` for the commits. Default `mikrotik-mcp`.                   |
+
+What makes the diffs clean:
+
+- The file is the export without its timestamp line, so a snapshot of an
+  unchanged router changes nothing and makes no commit.
+- With `sortSections`, a RouterOS version that prints its sections in another
+  order makes no false diff. **A sorted file is for reading and diffing only:
+  do not import it**, because import order matters.
+
+Limits to know:
+
+- The mirror runs the `git` program of the host. It must be installed.
+- For `push`, add a remote to the directory and give the host credentials for
+  it (an SSH key or a credential helper). The server stores none.
+- The repository holds router configuration. `/export` hides passwords and
+  keys, but addresses, users and firewall rules are in it: keep it private.
+- A Git failure is logged and never stops a snapshot or the change it guards.
+- Snapshots taken before the mirror was turned on are not added.

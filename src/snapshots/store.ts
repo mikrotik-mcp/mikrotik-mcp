@@ -12,6 +12,7 @@
  * — they are a first-class tool feature and persist to their own database
  * (`~/.mikrotik-mcp/snapshots.db` by default) regardless of dashboard state.
  */
+import { noteSnapshot } from "./git-mirror";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Database } from "bun:sqlite";
@@ -179,6 +180,8 @@ class SqliteSnapshotStore implements SnapshotStore {
         $lines: s.lines,
         $sha: s.sha,
       });
+    // After the row is stored: the Git mirror, when it is on.
+    noteSnapshot(s);
   }
 
   get(id: string): Snapshot | null {
