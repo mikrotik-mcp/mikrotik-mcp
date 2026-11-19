@@ -1,3 +1,4 @@
+import { logSince } from "../src/core/routeros";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { z } from "zod";
 import type { ToolContext } from "../src/core/context";
@@ -18,7 +19,9 @@ beforeEach(() => {
 
 describe("log handlers", () => {
   test("combined query constructs every filter and returns the newest lines", async () => {
-    command.mockResolvedValueOnce("old\nmiddle\nnew");
+    command.mockResolvedValueOnce(
+      " time=1 message=old\r\n\r\n time=2\r\n message=middle\r\n \r\n time=3 message=new\r\n\r\n",
+    );
     const result = await run("get_logs", {
       topics: "system, firewall",
       action: "drop",
@@ -30,26 +33,41 @@ describe("log handlers", () => {
       print_as: "detail",
     });
     expect(command.mock.calls[0]?.[0]).toBe(
-      '/log print detail where (topics~"system" or topics~"firewall") and action="drop" and message~"denied" and message~"^blocked" and time > ([:timestamp] - 1h) follow',
+      `/log print detail where (topics~"system" or topics~"firewall") and action="drop" and message~"denied" and message~"^blocked" and ${logSince("1h")} follow`,
     );
-    expect(result).toContain("middle\nnew");
+    // limit counts entries: a detail entry of two lines stays whole.
+    expect(result).toBe("LOG ENTRIES:\n\n time=2\n message=middle\n\n time=3 message=new");
     expect(result).not.toContain("old");
     expect(command.mock.calls[0]?.[1]).toBe(ctx);
   });
 
   test("empty result returns a clear message", async () => {
     expect(await run("get_logs")).toBe("No log entries found matching the criteria.");
-    expect(command.mock.calls[0]?.[0]).toBe("/log print value");
+    expect(command.mock.calls[0]?.[0]).toBe("/log print");
+  });
+
+  test("value form is one line for each entry, and limit drops blank lines", async () => {
+    // RouterOS `print value` lays every entry side by side in columns. It is never sent.
+    command.mockResolvedValueOnce(
+      "t1 system,info a\r\nt2 system,info b\r\nt3 dhcp,info c\r\n\r\n\r\n",
+    );
+    expect(await run("get_logs", { print_as: "value", limit: 2 })).toBe(
+      "LOG ENTRIES:\n\nt2 system,info b\nt3 dhcp,info c",
+    );
+    expect(command.mock.calls[0]?.[0]).toBe("/log print");
+    command.mockResolvedValueOnce("t1 a");
+    await run("get_logs", { print_as: "terse" });
+    expect(command.mock.calls[1]?.[0]).toBe("/log print terse");
   });
 
   test("severity error maps to two topics; topic view selects one", async () => {
     command.mockResolvedValue("entry");
     await run("get_logs_by_severity", { severity: "error", time_filter: "2h" });
     expect(command.mock.calls[0]?.[0]).toContain(
-      '(topics~"error" or topics~"critical") and time > ([:timestamp] - 2h)',
+      `(topics~"error" or topics~"critical") and ${logSince("2h")}`,
     );
     await run("get_logs_by_topic", { topic: "dhcp" });
-    expect(command.mock.calls[1]?.[0]).toBe('/log print value where topics~"dhcp"');
+    expect(command.mock.calls[1]?.[0]).toBe('/log print where topics~"dhcp"');
   });
 
   test("search and system event aliases produce message filters", async () => {
@@ -69,7 +87,7 @@ describe("log handlers", () => {
     expect(command.mock.calls[0]?.[0]).toContain(
       'message~"(login|logout|failed|denied|blocked|attack|invalid|unauthorized)"',
     );
-    expect(command.mock.calls[0]?.[0]).toContain("time > ([:timestamp] - 30m)");
+    expect(command.mock.calls[0]?.[0]).toContain(`${logSince("30m")}`);
     expect(result).toContain("new");
     expect(result).not.toContain("old");
     command.mockResolvedValueOnce("");
@@ -97,7 +115,7 @@ describe("log handlers", () => {
       await run("export_logs", { filename: "audit", topics: "system", time_filter: "1d" }),
     ).toContain("audit.txt");
     expect(command.mock.calls[0]?.[0]).toBe(
-      '/log print file=audit where topics~"system" and time > ([:timestamp] - 1d)',
+      `/log print file=audit where topics~"system" and ${logSince("1d")}`,
     );
     command.mockResolvedValueOnce("failure: denied");
     expect(await run("export_logs", { filename: "audit" })).toContain(
@@ -109,7 +127,7 @@ describe("log handlers", () => {
     command.mockResolvedValueOnce(Array.from({ length: 105 }, (_, i) => `line-${i}`).join("\n"));
     const result = await run("monitor_logs", { duration: 120, topics: "system", action: "accept" });
     expect(command.mock.calls[0]?.[0]).toBe(
-      '/log print where topics~"system" and action="accept" and time > ([:timestamp] - 60s)',
+      `/log print where topics~"system" and action="accept" and ${logSince("60s")}`,
     );
     expect(result).toContain("line-104");
     expect(result).not.toContain("line-0\n");

@@ -1,3 +1,4 @@
+import { logSince } from "../src/core/routeros";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { MikrotikConfigSchema } from "../src/config";
 import { getConfig, setConfig } from "../src/core/runtime";
@@ -52,7 +53,7 @@ test("log fetch uses bounded RouterOS time expression and parses events", async 
     "0 time=oct/24/2026 11:00:00 topics=system,info message=logged in",
   );
   await fetchLog("alpha", 7);
-  expect(mocks.command.mock.calls[0][0]).toBe("/log print detail where time > ([:timestamp] - 7m)");
+  expect(mocks.command.mock.calls[0][0]).toBe(`/log print detail where ${logSince("7m")}`);
 });
 
 test("fleet sweep isolates one router failure and returns the other read result", async () => {

@@ -32242,7 +32242,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Fetch RouterOS log entries (`/log print`) with any combination of topic, severity, message, prefix, time, and action filters — the general-purpose log reader for arbitrary filter combinations. For a single severity level use `get_logs_by_severity`; for a single named facility use `get_logs_by_topic`; for full-text message search use `search_logs`; for security-keyword presets spanning multiple topics use `get_security_logs`; for login/reboot/config events use `get_system_events`. Returns matching lines in `value`, `detail`, or `terse` format; `limit` caps to the N most recent lines. `time_filter` is a RouterOS duration string (e.g. `1h`, `30m`, `2d`); `topics` accepts comma-separated RouterOS topic names (e.g. `system,firewall`).",
+      "description": "Fetch RouterOS log entries (`/log print`) with any combination of topic, severity, message, prefix, time, and action filters — the general-purpose log reader for arbitrary filter combinations. For a single severity level use `get_logs_by_severity`; for a single named facility use `get_logs_by_topic`; for full-text message search use `search_logs`; for security-keyword presets spanning multiple topics use `get_security_logs`; for login/reboot/config events use `get_system_events`. `print_as`: `value` (default) and `terse` give one line for each entry (time, topics, message); `detail` gives each entry as key=value lines. `limit` keeps the N most recent ENTRIES. `time_filter` is a RouterOS duration string (e.g. `1h`, `30m`, `2d`); `topics` accepts comma-separated RouterOS topic names (e.g. `system,firewall`).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -32513,7 +32513,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Fetch RouterOS log entries (`/log print where time > ([:timestamp] - <duration>s)`) recorded within the last N seconds (1–60, capped at 60) — a snapshot of recent activity rather than a true streaming tail (non-interactive SSH exec cannot block on `follow`). Use to observe what was logged during a short recent window without a full `get_logs` query. For persistent reads with broader filter options use `get_logs`; for full-text message search use `search_logs`. Optional `topics` and `action` filters narrow results. Returns up to 100 of the most recent matching log lines.",
+      "description": "Fetch RouterOS log entries (`/log print where <entry is newer than duration>`) recorded within the last N seconds (1–60, capped at 60) — a snapshot of recent activity rather than a true streaming tail (non-interactive SSH exec cannot block on `follow`). Use to observe what was logged during a short recent window without a full `get_logs` query. For persistent reads with broader filter options use `get_logs`; for full-text message search use `search_logs`. Optional `topics` and `action` filters narrow results. Returns up to 100 of the most recent matching log lines.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

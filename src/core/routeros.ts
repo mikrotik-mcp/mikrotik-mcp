@@ -95,6 +95,24 @@ export function durationArg(value: string | number): string {
   return text;
 }
 
+/** The router's UTC offset as a time, also for a zone west of UTC (RouterOS gives that as an unsigned number). */
+const GMT_OFFSET =
+  "[:totime ((([/system clock get gmt-offset] + 2147483648) % 4294967296) - 2147483648)]";
+
+/**
+ * A `/log ... where` test that is true for entries newer than `duration`.
+ *
+ * `time > ([:timestamp] - 1h)` does not work: a log entry's `time` is text in
+ * the router's local time ("2026-11-20 01:51:03"), and `[:timestamp]` is a time
+ * in UTC. RouterOS 7.25 answers true for every entry, so the filter returned
+ * the whole log. Here the entry's time is made a time value and compared with
+ * the local "now". An entry whose time has no date (older RouterOS prints
+ * today's entries so) is kept, as before: it cannot be compared.
+ */
+export function logSince(duration: string | number): string {
+  return `(([:len $time] < 19) or ([:totime $time] > ([:timestamp] + ${GMT_OFFSET} - ${durationArg(duration)})))`;
+}
+
 /**
  * A RouterOS menu path such as `ip firewall filter`, for the one place a
  * command path comes from a caller. Anything else throws: the path is the

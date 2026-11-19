@@ -9,7 +9,7 @@ import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
 import { READ, DESTRUCTIVE, defineTool, WRITE } from "../core/registry";
 import type { ToolModule } from "../core/registry";
-import { isEmpty, quoted, quoteValue, durationArg } from "../core/routeros";
+import { isEmpty, quoted, quoteValue, logSince } from "../core/routeros";
 import { tailLines, orMatch } from "../utils";
 import type { ToolContext } from "../core/context";
 
@@ -36,7 +36,10 @@ async function runGetLogs(o: GetLogsOptions, ctx: ToolContext): Promise<string> 
     `Getting logs with filters: topics=${o.topics}, action=${o.action}, time=${o.time_filter}`,
   );
 
-  let cmd = `/log print ${printAs}`;
+  // `value` is sent as a plain `/log print`: one line for each entry (time, topics,
+  // message). RouterOS's own `print value` puts every entry side by side in
+  // columns, hundreds of kilobytes wide, and no line of it is one entry.
+  let cmd = printAs === "value" ? "/log print" : `/log print ${printAs}`;
 
   const filters: string[] = [];
 
@@ -51,15 +54,39 @@ async function runGetLogs(o: GetLogsOptions, ctx: ToolContext): Promise<string> 
   if (o.action) filters.push(`action=${quoted(o.action)}`);
   if (o.message_filter) filters.push(`message~${quoted(o.message_filter)}`);
   if (o.prefix_filter) filters.push(`message~${quoted(`^${o.prefix_filter}`)}`);
-  if (o.time_filter) filters.push(`time > ([:timestamp] - ${durationArg(o.time_filter)})`);
+  if (o.time_filter) filters.push(logSince(o.time_filter));
 
   if (filters.length) cmd += ` where ${filters.join(" and ")}`;
   if (o.follow) cmd += " follow";
 
   const result = await executeMikrotikCommand(cmd, ctx);
   if (isEmpty(result)) return "No log entries found matching the criteria.";
-  const limited = o.limit ? tailLines(result, o.limit) : result;
+  const limited = o.limit ? lastEntries(result, o.limit, printAs === "detail") : result;
   return `LOG ENTRIES:\n\n${limited}`;
+}
+
+/**
+ * The last `count` log entries. An entry is one line, or in `detail` form one
+ * block of lines up to the next blank line. Counting plain lines returned blank
+ * lines and cut `detail` entries in half.
+ */
+export function lastEntries(output: string, count: number, detail: boolean): string {
+  const lines = output.replace(/\r/g, "").split("\n");
+  if (!detail)
+    return lines
+      .filter((line) => line.trim() !== "")
+      .slice(-count)
+      .join("\n");
+  const entries: string[][] = [[]];
+  for (const line of lines) {
+    if (line.trim() === "") entries.push([]);
+    else entries.at(-1)!.push(line);
+  }
+  return entries
+    .filter((entry) => entry.length > 0)
+    .slice(-count)
+    .map((entry) => entry.join("\n"))
+    .join("\n\n");
 }
 
 export const logTools: ToolModule = [
@@ -73,8 +100,9 @@ export const logTools: ToolModule = [
       " combinations. For a single severity level use `get_logs_by_severity`; for a single" +
       " named facility use `get_logs_by_topic`; for full-text message search use `search_logs`;" +
       " for security-keyword presets spanning multiple topics use `get_security_logs`; for" +
-      " login/reboot/config events use `get_system_events`. Returns matching lines in `value`," +
-      " `detail`, or `terse` format; `limit` caps to the N most recent lines." +
+      " login/reboot/config events use `get_system_events`. `print_as`: `value` (default) and `terse` give one line for each entry" +
+      " (time, topics, message); `detail` gives each entry as key=value lines." +
+      " `limit` keeps the N most recent ENTRIES." +
       " `time_filter` is a RouterOS duration string (e.g. `1h`, `30m`, `2d`);" +
       " `topics` accepts comma-separated RouterOS topic names (e.g. `system,firewall`).",
     inputSchema: {
@@ -270,7 +298,7 @@ export const logTools: ToolModule = [
 
       let cmd = `/log print where ${orMatch("topics", securityTopics)} and message~${quoted(securityKeywords)}`;
 
-      if (a.time_filter) cmd += ` and time > ([:timestamp] - ${durationArg(a.time_filter)})`;
+      if (a.time_filter) cmd += ` and ${logSince(a.time_filter)}`;
 
       const result = await executeMikrotikCommand(cmd, ctx);
       if (isEmpty(result)) return "No security-related log entries found.";
@@ -335,14 +363,14 @@ export const logTools: ToolModule = [
 
       // Get recent entries count (last hour)
       const recentCount = await executeMikrotikCommand(
-        "/log print count-only where time > ([:timestamp] - 1h)",
+        `/log print count-only where ${logSince("1h")}`,
         ctx,
       );
       stats.push(`\nEntries in last hour: ${recentCount.trim()}`);
 
       // Get today's entries
       const todayCount = await executeMikrotikCommand(
-        "/log print count-only where time > ([:timestamp] - 1d)",
+        `/log print count-only where ${logSince("1d")}`,
         ctx,
       );
       stats.push(`Entries in last 24 hours: ${todayCount.trim()}`);
@@ -378,7 +406,7 @@ export const logTools: ToolModule = [
 
       const filters: string[] = [];
       if (a.topics) filters.push(`topics~${quoted(a.topics)}`);
-      if (a.time_filter) filters.push(`time > ([:timestamp] - ${durationArg(a.time_filter)})`);
+      if (a.time_filter) filters.push(logSince(a.time_filter));
 
       if (filters.length) cmd += ` where ${filters.join(" and ")}`;
 
@@ -394,7 +422,7 @@ export const logTools: ToolModule = [
     title: "Fetch Log Entries Within a Recent Time Window",
     annotations: READ,
     description:
-      "Fetch RouterOS log entries (`/log print where time > ([:timestamp] - <duration>s)`)" +
+      "Fetch RouterOS log entries (`/log print where <entry is newer than duration>`)" +
       " recorded within the last N seconds (1–60, capped at 60) — a snapshot of recent activity" +
       " rather than a true streaming tail (non-interactive SSH exec cannot block on `follow`)." +
       " Use to observe what was logged during a short recent window without a full `get_logs`" +
@@ -420,7 +448,7 @@ export const logTools: ToolModule = [
       const filters: string[] = [];
       if (a.topics) filters.push(`topics~${quoted(a.topics)}`);
       if (a.action) filters.push(`action=${quoted(a.action)}`);
-      filters.push(`time > ([:timestamp] - ${durationArg(duration)}s)`);
+      filters.push(logSince(`${duration}s`));
 
       const cmd = `/log print where ${filters.join(" and ")}`;
       const result = await executeMikrotikCommand(cmd, ctx);

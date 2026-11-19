@@ -8,7 +8,7 @@
 import { executeMikrotikCommand } from "../core/connector";
 import { createContext } from "../core/context";
 import { diffLines } from "../core/diff";
-import { Cmd, isEmpty, looksLikeError } from "../core/routeros";
+import { Cmd, isEmpty, looksLikeError, logSince } from "../core/routeros";
 import { getConfig, resolveDeviceName } from "../core/runtime";
 import { DEFAULT_SNAPSHOT_DB } from "../config";
 import { noteDriftResult } from "../drift/alert";
@@ -182,7 +182,7 @@ export async function driftRoutes(req: Request, url: URL): Promise<Response | nu
 
       // Best-effort log attribution
       try {
-        const logCmd = `/log print where topics~"system" and time > ([:timestamp] - 7d)`;
+        const logCmd = `/log print where topics~"system" and ${logSince("7d")}`;
         const logText = await executeMikrotikCommand(logCmd, ctx);
         if (!isEmpty(logText) && !looksLikeError(logText)) {
           report.attributions = attributeChanges(report.sections, logText);

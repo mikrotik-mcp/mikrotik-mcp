@@ -8,6 +8,7 @@
  * Everything device-facing lives here so `detectors.ts`, `correlate.ts` and
  * `respond.ts` stay pure enough to test with a fixture and a fake clock.
  */
+import { logSince } from "../core/routeros";
 import { executeMikrotikCommand } from "../core/connector";
 import { createContext } from "../core/context";
 import { getConfig, listDevices } from "../core/runtime";
@@ -41,7 +42,7 @@ export async function fetchLog(device: string, windowMinutes: number): Promise<L
   // `print detail` — the `value` format transposes into columns and is
   // unparseable at any real line count.
   const raw = await executeMikrotikCommand(
-    `/log print detail where time > ([:timestamp] - ${windowMinutes}m)`,
+    `/log print detail where ${logSince(`${windowMinutes}m`)}`,
     ctx,
   );
   const { events, unparsed } = parseLog(raw, device);
