@@ -535,12 +535,12 @@
             "maxLength": 80
           },
           "person": {
-            "default": "",
+            "description": "Who uses the device. Leave out to keep the saved person; \"\" clears it.",
             "type": "string",
             "maxLength": 80
           }
         },
-        "required": ["mac", "name", "person"],
+        "required": ["mac", "name"],
         "additionalProperties": false
       }
     },
@@ -1281,7 +1281,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Explicitly enable/disable periodic read-only router collection and local retention. No router configuration writes. Stores bounded resources, interface state, classified log metadata and MCP write/failure metadata; no raw messages or credentials. Requires the MCP process to stay running. SSH polling can miss logs; not a lossless syslog service.",
+      "description": "Explicitly enable/disable periodic read-only router collection and local retention. intervalSeconds, windowMinutes and retentionDays keep their saved value when left out (first use: 60 s, 60 min, 7 days). No router configuration writes. Stores bounded resources, interface state, classified log metadata and MCP write/failure metadata; no raw messages or credentials. Requires the MCP process to stay running. SSH polling can miss logs; not a lossless syslog service.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -1290,25 +1290,22 @@
             "type": "boolean"
           },
           "intervalSeconds": {
-            "default": 60,
             "type": "integer",
             "minimum": 30,
             "maximum": 300
           },
           "windowMinutes": {
-            "default": 60,
             "type": "integer",
             "minimum": 15,
             "maximum": 360
           },
           "retentionDays": {
-            "default": 7,
             "type": "integer",
             "minimum": 1,
             "maximum": 30
           }
         },
-        "required": ["enabled", "intervalSeconds", "windowMinutes", "retentionDays"],
+        "required": ["enabled"],
         "additionalProperties": false
       }
     },
@@ -17940,7 +17937,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Throttle (or unthrottle) a device's bandwidth by managing a `/queue simple` targeting its IP — sets the max download and upload rate. RouterOS rate strings: e.g. `10M`, `512k`; pass `0` or omit a side to leave it unlimited. Updates the device's existing simple queue if there is one, otherwise creates it (which also enables the per-device traffic counter the Connected Devices charts read). Identify the device by IP (the queue target).",
+      "description": "Throttle (or unthrottle) a device's bandwidth by managing a `/queue simple` targeting its IP — sets the max download and upload rate. RouterOS rate strings: e.g. `10M`, `512k`; pass `0` for unlimited. A side you leave out keeps its current limit (a new queue starts unlimited). Updates the device's existing simple queue if there is one, otherwise creates it (which also enables the per-device traffic counter the Connected Devices charts read). Identify the device by IP (the queue target).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -17950,11 +17947,11 @@
             "description": "Device IP address (the queue target)"
           },
           "download_limit": {
-            "description": "Max download rate, e.g. \"10M\". \"0\"/omit = unlimited",
+            "description": "Max download rate, e.g. \"10M\". \"0\" = unlimited. Leave out to keep the current limit.",
             "type": "string"
           },
           "upload_limit": {
-            "description": "Max upload rate, e.g. \"2M\". \"0\"/omit = unlimited",
+            "description": "Max upload rate, e.g. \"2M\". \"0\" = unlimited. Leave out to keep the current limit.",
             "type": "string"
           },
           "name": {

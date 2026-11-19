@@ -86,12 +86,14 @@ test("rate-limit operation distinguishes no-op, creation, update and RouterOS fa
   expect((await setDeviceLimits(ctx, "10.0.0.7", { download: "10M", upload: "2M" })).ok).toBe(true);
   expect(command.mock.calls.at(-1)?.[0]).toContain("max-limit=2M/10M");
 
-  command.mockResolvedValueOnce("1");
+  // The queue exists and only one side is given: the other side is read and kept.
+  command.mockResolvedValueOnce("1").mockResolvedValueOnce("0 target=10.0.0.7/32 max-limit=2M/10M");
   expect((await setDeviceLimits(ctx, "10.0.0.7", { download: "5M" })).ok).toBe(true);
   expect(command.mock.calls.at(-1)?.[0]).toContain("/queue simple set");
+  expect(command.mock.calls.at(-1)?.[0]).toContain("max-limit=2M/5M");
 
   command.mockResolvedValueOnce("1").mockResolvedValueOnce("failure: denied");
-  expect((await setDeviceLimits(ctx, "10.0.0.7", { download: "5M" })).ok).toBe(false);
+  expect((await setDeviceLimits(ctx, "10.0.0.7", { download: "5M", upload: "1M" })).ok).toBe(false);
 });
 
 test("block/allow use a MAC-scoped tagged rule and avoid duplicate blocks", async () => {

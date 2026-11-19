@@ -105,7 +105,12 @@ export const homeInternetTools: ToolModule = [
     inputSchema: {
       mac: macInput,
       name: z.string().trim().max(80),
-      person: z.string().trim().max(80).default(""),
+      person: z
+        .string()
+        .trim()
+        .max(80)
+        .optional()
+        .describe('Who uses the device. Leave out to keep the saved person; "" clears it.'),
     },
     async handler(a, ctx) {
       const device = resolveDeviceName(ctx.device);
@@ -113,7 +118,12 @@ export const homeInternetTools: ToolModule = [
       const store = await homeStore(),
         client = store.clients(device).find((c) => c.mac === a.mac.toUpperCase());
       if (!client) throw new Error("Refresh household devices first.");
-      const result = { ...client, name: a.name, person: a.person, acknowledged: true };
+      const result = {
+        ...client,
+        name: a.name,
+        person: a.person ?? client.person,
+        acknowledged: true,
+      };
       store.saveClient(device, result);
       return JSON.stringify(result);
     },

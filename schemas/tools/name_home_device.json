@@ -12,11 +12,11 @@
       "maxLength": 80
     },
     "person": {
-      "default": "",
+      "description": "Who uses the device. Leave out to keep the saved person; \"\" clears it.",
       "type": "string",
       "maxLength": 80
     }
   },
-  "required": ["mac", "name", "person"],
+  "required": ["mac", "name"],
   "additionalProperties": false
 }

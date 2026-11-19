@@ -451,13 +451,14 @@ export async function setDeviceLimits(
   ip: string,
   opts: { download?: string; upload?: string; name?: string },
 ): Promise<OpResult> {
-  const rate = (v: string | undefined): string => {
-    const t = (v ?? "").trim();
+  // An empty string is the dashboard's "no limit". Undefined is "not given".
+  const rate = (v: string | undefined): string | undefined => {
+    if (v === undefined) return undefined;
+    const t = v.trim();
     return t === "" ? "0" : t;
   };
-  const down = rate(opts.download);
-  const up = rate(opts.upload);
-  const maxLimit = `${up}/${down}`;
+  let down = rate(opts.download);
+  let up = rate(opts.upload);
 
   const existing = await executeMikrotikCommand(
     `/queue simple print count-only where target~${quoted(ip)}`,
@@ -465,9 +466,30 @@ export async function setDeviceLimits(
   );
   const have = (parseLeadingNumber(existing.trim()) ?? 0) > 0;
 
-  if (!have && down === "0" && up === "0") {
-    return { ok: true, message: `No rate limit set for ${ip} (left unlimited).` };
+  if (!have) {
+    // A new queue has no limit to keep: a side that is not given is unlimited.
+    down ??= "0";
+    up ??= "0";
+    if (down === "0" && up === "0")
+      return { ok: true, message: `No rate limit set for ${ip} (left unlimited).` };
+  } else if (down === undefined && up === undefined) {
+    return { ok: true, message: `No limit was given for ${ip}. Its limits were not changed.` };
+  } else if (down === undefined || up === undefined) {
+    // `max-limit` holds both sides, so the side that was not given is read and written back.
+    const current = await executeMikrotikCommand(
+      `/queue simple print detail where target~${quoted(ip)}`,
+      ctx,
+    );
+    const kept = current.match(/max-limit=([^\s/]+)\/(\S+)/);
+    if (looksLikeError(current) || !kept)
+      return {
+        ok: false,
+        message: `Could not read the current limits of ${ip}, so nothing was changed. Give both download_limit and upload_limit.`,
+      };
+    up ??= kept[1]!;
+    down ??= kept[2]!;
   }
+  const maxLimit = `${up}/${down}`;
 
   const cmd = have
     ? new Cmd(`/queue simple set [find target~${quoted(ip)}]`).set("max-limit", maxLimit).build()
@@ -804,7 +826,7 @@ export const connectedDeviceTools: ToolModule = [
     description:
       "Throttle (or unthrottle) a device's bandwidth by managing a `/queue simple` targeting its IP " +
       "— sets the max download and upload rate. RouterOS rate strings: e.g. `10M`, `512k`; pass `0` " +
-      "or omit a side to leave it unlimited. Updates the device's existing simple queue if there is " +
+      "for unlimited. A side you leave out keeps its current limit (a new queue starts unlimited). Updates the device's existing simple queue if there is " +
       "one, otherwise creates it (which also enables the per-device traffic counter the Connected " +
       "Devices charts read). Identify the device by IP (the queue target).",
     inputSchema: {
@@ -812,11 +834,15 @@ export const connectedDeviceTools: ToolModule = [
       download_limit: z
         .string()
         .optional()
-        .describe('Max download rate, e.g. "10M". "0"/omit = unlimited'),
+        .describe(
+          'Max download rate, e.g. "10M". "0" = unlimited. Leave out to keep the current limit.',
+        ),
       upload_limit: z
         .string()
         .optional()
-        .describe('Max upload rate, e.g. "2M". "0"/omit = unlimited'),
+        .describe(
+          'Max upload rate, e.g. "2M". "0" = unlimited. Leave out to keep the current limit.',
+        ),
       name: z.string().optional().describe("Optional name for a newly created queue"),
     },
     async handler(a, ctx) {

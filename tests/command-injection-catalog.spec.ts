@@ -231,47 +231,133 @@ test("no READ tool sends a command that changes the router", { timeout: 300_000 
   expect(Array.from(new Set(offenders))).toEqual([]);
 });
 
-/** Only the arguments a caller must give, with plain values. */
-function requiredArgs(shape: Record<string, Schema>): Record<string, unknown> | null {
-  const required = Object.fromEntries(
-    Object.entries(shape).filter(([, schema]) => !schema.safeParse(undefined).success),
-  );
-  return argsFor(required, "a");
+/** The settings every `set` in these commands writes, with their values. */
+function settingsWritten(commands: string[]): Map<string, string> {
+  const written = new Map<string, string>();
+  for (const command of commands) {
+    // Strings are taken out first, so a `;` or `=` inside one is not read as syntax.
+    const strings: string[] = [];
+    const masked = command.replace(/"(?:\\.|[^"\\])*"/g, (text) => `§${strings.push(text) - 1}§`);
+    for (const part of masked.split(/[;\n]/)) {
+      const at = part.search(/(?:^|[\s/{])set(?:\s|$)/);
+      if (at < 0) continue;
+      let rest = part.slice(at).replace(/^[\s/{]*set/, "");
+      // `[find ...]` and `where ...` choose the item. They do not write.
+      for (let depth = 0; depth < 6; depth += 1) rest = rest.replace(/\[[^[\]]*\]/g, "§");
+      rest = rest.replace(/\swhere\s.*$/, "");
+      for (const match of rest.matchAll(/(?:^|\s)([a-zA-Z.][\w.-]*)=(\S*)/g)) {
+        if (match[1] === "numbers" || match[1] === ".id") continue;
+        const value = match[2]!
+          .replace(/§(\d+)§/g, (_, index) => strings[Number(index)]!)
+          .replace(/[}\s]+$/, "");
+        written.set(match[1]!, value);
+      }
+    }
+  }
+  return written;
 }
 
+/** Every text a given argument can become in a command: true is `yes`, a list is each item. */
+function textsOf(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(textsOf);
+  if (value && typeof value === "object") return Object.values(value).flatMap(textsOf);
+  if (typeof value === "boolean") return value ? ["yes", "true"] : ["no", "false"];
+  return [String(value)];
+}
+
+/** Arguments that let a call run but name no setting. */
+const GATE = /^(?:apply|confirm\w*|dry_run|force|physical\w*|acknowledge\w*|i_understand\w*)$/;
+
 /**
- * A `set` command changes an item that exists. A parameter with a schema
- * default that the handler always writes resets that setting on every call:
- * `set_dns_servers` once wrote `allow-remote-requests=no` whenever it was
- * called with `servers` alone, and so stopped DNS for the router's clients.
- * A default is fine on an `add` command, which makes a new item.
+ * Tools whose job is to write a fixed value. Each entry says why. Do not add a
+ * tool here to make the test pass: make the tool keep what it was not given.
  */
-test("a set command writes only what the caller gave", async () => {
-  const leaks: string[] = [];
-  for (const tool of allToolModules.flat()) {
-    if (tool.annotations.readOnlyHint === true) continue;
-    const shape = (tool.inputSchema ?? {}) as Record<string, Schema>;
-    const defaults = Object.entries(shape)
-      .filter(([, schema]) => schema.def?.type === "default")
-      .map(([key]) => key);
-    if (defaults.length === 0) continue;
-    const given = requiredArgs(shape);
-    const parsed = given && z.object(shape).safeParse(given);
-    if (!parsed || !parsed.success) continue;
+const FIXED_BY_DESIGN: [RegExp, string][] = [
+  [/^(?:enable|disable)_/, "writes disabled=yes or disabled=no: that is the request"],
+  [/_enabled$/, "writes disabled as the opposite of the `enabled` it was given"],
+  [/^allow_device$/, "writes block-access=no: that is the request"],
+  [/^(?:start|stop)_packet_capture$/, "turns sniffer streaming on or off: that is the request"],
+  [/^audit_remediate$/, "applies the fixes its own audit found"],
+];
+
+/**
+ * A `set` command changes an item that exists, so it may write only what the
+ * caller gave. `set_dns_servers` once wrote `allow-remote-requests=no` on every
+ * call, and a call that only changed the servers stopped DNS for every client.
+ *
+ * Each write tool is called with its required arguments alone, then with each
+ * optional argument alone. The mock router answers every read, so the handler
+ * reaches its write. Two rules:
+ *   1. With the required arguments alone, every value written is one of them.
+ *   2. One optional argument adds at most one setting.
+ * A default on an `add` command is fine: it makes a new item.
+ */
+test("a set command writes only what the caller gave", { timeout: 300_000 }, async () => {
+  const leaks = new Set<string>();
+  let writes = 0;
+  const call = async (tool: (typeof tools)[number], args: unknown) => {
     sent.commands = [];
-    try {
-      await tool.handler(
-        parsed.data as never,
-        { info() {}, error() {}, warn() {}, debug() {} } as never,
+    await Promise.race([
+      Promise.resolve()
+        .then(() => tool.handler(args as never, ctx as never))
+        .catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+    const written = settingsWritten(sent.commands);
+    if (written.size > 0) writes += 1;
+    return written;
+  };
+  // "a" is a name; "*1" is an item id, for the tools that look the item up first.
+  for (const payload of ["a", "*1"]) {
+    for (const tool of tools) {
+      if (tool.annotations.readOnlyHint === true || tool.name in RAW_BY_DESIGN) continue;
+      const shape = (tool.inputSchema ?? {}) as Record<string, Schema>;
+      const object = z.object(shape);
+      const required = argsFor(
+        Object.fromEntries(
+          Object.entries(shape).filter(([, schema]) => !schema.safeParse(undefined).success),
+        ),
+        payload,
       );
-    } catch {
-      // A tool that needs more than the mock gives is not what this test reads.
+      if (!required) continue;
+      const base: Record<string, unknown> = { ...required };
+      for (const [key, schema] of Object.entries(shape)) {
+        const open = key !== "dry_run";
+        if (!(key in base) && GATE.test(key) && schema.safeParse(open).success) base[key] = open;
+      }
+      const parsedBase = object.safeParse(base);
+      if (!parsedBase.success) continue;
+
+      const alone = await call(tool, parsedBase.data);
+      if (!FIXED_BY_DESIGN.some(([name]) => name.test(tool.name))) {
+        const given = textsOf(required);
+        for (const [key, value] of alone) {
+          const text = value.replace(/^"|"$/g, "");
+          if (!given.some((item) => text.includes(item)))
+            leaks.add(`${tool.name}: writes ${key}=${value} when it was not given`);
+        }
+      }
+
+      for (const [key, schema] of Object.entries(shape)) {
+        if (key in base) continue;
+        let value = fill(schema, "zz");
+        if (!schema.safeParse(value).success)
+          value = SAFE.find((candidate) => schema.safeParse(candidate).success);
+        const values = value === true ? [true, false] : value === undefined ? [] : [value];
+        for (const one of values) {
+          const parsed = object.safeParse({ ...base, [key]: one });
+          if (!parsed.success) continue;
+          const written = await call(tool, parsed.data);
+          const added = [...written].filter(([name, text]) => alone.get(name) !== text);
+          if (added.length > 1)
+            leaks.add(
+              `${tool.name}: ${key} alone writes ${added.map(([name, text]) => `${name}=${text}`).join(" ")}`,
+            );
+        }
+      }
     }
-    const sets = sent.commands.filter((cmd) => /^\/[a-z0-9 /-]+ set\b/.test(cmd)).join(" ; ");
-    const written = defaults.filter((key) =>
-      new RegExp(`[ ;]${key.replaceAll("_", "-")}=`).test(sets),
-    );
-    if (written.length > 0) leaks.push(`${tool.name}: ${written.join(", ")}`);
   }
-  expect(leaks).toEqual([]);
-}, 120_000);
+  // If the mock stops reaching the writes, this test would pass and check nothing.
+  expect(writes).toBeGreaterThan(1000);
+  expect([...leaks]).toEqual([]);
+});

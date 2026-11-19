@@ -59,6 +59,16 @@ beforeEach(() => {
   mock.failure = false;
   mock.safe = false;
 });
+test("a recorder setting that is not given keeps its saved value", async () => {
+  await configureFlight({ enabled: true, intervalSeconds: 120, retentionDays: 14 }, ctx);
+  await configureFlight({ enabled: false }, ctx);
+  expect((await getFlight(ctx)).recorder).toMatchObject({
+    enabled: false,
+    intervalSeconds: 120,
+    windowMinutes: 60,
+    retentionDays: 14,
+  });
+});
 test("enable is local and sampling persists bounded metadata, never raw logs", async () => {
   await configureFlight({ enabled: true }, ctx);
   expect(mock.commands).toHaveLength(0);

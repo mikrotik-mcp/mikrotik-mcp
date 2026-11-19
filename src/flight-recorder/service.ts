@@ -72,7 +72,10 @@ export async function configureFlight(input: unknown, ctx: ToolContext) {
   const device = access(ctx, "configure_flight_recorder", true),
     a = recorderInput.parse(input);
   await edit(device, async (r) => {
-    Object.assign(r, a);
+    r.enabled = a.enabled;
+    r.intervalSeconds = a.intervalSeconds ?? r.intervalSeconds;
+    r.windowMinutes = a.windowMinutes ?? r.windowMinutes;
+    r.retentionDays = a.retentionDays ?? r.retentionDays;
     r.error = undefined;
   });
   return getFlight(ctx);

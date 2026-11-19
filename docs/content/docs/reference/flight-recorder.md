@@ -22,14 +22,14 @@ No tool-specific parameters.
 
 **Configure Network Flight Recorder** · Risk: **write**
 
-Explicitly enable/disable periodic read-only router collection and local retention. No router configuration writes. Stores bounded resources, interface state, classified log metadata and MCP write/failure metadata; no raw messages or credentials. Requires the MCP process to stay running. SSH polling can miss logs; not a lossless syslog service.
+Explicitly enable/disable periodic read-only router collection and local retention. intervalSeconds, windowMinutes and retentionDays keep their saved value when left out (first use: 60 s, 60 min, 7 days). No router configuration writes. Stores bounded resources, interface state, classified log metadata and MCP write/failure metadata; no raw messages or credentials. Requires the MCP process to stay running. SSH polling can miss logs; not a lossless syslog service.
 
-| Parameter         | Required | Definition                                                   |
-| ----------------- | -------- | ------------------------------------------------------------ |
-| `enabled`         | Yes      | `{"type":"boolean"}`                                         |
-| `intervalSeconds` | Yes      | `{"default":60,"type":"integer","minimum":30,"maximum":300}` |
-| `windowMinutes`   | Yes      | `{"default":60,"type":"integer","minimum":15,"maximum":360}` |
-| `retentionDays`   | Yes      | `{"default":7,"type":"integer","minimum":1,"maximum":30}`    |
+| Parameter         | Required | Definition                                      |
+| ----------------- | -------- | ----------------------------------------------- |
+| `enabled`         | Yes      | `{"type":"boolean"}`                            |
+| `intervalSeconds` | No       | `{"type":"integer","minimum":30,"maximum":300}` |
+| `windowMinutes`   | No       | `{"type":"integer","minimum":15,"maximum":360}` |
+| `retentionDays`   | No       | `{"type":"integer","minimum":1,"maximum":30}`   |
 
 ## freeze_network_incident
 

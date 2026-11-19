@@ -4,9 +4,11 @@ import type { WorkspaceRecord } from "../operations/store";
 
 export const recorderInput = z.object({
   enabled: z.boolean(),
-  intervalSeconds: z.number().int().min(30).max(300).default(60),
-  windowMinutes: z.number().int().min(15).max(360).default(60),
-  retentionDays: z.number().int().min(1).max(30).default(7),
+  // No defaults here: a setting that is not given keeps its saved value.
+  // A new record starts from blankFlight (60 s, 60 min, 7 days).
+  intervalSeconds: z.number().int().min(30).max(300).optional(),
+  windowMinutes: z.number().int().min(15).max(360).optional(),
+  retentionDays: z.number().int().min(1).max(30).optional(),
 });
 export interface FlightSample {
   at: number;
@@ -36,7 +38,7 @@ export interface FlightIncident {
   events: FlightEvent[];
   complete: boolean;
 }
-export interface FlightRecord extends WorkspaceRecord, z.infer<typeof recorderInput> {
+export interface FlightRecord extends WorkspaceRecord, Required<z.infer<typeof recorderInput>> {
   samples: FlightSample[];
   events: FlightEvent[];
   incidents: FlightIncident[];

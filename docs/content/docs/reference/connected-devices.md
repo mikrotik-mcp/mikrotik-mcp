@@ -86,14 +86,14 @@ Set a friendly label/comment on a device's DHCP lease (`/ip dhcp-server lease se
 
 **Set a Device's Download/Upload Rate Limits** · Risk: **write-idempotent**
 
-Throttle (or unthrottle) a device's bandwidth by managing a `/queue simple` targeting its IP — sets the max download and upload rate. RouterOS rate strings: e.g. `10M`, `512k`; pass `0` or omit a side to leave it unlimited. Updates the device's existing simple queue if there is one, otherwise creates it (which also enables the per-device traffic counter the Connected Devices charts read). Identify the device by IP (the queue target).
+Throttle (or unthrottle) a device's bandwidth by managing a `/queue simple` targeting its IP — sets the max download and upload rate. RouterOS rate strings: e.g. `10M`, `512k`; pass `0` for unlimited. A side you leave out keeps its current limit (a new queue starts unlimited). Updates the device's existing simple queue if there is one, otherwise creates it (which also enables the per-device traffic counter the Connected Devices charts read). Identify the device by IP (the queue target).
 
-| Parameter        | Required | Definition                                                              |
-| ---------------- | -------- | ----------------------------------------------------------------------- |
-| `ip`             | Yes      | Device IP address (the queue target) `{"type":"string"}`                |
-| `download_limit` | No       | Max download rate, e.g. "10M". "0"/omit = unlimited `{"type":"string"}` |
-| `upload_limit`   | No       | Max upload rate, e.g. "2M". "0"/omit = unlimited `{"type":"string"}`    |
-| `name`           | No       | Optional name for a newly created queue `{"type":"string"}`             |
+| Parameter        | Required | Definition                                                                                               |
+| ---------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `ip`             | Yes      | Device IP address (the queue target) `{"type":"string"}`                                                 |
+| `download_limit` | No       | Max download rate, e.g. "10M". "0" = unlimited. Leave out to keep the current limit. `{"type":"string"}` |
+| `upload_limit`   | No       | Max upload rate, e.g. "2M". "0" = unlimited. Leave out to keep the current limit. `{"type":"string"}`    |
+| `name`           | No       | Optional name for a newly created queue `{"type":"string"}`                                              |
 
 ## block_device
 

@@ -59,11 +59,11 @@ No tool-specific parameters.
 
 Save a friendly device name and person locally and acknowledge its new-device notice. Does not modify router DHCP, reserve an IP or change access.
 
-| Parameter | Required | Definition                                                       |
-| --------- | -------- | ---------------------------------------------------------------- |
-| `mac`     | Yes      | `{"type":"string","pattern":"^(?:[\\da-f]{2}:){5}[\\da-f]{2}$"}` |
-| `name`    | Yes      | `{"type":"string","maxLength":80}`                               |
-| `person`  | Yes      | `{"default":"","type":"string","maxLength":80}`                  |
+| Parameter | Required | Definition                                                                                                |
+| --------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| `mac`     | Yes      | `{"type":"string","pattern":"^(?:[\\da-f]{2}:){5}[\\da-f]{2}$"}`                                          |
+| `name`    | Yes      | `{"type":"string","maxLength":80}`                                                                        |
+| `person`  | No       | Who uses the device. Leave out to keep the saved person; "" clears it. `{"type":"string","maxLength":80}` |
 
 ## preview_home_policy
 

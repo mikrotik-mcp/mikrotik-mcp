@@ -8,11 +8,11 @@
       "description": "Device IP address (the queue target)"
     },
     "download_limit": {
-      "description": "Max download rate, e.g. \"10M\". \"0\"/omit = unlimited",
+      "description": "Max download rate, e.g. \"10M\". \"0\" = unlimited. Leave out to keep the current limit.",
       "type": "string"
     },
     "upload_limit": {
-      "description": "Max upload rate, e.g. \"2M\". \"0\"/omit = unlimited",
+      "description": "Max upload rate, e.g. \"2M\". \"0\" = unlimited. Leave out to keep the current limit.",
       "type": "string"
     },
     "name": {

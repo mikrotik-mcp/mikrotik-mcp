@@ -25,7 +25,7 @@ export const flightRecorderTools: ToolModule = [
     title: "Configure Network Flight Recorder",
     annotations: WRITE,
     description:
-      "Explicitly enable/disable periodic read-only router collection and local retention. No router configuration writes. Stores bounded resources, interface state, classified log metadata and MCP write/failure metadata; no raw messages or credentials. Requires the MCP process to stay running. SSH polling can miss logs; not a lossless syslog service.",
+      "Explicitly enable/disable periodic read-only router collection and local retention. intervalSeconds, windowMinutes and retentionDays keep their saved value when left out (first use: 60 s, 60 min, 7 days). No router configuration writes. Stores bounded resources, interface state, classified log metadata and MCP write/failure metadata; no raw messages or credentials. Requires the MCP process to stay running. SSH polling can miss logs; not a lossless syslog service.",
     inputSchema: recorderInput.shape,
     async handler(a, ctx) {
       return JSON.stringify(await configureFlight(a, ctx));
