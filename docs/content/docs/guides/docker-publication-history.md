@@ -243,3 +243,14 @@ description: "Archived verification records from previous Docker releases."
 - Release gate on the tagged commit: 5,326 tests, typecheck, lint and the Bun memory tests passed.
 - Removed the isolated release builder, smoke container, local verify and pulled images, and the source archive. No unrelated Docker data was pruned.
 - No running MCP service was upgraded or restarted; no router settings changed.
+
+## 6.20.0 publication record — November 20, 2026
+
+- Source: release tag `6.20.0` (`da9626ae`), built from a Git archive of the tag.
+- Published `alimaster/mikrotik-mcp:6.20.0` and promoted `latest` after the pulled digest passed the runtime check.
+- Both tags were read back with index digest `sha256:557f10a02d391578703d4c3a39c196cbd35b167ed9777c9b76392c3efea78078` and `linux/amd64` + `linux/arm64` manifests.
+- Native ARM64 check passed on the pulled digest with networking disabled and the synthetic configuration: Bun 1.4.5, MCP 6.20.0, non-root UID 1000, HTTP health, dashboard, writable JSON, the 9 tools of the default list, and the catalog through `describe_tool`
+- Native AMD64 execution was not tested. Cross-building is not a runtime test.
+- Release gate on the tagged commit: 5,332 tests, typecheck, lint and the Bun memory tests passed.
+- Removed the isolated release builder, smoke container, local verify and pulled images, and the source archive. No unrelated Docker data was pruned.
+- No running MCP service was upgraded or restarted; no router settings changed.
