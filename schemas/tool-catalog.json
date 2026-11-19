@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.17.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 1009,
+  "toolCount": 1011,
   "tools": [
     {
       "name": "create_client_check",
@@ -35841,7 +35841,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Save a fact, constraint, lesson, preference or procedure for an existing entity. Supply a source, author-assessed confidence, optional expiry and pin. A stable key (e.g. wan.provider) replaces that entity's previous value atomically and preserves revision history. Never store credentials or raw command dumps. No router changes.",
+      "description": "Save a fact, constraint, lesson, preference or procedure for an existing entity. Supply a source, author-assessed confidence, optional expiry and pin. A stable key (e.g. wan.provider) replaces that entity's previous value atomically and preserves revision history. An older memory of the same entity that says something else about the same subject (written as 'subject: value' or 'subject is value') is retired: archived with its history, and listed in `retired`. Memories that may contradict this one but were not retired are listed in `possibleConflicts`; when one of them is replaced by this fact, call again with its id in `supersedes`. Restore a retired memory with memory_revise status=active. Never store credentials or raw command dumps. No router changes.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -35901,6 +35901,17 @@
                 "type": "null"
               }
             ]
+          },
+          "supersedes": {
+            "default": [],
+            "description": "IDs of memories that this one replaces because they say something else. They are archived, with their history kept.",
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
           }
         },
         "required": [
@@ -35910,7 +35921,8 @@
           "source",
           "confidence",
           "pinned",
-          "expiresAt"
+          "expiresAt",
+          "supersedes"
         ],
         "additionalProperties": false
       }
@@ -36081,6 +36093,85 @@
           }
         },
         "required": ["id", "expectedRevision"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "memory_can_answer",
+      "title": "Check Whether Memory Can Answer",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Before you answer a question from memory, check that memory holds what the question asks about. Returns the words of the question that carry its meaning, which of them memory covers, which it does not (`missing`), which are covered only by memories that need review, the best matching memories, and advice. No language model is used: a word is covered when an active memory or an entity name has it. When `answerable` is false, do not answer the missing part from memory: read the router or say it is not known. With entityName the check reads that entity, its groups, shared policy and the entities it is linked to. No router access.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 1000
+          },
+          "entityName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": ["question"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "memory_as_of",
+      "title": "Read Memory As It Was",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Read memory as it was at a past moment: what was believed then, before later revisions, retirements and archiving. Give `at` as epoch milliseconds or text such as '2026-11-01' or '2026-11-01T14:30:00Z'. Each memory comes back as it read then, with `since` (unchanged, revised or archived). Use it to answer 'what did we know on that day' and to explain an old decision. These are past beliefs, not the network's state now: use memory_recall for today. A memory that was deleted keeps no history and is missing; `notes` says when that can be the case. No router access.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "string",
+                "minLength": 4,
+                "maxLength": 40
+              }
+            ],
+            "description": "The moment to read memory at: epoch milliseconds, or text such as \"2026-11-01\" or \"2026-11-01T14:30:00Z\"."
+          },
+          "entityName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "query": {
+            "default": "",
+            "type": "string",
+            "maxLength": 500
+          },
+          "limit": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": ["at", "query", "limit"],
         "additionalProperties": false
       }
     },

@@ -11,6 +11,8 @@ description: "Persistent knowledge-graph memory — entities, relations and obse
 - [Recall Relevant Network Context](#memory_recall)
 - [Browse and Review Memories](#memory_review)
 - [Revise or Verify a Memory](#memory_revise)
+- [Check Whether Memory Can Answer](#memory_can_answer)
+- [Read Memory As It Was](#memory_as_of)
 - [Memory Revision History](#memory_history)
 - [Create Knowledge Graph Entities](#memory_create_entities)
 - [Create Knowledge Graph Relations](#memory_create_relations)
@@ -50,18 +52,19 @@ Explicitly configure Device, Group or Shared scope for an existing knowledge ent
 
 **Remember Network Knowledge** · Risk: **write**
 
-Save a fact, constraint, lesson, preference or procedure for an existing entity. Supply a source, author-assessed confidence, optional expiry and pin. A stable key (e.g. wan.provider) replaces that entity's previous value atomically and preserves revision history. Never store credentials or raw command dumps. No router changes.
+Save a fact, constraint, lesson, preference or procedure for an existing entity. Supply a source, author-assessed confidence, optional expiry and pin. A stable key (e.g. wan.provider) replaces that entity's previous value atomically and preserves revision history. An older memory of the same entity that says something else about the same subject (written as 'subject: value' or 'subject is value') is retired: archived with its history, and listed in `retired`. Memories that may contradict this one but were not retired are listed in `possibleConflicts`; when one of them is replaced by this fact, call again with its id in `supersedes`. Restore a retired memory with memory_revise status=active. Never store credentials or raw command dumps. No router changes.
 
-| Parameter    | Required | Definition                                                                                                      |
-| ------------ | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `entityName` | Yes      | `{"type":"string","minLength":1,"maxLength":200}`                                                               |
-| `content`    | Yes      | `{"type":"string","minLength":1,"maxLength":8000}`                                                              |
-| `key`        | No       | `{"anyOf":[{"type":"string","minLength":1,"maxLength":120},{"type":"null"}]}`                                   |
-| `kind`       | Yes      | `{"default":"fact","type":"string","enum":["fact","constraint","lesson","preference","procedure"]}`             |
-| `source`     | Yes      | `{"default":"unspecified","type":"string","minLength":1,"maxLength":500}`                                       |
-| `confidence` | Yes      | `{"default":0.5,"type":"number","minimum":0,"maximum":1}`                                                       |
-| `pinned`     | Yes      | `{"default":false,"type":"boolean"}`                                                                            |
-| `expiresAt`  | Yes      | `{"default":null,"anyOf":[{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991},{"type":"null"}]}` |
+| Parameter    | Required | Definition                                                                                                                                                                                                                                   |
+| ------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entityName` | Yes      | `{"type":"string","minLength":1,"maxLength":200}`                                                                                                                                                                                            |
+| `content`    | Yes      | `{"type":"string","minLength":1,"maxLength":8000}`                                                                                                                                                                                           |
+| `key`        | No       | `{"anyOf":[{"type":"string","minLength":1,"maxLength":120},{"type":"null"}]}`                                                                                                                                                                |
+| `kind`       | Yes      | `{"default":"fact","type":"string","enum":["fact","constraint","lesson","preference","procedure"]}`                                                                                                                                          |
+| `source`     | Yes      | `{"default":"unspecified","type":"string","minLength":1,"maxLength":500}`                                                                                                                                                                    |
+| `confidence` | Yes      | `{"default":0.5,"type":"number","minimum":0,"maximum":1}`                                                                                                                                                                                    |
+| `pinned`     | Yes      | `{"default":false,"type":"boolean"}`                                                                                                                                                                                                         |
+| `expiresAt`  | Yes      | `{"default":null,"anyOf":[{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991},{"type":"null"}]}`                                                                                                                              |
+| `supersedes` | Yes      | IDs of memories that this one replaces because they say something else. They are archived, with their history kept. `{"default":[],"maxItems":20,"type":"array","items":{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991}}` |
 
 ## memory_recall
 
@@ -111,6 +114,30 @@ Correct, pin, archive or restore a stored memory with its expectedRevision from 
 | `expiresAt`        | No       | `{"anyOf":[{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991},{"type":"null"}]}` |
 | `status`           | No       | `{"type":"string","enum":["active","archived"]}`                                                 |
 | `verified`         | No       | `{"type":"boolean","const":true}`                                                                |
+
+## memory_can_answer
+
+**Check Whether Memory Can Answer** · Risk: **read**
+
+Before you answer a question from memory, check that memory holds what the question asks about. Returns the words of the question that carry its meaning, which of them memory covers, which it does not (`missing`), which are covered only by memories that need review, the best matching memories, and advice. No language model is used: a word is covered when an active memory or an entity name has it. When `answerable` is false, do not answer the missing part from memory: read the router or say it is not known. With entityName the check reads that entity, its groups, shared policy and the entities it is linked to. No router access.
+
+| Parameter    | Required | Definition                                         |
+| ------------ | -------- | -------------------------------------------------- |
+| `question`   | Yes      | `{"type":"string","minLength":2,"maxLength":1000}` |
+| `entityName` | No       | `{"type":"string","minLength":1,"maxLength":200}`  |
+
+## memory_as_of
+
+**Read Memory As It Was** · Risk: **read**
+
+Read memory as it was at a past moment: what was believed then, before later revisions, retirements and archiving. Give `at` as epoch milliseconds or text such as '2026-11-01' or '2026-11-01T14:30:00Z'. Each memory comes back as it read then, with `since` (unchanged, revised or archived). Use it to answer 'what did we know on that day' and to explain an old decision. These are past beliefs, not the network's state now: use memory_recall for today. A memory that was deleted keeps no history and is missing; `notes` says when that can be the case. No router access.
+
+| Parameter    | Required | Definition                                                                                                                                                                                                                                |
+| ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `at`         | Yes      | The moment to read memory at: epoch milliseconds, or text such as "2026-11-01" or "2026-11-01T14:30:00Z". `{"anyOf":[{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991},{"type":"string","minLength":4,"maxLength":40}]}` |
+| `entityName` | No       | `{"type":"string","minLength":1,"maxLength":200}`                                                                                                                                                                                         |
+| `query`      | Yes      | `{"default":"","type":"string","maxLength":500}`                                                                                                                                                                                          |
+| `limit`      | Yes      | `{"default":30,"type":"integer","minimum":1,"maximum":100}`                                                                                                                                                                               |
 
 ## memory_history
 

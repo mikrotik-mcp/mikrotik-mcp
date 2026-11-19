@@ -363,3 +363,160 @@ test("legacy migration backs up WAL data, preserves IDs/relations and never inve
     rmSync(directory, { recursive: true });
   }
 });
+
+test("a newer fact retires an older one that says something else about the same subject", async () => {
+  const store = await openMemoryStore(":memory:");
+  try {
+    store.createEntities([{ name: "edge", entityType: "router" }]);
+    const remember = (content: string, more: Record<string, unknown> = {}) =>
+      store.remember(RememberSchema.parse({ entityName: "edge", content, ...more }));
+    const old = remember("WAN IP: 203.0.113.7");
+    expect(old.retired).toEqual([]);
+    const next = remember("The WAN IP is 198.51.100.4");
+    expect(next.retired.map((r) => r.id)).toEqual([old.id]);
+    // Retired means archived with its history, and it names what replaced it.
+    const archived = store.facts(BrowseSchema.parse({ state: "archived" })).items[0]!;
+    expect(archived.id).toBe(old.id);
+    expect(archived.supersededBy).toBe(next.id);
+    expect(store.history(old.id)[0]!.action).toBe("superseded");
+    expect(
+      store.recall(RecallSchema.parse({ entityName: "edge", query: "wan ip" })).context,
+    ).not.toContain("203.0.113.7");
+    // The same value again retires nothing.
+    expect(remember("wan ip = 198.51.100.4").retired).toEqual([]);
+
+    // A one-word subject is too loose to act on: two facts about DNS can both hold.
+    const dns = remember("DNS: 1.1.1.1");
+    const dns2 = remember("DNS: 9.9.9.9");
+    expect(dns2.retired).toEqual([]);
+    expect(dns2.possibleConflicts.map((c) => c.id)).toEqual([dns.id]);
+    // The caller judges, and names what the new fact replaces.
+    const judged = remember("DNS: 9.9.9.9", { supersedes: [dns.id] });
+    expect(judged.id).toBe(dns2.id);
+    expect(judged.retired.map((r) => r.id)).toEqual([dns.id]);
+
+    // A pinned memory and a memory of another kind are never retired silently.
+    const pinned = remember("Uplink port: ether1", { pinned: true });
+    const rule = remember("Backup window: never before 02:00", { kind: "constraint" });
+    expect(remember("Uplink port: sfp1").possibleConflicts.map((c) => c.id)).toEqual([pinned.id]);
+    expect(remember("Backup window: 23:00").possibleConflicts.map((c) => c.id)).toEqual([rule.id]);
+
+    // An address with a port, and plain prose, are not "subject: value".
+    const a = remember("Forward 10.0.0.1:8080 to the NAS");
+    expect(remember("Forward 10.0.0.1:9090 to the NAS").retired).toEqual([]);
+    expect(a.status).toBe("active");
+
+    // Bringing a retired memory back clears what replaced it.
+    const back = store.revise({
+      id: old.id,
+      expectedRevision: archived.revision,
+      status: "active",
+    });
+    expect(back.status).toBe("active");
+    expect(back.supersededBy).toBeNull();
+    expect(() => remember("x: y", { supersedes: [999_999] })).toThrow("Memory not found");
+  } finally {
+    store.close();
+  }
+});
+
+test("memory can be read as it was at a past moment", async () => {
+  const store = await openMemoryStore(":memory:");
+  const realNow = Date.now;
+  let clock = Date.parse("2026-01-01T00:00:00Z");
+  Date.now = () => clock;
+  try {
+    store.createEntities([
+      { name: "edge", entityType: "router" },
+      { name: "core", entityType: "router" },
+    ]);
+    const remember = (entityName: string, content: string, more: Record<string, unknown> = {}) =>
+      store.remember(RememberSchema.parse({ entityName, content, ...more }));
+    const provider = remember("edge", "Fiber provider A", { key: "wan.provider" });
+    const wan = remember("edge", "WAN IP: 203.0.113.7");
+    clock = Date.parse("2026-02-01T00:00:00Z");
+    remember("edge", "Fiber provider B", { key: "wan.provider" });
+    remember("edge", "WAN IP: 198.51.100.4"); // retires the January address
+    remember("core", "Core runs RouterOS 7.25");
+    clock = Date.parse("2026-03-01T00:00:00Z");
+
+    const january = store.asOf({ at: "2026-01-15", limit: 30, query: "" });
+    expect(january.items.map((f) => [f.content, f.since])).toEqual([
+      ["Fiber provider A", "revised"],
+      ["WAN IP: 203.0.113.7", "archived"],
+    ]);
+    expect(january.items.map((f) => f.id).sort()).toEqual([provider.id, wan.id].sort());
+    // Later: the new values, and the memory that did not exist in January.
+    const february = store.asOf({ at: Date.parse("2026-02-15T00:00:00Z"), limit: 30, query: "" });
+    expect(february.items.map((f) => f.content).sort()).toEqual([
+      "Core runs RouterOS 7.25",
+      "Fiber provider B",
+      "WAN IP: 198.51.100.4",
+    ]);
+    expect(february.items.every((f) => f.since === "unchanged")).toBe(true);
+    // One entity, a word filter, and a moment before anything was known.
+    expect(store.asOf({ at: "2026-02-15", entityName: "core", limit: 30, query: "" }).total).toBe(
+      1,
+    );
+    expect(store.asOf({ at: "2026-02-15", query: "provider", limit: 30 }).items).toHaveLength(1);
+    expect(store.asOf({ at: "2025-06-01", limit: 30, query: "" }).items).toEqual([]);
+    expect(january.notes[0]).toContain("past beliefs");
+    expect(() => store.asOf({ at: "next tuesday", limit: 30, query: "" })).toThrow("Invalid time");
+    expect(() =>
+      store.asOf({ at: "2026-02-15", entityName: "ghost", limit: 30, query: "" }),
+    ).toThrow("Entity not found");
+  } finally {
+    Date.now = realNow;
+    store.close();
+  }
+});
+
+test("memory says whether it can answer a question, and what is missing", async () => {
+  const store = await openMemoryStore(":memory:");
+  try {
+    store.createEntities([
+      { name: "edge", entityType: "router" },
+      { name: "branch", entityType: "router" },
+    ]);
+    const fact = store.remember(
+      RememberSchema.parse({ entityName: "edge", content: "WAN provider: Fiber Co, 500 Mbit" }),
+    );
+    store.remember(RememberSchema.parse({ entityName: "branch", content: "WireGuard MTU: 1380" }));
+
+    const yes = store.canAnswer({ question: "Who is the WAN provider of edge?" });
+    expect(yes.terms).toEqual(["wan", "provider", "edge"]);
+    expect(yes.missing).toEqual([]);
+    // "edge" is covered by the entity's name alone.
+    expect(yes.covered.map((c) => c.term)).toEqual(["wan", "provider", "edge"]);
+    expect(yes.best[0]!.id).toBe(fact.id);
+    // The fact was never verified, so the answer needs a check on the router.
+    expect(yes.covered[0]!.needsReview).toBe(true);
+    expect(yes.advice).toContain("needs review");
+
+    const no = store.canAnswer({ question: "What is the BGP ASN of edge?" });
+    expect(no.answerable).toBe(false);
+    expect(no.missing).toEqual(["bgp", "asn"]);
+    expect(no.advice).toContain("Do not answer that part from memory");
+
+    // With an entity, another router's memories do not count.
+    expect(store.canAnswer({ question: "wireguard mtu", entityName: "edge" }).answerable).toBe(
+      false,
+    );
+    expect(store.canAnswer({ question: "wireguard mtu", entityName: "branch" }).answerable).toBe(
+      true,
+    );
+
+    // Verified, fresh memory answers without a caveat.
+    store.revise({ id: fact.id, expectedRevision: fact.revision, verified: true, confidence: 0.9 });
+    expect(store.canAnswer({ question: "wan provider" }).advice).toContain("covers every part");
+
+    // Only filler words, hostile text and an unknown entity.
+    expect(store.canAnswer({ question: "what is it?" }).answerable).toBe(false);
+    expect(store.canAnswer({ question: 'x" OR 1=1 -- * NEAR(' }).answerable).toBe(false);
+    expect(() => store.canAnswer({ question: "wan", entityName: "ghost" })).toThrow(
+      "Entity not found",
+    );
+  } finally {
+    store.close();
+  }
+});

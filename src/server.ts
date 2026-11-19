@@ -151,6 +151,10 @@ task so context is never lost between conversations:
   4. Use \`memory_review\` and \`memory_revise\` to correct or archive stale facts.
      Mark verified only after confirming evidence; history remains available via
      \`memory_history\`. Tool activity is NOT evidence that an operation succeeded.
+     Before you answer a question from memory alone, call \`memory_can_answer\`:
+     when it names a missing part, read the router or say it is not known. A
+     new fact retires an older one that says something else about the same
+     subject; \`memory_as_of\` reads memory as it was at a past moment.
 
 Shared memory protocol (logical applicability within this MCP database, NOT tenant isolation):
   5. Device scope is the default and preserves legacy knowledge. Store IPs, routes,

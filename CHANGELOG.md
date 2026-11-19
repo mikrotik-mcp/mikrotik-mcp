@@ -3,6 +3,22 @@
 Notable changes to `@usex/mikrotik-mcp`. Releases before 6.14.1 are described in
 the GitHub release notes.
 
+## Unreleased
+
+### Added
+
+- **Memory retires a fact that a newer one contradicts.** `memory_remember`
+  archives an older memory of the same entity that says something else about
+  the same subject ("WAN IP: …" after "WAN IP: …"), keeps its history, and
+  lists it in `retired`. A pinned memory, a memory of another kind and a
+  one-word subject are not retired: they come back in `possibleConflicts`, and
+  `supersedes` names the ones the new fact replaces.
+- **Memory as it was.** `memory_as_of` reads memory at a past moment: what was
+  believed then, before later revisions and retirements.
+- **Memory knows when it has no answer.** `memory_can_answer` checks, with no
+  language model, which parts of a question memory holds, which it does not,
+  and which it holds only in memories that need review.
+
 ## 6.16.0 — unreleased
 
 ### Added

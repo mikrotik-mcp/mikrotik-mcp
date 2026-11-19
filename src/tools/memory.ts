@@ -13,7 +13,9 @@ import { DESTRUCTIVE, READ, WRITE, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { getMemoryStore } from "../memory/accessor";
 import {
+  AsOfSchema,
   BrowseSchema,
+  CanAnswerSchema,
   RecallSchema,
   RememberSchema,
   ReviseSchema,
@@ -41,8 +43,11 @@ const RelationInput = z.object({
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
+/** A memory tool writes the MCP host's memory database, never the router. */
+const memoryTool: typeof defineTool = (def) => defineTool({ ...def, hostOnly: true });
+
 export const memoryTools: ToolModule = [
-  defineTool({
+  memoryTool({
     name: "memory_get_scope",
     title: "Inspect Memory Sharing Scope",
     annotations: READ,
@@ -53,7 +58,7 @@ export const memoryTools: ToolModule = [
       return JSON.stringify((await getMemoryStore()).scope(args.entityName));
     },
   }),
-  defineTool({
+  memoryTool({
     name: "memory_set_scope",
     title: "Set Memory Sharing Scope",
     annotations: WRITE,
@@ -64,18 +69,18 @@ export const memoryTools: ToolModule = [
       return JSON.stringify((await getMemoryStore()).setScope(args));
     },
   }),
-  defineTool({
+  memoryTool({
     name: "memory_remember",
     title: "Remember Network Knowledge",
     annotations: WRITE,
     description:
-      "Save a fact, constraint, lesson, preference or procedure for an existing entity. Supply a source, author-assessed confidence, optional expiry and pin. A stable key (e.g. wan.provider) replaces that entity's previous value atomically and preserves revision history. Never store credentials or raw command dumps. No router changes.",
+      "Save a fact, constraint, lesson, preference or procedure for an existing entity. Supply a source, author-assessed confidence, optional expiry and pin. A stable key (e.g. wan.provider) replaces that entity's previous value atomically and preserves revision history. An older memory of the same entity that says something else about the same subject (written as 'subject: value' or 'subject is value') is retired: archived with its history, and listed in `retired`. Memories that may contradict this one but were not retired are listed in `possibleConflicts`; when one of them is replaced by this fact, call again with its id in `supersedes`. Restore a retired memory with memory_revise status=active. Never store credentials or raw command dumps. No router changes.",
     inputSchema: RememberSchema.shape,
     async handler(args) {
       return JSON.stringify((await getMemoryStore()).remember(args));
     },
   }),
-  defineTool({
+  memoryTool({
     name: "memory_recall",
     title: "Recall Relevant Network Context",
     annotations: READ,
@@ -86,7 +91,7 @@ export const memoryTools: ToolModule = [
       return JSON.stringify((await getMemoryStore()).recall(args));
     },
   }),
-  defineTool({
+  memoryTool({
     name: "memory_review",
     title: "Browse and Review Memories",
     annotations: READ,
@@ -97,7 +102,7 @@ export const memoryTools: ToolModule = [
       return JSON.stringify((await getMemoryStore()).facts(args));
     },
   }),
-  defineTool({
+  memoryTool({
     name: "memory_revise",
     title: "Revise or Verify a Memory",
     annotations: WRITE,
@@ -108,7 +113,29 @@ export const memoryTools: ToolModule = [
       return JSON.stringify((await getMemoryStore()).revise(args));
     },
   }),
-  defineTool({
+  memoryTool({
+    name: "memory_can_answer",
+    title: "Check Whether Memory Can Answer",
+    annotations: READ,
+    description:
+      "Before you answer a question from memory, check that memory holds what the question asks about. Returns the words of the question that carry its meaning, which of them memory covers, which it does not (`missing`), which are covered only by memories that need review, the best matching memories, and advice. No language model is used: a word is covered when an active memory or an entity name has it. When `answerable` is false, do not answer the missing part from memory: read the router or say it is not known. With entityName the check reads that entity, its groups, shared policy and the entities it is linked to. No router access.",
+    inputSchema: CanAnswerSchema.shape,
+    async handler(args) {
+      return JSON.stringify((await getMemoryStore()).canAnswer(args));
+    },
+  }),
+  memoryTool({
+    name: "memory_as_of",
+    title: "Read Memory As It Was",
+    annotations: READ,
+    description:
+      "Read memory as it was at a past moment: what was believed then, before later revisions, retirements and archiving. Give `at` as epoch milliseconds or text such as '2026-11-01' or '2026-11-01T14:30:00Z'. Each memory comes back as it read then, with `since` (unchanged, revised or archived). Use it to answer 'what did we know on that day' and to explain an old decision. These are past beliefs, not the network's state now: use memory_recall for today. A memory that was deleted keeps no history and is missing; `notes` says when that can be the case. No router access.",
+    inputSchema: AsOfSchema.shape,
+    async handler(args) {
+      return JSON.stringify((await getMemoryStore()).asOf(args));
+    },
+  }),
+  memoryTool({
     name: "memory_history",
     title: "Memory Revision History",
     annotations: READ,
@@ -119,7 +146,7 @@ export const memoryTools: ToolModule = [
       return JSON.stringify((await getMemoryStore()).history(args.id));
     },
   }),
-  defineTool({
+  memoryTool({
     name: "memory_create_entities",
     title: "Create Knowledge Graph Entities",
     annotations: WRITE,
@@ -139,7 +166,7 @@ export const memoryTools: ToolModule = [
     },
   }),
 
-  defineTool({
+  memoryTool({
     name: "memory_create_relations",
     title: "Create Knowledge Graph Relations",
     annotations: WRITE,
@@ -160,7 +187,7 @@ export const memoryTools: ToolModule = [
     },
   }),
 
-  defineTool({
+  memoryTool({
     name: "memory_add_observations",
     title: "Add Observations to Entities",
     annotations: WRITE,
@@ -189,7 +216,7 @@ export const memoryTools: ToolModule = [
     },
   }),
 
-  defineTool({
+  memoryTool({
     name: "memory_delete_entities",
     title: "Delete Knowledge Graph Entities",
     annotations: DESTRUCTIVE,
@@ -208,7 +235,7 @@ export const memoryTools: ToolModule = [
     },
   }),
 
-  defineTool({
+  memoryTool({
     name: "memory_delete_observations",
     title: "Delete Observations from Entities",
     annotations: DESTRUCTIVE,
@@ -235,7 +262,7 @@ export const memoryTools: ToolModule = [
     },
   }),
 
-  defineTool({
+  memoryTool({
     name: "memory_delete_relations",
     title: "Delete Knowledge Graph Relations",
     annotations: DESTRUCTIVE,
@@ -252,7 +279,7 @@ export const memoryTools: ToolModule = [
     },
   }),
 
-  defineTool({
+  memoryTool({
     name: "memory_read_graph",
     title: "Read Entire Knowledge Graph",
     annotations: READ,
@@ -269,7 +296,7 @@ export const memoryTools: ToolModule = [
     },
   }),
 
-  defineTool({
+  memoryTool({
     name: "memory_search_nodes",
     title: "Search Knowledge Graph",
     annotations: READ,
@@ -291,7 +318,7 @@ export const memoryTools: ToolModule = [
     },
   }),
 
-  defineTool({
+  memoryTool({
     name: "memory_open_nodes",
     title: "Open Knowledge Graph Nodes",
     annotations: READ,

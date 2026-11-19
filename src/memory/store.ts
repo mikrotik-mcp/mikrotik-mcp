@@ -8,11 +8,15 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import type { z } from "zod";
 import type { Database } from "bun:sqlite";
 import type { Entity, KnowledgeGraph, MemoryActivity, MemoryStats, Relation } from "./types";
+import { factSubject, questionTerms } from "./insight";
 import {
+  AsOfSchema,
   assertMemorySafe,
   BrowseSchema,
+  CanAnswerSchema,
   memoryMatch,
   RecallSchema,
   RememberSchema,
@@ -22,8 +26,13 @@ import {
   ScopeSchema,
 } from "./knowledge";
 import type {
+  AsOfInput,
   BrowseInput,
+  CanAnswerInput,
+  MemoryAnswerability,
+  MemoryAsOf,
   MemoryFact,
+  RememberResult,
   MemoryHealth,
   MemoryPage,
   MemoryRecall,
@@ -53,7 +62,12 @@ export interface MemoryStore {
   openNodes(names: string[]): KnowledgeGraph;
   stats(): MemoryStats;
   activity(limit?: number, since?: number, changesOnly?: boolean): MemoryActivity[];
-  remember(input: RememberInput): MemoryFact;
+  /** Save a memory. An older memory that says something else about the same thing is retired. */
+  remember(input: RememberInput): RememberResult;
+  /** Memory as it was at a past moment. */
+  asOf(input: AsOfInput): MemoryAsOf;
+  /** Whether memory holds what a question asks about. No language model is used. */
+  canAnswer(input: CanAnswerInput): MemoryAnswerability;
   revise(input: ReviseInput): MemoryFact;
   facts(input: BrowseInput): MemoryPage;
   recall(input: RecallInput): MemoryRecall;
@@ -213,6 +227,9 @@ class SqliteMemoryStore implements MemoryStore {
             this.db.run(`ALTER TABLE observations ADD COLUMN ${column}`);
           this.db.run("UPDATE observations SET updated_at = created_at");
         }
+        // The memory that replaced this one. Added later than the columns above.
+        if (!columns.some((c) => c.name === "superseded_by"))
+          this.db.run("ALTER TABLE observations ADD COLUMN superseded_by INTEGER");
         this.db.run(
           "CREATE UNIQUE INDEX IF NOT EXISTS idx_obs_key ON observations(entity_name, fact_key) WHERE fact_key IS NOT NULL",
         );
@@ -525,7 +542,8 @@ class SqliteMemoryStore implements MemoryStore {
       .query(`SELECT id, entity_name AS entityName, content, fact_key AS key,
       COALESCE((SELECT scope FROM memory_scopes WHERE entity_name = observations.entity_name), 'device') AS scope,
       kind, source, confidence, pinned, expires_at AS expiresAt, verified_at AS verifiedAt,
-      status, created_at AS createdAt, updated_at AS updatedAt, revision FROM observations WHERE id = ?`)
+      status, created_at AS createdAt, updated_at AS updatedAt, revision,
+      superseded_by AS supersededBy FROM observations WHERE id = ?`)
       .get(id) as (Omit<MemoryFact, "pinned"> & { pinned: number }) | null;
     if (!row) throw new Error("Memory not found");
     return { ...row, pinned: Boolean(row.pinned) };
@@ -598,9 +616,81 @@ class SqliteMemoryStore implements MemoryStore {
       .immediate();
   }
 
-  remember(input: RememberInput): MemoryFact {
-    const data = RememberSchema.parse(input);
+  remember(input: RememberInput): RememberResult {
+    const { supersedes, ...data } = RememberSchema.parse(input);
     assertMemorySafe(data.entityName, data.content, data.source, data.key ?? "");
+    return this.db
+      .transaction(() => {
+        const saved = this.save(data);
+        return { ...this.retire(saved, supersedes), ...this.fact(saved.id) };
+      })
+      .immediate();
+  }
+
+  /**
+   * Retire the memories that `saved` replaces: the ones the caller named, and
+   * the ones of the same entity that say something else about the same subject.
+   * A retired memory is archived, never deleted: its history stays, and
+   * memory_revise with status=active brings it back.
+   */
+  private retire(
+    saved: MemoryFact,
+    named: number[],
+  ): Pick<RememberResult, "retired" | "possibleConflicts"> {
+    const retired: RememberResult["retired"] = [];
+    const possibleConflicts: RememberResult["possibleConflicts"] = [];
+    const now = Date.now();
+    const supersede = (old: MemoryFact, reason: string): void => {
+      this.db
+        .query(
+          "INSERT INTO memory_revisions(observation_id, changed_at, action, snapshot) VALUES (?, ?, ?, ?)",
+        )
+        .run(old.id, now, "superseded", JSON.stringify(old));
+      this.db
+        .query(
+          "UPDATE observations SET status = 'archived', superseded_by = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        )
+        .run(saved.id, now, old.id);
+      this.logActivity("superseded", old.entityName, { id: old.id, by: saved.id, reason });
+      retired.push({ id: old.id, entityName: old.entityName, content: old.content, reason });
+    };
+    for (const id of new Set(named)) {
+      if (id === saved.id) throw new Error("A memory cannot supersede itself");
+      const old = this.fact(id);
+      if (old.status === "active") supersede(old, "named in supersedes");
+    }
+    const mine = factSubject(saved.content);
+    if (mine) {
+      const rows = this.db
+        .query(
+          "SELECT id FROM observations WHERE entity_name = ? AND status = 'active' AND id != ? ORDER BY id DESC LIMIT 500",
+        )
+        .all(saved.entityName, saved.id) as { id: number }[];
+      for (const { id } of rows) {
+        const old = this.fact(id);
+        const theirs = factSubject(old.content);
+        if (!theirs || theirs.subject !== mine.subject || theirs.value === mine.value) continue;
+        // Retire only when it is safe to: a specific subject, the same kind of
+        // memory, and not one the operator pinned. Otherwise the caller judges.
+        if (mine.sure && old.kind === saved.kind && !old.pinned)
+          supersede(old, `said something else about "${mine.subject}"`);
+        else if (possibleConflicts.length < 10)
+          possibleConflicts.push({
+            id: old.id,
+            content: old.content,
+            reason: old.pinned
+              ? "pinned, so it was not retired"
+              : old.kind !== saved.kind
+                ? `a ${old.kind}, not a ${saved.kind}`
+                : `"${mine.subject}" is too general to retire it without you`,
+          });
+      }
+    }
+    return { retired, possibleConflicts };
+  }
+
+  /** Write one memory: a new row, or a revision of the one with the same key. */
+  private save(data: Omit<z.infer<typeof RememberSchema>, "supersedes">): MemoryFact {
     return this.db
       .transaction(() => {
         if (!this.db.query("SELECT 1 FROM entities WHERE name = ?").get(data.entityName))
@@ -668,6 +758,8 @@ class SqliteMemoryStore implements MemoryStore {
           throw new Error("Memory changed since you opened it. Refresh before editing.");
         const { id: _id, expectedRevision: _revision, verified, ...patch } = data;
         const next = { ...previous, ...patch };
+        // A memory brought back is no longer replaced by another.
+        if (next.status === "active") next.supersededBy = null;
         const now = Date.now();
         const changedEvidence =
           next.content !== previous.content || next.source !== previous.source;
@@ -682,7 +774,7 @@ class SqliteMemoryStore implements MemoryStore {
           .run(previous.id, now, action, JSON.stringify(previous));
         this.db
           .query(`UPDATE observations SET content = ?, kind = ?, source = ?, confidence = ?, pinned = ?,
-        expires_at = ?, verified_at = ?, status = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`)
+        expires_at = ?, verified_at = ?, status = ?, superseded_by = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`)
           .run(
             next.content,
             next.kind,
@@ -692,6 +784,7 @@ class SqliteMemoryStore implements MemoryStore {
             next.expiresAt,
             next.verifiedAt,
             next.status,
+            next.supersededBy,
             now,
             previous.id,
           );
@@ -953,6 +1046,140 @@ class SqliteMemoryStore implements MemoryStore {
         "Some memories need verification; confidence is author-supplied, not a probability of correctness.",
       );
     return { items, context, truncated, warnings, applicableScopes, conflicts, constraintsOmitted };
+  }
+
+  asOf(input: AsOfInput): MemoryAsOf {
+    const data = AsOfSchema.parse(input);
+    const at = typeof data.at === "number" ? data.at : Date.parse(data.at);
+    if (!Number.isFinite(at))
+      throw new Error('Invalid time: use epoch milliseconds or text such as "2026-11-01"');
+    if (data.entityName) this.scope(data.entityName); // Exact lookup, as in recall.
+    const rows = this.db
+      .query(
+        `SELECT id FROM observations WHERE created_at <= ?${data.entityName ? " AND entity_name = ?" : ""} ORDER BY id LIMIT 5000`,
+      )
+      .all(...(data.entityName ? [at, data.entityName] : [at])) as { id: number }[];
+    // The snapshot a revision keeps is the memory before that change. So the
+    // first change after the moment holds the memory as it read at the moment.
+    const before = this.db.query(
+      "SELECT snapshot FROM memory_revisions WHERE observation_id = ? AND changed_at > ? ORDER BY id LIMIT 1",
+    );
+    const words =
+      data.query
+        .toLocaleLowerCase()
+        .match(/[\p{L}\p{N}_]+/gu)
+        ?.slice(0, 16) ?? [];
+    const items: MemoryAsOf["items"] = [];
+    for (const { id } of rows) {
+      const now = this.fact(id);
+      const row = before.get(id, at) as { snapshot: string } | null;
+      const then = row ? ({ supersededBy: null, ...JSON.parse(row.snapshot) } as MemoryFact) : now;
+      if (then.status !== "active" || (then.expiresAt !== null && then.expiresAt <= at)) continue;
+      const text = `${then.entityName} ${then.key ?? ""} ${then.content}`.toLocaleLowerCase();
+      if (words.length > 0 && !words.some((word) => text.includes(word))) continue;
+      items.push({
+        ...then,
+        since: !row ? "unchanged" : now.status === "archived" ? "archived" : "revised",
+      });
+    }
+    items.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
+    const notes = [
+      "These are past beliefs, not the state of the network now. Use memory_recall for what holds today.",
+    ];
+    if (rows.length === 5000) notes.push("Only the first 5000 memories were read.");
+    const deleted = (
+      this.db
+        .query("SELECT COUNT(*) AS n FROM memory_activity WHERE action LIKE 'delete%' AND ts > ?")
+        .get(at) as { n: number }
+    ).n;
+    if (deleted > 0)
+      notes.push(
+        `${deleted} delete operation(s) ran after this moment. A deleted memory keeps no history, so it is missing here.`,
+      );
+    return { at, items: items.slice(0, data.limit), total: items.length, notes };
+  }
+
+  canAnswer(input: CanAnswerInput): MemoryAnswerability {
+    const data = CanAnswerSchema.parse(input);
+    const now = Date.now();
+    const terms = questionTerms(data.question);
+    // With an entity: its own memories, its groups, shared policy and what it is
+    // linked to, as recall reads them. Without one: all of memory.
+    let names: string[] | null = null;
+    if (data.entityName) {
+      this.scope(data.entityName);
+      const scoped = new Set<string>([data.entityName]);
+      const add = (sql: string, ...params: string[]): void => {
+        for (const row of this.db.query(sql).all(...params) as { name: string }[])
+          scoped.add(row.name);
+      };
+      add("SELECT entity_name AS name FROM memory_scopes WHERE scope = 'shared'");
+      add(
+        "SELECT group_name AS name FROM memory_group_members WHERE entity_name = ?",
+        data.entityName,
+      );
+      add(
+        "SELECT to_entity AS name FROM relations WHERE from_entity = ? LIMIT 50",
+        data.entityName,
+      );
+      add(
+        "SELECT from_entity AS name FROM relations WHERE to_entity = ? LIMIT 50",
+        data.entityName,
+      );
+      names = [...scoped].slice(0, 200);
+    }
+    const scopeSql = names ? ` AND o.entity_name IN (${names.map(() => "?").join(",")})` : "";
+    const active = "o.status = 'active' AND (o.expires_at IS NULL OR o.expires_at > ?)";
+    const matching = this.db.query(
+      `SELECT o.id FROM observations o WHERE ${active}
+       AND o.id IN (SELECT rowid FROM memory_fts WHERE memory_fts MATCH ?)${scopeSql} LIMIT 50`,
+    );
+    const quote = (term: string): string => `"${term.replaceAll('"', "")}"*`;
+    const covered: MemoryAnswerability["covered"] = [];
+    const missing: string[] = [];
+    for (const term of terms) {
+      const ids = matching.all(now, quote(term), ...(names ?? [])) as { id: number }[];
+      // An entity can answer by its name alone: "netherlands" is a router here.
+      const named = (names ?? []).some((name) => name.toLowerCase().includes(term))
+        ? true
+        : names === null &&
+          Boolean(
+            this.db
+              .query("SELECT 1 FROM entities WHERE instr(lower(name), ?) > 0 LIMIT 1")
+              .get(term),
+          );
+      if (ids.length === 0 && !named) {
+        missing.push(term);
+        continue;
+      }
+      const fresh = ids.filter(({ id }) => reviewReasons(this.fact(id), now).length === 0).length;
+      covered.push({ term, memories: ids.length, needsReview: ids.length > 0 && fresh === 0 });
+    }
+    const best =
+      terms.length === 0
+        ? []
+        : (
+            this.db
+              .query(
+                `SELECT o.id FROM observations o JOIN memory_fts f ON f.rowid = o.id
+                 WHERE ${active} AND memory_fts MATCH ?${scopeSql} ORDER BY f.rank LIMIT 5`,
+              )
+              .all(now, terms.map(quote).join(" OR "), ...(names ?? [])) as { id: number }[]
+          ).map(({ id }) => {
+            const fact = this.fact(id);
+            return { id, entityName: fact.entityName, content: fact.content.slice(0, 240) };
+          });
+    const answerable = terms.length > 0 && missing.length === 0;
+    const stale = covered.filter((c) => c.needsReview).map((c) => c.term);
+    const advice =
+      terms.length === 0
+        ? "The question has no word to look for. Ask about a thing: a router, an address, a rule."
+        : !answerable
+          ? `Memory holds nothing about: ${missing.join(", ")}. Do not answer that part from memory. Read the router, or say it is not known.`
+          : stale.length > 0
+            ? `Memory covers the question, but what it holds about ${stale.join(", ")} needs review (not verified, old, expired or low confidence). Check the router before you rely on it.`
+            : "Memory covers every part of the question. Read it with memory_recall.";
+    return { answerable, terms, covered, missing, best, advice };
   }
 
   history(id: number): MemoryRevision[] {

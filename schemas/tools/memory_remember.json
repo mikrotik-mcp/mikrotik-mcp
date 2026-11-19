@@ -58,8 +58,28 @@
           "type": "null"
         }
       ]
+    },
+    "supersedes": {
+      "default": [],
+      "description": "IDs of memories that this one replaces because they say something else. They are archived, with their history kept.",
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 9007199254740991
+      }
     }
   },
-  "required": ["entityName", "content", "kind", "source", "confidence", "pinned", "expiresAt"],
+  "required": [
+    "entityName",
+    "content",
+    "kind",
+    "source",
+    "confidence",
+    "pinned",
+    "expiresAt",
+    "supersedes"
+  ],
   "additionalProperties": false
 }

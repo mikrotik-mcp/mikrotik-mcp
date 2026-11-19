@@ -32,6 +32,31 @@ export const RememberSchema = z
     confidence: z.number().min(0).max(1).default(0.5),
     pinned: z.boolean().default(false),
     expiresAt: z.number().int().positive().nullable().default(null),
+    supersedes: z
+      .array(z.number().int().positive())
+      .max(20)
+      .default([])
+      .describe(
+        "IDs of memories that this one replaces because they say something else. They are archived, with their history kept.",
+      ),
+  })
+  .strict();
+/** A moment in the past: epoch milliseconds, or text such as "2026-11-01" or "2026-11-01T14:30:00Z". */
+const moment = z.union([z.number().int().positive(), z.string().trim().min(4).max(40)]);
+export const AsOfSchema = z
+  .object({
+    at: moment.describe(
+      'The moment to read memory at: epoch milliseconds, or text such as "2026-11-01" or "2026-11-01T14:30:00Z".',
+    ),
+    entityName: name.optional(),
+    query: z.string().trim().max(500).default(""),
+    limit: z.number().int().min(1).max(100).default(30),
+  })
+  .strict();
+export const CanAnswerSchema = z
+  .object({
+    question: z.string().trim().min(2).max(1000),
+    entityName: name.optional(),
   })
   .strict();
 export const ReviseSchema = z
@@ -72,7 +97,11 @@ export type RememberInput = z.infer<typeof RememberSchema>;
 export type ReviseInput = z.infer<typeof ReviseSchema>;
 export type RecallInput = z.infer<typeof RecallSchema>;
 export type BrowseInput = z.infer<typeof BrowseSchema>;
-export interface MemoryFact extends RememberInput {
+export type AsOfInput = z.infer<typeof AsOfSchema>;
+export type CanAnswerInput = z.infer<typeof CanAnswerSchema>;
+export interface MemoryFact extends Omit<RememberInput, "supersedes"> {
+  /** The memory that replaced this one, when a newer fact retired it. */
+  supersededBy: number | null;
   scope: MemoryScopeKind;
   id: number;
   key: string | null;
@@ -81,6 +110,32 @@ export interface MemoryFact extends RememberInput {
   updatedAt: number;
   verifiedAt: number | null;
   revision: number;
+}
+/** What `remember` did to older memories that said something else. */
+export interface RememberResult extends MemoryFact {
+  /** Memories this one replaced. They are archived; restore one with memory_revise status=active. */
+  retired: { id: number; entityName: string; content: string; reason: string }[];
+  /** Memories that may say something else, left for the caller to judge. */
+  possibleConflicts: { id: number; content: string; reason: string }[];
+}
+/** Memory as it was at one moment. */
+export interface MemoryAsOf {
+  at: number;
+  /** Each memory as it read then, and what happened to it since. */
+  items: (MemoryFact & { since: "unchanged" | "revised" | "archived" })[];
+  total: number;
+  notes: string[];
+}
+/** Whether memory holds what a question asks about. */
+export interface MemoryAnswerability {
+  answerable: boolean;
+  /** The words of the question that carry its meaning. */
+  terms: string[];
+  covered: { term: string; memories: number; needsReview: boolean }[];
+  missing: string[];
+  /** The memories that fit the question best. */
+  best: { id: number; entityName: string; content: string }[];
+  advice: string;
 }
 export interface MemoryRevision {
   id: number;

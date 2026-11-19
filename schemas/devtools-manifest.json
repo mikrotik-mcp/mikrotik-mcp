@@ -2257,6 +2257,8 @@
         "memory_recall",
         "memory_review",
         "memory_revise",
+        "memory_can_answer",
+        "memory_as_of",
         "memory_history",
         "memory_create_entities",
         "memory_create_relations",
@@ -11925,6 +11927,22 @@
     },
     {
       "name": "memory_revise",
+      "module": "memory",
+      "group": "Memory",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "memory_can_answer",
+      "module": "memory",
+      "group": "Memory",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "memory_as_of",
       "module": "memory",
       "group": "Memory",
       "noDevice": false,

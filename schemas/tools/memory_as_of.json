@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "memory_as_of",
+  "type": "object",
+  "properties": {
+    "at": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 40
+        }
+      ],
+      "description": "The moment to read memory at: epoch milliseconds, or text such as \"2026-11-01\" or \"2026-11-01T14:30:00Z\"."
+    },
+    "entityName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "query": {
+      "default": "",
+      "type": "string",
+      "maxLength": 500
+    },
+    "limit": {
+      "default": 30,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    }
+  },
+  "required": ["at", "query", "limit"],
+  "additionalProperties": false
+}
