@@ -3,6 +3,7 @@
  * the starts-by-hour bars. Plain SVG drawn to the board's geometry; hovering,
  * focusing or tapping a point or bar shows the kit's chart card.
  */
+import { smoothPath } from "./kit/curve";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, stagger } from "animejs";
@@ -70,14 +71,16 @@ export function TrafficChart({
   const x = (i: number): number => (n > 1 ? (i * w) / (n - 1) : w / 2);
   const y = (v: number): number => h - 8 - (v / max) * (h - 20);
   const line = (values: number[]): string =>
-    values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    smoothPath(values.map((v, i): [number, number] => [x(i), y(v)]));
   const downPath = line(down);
   const points = down.map((v, i): [number, number] => [x(i), y(v)]);
   return (
     <div ref={ref} data-slot="chart" className="um-chart">
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none">
         <Guides w={w} h={h} />
-        {n > 0 && <path d={`${downPath} L${w},${h} L0,${h} Z`} fill="var(--sig-fill)" />}
+        {n > 0 && (
+          <path d={`${downPath} L${x(n - 1)},${h} L${x(0)},${h} Z`} fill="var(--sig-fill)" />
+        )}
         {n > 0 && (
           <path
             data-draw

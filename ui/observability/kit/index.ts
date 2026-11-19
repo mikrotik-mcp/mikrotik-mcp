@@ -32,6 +32,7 @@ export { Led, Kbd } from "./listbox";
 export type { KitOption, Tone } from "./listbox";
 export { useField } from "./field-context";
 export { isLetterKey } from "./keys";
+export { smoothPath } from "./curve";
 export {
   ChartTipLayer,
   LineHover,
