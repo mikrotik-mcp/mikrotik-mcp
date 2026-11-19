@@ -131,3 +131,43 @@ apply_security_hardening_fixes finding_ids=["unenforced_list:port scanners","ker
 Security Hardening is the **granular, per-finding, remediate-by-ID** layer: it
 tells you exactly which specific misconfiguration to fix and lets you apply just
 that one, safely.
+
+## IPv6 firewall rules with a changing ISP prefix
+
+Many ISPs delegate a different IPv6 prefix after a reconnect. Addresses made
+with `from-pool` follow the new prefix on their own. A firewall rule that names
+the prefix, or one host inside it, does not: it keeps the old numbers and
+silently stops matching.
+
+`follow_ipv6_prefix` fixes this with address lists that are rewritten each time
+the prefix changes:
+
+```text
+follow_ipv6_prefix interface=ether1 list=isp-prefix hosts=[{"name":"web","suffix":"::10"}]
+```
+
+It installs a script on the DHCPv6 client of that interface. RouterOS runs the
+script when a prefix is bound, and the script maintains:
+
+| List             | Holds                                                |
+| ---------------- | ---------------------------------------------------- |
+| `isp-prefix`     | The whole delegated prefix.                          |
+| `isp-prefix-web` | The address of the host: the new prefix plus `::10`. |
+
+Write the rules against the lists (`dst-address-list=isp-prefix-web`), not
+against literal addresses. A suffix names a host inside the prefix: `::10` is
+host `::10` in the first /64, and `::1:0:0:0:10` is host `::10` in the second.
+
+The tool shows the script first (`apply=false`). After installing, run
+`renew_ipv6_dhcp_client` to fill the lists now. `unfollow_ipv6_prefix` clears
+the script and the entries again.
+
+Limits to know:
+
+- The DHCPv6 client must request a prefix (`request=prefix`).
+- A client holds one script. A script that this tool did not write is kept
+  unless you pass `replace=true`.
+- For a moment during a prefix change the lists are empty, between the removal
+  of the old entries and the addition of the new ones.
+- The host needs a stable suffix: a static address or a fixed interface
+  identifier. A host with privacy addresses changes its suffix and is not found.

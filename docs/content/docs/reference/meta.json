@@ -83,6 +83,7 @@
     "---IPv6---",
     "ipv6-address",
     "ipv6-dhcp-client",
+    "ipv6-prefix-follow",
     "ipv6-dhcp-relay",
     "ipv6-dhcp-server",
     "ipv6-firewall-filter",

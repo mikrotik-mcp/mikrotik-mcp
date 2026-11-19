@@ -66,6 +66,7 @@ import { ipCloudTools } from "./ip-cloud";
 import { ipDhcpClientTools } from "./ip-dhcp-client";
 import { ipv6AddressTools } from "./ipv6-address";
 import { ipv6DhcpClientTools } from "./ipv6-dhcp-client";
+import { ipv6PrefixFollowTools } from "./ipv6-prefix-follow";
 import { ipv6DhcpRelayTools } from "./ipv6-dhcp-relay";
 import { ipv6DhcpServerTools } from "./ipv6-dhcp-server";
 import { ipv6FirewallFilterTools } from "./ipv6-firewall-filter";
@@ -507,6 +508,16 @@ export const moduleCatalog: ModuleInfo[] = [
     group: "IPv6",
     description: "DHCPv6 client: address/prefix delegation requests (`/ipv6 dhcp-client`).",
     tools: ipv6DhcpClientTools,
+  },
+  {
+    label: "IPv6 Prefix Follow",
+    slug: "ipv6-prefix-follow",
+    group: "IPv6",
+    description:
+      "Keeps IPv6 firewall address lists on the prefix the ISP delegates today: a script on the " +
+      "DHCPv6 client rewrites the lists each time the prefix changes, so rules that use them " +
+      "stay right.",
+    tools: ipv6PrefixFollowTools,
   },
   {
     label: "DHCPv6 Relay",

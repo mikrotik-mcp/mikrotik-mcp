@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.15.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 993,
+  "toolCount": 995,
   "tools": [
     {
       "name": "create_client_check",
@@ -7917,6 +7917,94 @@
           }
         },
         "required": ["client_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "follow_ipv6_prefix",
+      "title": "Keep IPv6 Address Lists on the Delegated Prefix",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Makes IPv6 firewall address lists follow the prefix your ISP delegates, so rules keep working when the ISP changes the prefix. It installs a script on the DHCPv6 client of `interface`; RouterOS runs it each time a prefix is bound, and it rewrites: the address list `list` with the whole delegated prefix, and for each entry in `hosts` a list `<list>-<name>` with that host's address (the new prefix plus its fixed `suffix`). Point your firewall rules at these lists instead of at literal addresses, for example `dst-address-list=isp-prefix-web` to allow inbound HTTPS to one server. The client must request a prefix (`request=prefix`). DEFAULTS TO A DRY RUN (`apply=false`) that shows the script. An existing script on the client that this tool did not write is kept unless `replace=true`. The lists are filled at the next bind: run `renew_ipv6_dhcp_client` afterwards to fill them now. A suffix names a host inside the prefix: `::10` is host ::10 in the first /64, `::1:0:0:0:10` is host ::10 in the second /64.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "interface": {
+            "type": "string",
+            "description": "Interface of the DHCPv6 client, e.g. 'ether1' or 'pppoe-out1'"
+          },
+          "list": {
+            "default": "isp-prefix",
+            "description": "Address list that gets the whole delegated prefix",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$"
+          },
+          "hosts": {
+            "default": [],
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$",
+                  "description": "Short name, becomes list '<list>-<name>'"
+                },
+                "suffix": {
+                  "type": "string",
+                  "pattern": "^::[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,4}$",
+                  "description": "Fixed part of the address, e.g. '::10'"
+                }
+              },
+              "required": ["name", "suffix"],
+              "additionalProperties": false
+            }
+          },
+          "replace": {
+            "default": false,
+            "description": "Replace a script this tool did not write",
+            "type": "boolean"
+          },
+          "apply": {
+            "default": false,
+            "description": "false = show the script; true = install",
+            "type": "boolean"
+          }
+        },
+        "required": ["interface", "list", "hosts", "replace", "apply"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unfollow_ipv6_prefix",
+      "title": "Stop Following the Delegated IPv6 Prefix",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Undoes `follow_ipv6_prefix`: clears the script it installed on the DHCPv6 client of `interface` and removes the address-list entries the script made for `list`. A script that this tool did not write is left alone. Firewall rules that use those lists then match nothing: change or remove them first. Returns what was cleared.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "interface": {
+            "type": "string",
+            "description": "Interface of the DHCPv6 client"
+          },
+          "list": {
+            "default": "isp-prefix",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$"
+          }
+        },
+        "required": ["interface", "list"],
         "additionalProperties": false
       }
     },

@@ -530,6 +530,14 @@
       ]
     },
     {
+      "slug": "ipv6-prefix-follow",
+      "label": "IPv6 Prefix Follow",
+      "group": "IPv6",
+      "description": "Keeps IPv6 firewall address lists on the prefix the ISP delegates today: a script on the DHCPv6 client rewrites the lists each time the prefix changes, so rules that use them stay right.",
+      "alwaysOn": false,
+      "tools": ["follow_ipv6_prefix", "unfollow_ipv6_prefix"]
+    },
+    {
       "slug": "ipv6-dhcp-relay",
       "label": "DHCPv6 Relay",
       "group": "IPv6",
@@ -4383,6 +4391,22 @@
     {
       "name": "remove_ipv6_dhcp_client",
       "module": "ipv6-dhcp-client",
+      "group": "IPv6",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "follow_ipv6_prefix",
+      "module": "ipv6-prefix-follow",
+      "group": "IPv6",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "unfollow_ipv6_prefix",
+      "module": "ipv6-prefix-follow",
       "group": "IPv6",
       "noDevice": false,
       "requires": null,

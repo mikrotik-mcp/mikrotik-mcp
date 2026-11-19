@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "follow_ipv6_prefix",
+  "type": "object",
+  "properties": {
+    "interface": {
+      "type": "string",
+      "description": "Interface of the DHCPv6 client, e.g. 'ether1' or 'pppoe-out1'"
+    },
+    "list": {
+      "default": "isp-prefix",
+      "description": "Address list that gets the whole delegated prefix",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$"
+    },
+    "hosts": {
+      "default": [],
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$",
+            "description": "Short name, becomes list '<list>-<name>'"
+          },
+          "suffix": {
+            "type": "string",
+            "pattern": "^::[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,4}$",
+            "description": "Fixed part of the address, e.g. '::10'"
+          }
+        },
+        "required": ["name", "suffix"],
+        "additionalProperties": false
+      }
+    },
+    "replace": {
+      "default": false,
+      "description": "Replace a script this tool did not write",
+      "type": "boolean"
+    },
+    "apply": {
+      "default": false,
+      "description": "false = show the script; true = install",
+      "type": "boolean"
+    }
+  },
+  "required": ["interface", "list", "hosts", "replace", "apply"],
+  "additionalProperties": false
+}
