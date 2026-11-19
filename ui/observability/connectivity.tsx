@@ -13,12 +13,10 @@ const ROW = 72;
 const BOX_W = 240;
 const BOX_H = 44;
 /**
- * The flag behind a router box. It is stretched wide and squeezed to the box's
- * height, so every stripe shows, and then blurred: what is left is the flag's
- * colours as a soft wash, not a picture of it.
+ * The round flag at the right end of a router box. It is a little taller than
+ * the box, so it reads as a flag rising behind the box's edge.
  */
-const FLAG_W = 190;
-const FLAG_H = 62;
+const FLAG = 60;
 /** A router name as an id for its flag's clip path. */
 const flagId = (name: string): string => name.replace(/[^a-zA-Z0-9_-]/g, "_");
 const COL_1 = 470;
@@ -234,20 +232,17 @@ export function ManagementPaths({
       role="img"
       aria-label={`Management paths from the MCP server to ${devices.length} router${devices.length === 1 ? "" : "s"}`}
     >
-      {/* A router's country flag sits behind its box: large, soft, and faded out
-          towards the name so the text stays easy to read. */}
+      {/* A router's country flag sits at the right end of its box: sharp, and
+          faded out towards the name so the text stays easy to read. */}
       <defs>
         <linearGradient id="dv-flag-fade-ramp" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0.05" stopColor="white" stopOpacity="0" />
-          <stop offset="0.7" stopColor="white" stopOpacity="0.42" />
-          <stop offset="1" stopColor="white" stopOpacity="0.42" />
+          <stop offset="0" stopColor="white" stopOpacity="0" />
+          <stop offset="0.5" stopColor="white" stopOpacity="0.85" />
+          <stop offset="1" stopColor="white" stopOpacity="0.85" />
         </linearGradient>
         <mask id="dv-flag-fade" maskContentUnits="objectBoundingBox">
           <rect width="1" height="1" fill="url(#dv-flag-fade-ramp)" />
         </mask>
-        <filter id="dv-flag-soft" x="-20%" y="-40%" width="140%" height="180%">
-          <feGaussianBlur stdDeviation="7" />
-        </filter>
       </defs>
       <g
         {...tipProps((): TipCard => ({
@@ -383,12 +378,10 @@ export function ManagementPaths({
                     <image
                       className="dv-flag"
                       href={withToken(`/api/flag/${d.geo.countryCode}`)}
-                      x={x + BOX_W - FLAG_W * 0.86}
-                      y={cy - FLAG_H / 2}
-                      width={FLAG_W}
-                      height={FLAG_H}
-                      preserveAspectRatio="none"
-                      filter="url(#dv-flag-soft)"
+                      x={x + BOX_W - FLAG * 0.78}
+                      y={cy - FLAG / 2}
+                      width={FLAG}
+                      height={FLAG}
                     />
                   </g>
                 </g>
@@ -414,7 +407,7 @@ export function ManagementPaths({
               </text>
               {on && (
                 <text
-                  x={x + 228}
+                  x={d.geo?.countryCode ? x + 186 : x + 228}
                   y={cy - 3}
                   textAnchor="end"
                   fontSize="10"
