@@ -133,3 +133,27 @@ Limits to know:
   than 8 seconds is skipped; it never fails the change.
 - Turn it off with `"verifyWrites": false`, `--verify-writes false` or
   `MIKROTIK_VERIFY_WRITES=false`.
+
+## Checking a command before it runs
+
+`validate_routeros_command` parses RouterOS text on the router without running
+it, and reports the first problem with its line and column:
+
+```text
+Not valid on this router: bad parameter actoin at line 1, column 48. The command was not run.
+```
+
+The check uses the router's own parser (`:parse`), so the answer is exact for
+that router's RouterOS version and packages. `/interface wireless print` is
+valid on a router with the `wireless` package and not valid on one with `wifi`.
+
+`run_routeros_command` makes the same check first and refuses a command the
+router does not know; nothing runs. Pass `check_syntax=false` to skip it.
+
+Limits to know:
+
+- Values that are only looked up when the command runs are not checked: an
+  interface that does not exist, an address that is already in use.
+- When the check itself cannot run (a timeout), `run_routeros_command` runs the
+  command as before, and `validate_routeros_command` says that it could not
+  confirm or refuse it.

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "validate_routeros_command",
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "string",
+      "description": "A RouterOS command, or a script of several lines"
+    }
+  },
+  "required": ["command"],
+  "additionalProperties": false
+}

@@ -211,7 +211,7 @@
       "group": "System & Ops",
       "description": "Universal escape hatch — run any raw RouterOS CLI command (read or write) when a dedicated tool isn't found (`run_routeros_command`).",
       "alwaysOn": false,
-      "tools": ["run_routeros_command"]
+      "tools": ["run_routeros_command", "validate_routeros_command"]
     },
     {
       "slug": "interfaces",
@@ -2949,6 +2949,14 @@
     },
     {
       "name": "run_routeros_command",
+      "module": "raw-command",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "validate_routeros_command",
       "module": "raw-command",
       "group": "System & Ops",
       "noDevice": false,

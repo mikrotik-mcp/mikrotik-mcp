@@ -6,8 +6,13 @@
     "command": {
       "type": "string",
       "description": "Full RouterOS CLI command exactly as typed, e.g. '/ip address print'"
+    },
+    "check_syntax": {
+      "default": true,
+      "description": "Parse the command on the router first and refuse it when it is not valid",
+      "type": "boolean"
     }
   },
-  "required": ["command"],
+  "required": ["command", "check_syntax"],
   "additionalProperties": false
 }
