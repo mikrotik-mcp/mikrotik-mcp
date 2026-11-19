@@ -161,6 +161,7 @@ import {
 import { getDeviceGeo, ipGeoRoute, startGeoLookups, stopGeoLookups } from "./geo";
 import { flagSvg } from "./flags";
 import { observeToolCall, renderMetrics } from "./metrics";
+import { detailFor, renderDetail } from "./metrics-detail";
 import { configureRecorder, getEventStore, subscribe, subscriberCount } from "./recorder";
 import { readTrafficSample, subscribeTraffic } from "./traffic-hub";
 import { interfaceStatsResponse } from "./interface-stats";
@@ -1977,7 +1978,19 @@ export async function runDashboard(
     // Prometheus scrape. Inside the token check: a scraper sends the dashboard
     // token as a Bearer header.
     if (url.pathname === "/metrics") {
-      return new Response(renderMetrics(Object.keys(getConfig().devices), getDeviceStatus), {
+      const names = Object.keys(getConfig().devices);
+      // `?detail=0` keeps a scrape to what the health probe already holds.
+      const detail =
+        url.searchParams.get("detail") === "0"
+          ? ""
+          : renderDetail(
+              detailFor(
+                names.filter(
+                  (name) => !getConfig().devices[name]?.disabled && getDeviceStatus(name).reachable,
+                ),
+              ),
+            );
+      return new Response(renderMetrics(names, getDeviceStatus) + detail, {
         headers: { "content-type": "text/plain; version=0.0.4; charset=utf-8" },
       });
     }

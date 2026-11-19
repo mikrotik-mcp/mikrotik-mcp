@@ -347,5 +347,36 @@ Limits to know:
 - Device values are as fresh as the health probe, which runs every 30 seconds.
   A shorter scrape interval returns the same values again.
 - The counters start at zero when the server starts, as Prometheus expects.
-- There are no per-interface, per-core or optical (SFP) metrics. For those, use
-  an SNMP or RouterOS exporter next to this one.
+
+### Interface, CPU core and SFP metrics
+
+The same route also carries detail that needs three small reads from each
+router:
+
+| Metric                                                               | Type    | Labels            |
+| -------------------------------------------------------------------- | ------- | ----------------- |
+| `mikrotik_interface_running`                                         | gauge   | device, interface |
+| `mikrotik_interface_receive_bytes_total` / `_transmit_bytes_total`   | counter | device, interface |
+| `mikrotik_interface_receive_errors_total` / `_transmit_errors_total` | counter | device, interface |
+| `mikrotik_interface_receive_drops_total` / `_transmit_drops_total`   | counter | device, interface |
+| `mikrotik_cpu_core_load_percent`                                     | gauge   | device, cpu       |
+| `mikrotik_sfp_rx_power_dbm` / `_tx_power_dbm`                        | gauge   | device, interface |
+| `mikrotik_sfp_temperature_celsius` / `_supply_voltage_volts`         | gauge   | device, interface |
+| `mikrotik_detail_timestamp_seconds`                                  | gauge   | device            |
+
+These are not sampled on a timer. A scrape serves what is cached and, when the
+cache of a router is older than 30 seconds, starts a refresh in the background.
+So:
+
+- With no scraper, no router is ever read for this.
+- A scrape never waits for a router.
+- The first scrape after a start has no detail yet; the next one has.
+
+Add `?detail=0` to the URL to leave this detail out and read no router at all.
+
+Limits to know:
+
+- A dynamic interface (a PPP or VPN client session) is a series that comes and
+  goes with the session.
+- Error and drop counters exist only for interfaces that report them.
+- The SFP values were not tested on a router with an SFP module.
