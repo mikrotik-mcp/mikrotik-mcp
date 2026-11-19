@@ -7,9 +7,9 @@
  * and is not kept: closing the panel discards it.
  */
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import qrcode from "qrcode-generator";
-import { Download, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, Download, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { api, postJson } from "./api";
 import { TextInput } from "./kit";
 import {
@@ -54,6 +54,12 @@ function qrDataUrl(text: string): string {
   return code.createDataURL(5, 12);
 }
 
+/** A label for a copy of `user` that no user in `taken` has: "name-2", "name-3"… */
+export function copyLabel(user: string, taken: string[]): string {
+  const base = user.replace(/-\d+$/, "").slice(0, 59);
+  for (let n = 2; ; n++) if (!taken.includes(`${base}-${n}`)) return `${base}-${n}`;
+}
+
 function saveProfile(profile: Profile): void {
   const url = URL.createObjectURL(new Blob([`${profile.config}\n`], { type: "text/plain" }));
   const link = document.createElement("a");
@@ -74,6 +80,8 @@ export function WireguardUsersView(): ReactNode {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [form, setForm] = useState({ user: "", interface: "", endpoint: "", expires: "", dns: "" });
+  const [copied, setCopied] = useState("");
+  const formRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void api<{ devices: { name: string; disabled?: boolean }[]; defaultDevice: string }>(
@@ -141,6 +149,7 @@ export function WireguardUsersView(): ReactNode {
     if (result.config) {
       setProfile({ user: form.user, config: result.config });
       setForm((f) => ({ ...f, user: "", expires: "" }));
+      setCopied("");
       await load();
     }
   };
@@ -153,6 +162,22 @@ export function WireguardUsersView(): ReactNode {
     setConfirming(null);
     await act(`revoke:${user}`, "/api/wireguard/revoke", { user });
     await load();
+  };
+  /** Put a user's settings in the form, with a new label, to add one more like it. */
+  const duplicate = (user: WgUser): void => {
+    setForm((f) => ({
+      ...f,
+      user: copyLabel(
+        user.user,
+        (data?.users ?? []).map((u) => u.user),
+      ),
+      interface: user.interface,
+      expires: user.expires ?? "",
+    }));
+    setCopied(user.user);
+    const input = formRef.current?.querySelector("input");
+    input?.scrollIntoView?.({ block: "center" });
+    input?.focus();
   };
   const expire = async (): Promise<void> => {
     await act("expire", "/api/wireguard/expire", { action: "disable", apply: true });
@@ -219,12 +244,16 @@ export function WireguardUsersView(): ReactNode {
       <div className="wgu-cols">
         <MonitorPanel
           title="Add a user"
-          description="A free address in the interface's subnet is picked for you."
+          description={
+            copied
+              ? `Copied from ${copied}: interface and end date. The server endpoint and DNS are not kept on the router, so check them.`
+              : "A free address in the interface's subnet is picked for you."
+          }
         >
           {data && data.interfaces.length === 0 ? (
             <MonitorEmpty compact title="This router has no WireGuard interface." />
           ) : (
-            <div className="wgu-form">
+            <div className="wgu-form" ref={formRef}>
               <label className="wgu-field">
                 <span>User label</span>
                 <TextInput
@@ -331,39 +360,62 @@ export function WireguardUsersView(): ReactNode {
         {data && users.length === 0 && (
           <MonitorEmpty compact title="No remote user on this router yet." />
         )}
-        <ul className="wgu-list">
-          {users.map((user) => (
-            <li key={`${user.interface}:${user.user}`} className="wgu-row">
-              <b>{user.user}</b>
-              <span className="mono">{user.address}</span>
-              <span className="wgu-muted">{user.interface}</span>
-              <span className="wgu-muted">
-                {user.lastHandshake ? `handshake ${user.lastHandshake} ago` : "never connected"}
-              </span>
-              <span className="wgu-state">
-                {user.disabled ? (
-                  <StatusBadge tone="default">disabled</StatusBadge>
-                ) : user.expired ? (
-                  <StatusBadge tone="warn">expired {user.expires}</StatusBadge>
-                ) : user.expires ? (
-                  <StatusBadge tone="good">until {user.expires}</StatusBadge>
-                ) : (
-                  <StatusBadge tone="good">no end date</StatusBadge>
-                )}
-              </span>
-              <MonitorButton
-                size="sm"
-                variant="danger"
-                icon={<Trash2 aria-hidden="true" />}
-                disabled={busy === `revoke:${user.user}`}
-                onClick={() => void revoke(user.user)}
-                onBlur={() => setConfirming(null)}
-              >
-                {confirming === user.user ? "Press again to revoke" : "Revoke"}
-              </MonitorButton>
-            </li>
-          ))}
-        </ul>
+        <div className="wgu-table">
+          {users.length > 0 && (
+            <div className="wgu-row wgu-head" aria-hidden="true">
+              <span>User</span>
+              <span>Address</span>
+              <span>Interface</span>
+              <span>Last handshake</span>
+              <span>Access</span>
+              <span />
+            </div>
+          )}
+          <ul className="wgu-list">
+            {users.map((user) => (
+              <li key={`${user.interface}:${user.user}`} className="wgu-row">
+                <b>{user.user}</b>
+                <span className="mono">{user.address}</span>
+                <span className="wgu-muted">{user.interface}</span>
+                <span className="wgu-muted">
+                  {user.lastHandshake ? `handshake ${user.lastHandshake} ago` : "never connected"}
+                </span>
+                <span className="wgu-state">
+                  {user.disabled ? (
+                    <StatusBadge tone="default">disabled</StatusBadge>
+                  ) : user.expired ? (
+                    <StatusBadge tone="warn">expired {user.expires}</StatusBadge>
+                  ) : user.expires ? (
+                    <StatusBadge tone="good">until {user.expires}</StatusBadge>
+                  ) : (
+                    <StatusBadge tone="good">no end date</StatusBadge>
+                  )}
+                </span>
+                <span className="wgu-actions">
+                  <MonitorButton
+                    size="sm"
+                    variant="ghost"
+                    icon={<Copy aria-hidden="true" />}
+                    aria-label={`Duplicate ${user.user}`}
+                    onClick={() => duplicate(user)}
+                  >
+                    Duplicate
+                  </MonitorButton>
+                  <MonitorButton
+                    size="sm"
+                    variant="danger"
+                    icon={<Trash2 aria-hidden="true" />}
+                    disabled={busy === `revoke:${user.user}`}
+                    onClick={() => void revoke(user.user)}
+                    onBlur={() => setConfirming(null)}
+                  >
+                    {confirming === user.user ? "Press again to revoke" : "Revoke"}
+                  </MonitorButton>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </MonitorPanel>
     </section>
   );
