@@ -128,12 +128,6 @@
 .isl-chart[data-stale="true"] svg {
   opacity: 0.6;
 }
-.pop .isl-chart svg {
-  display: block;
-  width: 100%;
-  height: 72px;
-  margin-top: 8px;
-}
 .isl-total {
   display: flex;
   align-items: baseline;
@@ -149,13 +143,6 @@
 }
 .isl-total .mut {
   font-size: 12px;
-}
-.isl-bar {
-  fill: var(--sig);
-  opacity: 0.85;
-}
-.isl-fail {
-  fill: var(--destructive);
 }
 .isl-list {
   padding: 6px 8px 8px;
@@ -253,4 +240,75 @@ button.isl-row:hover {
     top: 52px;
     right: 12px;
   }
+}
+
+/* Board "Pulse 2": one LED for each bucket of time, on an ink plate. */
+.isl-leds {
+  display: grid;
+  grid-template-columns: repeat(var(--isl-cols, 15), minmax(0, 1fr));
+  gap: 7px 6px;
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.isl-chart[data-stale="true"] .isl-leds {
+  opacity: 0.6;
+}
+.isl-led {
+  height: 14px;
+  border-radius: 4px;
+  background: var(--overlay-03);
+  box-shadow: inset 0 0 0 1px var(--line);
+  outline: none;
+}
+.isl-led[data-state="on"] {
+  background: var(--sig);
+  box-shadow: var(--glow) var(--sig);
+}
+.isl-led[data-state="bad"] {
+  background: var(--destructive);
+  box-shadow: var(--glow) var(--destructive);
+}
+/* Now: the last LED has a ring while it is idle. */
+.isl-led[data-now][data-state="idle"] {
+  box-shadow: inset 0 0 0 1px var(--brand);
+}
+.isl-led:hover,
+.isl-led:focus-visible {
+  box-shadow: 0 0 0 2px var(--line-2);
+}
+.isl-leds-key {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font: 400 10.5px var(--font-mt);
+  color: var(--text-faint);
+}
+.isl-leds-key .rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.isl-leds-key .key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.isl-leds-key i {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--overlay-03);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.isl-leds-key i[data-state="on"] {
+  background: var(--sig);
+  box-shadow: none;
+}
+.isl-leds-key i[data-state="bad"] {
+  background: var(--destructive);
+  box-shadow: none;
 }

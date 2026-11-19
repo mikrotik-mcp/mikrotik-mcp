@@ -3,6 +3,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
+  CSSProperties,
 } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { animate, createScope, svg } from "animejs";
@@ -408,42 +409,57 @@ export function OperationsIsland(props: OperationsIslandProps): ReactNode {
                     </span>
                   </div>
                   {total > 0 ? (
-                    <svg
-                      viewBox="0 0 340 72"
-                      width="100%"
-                      height="72"
-                      role="img"
-                      aria-label={`Calls per bucket${minutes != null ? `, last ${minutes} minutes` : ""}`}
-                      className="kit-tips"
-                    >
-                      {series.map((bucket, index) => {
-                        const height = Math.round(((bucket.ok + bucket.error) / ceiling) * 64);
-                        const x = index * 19;
-                        return (
-                          <g key={bucket.t} {...tipProps(() => bucketCard(index))}>
-                            <rect x={x} y={0} width="13" height="72" fill="transparent" />
-                            <rect
-                              className="isl-bar"
-                              x={x}
-                              y={72 - height}
-                              width="13"
-                              height={height}
-                              rx="2"
+                    <>
+                      {/* One LED for each bucket of time, the oldest first. A lit
+                          LED had calls, brighter for more; one with a failed call
+                          takes the failure colour. The last LED is now. */}
+                      <div
+                        className="isl-leds kit-tips"
+                        role="img"
+                        aria-label={`Calls in each part of the last ${minutes ?? "few"} minutes`}
+                        style={
+                          { "--isl-cols": series.length > 20 ? 15 : series.length } as CSSProperties
+                        }
+                      >
+                        {series.map((bucket, index) => {
+                          const calls = bucket.ok + bucket.error;
+                          return (
+                            <span
+                              key={bucket.t}
+                              className="isl-led"
+                              data-state={bucket.error > 0 ? "bad" : calls > 0 ? "on" : "idle"}
+                              data-now={index === series.length - 1 || undefined}
+                              style={
+                                calls > 0
+                                  ? { opacity: 0.45 + 0.55 * Math.min(1, calls / ceiling) }
+                                  : undefined
+                              }
+                              {...tipProps(() => bucketCard(index))}
                             />
-                            {bucket.error > 0 && (
-                              <rect
-                                className="isl-fail"
-                                x={x}
-                                y={72 - height - 8}
-                                width="13"
-                                height="6"
-                                rx="2"
-                              />
-                            )}
-                          </g>
-                        );
-                      })}
-                    </svg>
+                          );
+                        })}
+                      </div>
+                      <div className="isl-leds-key" aria-hidden="true">
+                        <span>{minutes != null ? `${minutes} min ago` : "earlier"}</span>
+                        <span className="rule" />
+                        <span className="key">
+                          <i data-state="idle" />
+                          idle
+                        </span>
+                        <span className="key">
+                          <i data-state="on" />
+                          calls
+                        </span>
+                        {failed > 0 && (
+                          <span className="key">
+                            <i data-state="bad" />
+                            failed
+                          </span>
+                        )}
+                        <span className="rule" />
+                        <span>now</span>
+                      </div>
+                    </>
                   ) : (
                     <p className="isl-empty">
                       {props.stats ? "No calls in this window" : "Waiting for recorded activity"}
