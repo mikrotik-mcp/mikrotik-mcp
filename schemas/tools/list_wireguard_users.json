@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "list_wireguard_users",
+  "type": "object",
+  "properties": {
+    "interface": {
+      "description": "Only users of this WireGuard interface",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "expire_wireguard_users",
+  "type": "object",
+  "properties": {
+    "action": {
+      "default": "disable",
+      "type": "string",
+      "enum": ["disable", "remove"]
+    },
+    "apply": {
+      "default": false,
+      "description": "false = list only (default); true = act",
+      "type": "boolean"
+    }
+  },
+  "required": ["action", "apply"],
+  "additionalProperties": false
+}

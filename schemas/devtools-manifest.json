@@ -1297,7 +1297,12 @@
       "group": "VPN & Tunneling",
       "description": "Onboard a WireGuard remote user in one step: generate the client keypair, add the peer, and return a ready-to-import client config; plus a revoke action.",
       "alwaysOn": false,
-      "tools": ["onboard_wireguard_user", "revoke_wireguard_user"]
+      "tools": [
+        "onboard_wireguard_user",
+        "revoke_wireguard_user",
+        "list_wireguard_users",
+        "expire_wireguard_users"
+      ]
     },
     {
       "slug": "ipsec",
@@ -7609,6 +7614,26 @@
     },
     {
       "name": "revoke_wireguard_user",
+      "module": "vpn-onboard",
+      "group": "VPN & Tunneling",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "list_wireguard_users",
+      "module": "vpn-onboard",
+      "group": "VPN & Tunneling",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "expire_wireguard_users",
       "module": "vpn-onboard",
       "group": "VPN & Tunneling",
       "noDevice": false,

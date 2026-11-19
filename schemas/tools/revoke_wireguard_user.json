@@ -5,6 +5,7 @@
   "properties": {
     "user": {
       "type": "string",
+      "minLength": 1,
       "description": "The user label used at onboarding"
     }
   },

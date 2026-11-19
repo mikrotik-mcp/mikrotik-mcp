@@ -86,3 +86,35 @@ under [Safe Mode](/docs/guides/safe-mode) so a mistake can't lock you out:
 
 For site-to-site, also add a NAT **bypass** rule so traffic between the two LANs
 is routed, not masqueraded.
+
+## Remote users: addresses, QR codes and expiry
+
+`onboard_wireguard_user` makes one remote-access user in a single step.
+
+- **A free address, picked for you.** Leave `address` out and the tool takes
+  the lowest address in the interface's own subnet that no peer uses. Two users
+  never get the same one.
+- **A QR code.** With `save=true` the tool writes `<user>.conf` and
+  `<user>.png` to `~/.mikrotik-mcp/wireguard` (or `MIKROTIK_WIREGUARD_DIR`).
+  The phone app scans the PNG. The folder and the files are readable by the
+  owner only, because they hold the user's private key.
+- **Email.** `email_to` sends the profile through the alert email channel. The
+  message holds the private key: use it only for a mailbox you trust.
+- **An end date.** `expires=2026-12-31` is recorded on the peer.
+
+`list_wireguard_users` shows every user with its address, expiry and last
+handshake. `revoke_wireguard_user` removes one.
+
+An expiry date alone does not stop a connection. `expire_wireguard_users`
+makes it take effect: it disables (or, with `action=remove`, deletes) the peers
+whose date has passed. It shows a dry run first. Run it on a schedule, for
+example daily.
+
+Limits to know:
+
+- Address selection is IPv4 only and needs an IPv4 address on the interface.
+- The server never stores a user's private key unless you pass `save=true`. A
+  profile that was not saved cannot be shown again: revoke the user and onboard
+  it again.
+- A user label uses letters, digits, `.`, `_`, `@` and `-`, because it is also
+  a file name. `revoke_wireguard_user` still accepts older labels with spaces.

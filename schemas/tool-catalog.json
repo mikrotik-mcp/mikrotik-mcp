@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.15.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 989,
+  "toolCount": 991,
   "tools": [
     {
       "name": "create_client_check",
@@ -21218,7 +21218,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Generates a ready-to-use WireGuard remote-access profile for one user: creates a client keypair, adds the peer to the server `interface` (allowed-address = the client's tunnel IP), reads the server's public key, and returns a complete client .conf to paste into the WireGuard app or a QR generator. The peer is tagged `vpn-user: <user>` so revoke_wireguard_user can remove it. NOTE: the returned config contains the client PRIVATE key (required to connect) — handle it securely. `endpoint` is the server's public host:port; `allowed_ips` controls split vs full tunnel. SSH devices only. Returns the client config.",
+      "description": "Generates a ready-to-use WireGuard remote-access profile for one user: creates a client keypair, adds the peer to the server `interface` (allowed-address = the client's tunnel IP), reads the server's public key, and returns a complete client .conf to paste into the WireGuard app or a QR generator. The peer is tagged `vpn-user: <user>` so revoke_wireguard_user can remove it. NOTE: the returned config contains the client PRIVATE key (required to connect) — handle it securely. `endpoint` is the server's public host:port; `allowed_ips` controls split vs full tunnel. Leave `address` out and the tool picks the lowest free address in the interface's own subnet, so two users never get the same one. `expires` (YYYY-MM-DD) records an end date on the peer; `expire_wireguard_users` then disables or removes peers past their date. `save=true` writes `<user>.conf` and a `<user>.png` QR code (scan it in the WireGuard phone app) to a private folder on the MCP host and returns the paths. `email_to` sends the profile by email through the alert email channel; the message carries the private key, so use it only for a mailbox you trust. SSH devices only. Returns the client config.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -21229,11 +21229,26 @@
           },
           "user": {
             "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._@-]{0,62}$",
             "description": "User/device label, e.g. 'alice-laptop'"
           },
           "address": {
+            "description": "Tunnel IP for the client, e.g. '10.20.0.50'. Omit to take the lowest free one.",
+            "type": "string"
+          },
+          "expires": {
+            "description": "Last day the user may connect, e.g. '2026-12-31'",
+            "type": "string"
+          },
+          "save": {
+            "default": false,
+            "description": "Write <user>.conf and a <user>.png QR code on the MCP host",
+            "type": "boolean"
+          },
+          "email_to": {
+            "description": "Email the profile to this address (needs the alert email channel)",
             "type": "string",
-            "description": "Tunnel IP to assign the client, e.g. '10.20.0.50'"
+            "pattern": "^[^\\s<>@,;]+@[^\\s<>@,;]+$"
           },
           "endpoint": {
             "type": "string",
@@ -21254,7 +21269,7 @@
             "type": "string"
           }
         },
-        "required": ["interface", "user", "address", "endpoint", "allowed_ips", "keepalive"],
+        "required": ["interface", "user", "save", "endpoint", "allowed_ips", "keepalive"],
         "additionalProperties": false
       }
     },
@@ -21274,10 +21289,62 @@
         "properties": {
           "user": {
             "type": "string",
+            "minLength": 1,
             "description": "The user label used at onboarding"
           }
         },
         "required": ["user"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_wireguard_users",
+      "title": "List WireGuard Remote Users",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists the remote-access users created by onboard_wireguard_user (peers tagged `vpn-user: <user>`): the label, interface, tunnel address, expiry date and whether it has passed, whether the peer is disabled, and the last handshake. Use it to see who has VPN access, who has not connected for a long time, and whose access has expired. Peers that were added another way are not listed; use list_wireguard_peers for all of them.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "interface": {
+            "description": "Only users of this WireGuard interface",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "expire_wireguard_users",
+      "title": "Disable or Remove Expired WireGuard Users",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Acts on the remote-access users whose `expires` date (set at onboard_wireguard_user) has passed. `action=disable` (the default) disables the peer, so access stops and the peer can be enabled again; `action=remove` deletes it. DEFAULTS TO A DRY RUN (`apply=false`) that lists who would be affected. Users without an expiry date are never touched. Run it on a schedule to make expiry dates take effect: a date alone does not stop a connection.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "default": "disable",
+            "type": "string",
+            "enum": ["disable", "remove"]
+          },
+          "apply": {
+            "default": false,
+            "description": "false = list only (default); true = act",
+            "type": "boolean"
+          }
+        },
+        "required": ["action", "apply"],
         "additionalProperties": false
       }
     },

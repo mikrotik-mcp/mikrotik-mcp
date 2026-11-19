@@ -9,11 +9,26 @@
     },
     "user": {
       "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._@-]{0,62}$",
       "description": "User/device label, e.g. 'alice-laptop'"
     },
     "address": {
+      "description": "Tunnel IP for the client, e.g. '10.20.0.50'. Omit to take the lowest free one.",
+      "type": "string"
+    },
+    "expires": {
+      "description": "Last day the user may connect, e.g. '2026-12-31'",
+      "type": "string"
+    },
+    "save": {
+      "default": false,
+      "description": "Write <user>.conf and a <user>.png QR code on the MCP host",
+      "type": "boolean"
+    },
+    "email_to": {
+      "description": "Email the profile to this address (needs the alert email channel)",
       "type": "string",
-      "description": "Tunnel IP to assign the client, e.g. '10.20.0.50'"
+      "pattern": "^[^\\s<>@,;]+@[^\\s<>@,;]+$"
     },
     "endpoint": {
       "type": "string",
@@ -34,6 +49,6 @@
       "type": "string"
     }
   },
-  "required": ["interface", "user", "address", "endpoint", "allowed_ips", "keepalive"],
+  "required": ["interface", "user", "save", "endpoint", "allowed_ips", "keepalive"],
   "additionalProperties": false
 }
