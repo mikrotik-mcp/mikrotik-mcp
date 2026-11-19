@@ -170,6 +170,21 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
       "keyPassphrase": {
         "type": "string"
       },
+      "passwordFrom": {
+        "type": "string",
+        "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$"
+      },
+      "keyPassphraseFrom": {
+        "type": "string",
+        "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$"
+      },
+      "sshAgent": {
+        "type": "boolean"
+      },
+      "hostKeySha256": {
+        "type": "string",
+        "pattern": "^(?:SHA256:)?[A-Za-z0-9+/]{43}=?$"
+      },
       "timeoutMs": {
         "default": 10000,
         "type": "integer",

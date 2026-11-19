@@ -170,6 +170,33 @@ export const DeviceConfigSchema = z
     privateKey: z.string().optional(),
     /** Passphrase for an encrypted private key (keyFilename or privateKey). */
     keyPassphrase: z.string().optional(),
+    /**
+     * Read the password from outside the configuration: `env:NAME` or
+     * `file:/path`. It is read each time a connection opens. Wins over `password`.
+     */
+    passwordFrom: z
+      .string()
+      .regex(/^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$/, "Use env:NAME or file:/path")
+      .optional(),
+    /** Like `passwordFrom`, for the passphrase of the private key. */
+    keyPassphraseFrom: z
+      .string()
+      .regex(/^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$/, "Use env:NAME or file:/path")
+      .optional(),
+    /**
+     * Sign in with the SSH agent of the host (`SSH_AUTH_SOCK`). The private key
+     * stays in the agent (or on a hardware key behind it) and is never read by
+     * this server.
+     */
+    sshAgent: z.boolean().optional(),
+    /**
+     * Pin the router's SSH host key: its SHA-256 fingerprint as `ssh-keygen -lf`
+     * prints it (`SHA256:…`). A router that shows another key is refused.
+     */
+    hostKeySha256: z
+      .string()
+      .regex(/^(?:SHA256:)?[A-Za-z0-9+/]{43}=?$/, "Use the SHA256:… fingerprint")
+      .optional(),
     /** SSH connect timeout in milliseconds. */
     timeoutMs: z.coerce.number().int().positive().default(10_000),
     /**

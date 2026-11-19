@@ -9,6 +9,7 @@
  * check — selects a transport here rather than re-deciding (and defaulting a
  * MAC device to `127.0.0.1:22`).
  */
+import { secretOf } from "./secret-ref";
 import type { DeviceConfig } from "../config";
 import { MikroTikMacTelnetClient } from "../mac-telnet/client";
 import { MikroTikRestClient } from "../rest/client";
@@ -56,7 +57,7 @@ export function createRestClient(dc: DeviceConfig): MikroTikRestClient {
     ...endpointOptions(dc, "rest", dc.apiPort ?? 443),
     host: dc.host,
     username: dc.username,
-    password: dc.password,
+    password: secretOf(dc.password, dc.passwordFrom) ?? "",
     port: dc.apiPort,
     insecureTls: dc.apiInsecureTls,
     timeoutMs: dc.timeoutMs,
@@ -69,10 +70,12 @@ export function sshOptionsOf(dc: DeviceConfig, stateConfig = dc): SSHClientOptio
     ...endpointOptions(stateConfig, "ssh", dc.port),
     host: dc.host,
     username: dc.username,
-    password: dc.password,
+    password: secretOf(dc.password, dc.passwordFrom),
     keyFilename: dc.keyFilename,
     privateKey: dc.privateKey,
-    keyPassphrase: dc.keyPassphrase,
+    keyPassphrase: secretOf(dc.keyPassphrase, dc.keyPassphraseFrom),
+    agent: dc.sshAgent,
+    hostKeySha256: dc.hostKeySha256,
     port: dc.port,
     timeoutMs: dc.timeoutMs,
   };
@@ -131,7 +134,7 @@ export function createDeviceClient(
     return new MikroTikMacTelnetClient({
       mac: dc.mac,
       username: dc.username,
-      password: dc.password,
+      password: secretOf(dc.password, dc.passwordFrom) ?? "",
       sourceMac: dc.sourceMac,
       host: dc.macHost,
       port: dc.macPort,
@@ -160,7 +163,13 @@ export function connectErrorMessage(name: string, dc: DeviceConfig, lastError?: 
     );
   }
   const authMode =
-    dc.keyFilename || dc.privateKey ? "SSH key" : dc.password ? "password" : "no credentials";
+    dc.keyFilename || dc.privateKey
+      ? "SSH key"
+      : dc.sshAgent
+        ? "SSH agent"
+        : dc.password || dc.passwordFrom
+          ? "password"
+          : "no credentials";
   return (
     `Failed to connect to MikroTik device '${name}' at ${dc.host}:${dc.port} (auth: ${authMode})${reason}. ` +
     "Check the host/port are reachable, the SSH service is enabled (/ip service), and the credentials are correct."

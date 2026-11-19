@@ -14,6 +14,7 @@
  * and no `child_process` are involved, so there is no local command-injection
  * surface from this module.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { Readable } from "node:stream";
 import { Client } from "ssh2";
@@ -58,6 +59,10 @@ export interface SSHClientOptions extends EndpointOptions {
   privateKey?: string;
   /** Passphrase for an encrypted private key. */
   keyPassphrase?: string;
+  /** Sign in with an SSH agent: `true` uses `SSH_AUTH_SOCK`, a string is the socket. */
+  agent?: boolean | string;
+  /** The pinned SHA-256 fingerprint of the host key (`SHA256:…`). */
+  hostKeySha256?: string;
   timeoutMs?: number;
   /**
    * Optional SSH jump host (bastion / ProxyJump). When set, `connect()` reaches
@@ -279,6 +284,24 @@ export class MikroTikSSHClient {
       if (cfg.privateKey && o.keyPassphrase) cfg.passphrase = o.keyPassphrase;
       // A password may still be supplied as a fallback (ssh2 tries key first).
       if (o.password) cfg.password = o.password;
+      if (o.agent) {
+        const socket = o.agent === true ? process.env.SSH_AUTH_SOCK : o.agent;
+        if (!socket) {
+          reject(new Error("SSH agent is set, but SSH_AUTH_SOCK is not: no agent is running"));
+          return;
+        }
+        cfg.agent = socket;
+      }
+      // A pinned host key: a router that shows another key is not the router
+      // that was configured (a replaced device, or someone in the middle).
+      let seenKey = "";
+      if (o.hostKeySha256) {
+        const pinned = o.hostKeySha256.replace(/^SHA256:/, "").replace(/=+$/, "");
+        cfg.hostVerifier = (key: Buffer): boolean => {
+          seenKey = createHash("sha256").update(key).digest("base64").replace(/=+$/, "");
+          return seenKey === pinned;
+        };
+      }
 
       client
         .on("ready", () => {
@@ -286,7 +309,15 @@ export class MikroTikSSHClient {
           resolve(client);
         })
         .on("error", (err) => {
-          if (!ready) reject(err);
+          if (!ready)
+            reject(
+              o.hostKeySha256 && seenKey && /verification failed|host denied/i.test(err.message)
+                ? new Error(
+                    `host key does not match the pinned fingerprint: the router shows SHA256:${seenKey}. ` +
+                      "Nothing was sent. If the router was replaced or reset, update hostKeySha256.",
+                  )
+                : err,
+            );
           client.destroy();
         })
         .on("close", () => {
