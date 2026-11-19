@@ -186,6 +186,9 @@ function describeParams(
   }));
 }
 
+/** True when every letter of a request is Latin. The search index and the embedding model read English only. */
+const ALL_LATIN = /^[\p{Script=Latin}\P{L}]*$/u;
+
 export const toolGatewayTools: ToolModule = [
   defineTool({
     name: "get_tool_call",
@@ -291,7 +294,8 @@ export const toolGatewayTools: ToolModule = [
       "ALWAYS call this tool FIRST before attempting any other tool. A tool that is not in your tool " +
       "list is NOT missing: this server has about a thousand tools and every one of them runs through " +
       "`invoke_tool`. Never say a tool is unavailable before this search returned nothing.\n\n" +
-      "Describe what you want to do in your own words, e.g. 'block a LAN client by MAC', " +
+      "Describe what you want to do in your own words, IN ENGLISH: the search reads English only, so " +
+      "translate a request the user wrote in another language. E.g. 'block a LAN client by MAC', " +
       "'change the nameservers the router uses', 'import a TLS certificate', 'list DHCP leases', " +
       "'create a WireGuard peer'. The search matches words AND meaning, so you do not need the tool's " +
       "own terms. Returns a short list: each tool's exact name and one line on what it is for (no " +
@@ -308,7 +312,8 @@ export const toolGatewayTools: ToolModule = [
         .string()
         .min(1)
         .describe(
-          "What you want to do, in words or keywords (e.g. 'add ipv4 nat masquerade rule').",
+          "What you want to do, in English words or keywords (e.g. 'add ipv4 nat masquerade rule'). " +
+            "Translate a request in another language to English first.",
         ),
       limit: z.coerce
         .number()
@@ -321,6 +326,10 @@ export const toolGatewayTools: ToolModule = [
     async handler(a, ctx) {
       const { index, byName } = await gateway();
       const limit = a.limit ?? 8;
+      const english = ALL_LATIN.test(a.query)
+        ? ""
+        : "\n\nThe search reads English only, and this request has words in another script. " +
+          "Translate it to English and call find_tools again.";
       // Only tools this server can run (read-only mode and module filters drop
       // some); over-fetch so the filter does not shorten the result.
       const ranked = rankTools(index, a.query, limit + 25);
@@ -330,6 +339,8 @@ export const toolGatewayTools: ToolModule = [
       // The first result survived the filter only if it is still first.
       const sure = ranked.sure && hits[0]?.name === ranked.hits[0]?.name;
       if (hits.length === 0) {
+        // No raw-command hint here: the request was not searched in a language the index reads.
+        if (english) return `No tools matched "${a.query}".${english}`;
         return (
           `No tools matched "${a.query}". Try different keywords (a RouterOS scope like ` +
           "'firewall', 'dhcp', 'wireguard', 'certificate'). For a raw CLI command: " +
@@ -353,7 +364,7 @@ export const toolGatewayTools: ToolModule = [
       const plural = hits.length === 1 ? "" : "s";
       return (
         `Found ${hits.length} tool${plural} for "${a.query}" (best first).\n\n${lines.join("\n")}${detail}\n\n` +
-        "Every tool in this list can be run with invoke_tool, also when it is not in your own tool list."
+        `Every tool in this list can be run with invoke_tool, also when it is not in your own tool list.${english}`
       );
     },
   }),

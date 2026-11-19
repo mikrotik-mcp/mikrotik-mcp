@@ -130,6 +130,8 @@ the GitHub release notes.
   line and a ready call for each tool, no schema.
   While the vectors are built (first start, or a changed catalog), a tool call
   does not run: it gets an answer with the progress and the seconds to wait.
+  The search reads English only: `find_tools` tells the model to translate a
+  request first, and says so again when a request comes in another script.
 
 - **Start summary.** `serve` on an interactive terminal now prints, under the
   banner, where the server answers (the MCP endpoint and the dashboard, on

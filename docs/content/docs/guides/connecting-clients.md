@@ -765,6 +765,11 @@ tool was in the first five results 4 times with words alone and 15 times with
 both. It is better, not perfect: when the list misses, rephrase the request or
 name the RouterOS menu.
 
+The search reads English only. On the same requests written in Persian the
+right tool was in the first five once. So `find_tools` tells the model to
+translate a request to English first, and says so again in its answer when a
+request has words in another script.
+
 ### Short answers, and errors that correct themselves
 
 - `find_tools` returns a name, one line and a ready call for each tool. It

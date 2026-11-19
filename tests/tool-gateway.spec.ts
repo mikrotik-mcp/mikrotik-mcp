@@ -28,6 +28,17 @@ const run = (name: string, args: unknown): Promise<string> =>
   );
 
 describe("find_tools", () => {
+  test("asks for English when the request is in another script", async () => {
+    const ask = /Translate it to English and call find_tools again/;
+    const none = await run("find_tools", { query: "روتر رو خاموش کن" });
+    expect(none).toMatch(ask);
+    // A request that was not really searched must not send the model to a raw command.
+    expect(none).not.toMatch(/run_routeros_command/);
+    expect(await run("find_tools", { query: "قوانین firewall" })).toMatch(ask);
+    // Latin letters, digits and signs are not another script.
+    expect(await run("find_tools", { query: "ping 8.8.8.8 — café" })).not.toMatch(ask);
+  });
+
   test("surfaces a real tool by intent (and IPv4 outranks its IPv6 twin)", async () => {
     const out = await run("find_tools", { query: "list dhcp servers" });
     expect(out).toMatch(/list_dhcp_servers/);

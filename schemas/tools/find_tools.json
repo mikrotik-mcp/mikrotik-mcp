@@ -6,7 +6,7 @@
     "query": {
       "type": "string",
       "minLength": 1,
-      "description": "What you want to do, in words or keywords (e.g. 'add ipv4 nat masquerade rule')."
+      "description": "What you want to do, in English words or keywords (e.g. 'add ipv4 nat masquerade rule'). Translate a request in another language to English first."
     },
     "limit": {
       "description": "Max results to return (default 8).",

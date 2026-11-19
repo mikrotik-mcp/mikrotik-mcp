@@ -54,7 +54,7 @@ Tool discovery — MANDATORY workflow:
   This server has about a thousand dedicated tools. Your tool list holds only a
   few of them. You MUST follow this order:
     1. ALWAYS call \`find_tools\` FIRST — describe what you want to do in your own
-       words. It searches the full catalog by words and by meaning and returns
+       words, in English (translate a request in another language first). It searches the full catalog by words and by meaning and returns
        tool names with one line each.
     2. Call \`describe_tool\` with the name you picked to get its parameters.
        When \`find_tools\` is sure of the best match, it gives them at once.

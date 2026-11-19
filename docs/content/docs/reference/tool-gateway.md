@@ -26,14 +26,14 @@ Retrieve a saved MCP invocation by its exact Tool call ID from a result or Dashb
 
 🔍 START HERE — this is the PRIMARY entry point for ANY MikroTik / RouterOS task. ALWAYS call this tool FIRST before attempting any other tool. A tool that is not in your tool list is NOT missing: this server has about a thousand tools and every one of them runs through `invoke_tool`. Never say a tool is unavailable before this search returned nothing.
 
-Describe what you want to do in your own words, e.g. 'block a LAN client by MAC', 'change the nameservers the router uses', 'import a TLS certificate', 'list DHCP leases', 'create a WireGuard peer'. The search matches words AND meaning, so you do not need the tool's own terms. Returns a short list: each tool's exact name and one line on what it is for (no schemas). When it is sure of the best match it adds that tool's parameters and a ready call.
+Describe what you want to do in your own words, IN ENGLISH: the search reads English only, so translate a request the user wrote in another language. E.g. 'block a LAN client by MAC', 'change the nameservers the router uses', 'import a TLS certificate', 'list DHCP leases', 'create a WireGuard peer'. The search matches words AND meaning, so you do not need the tool's own terms. Returns a short list: each tool's exact name and one line on what it is for (no schemas). When it is sure of the best match it adds that tool's parameters and a ready call.
 
 Workflow: find_tools → describe_tool (for the tool you picked) → invoke_tool. Only if this search returns zero results, run a raw command with `invoke_tool {"name":"run_routeros_command","arguments":{"command":"…"}}`. For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate. For authorized changes that must be coordinated across multiple routers, search 'begin_transaction' BEFORE individual write tools (VPN tunnels, peering, routes or fleet ACLs). Discovery does not authorize verify_transaction or commit_transaction.
 
-| Parameter | Required | Definition                                                                                                         |
-| --------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `query`   | Yes      | What you want to do, in words or keywords (e.g. 'add ipv4 nat masquerade rule'). `{"type":"string","minLength":1}` |
-| `limit`   | No       | Max results to return (default 8). `{"type":"integer","minimum":1,"maximum":25}`                                   |
+| Parameter | Required | Definition                                                                                                                                                                           |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `query`   | Yes      | What you want to do, in English words or keywords (e.g. 'add ipv4 nat masquerade rule'). Translate a request in another language to English first. `{"type":"string","minLength":1}` |
+| `limit`   | No       | Max results to return (default 8). `{"type":"integer","minimum":1,"maximum":25}`                                                                                                     |
 
 ## describe_tool
 
