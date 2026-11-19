@@ -381,6 +381,24 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
     return () => desktop.removeEventListener("change", close);
   }, [onMobileOpenChange]);
 
+  // The digit keys 1 to 9 open the pinned pages, in the order of the board.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      const digit = /^(?:Digit|Numpad)([1-9])$/.exec(event.code)?.[1];
+      const id = digit ? pins[Number(digit) - 1] : undefined;
+      if (!id) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(?:INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (document.querySelector("[role=dialog][data-state=open], [role=menu], [role=listbox]"))
+        return;
+      event.preventDefault();
+      onNavigate(id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pins, onNavigate]);
+
   const groups = navigationGroups("");
   const activeIndex = groups.findIndex((group) => group.id === activeGroup);
   const choose = (id: ViewId): void => {
@@ -459,13 +477,6 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
           }}
         >
           {active && <span className="shell-nav-hl" aria-hidden="true" />}
-          {inPinned && (
-            <span
-              className="shell-pin-led"
-              data-tone={item.id === "alerts" && firingCount > 0 ? "bad" : "ok"}
-              aria-hidden="true"
-            />
-          )}
           <span className="lbl">{item.label}</span>
           <span className="shell-nav-badges">
             <NewFeatureBadge view={item.id} version={version} />
@@ -493,6 +504,67 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
             {pinned ? <PinOff aria-hidden="true" /> : <Pin aria-hidden="true" />}
           </button>
         )}
+      </div>
+    );
+  };
+
+  /** One row of the pinned board: its number key, the page, its group, its live number. */
+  const pinnedRow = (item: (typeof VIEWS)[number], index: number): ReactNode => {
+    const release = newFeatureRelease(item.id, version);
+    const active = view === item.id;
+    const note =
+      item.id === "alerts" && firingCount > 0
+        ? { text: `${firingCount} firing`, tone: "bad" }
+        : item.id === "feed" && feedCount > 0
+          ? { text: feedCount > 999 ? "999+" : String(feedCount), tone: "ok" }
+          : null;
+    return (
+      <div className="shell-nav-row" key={item.id}>
+        <a
+          href={`#${item.id}`}
+          className="it shell-nav-link shell-pin"
+          data-pinned
+          data-active={active || undefined}
+          aria-current={active ? "page" : undefined}
+          aria-label={release ? pageLabel(item) : undefined}
+          aria-keyshortcuts={index < 9 ? String(index + 1) : undefined}
+          onClick={(event) => {
+            if (!plainClick(event)) return;
+            event.preventDefault();
+            choose(item.id);
+          }}
+        >
+          <kbd className="shell-pin-key" aria-hidden="true">
+            {index < 9 ? index + 1 : "·"}
+          </kbd>
+          <span className="shell-pin-text">
+            <span className="lbl">{item.label}</span>
+            <span className="shell-pin-group">{viewGroup(item.id).label}</span>
+          </span>
+          <span className="shell-nav-badges">
+            <NewFeatureBadge view={item.id} version={version} />
+            {note && (
+              <span className="shell-pin-note" data-tone={note.tone}>
+                <span className="shell-pin-led" data-tone={note.tone} aria-hidden="true" />
+                {note.text}
+              </span>
+            )}
+          </span>
+        </a>
+        <button
+          type="button"
+          className="shell-pin-toggle"
+          aria-label={`Unpin ${item.label}`}
+          aria-pressed
+          title={`Unpin ${item.label}`}
+          onClick={() => {
+            togglePin(item.id);
+            // Removing a shortcut must not strand focus on an unmounted control.
+            document.getElementById(`${instance}-search`)?.focus();
+          }}
+        >
+          <PinOff aria-hidden="true" />
+        </button>
       </div>
     );
   };
@@ -546,14 +618,25 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       </button>
       <ScrollArea className="shell-nav-scroll" viewportProps={{ ref: navigationViewport }}>
         <div className="sb-scroll">
-          <section className="sec shell-pinned" aria-label="Pinned pages">
-            <div className="ngl">Pinned</div>
+          <section
+            className="sec shell-pinned"
+            aria-label="Pinned pages"
+            data-board={pins.length > 0 || undefined}
+          >
+            <div className="ngl">
+              Pinned
+              {pins.length > 0 && (
+                <span className="shell-pin-keys">
+                  {pins.length === 1 ? "press 1" : `press 1 to ${Math.min(pins.length, 9)}`}
+                </span>
+              )}
+            </div>
             {pins.length > 0 ? (
               <div className="nav">
-                {pins.map((id) =>
-                  pageRow(
+                {pins.map((id, index) =>
+                  pinnedRow(
                     VIEWS.find((item) => item.id === id)!,
-                    true,
+                    index,
                   ),
                 )}
               </div>

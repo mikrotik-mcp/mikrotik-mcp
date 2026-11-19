@@ -1329,3 +1329,104 @@ span.ri:hover {
   color: var(--background);
   box-shadow: var(--glow) var(--sig);
 }
+
+/* ------------------------------------------------------------- pinned board
+ * Board "Pinned 3": a departure board. One glass card, a head, and one row for
+ * each pinned page: its number key, its name over its group, its live number.
+ */
+.shell-pinned[data-board] {
+  gap: 0;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: var(--glass);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.shell-pinned[data-board] .ngl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 12px;
+  background: var(--overlay-03);
+  box-shadow: inset 0 -1px 0 var(--line);
+  line-height: 30px;
+}
+.shell-pin-keys {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.shell-pinned[data-board] .nav {
+  gap: 0;
+}
+.shell-pinned[data-board] .shell-nav-row + .shell-nav-row {
+  box-shadow: inset 0 1px 0 var(--line);
+}
+.it.shell-pin {
+  height: 44px;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.it.shell-pin[data-active] {
+  background: linear-gradient(90deg, var(--sig-soft), transparent);
+  box-shadow: inset 2px 0 0 var(--sig);
+  font-weight: 600;
+}
+.it.shell-pin[data-active]:hover {
+  background: linear-gradient(90deg, var(--sig-soft), transparent);
+}
+.shell-pin-key {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--overlay-03);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  font: 500 11px var(--font-mt);
+  color: var(--muted-foreground);
+}
+.it.shell-pin[data-active] .shell-pin-key {
+  background: var(--sig);
+  box-shadow: none;
+  color: var(--background);
+}
+.shell-pin-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.shell-pin-text .lbl {
+  flex: none;
+  line-height: 17px;
+}
+.shell-pin-group {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted-foreground);
+}
+.shell-pin-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 11.5px var(--font-mt);
+  color: var(--foreground);
+}
+.shell-pin-note[data-tone="bad"] {
+  color: var(--destructive);
+}
+.shell-pinned[data-board] .shell-pin-toggle {
+  top: 10px;
+  right: 8px;
+}

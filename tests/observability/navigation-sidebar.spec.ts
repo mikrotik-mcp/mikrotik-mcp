@@ -299,9 +299,49 @@ test("another open group has a branch, but nothing on it is lit", async () => {
   expect(heading("Network").closest("section")!.querySelector(".shell-branch")).toBeNull();
 });
 
-test("a pinned page shows a LED, in the failure colour when its alerts fire", async () => {
+test("pinned pages are a board: a number key, the group, and a live number", async () => {
+  window.localStorage.setItem(NAVIGATION_PINS_KEY, JSON.stringify(["feed", "alerts", "terminal"]));
+  await mount("alerts");
+  const rows = [...host.querySelectorAll<HTMLElement>(".shell-pinned .shell-pin")];
+  expect(rows.map((row) => row.querySelector(".shell-pin-key")!.textContent)).toEqual([
+    "1",
+    "2",
+    "3",
+  ]);
+  expect(rows.map((row) => row.querySelector(".shell-pin-group")!.textContent)).toEqual([
+    "Monitoring",
+    "Monitoring",
+    "Router configuration",
+  ]);
+  // Only a page with a live number shows one: 2 alerts fire, the feed is empty.
+  expect(rows.map((row) => row.querySelector(".shell-pin-note")?.textContent ?? "")).toEqual([
+    "",
+    "2 firing",
+    "",
+  ]);
+  expect(rows[1]!.querySelector(".shell-pin-led")!.getAttribute("data-tone")).toBe("bad");
+  expect(rows[1]!.getAttribute("aria-current")).toBe("page");
+  expect(host.querySelector(".shell-pin-keys")!.textContent).toBe("press 1 to 3");
+});
+
+test("a digit key opens its pinned page, but not while typing", async () => {
   window.localStorage.setItem(NAVIGATION_PINS_KEY, JSON.stringify(["feed", "alerts"]));
   await mount("openvpn");
-  const leds = [...host.querySelectorAll<HTMLElement>(".shell-pinned .shell-pin-led")];
-  expect(leds.map((led) => led.dataset.tone)).toEqual(["ok", "bad"]);
+  const press = (code: string, init: KeyboardEventInit = {}): void => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { code, bubbles: true, ...init }));
+  };
+  press("Digit2");
+  expect(navigate).toHaveBeenLastCalledWith("alerts");
+  // The key is read by its place, so a Persian layout works too.
+  press("Digit1", { key: "۱" });
+  expect(navigate).toHaveBeenLastCalledWith("feed");
+  navigate.mockClear();
+  press("Digit3"); // no third pin
+  press("Digit1", { metaKey: true }); // a browser shortcut
+  const input = document.createElement("input");
+  document.body.append(input);
+  input.focus();
+  press("Digit1");
+  input.remove();
+  expect(navigate).not.toHaveBeenCalled();
 });
