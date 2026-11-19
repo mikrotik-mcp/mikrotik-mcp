@@ -7,6 +7,57 @@ the GitHub release notes.
 
 ### Added
 
+- **Alerts on Telegram and by email, and a daily digest.** Two new channels
+  (`telegram`, `email` over SMTP) and one message a day that sums up the last
+  24 hours. A password is never sent to a mail server over a clear connection.
+- **Audit export to syslog or a SIEM.** `audit.syslog` sends every finished tool
+  call as one RFC 5424 message, with secrets redacted. It works with the
+  dashboard off.
+- **Prometheus metrics.** The dashboard answers `GET /metrics`: router health
+  and tool-call counters, read from memory only.
+- **Git mirror for configuration snapshots.** `gitMirror` writes each snapshot
+  as `<device>.rsc`, commits it and can push it. An unchanged router makes no
+  commit.
+- **Changes confirmed from the router's log.** After a tool that can change a
+  router, the result shows what the router itself recorded in
+  `/system history`, or that it recorded nothing. `verifyWrites` turns it off.
+- **Syntax check before a command runs.** `validate_routeros_command` parses a
+  command on the router without running it. `run_routeros_command` does the
+  same first and refuses a command the router does not know.
+- **Approvals.** With `approvals.enabled`, a risky tool call waits for a person
+  on the Access page and runs only after it is approved. An approval is for one
+  exact call, is used once, and expires.
+- **Find devices that are not managed.** `discover_unmanaged_devices` reads the
+  neighbour table of every router and lists what is attached and not in the
+  device list.
+- **SSH agent, secrets outside the config file, host-key pinning.** `sshAgent`,
+  `passwordFrom` / `keyPassphraseFrom` (`env:NAME` or `file:/path`) and
+  `hostKeySha256`.
+- **Local firmware repository.** Download a RouterOS version once
+  (`firmware_repo_fetch`), send the same files to every router over SFTP
+  (`firmware_stage_from_repo`), and finish after the reboot
+  (`firmware_post_upgrade`): version check, RouterBOOT, your own commands.
+- **WireGuard users: free address, QR code, email, expiry.**
+  `onboard_wireguard_user` picks a free address, can save a `.conf` and a QR
+  PNG, can email the profile, and records an end date.
+  `list_wireguard_users` and `expire_wireguard_users` are new.
+- **Zone-based firewall.** `design_zone_firewall` builds interface lists and
+  filter rules from zones and policies, in Safe Mode. `remove_zone_firewall`
+  takes the design out.
+- **IPv6 with a changing ISP prefix.** `follow_ipv6_prefix` keeps firewall
+  address lists on the prefix the ISP delegates today.
+- **Plan the move from `wireless` to `wifi`.**
+  `plan_wireless_to_wifi_migration` translates every setting to its new name
+  and lists what the new driver cannot do. Read-only.
+- **Container lifecycle.** `get_container_logs`, `upgrade_container_image`
+  (keeps the data in mounts) and `deploy_container_stack` (several containers
+  from one description).
+- **Hotspot voucher batches.** Vouchers belong to a batch; `print=true` writes
+  a print-ready sheet with optional QR codes and a CSV file.
+  `list_voucher_batches` and `remove_voucher_batch` are new.
+- **Configuration templates.** Keep a configuration with `{{variable}}` places
+  and apply it to a new router or to many with `apply_config_template`. Every
+  command is parsed on the router first and written in Safe Mode.
 - **Dashboard Files page.** The files of every router, as the Files window of
   WinBox, in dockable panes side by side.
   - Each pane shows one folder of one router, with the storage of the router,
@@ -105,6 +156,8 @@ the GitHub release notes.
 
 ### Fixed
 
+- `revoke_wireguard_user` quoted the user label twice, so a label with a space
+  was never found.
 - **Terminal:** an idle Shell pane closed after about one minute. The SSH
   library sent keepalive requests that RouterOS does not answer, and then
   closed the session. The shell now uses no SSH keepalive; its own 30-minute
