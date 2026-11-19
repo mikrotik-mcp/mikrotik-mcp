@@ -42,10 +42,11 @@ Three options let a device entry hold no secret at all.
 { "edge": { "host": "10.0.0.1", "username": "mcp", "passwordFrom": "env:EDGE_PASSWORD" } }
 ```
 
-| Reference    | Reads                                                                             |
-| ------------ | --------------------------------------------------------------------------------- |
-| `env:NAME`   | The environment variable `NAME`.                                                  |
-| `file:/path` | The file, without one trailing newline. Works with Docker and Kubernetes secrets. |
+| Reference                 | Reads                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `env:NAME`                | The environment variable `NAME`.                                                         |
+| `file:/path`              | The file, without one trailing newline. Works with Docker and Kubernetes secrets.        |
+| `keyring:service/account` | The keyring of the operating system: the macOS Keychain, or the Secret Service on Linux. |
 
 `passwordFrom` wins over `password`, and `keyPassphraseFrom` does the same for
 the passphrase of a private key. The reference is read each time a connection
@@ -91,8 +92,12 @@ replaced or reset, or its host key was regenerated).
 
 Limits to know:
 
-- There is no operating-system keyring support. Use `file:` with a file your
-  password manager or secret store writes, or the SSH agent.
+- The keyring works on macOS and Linux. Store an entry with
+  `security add-generic-password -s mikrotik-mcp -a edge -w` (macOS) or
+  `secret-tool store --label=edge service mikrotik-mcp account edge` (Linux),
+  then use `keyring:mikrotik-mcp/edge`. The server must run as a user that can
+  read the entry: a service started at boot, before login, cannot unlock a
+  login keyring. On Windows, use `env:` or `file:`.
 - A pin covers SSH. The REST transport checks the router's TLS certificate
   instead (`apiInsecureTls`), and MAC-Telnet has no host key.
 - An inline `jumpHost` does not take these options. Use `jumpVia` with a

@@ -6,6 +6,7 @@
  * the `MIKROTIK_DEVICES` env var. Each device gets a name the AI can target
  * per tool call.
  */
+import { SECRET_REF } from "./core/secret-ref";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -171,17 +172,17 @@ export const DeviceConfigSchema = z
     /** Passphrase for an encrypted private key (keyFilename or privateKey). */
     keyPassphrase: z.string().optional(),
     /**
-     * Read the password from outside the configuration: `env:NAME` or
-     * `file:/path`. It is read each time a connection opens. Wins over `password`.
+     * Read the password from outside the configuration: `env:NAME`,
+     * `file:/path` or `keyring:service/account` (macOS Keychain, Linux Secret Service). It is read each time a connection opens. Wins over `password`.
      */
     passwordFrom: z
       .string()
-      .regex(/^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$/, "Use env:NAME or file:/path")
+      .regex(SECRET_REF, "Use env:NAME, file:/path or keyring:service/account")
       .optional(),
     /** Like `passwordFrom`, for the passphrase of the private key. */
     keyPassphraseFrom: z
       .string()
-      .regex(/^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$/, "Use env:NAME or file:/path")
+      .regex(SECRET_REF, "Use env:NAME, file:/path or keyring:service/account")
       .optional(),
     /**
      * Sign in with the SSH agent of the host (`SSH_AUTH_SOCK`). The private key

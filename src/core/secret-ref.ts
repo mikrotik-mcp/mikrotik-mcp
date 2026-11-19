@@ -7,11 +7,55 @@
  * is used without a restart. The value never enters the configuration, its
  * backups or the dashboard's config editor; only the reference does.
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-export const SECRET_REF = /^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$/;
+const KEYRING_PART = "[A-Za-z0-9][A-Za-z0-9._@-]{0,63}";
+export const SECRET_REF = new RegExp(
+  `^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+|keyring:${KEYRING_PART}/${KEYRING_PART})$`,
+);
 
-/** Resolve `env:NAME` or `file:/path`. Throws with a reason that names no secret. */
+type Runner = (program: string, args: string[]) => string;
+const runProgram: Runner = (program, args) =>
+  execFileSync(program, args, {
+    encoding: "utf8",
+    timeout: 10_000,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+let runner: Runner = runProgram;
+
+/** Replace the program runner (tests only). Pass nothing to restore. */
+export function setKeyringRunner(fn?: Runner): void {
+  runner = fn ?? runProgram;
+}
+
+/**
+ * Read a secret from the keyring of the operating system: the macOS Keychain
+ * (`security`) or the Secret Service on Linux (`secret-tool`). The program is
+ * started with an argument list, no shell, and the two names are limited to a
+ * plain set of characters, so neither can be read as an option.
+ */
+function fromKeyring(service: string, account: string, platform = process.platform): string {
+  const call: [string, string[]] | undefined =
+    platform === "darwin"
+      ? ["security", ["find-generic-password", "-s", service, "-a", account, "-w"]]
+      : platform === "linux"
+        ? ["secret-tool", ["lookup", "service", service, "account", account]]
+        : undefined;
+  if (!call) throw new Error(`the keyring is not supported on ${platform}; use env: or file:`);
+  let value: string;
+  try {
+    value = runner(call[0], call[1]).replace(/\r?\n$/, "");
+  } catch {
+    throw new Error(
+      `the keyring has no entry for service "${service}", account "${account}" (or ${call[0]} is not installed)`,
+    );
+  }
+  if (value === "") throw new Error(`the keyring entry "${service}/${account}" is empty`);
+  return value;
+}
+
+/** Resolve `env:NAME`, `file:/path` or `keyring:service/account`. Throws with a reason that names no secret. */
 export function resolveSecret(reference: string): string {
   if (reference.startsWith("env:")) {
     const value = process.env[reference.slice(4)];
@@ -29,7 +73,11 @@ export function resolveSecret(reference: string): string {
       );
     }
   }
-  throw new Error("a secret reference must start with env: or file:");
+  if (reference.startsWith("keyring:") && SECRET_REF.test(reference)) {
+    const [service, account] = reference.slice(8).split("/") as [string, string];
+    return fromKeyring(service, account);
+  }
+  throw new Error("a secret reference must be env:NAME, file:/path or keyring:service/account");
 }
 
 /** The literal value, or the referenced one when a reference is set. */

@@ -172,11 +172,11 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
       },
       "passwordFrom": {
         "type": "string",
-        "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$"
+        "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+|keyring:[A-Za-z0-9][A-Za-z0-9._@-]{0,63}\\/[A-Za-z0-9][A-Za-z0-9._@-]{0,63})$"
       },
       "keyPassphraseFrom": {
         "type": "string",
-        "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+)$"
+        "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+|keyring:[A-Za-z0-9][A-Za-z0-9._@-]{0,63}\\/[A-Za-z0-9][A-Za-z0-9._@-]{0,63})$"
       },
       "sshAgent": {
         "type": "boolean"

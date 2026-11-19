@@ -85,15 +85,15 @@ export const DEVICE_FIELDS: CfgField[] = [
     label: "Password from",
     type: "text",
     advanced: true,
-    placeholder: "env:ROUTER_PASSWORD or file:/run/secrets/router",
-    help: "Read the password from an environment variable or a file each time a connection opens. Wins over Password.",
+    placeholder: "env:NAME, file:/path or keyring:service/account",
+    help: "Read the password from an environment variable, a file or the keyring of the operating system each time a connection opens. Wins over Password.",
   },
   {
     key: "keyPassphraseFrom",
     label: "Key passphrase from",
     type: "text",
     advanced: true,
-    placeholder: "env:NAME or file:/path",
+    placeholder: "env:NAME, file:/path or keyring:service/account",
   },
   {
     key: "sshAgent",
