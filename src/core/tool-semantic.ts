@@ -6,10 +6,11 @@
  * nameservers" shares no word with `set_dns_servers`. An embedding model places
  * both near each other, so the request finds the tool by meaning.
  *
- * The model is `@ternlight/mini`: a 5 MB WebAssembly bundle that runs on the
+ * The model is `@ternlight/base` (the quality tier): a 7 MB WebAssembly bundle
+ * that runs on the
  * CPU of this host. Nothing is sent anywhere, and there is no API key.
  *
- * - The catalog is embedded once (about 5 ms for each tool) in the background,
+ * - The catalog is embedded once (about 9 ms for each tool) in the background,
  *   in small batches, so the server answers while it runs.
  * - The vectors are cached on disk, keyed by the text that was embedded. A
  *   restart with the same catalog loads them in milliseconds.
@@ -88,12 +89,12 @@ export function startSemanticIndex(docs: SemanticDoc[], embed?: Embed): Promise<
       let run = embed;
       if (!run) {
         // A dynamic import: the WebAssembly loads only when the feature is used.
-        const model = (await import("@ternlight/mini")) as { embed: Embed };
+        const model = (await import("@ternlight/base")) as { embed: Embed };
         run = model.embed;
       }
       const texts = docs.map(semanticText);
       const key = createHash("sha256")
-        .update(`ternlight-mini-1\n${texts.join("\n")}`)
+        .update(`ternlight-base-1\n${texts.join("\n")}`)
         .digest("hex");
       let vectors = embed ? null : loadCache(key, docs.length);
       if (!vectors) {

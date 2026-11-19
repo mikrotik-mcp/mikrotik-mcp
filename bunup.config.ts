@@ -3,9 +3,9 @@ import { defineConfig } from "bunup";
 // `@tikoci/centrs` ships raw TypeScript (Bun-native). Keep it external so bunup
 // doesn't inline its namespace re-export (which it mis-bundles); Bun resolves the
 // package from node_modules at runtime, and npm/bunx install it alongside us.
-// `@ternlight/mini` loads its WebAssembly file from its own folder; bundling the
+// `@ternlight/base` loads its WebAssembly file from its own folder; bundling the
 // JavaScript would separate it from that file.
-const external = ["@tikoci/centrs", "@ternlight/mini"];
+const external = ["@tikoci/centrs", "@ternlight/base"];
 
 // Zod schemas and the MCP SDK's JSON Schema converter must travel together.
 // Resolving them independently at install time can mix Zod 4.5+ record

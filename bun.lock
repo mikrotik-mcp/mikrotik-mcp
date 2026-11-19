@@ -9,7 +9,7 @@
         "@modelcontextprotocol/core": "^2.4.0",
         "@modelcontextprotocol/ext-apps": "^2.0.4",
         "@modelcontextprotocol/sdk": "^1.32.2",
-        "@ternlight/mini": "^0.1.1",
+        "@ternlight/base": "^0.1.1",
         "@tikoci/centrs": "^0.1.10",
         "figlet": "^1.12.0",
         "gradient-string": "^3.0.0",
@@ -693,7 +693,7 @@
 
     "@tanstack/virtual-core": ["@tanstack/virtual-core@3.19.11", "", {}, "sha512-/5iHb0RHBvj8Di59FDs4ESNm45jls33aZAi4zccVXZjc/6ZvwQP6nzEYeT6weXjTf9E6/vrp2JhYWRyO+ZP13A=="],
 
-    "@ternlight/mini": ["@ternlight/mini@0.1.1", "", {}, "sha512-nD+4U+lgwpvPY/iklZSbOGVsIcTpv78ptFThbRUSe+i8pMQlNAVaf8A8aiRDKIF0w7xmxi0gWfkssN8gFWyFBw=="],
+    "@ternlight/base": ["@ternlight/base@0.1.1", "", {}, "sha512-G+/awDQq6AdLGR7GaIq7RCTdriR+DlqpSjiqfYdev6mCDR0HKLhlp5ZF2GiXX3CM6ZwY8g2AI8937IERqTxIkQ=="],
 
     "@testing-library/dom": ["@testing-library/dom@10.4.1", "", { "dependencies": { "@babel/code-frame": "^7.10.4", "@babel/runtime": "^7.12.5", "@types/aria-query": "^5.0.1", "aria-query": "5.3.0", "dom-accessibility-api": "^0.5.9", "lz-string": "^1.5.0", "picocolors": "1.1.1", "pretty-format": "^27.0.2" } }, "sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg=="],
 

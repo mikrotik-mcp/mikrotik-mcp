@@ -738,12 +738,12 @@ whole list and calls tools by their own names.
 
 - **Words.** The request's words against tool names, titles and descriptions.
 - **Meaning.** A small embedding model
-  ([ternlight](https://github.com/soycaporal/ternlight), a 5 MB WebAssembly
+  ([ternlight](https://github.com/soycaporal/ternlight), the 7 MB quality tier, a WebAssembly
   bundle) runs on the host. "The router is hot, check temperature" finds
   `get_system_health` with no word in common. Nothing is sent anywhere.
 
 The catalog is embedded once in the background when the server starts (about
-five seconds) and the result is cached in `~/.mikrotik-mcp/tool-vectors.bin`.
+ten seconds) and the result is cached in `~/.mikrotik-mcp/tool-vectors.bin`.
 A search before that is done uses words only. Turn it off with
 `--semantic-search false`.
 
@@ -767,7 +767,7 @@ Limits to know:
 - The embedding model reads English. A request in another language is matched
   by words only, which mostly means not at all: ask in English, or let the
   model translate.
-- The package adds about 23 MB on disk.
+- The package adds about 32 MB on disk.
 - A model can still answer without calling any tool. The server cannot see
   that; the rule at the top of the server instructions and of the tool
   descriptions makes it less likely.
