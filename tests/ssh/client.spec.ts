@@ -141,3 +141,65 @@ test("concurrent commands share one connection-loss listener set", async () => {
   await new Promise((r) => setImmediate(r));
   expect(errors).not.toContain("MaxListenersExceededWarning");
 });
+
+/** A fake connection whose SFTP channel answers only when the test says so. */
+function fileSession() {
+  const sftp = {
+    end: vi.fn(),
+    writeFile: vi.fn(),
+    readFile: vi.fn(),
+  };
+  const connection = Object.assign(new EventEmitter(), {
+    end: vi.fn(),
+    sftp: vi.fn((callback: (error: Error | undefined, channel: typeof sftp) => void) =>
+      callback(undefined, sftp),
+    ),
+  });
+  const client = new MikroTikSSHClient({ host: "router", username: "test" });
+  Object.assign(client, { client: connection });
+  return { client, connection, sftp };
+}
+
+test("a file transfer that stalls is stopped, and says the file must be read back", async () => {
+  vi.useFakeTimers();
+  const s = fileSession();
+  // writeFile never calls back: before the limit this promise waited for ever.
+  const result = s.client.uploadFile("a.txt", Buffer.from("x")).catch((e) => e);
+  await vi.advanceTimersByTimeAsync(45_000);
+  const error = await result;
+  expect(error.message).toMatch(/did not finish in 45 s/);
+  expect(error.message).toMatch(/read it back before you send it again/);
+  expect(s.sftp.end).toHaveBeenCalledOnce();
+  expect(s.connection.listenerCount("close")).toBe(0);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test("a file transfer ends when the connection closes or fails under it", async () => {
+  const closed = fileSession();
+  const upload = closed.client.uploadFile("a.txt", Buffer.from("x")).catch((e) => e);
+  closed.connection.emit("close");
+  expect((await upload).message).toMatch(/SFTP write stopped: the SSH connection closed/);
+
+  const failed = fileSession();
+  const download = failed.client.downloadFile("a.txt").catch((e) => e);
+  failed.connection.emit("error", new Error("read ECONNRESET"));
+  expect((await download).message).toBe("SFTP read stopped: read ECONNRESET.");
+});
+
+test("a finished transfer gives its result once and leaves nothing behind", async () => {
+  vi.useFakeTimers();
+  const s = fileSession();
+  s.sftp.readFile.mockImplementation((_path: string, done: (e: null, d: Buffer) => void) =>
+    done(null, Buffer.from("data")),
+  );
+  expect((await s.client.downloadFile("a.txt")).toString()).toBe("data");
+  s.sftp.writeFile.mockImplementation((_p: string, _d: Buffer, done: (e: Error) => void) =>
+    done(new Error("No such file or directory")),
+  );
+  await expect(s.client.uploadFile("dir/a.txt", Buffer.from("x"))).rejects.toThrow(
+    "SFTP write failed: No such file or directory",
+  );
+  expect(s.connection.listenerCount("close")).toBe(0);
+  expect(s.connection.listenerCount("error")).toBe(0);
+  expect(vi.getTimerCount()).toBe(0);
+});

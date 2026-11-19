@@ -153,6 +153,14 @@ function watchConnection(connection: Client, waiter: (lost: string) => void): ()
   };
 }
 
+/**
+ * How long one SFTP transfer may take. An upload from a tool call must answer
+ * before the MCP host drops the call (about 60 s). A download can be a backup of
+ * several megabytes for a scheduled job, so it gets longer.
+ */
+const SFTP_UPLOAD_LIMIT_MS = 45_000;
+const SFTP_DOWNLOAD_LIMIT_MS = 120_000;
+
 export class MikroTikSSHClient {
   private client: Client | null = null;
   /**
@@ -586,28 +594,10 @@ export class MikroTikSSHClient {
    * appears in `/file`; a path like `disk1/config.rsc` targets external disk.
    * Resolves on success; rejects with a clear reason on failure.
    */
-  uploadFile(remotePath: string, data: Buffer): Promise<void> {
-    if (!this.client) {
-      return Promise.reject(new Error("Not connected to MikroTik device"));
-    }
-    const openSftp = this.client.sftp.bind(this.client);
-    return new Promise((resolve, reject) => {
-      openSftp((err, sftp) => {
-        if (err) {
-          reject(new Error(`SFTP subsystem unavailable: ${err.message}`));
-          return;
-        }
-        sftp.writeFile(remotePath, data, (werr) => {
-          try {
-            sftp.end();
-          } catch {
-            /* already closed */
-          }
-          if (werr) reject(new Error(`SFTP write failed: ${werr.message}`));
-          else resolve();
-        });
-      });
-    });
+  uploadFile(remotePath: string, data: Buffer, limitMs = SFTP_UPLOAD_LIMIT_MS): Promise<void> {
+    return this.transfer<void>("write", limitMs, (sftp, done) =>
+      sftp.writeFile(remotePath, data, (error) => done(error)),
+    );
   }
 
   /**
@@ -615,26 +605,83 @@ export class MikroTikSSHClient {
    * to the SFTP default directory (the flash root). Resolves with the raw file
    * contents; rejects with a clear reason on failure.
    */
-  downloadFile(remotePath: string): Promise<Buffer> {
-    if (!this.client) {
-      return Promise.reject(new Error("Not connected to MikroTik device"));
-    }
-    const openSftp = this.client.sftp.bind(this.client);
-    return new Promise((resolve, reject) => {
-      openSftp((err, sftp) => {
-        if (err) {
-          reject(new Error(`SFTP subsystem unavailable: ${err.message}`));
+  downloadFile(remotePath: string, limitMs = SFTP_DOWNLOAD_LIMIT_MS): Promise<Buffer> {
+    return this.transfer<Buffer>("read", limitMs, (sftp, done) =>
+      sftp.readFile(remotePath, (error, data) => done(error, data)),
+    );
+  }
+
+  /**
+   * One SFTP transfer that always ends: with its result, when the connection
+   * closes or fails, or after `limitMs`.
+   *
+   * Before this, a transfer waited only for the SFTP callback. A channel that
+   * stalled, or a connection that dropped during the transfer, never called it:
+   * the tool call had no answer and the caller waited until its own host gave up.
+   */
+  private transfer<T>(
+    what: "read" | "write",
+    limitMs: number,
+    run: (sftp: SFTPWrapper, done: (error?: Error | null, value?: T) => void) => void,
+  ): Promise<T> {
+    const client = this.client;
+    if (!client) return Promise.reject(new Error("Not connected to MikroTik device"));
+    return new Promise<T>((resolve, reject) => {
+      let channel: SFTPWrapper | undefined;
+      let settled = false;
+      // What to take away when the transfer ends: the timer and the two listeners.
+      const cleanup: (() => void)[] = [];
+      const finish = (error?: Error | null, value?: T): void => {
+        if (settled) return;
+        settled = true;
+        for (const undo of cleanup) undo();
+        try {
+          channel?.end();
+        } catch {
+          /* already closed */
+        }
+        if (error) reject(error);
+        else resolve(value as T);
+      };
+      const unknown =
+        what === "write"
+          ? " The file may be missing or partly written: read it back before you send it again."
+          : "";
+      const onClose = (): void =>
+        finish(new Error(`SFTP ${what} stopped: the SSH connection closed.${unknown}`));
+      const onError = (error: Error): void =>
+        finish(new Error(`SFTP ${what} stopped: ${error.message}.${unknown}`));
+      const timer = setTimeout(
+        () =>
+          finish(
+            new Error(
+              `SFTP ${what} did not finish in ${Math.round(limitMs / 1000)} s and was stopped.${unknown}`,
+            ),
+          ),
+        limitMs,
+      );
+      client.once("close", onClose);
+      client.once("error", onError);
+      cleanup.push(
+        () => clearTimeout(timer),
+        () => client.off("close", onClose),
+        () => client.off("error", onError),
+      );
+      client.sftp((error, sftp) => {
+        if (error) {
+          finish(new Error(`SFTP subsystem unavailable: ${error.message}`));
           return;
         }
-        sftp.readFile(remotePath, (rerr, data) => {
-          try {
-            sftp.end();
-          } catch {
-            /* already closed */
-          }
-          if (rerr) reject(new Error(`SFTP read failed: ${rerr.message}`));
-          else resolve(data);
-        });
+        if (settled) {
+          sftp.end();
+          return;
+        }
+        channel = sftp;
+        run(sftp, (failure, value) =>
+          failure
+            ? finish(new Error(`SFTP ${what} failed: ${failure.message}`))
+            : finish(null, value),
+        );
       });
     });
   }
