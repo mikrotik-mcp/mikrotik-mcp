@@ -24,6 +24,7 @@ import { startFlightRecorder, stopFlightRecorder } from "./flight-recorder/servi
 import { createDeviceClient, describeTransport } from "./core/transport";
 import { logger } from "./logger";
 import { allToolModules } from "./tools";
+import { setApprovalNotifier } from "./core/approvals";
 import { createSyslogSink } from "./observability/audit-syslog";
 import { runDashboard } from "./observability/dashboard";
 import { setAuditSink } from "./observability/recorder";
@@ -34,7 +35,7 @@ import { VERSION, SERVER_NAME } from "./version";
 import { printBanner } from "./cli-logo";
 import { printStartSummary } from "./cli-summary";
 import { getDeviceStatus, probeAll } from "./observability/health";
-import { AlertEngine, setAlertEngine } from "./alerts/engine";
+import { AlertEngine, getAlertEngine, setAlertEngine } from "./alerts/engine";
 import { startAlertSampler, stopAlertSampler } from "./alerts/sampler";
 import { startScheduler, stopScheduler } from "./schedule/session";
 import { startAttackDetection, stopAttackDetection } from "./attack/session";
@@ -289,6 +290,28 @@ async function main(): Promise<void> {
     logger.info(
       `Audit export: syslog ${cfg.audit.syslog.protocol}://${cfg.audit.syslog.host}:${cfg.audit.syslog.port}`,
     );
+  }
+
+  // Approvals: tell the chosen alert channels about each change that waits.
+  if (cfg.approvals?.enabled) {
+    const notify = cfg.approvals.notify;
+    setApprovalNotifier((request) => {
+      if (notify.length === 0) return;
+      getAlertEngine()?.broadcast(notify, {
+        ruleId: "approval-request",
+        severity: request.risk === "DANGEROUS" ? "critical" : "high",
+        kind: "fire",
+        title: `Approval needed: ${request.title}`,
+        body: `${request.tool}${request.device ? ` on ${request.device}` : ""} (${request.risk}). Open the dashboard, Access page, to approve or reject request ${request.id}.`,
+        device: request.device,
+        at: request.requestedAt,
+      });
+    });
+    logger.info(`Approvals on: ${cfg.approvals.minRisk} changes and above wait for a person`);
+    if (!cfg.dashboard.enabled)
+      logger.error(
+        "Approvals are on but the dashboard is off: no one can approve a change. Start with --dashboard.",
+      );
   }
 
   // Git mirror: every stored snapshot also goes to a Git working directory.

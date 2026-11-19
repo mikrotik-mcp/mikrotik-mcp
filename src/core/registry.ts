@@ -22,12 +22,13 @@ import {
   unknownDeviceMessage,
 } from "./runtime";
 import { evaluateAccess, getAccessPolicy, recordDenial } from "./access";
+import { checkApproval, needsApproval } from "./approvals";
 import type { ToolRequires } from "./capability";
 import { explainUnmet } from "./capability";
 import { getCapabilities, peekCapabilities } from "./capability-cache";
 import { describeChange, newEntries, readHistory } from "./write-verify";
 import { logger } from "../logger";
-import { redactAuditText, riskOf } from "../observability/event";
+import { redact, redactAuditText, riskOf } from "../observability/event";
 import type { ToolCallLog } from "../observability/event";
 import { recordToolToMemory } from "../memory/auto-record";
 import { emitAlertEvent } from "../alerts/engine";
@@ -613,6 +614,27 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             logger.warn(`Access denied for ${def.name}: ${decision.reason}`);
             return { content: [{ type: "text", text }], isError: true };
           }
+        }
+
+        // ── Human approval. After the access check, before any device I/O: a
+        // change that waits for a person must not reach a router. The gateway is
+        // skipped; the tool it runs comes through here on its own.
+        const approvals = getConfig().approvals;
+        if (!def.dispatcher && needsApproval(approvals, risk)) {
+          const decision = checkApproval(approvals!, {
+            tool: def.name,
+            title: def.title,
+            risk,
+            device: def.noDevice ? undefined : resolveDeviceName(deviceName),
+            args: rest,
+            shownArgs: redact(rest),
+            reason: typeof reason === "string" ? reason : undefined,
+          });
+          if (!decision.allowed) {
+            logger.info(`Approval needed for ${def.name}`);
+            return { content: [{ type: "text", text: decision.text }], isError: true };
+          }
+          ctx.info(`Approved by a person (request ${decision.id})`);
         }
 
         // For state-changing tools on a multi-device server, stamp the result

@@ -310,6 +310,37 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     fields: [{ key: "dbPath", label: "Database path", type: "text" }],
   },
   {
+    id: "approvals",
+    title: "Approvals",
+    icon: "✋",
+    kind: "object",
+    path: "approvals",
+    enable: { key: "enabled", label: "Approvals" },
+    blurb:
+      "Make a person approve changes before they run. A request waits on the Access page; the model runs the change again after it is approved.",
+    fields: [
+      {
+        key: "minRisk",
+        label: "Lowest risk that needs approval",
+        type: "select",
+        options: ["WRITE", "DESTRUCTIVE", "DANGEROUS"],
+        help: "WRITE asks for every change. DESTRUCTIVE asks for removals and resets.",
+      },
+      {
+        key: "ttlMinutes",
+        label: "Valid for (minutes)",
+        type: "number",
+        help: "How long a request, and then its approval, stays valid. Default 30.",
+      },
+      {
+        key: "notify",
+        label: "Notify channels",
+        type: "list",
+        help: "Alert channels told about each new request, for example telegram.",
+      },
+    ],
+  },
+  {
     id: "gitMirror",
     title: "Git mirror",
     icon: "🌿",

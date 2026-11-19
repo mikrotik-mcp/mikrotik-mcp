@@ -720,6 +720,41 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
 }
 ```
 
+## approvals
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "type": "boolean"
+    },
+    "minRisk": {
+      "default": "DESTRUCTIVE",
+      "type": "string",
+      "enum": ["WRITE", "DESTRUCTIVE", "DANGEROUS"]
+    },
+    "ttlMinutes": {
+      "default": 30,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1440
+    },
+    "notify": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["slack", "discord", "ntfy", "telegram", "email", "webhook", "mcp"]
+      }
+    }
+  },
+  "required": ["enabled", "minRisk", "ttlMinutes", "notify"],
+  "additionalProperties": false
+}
+```
+
 ## gitMirror
 
 ```json

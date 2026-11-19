@@ -87,3 +87,50 @@ The settings API exposes only policy data, configured device names and disabled
 flags, and catalog metadata—not device hosts, passwords or SSH keys. Writes are
 JSON-only and reject cross-site browser requests. No endpoint grants a model the
 ability to widen its own scope.
+
+## Approvals: a person decides each risky change
+
+With approvals on, a tool call at or above a chosen risk does not run. It
+becomes a request that waits on the Access page. After you approve it, the model
+calls the same tool again with the same arguments, and that one call runs.
+
+```json
+{
+  "approvals": {
+    "enabled": true,
+    "minRisk": "DESTRUCTIVE",
+    "ttlMinutes": 30,
+    "notify": ["telegram"]
+  }
+}
+```
+
+| Setting      | Default       | Meaning                                                               |
+| ------------ | ------------- | --------------------------------------------------------------------- |
+| `enabled`    | `false`       |                                                                       |
+| `minRisk`    | `DESTRUCTIVE` | `WRITE` asks for every change. `DANGEROUS` asks only for the gravest. |
+| `ttlMinutes` | `30`          | How long a request, and then its approval, stays valid.               |
+| `notify`     | `[]`          | Alert channels that are told about each new request.                  |
+
+What an approval covers:
+
+- **One exact call.** The tool, the router and the arguments are hashed
+  together. An approval cannot be spent on other arguments or another router.
+- **One use.** After the call runs, the same call needs a new request.
+- **A limited time.** A request that is not decided, and an approval that is
+  not used, expire.
+
+The request shows the arguments with secrets redacted. Only the dashboard can
+decide: there is no tool for it, so the model cannot approve its own change, and
+a page of another origin cannot do it for you.
+
+Limits to know:
+
+- Approvals need the dashboard. With approvals on and the dashboard off, every
+  covered call is refused and no one can approve it.
+- Requests live in memory. A restart clears them, and a change that was waiting
+  is requested again.
+- The dashboard has one token, not users. Anyone who can open it can approve.
+  Set a dashboard token and keep the dashboard on a network you trust.
+- The dashboard's own pages (Terminal, Files, the config editor) are operator
+  actions and do not wait for approval.

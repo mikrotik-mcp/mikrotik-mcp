@@ -408,3 +408,70 @@
     width: 100%;
   }
 }
+
+/* Approvals: the changes that wait for a person. */
+.approvals-list {
+  display: grid;
+  gap: 10px;
+}
+.approvals-item {
+  display: grid;
+  gap: 8px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  padding: 10px 12px;
+}
+.approvals-item[data-pending] {
+  background: color-mix(in oklab, var(--warning) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warning) 40%, transparent);
+}
+.approvals-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+.approvals-head b {
+  color: var(--text-emphasis);
+}
+.approvals-head .mono,
+.approvals-time,
+.approvals-device {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.approvals-time {
+  margin-left: auto;
+}
+.approvals-reason {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+.approvals-args {
+  max-height: 180px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--glass-2);
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  font: 400 11.5px/17px var(--font-mt);
+}
+.approvals-actions {
+  display: flex;
+  gap: 8px;
+}
+.approvals-status {
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  padding: 1px 8px;
+  color: var(--muted-foreground);
+  font: 500 11px/18px var(--font-mt);
+}
+.approvals-status[data-status="used"],
+.approvals-status[data-status="approved"] {
+  color: var(--sig);
+}
+.approvals-status[data-status="rejected"] {
+  color: var(--destructive);
+}

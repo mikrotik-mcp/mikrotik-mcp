@@ -40,6 +40,7 @@ import {
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 import { AccessToolPicker } from "./access-tool-picker";
+import { ApprovalsPanel } from "./approvals-panel";
 import { DetailList, RowDrawer, RowMenu, RowMore, TextInput } from "./kit";
 import "./monitoring.css";
 import "./access-view.css";
@@ -430,6 +431,7 @@ export function AccessView(): ReactNode {
           </div>
         }
       />
+      <ApprovalsPanel />
 
       {error && (
         <MonitorNote tone="bad" role="alert" icon={<ShieldOff aria-hidden="true" />}>

@@ -118,7 +118,10 @@ test("loads a configured form, actual BeUI controls, and a read-only decision pr
   expect(writes()).toHaveLength(0);
 });
 test("failed loading shows retry guidance instead of a perpetual loading or empty state", async () => {
-  fetchMock.mockResolvedValue(Response.json({ error: "Server offline" }, { status: 503 }));
+  // A new Response for each request: a body can be read only once, and the page makes two.
+  fetchMock.mockImplementation(async () =>
+    Response.json({ error: "Server offline" }, { status: 503 }),
+  );
   await render();
   expect(host.textContent).toContain("Server offline");
   expect(host.textContent).toContain("Status unavailable");

@@ -341,6 +341,21 @@ export const GitMirrorConfigSchema = z.object({
   author: z.string().optional(),
 });
 
+/**
+ * Human approval for changes an AI asks for. A tool call at or above `minRisk`
+ * waits for a person in the dashboard and runs only after it is approved.
+ */
+export const ApprovalsConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  minRisk: z.enum(["WRITE", "DESTRUCTIVE", "DANGEROUS"]).default("DESTRUCTIVE"),
+  /** How long a request, and then its approval, stays valid. */
+  ttlMinutes: z.coerce.number().int().min(1).max(1440).default(30),
+  /** Alert channels that are told about each new request. */
+  notify: z
+    .array(z.enum(["slack", "discord", "ntfy", "telegram", "email", "webhook", "mcp"]))
+    .default([]),
+});
+
 export const AlertChannelsSchema = z.object({
   slack: z.object({ url: z.string().url() }).optional(),
   discord: z.object({ url: z.string().url() }).optional(),
@@ -661,6 +676,7 @@ export const MikrotikConfigSchema = z.object({
   /** Alerting: rules + delivery channels. Absent unless configured (opt-in). */
   alerts: AlertsConfigSchema.optional(),
   audit: AuditConfigSchema.optional(),
+  approvals: ApprovalsConfigSchema.optional(),
   gitMirror: GitMirrorConfigSchema.optional(),
   /** NetFlow/IPFIX collection (opt-in; binds a UDP port only when enabled). */
   flows: FlowsConfigSchema.default(() => FlowsConfigSchema.parse({})),
@@ -769,6 +785,7 @@ export function parseFlags(argv: string[]): Record<string, string> {
  */
 const PASSTHROUGH_BLOCKS = [
   "alerts",
+  "approvals",
   "audit",
   "gitMirror",
   "flows",
