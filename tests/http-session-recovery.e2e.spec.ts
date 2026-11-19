@@ -45,9 +45,16 @@ async function startServer(port: number, home: string) {
       "--host=192.0.2.1",
     ],
     // A clean environment and an empty HOME: no real device config can load.
+    // Tool search by meaning is off: a new server holds tool calls back while
+    // it builds the vectors, and this test is about the session, not the search.
     {
       cwd: root,
-      env: { PATH: process.env.PATH, HOME: home, MIKROTIK_DISABLE_UPDATE_CHECK: "true" },
+      env: {
+        PATH: process.env.PATH,
+        HOME: home,
+        MIKROTIK_DISABLE_UPDATE_CHECK: "true",
+        MIKROTIK_MCP__SEMANTIC_SEARCH: "false",
+      },
     },
   );
   children.push(child);

@@ -128,6 +128,8 @@ the GitHub release notes.
 - **Tool search by meaning.** `find_tools` now also matches what a request
   means, with the ternlight embedding model on the host. It returns a name, one
   line and a ready call for each tool, no schema.
+  While the vectors are built (first start, or a changed catalog), a tool call
+  does not run: it gets an answer with the progress and the seconds to wait.
 
 - **Start summary.** `serve` on an interactive terminal now prints, under the
   banner, where the server answers (the MCP endpoint and the dashboard, on
