@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "6.16.0",
+  "version": "6.17.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
   "toolCount": 1009,
   "tools": [
