@@ -4,6 +4,7 @@
  * failed stretches shaded pink, and a dashed amber line where an incident
  * was frozen. Draws in from the left (anime.js, off with reduced motion).
  */
+import { smoothPath } from "./kit/curve";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { LineHover } from "./kit";
@@ -55,17 +56,16 @@ export function FlightSignal({
 
   // CPU line, broken where a sample has no CPU or the gap is too long.
   const lines: string[] = [];
-  let run: string[] = [];
+  let run: [number, number][] = [];
   samples.forEach((s, i) => {
     const prev = samples[i - 1];
     if (s.cpu === undefined || (prev && s.at - prev.at > MAX_JOIN)) {
-      if (run.length > 1) lines.push(run.join(""));
+      if (run.length > 1) lines.push(smoothPath(run));
       run = [];
     }
-    if (s.cpu !== undefined)
-      run.push(`${run.length ? "L" : "M"}${x(s.at).toFixed(1)},${cpuY(s.cpu).toFixed(1)}`);
+    if (s.cpu !== undefined) run.push([x(s.at), cpuY(s.cpu)]);
   });
-  if (run.length > 1) lines.push(run.join(""));
+  if (run.length > 1) lines.push(smoothPath(run));
 
   // Shade each stretch without a healthy management answer.
   const shade: { from: number; to: number }[] = [];

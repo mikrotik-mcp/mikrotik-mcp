@@ -5,6 +5,7 @@
  * chart first shows a client, not on every live sample, and stay still under
  * reduced motion.
  */
+import { smoothPath } from "./kit/curve";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, svg } from "animejs";
@@ -68,7 +69,7 @@ export function LineChart({
   const x = (i: number): number => (xs?.[i] ?? (n > 1 ? i / (n - 1) : 1)) * W;
   const y = (v: number): number => h - 8 - ((Number.isFinite(v) ? v : 0) / max) * (h - 20);
   const pathOf = (values: number[]): string =>
-    `M${values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" L")}`;
+    smoothPath(values.map((v, i): [number, number] => [x(i), y(v)]));
 
   return (
     <div className="clients-chart">
@@ -157,11 +158,12 @@ export function RowSpark({
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min || 1;
-  const pts = values.map(
-    (v, i) =>
-      `${((i * w) / (values.length - 1)).toFixed(1)},${(h - 2 - ((v - min) / range) * (h - 4)).toFixed(1)}`,
+  const d = smoothPath(
+    values.map((v, i): [number, number] => [
+      (i * w) / (values.length - 1),
+      h - 2 - ((v - min) / range) * (h - 4),
+    ]),
   );
-  const d = `M${pts.join(" L")}`;
   return (
     <svg
       className={cls}

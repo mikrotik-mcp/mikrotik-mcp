@@ -26,11 +26,11 @@ test("client traffic chart fills its container without letterboxing or scaling i
     expect(line.getAttribute("vector-effect")).toBe("non-scaling-stroke");
     // Points sit on observed time: first and latest samples reach opposite edges,
     // and the 2s sample sits a quarter of the way across, even before history fills.
-    const x = line
-      .getAttribute("d")!
-      .replace(/^M/, "")
-      .split(" L")
-      .map((p) => Number(p.split(",")[0]));
+    // The line is a curve: after the first point, every third pair is a data point
+    // (the two before it are the curve's control points).
+    const x = [...line.getAttribute("d")!.matchAll(/(-?[\d.]+),-?[\d.]+/g)]
+      .map((pair) => Number(pair[1]))
+      .filter((_, i) => i % 3 === 0);
     expect(x).toEqual([0, 130, 520]);
   }
 });

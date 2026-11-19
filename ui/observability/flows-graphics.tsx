@@ -4,6 +4,7 @@
  * tokens. Radar nodes settle into place on load and hovering one dims the
  * rest; chart lines draw in from the left. Nothing moves with reduced motion.
  */
+import { smoothPath } from "./kit/curve";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, stagger } from "animejs";
@@ -218,7 +219,7 @@ export function FlowLines({
   const y = (v: number): number => Math.round((height - 8 - (v / max) * (height - 20)) * 10) / 10;
   const paths = series.map((s) => {
     const values = s.length === 1 ? [s[0], s[0]] : s;
-    return `M${values.map((v, i) => `${x(i)},${y(v)}`).join(" L")}`;
+    return smoothPath(values.map((v, i): [number, number] => [Number(x(i)), Number(y(v))]));
   });
   const main = series[0] ?? [];
   const points = main.map((v, i): [number, number] => [x(i), y(v)]);

@@ -1,6 +1,7 @@
+import { niceCeil, smoothPath } from "./kit/curve";
 import "./interfaces.css";
 import { LoadingState } from "./loading-state";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertTriangle, Loader2, Pause, Play, RefreshCw, Server } from "lucide-react";
 import {
@@ -121,6 +122,8 @@ function rateDelta(
 // The board's chart: 720×210, drawn edge to edge.
 const CW = 720;
 const CH = 210;
+/** Readings the chart holds: the history kept for an interface. */
+const WINDOW = 60;
 
 /** Line segments (split at gaps) for one series. */
 function segments(values: (number | null)[], x: (i: number) => number, y: (v: number) => number) {
@@ -128,12 +131,12 @@ function segments(values: (number | null)[], x: (i: number) => number, y: (v: nu
   let run: [number, number][] = [];
   const flush = () => {
     if (run.length) {
-      const line = run.map(([px, py], i) => `${i ? "L" : "M"}${px.toFixed(1)},${py.toFixed(1)}`);
+      const line = smoothPath(run);
       const first = run[0][0].toFixed(1);
       const last = run[run.length - 1][0].toFixed(1);
       out.push({
-        line: line.join(" "),
-        area: `${line.join(" ")} L${last},${CH} L${first},${CH} Z`,
+        line,
+        area: `${line} L${last},${CH} L${first},${CH} Z`,
       });
     }
     run = [];
@@ -149,12 +152,33 @@ function segments(values: (number | null)[], x: (i: number) => number, y: (v: nu
 /** RX and TX over the last 60 samples: the board's line chart with five time marks. */
 function TrafficChart({ points, name }: { points: Point[]; name: string }): ReactNode {
   const root = useRef<HTMLDivElement>(null);
+  const slide = useRef<SVGGElement>(null);
   useLineDraw(root, name);
   const n = points.length;
-  const top = Math.max(0, ...points.flatMap((p) => [p.rx ?? 0, p.tx ?? 0])) || 1;
-  const x = (i: number) => (n > 1 ? (i * CW) / (n - 1) : 0);
+  // The scale moves in steps (1, 2, 5, 10…), so one busier reading does not
+  // make every line jump.
+  const top = niceCeil(Math.max(0, ...points.flatMap((p) => [p.rx ?? 0, p.tx ?? 0])));
+  // The window is always 60 readings wide and the newest is at the right edge.
+  // A short history fills from the right; it is not stretched over the width.
+  const step = CW / (WINDOW - 1);
+  const x = (i: number) => CW - (n - 1 - i) * step;
   const y = (v: number) => CH - 8 - (v / top) * (CH - 20);
-  const ticks = n ? [0, 1, 2, 3, 4].map((k) => points[Math.round((k * (n - 1)) / 4)]) : [];
+  const ticks = [0, 1, 2, 3, 4].map(
+    (k) => points[n - 1 - Math.round(((4 - k) * (WINDOW - 1)) / 4)],
+  );
+  // A new reading slides in from the right, instead of the whole line jumping.
+  const newest = points.at(-1)?.ts;
+  useLayoutEffect(() => {
+    const g = slide.current;
+    if (!g || n < 2 || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    g.style.transition = "none";
+    g.style.transform = `translateX(${step}px)`;
+    const frame = requestAnimationFrame(() => {
+      g.style.transition = "transform 900ms cubic-bezier(0.22, 1, 0.36, 1)";
+      g.style.transform = "translateX(0)";
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [newest, n, step]);
   const rx = segments(
     points.map((p) => p.rx),
     x,
@@ -202,26 +226,29 @@ function TrafficChart({ points, name }: { points: Point[]; name: string }): Reac
             strokeDasharray="2 5"
           />
         ))}
-        {rx.map((seg, i) => (
-          <path key={`a${i}`} d={seg.area} fill="var(--sig-fill)" />
-        ))}
-        {[
-          { segs: rx, color: "var(--sig)", key: "rx" },
-          { segs: tx, color: "var(--brand)", key: "tx" },
-        ].map((s) =>
-          s.segs.map((seg, i) => (
-            <path
-              key={`${s.key}${i}`}
-              data-draw
-              d={seg.line}
-              fill="none"
-              stroke={s.color}
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          )),
-        )}
+        <g ref={slide}>
+          {rx.map((seg, i) => (
+            <path key={`a${i}`} d={seg.area} fill="var(--sig-fill)" />
+          ))}
+          {[
+            { segs: rx, color: "var(--sig)", key: "rx" },
+            { segs: tx, color: "var(--brand)", key: "tx" },
+          ].map((s) =>
+            s.segs.map((seg, i) => (
+              <path
+                key={`${s.key}${i}`}
+                data-draw
+                d={seg.line}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            )),
+          )}
+        </g>
         {n > 0 && (
           <LineHover
             width={CW}
@@ -234,7 +261,7 @@ function TrafficChart({ points, name }: { points: Point[]; name: string }): Reac
       </svg>
       <div className="mt-1.5 flex justify-between text-[11px] text-faint">
         {ticks.map((p, i) => (
-          <span key={i}>{clock(p.ts)}</span>
+          <span key={i}>{p ? clock(p.ts) : ""}</span>
         ))}
       </div>
     </div>
@@ -251,9 +278,7 @@ function Spark({ points, muted, name }: { points: Point[]; muted: boolean; name:
         <line x1="0" y1="22" x2="120" y2="22" stroke="var(--text-faint)" strokeWidth={1.25} />
       </svg>
     );
-  const d = `M${sparkPoints(values, 120, 24)
-    .map(([px, py]) => `${px},${py}`)
-    .join(" L")}`;
+  const d = smoothPath(sparkPoints(values, 120, 24));
   // The row is the focus stop, so the spark shows its card on hover only.
   const tip = tipProps(() => ({
     title: name,

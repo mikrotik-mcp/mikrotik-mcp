@@ -4,6 +4,7 @@
  * while the device is connected; traces draw in from the left. Nothing moves
  * with reduced motion.
  */
+import { smoothPath } from "./kit/curve";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, svg } from "animejs";
@@ -177,9 +178,7 @@ function tracePoints(values: number[], maximum: number): [number, number][] {
 }
 
 function tracePath(values: number[], maximum: number): string {
-  return `M${tracePoints(values, maximum)
-    .map(([x, y]) => `${x},${y}`)
-    .join(" L")}`;
+  return smoothPath(tracePoints(values, maximum));
 }
 
 const ms = (v: number): string => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;

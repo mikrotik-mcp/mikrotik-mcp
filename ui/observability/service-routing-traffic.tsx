@@ -1,3 +1,4 @@
+import { smoothPath } from "./kit/curve";
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import type { RoutingPolicy } from "../../src/service-routing/model";
@@ -100,13 +101,14 @@ export function RoutingTrafficPanel({
   const peak = Math.max(0, ...rates.map((p) => p.bps!));
   const x = (at: number) => (((at - end + 300_000) / 300_000) * 360).toFixed(1);
   const y = (bps: number) => (112 - (bps / Math.max(1, peak)) * 100).toFixed(1);
-  const path = points
-    .map((p, index) =>
-      p.bps === null
-        ? ""
-        : `${index > 0 && points[index - 1].bps !== null ? "L" : "M"}${x(p.at)},${y(p.bps)}`,
-    )
-    .join(" ");
+  // One smooth curve for each unbroken run of readings; a gap starts a new one.
+  const runs: [number, number][][] = [];
+  points.forEach((p, index) => {
+    if (p.bps === null) return;
+    if (index === 0 || points[index - 1].bps === null) runs.push([]);
+    runs.at(-1)!.push([Number(x(p.at)), Number(y(p.bps))]);
+  });
+  const path = runs.map((run) => smoothPath(run)).join(" ");
   useLineDraw(chart, `${policy.id}:${rates.length > 1}`);
   const hoverPoints = rates.map((p): [number, number] => [Number(x(p.at)), Number(y(p.bps!))]);
   const rateCard = (i: number): TipCard => {

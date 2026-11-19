@@ -8,6 +8,7 @@
  * AP, and client load per radio. Every write names the router, asks for
  * confirmation in a dialog first, and reloads the data afterwards.
  */
+import { smoothPath } from "./kit/curve";
 import "./monitoring.css";
 import "./capsman.css";
 import type { CSSProperties, ReactNode } from "react";
@@ -1268,7 +1269,7 @@ const SPARK_H = 40;
 function RadioSpark({ s }: { s: RadioSeries }): ReactNode {
   const values = s.points.map((p) => p.clients);
   const points = values.length > 1 ? sparkPoints(values, SPARK_W, SPARK_H) : [];
-  const line = points.length > 0 ? `M${points.map(([x, y]) => `${x},${y}`).join(" L")}` : "";
+  const line = smoothPath(points);
   const five = s.band === "5ghz";
   const color = five ? "var(--sig)" : s.band === "2ghz" ? "var(--warning)" : "var(--text-faint)";
   const fill = five ? "var(--sig-fill)" : "var(--warn-soft)";

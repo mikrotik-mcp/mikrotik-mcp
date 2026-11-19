@@ -41,3 +41,10 @@ export function smoothPath(points: readonly (readonly [number, number])[]): stri
   }
   return d;
 }
+
+/** The next round number at or above `value`: 1, 2 or 5 times a power of ten. */
+export function niceCeil(value: number): number {
+  if (!(value > 0)) return 1;
+  const unit = 10 ** Math.floor(Math.log10(value));
+  return [1, 2, 5, 10].map((m) => m * unit).find((m) => m >= value)!;
+}

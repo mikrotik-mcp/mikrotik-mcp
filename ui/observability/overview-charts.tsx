@@ -3,6 +3,7 @@
  * MCP server. Plain SVG coloured by tokens. The line draws in from the left and
  * the map's nodes settle into place; nothing moves with reduced motion.
  */
+import { smoothPath } from "./kit/curve";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { animate, createScope, stagger, svg } from "animejs";
@@ -44,7 +45,7 @@ export function CallsLine({
     Math.round((n > 1 ? (i * W) / (n - 1) : 0) * 10) / 10,
     Math.round((H - 8 - (v / max) * (H - 20)) * 10) / 10,
   ]);
-  const d = points.length ? `M${points.map(([x, y]) => `${x},${y}`).join(" L")}` : "";
+  const d = smoothPath(points);
   const card = (i: number): TipCard => {
     const t = times?.[i];
     const span =

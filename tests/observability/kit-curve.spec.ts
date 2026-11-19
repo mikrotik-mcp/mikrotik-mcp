@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { smoothPath } from "../../ui/observability/kit/curve";
+import { niceCeil, smoothPath } from "../../ui/observability/kit/curve";
 
 /** Every number in a path, as [x, y] pairs in the order they are written. */
 const pairs = (d: string): [number, number][] =>
@@ -63,4 +63,10 @@ test("a peak is flat at its top, so the drawing does not overshoot the data", ()
   // The control points on both sides of the middle point sit at its height.
   expect(all[2]![1]).toBe(10);
   expect(all[4]![1]).toBe(10);
+});
+
+test("a chart's scale moves in round steps", () => {
+  expect([0, 0.4, 1, 1.2, 2, 3, 7, 10, 11, 480, 2_300_000].map(niceCeil)).toEqual([
+    1, 0.5, 1, 2, 2, 5, 10, 10, 20, 500, 5_000_000,
+  ]);
 });

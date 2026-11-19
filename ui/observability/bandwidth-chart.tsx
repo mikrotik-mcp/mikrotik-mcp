@@ -3,6 +3,7 @@
  * source TX (teal) and source RX (blue) as lines, each run a dot. A failed or
  * interrupted run is a pink dashed mark and a break in the lines, never zero.
  */
+import { smoothPath } from "./kit/curve";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { LineHover } from "./kit";
@@ -175,7 +176,7 @@ export function ThroughputChart({
               <g key={`${s.key}-${i}`}>
                 <path
                   data-draw
-                  d={`M${run.map(([px, py]) => `${px},${py}`).join(" L")}`}
+                  d={smoothPath(run)}
                   fill="none"
                   stroke={s.color}
                   strokeWidth={2}
