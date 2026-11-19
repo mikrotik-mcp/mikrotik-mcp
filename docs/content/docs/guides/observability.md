@@ -308,3 +308,44 @@ Limits to know:
 - The messages are not encrypted. Send them over a network you trust, or to a
   local collector that forwards with TLS.
 - A message is cut at 2048 characters.
+
+## Prometheus metrics
+
+The dashboard answers `GET /metrics` in the Prometheus text format. A scrape
+reads only what is already in memory: it opens no connection to a router and
+reads no database.
+
+| Metric                                               | Type    | Meaning                                                   |
+| ---------------------------------------------------- | ------- | --------------------------------------------------------- |
+| `mikrotik_device_up`                                 | gauge   | 1 when the last health probe reached the router.          |
+| `mikrotik_device_info`                               | gauge   | Always 1. Labels: identity, version, board, architecture. |
+| `mikrotik_device_probe_latency_seconds`              | gauge   | Duration of the last probe.                               |
+| `mikrotik_device_probe_timestamp_seconds`            | gauge   | When the router was last probed.                          |
+| `mikrotik_device_cpu_load_percent`                   | gauge   |                                                           |
+| `mikrotik_device_cpu_count`                          | gauge   |                                                           |
+| `mikrotik_device_memory_free_bytes` / `_total_bytes` | gauge   |                                                           |
+| `mikrotik_device_disk_free_bytes` / `_total_bytes`   | gauge   |                                                           |
+| `mikrotik_device_uptime_seconds`                     | gauge   |                                                           |
+| `mikrotik_mcp_tool_calls_total`                      | counter | Labels: tool, risk, device, outcome.                      |
+| `mikrotik_mcp_tool_call_duration_seconds_total`      | counter | Divide by the call count for the mean.                    |
+
+The route is behind the dashboard token. Give the scraper the token as a Bearer
+header:
+
+```yaml
+scrape_configs:
+  - job_name: mikrotik-mcp
+    scrape_interval: 30s
+    authorization:
+      credentials: "<the dashboard token>"
+    static_configs:
+      - targets: ["127.0.0.1:9090"]
+```
+
+Limits to know:
+
+- Device values are as fresh as the health probe, which runs every 30 seconds.
+  A shorter scrape interval returns the same values again.
+- The counters start at zero when the server starts, as Prometheus expects.
+- There are no per-interface, per-core or optical (SFP) metrics. For those, use
+  an SNMP or RouterOS exporter next to this one.

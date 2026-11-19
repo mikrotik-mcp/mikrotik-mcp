@@ -160,6 +160,7 @@ import {
 } from "./health";
 import { getDeviceGeo, ipGeoRoute, startGeoLookups, stopGeoLookups } from "./geo";
 import { flagSvg } from "./flags";
+import { observeToolCall, renderMetrics } from "./metrics";
 import { configureRecorder, getEventStore, subscribe, subscriberCount } from "./recorder";
 import { readTrafficSample, subscribeTraffic } from "./traffic-hub";
 import { interfaceStatsResponse } from "./interface-stats";
@@ -1592,6 +1593,7 @@ export async function runDashboard(
     maxEvents: cfg.maxEvents,
     transport: transportLabel,
   });
+  subscribe(observeToolCall);
 
   // Periodically probe each configured device's SSH reachability for the
   // connectivity graph/status (one immediate pass, then every 30s).
@@ -1967,6 +1969,14 @@ export async function runDashboard(
 
     if (url.pathname === "/api/topology") {
       return json(topologyPayload());
+    }
+
+    // Prometheus scrape. Inside the token check: a scraper sends the dashboard
+    // token as a Bearer header.
+    if (url.pathname === "/metrics") {
+      return new Response(renderMetrics(Object.keys(getConfig().devices), getDeviceStatus), {
+        headers: { "content-type": "text/plain; version=0.0.4; charset=utf-8" },
+      });
     }
 
     if (url.pathname === "/api/config") {
