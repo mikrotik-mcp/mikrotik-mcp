@@ -25,26 +25,26 @@ description: "DNS settings, static records, cache and regexp (`/ip dns`)."
 
 **Configure DNS Resolver Settings** · Risk: **write**
 
-Configures the DNS resolver (`/ip dns set`) — sets upstream server IPs, enables or disables forwarding client queries to this router (allow_remote_requests), tunes cache limits (cache_size in KiB, cache_max_ttl, max_udp_packet_size, max_concurrent_queries), and optionally switches to DNS-over-HTTPS (use_doh=true + doh_server URL + verify_doh_cert). Use this when you need to CHANGE which servers the router queries or how its resolver behaves. To read current settings without changing them use get_dns_settings. Returns the updated `/ip dns print` output after applying changes.
+Configures the DNS resolver (`/ip dns set`) — sets upstream server IPs, enables or disables forwarding client queries to this router (allow_remote_requests), tunes cache limits (cache_size in KiB, cache_max_ttl, max_udp_packet_size, max_concurrent_queries), and optionally switches to DNS-over-HTTPS (doh_server URL, verify_doh_cert; use_doh=false turns it off). ONLY the settings you give are changed: a setting you leave out keeps its value on the router. `servers` is a LIST of addresses, e.g. ["1.1.1.1","8.8.8.8"]; it replaces the whole list. Use this when you need to CHANGE which servers the router queries or how its resolver behaves. To read current settings without changing them use get_dns_settings. Returns the updated `/ip dns print` output after applying changes.
 
-| Parameter                     | Required | Definition                                                                                                                   |
-| ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `servers`                     | Yes      | DNS server IP addresses `{"type":"array","items":{"type":"string"}}`                                                         |
-| `allow_remote_requests`       | Yes      | `{"default":false,"type":"boolean"}`                                                                                         |
-| `max_udp_packet_size`         | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                  |
-| `max_concurrent_queries`      | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                  |
-| `max_concurrent_tcp_sessions` | No       | Maximum number of simultaneous TCP DNS sessions `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`  |
-| `query_server_timeout`        | No       | Per-upstream-server query timeout, e.g. "2s" `{"type":"string"}`                                                             |
-| `query_total_timeout`         | No       | Total query timeout across all servers, e.g. "10s" `{"type":"string"}`                                                       |
-| `cache_size`                  | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                  |
-| `cache_max_ttl`               | No       | `{"type":"string"}`                                                                                                          |
-| `use_doh`                     | Yes      | `{"default":false,"type":"boolean"}`                                                                                         |
-| `doh_server`                  | No       | `{"type":"string"}`                                                                                                          |
-| `verify_doh_cert`             | Yes      | `{"default":true,"type":"boolean"}`                                                                                          |
-| `doh_max_server_connections`  | No       | Maximum concurrent connections to the DoH server `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
-| `doh_max_concurrent_queries`  | No       | Maximum concurrent queries over DoH `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`              |
-| `doh_timeout`                 | No       | DoH request timeout, e.g. "5s" `{"type":"string"}`                                                                           |
-| `vrf`                         | No       | VRF the resolver uses for upstream queries `{"type":"string"}`                                                               |
+| Parameter                     | Required | Definition                                                                                                                                                                                     |
+| ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `servers`                     | No       | Upstream DNS server addresses, as a list: ["1.1.1.1","8.8.8.8"]. Replaces the whole list. Leave out to keep the servers. `{"type":"array","items":{"type":"string"}}`                          |
+| `allow_remote_requests`       | No       | Whether the router answers DNS queries from clients. Leave out to keep the current value: turning it off stops DNS for every client that uses the router as its resolver. `{"type":"boolean"}` |
+| `max_udp_packet_size`         | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                    |
+| `max_concurrent_queries`      | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                    |
+| `max_concurrent_tcp_sessions` | No       | Maximum number of simultaneous TCP DNS sessions `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                    |
+| `query_server_timeout`        | No       | Per-upstream-server query timeout, e.g. "2s" `{"type":"string"}`                                                                                                                               |
+| `query_total_timeout`         | No       | Total query timeout across all servers, e.g. "10s" `{"type":"string"}`                                                                                                                         |
+| `cache_size`                  | No       | `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                                                    |
+| `cache_max_ttl`               | No       | `{"type":"string"}`                                                                                                                                                                            |
+| `use_doh`                     | No       | false turns DNS-over-HTTPS off (clears the DoH server). true needs doh_server. Leave out to keep DoH as it is. `{"type":"boolean"}`                                                            |
+| `doh_server`                  | No       | DNS-over-HTTPS server URL. Giving it turns DoH on. `{"type":"string"}`                                                                                                                         |
+| `verify_doh_cert`             | No       | Whether the DoH server's certificate is checked. Leave out to keep the value. `{"type":"boolean"}`                                                                                             |
+| `doh_max_server_connections`  | No       | Maximum concurrent connections to the DoH server `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                   |
+| `doh_max_concurrent_queries`  | No       | Maximum concurrent queries over DoH `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                                                                                |
+| `doh_timeout`                 | No       | DoH request timeout, e.g. "5s" `{"type":"string"}`                                                                                                                                             |
+| `vrf`                         | No       | VRF the resolver uses for upstream queries `{"type":"string"}`                                                                                                                                 |
 
 ## get_dns_settings
 

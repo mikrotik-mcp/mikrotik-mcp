@@ -163,6 +163,7 @@ const cases = moduleCatalog.flatMap((module) => {
         "create_basic_firewall_setup",
         "update_switch_port",
         "set_dhcp_client",
+        "set_dns_servers",
         "update_igmp_proxy_settings",
         "set_l2tp_server",
         "set_pptp_server",

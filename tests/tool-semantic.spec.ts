@@ -147,7 +147,8 @@ test("find_tools gives names with one line each, no schema, and says every tool 
   // An exact name is a sure match: its parameters come with the list.
   const sure = await run("find_tools", { query: "set_dns_servers" });
   expect(sure).toContain("Best match: set_dns_servers. Its parameters:");
-  expect(sure).toMatch(/• servers \(required\)/);
+  // The kind is said, so a list is not sent as plain text.
+  expect(sure).toMatch(/• servers \(optional, list of text\)/);
 });
 
 test("the tool descriptions carry the rule that an unlisted tool is not missing", () => {

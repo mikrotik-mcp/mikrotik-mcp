@@ -178,13 +178,25 @@ export const dnsTools: ToolModule = [
       "Configures the DNS resolver (`/ip dns set`) — sets upstream server IPs, enables or disables " +
       "forwarding client queries to this router (allow_remote_requests), tunes cache limits " +
       "(cache_size in KiB, cache_max_ttl, max_udp_packet_size, max_concurrent_queries), and " +
-      "optionally switches to DNS-over-HTTPS (use_doh=true + doh_server URL + verify_doh_cert). " +
+      "optionally switches to DNS-over-HTTPS (doh_server URL, verify_doh_cert; use_doh=false turns it off). " +
+      "ONLY the settings you give are changed: a setting you leave out keeps its value on the router. " +
+      '`servers` is a LIST of addresses, e.g. ["1.1.1.1","8.8.8.8"]; it replaces the whole list. ' +
       "Use this when you need to CHANGE which servers the router queries or how its resolver behaves. " +
       "To read current settings without changing them use get_dns_settings. " +
       "Returns the updated `/ip dns print` output after applying changes.",
     inputSchema: {
-      servers: z.array(z.string()).describe("DNS server IP addresses"),
-      allow_remote_requests: z.boolean().default(false),
+      servers: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Upstream DNS server addresses, as a list: ["1.1.1.1","8.8.8.8"]. Replaces the whole list. Leave out to keep the servers.',
+        ),
+      allow_remote_requests: z
+        .boolean()
+        .optional()
+        .describe(
+          "Whether the router answers DNS queries from clients. Leave out to keep the current value: turning it off stops DNS for every client that uses the router as its resolver.",
+        ),
       max_udp_packet_size: z.number().int().optional(),
       max_concurrent_queries: z.number().int().optional(),
       max_concurrent_tcp_sessions: z
@@ -202,9 +214,20 @@ export const dnsTools: ToolModule = [
         .describe('Total query timeout across all servers, e.g. "10s"'),
       cache_size: z.number().int().optional(),
       cache_max_ttl: z.string().optional(),
-      use_doh: z.boolean().default(false),
-      doh_server: z.string().optional(),
-      verify_doh_cert: z.boolean().default(true),
+      use_doh: z
+        .boolean()
+        .optional()
+        .describe(
+          "false turns DNS-over-HTTPS off (clears the DoH server). true needs doh_server. Leave out to keep DoH as it is.",
+        ),
+      doh_server: z
+        .string()
+        .optional()
+        .describe("DNS-over-HTTPS server URL. Giving it turns DoH on."),
+      verify_doh_cert: z
+        .boolean()
+        .optional()
+        .describe("Whether the DoH server's certificate is checked. Leave out to keep the value."),
       doh_max_server_connections: z
         .number()
         .int()
@@ -219,10 +242,16 @@ export const dnsTools: ToolModule = [
       vrf: z.string().optional().describe("VRF the resolver uses for upstream queries"),
     },
     async handler(a, ctx) {
-      ctx.info(`Setting DNS servers: ${a.servers.join(", ")}`);
+      if (a.use_doh === true && !a.doh_server)
+        return "Not run: use_doh=true needs doh_server (the DoH URL). Nothing was changed.";
+      if (a.use_doh === false && a.doh_server)
+        return "Not run: use_doh=false turns DoH off, but doh_server was given too. Give one of them. Nothing was changed.";
 
+      // Only what the caller gave is written. A setting that is left out keeps
+      // its value on the router: this tool once reset allow-remote-requests to
+      // "no" on every call, which stops DNS for the clients of the router.
       const cmd = new Cmd("/ip dns set")
-        .set("servers", a.servers.join(","))
+        .opt("servers", a.servers?.join(","))
         .bool("allow-remote-requests", a.allow_remote_requests)
         .opt("max-udp-packet-size", a.max_udp_packet_size)
         .opt("max-concurrent-queries", a.max_concurrent_queries)
@@ -233,16 +262,19 @@ export const dnsTools: ToolModule = [
         .opt("cache-max-ttl", a.cache_max_ttl)
         .opt("vrf", a.vrf);
 
-      if (a.use_doh && a.doh_server) {
-        cmd
-          .set("use-doh-server", a.doh_server)
-          .bool("verify-doh-cert", a.verify_doh_cert)
-          .opt("doh-max-server-connections", a.doh_max_server_connections)
-          .opt("doh-max-concurrent-queries", a.doh_max_concurrent_queries)
-          .opt("doh-timeout", a.doh_timeout);
-      }
+      if (a.use_doh === false) cmd.set("use-doh-server", "");
+      cmd
+        .opt("use-doh-server", a.doh_server)
+        .bool("verify-doh-cert", a.verify_doh_cert)
+        .opt("doh-max-server-connections", a.doh_max_server_connections)
+        .opt("doh-max-concurrent-queries", a.doh_max_concurrent_queries)
+        .opt("doh-timeout", a.doh_timeout);
 
-      const result = await executeMikrotikCommand(cmd.build(), ctx);
+      const command = cmd.build();
+      if (command === "/ip dns set")
+        return "Not run: no setting was given. Give at least one, for example servers. Nothing was changed.";
+      ctx.info(`Setting DNS: ${command.slice("/ip dns set ".length)}`);
+      const result = await executeMikrotikCommand(command, ctx);
 
       if (looksLikeError(result)) return `Failed to update DNS settings: ${result}`;
 

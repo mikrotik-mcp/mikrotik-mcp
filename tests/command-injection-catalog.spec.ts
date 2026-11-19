@@ -230,3 +230,48 @@ test("no READ tool sends a command that changes the router", { timeout: 300_000 
   expect(called).toBeGreaterThan(200);
   expect(Array.from(new Set(offenders))).toEqual([]);
 });
+
+/** Only the arguments a caller must give, with plain values. */
+function requiredArgs(shape: Record<string, Schema>): Record<string, unknown> | null {
+  const required = Object.fromEntries(
+    Object.entries(shape).filter(([, schema]) => !schema.safeParse(undefined).success),
+  );
+  return argsFor(required, "a");
+}
+
+/**
+ * A `set` command changes an item that exists. A parameter with a schema
+ * default that the handler always writes resets that setting on every call:
+ * `set_dns_servers` once wrote `allow-remote-requests=no` whenever it was
+ * called with `servers` alone, and so stopped DNS for the router's clients.
+ * A default is fine on an `add` command, which makes a new item.
+ */
+test("a set command writes only what the caller gave", async () => {
+  const leaks: string[] = [];
+  for (const tool of allToolModules.flat()) {
+    if (tool.annotations.readOnlyHint === true) continue;
+    const shape = (tool.inputSchema ?? {}) as Record<string, Schema>;
+    const defaults = Object.entries(shape)
+      .filter(([, schema]) => schema.def?.type === "default")
+      .map(([key]) => key);
+    if (defaults.length === 0) continue;
+    const given = requiredArgs(shape);
+    const parsed = given && z.object(shape).safeParse(given);
+    if (!parsed || !parsed.success) continue;
+    sent.commands = [];
+    try {
+      await tool.handler(
+        parsed.data as never,
+        { info() {}, error() {}, warn() {}, debug() {} } as never,
+      );
+    } catch {
+      // A tool that needs more than the mock gives is not what this test reads.
+    }
+    const sets = sent.commands.filter((cmd) => /^\/[a-z0-9 /-]+ set\b/.test(cmd)).join(" ; ");
+    const written = defaults.filter((key) =>
+      new RegExp(`[ ;]${key.replaceAll("_", "-")}=`).test(sets),
+    );
+    if (written.length > 0) leaks.push(`${tool.name}: ${written.join(", ")}`);
+  }
+  expect(leaks).toEqual([]);
+}, 120_000);

@@ -7159,20 +7159,20 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Configures the DNS resolver (`/ip dns set`) — sets upstream server IPs, enables or disables forwarding client queries to this router (allow_remote_requests), tunes cache limits (cache_size in KiB, cache_max_ttl, max_udp_packet_size, max_concurrent_queries), and optionally switches to DNS-over-HTTPS (use_doh=true + doh_server URL + verify_doh_cert). Use this when you need to CHANGE which servers the router queries or how its resolver behaves. To read current settings without changing them use get_dns_settings. Returns the updated `/ip dns print` output after applying changes.",
+      "description": "Configures the DNS resolver (`/ip dns set`) — sets upstream server IPs, enables or disables forwarding client queries to this router (allow_remote_requests), tunes cache limits (cache_size in KiB, cache_max_ttl, max_udp_packet_size, max_concurrent_queries), and optionally switches to DNS-over-HTTPS (doh_server URL, verify_doh_cert; use_doh=false turns it off). ONLY the settings you give are changed: a setting you leave out keeps its value on the router. `servers` is a LIST of addresses, e.g. [\"1.1.1.1\",\"8.8.8.8\"]; it replaces the whole list. Use this when you need to CHANGE which servers the router queries or how its resolver behaves. To read current settings without changing them use get_dns_settings. Returns the updated `/ip dns print` output after applying changes.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "servers": {
+            "description": "Upstream DNS server addresses, as a list: [\"1.1.1.1\",\"8.8.8.8\"]. Replaces the whole list. Leave out to keep the servers.",
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "DNS server IP addresses"
+            }
           },
           "allow_remote_requests": {
-            "default": false,
+            "description": "Whether the router answers DNS queries from clients. Leave out to keep the current value: turning it off stops DNS for every client that uses the router as its resolver.",
             "type": "boolean"
           },
           "max_udp_packet_size": {
@@ -7208,14 +7208,15 @@
             "type": "string"
           },
           "use_doh": {
-            "default": false,
+            "description": "false turns DNS-over-HTTPS off (clears the DoH server). true needs doh_server. Leave out to keep DoH as it is.",
             "type": "boolean"
           },
           "doh_server": {
+            "description": "DNS-over-HTTPS server URL. Giving it turns DoH on.",
             "type": "string"
           },
           "verify_doh_cert": {
-            "default": true,
+            "description": "Whether the DoH server's certificate is checked. Leave out to keep the value.",
             "type": "boolean"
           },
           "doh_max_server_connections": {
@@ -7239,7 +7240,6 @@
             "type": "string"
           }
         },
-        "required": ["servers", "allow_remote_requests", "use_doh", "verify_doh_cert"],
         "additionalProperties": false
       }
     },

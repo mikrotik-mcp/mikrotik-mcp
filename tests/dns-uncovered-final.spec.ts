@@ -58,3 +58,35 @@ test("DNS export uses default and explicit names", async () => {
   expect(await run("export_dns_config", { filename: "backup" })).toContain("Export result: saved");
   expect(command.mock.calls.at(-1)?.[0]).toBe("/ip dns export file=backup");
 });
+
+test("set_dns_servers changes only the settings that were given", async () => {
+  const sentBy = async (args: Record<string, unknown>): Promise<string> => {
+    command.mockClear();
+    await run("set_dns_servers", args);
+    return command.mock.calls[0]?.[0] ?? "";
+  };
+  // The reported bug: servers alone also wrote allow-remote-requests=no, which
+  // stops DNS for every client that uses the router as its resolver.
+  expect(await sentBy({ servers: ["1.1.1.1", "8.8.8.8"] })).toBe(
+    "/ip dns set servers=1.1.1.1,8.8.8.8",
+  );
+  expect(await sentBy({ allow_remote_requests: false })).toBe(
+    "/ip dns set allow-remote-requests=no",
+  );
+  expect(await sentBy({ cache_size: 4096 })).toBe("/ip dns set cache-size=4096");
+  // DoH: the URL turns it on, use_doh=false clears it, and nothing else is touched.
+  expect(await sentBy({ doh_server: "https://dns.example/dns-query" })).toBe(
+    "/ip dns set use-doh-server=https://dns.example/dns-query",
+  );
+  expect(await sentBy({ use_doh: false })).toBe('/ip dns set use-doh-server=""');
+  expect(await sentBy({ verify_doh_cert: false })).toBe("/ip dns set verify-doh-cert=no");
+});
+
+test("set_dns_servers runs nothing when the request cannot be carried out", async () => {
+  expect(await run("set_dns_servers", {})).toContain("no setting was given");
+  expect(await run("set_dns_servers", { use_doh: true })).toContain("needs doh_server");
+  expect(
+    await run("set_dns_servers", { use_doh: false, doh_server: "https://dns.example/q" }),
+  ).toContain("Give one of them");
+  expect(command).not.toHaveBeenCalled();
+});

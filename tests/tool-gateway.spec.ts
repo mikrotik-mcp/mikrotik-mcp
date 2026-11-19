@@ -7,6 +7,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { MikrotikConfigSchema } from "../src/config";
 import { createContext } from "../src/core/context";
+import { invokeCall } from "../src/core/registry";
 import { setConfig } from "../src/core/runtime";
 import { toolGatewayTools } from "../src/tools/tool-gateway";
 
@@ -51,6 +52,15 @@ describe("find_tools", () => {
     expect(off).not.toMatch(/switch_/);
     const on = await run("find_tools", { query: "turn the ether3 interface back on", limit: 3 });
     expect(on).toMatch(/\d\. enable_interface /);
+  });
+
+  test("a ready call shows a list as a list", () => {
+    const call = invokeCall("x", {
+      required: ["servers", "name"],
+      properties: { servers: { type: "array" }, name: { type: "string" } },
+    });
+    expect(call).toContain('"servers":["<servers>"]');
+    expect(call).toContain('"name":"<name>"');
   });
 
   test("words that are also object members do not break the search", async () => {

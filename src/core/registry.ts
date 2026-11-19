@@ -162,7 +162,11 @@ function toolAccess(server: McpServer, surface: "full" | "core"): ToolAccess {
  */
 export function invokeCall(name: string, schema?: Record<string, unknown>): string {
   const required = Array.isArray(schema?.required) ? (schema.required as string[]) : [];
-  const args = Object.fromEntries(required.map((key) => [key, `<${key}>`]));
+  const properties = (schema?.properties ?? {}) as Record<string, { type?: string }>;
+  // A list is shown as a list, so the call is not pasted with a plain string.
+  const args = Object.fromEntries(
+    required.map((key) => [key, properties[key]?.type === "array" ? [`<${key}>`] : `<${key}>`]),
+  );
   return `invoke_tool ${JSON.stringify({ name, arguments: args })}`;
 }
 

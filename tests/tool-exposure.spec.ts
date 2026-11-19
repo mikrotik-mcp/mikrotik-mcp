@@ -318,8 +318,8 @@ describe("(d) one schema per tool", () => {
     );
     const described = (await call("describe_tool", { name: "apply_plan" })).text;
     expect(describedSchema(described)).toEqual(listed);
-    expect(described).toContain("reason (required)");
-    expect(described).toContain("use_safe_mode (optional)");
+    expect(described).toContain("reason (required, text)");
+    expect(described).toContain("use_safe_mode (optional, true or false)");
   });
 
   test("a tool that is not listed (core surface) still describes its direct-call schema", async () => {

@@ -146,7 +146,7 @@ function paramLinesOf(tool: RegisterableTool, ctx: ToolContext): string {
     ? params
         .map(
           (p) =>
-            `  • ${p.name}${p.required ? " (required)" : " (optional)"}${
+            `  • ${p.name} (${p.required ? "required" : "optional"}${p.kind ? `, ${p.kind}` : ""})${
               p.description ? ` — ${p.description}` : ""
             }`,
         )
@@ -174,14 +174,47 @@ function isOptional(field: z.ZodTypeAny): boolean {
   return field.safeParse(undefined).success;
 }
 
+/** What kind of value a field takes, in a word: "text", "number", "list of text". */
+function kindOf(field: z.ZodTypeAny): string {
+  const def = (
+    field as { def?: { type?: string; innerType?: z.ZodTypeAny; element?: z.ZodTypeAny } }
+  ).def;
+  switch (def?.type) {
+    case "optional":
+    case "default":
+    case "nullable":
+    case "prefault":
+    case "catch":
+    case "readonly":
+      return def.innerType ? kindOf(def.innerType) : "";
+    case "string":
+      return "text";
+    case "number":
+    case "int":
+      return "number";
+    case "boolean":
+      return "true or false";
+    case "array":
+      return `list of ${(def.element && kindOf(def.element)) || "values"}`;
+    case "enum":
+      return "one of the listed values";
+    case "object":
+    case "record":
+      return "object";
+    default:
+      return "";
+  }
+}
+
 /** Compact, model-friendly parameter list for a tool's raw input shape. */
 function describeParams(
   shape: Record<string, z.ZodTypeAny> | undefined,
-): { name: string; required: boolean; description?: string }[] {
+): { name: string; required: boolean; kind: string; description?: string }[] {
   if (!shape) return [];
   return Object.entries(shape).map(([name, field]) => ({
     name,
     required: !isOptional(field),
+    kind: kindOf(field),
     description: field.description,
   }));
 }
