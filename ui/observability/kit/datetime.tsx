@@ -4,7 +4,7 @@
  * quick presets.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent, ReactNode, Ref } from "react";
 import {
   addDays,
   addMonths,
@@ -185,7 +185,10 @@ function Trigger({
   label,
   className,
   onClick,
+  ref,
 }: {
+  /** The popover reads the button's place from this. Without it the calendar is never placed. */
+  ref?: Ref<HTMLButtonElement>;
   open: boolean;
   text: string;
   placeholder: string;
@@ -199,6 +202,7 @@ function Trigger({
   const f = useField();
   return (
     <button
+      ref={ref}
       type="button"
       id={id ?? f.id}
       className={cn("kit-trigger", className)}
@@ -251,6 +255,7 @@ export function DateTimePicker({
   const [month, setMonth] = useState(startOfMonth(value ?? new Date()));
   const [focusDay, setFocusDay] = useState(value ?? new Date());
   const phone = useIsPhone(open);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (open) {
       setMonth(startOfMonth(value ?? new Date()));
@@ -269,8 +274,10 @@ export function DateTimePicker({
       phone={phone}
       className="kit-pop"
       animate
+      keep={triggerRef}
       anchor={
         <Trigger
+          ref={triggerRef}
           open={open}
           text={text}
           placeholder={placeholder}
@@ -400,6 +407,7 @@ export function DateRangePicker({
   const [focusDay, setFocusDay] = useState(value?.to ?? new Date());
   const [preset, setPreset] = useState<string | null>(null);
   const phone = useIsPhone(open);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     setDraft({ from: value?.from ?? null, to: value?.to ?? null });
@@ -446,8 +454,10 @@ export function DateRangePicker({
       phone={phone}
       className="kit-pop"
       animate
+      keep={triggerRef}
       anchor={
         <Trigger
+          ref={triggerRef}
           open={open}
           text={text}
           placeholder="Choose a range"
