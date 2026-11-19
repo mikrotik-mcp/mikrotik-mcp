@@ -148,6 +148,7 @@ export function DeviceResources({
             format={(v) => `${Math.round(v)}%`}
             width={300}
             height={40}
+            fluid
             fill
             className="dv-cpu-spark"
           />

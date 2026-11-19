@@ -4,11 +4,11 @@
  * note: sparklines draw in from the left, rings and donuts sweep to their
  * value. Nothing moves when the user asks for reduced motion.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { animate, createScope, svg } from "animejs";
 import type { Scope } from "animejs";
-import { LineHover, tipProps } from "./kit";
+import { LineHover, smoothPath, tipProps } from "./kit";
 import type { TipCard } from "./kit";
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
@@ -45,6 +45,7 @@ export function Sparkline({
   values,
   width = 64,
   height = 22,
+  fluid = false,
   tone = "good",
   fill = false,
   className = "monitor-spark",
@@ -56,6 +57,8 @@ export function Sparkline({
   values: number[];
   width?: number;
   height?: number;
+  /** Take the width of the box the chart is in; `width` is used until it is measured. */
+  fluid?: boolean;
   tone?: ChartTone;
   /** Shade the area under the line. */
   fill?: boolean;
@@ -86,9 +89,30 @@ export function Sparkline({
     return () => scope.current?.revert();
   }, [key]);
 
-  if (values.length < 2) return null;
+  // A fluid chart is drawn at the real width of its box, so nothing is stretched.
+  const [boxWidth, setBoxWidth] = useState<number>();
+  const drawn = values.length >= 2;
+  useEffect(() => {
+    const box = fluid ? root.current?.parentElement : null;
+    if (!box || typeof ResizeObserver === "undefined") return;
+    const measure = (): void => {
+      const style = getComputedStyle(box);
+      const inner =
+        box.clientWidth -
+        Number.parseFloat(style.paddingLeft) -
+        Number.parseFloat(style.paddingRight);
+      if (inner > 0) setBoxWidth(Math.round(inner));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [fluid, drawn]);
+
+  if (!drawn) return null;
+  if (fluid && boxWidth) width = boxWidth;
   const points = sparkPoints(values, width, height);
-  const d = `M${points.map(([x, y]) => `${x},${y}`).join(" L")}`;
+  const d = smoothPath(points);
   const color = TONE_COLOR[tone];
   const card = (i: number): TipCard => ({
     title: labels?.[i] ?? `Point ${i + 1} of ${values.length}`,
