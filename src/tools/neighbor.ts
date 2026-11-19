@@ -13,9 +13,13 @@
  */
 import { z } from "zod";
 import { executeMikrotikCommand } from "../core/connector";
+import { createContext } from "../core/context";
 import { READ, WRITE_IDEMPOTENT, defineTool } from "../core/registry";
 import type { ToolModule } from "../core/registry";
 import { whereClause, isEmpty, looksLikeError, Cmd, quoted } from "../core/routeros";
+import { getConfig, resolveDeviceName } from "../core/runtime";
+import { assertDeviceAccess } from "../core/scoped-access";
+import { buildTopology, parseNeighbors } from "../observability/topology";
 
 export const neighborTools: ToolModule = [
   defineTool({
@@ -135,6 +139,92 @@ export const neighborTools: ToolModule = [
       if (looksLikeError(result)) return `Failed to update discovery settings: ${result}`;
       const after = await executeMikrotikCommand("/ip neighbor discovery-settings print", ctx);
       return `Discovery settings updated.\n\n${after}`;
+    },
+  }),
+  defineTool({
+    name: "discover_unmanaged_devices",
+    title: "Discover Devices That Are Not Managed Yet",
+    annotations: READ,
+    noDevice: true,
+    description:
+      "Finds MikroTik and other devices that are attached to your network but are NOT in this " +
+      "server's device list. It reads the neighbour table (`/ip neighbor`, filled by MNDP, CDP and " +
+      "LLDP) of every configured router, or of the routers you name, merges what they saw, and " +
+      "removes every neighbour that is already a configured device (matched by MAC, IP or " +
+      "identity). For each remaining device it returns the identity, board, RouterOS version, " +
+      "MAC, IP, which router saw it on which interface, and a ready device-config entry. Use it " +
+      "to answer 'which routers are not managed yet?' or before you add a device. It only reads; " +
+      "it does NOT add a device or log in to one. A person adds a device with its credentials in " +
+      "the dashboard (Topology page, or the configuration editor) or in the devices file. A " +
+      "neighbour is seen only on a directly attached Layer-2 segment, so a router behind another " +
+      "router does not appear.",
+    inputSchema: {
+      devices: z
+        .array(z.string())
+        .optional()
+        .describe("Routers to ask. Omit to ask every configured router that is not disabled."),
+    },
+    async handler(a) {
+      const config = getConfig();
+      const asked = a.devices?.length
+        ? a.devices.map((name: string) => resolveDeviceName(name))
+        : Object.entries(config.devices)
+            .filter(([, device]) => !device.disabled)
+            .map(([name]) => name);
+      if (asked.length === 0) return "No router is configured, so there is nothing to ask.";
+
+      const neighborsByDevice: Record<string, ReturnType<typeof parseNeighbors>> = {};
+      const failed: string[] = [];
+      // One at a time: a fleet-wide read must not open every connection at once.
+      for (const name of asked) {
+        try {
+          assertDeviceAccess([name], "discover_unmanaged_devices", "READ");
+          const out = await executeMikrotikCommand(
+            "/ip neighbor print detail",
+            createContext(undefined, name),
+          );
+          if (looksLikeError(out)) failed.push(`${name}: ${out.trim().split("\n")[0]}`);
+          else neighborsByDevice[name] = parseNeighbors(out);
+        } catch (error) {
+          failed.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      const graph = buildTopology({
+        // Every configured device takes part in the matching, also one that was not asked.
+        devices: Object.entries(config.devices).map(([name, device]) => ({
+          name,
+          config: device,
+          status: { reachable: null, checkedAt: null, latencyMs: null },
+        })),
+        neighborsByDevice,
+      });
+      const found = graph.nodes.filter((node) => node.onboardable);
+      const lines = [
+        `Asked ${asked.length - failed.length} of ${asked.length} router(s). ` +
+          `${found.length} device(s) are attached and not managed.`,
+      ];
+      for (const node of found) {
+        const seenBy = graph.edges
+          .filter((edge) => edge.to === node.id)
+          .map((edge) => `${edge.from}${edge.interface ? ` on ${edge.interface}` : ""}`);
+        lines.push(
+          "",
+          `${node.label}`,
+          `  board: ${node.board ?? "?"} · version: ${node.version ?? "?"} · platform: ${node.platform ?? "?"}`,
+          `  MAC: ${node.mac ?? "?"} · IP: ${node.ip ?? "none (reach it by MAC-Telnet)"}`,
+          `  seen by: ${seenBy.join(", ") || "?"}`,
+          `  config entry: ${JSON.stringify({ [node.suggestedConfig?.name ?? node.label]: { ...node.suggestedConfig, name: undefined } })}`,
+        );
+      }
+      if (failed.length > 0) lines.push("", "Could not ask:", ...failed.map((f) => `  ${f}`));
+      if (found.length > 0)
+        lines.push(
+          "",
+          "To manage one, a person adds it with its username and password or key: dashboard, " +
+            "Topology page (Add device), or the devices file. This tool adds nothing.",
+        );
+      return lines.join("\n");
     },
   }),
 ];

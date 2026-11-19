@@ -8,6 +8,7 @@ description: "Discovered Layer-2 neighbours and discovery settings — the data 
 - [List Discovered Neighbor Devices (MNDP/CDP/LLDP)](#list_neighbors)
 - [Get Neighbor Discovery Settings](#get_neighbor_discovery_settings)
 - [Set Neighbor Discovery Settings](#set_neighbor_discovery_settings)
+- [Discover Devices That Are Not Managed Yet](#discover_unmanaged_devices)
 
 ## list_neighbors
 
@@ -45,3 +46,13 @@ Updates the global neighbor-discovery configuration (`/ip neighbor discovery-set
 | `lldp_mac_phy_config`      | No       | Include the IEEE 802.3 MAC/PHY Configuration/Status TLV in LLDP frames. `{"type":"boolean"}`                                |
 | `lldp_max_frame_size`      | No       | Include the Maximum Frame Size TLV in LLDP frames. `{"type":"boolean"}`                                                     |
 | `lldp_vlan_info`           | No       | Include the Port VLAN ID and VLAN Name TLVs in LLDP frames. `{"type":"boolean"}`                                            |
+
+## discover_unmanaged_devices
+
+**Discover Devices That Are Not Managed Yet** · Risk: **read**
+
+Finds MikroTik and other devices that are attached to your network but are NOT in this server's device list. It reads the neighbour table (`/ip neighbor`, filled by MNDP, CDP and LLDP) of every configured router, or of the routers you name, merges what they saw, and removes every neighbour that is already a configured device (matched by MAC, IP or identity). For each remaining device it returns the identity, board, RouterOS version, MAC, IP, which router saw it on which interface, and a ready device-config entry. Use it to answer 'which routers are not managed yet?' or before you add a device. It only reads; it does NOT add a device or log in to one. A person adds a device with its credentials in the dashboard (Topology page, or the configuration editor) or in the devices file. A neighbour is seen only on a directly attached Layer-2 segment, so a router behind another router does not appear.
+
+| Parameter | Required | Definition                                                                                                             |
+| --------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `devices` | No       | Routers to ask. Omit to ask every configured router that is not disabled. `{"type":"array","items":{"type":"string"}}` |

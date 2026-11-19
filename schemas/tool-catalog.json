@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.15.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 984,
+  "toolCount": 985,
   "tools": [
     {
       "name": "create_client_check",
@@ -28573,6 +28573,31 @@
           "lldp_vlan_info": {
             "description": "Include the Port VLAN ID and VLAN Name TLVs in LLDP frames.",
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "discover_unmanaged_devices",
+      "title": "Discover Devices That Are Not Managed Yet",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Finds MikroTik and other devices that are attached to your network but are NOT in this server's device list. It reads the neighbour table (`/ip neighbor`, filled by MNDP, CDP and LLDP) of every configured router, or of the routers you name, merges what they saw, and removes every neighbour that is already a configured device (matched by MAC, IP or identity). For each remaining device it returns the identity, board, RouterOS version, MAC, IP, which router saw it on which interface, and a ready device-config entry. Use it to answer 'which routers are not managed yet?' or before you add a device. It only reads; it does NOT add a device or log in to one. A person adds a device with its credentials in the dashboard (Topology page, or the configuration editor) or in the devices file. A neighbour is seen only on a directly attached Layer-2 segment, so a router behind another router does not appear.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "devices": {
+            "description": "Routers to ask. Omit to ask every configured router that is not disabled.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false

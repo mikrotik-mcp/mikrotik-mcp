@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "discover_unmanaged_devices",
+  "type": "object",
+  "properties": {
+    "devices": {
+      "description": "Routers to ask. Omit to ask every configured router that is not disabled.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

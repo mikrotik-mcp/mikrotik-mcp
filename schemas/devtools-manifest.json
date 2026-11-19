@@ -1682,7 +1682,8 @@
       "tools": [
         "list_neighbors",
         "get_neighbor_discovery_settings",
-        "set_neighbor_discovery_settings"
+        "set_neighbor_discovery_settings",
+        "discover_unmanaged_devices"
       ]
     },
     {
@@ -9648,6 +9649,14 @@
       "module": "neighbor",
       "group": "System & Ops",
       "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "discover_unmanaged_devices",
+      "module": "neighbor",
+      "group": "System & Ops",
+      "noDevice": true,
       "requires": null,
       "ui": null
     },
