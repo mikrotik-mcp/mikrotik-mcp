@@ -26,6 +26,7 @@ import { checkApproval, needsApproval } from "./approvals";
 import type { ToolRequires } from "./capability";
 import { explainUnmet } from "./capability";
 import { getCapabilities, peekCapabilities } from "./capability-cache";
+import { buildStatus, buildWaitMessage } from "./tool-semantic";
 import { describeChange, newEntries, readHistory } from "./write-verify";
 import { logger } from "../logger";
 import { redact, redactAuditText, riskOf } from "../observability/event";
@@ -88,6 +89,14 @@ export const PINNED_TOOLS: readonly string[] = [
   "get_tool_call",
 ];
 const PINNED = new Set(PINNED_TOOLS);
+
+/** Tools that must answer at once, whatever else the server is doing. */
+const SAFE_MODE_CONTROL = new Set([
+  "safe_mode_status",
+  "enable_safe_mode",
+  "commit_safe_mode",
+  "rollback_safe_mode",
+]);
 
 /** One tool as bound to one MCP server: what a direct call validates and runs. */
 interface BoundTool {
@@ -586,6 +595,15 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
             return { content: [{ type: "text", text }], isError: true };
           }
         }
+
+        // ── The tool search index is being built (the first seconds after a
+        // start, or after the catalog changed). Until it is complete a search
+        // can miss the right tool, so a call is answered with how long to wait
+        // instead of running. Safe Mode control is never held back: a rollback
+        // must not wait for a search index.
+        const build = SAFE_MODE_CONTROL.has(def.name) ? null : buildStatus();
+        if (build)
+          return { content: [{ type: "text", text: buildWaitMessage(build) }], isError: true };
 
         // ── Access scope. First guard in the chain, before any device I/O and
         // before the capability probe: an out-of-scope call must not be able to

@@ -4,8 +4,15 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
+import { z } from "zod";
+import { MikrotikConfigSchema } from "../src/config";
+import { READ, WRITE, defineTool, registerTools } from "../src/core/registry";
+import { getConfig, setConfig } from "../src/core/runtime";
 import { buildToolIndex } from "../src/core/tool-search";
 import {
+  BUILD_WAIT_LIMIT_MS,
+  buildStatus,
+  buildWaitMessage,
   fuseRanks,
   resetSemanticIndex,
   semanticRank,
@@ -146,4 +153,94 @@ test("find_tools gives names with one line each, no schema, and says every tool 
 test("the tool descriptions carry the rule that an unlisted tool is not missing", () => {
   expect(gatewayTool("find_tools").description).toContain("is NOT missing");
   expect(gatewayTool("invoke_tool").description).toContain("is NOT missing");
+});
+
+test("the build reports how much is left and for how long, and stops at the limit", async () => {
+  expect(buildStatus()).toBeNull();
+  const many = Array.from({ length: 40 }, (_, i) => ({
+    name: `tool_${i}`,
+    title: `T${i}`,
+    description: "d.",
+  }));
+  const build = startSemanticIndex(many, fakeEmbed);
+  // The build has started and yields after every eight tools.
+  await new Promise((resolve) => setImmediate(resolve));
+  const status = buildStatus()!;
+  expect(status.total).toBe(40);
+  expect(status.done).toBeGreaterThan(0);
+  expect(status.remaining).toBe(40 - status.done);
+  expect(status.seconds).toBeGreaterThanOrEqual(1);
+  expect(buildWaitMessage({ done: 600, total: 1006, remaining: 406, seconds: 4 })).toBe(
+    "Not run: the tool search index is still being built. 600 of 1006 tools are embedded, 406 are left, about 4 seconds more. Nothing was changed. Wait 4 seconds, then make the same call again. Do not look for another way to do the task meanwhile.",
+  );
+  // A build that hangs does not hold calls back for ever.
+  expect(buildStatus(Date.now() + BUILD_WAIT_LIMIT_MS + 1)).toBeNull();
+  await build;
+  expect(buildStatus()).toBeNull();
+});
+
+type Handler = (
+  args: Record<string, unknown>,
+) => Promise<{ isError?: boolean; content: { text: string }[] }>;
+
+test("while the vectors are built, a tool call is told to wait; Safe Mode control is not", async () => {
+  const original = getConfig();
+  setConfig(
+    MikrotikConfigSchema.parse({
+      devices: { home: { host: "192.0.2.1" } },
+      defaultDevice: "home",
+      verifyWrites: false,
+    }),
+  );
+  const ran: string[] = [];
+  const handlers: Record<string, Handler> = {};
+  const server = {
+    registerTool: (name: string, _meta: unknown, handler: Handler) => {
+      handlers[name] = handler;
+      return { enable() {}, disable() {} };
+    },
+  };
+  const tool = (name: string, annotations: typeof READ) =>
+    defineTool({
+      name,
+      title: name,
+      description: "d",
+      annotations,
+      noDevice: true,
+      inputSchema: { x: z.string().optional() },
+      handler: async () => {
+        ran.push(name);
+        return "done";
+      },
+    });
+  registerTools(server as never, [
+    [tool("list_x", READ), tool("add_x", WRITE), tool("rollback_safe_mode", WRITE)],
+  ]);
+  try {
+    await handlers.list_x!({});
+    expect(ran).toEqual(["list_x"]);
+
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      name: `tool_${i}`,
+      title: `T${i}`,
+      description: "d.",
+    }));
+    const build = startSemanticIndex(many, fakeEmbed);
+    await new Promise((resolve) => setImmediate(resolve));
+    const waiting = await handlers.add_x!({});
+    expect(waiting.isError).toBe(true);
+    expect(waiting.content[0]!.text).toMatch(
+      /^Not run: the tool search index is still being built\. \d+ of 40 tools are embedded, \d+ are left, about \d+ seconds? more\./,
+    );
+    expect((await handlers.list_x!({})).isError).toBe(true);
+    // A rollback never waits.
+    expect((await handlers.rollback_safe_mode!({})).isError).toBeUndefined();
+    expect(ran).toEqual(["list_x", "rollback_safe_mode"]);
+
+    await build;
+    expect((await handlers.add_x!({})).isError).toBeUndefined();
+    expect(ran).toEqual(["list_x", "rollback_safe_mode", "add_x"]);
+  } finally {
+    setConfig(original);
+  }
 });

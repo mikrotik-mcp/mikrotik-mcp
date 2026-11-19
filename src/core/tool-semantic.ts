@@ -46,6 +46,52 @@ interface State {
 let state: State | null = null;
 let building: Promise<void> | null = null;
 
+/** How far the build is. `total` is 0 until a build has started. */
+const progress = { done: 0, total: 0, startedAt: 0, finished: false };
+/**
+ * A build that takes longer than this no longer holds tool calls back. A model
+ * that hangs must not lock the server; the search then works on words.
+ */
+export const BUILD_WAIT_LIMIT_MS = 120_000;
+
+export interface BuildStatus {
+  done: number;
+  total: number;
+  remaining: number;
+  /** Seconds until the build ends, from the speed so far. At least 1. */
+  seconds: number;
+}
+
+/**
+ * The state of a build that is running now, or `null` when none is: search by
+ * meaning is off, the build is finished or failed, or it passed the wait limit.
+ */
+export function buildStatus(now = Date.now()): BuildStatus | null {
+  if (progress.total === 0 || progress.finished) return null;
+  const elapsed = now - progress.startedAt;
+  if (elapsed > BUILD_WAIT_LIMIT_MS) return null;
+  const remaining = progress.total - progress.done;
+  // Before the first tool is done there is no speed yet: assume 10 ms for each.
+  const each = progress.done > 0 ? elapsed / progress.done : 10;
+  return {
+    done: progress.done,
+    total: progress.total,
+    remaining,
+    seconds: Math.max(1, Math.ceil((remaining * each) / 1000)),
+  };
+}
+
+/** What a tool call is told while the vectors are being built. */
+export function buildWaitMessage(status: BuildStatus): string {
+  return (
+    `Not run: the tool search index is still being built. ${status.done} of ${status.total} ` +
+    `tools are embedded, ${status.remaining} are left, about ${status.seconds} second` +
+    `${status.seconds === 1 ? "" : "s"} more. Nothing was changed. Wait ${status.seconds} ` +
+    `second${status.seconds === 1 ? "" : "s"}, then make the same call again. Do not look for ` +
+    "another way to do the task meanwhile."
+  );
+}
+
 /** Where the vectors are kept: `MIKROTIK_TOOL_VECTORS`, or `~/.mikrotik-mcp/tool-vectors.bin`. */
 const cacheFile = (): string =>
   process.env.MIKROTIK_TOOL_VECTORS || join(homedir(), ".mikrotik-mcp", "tool-vectors.bin");
@@ -85,6 +131,10 @@ function saveCache(key: string, vectors: Float32Array): void {
  */
 export function startSemanticIndex(docs: SemanticDoc[], embed?: Embed): Promise<void> {
   building ??= (async () => {
+    progress.done = 0;
+    progress.total = docs.length;
+    progress.startedAt = Date.now();
+    progress.finished = false;
     try {
       let run = embed;
       if (!run) {
@@ -97,11 +147,13 @@ export function startSemanticIndex(docs: SemanticDoc[], embed?: Embed): Promise<
         .update(`ternlight-base-1\n${texts.join("\n")}`)
         .digest("hex");
       let vectors = embed ? null : loadCache(key, docs.length);
+      if (vectors) progress.done = docs.length;
       if (!vectors) {
         const started = Date.now();
         vectors = new Float32Array(docs.length * DIM);
         for (let i = 0; i < docs.length; i += 1) {
           vectors.set(run(texts[i]!), i * DIM);
+          progress.done = i + 1;
           // Yield every few tools: the server keeps answering while this runs.
           if (i % 8 === 7) await new Promise((resolve) => setImmediate(resolve));
         }
@@ -111,6 +163,9 @@ export function startSemanticIndex(docs: SemanticDoc[], embed?: Embed): Promise<
       state = { names: docs.map((doc) => doc.name), vectors, embed: run };
     } catch (error) {
       logger.debug(`[tool-search] semantic search is off: ${String(error)}`);
+    } finally {
+      // Finished or failed: either way no call waits for it any more.
+      progress.finished = true;
     }
   })();
   return building;
@@ -120,6 +175,9 @@ export function startSemanticIndex(docs: SemanticDoc[], embed?: Embed): Promise<
 export function resetSemanticIndex(): void {
   state = null;
   building = null;
+  progress.done = 0;
+  progress.total = 0;
+  progress.finished = false;
 }
 
 export const semanticReady = (): boolean => state !== null;

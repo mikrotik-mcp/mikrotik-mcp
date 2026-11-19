@@ -744,7 +744,20 @@ whole list and calls tools by their own names.
 
 The catalog is embedded once in the background when the server starts (about
 ten seconds) and the result is cached in `~/.mikrotik-mcp/tool-vectors.bin`.
-A search before that is done uses words only. Turn it off with
+While the vectors are being built, a tool call does not run. It gets an answer
+that says how far the build is and how long to wait:
+
+```text
+Not run: the tool search index is still being built. 224 of 1006 tools are
+embedded, 782 are left, about 7 seconds more. Nothing was changed. Wait 7
+seconds, then make the same call again.
+```
+
+This happens only on the first start and after an upgrade that changes the
+catalog; later starts load the cache and answer at once. The Safe Mode tools
+(`safe_mode_status`, `enable_safe_mode`, `commit_safe_mode`,
+`rollback_safe_mode`) are never held back, and a build that takes more than
+two minutes stops holding calls back. Turn it off with
 `--semantic-search false`.
 
 On 25 requests that were written without looking at the tool names, the right
