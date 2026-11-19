@@ -169,6 +169,17 @@
   .kit-ctx {
     min-width: 240px;
     max-width: 320px;
+    /* A row menu can be long. It takes the room the window has, and scrolls
+       only when even that is not enough, so the last actions are never cut off. */
+    max-height: min(
+      calc(100dvh - 24px),
+      var(
+        --radix-context-menu-content-available-height,
+        var(--radix-dropdown-menu-content-available-height, calc(100dvh - 24px))
+      )
+    );
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .kit-ctx-head {
     display: flex;
