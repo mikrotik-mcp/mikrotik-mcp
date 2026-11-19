@@ -63,6 +63,6 @@ test("removal stops at the failed step and reports already removed components", 
   expect(command.mock.calls.map(([text]) => text)).toEqual([
     '/system scheduler remove [find name="threat-feed-deny"]',
     '/system script remove [find name="threat-feed-deny"]',
-    '/ip firewall raw remove [find comment~"threat-feed: drop deny"]',
+    '/ip firewall raw remove [find comment="threat-feed: drop deny"]',
   ]);
 });

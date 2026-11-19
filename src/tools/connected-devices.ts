@@ -206,12 +206,31 @@ export async function fetchDevices(ctx: ToolContext): Promise<Device[]> {
   return [...byMac.values()].sort((x, y) => x.ip.localeCompare(y.ip, undefined, { numeric: true }));
 }
 
+const QUEUE_ADDRESS = /^[0-9a-f.:]+(?:\/\d{1,3})?$/i;
+
+/**
+ * A `where` test that is true only for a queue whose target is exactly this
+ * address. Null when the text is not an address.
+ *
+ * `~` is a regular expression, so `target~"10.0.0.1"` is also true for
+ * 10.0.0.10, 10.0.0.100 and 110.0.0.1: a limit set for one device changed the
+ * queues of the others. The pattern is anchored, and each dot is a literal dot.
+ * A host address also matches with its /32 (or /128) written out. A target
+ * list is matched item by item.
+ */
+export function queueTarget(ip: string): string | null {
+  const address = ip.trim();
+  if (!QUEUE_ADDRESS.test(address)) return null;
+  const host = address.includes("/") ? "" : address.includes(":") ? "(/128)?" : "(/32)?";
+  return `target~${quoted(`(^|[,;])${address.replaceAll(".", "[.]")}${host}($|[,;])`)}`;
+}
+
 /** Sample a device's live download/upload from a matching `/queue simple` entry. */
 export async function sampleDeviceTraffic(ctx: ToolContext, ip: string): Promise<DeviceTraffic> {
-  const q = await executeMikrotikCommand(
-    `/queue simple print stats detail where target~${quoted(ip)}`,
-    ctx,
-  );
+  const target = queueTarget(ip);
+  const q = target
+    ? await executeMikrotikCommand(`/queue simple print stats detail where ${target}`, ctx)
+    : "";
   if (isEmpty(q) || looksLikeError(q)) {
     return {
       ip,
@@ -460,8 +479,11 @@ export async function setDeviceLimits(
   let down = rate(opts.download);
   let up = rate(opts.upload);
 
+  const target = queueTarget(ip);
+  if (!target) return { ok: false, message: `'${ip}' is not an IP address. Nothing was changed.` };
+
   const existing = await executeMikrotikCommand(
-    `/queue simple print count-only where target~${quoted(ip)}`,
+    `/queue simple print count-only where ${target}`,
     ctx,
   );
   const have = (parseLeadingNumber(existing.trim()) ?? 0) > 0;
@@ -476,10 +498,7 @@ export async function setDeviceLimits(
     return { ok: true, message: `No limit was given for ${ip}. Its limits were not changed.` };
   } else if (down === undefined || up === undefined) {
     // `max-limit` holds both sides, so the side that was not given is read and written back.
-    const current = await executeMikrotikCommand(
-      `/queue simple print detail where target~${quoted(ip)}`,
-      ctx,
-    );
+    const current = await executeMikrotikCommand(`/queue simple print detail where ${target}`, ctx);
     const kept = current.match(/max-limit=([^\s/]+)\/(\S+)/);
     if (looksLikeError(current) || !kept)
       return {
@@ -492,10 +511,10 @@ export async function setDeviceLimits(
   const maxLimit = `${up}/${down}`;
 
   const cmd = have
-    ? new Cmd(`/queue simple set [find target~${quoted(ip)}]`).set("max-limit", maxLimit).build()
+    ? new Cmd(`/queue simple set [find ${target}]`).set("max-limit", maxLimit).build()
     : new Cmd("/queue simple add")
         .set("name", opts.name?.trim() || `client-${ip}`)
-        .set("target", ip)
+        .set("target", ip.trim())
         .set("max-limit", maxLimit)
         .build();
   const out = await executeMikrotikCommand(cmd, ctx);

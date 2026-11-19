@@ -33,7 +33,7 @@ vi.mock("../src/home/store", () => ({
   }),
 }));
 
-const { setDeviceLimits } = await import("../src/tools/connected-devices");
+const { queueTarget, setDeviceLimits } = await import("../src/tools/connected-devices");
 const { homeInternetTools } = await import("../src/tools/home-internet");
 
 const ctx: ToolContext = { device: "lab", info: vi.fn(), error: vi.fn() };
@@ -52,10 +52,40 @@ beforeEach(() => {
   home.saved = [];
 });
 
+/** The exact pattern that was checked on a RouterOS 7 console with `:put ("..." ~ "...")`. */
+const ONLY_7 = String.raw`target~"(^|[,;])10[.]0[.]0[.]7(/32)?(\$|[,;])"`;
+
+test("a queue is chosen by its exact address, not by a prefix of it", async () => {
+  expect(queueTarget("10.0.0.7")).toBe(ONLY_7);
+  // Read as RouterOS reads it: `\$` is a literal dollar, the end of the text.
+  const pattern = new RegExp(ONLY_7.slice('target~"'.length, -1).replace(String.raw`\$`, "$"));
+  for (const same of [
+    "10.0.0.7/32",
+    "10.0.0.7",
+    "10.0.0.5/32,10.0.0.7/32",
+    "10.0.0.7/32;10.0.0.9/32",
+  ])
+    expect(pattern.test(same), same).toBe(true);
+  for (const other of ["10.0.0.70/32", "10.0.0.71", "110.0.0.7/32", "10.0.0.7/24", "10x0.0.7/32"])
+    expect(pattern.test(other), other).toBe(false);
+
+  expect(queueTarget("10.0.0.0/24")).toBe('target~"(^|[,;])10[.]0[.]0[.]0/24(\\$|[,;])"');
+  expect(queueTarget("2001:db8::7")).toContain("2001:db8::7(/128)?");
+  // Not an address: no selector, so no command can be built from it.
+  for (const bad of ["", ".*", "10.0.0.7|10.0.0.8", 'x" ; /system reboot ; "'])
+    expect(queueTarget(bad), bad).toBeNull();
+});
+
+test("a limit for text that is not an address reaches no router", async () => {
+  const result = await setDeviceLimits(ctx, ".*", { download: "1M" });
+  expect(result.ok).toBe(false);
+  expect(router.sent).toEqual([]);
+});
+
 test("a rate limit that is not given keeps its value", async () => {
   // RouterOS max-limit is upload/download.
   expect((await setDeviceLimits(ctx, "10.0.0.7", { download: "20M" })).ok).toBe(true);
-  expect(writes()).toEqual(['/queue simple set [find target~"10.0.0.7"] max-limit=2M/20M']);
+  expect(writes()).toEqual([`/queue simple set [find ${ONLY_7}] max-limit=2M/20M`]);
 
   router.sent = [];
   await setDeviceLimits(ctx, "10.0.0.7", { upload: "5M" });

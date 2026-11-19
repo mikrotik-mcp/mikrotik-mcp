@@ -108,7 +108,7 @@ export const threatFeedTools: ToolModule = [
         ["script", `/system script remove [find name=${quoted(id)}]`],
         [
           "raw drop",
-          `/ip firewall raw remove [find comment~${quoted(`${FEED_TAG}: drop ${a.name}`)}]`,
+          `/ip firewall raw remove [find comment=${quoted(`${FEED_TAG}: drop ${a.name}`)}]`,
         ],
       ];
       const removed: string[] = [];
