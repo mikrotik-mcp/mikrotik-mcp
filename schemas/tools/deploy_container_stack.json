@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "deploy_container_stack",
+  "type": "object",
+  "properties": {
+    "services": {
+      "minItems": 1,
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$",
+            "description": "Container name; also names its env list and mounts"
+          },
+          "image": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Image to pull, e.g. 'pihole/pihole:latest'"
+          },
+          "veth": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$"
+              },
+              "address": {
+                "type": "string",
+                "description": "Address with prefix, e.g. '172.20.0.2/24'"
+              },
+              "gateway": {
+                "type": "string",
+                "description": "Gateway, e.g. '172.20.0.1'"
+              },
+              "bridge": {
+                "description": "Add the veth as a port of this existing bridge",
+                "type": "string"
+              }
+            },
+            "required": ["name", "address", "gateway"],
+            "additionalProperties": false,
+            "description": "The container's network interface, created when it does not exist"
+          },
+          "env": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,80}$"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "mounts": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$",
+                  "description": "Mount name (used by older RouterOS versions)"
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Path on the router, e.g. '/usb1/pihole/etc'"
+                },
+                "dst": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Path in the container, e.g. '/etc/pihole'"
+                }
+              },
+              "required": ["name", "src", "dst"],
+              "additionalProperties": false
+            }
+          },
+          "root_dir": {
+            "description": "Where the image is unpacked, e.g. 'usb1/pihole/root'",
+            "type": "string"
+          },
+          "cmd": {
+            "type": "string"
+          },
+          "logging": {
+            "default": true,
+            "type": "boolean"
+          },
+          "start_on_boot": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": ["name", "image", "veth", "env", "mounts", "logging", "start_on_boot"],
+        "additionalProperties": false
+      }
+    },
+    "apply": {
+      "default": false,
+      "description": "false = show the commands; true = create",
+      "type": "boolean"
+    }
+  },
+  "required": ["services", "apply"],
+  "additionalProperties": false
+}

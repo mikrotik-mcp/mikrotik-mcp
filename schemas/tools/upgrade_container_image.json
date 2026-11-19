@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "upgrade_container_image",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,40}$",
+      "description": "Container name"
+    },
+    "stop": {
+      "default": false,
+      "description": "Stop the container first when it runs",
+      "type": "boolean"
+    },
+    "accept_data_loss": {
+      "default": false,
+      "description": "Allow the upgrade of a container that has no mount",
+      "type": "boolean"
+    },
+    "apply": {
+      "default": false,
+      "description": "false = show the plan; true = upgrade",
+      "type": "boolean"
+    }
+  },
+  "required": ["name", "stop", "accept_data_loss", "apply"],
+  "additionalProperties": false
+}

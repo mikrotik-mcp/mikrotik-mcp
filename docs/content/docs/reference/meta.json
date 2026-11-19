@@ -42,6 +42,7 @@
     "local-backup",
     "disk",
     "container",
+    "container-stack",
     "safe-mode",
     "txn",
     "dr-drill",

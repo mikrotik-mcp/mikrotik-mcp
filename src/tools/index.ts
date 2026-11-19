@@ -35,6 +35,7 @@ import { deviceModeTools } from "./device-mode";
 import { dhcpTools } from "./dhcp";
 import { hotspotBuilderTools } from "./hotspot-builder";
 import { containerTools } from "./container";
+import { containerStackTools } from "./container-stack";
 import { diskTools } from "./disk";
 import { rawCommandTools } from "./raw-command";
 import { toolGatewayTools } from "./tool-gateway";
@@ -1406,6 +1407,15 @@ export const moduleCatalog: ModuleInfo[] = [
       "Shared container safety knowledge and exact-target OCI lifecycle (`/container`), global config " +
       "(registry/tmpdir/RAM), named env lists, and volume mounts.",
     tools: containerTools,
+  },
+  {
+    label: "Container Lifecycle",
+    slug: "container-stack",
+    group: "System & Ops",
+    description:
+      "The steps around the basic container tools: read container logs, upgrade an image and " +
+      "keep the data in its mounts, and deploy several containers from one description.",
+    tools: containerStackTools,
   },
   {
     label: "Safe Mode",

@@ -2150,6 +2150,14 @@
       ]
     },
     {
+      "slug": "container-stack",
+      "label": "Container Lifecycle",
+      "group": "System & Ops",
+      "description": "The steps around the basic container tools: read container logs, upgrade an image and keep the data in its mounts, and deploy several containers from one description.",
+      "alwaysOn": false,
+      "tools": ["get_container_logs", "upgrade_container_image", "deploy_container_stack"]
+    },
+    {
       "slug": "safe-mode",
       "label": "Safe Mode",
       "group": "System & Ops",
@@ -11512,6 +11520,34 @@
         "deviceMode": "container",
         "minVersion": "7.0"
       },
+      "ui": null
+    },
+    {
+      "name": "get_container_logs",
+      "module": "container-stack",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "upgrade_container_image",
+      "module": "container-stack",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "deploy_container_stack",
+      "module": "container-stack",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
       "ui": null
     },
     {

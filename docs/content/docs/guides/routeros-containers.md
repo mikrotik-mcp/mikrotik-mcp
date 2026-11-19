@@ -35,3 +35,67 @@ arguments; default activity-history redaction masks env/value/command fields, an
 container detail masks sensitive properties. Application log text may still contain
 secrets: collect only bounded, reviewed logs. These safeguards are not retroactive
 cleanup of older logs and do not make arbitrary raw-command output secret-safe.
+
+## Logs, image upgrades and deploying from one description
+
+### Reading logs
+
+`get_container_logs` reads what containers wrote to the RouterOS log. A
+container logs only when it has `logging=yes`. RouterOS does not tag a line
+with the container's name, so with several logging containers the lines are
+mixed; use `contains` to filter.
+
+### Upgrading an image
+
+`upgrade_container_image` pulls the newest image and keeps the container's
+settings.
+
+| Survives the upgrade                 | Is lost                                             |
+| ------------------------------------ | --------------------------------------------------- |
+| Everything in the container's mounts | Files written inside the container's root directory |
+| The env list and all settings        |                                                     |
+
+A container with no mount is refused unless you pass `accept_data_loss=true`.
+The container must be stopped (`stop=true` stops it first). The pull runs in
+the background: wait until `get_container` shows `stopped`, then start it.
+
+### Deploying from one description
+
+`deploy_container_stack` creates containers the way a compose file does:
+
+```json
+{
+  "services": [
+    {
+      "name": "pihole",
+      "image": "pihole/pihole:latest",
+      "veth": {
+        "name": "veth-pihole",
+        "address": "172.20.0.2/24",
+        "gateway": "172.20.0.1",
+        "bridge": "containers"
+      },
+      "env": { "TZ": "Europe/Berlin" },
+      "mounts": [{ "name": "pihole-etc", "src": "/usb1/pihole/etc", "dst": "/etc/pihole" }],
+      "root_dir": "usb1/pihole/root"
+    }
+  ]
+}
+```
+
+For each service it creates the veth interface, the env list, the mounts and
+the container, in that order. Before it writes anything, **every command is
+parsed on the router**. RouterOS renamed container settings between releases
+(`envlist` to `envlists`, `mounts` to `mountlists`), and the tool uses the names
+that router knows. If a command is not valid there, nothing is written.
+
+Limits to know:
+
+- It does not start the containers. The image is pulled in the background.
+- It adds no firewall or NAT rule, and no address on the bridge. See
+  `get_routeros_container_guide` for the network side.
+- A container that already exists is skipped, so the same call can be run again
+  after a failure. Items of a failed service that were already created (veth,
+  envs, mounts) must be removed by hand first.
+- Env values are hidden in the tool's answer, but they are stored in plain text
+  on the router, as every container env is.
