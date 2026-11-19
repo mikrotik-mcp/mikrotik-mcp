@@ -61,9 +61,14 @@ function invoke(args: Record<string, unknown>, item = cases[0]) {
 
 test("an inserted management rule is read by its returned ID, never the last row", async () => {
   const details = "1 chain=input action=drop protocol=tcp dst-port=22 src-address-list=!MGMT-SSH";
+  let added = false;
   command.mockImplementation(async (cmd: string) => {
-    if (cmd === ":foreach i in=[/ip firewall filter find] do={:put $i}") return "*A\n*B\n*F";
-    if (cmd.startsWith(":put [/ip firewall filter add ")) return "*10\r\n";
+    if (cmd === ":foreach i in=[/ip firewall filter find] do={:put $i}")
+      return added ? "*A\n*10\n*B\n*F" : "*A\n*B\n*F";
+    if (cmd.startsWith(":put [/ip firewall filter add ")) {
+      added = true;
+      return "*10\r\n";
+    }
     if (cmd.startsWith("/ip firewall filter add ")) return "";
     if (cmd === "/ip firewall filter print detail count-only") return "4";
     if (cmd.includes("print detail from=")) {
@@ -88,7 +93,9 @@ test("an inserted management rule is read by its returned ID, never the last row
   });
   expect(result.isError).toBeFalsy();
   expect(JSON.stringify(result.content)).toContain(details);
-  expect(command).toHaveBeenCalledTimes(3);
+  expect(JSON.stringify(result.content)).toContain("Row 1 of 4");
+  expect(JSON.stringify(result.content)).toContain("place_before=1 was applied");
+  expect(command).toHaveBeenCalledTimes(4);
   expect(command.mock.calls[1][0]).toContain("place-before=*B");
   expect(command.mock.calls[1][0]).toContain("src-address-list=!MGMT-SSH");
   expect(command.mock.calls.every(([, ctx]) => ctx.device === "MOM Afranet")).toBe(true);
@@ -114,14 +121,18 @@ test.each(cases)("$name captures its internal ID and reads only that item", asyn
     item.name === "add_switch_rule"
       ? "0 switch=switch1 ports=ether1 disabled=no"
       : "1 chain=input action=accept disabled=no";
-  command.mockResolvedValueOnce("*2B\r\nwarning: device notice").mockResolvedValueOnce(details);
+  command
+    .mockResolvedValueOnce("*2B\r\nwarning: device notice")
+    .mockResolvedValueOnce(details)
+    .mockResolvedValueOnce("*1\n*2B");
   const result = await invoke(
     { chain: "input", action: "accept", switch: "switch1", ports: "ether1" },
     item,
   );
   expect(result.isError).toBeFalsy();
   expect(JSON.stringify(result.content)).toContain("created successfully (id *2B)");
-  expect(command).toHaveBeenCalledTimes(2);
+  expect(JSON.stringify(result.content)).toContain("Row 1 of 2");
+  expect(command).toHaveBeenCalledTimes(3);
   expect(command.mock.calls[0][0]).toMatch(new RegExp(`^:put \\[${item.scope} add `));
   expect(command.mock.calls[1][0]).toBe(`${item.scope} print detail where .id=*2B`);
 });
@@ -132,15 +143,44 @@ test.each(cases.filter((item) => item.name !== "add_switch_rule"))(
     command
       .mockResolvedValueOnce("*A\n*BC\n*F")
       .mockResolvedValueOnce("*10")
-      .mockResolvedValueOnce("1 chain=input action=accept");
+      .mockResolvedValueOnce("1 chain=input action=accept")
+      .mockResolvedValueOnce("*A\n*10\n*BC\n*F");
     const result = await invoke({ chain: "input", action: "accept", place_before: "1" }, item);
     expect(result.isError).toBeFalsy();
-    expect(command).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(result.content)).toContain("place_before=1 was applied");
+    expect(command).toHaveBeenCalledTimes(4);
     expect(command.mock.calls[0][0]).toBe(`:foreach i in=[${item.scope} find] do={:put $i}`);
     expect(command.mock.calls[1][0]).toContain("place-before=*BC");
     expect(command.mock.calls[2][0]).toBe(`${item.scope} print detail where .id=*10`);
   },
 );
+
+test("the row shown is the real one, not the stale number RouterOS prints after an insert", async () => {
+  // Seen on RouterOS 7.25.1: a rule added with place-before at row 0 of 7 is printed as "6".
+  command
+    .mockResolvedValueOnce("*6\n*5\n*4")
+    .mockResolvedValueOnce("*7")
+    .mockResolvedValueOnce(" 3  ;;; SSTP\r\n    chain=input action=accept dst-port=443")
+    .mockResolvedValueOnce("*7\n*6\n*5\n*4");
+  const result = await invoke({ chain: "input", action: "accept", place_before: "0" });
+  const text = JSON.stringify(result.content);
+  expect(text).toContain("Row 0 of 4 (rows count from 0), directly before *6.");
+  expect(text).toContain("place_before=0 was applied");
+  expect(text).toContain(" 0  ;;; SSTP");
+  expect(text).not.toContain(" 3  ;;; SSTP");
+});
+
+test("a rule that did not land where it was asked is reported, never called placed", async () => {
+  command
+    .mockResolvedValueOnce("1")
+    .mockResolvedValueOnce("*7")
+    .mockResolvedValueOnce("2 chain=input action=accept")
+    .mockResolvedValueOnce("*6\n*5\n*7");
+  const result = await invoke({ chain: "input", action: "accept", place_before: "*6" });
+  const text = JSON.stringify(result.content);
+  expect(text).toContain("Row 2 of 3");
+  expect(text).toContain("WARNING: place_before=*6 was NOT applied");
+});
 
 test.each(["", "5", "warning: existing rule *2B", "*2B; /system reset-configuration"])(
   "missing or untrusted creation ID %j never guesses a row or repeats the write",

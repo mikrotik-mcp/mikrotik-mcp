@@ -405,7 +405,7 @@ export const firewallMangleTools: ToolModule = [
         return `Failed to create mangle rule: ${hint ?? trimmed}`;
       }
 
-      return readCreatedRule("/ip firewall mangle", trimmed, "Mangle rule", ctx);
+      return readCreatedRule("/ip firewall mangle", trimmed, "Mangle rule", ctx, a.place_before);
     },
   }),
 

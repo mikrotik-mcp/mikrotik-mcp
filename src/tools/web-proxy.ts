@@ -108,7 +108,7 @@ export const webProxyTools: ToolModule = [
         .opt("comment", a.comment);
       const result = await executeRuleCreate(scope, cmd, ctx, a.place_before);
       if (looksLikeError(result)) return `Failed to add web proxy access rule: ${result}`;
-      return readCreatedRule(scope, result, "Web proxy access rule", ctx);
+      return readCreatedRule(scope, result, "Web proxy access rule", ctx, a.place_before);
     },
   }),
   defineTool({

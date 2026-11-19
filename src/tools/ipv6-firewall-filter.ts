@@ -339,7 +339,13 @@ export const ipv6FirewallFilterTools: ToolModule = [
         return `Failed to create IPv6 firewall filter rule: ${trimmed}`;
       }
 
-      return readCreatedRule("/ipv6 firewall filter", trimmed, "IPv6 firewall filter rule", ctx);
+      return readCreatedRule(
+        "/ipv6 firewall filter",
+        trimmed,
+        "IPv6 firewall filter rule",
+        ctx,
+        a.place_before,
+      );
     },
   }),
 

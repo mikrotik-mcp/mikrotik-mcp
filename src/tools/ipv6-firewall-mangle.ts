@@ -336,7 +336,13 @@ export const ipv6FirewallMangleTools: ToolModule = [
         return `Failed to create IPv6 firewall mangle rule: ${trimmed}`;
       }
 
-      return readCreatedRule("/ipv6 firewall mangle", trimmed, "IPv6 mangle rule", ctx);
+      return readCreatedRule(
+        "/ipv6 firewall mangle",
+        trimmed,
+        "IPv6 mangle rule",
+        ctx,
+        a.place_before,
+      );
     },
   }),
 

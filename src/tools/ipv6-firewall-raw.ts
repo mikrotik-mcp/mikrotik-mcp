@@ -204,7 +204,13 @@ export const ipv6FirewallRawTools: ToolModule = [
         return `Failed to create IPv6 firewall raw rule: ${trimmed}`;
       }
 
-      return readCreatedRule("/ipv6 firewall raw", trimmed, "IPv6 firewall raw rule", ctx);
+      return readCreatedRule(
+        "/ipv6 firewall raw",
+        trimmed,
+        "IPv6 firewall raw rule",
+        ctx,
+        a.place_before,
+      );
     },
   }),
 

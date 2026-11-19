@@ -416,7 +416,13 @@ export const firewallFilterTools: ToolModule = [
         return `Failed to create firewall filter rule: ${hint ?? trimmed}`;
       }
 
-      return readCreatedRule("/ip firewall filter", trimmed, "Firewall filter rule", ctx);
+      return readCreatedRule(
+        "/ip firewall filter",
+        trimmed,
+        "Firewall filter rule",
+        ctx,
+        a.place_before,
+      );
     },
   }),
 

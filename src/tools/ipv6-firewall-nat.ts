@@ -317,7 +317,7 @@ export const ipv6FirewallNatTools: ToolModule = [
         return `Failed to create IPv6 firewall NAT rule: ${trimmed}`;
       }
 
-      return readCreatedRule("/ipv6 firewall nat", trimmed, "IPv6 NAT rule", ctx);
+      return readCreatedRule("/ipv6 firewall nat", trimmed, "IPv6 NAT rule", ctx, a.place_before);
     },
   }),
 

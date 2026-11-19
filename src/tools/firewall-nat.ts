@@ -369,7 +369,7 @@ export const firewallNatTools: ToolModule = [
         return `Failed to create NAT rule: ${hint ?? trimmed}`;
       }
 
-      return readCreatedRule("/ip firewall nat", trimmed, "NAT rule", ctx);
+      return readCreatedRule("/ip firewall nat", trimmed, "NAT rule", ctx, a.place_before);
     },
   }),
 
