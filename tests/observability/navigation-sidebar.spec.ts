@@ -299,7 +299,7 @@ test("another open group has a branch, but nothing on it is lit", async () => {
   expect(heading("Network").closest("section")!.querySelector(".shell-branch")).toBeNull();
 });
 
-test("a pinned page shows a LED, pink when its alerts fire", async () => {
+test("a pinned page shows a LED, in the failure colour when its alerts fire", async () => {
   window.localStorage.setItem(NAVIGATION_PINS_KEY, JSON.stringify(["feed", "alerts"]));
   await mount("openvpn");
   const leds = [...host.querySelectorAll<HTMLElement>(".shell-pinned .shell-pin-led")];

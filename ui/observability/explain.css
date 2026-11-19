@@ -36,7 +36,7 @@
   flex: 1 1 220px;
 }
 
-/* The exposure panel: a pink outline only, and an LED before its title. */
+/* The exposure panel: a failure-colour outline only, and an LED before its title. */
 .explain .monitor-panel[data-tone="bad"] {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--destructive) 45%, transparent);
 }

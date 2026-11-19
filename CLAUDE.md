@@ -156,7 +156,7 @@ Load them before you write UI code, not after.
 Design system: **Signal**, approved by the user as the dashboard's look (the
 "Signal Redesign" Design canvas holds every page's approved board). A night-time
 operations room: ink ground, frosted glass panels, one luminous teal for healthy
-paths, pink for failures, amber for strain, indigo for neutral data; Geist and
+paths, rose gold for failures, amber for strain, indigo for neutral data; Geist and
 Geist Mono; LEDs, signal paths, rings and sparklines that move with anime.js.
 Tokens live in `ui/observability/tailwind.css` (`:root` = light, `.dark` =
 default dark). Use the tokens; do not invent colors, sizes or radii, and never

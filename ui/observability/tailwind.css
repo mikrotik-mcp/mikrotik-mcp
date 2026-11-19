@@ -32,7 +32,7 @@
 /*
  * Values come from the approved "Signal" redesign: a night-time operations
  * room. Ink ground, frosted glass panels, one luminous teal (`--sig`) for
- * healthy paths, pink (`--destructive`) for failure, amber (`--warning`) for
+ * healthy paths, rose gold (`--destructive`) for failure, amber (`--warning`) for
  * strain and indigo (`--brand`, `--chart-1`) for neutral data. Dark is the
  * default; light is its daytime counterpart. Glass layers are translucent, so
  * they sit on the page glow in both themes.
@@ -56,7 +56,7 @@
   --muted-foreground: #5c6884;
   --accent: rgba(255, 255, 255, 0.92);
   --accent-foreground: #0b1324;
-  --destructive: #d6245a;
+  --destructive: #a4553a;
   --destructive-foreground: #ffffff;
   /* Text-safe teal on white; `--sig` is the brighter fill. */
   --success: #0a7d67;
@@ -81,7 +81,7 @@
   --sig-soft: rgba(18, 179, 147, 0.12);
   --acc-soft: rgba(59, 91, 219, 0.1);
   --warn-soft: rgba(184, 106, 0, 0.1);
-  --bad-soft: rgba(214, 36, 90, 0.09);
+  --bad-soft: rgba(164, 85, 58, 0.1);
   --on-sig: #ffffff;
   --scrim: rgba(15, 23, 42, 0.36);
   /* LED glow spread: none in daylight. */
@@ -112,7 +112,7 @@
   --chart-1: #3b5bdb;
   --chart-2: #12b393;
   --chart-3: #b86a00;
-  --chart-4: #d6245a;
+  --chart-4: #a4553a;
   --chart-5: #5c6884;
 
   /*
@@ -149,8 +149,8 @@
   --muted-foreground: #8592ae;
   --accent: rgba(148, 178, 255, 0.09);
   --accent-foreground: #eef3ff;
-  /* White on the pink is under 4.5:1, so text on the danger fill is ink. */
-  --destructive: #ff5c8a;
+  /* White on the rose gold is under 4.5:1, so text on the danger fill is ink. */
+  --destructive: #e8a08c;
   --destructive-foreground: #070b14;
   --success: #5ee6c8;
   --warning: #ffb547;
@@ -175,7 +175,7 @@
   --sig-soft: rgba(94, 230, 200, 0.14);
   --acc-soft: rgba(138, 166, 255, 0.14);
   --warn-soft: rgba(255, 181, 71, 0.12);
-  --bad-soft: rgba(255, 92, 138, 0.12);
+  --bad-soft: rgba(232, 160, 140, 0.13);
   --on-sig: #04120f;
   --scrim: rgba(3, 6, 12, 0.66);
   --glow: 0 0 10px;
@@ -197,7 +197,7 @@
   --chart-1: #8aa6ff;
   --chart-2: #5ee6c8;
   --chart-3: #ffb547;
-  --chart-4: #ff5c8a;
+  --chart-4: #e8a08c;
   --chart-5: #8592ae;
 
   --entity-1: #3291ff;
