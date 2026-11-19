@@ -7,7 +7,7 @@ Run one Bun server for Codex, Claude and your other MCP clients. Connection pool
 
 ## Quick setup
 
-Install [Bun 1.4.4 or newer](https://bun.sh/docs/installation), then run these commands in Terminal or Windows PowerShell:
+Install [Bun 1.4.5 or newer](https://bun.sh/docs/installation), then run these commands in Terminal or Windows PowerShell:
 
 ```sh
 bun add --global @usex/mikrotik-mcp@latest

@@ -8,7 +8,7 @@ source. Bun runs the `.ts` entry points directly.
 
 ## Prerequisites
 
-- **[Bun](https://bun.sh) ≥ 1.4.4** (the repo pins `bun@1.4.4` via
+- **[Bun](https://bun.sh) ≥ 1.4.5** (the repo pins `bun@1.4.5` via
   `packageManager`).
 
 ```bash

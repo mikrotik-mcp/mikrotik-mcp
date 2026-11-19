@@ -18,33 +18,33 @@
   "dependencies": {
     "@types/mdx": "^2.0.14",
     "@vercel/analytics": "^2.0.1",
-    "@vercel/speed-insights": "^2.0.0",
-    "fumadocs-core": "^16.17.9",
-    "fumadocs-mdx": "^15.4.10",
-    "fumadocs-ui": "^16.17.9",
-    "next": "16.4.5",
+    "@vercel/speed-insights": "^2.1.0",
+    "fumadocs-core": "^16.19.4",
+    "fumadocs-mdx": "^15.6.3",
+    "fumadocs-ui": "^16.19.4",
+    "next": "16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "shiki": "^4.5.0",
+    "shiki": "^4.6.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
-    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.5",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
-    "eslint": "^10.13.0",
-    "eslint-config-next": "16.4.3",
+    "eslint": "^10.15.0",
+    "eslint-config-next": "16.4.6",
     "github-slugger": "^2.0.0",
     "mdast-util-to-string": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.5",
     "typescript": "^7.0.2",
     "unified": "^11.0.5"
   },
   "engines": {
     "bun": ">=1.4.4"
   },
-  "packageManager": "bun@1.4.4"
+  "packageManager": "bun@1.4.5"
 }

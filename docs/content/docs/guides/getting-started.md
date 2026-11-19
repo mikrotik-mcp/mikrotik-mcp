@@ -9,7 +9,7 @@ its configuration surface as MCP tools.
 
 ## Prerequisites
 
-- **[Bun](https://bun.sh) ≥ 1.4.4** — the only runtime requirement.
+- **[Bun](https://bun.sh) ≥ 1.4.5** — the only runtime requirement.
 - A reachable **RouterOS device** with SSH enabled (`/ip service` → `ssh`).
 - SSH credentials: either a **password** or an **SSH private key** for a user
   with the privileges you intend to manage.
