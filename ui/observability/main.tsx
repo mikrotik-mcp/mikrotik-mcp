@@ -9,6 +9,7 @@
  * makes. Charts are hand-rolled SVG (no chart library). A `?token=` in the URL
  * is forwarded to every API call and the live stream when the server requires it.
  */
+import { isLetterKey } from "./kit/keys";
 import { LoadingState } from "./loading-state";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1616,11 +1617,10 @@ function App(): ReactNode {
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
-      const key = event.key.toLowerCase();
-      if (key === "b") {
+      if (isLetterKey(event, "b")) {
         event.preventDefault();
         toggleNavigation();
-      } else if (key === "k") {
+      } else if (isLetterKey(event, "k")) {
         event.preventDefault();
         setPaletteOpen((open) => !open);
       }

@@ -6,6 +6,7 @@
  * drawer holds the command history and the favourites, and can run any of them
  * on any router.
  */
+import { isLetterKey } from "./kit/keys";
 import type {
   DockviewApi,
   DockviewReadyEvent,
@@ -275,13 +276,13 @@ function TerminalWorkspace(): ReactNode {
     const onKey = (event: KeyboardEvent): void => {
       if (!(event.metaKey || event.ctrlKey)) return;
       // Ctrl/Cmd+Shift+P: the command palette.
-      if (event.shiftKey && event.key.toLowerCase() === "p") {
+      if (event.shiftKey && isLetterKey(event, "p")) {
         event.preventDefault();
         setPalette((open) => !open);
         return;
       }
       // Ctrl/Cmd+F: find in the terminals, in place of the browser's page search.
-      if (event.key.toLowerCase() === "f") {
+      if (isLetterKey(event, "f")) {
         event.preventDefault();
         setFinding(true);
         setFindFocus((tick) => tick + 1);

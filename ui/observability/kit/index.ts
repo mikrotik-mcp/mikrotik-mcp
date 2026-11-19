@@ -31,6 +31,7 @@ export type { MenuItem } from "./overlays";
 export { Led, Kbd } from "./listbox";
 export type { KitOption, Tone } from "./listbox";
 export { useField } from "./field-context";
+export { isLetterKey } from "./keys";
 export {
   ChartTipLayer,
   LineHover,

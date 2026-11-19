@@ -4,6 +4,7 @@
  * a popover for panels with fields, a ticking count and the shimmer of a
  * progress bar.
  */
+import { isLetterKey } from "./kit/keys";
 import { animate, createScope } from "animejs";
 import { DropdownMenu as MenuPrimitive, Popover as PopoverPrimitive } from "radix-ui";
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from "react";
@@ -24,7 +25,8 @@ function matchesKey(shortcut: string, event: KeyboardEvent): boolean {
   const parts = shortcut.split(" ");
   const key = parts.at(-1)?.toLowerCase();
   const ctrl = parts.includes("Ctrl");
-  return event.key.toLowerCase() === key && ctrl === (event.ctrlKey || event.metaKey);
+  const pressed = key?.length === 1 ? isLetterKey(event, key) : event.key.toLowerCase() === key;
+  return pressed && ctrl === (event.ctrlKey || event.metaKey);
 }
 
 /**

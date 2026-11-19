@@ -5,6 +5,7 @@
  * also owns its connection state: it probes the router on a timer, shows the
  * latency, and reconnects with a growing delay when the probe fails.
  */
+import { isLetterKey } from "./kit/keys";
 import type { IDockviewPanelProps } from "dockview-react";
 import {
   ArrowDownToLine,
@@ -1200,10 +1201,14 @@ export function TerminalPane(
       event.preventDefault();
       void submit(input);
       setInput("");
-    } else if (event.key === "l" && event.ctrlKey) {
+    } else if (isLetterKey(event, "l") && event.ctrlKey) {
       event.preventDefault();
       setBlocks((list) => list.filter((b) => b.status === "running"));
-    } else if (event.key === "c" && event.ctrlKey && area.selectionStart === area.selectionEnd) {
+    } else if (
+      isLetterKey(event, "c") &&
+      event.ctrlKey &&
+      area.selectionStart === area.selectionEnd
+    ) {
       const last = Array.from(running.current.values()).at(-1);
       if (last) {
         event.preventDefault();

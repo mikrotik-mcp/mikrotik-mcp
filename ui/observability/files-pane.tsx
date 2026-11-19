@@ -4,6 +4,7 @@
  * Drop files from the computer to upload them. Drag rows to another pane (or to
  * a folder) to copy them there; the server relays a router-to-router copy.
  */
+import { isLetterKey } from "./kit/keys";
 import type { IDockviewPanelProps } from "dockview-react";
 import {
   ArrowDownToLine,
@@ -429,7 +430,7 @@ export function FilesPane(props: PaneProps): ReactNode {
 
   const onKey = (event: KeyboardEvent): void => {
     if ((event.target as HTMLElement).tagName === "INPUT") return;
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+    if ((event.metaKey || event.ctrlKey) && isLetterKey(event, "a")) {
       event.preventDefault();
       setSelected(new Set(shown.map((entry) => entry.name)));
     } else if (event.key === "Escape") setSelected(new Set());

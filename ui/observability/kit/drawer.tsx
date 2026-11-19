@@ -7,6 +7,7 @@
  * 720 px and is remembered. On a phone it is a full-height sheet: swipe down
  * to close, left or right for the next row.
  */
+import { isLetterKey } from "./keys";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -126,10 +127,8 @@ export function RowDrawer({
       if (e.key === "Escape" && !typing()) {
         e.preventDefault();
         onClose();
-      } else if ((e.key === "j" || e.key === "J") && !typing() && !e.metaKey && !e.ctrlKey)
-        nav?.onNext?.();
-      else if ((e.key === "k" || e.key === "K") && !typing() && !e.metaKey && !e.ctrlKey)
-        nav?.onPrev?.();
+      } else if (isLetterKey(e, "j") && !typing() && !e.metaKey && !e.ctrlKey) nav?.onNext?.();
+      else if (isLetterKey(e, "k") && !typing() && !e.metaKey && !e.ctrlKey) nav?.onPrev?.();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
