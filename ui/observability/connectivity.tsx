@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { formatMs, useLineDraw } from "./monitoring-ui";
 import { deviceState } from "./device-card";
-import { withToken } from "./api";
+import { useFlagPalettes } from "./flag-colours";
 import { tipProps } from "./kit";
 import type { TipCard, TipRow } from "./kit";
 import type { DeviceInfo } from "./types";
@@ -13,10 +13,21 @@ const ROW = 72;
 const BOX_W = 240;
 const BOX_H = 44;
 /**
- * The round flag at the right end of a router box. It is a little taller than
- * the box, so it reads as a flag rising behind the box's edge.
+ * Where the blobs of a flag's colours sit in a router box, for one, two and
+ * three colours: [across, down] as parts of the box, from its centre line.
  */
-const FLAG = 60;
+const WASH: Record<number, [number, number][]> = {
+  1: [[0.6, 0]],
+  2: [
+    [0.3, -0.25],
+    [0.8, 0.25],
+  ],
+  3: [
+    [0.22, -0.3],
+    [0.58, 0.35],
+    [0.9, -0.2],
+  ],
+};
 /** A router name as an id for its flag's clip path. */
 const flagId = (name: string): string => name.replace(/[^a-zA-Z0-9_-]/g, "_");
 const COL_1 = 470;
@@ -213,6 +224,7 @@ export function ManagementPaths({
   pulses: Record<string, number>;
 }): ReactNode {
   const root = useRef<SVGSVGElement>(null);
+  const palettes = useFlagPalettes(devices.flatMap((d) => d.geo?.countryCode ?? []));
   const lit = useLit(pulses);
   const { placed, height, mid } = layout(devices);
   useLineDraw(
@@ -232,17 +244,12 @@ export function ManagementPaths({
       role="img"
       aria-label={`Management paths from the MCP server to ${devices.length} router${devices.length === 1 ? "" : "s"}`}
     >
-      {/* A router's country flag sits at the right end of its box: sharp, and
-          faded out towards the name so the text stays easy to read. */}
+      {/* A router's country is a wash of its flag's colours over the whole box:
+          one soft blob for each colour, drifting slowly. */}
       <defs>
-        <linearGradient id="dv-flag-fade-ramp" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0" stopColor="white" stopOpacity="0" />
-          <stop offset="0.5" stopColor="white" stopOpacity="0.85" />
-          <stop offset="1" stopColor="white" stopOpacity="0.85" />
-        </linearGradient>
-        <mask id="dv-flag-fade" maskContentUnits="objectBoundingBox">
-          <rect width="1" height="1" fill="url(#dv-flag-fade-ramp)" />
-        </mask>
+        <filter id="dv-flag-soft" x="-60%" y="-120%" width="220%" height="340%">
+          <feGaussianBlur stdDeviation="16" />
+        </filter>
       </defs>
       <g
         {...tipProps((): TipCard => ({
@@ -374,15 +381,24 @@ export function ManagementPaths({
                       rx="9"
                     />
                   </clipPath>
-                  <g mask="url(#dv-flag-fade)">
-                    <image
-                      className="dv-flag"
-                      href={withToken(`/api/flag/${d.geo.countryCode}`)}
-                      x={x + BOX_W - FLAG * 0.78}
-                      y={cy - FLAG / 2}
-                      width={FLAG}
-                      height={FLAG}
-                    />
+                  <g className="dv-flag-wash">
+                    {(palettes[d.geo.countryCode] ?? []).map((colour, i, all) => {
+                      // One soft blob for each colour, spread across the box.
+                      const at = WASH[all.length]?.[i] ?? WASH[1]![0]!;
+                      return (
+                        <ellipse
+                          key={colour}
+                          className="dv-flag-blob"
+                          cx={x + BOX_W * at[0]}
+                          cy={cy + BOX_H * at[1]}
+                          rx={BOX_W * 0.34}
+                          ry={BOX_H * 0.95}
+                          fill={colour}
+                          filter="url(#dv-flag-soft)"
+                          style={{ animationDelay: `${i * -3}s` }}
+                        />
+                      );
+                    })}
                   </g>
                 </g>
               )}
@@ -407,7 +423,7 @@ export function ManagementPaths({
               </text>
               {on && (
                 <text
-                  x={d.geo?.countryCode ? x + 186 : x + 228}
+                  x={x + 228}
                   y={cy - 3}
                   textAnchor="end"
                   fontSize="10"

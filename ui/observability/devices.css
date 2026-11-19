@@ -679,3 +679,27 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* A router's country: its flag's colours as a faint, slow wash over the box. */
+.dv-flag-wash {
+  opacity: 0.34;
+}
+:root:not(.dark) .dv-flag-wash {
+  opacity: 0.26;
+}
+.dv-flag-blob {
+  animation: dv-flag-drift 14s ease-in-out infinite alternate;
+}
+@keyframes dv-flag-drift {
+  from {
+    transform: translate(-10px, -3px);
+  }
+  to {
+    transform: translate(12px, 4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dv-flag-blob {
+    animation: none;
+  }
+}
