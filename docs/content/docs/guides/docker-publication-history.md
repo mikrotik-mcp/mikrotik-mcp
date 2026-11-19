@@ -210,3 +210,14 @@ description: "Archived verification records from previous Docker releases."
 - `scripts/check-docker-runtime.ts` was changed after the tag for the short default tool list; the image was checked with the changed script.
 - Removed the isolated release builder, smoke container, local verify and pulled images, and the source archive. No unrelated Docker data was pruned.
 - No running MCP service was upgraded or restarted; no router settings changed.
+
+## 6.17.0 publication record — November 19, 2026
+
+- Source: release tag `6.17.0` (`bb569eba`), built from a Git archive of the tag.
+- Published `alimaster/mikrotik-mcp:6.17.0` and promoted `latest` after the pulled digest passed the runtime check.
+- Both tags were read back with index digest `sha256:25252a922cd3f33ca426ccc050b70669ab81f5a17892ddbc8b7339942168a9da` and `linux/amd64` + `linux/arm64` manifests.
+- Native ARM64 check passed on the pulled digest with networking disabled and the synthetic configuration: Bun 1.4.4, MCP 6.17.0, non-root UID 1000, HTTP health, dashboard, writable JSON, the 9 tools of the default list, and the catalog through `describe_tool`. The check script is the one in the tag.
+- Native AMD64 execution was not tested. Cross-building is not a runtime test.
+- Release gate on the tagged commit: 5,303 tests, typecheck and lint passed.
+- Removed the isolated release builder, smoke container, local verify and pulled images, and the source archive. No unrelated Docker data was pruned.
+- No running MCP service was upgraded or restarted; no router settings changed.
