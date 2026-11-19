@@ -28,6 +28,11 @@ const run = (name: string, args: unknown): Promise<string> =>
   );
 
 describe("find_tools", () => {
+  test("two words that the catalog writes as one still find the tool", async () => {
+    const out = await run("find_tools", { query: "shut down the router", limit: 3 });
+    expect(out).toMatch(/^1\. shutdown_system /m);
+  });
+
   test("asks for English when the request is in another script", async () => {
     const ask = /Translate it to English and call find_tools again/;
     const none = await run("find_tools", { query: "روتر رو خاموش کن" });

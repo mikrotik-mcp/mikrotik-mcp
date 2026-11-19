@@ -225,8 +225,14 @@ export function searchToolIndex(index: ToolSearchIndex, query: string, limit = 8
   const qRaw = query.trim().toLowerCase();
   const qList = tokenize(query);
   if (qList.length === 0) return [];
-  const qOriginal = new Set(qList);
-  const qTokens = expandQuery(qList);
+  // Two words that the catalog writes as one ("shut down" for `shutdown`,
+  // "wire guard" for `wireguard`) count as that one word too.
+  const joined = qList
+    .slice(1)
+    .map((t, i) => qList[i]! + t)
+    .filter((t) => index.df.has(t));
+  const qOriginal = new Set([...qList, ...joined]);
+  const qTokens = expandQuery([...qList, ...joined]);
   const qUnderscored = qRaw.replace(/\s+/g, "_");
 
   // A query token counts as "in name" if the name has it OR any of its synonyms.
