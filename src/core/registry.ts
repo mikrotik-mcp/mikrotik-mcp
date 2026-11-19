@@ -360,6 +360,13 @@ export interface ToolDef<Shape extends ZodRawShape> {
    */
   noDevice?: boolean;
   /**
+   * When true, a write by this tool changes the MCP host only (its memory
+   * database, for one), never the router. The registry then does not read the
+   * router's change log around the call: there is nothing there to confirm,
+   * and the read costs an SSH round trip.
+   */
+  hostOnly?: boolean;
+  /**
    * What this tool needs from the device — a RouterOS version floor, a package,
    * a wireless stack, a board, a device-mode permission.
    *
@@ -697,7 +704,11 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
           // Read-back: the router's own change log, before and after a tool
           // that can change it. Skipped for gateways, which run another tool.
           const verify =
-            risk !== "READ" && !def.noDevice && !def.dispatcher && getConfig().verifyWrites;
+            risk !== "READ" &&
+            !def.noDevice &&
+            !def.hostOnly &&
+            !def.dispatcher &&
+            getConfig().verifyWrites;
           const historyBefore = verify ? await readHistory(ctx) : null;
           const raw = await def.handler(rest, ctx);
           if (typeof raw !== "string" && raw.passthrough) {

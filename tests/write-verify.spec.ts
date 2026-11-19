@@ -88,6 +88,15 @@ function register(verifyWrites: boolean): Record<string, Handler> {
         },
       }),
       defineTool({
+        name: "note_thing",
+        title: "Note",
+        description: "d",
+        annotations: WRITE,
+        hostOnly: true,
+        inputSchema: {},
+        handler: async () => "Noted on the MCP host.",
+      }),
+      defineTool({
         name: "list_things",
         title: "List",
         description: "d",
@@ -153,4 +162,13 @@ test("a change log that cannot be read never fails the write", async () => {
   const result = await tools.enable_thing!({ name: "real" });
   expect(result.content[0]!.text).toBe("Thing enabled successfully.");
   expect(JSON.stringify(result)).not.toContain("Router change log");
+});
+
+test("a write that changes only the MCP host does not read the router's log", async () => {
+  const tools = register(true);
+  const text = (await tools.note_thing!({})).content.map((c) => c.text).join("\n");
+  expect(text).toContain("Noted on the MCP host.");
+  expect(text).not.toContain("Router change log");
+  // No SSH round trip for a tool that never touches the router.
+  expect(command).not.toHaveBeenCalled();
 });
