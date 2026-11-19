@@ -9,7 +9,41 @@
       "items": {
         "type": "string"
       }
+    },
+    "listen_seconds": {
+      "default": 0,
+      "description": "Also listen for MikroTik discovery (MNDP, UDP 5678) on the MCP host itself for this many seconds. Finds devices on the host's own network segment, also with no managed router.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 30
+    },
+    "scan": {
+      "description": "Also scan a subnet from one router (`/tool ip-scan`). Finds hosts that announce nothing, by address and MAC. It sends probes on that network.",
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "string",
+          "description": "The router that runs the scan"
+        },
+        "interface": {
+          "description": "Scan the subnet on this interface",
+          "type": "string"
+        },
+        "address_range": {
+          "description": "Range or CIDR, e.g. '192.168.88.0/24'",
+          "type": "string"
+        },
+        "seconds": {
+          "default": 8,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        }
+      },
+      "required": ["device", "seconds"],
+      "additionalProperties": false
     }
   },
+  "required": ["listen_seconds"],
   "additionalProperties": false
 }

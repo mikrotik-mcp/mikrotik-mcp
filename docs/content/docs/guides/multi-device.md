@@ -191,3 +191,41 @@ The guided prompt **`setup-tunnel-between-sites`** ([prompts](/docs/guides/promp
 the whole flow — inventory both ends, pick a technology, configure each side with
 its `device`, open the firewall under per-device Safe Mode, and verify with `ping`
 from both routers. See also the [VPN guide](/docs/guides/vpn-guide).
+
+## Finding and adding devices
+
+`discover_unmanaged_devices` lists what is attached to your network and is not
+in the device list. It has three sources:
+
+| Source                    | Finds                                             | How                                  |
+| ------------------------- | ------------------------------------------------- | ------------------------------------ |
+| Neighbour tables (always) | What each managed router hears by MNDP, CDP, LLDP | Reads `/ip neighbor` on every router |
+| `listen_seconds`          | MikroTik devices on the MCP host's own segment    | The host listens on UDP 5678         |
+| `scan`                    | Any host in a subnet, by address and MAC          | One router runs `/tool ip-scan`      |
+
+`listen_seconds` works with no managed router at all, which is how a first
+router is found. A scan sends probes on that network; the other two only
+listen.
+
+`enrol_device` adds a device to the list. **The secret never passes through the
+call.** Put it in an environment variable, a file or the keyring first, then
+pass only where it is:
+
+```text
+enrol_device name=ap-lobby host=10.0.0.77 username=mcp password_from=keyring:mikrotik-mcp/ap-lobby
+```
+
+It connects first. A device that cannot be reached or signed in to is not
+added. With `apply=false` (the default) it only reports whether the connection
+works. With `apply=true` the device is written to the configuration file, with
+a backup, and is usable at once.
+
+Limits to know:
+
+- MNDP and neighbour tables see only a directly attached Layer-2 segment.
+- The host listener needs UDP 5678 to be free and broadcast to be allowed. In a
+  container it needs host networking.
+- A device added with `enrol_device` needs a configuration **file**. A server
+  configured only by environment variables cannot save it.
+- An MCP client that listed the tools before the device was added may need to
+  reconnect to offer it as a device choice.

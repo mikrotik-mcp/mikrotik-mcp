@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "enrol_device",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]{0,40}$",
+      "description": "Name for the device in this server"
+    },
+    "host": {
+      "description": "IP address or host name (SSH)",
+      "type": "string"
+    },
+    "mac": {
+      "description": "MAC address, for a device with no IP (MAC-Telnet)",
+      "type": "string"
+    },
+    "port": {
+      "default": 22,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "username": {
+      "default": "admin",
+      "type": "string",
+      "minLength": 1
+    },
+    "password_from": {
+      "description": "Where the password is: env:NAME, file:/path or keyring:service/account",
+      "type": "string",
+      "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+|keyring:[A-Za-z0-9][A-Za-z0-9._@-]{0,63}\\/[A-Za-z0-9][A-Za-z0-9._@-]{0,63})$"
+    },
+    "ssh_agent": {
+      "default": false,
+      "description": "Sign in with the SSH agent of the host",
+      "type": "boolean"
+    },
+    "key_filename": {
+      "description": "Path of a private key file on the host",
+      "type": "string"
+    },
+    "host_key_sha256": {
+      "description": "Pin the SSH host key (SHA256:…)",
+      "type": "string"
+    },
+    "apply": {
+      "default": false,
+      "description": "false = test the connection; true = add",
+      "type": "boolean"
+    }
+  },
+  "required": ["name", "port", "username", "ssh_agent", "apply"],
+  "additionalProperties": false
+}
