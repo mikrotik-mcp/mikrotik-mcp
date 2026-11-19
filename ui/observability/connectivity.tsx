@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { formatMs, useLineDraw } from "./monitoring-ui";
 import { deviceState } from "./device-card";
+import { withToken } from "./api";
 import { tipProps } from "./kit";
 import type { TipCard, TipRow } from "./kit";
 import type { DeviceInfo } from "./types";
@@ -11,6 +12,15 @@ const LIT_MS = 1600;
 const ROW = 72;
 const BOX_W = 240;
 const BOX_H = 44;
+/**
+ * The flag behind a router box. It is stretched wide and squeezed to the box's
+ * height, so every stripe shows, and then blurred: what is left is the flag's
+ * colours as a soft wash, not a picture of it.
+ */
+const FLAG_W = 190;
+const FLAG_H = 62;
+/** A router name as an id for its flag's clip path. */
+const flagId = (name: string): string => name.replace(/[^a-zA-Z0-9_-]/g, "_");
 const COL_1 = 470;
 const COL_2 = 800;
 const SERVER_RIGHT = 240;
@@ -76,6 +86,9 @@ function routerCard(d: DeviceInfo, via: string | null, on: boolean): TipCard {
     led: state === "online" ? "ok" : state === "offline" ? "bad" : "off",
     rows: [
       { label: "Address", value: d.address ?? `${d.host}:${d.port}` },
+      ...(d.geo
+        ? [{ label: "Country", value: [d.geo.city, d.geo.country].filter(Boolean).join(", ") }]
+        : []),
       { label: "Path", value: via ? `via ${via}` : linkWord(d, via) },
       ...latencyRow(d),
       { label: "Calls", value: d.activity.calls.toLocaleString("en-US") },
@@ -221,6 +234,21 @@ export function ManagementPaths({
       role="img"
       aria-label={`Management paths from the MCP server to ${devices.length} router${devices.length === 1 ? "" : "s"}`}
     >
+      {/* A router's country flag sits behind its box: large, soft, and faded out
+          towards the name so the text stays easy to read. */}
+      <defs>
+        <linearGradient id="dv-flag-fade-ramp" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0.05" stopColor="white" stopOpacity="0" />
+          <stop offset="0.7" stopColor="white" stopOpacity="0.42" />
+          <stop offset="1" stopColor="white" stopOpacity="0.42" />
+        </linearGradient>
+        <mask id="dv-flag-fade" maskContentUnits="objectBoundingBox">
+          <rect width="1" height="1" fill="url(#dv-flag-fade-ramp)" />
+        </mask>
+        <filter id="dv-flag-soft" x="-20%" y="-40%" width="140%" height="180%">
+          <feGaussianBlur stdDeviation="7" />
+        </filter>
+      </defs>
       <g
         {...tipProps((): TipCard => ({
           title: "MCP server",
@@ -339,6 +367,32 @@ export function ManagementPaths({
                 stroke={box}
                 strokeOpacity={on || state === "offline" ? 1 : 0.9}
               />
+              {d.geo?.countryCode && (
+                // chart-exempt: the flag is decoration; the box's own card names the country.
+                <g aria-hidden="true" clipPath={`url(#dv-flag-clip-${flagId(d.name)})`}>
+                  <clipPath id={`dv-flag-clip-${flagId(d.name)}`}>
+                    <rect
+                      x={x + 1}
+                      y={cy - BOX_H / 2 + 1}
+                      width={BOX_W - 2}
+                      height={BOX_H - 2}
+                      rx="9"
+                    />
+                  </clipPath>
+                  <g mask="url(#dv-flag-fade)">
+                    <image
+                      className="dv-flag"
+                      href={withToken(`/api/flag/${d.geo.countryCode}`)}
+                      x={x + BOX_W - FLAG_W * 0.86}
+                      y={cy - FLAG_H / 2}
+                      width={FLAG_W}
+                      height={FLAG_H}
+                      preserveAspectRatio="none"
+                      filter="url(#dv-flag-soft)"
+                    />
+                  </g>
+                </g>
+              )}
               <circle cx={x + 18} cy={cy} r="3.5" fill={dot} />
               <text
                 x={x + 32}
