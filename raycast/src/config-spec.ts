@@ -705,6 +705,13 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         type: "bool",
         help: "Block all write/destructive tools.",
       },
+      {
+        key: "verifyWrites",
+        label: "Confirm changes from the router's log",
+        type: "bool",
+        defaultOn: true,
+        help: "After a tool that can change a router, read the router's own change log and add the new entries to the result. It costs two short reads for each change.",
+      },
       { key: "disableUpdateCheck", label: "Disable update check", type: "bool" },
       {
         key: "logLevel",

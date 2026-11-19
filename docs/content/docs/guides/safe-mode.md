@@ -100,3 +100,36 @@ Safe Mode is **per device**. A change that must land on more than one router
 it: see **[Cross-Device Transactions](/docs/guides/transactions)**, which holds one Safe
 Mode session per participant, verifies while everything is still uncommitted, and
 then commits in a declared order — reporting `COMMITTED`, `ABORTED` or `PARTIAL`.
+
+## Confirming a change from the router's log
+
+After every tool that can change a router, the server reads the router's own
+change log (`/system history`) and adds the new entries to the result:
+
+```text
+Scheduler 'nightly' enabled successfully.
+
+Router change log: 1 new entry (newest first):
+  - scheduler changed  admin  write  2026-11-19 05:00:00
+```
+
+When the router recorded nothing, the result says so:
+
+```text
+Router change log: no change recorded for this call. If you expected a
+configuration change, it did not happen (for example, the item was not found).
+```
+
+This comes from the router, not from the tool, so a tool cannot report a change
+that did not happen.
+
+Limits to know:
+
+- The log is evidence, not proof. An action that changes no configuration (a
+  reboot, a file transfer, a script run, a cache flush) leaves no entry.
+- On a busy router, entries from failover scripts or other administrators in
+  the same seconds are listed too. They cannot be told apart.
+- It costs two short reads for each change. A read that fails or takes more
+  than 8 seconds is skipped; it never fails the change.
+- Turn it off with `"verifyWrites": false`, `--verify-writes false` or
+  `MIKROTIK_VERIFY_WRITES=false`.

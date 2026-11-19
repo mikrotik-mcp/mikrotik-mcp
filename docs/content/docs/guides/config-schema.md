@@ -1053,6 +1053,15 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
 }
 ```
 
+## verifyWrites
+
+```json
+{
+  "default": true,
+  "type": "boolean"
+}
+```
+
 ## access
 
 ```json

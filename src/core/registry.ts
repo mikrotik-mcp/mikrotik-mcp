@@ -25,6 +25,7 @@ import { evaluateAccess, getAccessPolicy, recordDenial } from "./access";
 import type { ToolRequires } from "./capability";
 import { explainUnmet } from "./capability";
 import { getCapabilities, peekCapabilities } from "./capability-cache";
+import { describeChange, newEntries, readHistory } from "./write-verify";
 import { logger } from "../logger";
 import { redactAuditText, riskOf } from "../observability/event";
 import type { ToolCallLog } from "../observability/event";
@@ -648,6 +649,11 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
               return { content: [{ type: "text", text }], isError: true };
             }
           }
+          // Read-back: the router's own change log, before and after a tool
+          // that can change it. Skipped for gateways, which run another tool.
+          const verify =
+            risk !== "READ" && !def.noDevice && !def.dispatcher && getConfig().verifyWrites;
+          const historyBefore = verify ? await readHistory(ctx) : null;
           const raw = await def.handler(rest, ctx);
           if (typeof raw !== "string" && raw.passthrough) {
             delegated = true;
@@ -708,6 +714,14 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
                 out.structuredContent,
               ),
             };
+          }
+          if (historyBefore) {
+            const historyAfter = await readHistory(ctx);
+            if (historyAfter)
+              result.content.push({
+                type: "text",
+                text: describeChange(newEntries(historyBefore, historyAfter)),
+              });
           }
           if (deviceStamp) result.content.push({ type: "text", text: deviceStamp });
           return result;

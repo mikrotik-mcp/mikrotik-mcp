@@ -984,6 +984,10 @@
       "default": false,
       "type": "boolean"
     },
+    "verifyWrites": {
+      "default": true,
+      "type": "boolean"
+    },
     "access": {
       "default": {
         "enabled": false,
@@ -1122,6 +1126,7 @@
     "attacks",
     "ssh",
     "readOnly",
+    "verifyWrites",
     "access",
     "tools",
     "memory",

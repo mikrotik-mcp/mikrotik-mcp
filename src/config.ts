@@ -683,6 +683,12 @@ export const MikrotikConfigSchema = z.object({
    */
   readOnly: z.boolean().default(false),
   /**
+   * Read-back for writes: after a tool that can change a router, read the
+   * router's own change log (`/system history`) and add the new entries to the
+   * result. It costs two short reads for each write.
+   */
+  verifyWrites: z.boolean().default(true),
+  /**
    * Caller-scoped access control (opt-in). Unlike `readOnly`, which removes
    * tools from the surface entirely, this keeps the full catalog discoverable
    * and denies out-of-scope CALLS with an auditable reason the model can act on.
@@ -786,6 +792,7 @@ function parseDevicesSource(
   ssh?: Record<string, unknown>;
   memory?: Record<string, unknown>;
   readOnly?: boolean;
+  verifyWrites?: boolean;
   disableUpdateCheck?: boolean;
   logLevel?: string;
   backupDir?: string;
@@ -835,6 +842,8 @@ function parseDevicesSource(
       : undefined;
   // Top-level scalar toggles (also structured-form only, for the same reason).
   const readOnly = structured && typeof obj.readOnly === "boolean" ? obj.readOnly : undefined;
+  const verifyWrites =
+    structured && typeof obj.verifyWrites === "boolean" ? obj.verifyWrites : undefined;
   const disableUpdateCheck =
     structured && typeof obj.disableUpdateCheck === "boolean" ? obj.disableUpdateCheck : undefined;
   const logLevel = structured && typeof obj.logLevel === "string" ? obj.logLevel : undefined;
@@ -856,6 +865,7 @@ function parseDevicesSource(
     ssh,
     memory,
     readOnly,
+    verifyWrites,
     disableUpdateCheck,
     logLevel,
     backupDir,
@@ -967,6 +977,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
   let fileSsh: Record<string, unknown> | undefined;
   let fileMemory: Record<string, unknown> | undefined;
   let fileReadOnly: boolean | undefined;
+  let fileVerifyWrites: boolean | undefined;
   let fileDisableUpdateCheck: boolean | undefined;
   let fileLogLevel: string | undefined;
   let fileBackupDir: string | undefined;
@@ -985,6 +996,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     fileSsh = src.ssh;
     fileMemory = src.memory;
     fileReadOnly = src.readOnly;
+    fileVerifyWrites = src.verifyWrites;
     fileDisableUpdateCheck = src.disableUpdateCheck;
     fileLogLevel = src.logLevel;
     fileBackupDir = src.backupDir;
@@ -1038,6 +1050,10 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     fileVal: boolean | undefined,
   ): boolean | undefined => (flagVal !== undefined ? isTruthy(flagVal) : fileVal);
   const readOnly = boolFileFlag(pick("read-only", "MIKROTIK_READ_ONLY"), fileReadOnly);
+  const verifyWrites = boolFileFlag(
+    pick("verify-writes", "MIKROTIK_VERIFY_WRITES"),
+    fileVerifyWrites,
+  );
   const disableUpdateCheck = boolFileFlag(
     pick("disable-update-check", "MIKROTIK_DISABLE_UPDATE_CHECK"),
     fileDisableUpdateCheck,
@@ -1143,6 +1159,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     mcp,
     dashboard,
     readOnly,
+    verifyWrites,
     disableUpdateCheck,
     logLevel,
     backupDir,

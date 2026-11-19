@@ -39,6 +39,8 @@ beforeEach(() => {
     MikrotikConfigSchema.parse({
       devices: { "MOM Afranet": { host: "192.0.2.1" } },
       defaultDevice: "MOM Afranet",
+      // These tests count every command; the change-log read-back has its own tests.
+      verifyWrites: false,
     }),
   );
 });

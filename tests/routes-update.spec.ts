@@ -10,7 +10,12 @@ const original = getConfig();
 beforeEach(() => {
   command.mockReset();
   setConfig(
-    MikrotikConfigSchema.parse({ devices: { home: { host: "192.0.2.1" } }, defaultDevice: "home" }),
+    MikrotikConfigSchema.parse({
+      devices: { home: { host: "192.0.2.1" } },
+      defaultDevice: "home",
+      // These tests count every command; the change-log read-back has its own tests.
+      verifyWrites: false,
+    }),
   );
 });
 afterEach(() => setConfig(original));
