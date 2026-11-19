@@ -77,7 +77,7 @@ test("active page opens its correct category, with counts and the shared scrollb
   expect(host.querySelectorAll(".shell-nav-group")).toHaveLength(8);
   expect(heading("Users & VPN").getAttribute("aria-expanded")).toBe("true");
   expect(heading("Users & VPN").dataset.active).toBe("true");
-  expect(heading("Users & VPN").querySelector(".shell-group-size")?.textContent).toBe("3");
+  expect(heading("Users & VPN").querySelector(".shell-group-size")?.textContent).toBe("4");
   expect(track("Users & VPN").hidden).toBe(false);
   expect(track("Users & VPN").querySelector('a[href="#openvpn"]')).not.toBeNull();
   expect(track("Network").hidden).toBe(true);

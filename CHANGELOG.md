@@ -108,6 +108,23 @@ the GitHub release notes.
 - `dashboard.files` (`--dashboard-files`, `MIKROTIK_DASHBOARD__FILES`, default
   `true`) turns the page off or on. It is a switch in **Config → Dashboard**,
   and a change applies with no restart.
+- **More metrics.** `/metrics` also carries interface counters, the load of
+  each CPU core and SFP optical levels. They are read only when something
+  scrapes, and a scrape never waits for a router.
+- **Find a first router, and add it safely.** `discover_unmanaged_devices` can
+  listen for MNDP on the MCP host and scan a subnet from a router.
+  `enrol_device` adds a device and accepts only a secret reference, so a
+  password never passes through the model.
+- **Keyring secrets.** `keyring:service/account` reads the macOS Keychain or the
+  Linux Secret Service.
+- **Apply the `wireless` to `wifi` plan, and CAPsMAN.** The plan can be saved
+  and applied after the package change, with passwords from secret references.
+  It now covers a legacy CAPsMAN.
+- **Sell a voucher to a billing system.** `POST /api/vouchers/issue` with its
+  own token; a payment reference makes it safe to repeat.
+  `protect_hotspot_login` rate-limits the hotspot login.
+- **WireGuard Users page.** Add a user, scan its QR code, set an end date,
+  revoke.
 
 - **Start summary.** `serve` on an interactive terminal now prints, under the
   banner, where the server answers (the MCP endpoint and the dashboard, on
