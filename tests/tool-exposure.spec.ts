@@ -211,10 +211,13 @@ describe("(c) invoke_tool reaches every tool, with the direct-call pipeline", ()
     }
   });
 
-  test("a tool that is not listed runs through invoke_tool and returns its real output", async () => {
+  test("a tool that is not listed runs by its own name and through invoke_tool", async () => {
     const { call, invoke } = await connect({ mcp: { toolSurface: "core" } });
-    const direct = await call("list_ip_addresses").catch((error: unknown) => String(error));
-    expect(JSON.stringify(direct)).toMatch(/not found|Unknown tool/i);
+    // A client that kept an older tool list calls the tool by name. It must
+    // run, not answer "tool not found".
+    const direct = await call("list_ip_addresses", { device: "branch" });
+    expect(direct.isError).toBe(false);
+    expect(direct.text).toContain("192.0.2.1/24");
 
     const result = await invoke("list_ip_addresses", {}, "branch");
     expect(result.isError).toBe(false);

@@ -102,7 +102,7 @@ const SAFE_MODE_CONTROL = new Set([
 interface BoundTool {
   shape: ZodRawShape | undefined;
   callback: (args: Record<string, unknown>) => Promise<CallToolResult>;
-  /** False in `core` surface mode for tools reachable only through `invoke_tool`. */
+  /** False in `core` surface mode: the tool is not in `tools/list`, but it runs by name. */
   listed: boolean;
   schema?: Record<string, unknown>;
 }
@@ -126,6 +126,11 @@ const EMPTY_INPUT_SCHEMA = { type: "object", properties: {} };
  * The gateway's view of a server's tools. Schema and execution come from the
  * same bound entry a direct call uses, so they cannot drift apart.
  */
+/** False for a tool that `core` surface mode keeps out of `tools/list`. It still runs by name. */
+export function isListedTool(server: McpServer, name: string): boolean {
+  return boundOf(server).get(name)?.listed !== false;
+}
+
 function toolAccess(server: McpServer, surface: "full" | "core"): ToolAccess {
   const bound = boundOf(server);
   return {
@@ -198,7 +203,7 @@ export function unreachableToolHint(
 export interface RegisterOptions {
   /**
    * `full` (default) lists every tool. `core` lists only {@link PINNED_TOOLS}
-   * plus `coreTools`; every other tool stays bound and runs through
+   * plus `coreTools`; every other tool still runs, by its own name or through
    * `invoke_tool`. Use `core` for hosts that load only part of a large list.
    */
   surface?: "full" | "core";
@@ -891,7 +896,10 @@ export function defineTool<Shape extends ZodRawShape>(def: ToolDef<Shape>): Regi
       };
 
       boundOf(server).set(def.name, { shape: inputSchema, callback, listed });
-      if (!listed) return; // bound for invoke_tool, but not in tools/list
+      // An unlisted tool is registered too. `tools/list` leaves it out (see
+      // `isListedTool`), but a call by its own name still runs: a client that
+      // kept an older tool list, or that read the name in a `find_tools`
+      // answer, must not get "tool not found" for a tool this server has.
       server.registerTool(
         def.name,
         {

@@ -729,8 +729,9 @@ then tell you it cannot do the job. Three things work against that.
 
 With the core set, every tool the model sees is callable, and every other tool
 runs through `invoke_tool` with the same validation, access checks and audit
-record as a direct call. Set `--tool-surface full` for a client that loads the
-whole list and calls tools by their own names.
+record as a direct call. A tool that is not in the list also runs when it is
+called by its own name, so a client that kept an older tool list keeps working.
+Set `--tool-surface full` for a client that must see the whole list.
 
 ### Search by words and by meaning
 
