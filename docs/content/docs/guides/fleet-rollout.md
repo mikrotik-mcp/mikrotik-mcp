@@ -143,3 +143,43 @@ Every decision — which wave next, does the gate pass, what to revert — is pu
 and exercised offline in `tests/rollout/` (52 cases), including the ones that
 only exist when things go wrong: a snapshot that cannot be taken, a health check
 that throws, an untouched device going dark, and a revert that itself fails.
+
+## Upgrading from a local firmware repository
+
+`firmware_stage` lets each router download its packages from MikroTik. A local
+repository on the MCP host is the other way: a version is downloaded once, its
+checksum is recorded, and the same files go to every router over SFTP. Routers
+need no internet, and a canary and the rest of the fleet get identical packages.
+
+1. **Download once.** `firmware_repo_fetch version=7.25.1 architecture=arm64 packages=["routeros","wifi-qcom"]`
+   gets the files from `download.mikrotik.com` (HTTPS only) and prints each
+   SHA-256. `firmware_repo_list` shows what is in the repository.
+2. **Stage.** `firmware_stage_from_repo version=7.25.1` reads the router's
+   architecture and installed packages and shows the plan. With `apply=true` it
+   uploads the files and verifies each one arrived. It does not reboot.
+3. **Reboot** in your maintenance window (`reboot_system`). RouterOS installs
+   packages found in the root of its file system during the reboot.
+4. **Finish.** `firmware_post_upgrade expected_version=7.25.1 upgrade_routerboard=true commands=[…]`
+   checks the version, queues the RouterBOOT upgrade, and runs your commands.
+
+Two rules the tools enforce:
+
+- **Every installed package goes together.** A router with `wifi-qcom` or
+  `container` needs those at the same version. A file missing from the
+  repository stops the staging, and the answer gives the exact
+  `firmware_repo_fetch` call for it.
+- **RouterBOOT comes after RouterOS.** The new bootloader is inside the new
+  RouterOS, so it can only be queued after the upgrade reboot. It takes effect
+  at one more reboot.
+
+The repository is `~/.mikrotik-mcp/firmware`, or the directory in
+`MIKROTIK_FIRMWARE_DIR`. You can also copy `.npk` files into it by hand.
+
+Limits to know:
+
+- The SHA-256 is recorded, not compared with a published value: MikroTik
+  publishes no checksum in a form the tool reads. Compare it with the download
+  page when that matters.
+- Staging does not work for a MAC-Telnet device, which has no file transfer.
+- A failed upload leaves the files that were already sent. The answer says so:
+  do not reboot until they are removed or the staging is run again.

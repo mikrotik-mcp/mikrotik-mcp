@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "firmware_stage_from_repo",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+(?:\\.\\d+)?(?:(?:beta|rc)\\d+)?$",
+      "description": "The version to stage, for example '7.25.1'"
+    },
+    "apply": {
+      "default": false,
+      "description": "false = show the plan (default); true = upload",
+      "type": "boolean"
+    }
+  },
+  "required": ["version", "apply"],
+  "additionalProperties": false
+}

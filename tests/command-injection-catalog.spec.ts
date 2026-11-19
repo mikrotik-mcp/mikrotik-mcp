@@ -164,6 +164,7 @@ function argsFor(shape: Record<string, Schema>, payload: string): Record<string,
 /** Tools whose argument is a RouterOS command or script by design. */
 const RAW_BY_DESIGN: Record<string, string> = {
   run_routeros_command: "runs the command the caller gives",
+  firmware_post_upgrade: "its commands argument is a list of commands to run after an upgrade",
 };
 
 const ctx = { device: undefined, info: () => {}, error: () => {} };

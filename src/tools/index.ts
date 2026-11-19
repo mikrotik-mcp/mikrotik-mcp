@@ -53,6 +53,7 @@ import { firewallFilterTools } from "./firewall-filter";
 import { firewallNatTools } from "./firewall-nat";
 import { firewallMangleTools } from "./firewall-mangle";
 import { firmwareLifecycleTools } from "./firmware-lifecycle";
+import { firmwareRepoTools } from "./firmware-repo";
 import { portForwardTools } from "./port-forward";
 import { interfaceTools } from "./interfaces";
 import { ipAddressTools } from "./ip-address";
@@ -1074,6 +1075,16 @@ export const moduleCatalog: ModuleInfo[] = [
       "maintenance-window scheduling, and verify post-upgrade health — with automatic " +
       "RouterOS fallback on failure.",
     tools: firmwareLifecycleTools,
+  },
+  {
+    label: "Firmware Repository",
+    slug: "firmware-repo",
+    group: "System & Ops",
+    description:
+      "RouterOS packages kept on the MCP host: download a version once with its checksum, send " +
+      "the same files to every router over SFTP (routers need no internet), then finish the " +
+      "upgrade after the reboot — version check, RouterBOOT, and your own commands.",
+    tools: firmwareRepoTools,
   },
   {
     label: "Network Tools",

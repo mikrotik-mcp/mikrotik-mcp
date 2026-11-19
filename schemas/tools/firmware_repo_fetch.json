@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "firmware_repo_fetch",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+(?:\\.\\d+)?(?:(?:beta|rc)\\d+)?$",
+      "description": "RouterOS version, for example '7.25.1'"
+    },
+    "architecture": {
+      "type": "string",
+      "enum": ["arm", "arm64", "mipsbe", "mmips", "smips", "ppc", "tile", "x86"],
+      "description": "Package architecture. Use x86 for CHR and x86_64 routers."
+    },
+    "packages": {
+      "default": ["routeros"],
+      "description": "Package names without version, for example ['routeros','wireless']",
+      "minItems": 1,
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{0,40}$"
+      }
+    }
+  },
+  "required": ["version", "architecture", "packages"],
+  "additionalProperties": false
+}

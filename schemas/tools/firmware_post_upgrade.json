@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "firmware_post_upgrade",
+  "type": "object",
+  "properties": {
+    "expected_version": {
+      "description": "Stop when the router does not run this version, for example '7.25.1'",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+(?:\\.\\d+)?(?:(?:beta|rc)\\d+)?$"
+    },
+    "upgrade_routerboard": {
+      "default": false,
+      "description": "Queue the RouterBOOT upgrade when its version differs",
+      "type": "boolean"
+    },
+    "commands": {
+      "default": [],
+      "description": "RouterOS commands to run after the checks, in order",
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": ["upgrade_routerboard", "commands"],
+  "additionalProperties": false
+}

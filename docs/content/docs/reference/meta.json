@@ -24,6 +24,7 @@
     "device-mode",
     "system-config",
     "firmware-lifecycle",
+    "firmware-repo",
     "network-tools",
     "ip-intelligence",
     "root-cause",

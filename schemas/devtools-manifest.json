@@ -1633,6 +1633,19 @@
       "tools": ["firmware_check", "firmware_stage", "firmware_upgrade", "firmware_status"]
     },
     {
+      "slug": "firmware-repo",
+      "label": "Firmware Repository",
+      "group": "System & Ops",
+      "description": "RouterOS packages kept on the MCP host: download a version once with its checksum, send the same files to every router over SFTP (routers need no internet), then finish the upgrade after the reboot — version check, RouterBOOT, and your own commands.",
+      "alwaysOn": false,
+      "tools": [
+        "firmware_repo_list",
+        "firmware_repo_fetch",
+        "firmware_stage_from_repo",
+        "firmware_post_upgrade"
+      ]
+    },
+    {
       "slug": "network-tools",
       "label": "Network Tools",
       "group": "System & Ops",
@@ -9463,6 +9476,38 @@
     {
       "name": "firmware_status",
       "module": "firmware-lifecycle",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "firmware_repo_list",
+      "module": "firmware-repo",
+      "group": "System & Ops",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "firmware_repo_fetch",
+      "module": "firmware-repo",
+      "group": "System & Ops",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "firmware_stage_from_repo",
+      "module": "firmware-repo",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "firmware_post_upgrade",
+      "module": "firmware-repo",
       "group": "System & Ops",
       "noDevice": false,
       "requires": null,
