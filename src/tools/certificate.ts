@@ -123,9 +123,11 @@ export const certificateTools: ToolModule = [
     description:
       "Signs an existing certificate template (`/certificate sign`) to produce a valid certificate. " +
       "Omit `ca` to produce a self-signed certificate; supply the name of an existing CA certificate in `ca` " +
-      "to issue it under that CA. " +
+      "to issue it under that CA. RouterOS self-signs ONLY a template whose key-usage has key-cert-sign (a CA); " +
+      "for a server or client certificate without it (for example digital-signature,key-encipherment,tls-server), " +
+      "omitting `ca` fails with 'CA not found': make a CA first and pass it in `ca`. " +
       "IMPORTANT: certificate stores are PER-DEVICE — the template (and the `ca`, if given) must live on the " +
-      "SAME router this runs on. A 'CA not found' error almost always means the template or CA was created on a " +
+      "SAME router this runs on. A 'CA not found' error with `ca` given usually means the CA was created on a " +
       "different device; verify with list_certificates on this device first (and check the targeting). " +
       "Set the common name (CN) when you create the template (create_certificate), not here — `/certificate sign` " +
       "has no CN option. " +
@@ -174,7 +176,26 @@ export const certificateTools: ToolModule = [
 
       const cmd = new Cmd("/certificate sign").raw(quoteValue(a.name)).opt("ca", a.ca).build();
       const result = await executeMikrotikCommand(cmd, ctx);
-      if (looksLikeError(result)) return `Failed to sign certificate: ${result}`;
+      if (looksLikeError(result)) {
+        // RouterOS says "CA not found" for a self-sign of a template that may not sign.
+        if (!a.ca && /CA not found/i.test(result)) {
+          const detail = await executeMikrotikCommand(
+            `/certificate print detail where name=${quoted(a.name)}`,
+            ctx,
+          );
+          const usage = detail.match(/key-usage=(\S+)/)?.[1] ?? "";
+          if (usage && !usage.split(",").includes("key-cert-sign"))
+            return (
+              `Not signed: RouterOS cannot self-sign '${a.name}'. Its key-usage is ${usage}, without key-cert-sign, ` +
+              `and RouterOS self-signs only a template that has key-cert-sign. Two ways: ` +
+              `(1) create a CA template (create_certificate with key_usage "key-cert-sign,crl-sign"), sign it with ` +
+              `sign_certificate and no ca, then sign '${a.name}' with ca set to that CA; or ` +
+              `(2) remove '${a.name}' and create it again with key-cert-sign added to its key_usage. ` +
+              `Device message: ${result.trim()}`
+            );
+        }
+        return `Failed to sign certificate: ${result}`;
+      }
       return `Signing certificate '${a.name}'${a.ca ? ` with CA '${a.ca}'` : " (self-signed)"}…\n\n${result}`;
     },
   }),
