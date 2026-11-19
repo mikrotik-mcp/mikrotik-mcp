@@ -41,6 +41,8 @@ export interface ToolSearchIndex {
   entries: IndexedEntry[];
   /** Document frequency per token (how many tools contain it). */
   df: Map<string, number>;
+  /** The first word of every tool name: `list`, `add`, `enable`, `audit`… */
+  verbs: Set<string>;
   /** Total number of indexed tools. */
   n: number;
 }
@@ -94,6 +96,7 @@ const SYNONYMS: Record<string, string[]> = {
  * where the catalog word is unambiguous.
  */
 const DOMAIN_WORDS: Record<string, string[]> = {
+  fw: ["firewall", "filter"],
   nameserver: ["dns"],
   nameservers: ["dns"],
   resolver: ["dns"],
@@ -147,14 +150,136 @@ const DOMAIN_WORDS: Record<string, string[]> = {
   guests: ["hotspot", "vouchers"],
 };
 
+/** A table lookup that only own keys answer: a user can type "constructor". */
+const own = (table: Record<string, string[]>, key: string): string[] =>
+  Object.hasOwn(table, key) ? table[key]! : [];
+
 /** Expand query tokens with verb synonyms and with the catalog's word for a user's word. */
 function expandQuery(tokens: string[]): Set<string> {
   const out = new Set(tokens);
   for (const t of tokens) {
-    for (const s of SYNONYMS[t] ?? []) out.add(s);
-    for (const s of DOMAIN_WORDS[t] ?? []) out.add(s);
+    for (const s of own(SYNONYMS, t)) out.add(s);
+    for (const s of own(DOMAIN_WORDS, t)) out.add(s);
   }
   return out;
+}
+
+/**
+ * Words that say nothing about which tool is meant. "router" is one of them:
+ * every tool is about the router, and the word would only match the modules
+ * that have it in their name.
+ */
+const FILLER = new Set(
+  (
+    "a an the my me i we you your our it its is are was be of for by with and or that this these " +
+    "those there please can could would should will want like need do does did go ahead thank " +
+    "thanks very much every single how what which who why when where whether if then so just " +
+    "also currently now have has had router routers mikrotik routeros"
+  ).split(" "),
+);
+
+/** More words than this in one request are not read. */
+const MAX_QUERY_WORDS = 64;
+
+/** True when `a` becomes `b` with one letter changed, added, removed, or two neighbours swapped. */
+function oneEditApart(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  const rest = (x: number, y: number): boolean => a.slice(i + x) === b.slice(i + y);
+  return (
+    rest(1, 1) || rest(1, 0) || rest(0, 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && rest(2, 2))
+  );
+}
+
+/**
+ * A word the catalog does not have, as the catalog's word or words: another
+ * form of it ("removed", "neighbours"), two words written as one ("ipaddress"),
+ * or a typing mistake ("wiregaurd"). The word itself when nothing fits.
+ */
+function repairWord(word: string, df: Map<string, number>): string[] {
+  const forms = [
+    word.replace(/ing$/, ""),
+    word.replace(/ing$/, "e"),
+    word.replace(/ed$/, ""),
+    word.replace(/d$/, ""),
+    word.replace(/ies$/, "y"),
+    word.replace(/es$/, ""),
+    word.replace(/s$/, ""),
+    word.replace("our", "or"),
+  ];
+  const form = forms.find((f) => f !== word && df.has(f));
+  if (form) return [form];
+  if (word.length > 30) return [word];
+  // The split with the longest shorter half: "ipaddress" is ip + address.
+  for (let cut = Math.floor(word.length / 2), step = 0; step < word.length; step++) {
+    const at = cut + (step % 2 === 0 ? step / 2 : -(step + 1) / 2);
+    if (at < 2 || at > word.length - 2) continue;
+    if (df.has(word.slice(0, at)) && df.has(word.slice(at)))
+      return [word.slice(0, at), word.slice(at)];
+  }
+  if (word.length < 4 || /^\d+$/.test(word)) return [word];
+  let best: string | undefined;
+  for (const [known, count] of df) {
+    if (known[0] !== word[0] || known.length < 4 || !oneEditApart(word, known)) continue;
+    if (!best || count > df.get(best)!) best = known;
+  }
+  return [best ?? word];
+}
+
+/**
+ * The words of a request as the index can match them: identifiers split
+ * ("listIpAddresses"), "turn off" and "switch on" as the verbs the tools use,
+ * unknown words repaired, and filler words left out.
+ */
+function queryWords(query: string, df: Map<string, number>): string[] {
+  let words = query
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .slice(0, MAX_QUERY_WORDS)
+    .flatMap((raw) => {
+      const lower = raw.toLowerCase();
+      if (df.has(lower)) return [lower];
+      return raw
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .toLowerCase()
+        .split(" ");
+    });
+  // "turn off" / "switch off" is disable, "turn on" is enable, "power off" is shutdown.
+  const verb = ["turn", "power", "switch"].find((v) => words.includes(v));
+  const state = ["off", "down", "on"].find((p) => words.includes(p));
+  if (verb && state && (verb !== "power" || state !== "on")) {
+    const meaning = verb === "power" ? "shutdown" : state === "on" ? "enable" : "disable";
+    if (verb === "power" || state !== "down") {
+      words = words.filter((w) => w !== state);
+      words[words.indexOf(verb)] = meaning;
+    }
+  }
+  // Two words that the catalog writes as one ("shut down", "wire guard"), before
+  // a repair can read one half as a typing mistake.
+  for (let i = 0; i < words.length - 1; i++) {
+    const one = words[i]! + words[i + 1]!;
+    if (!df.has(one) || (df.has(words[i]!) && df.has(words[i + 1]!))) continue;
+    words.splice(i, 2, one);
+  }
+  const repaired = words.flatMap((w) =>
+    df.has(w) || Object.hasOwn(SYNONYMS, w) || Object.hasOwn(DOMAIN_WORDS, w)
+      ? [w]
+      : repairWord(w, df),
+  );
+  const meaningful = repaired.filter((w) => !FILLER.has(w));
+  return meaningful.length > 0 ? meaningful : repaired;
+}
+
+/** The other number or spelling of a word, when the catalog has it: "address" and "addresses". */
+function otherNumber(word: string, df: Map<string, number>): string[] {
+  return [
+    `${word}s`,
+    `${word}es`,
+    word.replace(/es$/, ""),
+    word.replace(/s$/, ""),
+    word.replace("our", "or"),
+  ].filter((f) => f !== word && df.has(f));
 }
 
 /** Build a search index from the flattened tool list. Pure; O(total tokens). */
@@ -172,7 +297,8 @@ export function buildToolIndex(tools: ToolForIndex[]): ToolSearchIndex {
   for (const e of entries) {
     for (const tok of e.allTokens) df.set(tok, (df.get(tok) ?? 0) + 1);
   }
-  return { entries, df, n: entries.length };
+  const verbs = new Set(tools.map((t) => tokenize(t.name)[0] ?? ""));
+  return { entries, df, n: entries.length, verbs };
 }
 
 // Field weights — a token in the tool NAME is the strongest signal of intent,
@@ -223,7 +349,7 @@ function domainFactor(entry: IndexedEntry, qTokens: Set<string>): number {
  */
 export function searchToolIndex(index: ToolSearchIndex, query: string, limit = 8): ScoredTool[] {
   const qRaw = query.trim().toLowerCase();
-  const qList = tokenize(query);
+  const qList = queryWords(query, index.df);
   if (qList.length === 0) return [];
   // Two words that the catalog writes as one ("shut down" for `shutdown`,
   // "wire guard" for `wireguard`) count as that one word too.
@@ -233,11 +359,30 @@ export function searchToolIndex(index: ToolSearchIndex, query: string, limit = 8
     .filter((t) => index.df.has(t));
   const qOriginal = new Set([...qList, ...joined]);
   const qTokens = expandQuery([...qList, ...joined]);
+  for (const t of qList) for (const f of otherNumber(t, index.df)) qTokens.add(f);
   const qUnderscored = qRaw.replace(/\s+/g, "_");
 
   // A query token counts as "in name" if the name has it OR any of its synonyms.
   const nameHasIntent = (entry: IndexedEntry, t: string): boolean =>
-    entry.nameTokens.has(t) || (SYNONYMS[t] ?? []).some((s) => entry.nameTokens.has(s));
+    entry.nameTokens.has(t) ||
+    own(SYNONYMS, t).some((s) => entry.nameTokens.has(s)) ||
+    otherNumber(t, index.df).some((s) => entry.nameTokens.has(s));
+
+  // "removed route", "listing addresses": the verb a tool name starts with. Only
+  // the first word: later in a sentence ("what changed since…") it is not an order.
+  for (const t of qList.slice(0, 1)) {
+    if (index.verbs.has(t)) continue;
+    const verb = [
+      t.replace(/ing$/, ""),
+      t.replace(/ing$/, "e"),
+      t.replace(/ed$/, ""),
+      t.replace(/d$/, ""),
+    ].find((f) => f !== t && index.verbs.has(f));
+    if (verb) for (const v of expandQuery([verb])) qTokens.add(v);
+  }
+  const verbless =
+    qList.length <= 3 &&
+    ![...qTokens].some((t) => Object.hasOwn(SYNONYMS, t) || index.verbs.has(t));
 
   const scored = index.entries.map((entry, i) => {
     let s = 0;
@@ -263,6 +408,8 @@ export function searchToolIndex(index: ToolSearchIndex, query: string, limit = 8
     if (qRaw.length > 2 && entry.title.toLowerCase().includes(qRaw)) s += 3;
 
     s *= domainFactor(entry, qTokens);
+    // A short request with no verb ("fw rules", "users") most often asks to see things.
+    if (verbless && /^(?:list|show)_/.test(entry.name)) s *= 1.25;
     return { entry, s, i };
   });
 

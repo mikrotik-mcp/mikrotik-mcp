@@ -28,6 +28,42 @@ const run = (name: string, args: unknown): Promise<string> =>
   );
 
 describe("find_tools", () => {
+  // Each request is one way people and models really write. The right tool must be first.
+  test.each([
+    ["an identifier in camel case", "listIpAddresses", "list_ip_addresses"],
+    ["a RouterOS console path", "/system reboot", "reboot_system"],
+    ["two words written as one", "dhcpserver list", "list_dhcp_servers"],
+    ["a typing mistake", "list wiregaurd peers", "list_wireguard_peers"],
+    ["two letters swapped", "creat vlan interface", "create_vlan_interface"],
+    ["another form of a word", "removed route", "remove_route"],
+    ["British spelling", "ospf neighbours", "list_ospf_neighbors"],
+    ["the word router is not the migration module", "restart the router", "reboot_system"],
+    ["a short request with no verb asks to list", "wg peers", "list_wireguard_peers"],
+  ])("%s: %s", async (_what, query, tool) => {
+    const out = await run("find_tools", { query, limit: 3 });
+    expect(out).toMatch(new RegExp(`^1\\. ${tool} `, "m"));
+  });
+
+  test("turn off and switch on are the verbs disable and enable", async () => {
+    // Not first: the wireless twin has the same words. Both must be in the first three.
+    const off = await run("find_tools", { query: "switch off interface ether3", limit: 3 });
+    expect(off).toMatch(/\d\. disable_interface /);
+    expect(off).not.toMatch(/switch_/);
+    const on = await run("find_tools", { query: "turn the ether3 interface back on", limit: 3 });
+    expect(on).toMatch(/\d\. enable_interface /);
+  });
+
+  test("words that are also object members do not break the search", async () => {
+    for (const query of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"])
+      expect(await run("find_tools", { query })).toMatch(/^(Found|No tools matched)/);
+  });
+
+  test("a very long request is answered fast", async () => {
+    const started = performance.now();
+    await run("find_tools", { query: "list ".repeat(3000) + "x".repeat(20000) });
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   test("two words that the catalog writes as one still find the tool", async () => {
     const out = await run("find_tools", { query: "shut down the router", limit: 3 });
     expect(out).toMatch(/^1\. shutdown_system /m);
