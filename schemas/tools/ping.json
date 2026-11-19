@@ -27,6 +27,11 @@
       "type": "integer",
       "minimum": -9007199254740991,
       "maximum": 9007199254740991
+    },
+    "interval": {
+      "description": "Time between packets, e.g. \"200ms\" or \"1s\" (RouterOS default: 1s).",
+      "type": "string",
+      "pattern": "^\\d+(?:ms|s)$"
     }
   },
   "required": ["address", "count"],

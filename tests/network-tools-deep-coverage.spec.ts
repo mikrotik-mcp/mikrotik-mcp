@@ -28,6 +28,32 @@ test("ping bounds execution time and reports success, empty response, and router
   expect(await call("ping", { address: "192.0.2.1", count: 1 })).toContain("Failed to ping");
 });
 
+test("a long ping is kept under the time a host waits for a tool result", async () => {
+  // 60 packets at the default 1 s ran for 59 s, and the host dropped the call ("No result received").
+  execute.mockResolvedValueOnce("sent=60 received=60");
+  const fitted = await call("ping", { address: "192.0.2.1", count: 60 });
+  expect(execute.mock.calls.at(-1)?.[0]).toContain("interval=666ms");
+  expect(execute.mock.calls.at(-1)?.[2]).toEqual({ maxMs: 48_000 });
+  expect(fitted).toContain("sent every 666ms");
+
+  // A short run is not touched.
+  execute.mockResolvedValueOnce("sent=40 received=40");
+  expect(await call("ping", { address: "192.0.2.1", count: 40 })).not.toContain("Note:");
+  expect(execute.mock.calls.at(-1)?.[0]).not.toContain("interval=");
+
+  // The caller's own interval is used as given, or refused. It is never changed.
+  execute.mockResolvedValueOnce("sent=60 received=60");
+  await call("ping", { address: "192.0.2.1", count: 60, interval: "200ms" });
+  expect(execute.mock.calls.at(-1)?.[0]).toContain("interval=200ms");
+
+  const sentBefore = execute.mock.calls.length;
+  const refused = await call("ping", { address: "192.0.2.1", count: 100, interval: "1s" });
+  expect(refused).toContain("Not run: 100 packets every 1s take 100 s");
+  expect(refused).toContain("count 40 or less, or interval 400ms or less");
+  expect(await call("ping", { address: "192.0.2.1", interval: "5ms" })).toContain("10ms or more");
+  expect(execute.mock.calls.length).toBe(sentBefore);
+});
+
 test("traceroute requests DNS names and has a bounded read even if router streams forever", async () => {
   execute.mockResolvedValueOnce("1 10.0.0.1 1ms");
   expect(await call("traceroute", { address: "example.test", count: 2, use_dns: true })).toContain(

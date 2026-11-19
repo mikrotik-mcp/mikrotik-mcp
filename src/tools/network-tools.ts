@@ -20,6 +20,12 @@ import {
   quoteValue,
 } from "../core/routeros";
 
+/**
+ * A ping run ends within this time. Claude apps and other hosts drop a tool call
+ * at about 60 s, and the first call to a router can spend 10 s on the connection.
+ */
+const PING_BUDGET_MS = 40_000;
+
 export const networkToolTools: ToolModule = [
   defineTool({
     name: "ping",
@@ -28,6 +34,8 @@ export const networkToolTools: ToolModule = [
     description:
       "Sends ICMP echo requests to a target host (`/ping`) from the RouterOS device — use to verify reachability or measure round-trip latency from the router's vantage point. " +
       "Output is a single bounded run of `count` packets (1–100, default 4); it does not stream continuously. " +
+      "A run is kept under 40 seconds, because hosts drop a tool call near 60 seconds ('No result received'): " +
+      "with no `interval`, a long run sends its packets closer together and says so; an `interval` that makes the run longer is refused. " +
       "Optional `interface` pins egress to a specific interface; `src_address` sets the source IP for the probe. " +
       "Returns packet statistics (sent/received/loss/RTT) or a failure message if unreachable. " +
       "For hop-by-hop path discovery use `traceroute`; for throughput measurement use `bandwidth_test`.",
@@ -43,21 +51,49 @@ export const networkToolTools: ToolModule = [
       interface: z.string().optional().describe("Outgoing interface"),
       src_address: z.string().optional().describe("Source address to ping from"),
       size: z.number().int().optional().describe("Packet size in bytes"),
+      interval: z
+        .string()
+        .regex(/^\d+(?:ms|s)$/, 'Use milliseconds or seconds, for example "200ms" or "1s".')
+        .optional()
+        .describe('Time between packets, e.g. "200ms" or "1s" (RouterOS default: 1s).'),
     },
     async handler(a, ctx) {
       ctx.info(`Pinging ${a.address} (count=${a.count})`);
+      const asked = a.interval
+        ? Number.parseInt(a.interval, 10) * (a.interval.endsWith("ms") ? 1 : 1000)
+        : undefined;
+      if (asked !== undefined && asked < 10) return "Not run: interval must be 10ms or more.";
+      if (asked !== undefined && a.count * asked > PING_BUDGET_MS)
+        return (
+          `Not run: ${a.count} packets every ${a.interval} take ${Math.ceil((a.count * asked) / 1000)} s. ` +
+          `A run must end within ${PING_BUDGET_MS / 1000} s, or the host drops the call before the result arrives. ` +
+          `Use count ${Math.floor(PING_BUDGET_MS / asked)} or less, or interval ${Math.floor(PING_BUDGET_MS / a.count)}ms or less.`
+        );
+      // No interval given and the default 1 s is too slow for this count: send the packets closer together.
+      const fitted =
+        asked === undefined && a.count * 1000 > PING_BUDGET_MS
+          ? Math.floor(PING_BUDGET_MS / a.count)
+          : undefined;
       const cmd = new Cmd(`/ping ${quoteValue(a.address)}`)
         .set("count", a.count)
+        .opt("interval", fitted !== undefined ? `${fitted}ms` : a.interval)
         .opt("interface", a.interface)
         .opt("src-address", a.src_address)
         .opt("size", a.size)
         .build();
-      // Each echo takes ~1s; cap the read so an unreachable host can't hang.
+      // Cap the read so an unreachable host can't hang, and never wait past the host's own limit.
       const result = flattenLiveOutput(
-        await executeMikrotikCommand(cmd, ctx, { maxMs: a.count * 1500 + 6000 }),
+        await executeMikrotikCommand(cmd, ctx, {
+          maxMs: Math.min(a.count * 1500 + 6000, PING_BUDGET_MS + 8000),
+        }),
       );
       if (looksLikeError(result)) return `Failed to ping ${a.address}: ${result}`;
-      return isEmpty(result) ? `No response from ${a.address}.` : `PING ${a.address}:\n\n${result}`;
+      if (isEmpty(result)) return `No response from ${a.address}.`;
+      const note =
+        fitted !== undefined
+          ? `\n\nNote: ${a.count} packets at the default 1 s take longer than ${PING_BUDGET_MS / 1000} s, so they were sent every ${fitted}ms. Give \`interval\` to choose the spacing.`
+          : "";
+      return `PING ${a.address}:\n\n${result}${note}`;
     },
   }),
 

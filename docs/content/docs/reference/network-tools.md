@@ -18,15 +18,16 @@ description: "ping, traceroute, bandwidth-test, DNS resolve, netwatch (`/tool`).
 
 **Ping Host via Router** · Risk: **read**
 
-Sends ICMP echo requests to a target host (`/ping`) from the RouterOS device — use to verify reachability or measure round-trip latency from the router's vantage point. Output is a single bounded run of `count` packets (1–100, default 4); it does not stream continuously. Optional `interface` pins egress to a specific interface; `src_address` sets the source IP for the probe. Returns packet statistics (sent/received/loss/RTT) or a failure message if unreachable. For hop-by-hop path discovery use `traceroute`; for throughput measurement use `bandwidth_test`.
+Sends ICMP echo requests to a target host (`/ping`) from the RouterOS device — use to verify reachability or measure round-trip latency from the router's vantage point. Output is a single bounded run of `count` packets (1–100, default 4); it does not stream continuously. A run is kept under 40 seconds, because hosts drop a tool call near 60 seconds ('No result received'): with no `interval`, a long run sends its packets closer together and says so; an `interval` that makes the run longer is refused. Optional `interface` pins egress to a specific interface; `src_address` sets the source IP for the probe. Returns packet statistics (sent/received/loss/RTT) or a failure message if unreachable. For hop-by-hop path discovery use `traceroute`; for throughput measurement use `bandwidth_test`.
 
-| Parameter     | Required | Definition                                                                                       |
-| ------------- | -------- | ------------------------------------------------------------------------------------------------ |
-| `address`     | Yes      | Target host or IP to ping `{"type":"string"}`                                                    |
-| `count`       | Yes      | Number of echo requests (1-100) `{"default":4,"type":"integer","minimum":1,"maximum":100}`       |
-| `interface`   | No       | Outgoing interface `{"type":"string"}`                                                           |
-| `src_address` | No       | Source address to ping from `{"type":"string"}`                                                  |
-| `size`        | No       | Packet size in bytes `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}` |
+| Parameter     | Required | Definition                                                                                                         |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `address`     | Yes      | Target host or IP to ping `{"type":"string"}`                                                                      |
+| `count`       | Yes      | Number of echo requests (1-100) `{"default":4,"type":"integer","minimum":1,"maximum":100}`                         |
+| `interface`   | No       | Outgoing interface `{"type":"string"}`                                                                             |
+| `src_address` | No       | Source address to ping from `{"type":"string"}`                                                                    |
+| `size`        | No       | Packet size in bytes `{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991}`                   |
+| `interval`    | No       | Time between packets, e.g. "200ms" or "1s" (RouterOS default: 1s). `{"type":"string","pattern":"^\\d+(?:ms\|s)$"}` |
 
 ## traceroute
 

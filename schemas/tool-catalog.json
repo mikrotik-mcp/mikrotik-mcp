@@ -19410,7 +19410,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Signs an existing certificate template (`/certificate sign`) to produce a valid certificate. Omit `ca` to produce a self-signed certificate; supply the name of an existing CA certificate in `ca` to issue it under that CA. IMPORTANT: certificate stores are PER-DEVICE — the template (and the `ca`, if given) must live on the SAME router this runs on. A 'CA not found' error almost always means the template or CA was created on a different device; verify with list_certificates on this device first (and check the targeting). Set the common name (CN) when you create the template (create_certificate), not here — `/certificate sign` has no CN option. May run for several seconds while the device generates key material. Returns the signing operation output from the device.",
+      "description": "Signs an existing certificate template (`/certificate sign`) to produce a valid certificate. Omit `ca` to produce a self-signed certificate; supply the name of an existing CA certificate in `ca` to issue it under that CA. RouterOS self-signs ONLY a template whose key-usage has key-cert-sign (a CA); for a server or client certificate without it (for example digital-signature,key-encipherment,tls-server), omitting `ca` fails with 'CA not found': make a CA first and pass it in `ca`. IMPORTANT: certificate stores are PER-DEVICE — the template (and the `ca`, if given) must live on the SAME router this runs on. A 'CA not found' error with `ca` given usually means the CA was created on a different device; verify with list_certificates on this device first (and check the targeting). Set the common name (CN) when you create the template (create_certificate), not here — `/certificate sign` has no CN option. May run for several seconds while the device generates key material. Returns the signing operation output from the device.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -28515,7 +28515,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Sends ICMP echo requests to a target host (`/ping`) from the RouterOS device — use to verify reachability or measure round-trip latency from the router's vantage point. Output is a single bounded run of `count` packets (1–100, default 4); it does not stream continuously. Optional `interface` pins egress to a specific interface; `src_address` sets the source IP for the probe. Returns packet statistics (sent/received/loss/RTT) or a failure message if unreachable. For hop-by-hop path discovery use `traceroute`; for throughput measurement use `bandwidth_test`.",
+      "description": "Sends ICMP echo requests to a target host (`/ping`) from the RouterOS device — use to verify reachability or measure round-trip latency from the router's vantage point. Output is a single bounded run of `count` packets (1–100, default 4); it does not stream continuously. A run is kept under 40 seconds, because hosts drop a tool call near 60 seconds ('No result received'): with no `interval`, a long run sends its packets closer together and says so; an `interval` that makes the run longer is refused. Optional `interface` pins egress to a specific interface; `src_address` sets the source IP for the probe. Returns packet statistics (sent/received/loss/RTT) or a failure message if unreachable. For hop-by-hop path discovery use `traceroute`; for throughput measurement use `bandwidth_test`.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -28544,6 +28544,11 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "interval": {
+            "description": "Time between packets, e.g. \"200ms\" or \"1s\" (RouterOS default: 1s).",
+            "type": "string",
+            "pattern": "^\\d+(?:ms|s)$"
           }
         },
         "required": ["address", "count"],
