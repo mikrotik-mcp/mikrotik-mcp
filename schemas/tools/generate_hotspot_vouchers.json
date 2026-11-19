@@ -9,6 +9,42 @@
       "minimum": 1,
       "maximum": 200
     },
+    "batch": {
+      "description": "Batch name, e.g. 'hotel-2026-11'",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$"
+    },
+    "print": {
+      "default": false,
+      "description": "Write a printable HTML sheet and a CSV file",
+      "type": "boolean"
+    },
+    "title": {
+      "default": "Guest Wi-Fi",
+      "description": "Printed on each card",
+      "type": "string",
+      "maxLength": 60
+    },
+    "validity": {
+      "description": "Printed text, e.g. '1 day'",
+      "type": "string",
+      "maxLength": 40
+    },
+    "price": {
+      "description": "Printed text, e.g. '5 EUR'",
+      "type": "string",
+      "maxLength": 20
+    },
+    "note": {
+      "description": "Small print, e.g. how to connect",
+      "type": "string",
+      "maxLength": 120
+    },
+    "login_url": {
+      "description": "Hotspot login address, e.g. 'http://hotspot.lan/login', for a QR code",
+      "type": "string",
+      "format": "uri"
+    },
     "uptime_limit": {
       "description": "Per-voucher uptime, e.g. '1h', '1d'",
       "type": "string"
@@ -28,6 +64,6 @@
       "type": "boolean"
     }
   },
-  "required": ["count", "code_prefix", "apply"],
+  "required": ["count", "print", "title", "code_prefix", "apply"],
   "additionalProperties": false
 }

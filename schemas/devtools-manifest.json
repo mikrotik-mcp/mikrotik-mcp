@@ -475,7 +475,12 @@
       "group": "Addressing & Routing",
       "description": "Stand up a guest hotspot with a captive portal (gateway, DHCP, /ip hotspot, per-guest cap, walled garden) and generate printable vouchers, with preview-before-apply.",
       "alwaysOn": false,
-      "tools": ["build_guest_hotspot", "generate_hotspot_vouchers"]
+      "tools": [
+        "build_guest_hotspot",
+        "generate_hotspot_vouchers",
+        "list_voucher_batches",
+        "remove_voucher_batch"
+      ]
     },
     {
       "slug": "dns",
@@ -4162,6 +4167,26 @@
     },
     {
       "name": "generate_hotspot_vouchers",
+      "module": "hotspot-builder",
+      "group": "Addressing & Routing",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "list_voucher_batches",
+      "module": "hotspot-builder",
+      "group": "Addressing & Routing",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "remove_voucher_batch",
       "module": "hotspot-builder",
       "group": "Addressing & Routing",
       "noDevice": false,

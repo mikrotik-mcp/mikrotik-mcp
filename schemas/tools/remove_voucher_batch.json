@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "remove_voucher_batch",
+  "type": "object",
+  "properties": {
+    "batch": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$",
+      "description": "The batch name"
+    },
+    "include_used": {
+      "default": false,
+      "description": "Also remove vouchers that were used",
+      "type": "boolean"
+    },
+    "apply": {
+      "default": false,
+      "description": "false = count only; true = remove",
+      "type": "boolean"
+    }
+  },
+  "required": ["batch", "include_used", "apply"],
+  "additionalProperties": false
+}

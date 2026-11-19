@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.15.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 999,
+  "toolCount": 1001,
   "tools": [
     {
       "name": "create_client_check",
@@ -6926,7 +6926,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Creates `count` random guest login codes as `/ip hotspot user` entries (username = password = code), each with an optional uptime limit and hotspot user profile — the printable vouchers you hand to guests. DEFAULTS TO A DRY RUN (`apply=false`) that just shows the codes it would create; set `apply=true` to add them. Returns the generated codes.",
+      "description": "Creates `count` random guest login codes as `/ip hotspot user` entries (username = password = code), each with an optional uptime limit and hotspot user profile — the printable vouchers you hand to guests. DEFAULTS TO A DRY RUN (`apply=false`) that just shows the codes it would create; set `apply=true` to add them. Every voucher of one call belongs to a batch (the `batch` name, or one made from the date), so `list_voucher_batches` can count how many were used and `remove_voucher_batch` can clear the unused ones. With `print=true` the tool also writes a print-ready HTML sheet (cards with cut lines, three across) and a CSV file to a folder on the MCP host and returns the paths; `title`, `validity`, `price` and `note` are printed on each card, and `login_url` adds a QR code that signs the guest in when scanned. Returns the generated codes.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -6936,6 +6936,42 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 200
+          },
+          "batch": {
+            "description": "Batch name, e.g. 'hotel-2026-11'",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$"
+          },
+          "print": {
+            "default": false,
+            "description": "Write a printable HTML sheet and a CSV file",
+            "type": "boolean"
+          },
+          "title": {
+            "default": "Guest Wi-Fi",
+            "description": "Printed on each card",
+            "type": "string",
+            "maxLength": 60
+          },
+          "validity": {
+            "description": "Printed text, e.g. '1 day'",
+            "type": "string",
+            "maxLength": 40
+          },
+          "price": {
+            "description": "Printed text, e.g. '5 EUR'",
+            "type": "string",
+            "maxLength": 20
+          },
+          "note": {
+            "description": "Small print, e.g. how to connect",
+            "type": "string",
+            "maxLength": 120
+          },
+          "login_url": {
+            "description": "Hotspot login address, e.g. 'http://hotspot.lan/login', for a QR code",
+            "type": "string",
+            "format": "uri"
           },
           "uptime_limit": {
             "description": "Per-voucher uptime, e.g. '1h', '1d'",
@@ -6956,7 +6992,58 @@
             "type": "boolean"
           }
         },
-        "required": ["count", "code_prefix", "apply"],
+        "required": ["count", "print", "title", "code_prefix", "apply"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_voucher_batches",
+      "title": "List Hotspot Voucher Batches",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists the batches of vouchers made by generate_hotspot_vouchers: for each batch the number of vouchers, how many were used (the guest signed in at least once) and how many are still unused. Use it to see how a batch sells, or before you clear old unused codes with remove_voucher_batch. Hotspot users that were added another way are not listed.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "remove_voucher_batch",
+      "title": "Remove a Hotspot Voucher Batch",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Removes the vouchers of one batch made by generate_hotspot_vouchers. By default only the UNUSED vouchers go (codes nobody signed in with), so a guest who is using one keeps access; `include_used=true` removes every voucher of the batch. DEFAULTS TO A DRY RUN (`apply=false`) that counts what would be removed. Use it to retire codes that were printed and not sold. A removed code can never sign in again.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "batch": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$",
+            "description": "The batch name"
+          },
+          "include_used": {
+            "default": false,
+            "description": "Also remove vouchers that were used",
+            "type": "boolean"
+          },
+          "apply": {
+            "default": false,
+            "description": "false = count only; true = remove",
+            "type": "boolean"
+          }
+        },
+        "required": ["batch", "include_used", "apply"],
         "additionalProperties": false
       }
     },

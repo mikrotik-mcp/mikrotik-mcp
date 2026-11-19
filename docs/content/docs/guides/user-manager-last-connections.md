@@ -39,3 +39,34 @@ No sessions are disconnected, and no RouterOS configuration is changed.
 
 The summary checks `list_user_manager_sessions` read access before serving cached
 history. Caches are isolated by device and discarded on configuration changes.
+
+## Hotspot vouchers: batches and printing
+
+`generate_hotspot_vouchers` creates guest codes as hotspot users. Every call
+makes one **batch**: pass `batch=hotel-nov`, or the tool names it from the date.
+
+With `print=true` the tool also writes two files to `~/.mikrotik-mcp/vouchers`
+(or `MIKROTIK_VOUCHER_DIR`) on the MCP host:
+
+| File           | For                                                                          |
+| -------------- | ---------------------------------------------------------------------------- |
+| `<batch>.html` | Printing. Cards three across with cut lines. Open it in a browser and print. |
+| `<batch>.csv`  | A spreadsheet or a billing system: code, batch, validity, price.             |
+
+`title`, `validity`, `price` and `note` are printed on each card. With
+`login_url` (the hotspot's login address) each card gets a QR code that signs
+the guest in when scanned.
+
+`list_voucher_batches` counts, for each batch, how many vouchers were used and
+how many are not. `remove_voucher_batch` retires a batch: by default only the
+unused vouchers, so a guest who is online keeps access.
+
+Limits to know:
+
+- The codes are passwords. The folder and the files are readable by the owner
+  only; treat a printed sheet the same way.
+- "Used" means the hotspot user has uptime. A router reboot does not reset it,
+  but removing and adding a user does.
+- There is no payment or billing link. The CSV is the hand-over to your own
+  system. Login rate limiting is a RouterOS hotspot setting, not part of this.
+- The HTML holds no script and loads nothing from the network.
