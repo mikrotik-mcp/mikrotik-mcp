@@ -273,3 +273,35 @@ test("the collapsed sidebar choice survives a reload", async () => {
   await act(async () => root.render(h(Probe)));
   expect(host.textContent).toBe("rail");
 });
+
+test("the line is lit from the first group to the page you are on", async () => {
+  await mount("openvpn");
+  const line = (label: string) => heading(label).closest("section")!.dataset.line;
+  expect(
+    ["Monitoring", "Network", "Users & VPN", "Diagnostics", "MCP workspace"].map(line),
+  ).toEqual(["passed", "passed", "here", "ahead", "ahead"]);
+  // The branch of the open group: lit to OpenVPN, the second of its four pages.
+  const rows = [...track("Users & VPN").querySelectorAll<HTMLElement>(".shell-nav-row")];
+  expect(rows.map((row) => row.dataset.line)).toEqual(["passed", "here", "ahead", "ahead"]);
+  const branch = heading("Users & VPN").closest("section")!.querySelector(".shell-branch")!;
+  expect(branch.hasAttribute("data-lit")).toBe(true);
+  expect(branch.getAttribute("aria-hidden")).toBe("true");
+});
+
+test("another open group has a branch, but nothing on it is lit", async () => {
+  await mount("openvpn");
+  await act(async () => heading("Security").click());
+  const section = heading("Security").closest("section")!;
+  expect(section.querySelector(".shell-branch")!.hasAttribute("data-lit")).toBe(false);
+  const rows = [...track("Security").querySelectorAll<HTMLElement>(".shell-nav-row")];
+  expect(rows.every((row) => row.dataset.line === "ahead")).toBe(true);
+  // A closed group draws no branch.
+  expect(heading("Network").closest("section")!.querySelector(".shell-branch")).toBeNull();
+});
+
+test("a pinned page shows a LED, pink when its alerts fire", async () => {
+  window.localStorage.setItem(NAVIGATION_PINS_KEY, JSON.stringify(["feed", "alerts"]));
+  await mount("openvpn");
+  const leds = [...host.querySelectorAll<HTMLElement>(".shell-pinned .shell-pin-led")];
+  expect(leds.map((led) => led.dataset.tone)).toEqual(["ok", "bad"]);
+});

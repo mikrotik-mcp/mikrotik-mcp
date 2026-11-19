@@ -277,7 +277,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
     }).add((self) => {
       if (self?.matches.reduceMotion) return;
       animate(aside, {
-        width: railShown ? [248, 68] : [68, 248],
+        width: railShown ? [320, 72] : [72, 320],
         ease: spring({ bounce: 0.12, duration: 320 }),
       });
       if (railShown)
@@ -382,6 +382,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
   }, [onMobileOpenChange]);
 
   const groups = navigationGroups("");
+  const activeIndex = groups.findIndex((group) => group.id === activeGroup);
   const choose = (id: ViewId): void => {
     onNavigate(id);
     onMobileOpenChange(false);
@@ -432,12 +433,17 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
     return release ? `${item.label} · New in v${release}` : item.label;
   };
 
-  const pageRow = (item: (typeof VIEWS)[number], inPinned = false, inFlyout = false): ReactNode => {
+  const pageRow = (
+    item: (typeof VIEWS)[number],
+    inPinned = false,
+    inFlyout = false,
+    line?: LineState,
+  ): ReactNode => {
     const pinned = pins.includes(item.id);
     const release = newFeatureRelease(item.id, version);
     const active = view === item.id;
     return (
-      <div className="shell-nav-row" key={item.id}>
+      <div className="shell-nav-row" key={item.id} data-line={line}>
         <a
           href={`#${item.id}`}
           className="it shell-nav-link"
@@ -453,7 +459,13 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
           }}
         >
           {active && <span className="shell-nav-hl" aria-hidden="true" />}
-          {inPinned && renderIcon(item.id)}
+          {inPinned && (
+            <span
+              className="shell-pin-led"
+              data-tone={item.id === "alerts" && firingCount > 0 ? "bad" : "ok"}
+              aria-hidden="true"
+            />
+          )}
           <span className="lbl">{item.label}</span>
           <span className="shell-nav-badges">
             <NewFeatureBadge view={item.id} version={version} />
@@ -556,12 +568,18 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
             {pinNotice}
           </p>
           <div className="shell-groups">
-            {groups.map((group) => {
+            {groups.map((group, index) => {
               const open = expanded.has(group.id);
               const GroupIcon = GROUP_ICONS[group.id] ?? Layers;
               const alerting = group.views.includes("alerts") && firingCount > 0;
+              const here = group.id === activeGroup;
+              const page = here ? group.items.findIndex((item) => item.id === view) : -1;
               return (
-                <section className="sec shell-nav-group" key={group.id}>
+                <section
+                  className="sec shell-nav-group"
+                  key={group.id}
+                  data-line={lineState(index, activeIndex)}
+                >
                   <button
                     type="button"
                     className="sec-h shell-group-heading"
@@ -584,8 +602,23 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
                       {group.items.length}
                     </span>
                   </button>
+                  {open && (
+                    // The branch from the group's station to its first page.
+                    <svg
+                      className="shell-branch"
+                      data-lit={page >= 0 || undefined}
+                      viewBox="0 0 30 41"
+                      aria-hidden="true"
+                    >
+                      <path d="M1 0 C1 24 29 16 29 41" />
+                    </svg>
+                  )}
                   <div id={`${instance}-${group.id}`} className="shell-nav-track" hidden={!open}>
-                    <div className="nav">{group.items.map((item) => pageRow(item))}</div>
+                    <div className="nav">
+                      {group.items.map((item, at) =>
+                        pageRow(item, false, false, lineState(at, page)),
+                      )}
+                    </div>
                   </div>
                 </section>
               );
@@ -707,10 +740,11 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       )}
       <span className="rsep" aria-hidden="true" />
       <div className="rail-groups">
-        {groups.map((group) => (
+        {groups.map((group, index) => (
           <RailGroup
             key={group.id}
             group={group}
+            line={lineState(index, activeIndex)}
             active={group.id === activeGroup}
             alerts={group.views.includes("alerts") ? firingCount : 0}
             open={flyout === group.id}
@@ -754,9 +788,19 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
   );
 }
 
+/**
+ * Where a stop is on the lit line: before the place you are at, at it, or
+ * after it. `at` is -1 when the place is not in this list, so nothing is lit.
+ */
+type LineState = "passed" | "here" | "ahead";
+function lineState(index: number, at: number): LineState {
+  return at < 0 || index > at ? "ahead" : index === at ? "here" : "passed";
+}
+
 /** A rail icon for one group; hover or focus shows the group's pages beside it. */
 function RailGroup({
   group,
+  line,
   active,
   alerts,
   open,
@@ -764,6 +808,7 @@ function RailGroup({
   children,
 }: {
   group: { id: string; label: string; description: string };
+  line: LineState;
   active: boolean;
   alerts: number;
   open: boolean;
@@ -842,6 +887,7 @@ function RailGroup({
   return (
     <div
       className="rail-group"
+      data-line={line}
       onMouseEnter={() => schedule(true, 120)}
       onMouseLeave={() => schedule(false, 160)}
       onFocus={() => {
