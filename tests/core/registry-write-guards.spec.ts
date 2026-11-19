@@ -42,6 +42,8 @@ const TWO_DEVICES: MikrotikConfig = MikrotikConfigSchema.parse({
     branch: { host: "10.0.0.2", description: "Branch Office" },
   },
   defaultDevice: "home",
+  // No read-back: it opens a real SSH connection, and 10.0.0.1 can be a real host.
+  verifyWrites: false,
 });
 
 beforeEach(() => setConfig(TWO_DEVICES));
