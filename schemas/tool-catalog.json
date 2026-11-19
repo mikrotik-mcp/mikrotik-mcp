@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.15.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 995,
+  "toolCount": 996,
   "tools": [
     {
       "name": "create_client_check",
@@ -4410,6 +4410,23 @@
           }
         },
         "required": ["interface", "duration", "apply"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "plan_wireless_to_wifi_migration",
+      "title": "Plan the Move From 'wireless' to 'wifi'",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Plans the migration of a router from the legacy `wireless` package (`/interface wireless`) to the new `wifi` driver (`/interface wifi`, formerly wifiwave2). It reads the wireless interfaces, their security profiles and the access list, and returns the equivalent `/interface wifi` commands with every setting translated to its new name (ssid, mode, band, channel width, frequency, country, hidden SSID, client isolation, VLAN, WPS, authentication types, virtual APs, access-list entries). It also lists BLOCKERS that the new driver cannot do (Nv2 or Nstreme links, WDS, modes with no equivalent) and notes for a person. It changes NOTHING and does not read Wi-Fi passwords: the plan has a CHANGE-ME placeholder for each one. The move itself is manual: install the new package, reboot, then run the reviewed commands; wireless clients drop while you do it. Use this before you decide to migrate, to see what the result would be and whether anything stands in the way. Fails with a clear message when the router has no `wireless` menu.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       }
     },

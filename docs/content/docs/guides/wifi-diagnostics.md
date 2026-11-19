@@ -43,3 +43,45 @@ Security-profile creation/removal/modern assignment remain unimplemented;
 the inspection tools are implemented independently of those write operations.
 
 See the [official MikroTik Wi-Fi documentation](https://manual.mikrotik.com/docs/wireless/wifi/).
+
+## Moving from `wireless` to `wifi`
+
+RouterOS has two wireless drivers. The legacy `wireless` package uses
+`/interface wireless`; the new `wifi` driver (first called wifiwave2) uses
+`/interface wifi` and names almost every setting differently.
+
+`plan_wireless_to_wifi_migration` reads the legacy configuration and returns the
+commands for the new driver. It changes nothing.
+
+| Legacy (`wireless`)                      | New (`wifi`)                     |
+| ---------------------------------------- | -------------------------------- |
+| `ssid`                                   | `configuration.ssid`             |
+| `mode=ap-bridge`                         | `configuration.mode=ap`          |
+| `band=2ghz-b/g/n`, `5ghz-a/n/ac`         | `channel.band=2ghz-n`, `5ghz-ac` |
+| `channel-width=20/40/80mhz-Ceee`         | `channel.width=20/40/80mhz`      |
+| `frequency=2437`                         | `channel.frequency=2437`         |
+| `hide-ssid`                              | `configuration.hide-ssid`        |
+| `default-forwarding=no`                  | `datapath.client-isolation=yes`  |
+| `vlan-mode=use-tag` + `vlan-id`          | `datapath.vlan-id`               |
+| security profile, `authentication-types` | `security.authentication-types`  |
+| security profile, pre-shared key         | `security.passphrase`            |
+| `wlan1`, `wlan2`                         | `wifi1`, `wifi2`                 |
+| access-list `authentication=no`          | access-list `action=reject`      |
+
+The plan also lists **blockers**: things the new driver cannot do. An Nv2 or
+Nstreme link, a WDS link, and modes with no equivalent are named, not dropped
+in silence.
+
+Limits to know:
+
+- The plan does not read Wi-Fi passwords. Each one is a `CHANGE-ME` placeholder
+  that you replace.
+- It does not check the hardware. The new driver needs `wifi-qcom-ac`
+  (802.11ac ARM devices) or `wifi-qcom` (802.11ax devices); MIPS devices and
+  devices with 16 MB of storage cannot run it. Check the product page.
+- The move is manual: install the new package, reboot, then run the reviewed
+  commands. Wireless clients drop while you do it, so have a wired or console
+  way in.
+- Bridge ports, the DHCP server and firewall rules still name the old
+  interfaces afterwards. Point them at the new names.
+- CAPsMAN settings are not part of the plan.

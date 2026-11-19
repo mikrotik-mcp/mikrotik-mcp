@@ -54,6 +54,7 @@ import { firewallNatTools } from "./firewall-nat";
 import { firewallMangleTools } from "./firewall-mangle";
 import { firmwareLifecycleTools } from "./firmware-lifecycle";
 import { firmwareRepoTools } from "./firmware-repo";
+import { wifiMigrationTools } from "./wifi-migration";
 import { zoneFirewallTools } from "./zone-firewall";
 import { portForwardTools } from "./port-forward";
 import { interfaceTools } from "./interfaces";
@@ -373,6 +374,15 @@ export const moduleCatalog: ModuleInfo[] = [
       "Survey RF channel usage and tune a wireless radio to the least-congested frequency, with " +
       "preview-before-apply (legacy `/interface wireless`).",
     tools: wifiOptimizerTools,
+  },
+  {
+    label: "Wireless to WiFi Migration",
+    slug: "wifi-migration",
+    group: "Interfaces",
+    description:
+      "Plans the move from the legacy `wireless` package to the new `wifi` driver: translates " +
+      "every setting to its new name, and lists what the new driver cannot do. Read-only.",
+    tools: wifiMigrationTools,
   },
   {
     label: "CAPsMAN Orchestrator",

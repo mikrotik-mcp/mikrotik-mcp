@@ -302,6 +302,14 @@
       "tools": ["tune_wifi_channel"]
     },
     {
+      "slug": "wifi-migration",
+      "label": "Wireless to WiFi Migration",
+      "group": "Interfaces",
+      "description": "Plans the move from the legacy `wireless` package to the new `wifi` driver: translates every setting to its new name, and lists what the new driver cannot do. Read-only.",
+      "alwaysOn": false,
+      "tools": ["plan_wireless_to_wifi_migration"]
+    },
+    {
       "slug": "capsman",
       "label": "CAPsMAN Orchestrator",
       "group": "Interfaces",
@@ -3417,6 +3425,14 @@
     {
       "name": "tune_wifi_channel",
       "module": "wifi-optimizer",
+      "group": "Interfaces",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "plan_wireless_to_wifi_migration",
+      "module": "wifi-migration",
       "group": "Interfaces",
       "noDevice": false,
       "requires": null,
