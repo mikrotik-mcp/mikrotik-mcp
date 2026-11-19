@@ -103,8 +103,24 @@ try {
       assert(cursors.size < 100, "MCP pagination must finish");
     }
   } while (cursor);
-  assert(
-    names.includes("list_mikrotik_devices"),
+  // The default list is short: the three tools below reach every other tool.
+  for (const name of ["find_tools", "describe_tool", "invoke_tool"])
+    assert(names.includes(name), `The tool list must have ${name}`);
+  // The catalog behind them. A new container first builds the search vectors
+  // and holds tool calls back meanwhile, so wait for that to finish.
+  let described = "";
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const result = await rpc("tools/call", {
+      name: "describe_tool",
+      arguments: { name: "list_mikrotik_devices" },
+    });
+    described = result.content[0].text;
+    if (!described.includes("still being built")) break;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  assert.match(
+    described,
+    /list_mikrotik_devices/,
     "The built catalog must include device discovery",
   );
   assert.equal(new Set(names).size, names.length, "Tool names must be unique");

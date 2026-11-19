@@ -198,3 +198,15 @@ description: "Archived verification records from previous Docker releases."
 - Release gate: 4,897 tests, typecheck and lint passed. The separate macOS upgrade helper adds seven tests; the subsequent gate passed 4,904 tests.
 - Removed the isolated release builder/cache, smoke container and locally pulled release image. No unrelated Docker volumes were pruned.
 - Separately, the user-authorized macOS upgrade helper upgraded and restarted the existing Bun LaunchAgent from 6.10.0 to 6.11.0; MCP initialization verified the running version. No router configuration was changed.
+
+## 6.16.0 publication record — November 19, 2026
+
+- Source: release tag `6.16.0` (`d6c962cc`), built from a Git archive of the tag.
+- Published `alimaster/mikrotik-mcp:6.16.0` and promoted `latest` after the pulled digest passed the runtime check.
+- Both tags were read back with index digest `sha256:db7b98395a3fb061d8e18ee3819e87e60d5fde8481c07efe2195f8917f49b8cc` and `linux/amd64` + `linux/arm64` manifests.
+- Native ARM64 check passed on the pulled digest with networking disabled and the synthetic configuration: Bun 1.4.4, MCP 6.16.0, non-root UID 1000, HTTP health, dashboard, writable JSON, the 9 tools of the default list, and the catalog through `describe_tool`.
+- Native AMD64 execution was not tested. Cross-building is not a runtime test.
+- Release gate: 5,276 tests, typecheck and lint passed. One test opened a real SSH connection and timed out; it was fixed after the tag and does not change the image.
+- `scripts/check-docker-runtime.ts` was changed after the tag for the short default tool list; the image was checked with the changed script.
+- Removed the isolated release builder, smoke container, local verify and pulled images, and the source archive. No unrelated Docker data was pruned.
+- No running MCP service was upgraded or restarted; no router settings changed.
