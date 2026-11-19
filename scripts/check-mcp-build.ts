@@ -48,7 +48,8 @@ for (const { capabilityGating, toolPageSize } of cases) {
       defaultDevice: "offline",
       disableUpdateCheck: true,
       memory: { enabled: false },
-      mcp: { capabilityGating, toolPageSize },
+      // The default surface lists only the search tools; this gate reads every tool.
+      mcp: { capabilityGating, toolPageSize, toolSurface: "full" },
     }),
   );
   const { server } = createServer();
@@ -94,6 +95,33 @@ for (const { capabilityGating, toolPageSize } of cases) {
     process.stdout.write(
       `✓ Built MCP: ${tools.length} tools in ${pages} page(s), pageSize=${toolPageSize}, capabilityGating=${capabilityGating}\n`,
     );
+  } finally {
+    await client.close();
+    await server.close();
+  }
+}
+
+// The default surface: a short list, with the three tools that reach every other tool.
+{
+  setConfig(
+    MikrotikConfigSchema.parse({
+      devices: { offline: { host: "127.0.0.1", port: 1 } },
+      defaultDevice: "offline",
+      disableUpdateCheck: true,
+      memory: { enabled: false },
+    }),
+  );
+  const { server } = createServer();
+  const client = new Client({ name: "build-tools-list-check", version: "1" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  try {
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const names = (await client.listTools()).tools.map((tool) => tool.name);
+    assert(names.length < 100, `The default list must be short, got ${names.length} tools`);
+    for (const name of ["find_tools", "describe_tool", "invoke_tool"])
+      assert(names.includes(name), `The default list must have ${name}`);
+    process.stdout.write(`✓ Built MCP: ${names.length} tools in the default list\n`);
   } finally {
     await client.close();
     await server.close();
