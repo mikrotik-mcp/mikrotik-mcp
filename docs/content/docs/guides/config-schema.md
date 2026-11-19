@@ -770,6 +770,58 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
 }
 ```
 
+## vouchers
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "issue": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 16
+        },
+        "tokenFrom": {
+          "type": "string",
+          "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+|keyring:[A-Za-z0-9][A-Za-z0-9._@-]{0,63}\\/[A-Za-z0-9][A-Za-z0-9._@-]{0,63})$"
+        },
+        "device": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "uptimeLimit": {
+          "type": "string",
+          "pattern": "^\\d+[wdhms](?:\\d+[wdhms])*$"
+        },
+        "batch": {
+          "default": "sold",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$"
+        },
+        "codePrefix": {
+          "default": "g",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]{0,6}$"
+        },
+        "maxPerMinute": {
+          "default": 30,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        }
+      },
+      "required": ["batch", "codePrefix", "maxPerMinute"],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+```
+
 ## gitMirror
 
 ```json

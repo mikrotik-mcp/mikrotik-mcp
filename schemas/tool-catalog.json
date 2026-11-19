@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.15.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 1007,
+  "toolCount": 1009,
   "tools": [
     {
       "name": "create_client_check",
@@ -7090,6 +7090,64 @@
           }
         },
         "required": ["batch", "include_used", "apply"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "protect_hotspot_login",
+      "title": "Rate-Limit the Hotspot Login",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Limits how fast one client can open connections to the hotspot login service, so guessing voucher codes or passwords by trying many of them is slowed and then blocked. It adds firewall rules in the `pre-hs-input` chain, which RouterOS runs before its own hotspot rules: a client that opens more than `per_minute` new connections to the login ports (tcp 64872-64875) is put in the address list `hs-login-flood` and dropped for `block_minutes`. DEFAULTS TO A DRY RUN (`apply=false`) that shows the rules. It limits connections for each client address, not attempts for each user name, so it cannot tell a wrong code from a page reload: keep `per_minute` well above normal use. Undo it with `unprotect_hotspot_login`. The router needs a hotspot for the chain to be used.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "per_minute": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 600
+          },
+          "burst": {
+            "default": 15,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "block_minutes": {
+            "default": 10,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "apply": {
+            "default": false,
+            "description": "false = show the rules; true = add them",
+            "type": "boolean"
+          }
+        },
+        "required": ["per_minute", "burst", "block_minutes", "apply"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unprotect_hotspot_login",
+      "title": "Remove the Hotspot Login Rate Limit",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Removes the rules `protect_hotspot_login` added and empties its block list. Clients that were blocked can sign in again at once. Rules you added yourself are not touched. Returns how many rules were removed.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       }
     },

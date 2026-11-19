@@ -479,7 +479,9 @@
         "build_guest_hotspot",
         "generate_hotspot_vouchers",
         "list_voucher_batches",
-        "remove_voucher_batch"
+        "remove_voucher_batch",
+        "protect_hotspot_login",
+        "unprotect_hotspot_login"
       ]
     },
     {
@@ -4209,6 +4211,22 @@
     },
     {
       "name": "remove_voucher_batch",
+      "module": "hotspot-builder",
+      "group": "Addressing & Routing",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "protect_hotspot_login",
+      "module": "hotspot-builder",
+      "group": "Addressing & Routing",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "unprotect_hotspot_login",
       "module": "hotspot-builder",
       "group": "Addressing & Routing",
       "noDevice": false,

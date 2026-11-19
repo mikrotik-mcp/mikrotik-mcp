@@ -194,6 +194,7 @@ import { driftRoutes } from "./drift-routes";
 import { postureRoutes } from "./posture-routes";
 import { createAccessSettingsRoutes } from "./access-settings";
 import { approvalRoutes } from "./approval-routes";
+import { voucherIssueRoute } from "./voucher-issue";
 import { txnRoutes } from "./txn-routes";
 import { flowRoutes } from "./flow-routes";
 import { rolloutRoutes } from "./rollout-routes";
@@ -2133,6 +2134,10 @@ export async function runDashboard(
 
       const checkResponse = await clientCheckRoutes(req, url, srv.requestIP(req)?.address);
       if (checkResponse) return checkResponse;
+
+      // A billing system sells a voucher here with its own narrow token.
+      const voucherResponse = await voucherIssueRoute(req, url);
+      if (voucherResponse) return voucherResponse;
 
       if (!tokenOk(req, url)) {
         return new Response("Unauthorized", { status: 401 });

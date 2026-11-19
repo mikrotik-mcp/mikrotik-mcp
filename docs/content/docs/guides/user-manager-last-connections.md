@@ -67,6 +67,63 @@ Limits to know:
   only; treat a printed sheet the same way.
 - "Used" means the hotspot user has uptime. A router reboot does not reset it,
   but removing and adding a user does.
-- There is no payment or billing link. The CSV is the hand-over to your own
-  system. Login rate limiting is a RouterOS hotspot setting, not part of this.
+- The CSV is the hand-over for vouchers you print. For vouchers sold online,
+  see "Selling a voucher from a payment system" below.
 - The HTML holds no script and loads nothing from the network.
+
+## Selling a voucher from a payment system
+
+The usual flow: a guest pays, the payment provider tells your billing system,
+and that system asks this server for a voucher to show the guest.
+
+```json
+{
+  "vouchers": {
+    "issue": { "tokenFrom": "env:VOUCHER_TOKEN", "device": "hotel", "uptimeLimit": "1d" }
+  }
+}
+```
+
+```bash
+curl -X POST http://127.0.0.1:9090/api/vouchers/issue -H "Authorization: Bearer $VOUCHER_TOKEN" -H "Content-Type: application/json" -d '{"reference":"pay_123"}'
+```
+
+The answer holds the code, which is also the user name and the password:
+
+```json
+{
+  "code": "g3f9a1c2b",
+  "username": "g3f9a1c2b",
+  "password": "g3f9a1c2b",
+  "batch": "sold",
+  "reference": "pay_123",
+  "repeated": false,
+  "validity": "1d"
+}
+```
+
+- **Its own token.** The route does not use the dashboard token. The billing
+  system holds one credential that can only issue vouchers.
+- **Safe to repeat.** Send the payment id as `reference`. A second call with
+  the same reference returns the same code and creates nothing, because
+  payment providers do resend a notification.
+- **Limited.** `maxPerMinute` (default 30) bounds new vouchers. Each issue
+  reaches the audit feed, without the code.
+- The route does not exist until `vouchers.issue` is configured.
+
+This server does not talk to a payment provider. It does not verify a payment:
+your billing system does that and calls the route only after the payment is
+confirmed. Send the request over a network you trust or behind TLS; the answer
+carries the code.
+
+## Limiting the hotspot login
+
+`protect_hotspot_login` slows down and then blocks a client that tries many
+codes. It adds rules in `pre-hs-input`, the chain RouterOS runs before its own
+hotspot rules: a client that opens more than `per_minute` new connections to
+the login ports is dropped for `block_minutes`. `unprotect_hotspot_login`
+removes the rules.
+
+It limits connections for each client address, not attempts for each user
+name. It cannot tell a wrong code from a page reload, so keep the limit well
+above normal use.

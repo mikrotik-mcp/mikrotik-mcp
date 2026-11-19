@@ -340,6 +340,36 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     fields: [{ key: "dbPath", label: "Database path", type: "text" }],
   },
   {
+    id: "vouchers",
+    title: "Voucher sales",
+    icon: "🎟️",
+    kind: "object",
+    path: "vouchers",
+    enable: { presence: true, label: "Voucher sales" },
+    blurb:
+      "Let a payment or billing system get a hotspot voucher: POST /api/vouchers/issue on the dashboard port, with its own token.",
+    fields: [
+      {
+        key: "issue.token",
+        label: "Voucher token",
+        type: "password",
+        secret: true,
+        help: "At least 16 characters. The billing system sends it as a Bearer token. It can only issue vouchers.",
+      },
+      {
+        key: "issue.tokenFrom",
+        label: "Voucher token from",
+        type: "text",
+        placeholder: "env:NAME, file:/path or keyring:service/account",
+      },
+      { key: "issue.device", label: "Hotspot router", type: "text" },
+      { key: "issue.profile", label: "Hotspot user profile", type: "text" },
+      { key: "issue.uptimeLimit", label: "Uptime of a voucher", type: "text", placeholder: "1d" },
+      { key: "issue.batch", label: "Batch name", type: "text", placeholder: "sold" },
+      { key: "issue.maxPerMinute", label: "Most vouchers in one minute", type: "number" },
+    ],
+  },
+  {
     id: "approvals",
     title: "Approvals",
     icon: "✋",

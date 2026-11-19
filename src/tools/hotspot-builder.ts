@@ -23,6 +23,47 @@ export function voucherDir(): string {
 }
 
 const BATCH_TAG = "voucher-batch: ";
+const LOGIN_TAG = "hs-login-limit";
+const LOGIN_LIST = "hs-login-flood";
+/** The ports of the hotspot login service on the router. */
+const LOGIN_PORTS = "64872-64875";
+
+/**
+ * The rules that rate-limit the hotspot login for each client address.
+ * `pre-hs-input` is the chain RouterOS jumps to before its own hotspot rules.
+ */
+export function loginLimitRules(perMinute: number, burst: number, blockMinutes: number): string[] {
+  const rule = (chain: string): Cmd => new Cmd("/ip firewall filter add").set("chain", chain);
+  return [
+    rule("pre-hs-input")
+      .set("protocol", "tcp")
+      .set("dst-port", LOGIN_PORTS)
+      .set("src-address-list", LOGIN_LIST)
+      .set("action", "drop")
+      .set("comment", `${LOGIN_TAG}: blocked clients`)
+      .build(),
+    rule("pre-hs-input")
+      .set("protocol", "tcp")
+      .set("dst-port", LOGIN_PORTS)
+      .set("connection-state", "new")
+      .set("action", "jump")
+      .set("jump-target", LOGIN_TAG)
+      .set("comment", `${LOGIN_TAG}: count new connections`)
+      .build(),
+    rule(LOGIN_TAG)
+      .set("dst-limit", `${perMinute}/1m,${burst},src-address/1m`)
+      .set("action", "return")
+      .set("comment", `${LOGIN_TAG}: under the limit`)
+      .build(),
+    rule(LOGIN_TAG)
+      .set("action", "add-src-to-address-list")
+      .set("address-list", LOGIN_LIST)
+      .set("address-list-timeout", `${blockMinutes}m`)
+      .set("comment", `${LOGIN_TAG}: over the limit`)
+      .build(),
+    rule(LOGIN_TAG).set("action", "drop").set("comment", `${LOGIN_TAG}: drop`).build(),
+  ];
+}
 const BATCH = /^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$/;
 
 function defaultRange(subnet: string): string {
@@ -242,7 +283,8 @@ export const hotspotBuilderTools: ToolModule = [
       if (rows.length === 0) return "No voucher batch is on this router.";
       const batches = new Map<string, { total: number; used: number }>();
       for (const row of rows) {
-        const name = row.comment!.slice(BATCH_TAG.length);
+        // A voucher sold through the issue route also carries its payment reference.
+        const name = row.comment!.slice(BATCH_TAG.length).replace(/ ref=\S+$/, "");
         const entry = batches.get(name) ?? { total: 0, used: 0 };
         entry.total += 1;
         // A voucher that was never used has no uptime.
@@ -274,7 +316,7 @@ export const hotspotBuilderTools: ToolModule = [
     async handler(a, ctx) {
       const rows = parseRecords(
         await executeMikrotikCommand(
-          `/ip hotspot user print detail where comment=${quoted(`${BATCH_TAG}${a.batch}`)}`,
+          `/ip hotspot user print detail where comment~${quoted(`^${BATCH_TAG}${a.batch}( ref=.*)?\$`)}`,
           { ...ctx, risk: "READ" },
         ),
       ).rows;
@@ -289,7 +331,7 @@ export const hotspotBuilderTools: ToolModule = [
       let removed = 0;
       for (const row of targets) {
         const result = await executeMikrotikCommand(
-          `/ip hotspot user remove [find name=${quoted(row.name!)} comment=${quoted(`${BATCH_TAG}${a.batch}`)}]`,
+          `/ip hotspot user remove [find name=${quoted(row.name!)} comment~${quoted(`^${BATCH_TAG}${a.batch}( ref=.*)?\$`)}]`,
           ctx,
         );
         if (looksLikeError(result))
@@ -297,6 +339,74 @@ export const hotspotBuilderTools: ToolModule = [
         removed += 1;
       }
       return `Removed ${removed} voucher(s) of batch '${a.batch}'. ${rows.length - removed} remain.`;
+    },
+  }),
+
+  defineTool({
+    name: "protect_hotspot_login",
+    title: "Rate-Limit the Hotspot Login",
+    annotations: WRITE,
+    description:
+      "Limits how fast one client can open connections to the hotspot login service, so guessing " +
+      "voucher codes or passwords by trying many of them is slowed and then blocked. It adds " +
+      "firewall rules in the `pre-hs-input` chain, which RouterOS runs before its own hotspot " +
+      "rules: a client that opens more than `per_minute` new connections to the login ports " +
+      "(tcp 64872-64875) is put in the address list `hs-login-flood` and dropped for " +
+      "`block_minutes`. DEFAULTS TO A DRY RUN (`apply=false`) that shows the rules. It limits " +
+      "connections for each client address, not attempts for each user name, so it cannot tell a " +
+      "wrong code from a page reload: keep `per_minute` well above normal use. Undo it with " +
+      "`unprotect_hotspot_login`. The router needs a hotspot for the chain to be used.",
+    inputSchema: {
+      per_minute: z.number().int().min(5).max(600).default(30),
+      burst: z.number().int().min(1).max(200).default(15),
+      block_minutes: z.number().int().min(1).max(1440).default(10),
+      apply: z.boolean().default(false).describe("false = show the rules; true = add them"),
+    },
+    async handler(a, ctx) {
+      const existing = await executeMikrotikCommand(
+        `/ip firewall filter print count-only where comment~"^${LOGIN_TAG}"`,
+        { ...ctx, risk: "READ" },
+      );
+      if (Number(existing.trim()) > 0)
+        return "The hotspot login is already rate-limited. Run unprotect_hotspot_login first to change the limits.";
+      const commands = loginLimitRules(a.per_minute, a.burst, a.block_minutes);
+      const preview = commands.map((c) => `  ${c}`).join("\n");
+      if (!a.apply)
+        return `DRY RUN — ${commands.length} rule(s). Set apply=true to add them.\n\n${preview}`;
+      let done = 0;
+      for (const command of commands) {
+        const result = await executeMikrotikCommand(command, ctx);
+        if (looksLikeError(result))
+          return `Added ${done} of ${commands.length} rule(s), then FAILED: ${result}\nRemove the partial set with unprotect_hotspot_login.`;
+        done += 1;
+      }
+      return `Hotspot login limited to ${a.per_minute} new connections a minute for each client; a client over the limit is blocked for ${a.block_minutes} minute(s).\n\n${preview}`;
+    },
+  }),
+
+  defineTool({
+    name: "unprotect_hotspot_login",
+    title: "Remove the Hotspot Login Rate Limit",
+    annotations: DESTRUCTIVE,
+    description:
+      "Removes the rules `protect_hotspot_login` added and empties its block list. Clients that " +
+      "were blocked can sign in again at once. Rules you added yourself are not touched. Returns " +
+      "how many rules were removed.",
+    inputSchema: {},
+    async handler(_a, ctx) {
+      const count = await executeMikrotikCommand(
+        `/ip firewall filter print count-only where comment~"^${LOGIN_TAG}"`,
+        { ...ctx, risk: "READ" },
+      );
+      if (Number(count.trim()) === 0) return "The hotspot login has no rate limit from this tool.";
+      for (const command of [
+        `/ip firewall filter remove [find comment~"^${LOGIN_TAG}"]`,
+        `/ip firewall address-list remove [find list="${LOGIN_LIST}"]`,
+      ]) {
+        const result = await executeMikrotikCommand(command, ctx);
+        if (looksLikeError(result)) return `Failed: ${result}`;
+      }
+      return `Removed ${count.trim()} rule(s) and emptied the block list.`;
     },
   }),
 ];

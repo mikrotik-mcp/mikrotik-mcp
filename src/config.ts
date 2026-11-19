@@ -384,6 +384,39 @@ export const ApprovalsConfigSchema = z.object({
     .default([]),
 });
 
+/**
+ * Hotspot vouchers sold by a payment or billing system: `POST
+ * /api/vouchers/issue` on the dashboard port, with its own token.
+ */
+export const VouchersConfigSchema = z.object({
+  issue: z
+    .object({
+      /** The token the billing system sends as `Authorization: Bearer …`. */
+      token: z.string().min(16).optional(),
+      /** Read the token from `env:NAME`, `file:/path` or `keyring:service/account`. */
+      tokenFrom: z.string().regex(SECRET_REF).optional(),
+      /** The router that holds the hotspot. Default: the default device. */
+      device: z.string().optional(),
+      profile: z.string().optional(),
+      /** Uptime of each voucher, e.g. `1d`. */
+      uptimeLimit: z
+        .string()
+        .regex(/^\d+[wdhms](?:\d+[wdhms])*$/)
+        .optional(),
+      batch: z
+        .string()
+        .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$/)
+        .default("sold"),
+      codePrefix: z
+        .string()
+        .regex(/^[A-Za-z0-9]{0,6}$/)
+        .default("g"),
+      maxPerMinute: z.coerce.number().int().min(1).max(600).default(30),
+    })
+    .refine((v) => Boolean(v.token || v.tokenFrom), "Set token or tokenFrom")
+    .optional(),
+});
+
 export const AlertChannelsSchema = z.object({
   slack: z.object({ url: z.string().url() }).optional(),
   discord: z.object({ url: z.string().url() }).optional(),
@@ -705,6 +738,7 @@ export const MikrotikConfigSchema = z.object({
   alerts: AlertsConfigSchema.optional(),
   audit: AuditConfigSchema.optional(),
   approvals: ApprovalsConfigSchema.optional(),
+  vouchers: VouchersConfigSchema.optional(),
   gitMirror: GitMirrorConfigSchema.optional(),
   /** NetFlow/IPFIX collection (opt-in; binds a UDP port only when enabled). */
   flows: FlowsConfigSchema.default(() => FlowsConfigSchema.parse({})),
@@ -816,6 +850,7 @@ const PASSTHROUGH_BLOCKS = [
   "approvals",
   "audit",
   "gitMirror",
+  "vouchers",
   "flows",
   "policy",
   "schedules",

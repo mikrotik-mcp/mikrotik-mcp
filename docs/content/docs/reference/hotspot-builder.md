@@ -9,6 +9,8 @@ description: "Stand up a guest hotspot with a captive portal (gateway, DHCP, /ip
 - [Generate Hotspot Vouchers](#generate_hotspot_vouchers)
 - [List Hotspot Voucher Batches](#list_voucher_batches)
 - [Remove a Hotspot Voucher Batch](#remove_voucher_batch)
+- [Rate-Limit the Hotspot Login](#protect_hotspot_login)
+- [Remove the Hotspot Login Rate Limit](#unprotect_hotspot_login)
 
 ## build_guest_hotspot
 
@@ -67,3 +69,24 @@ Removes the vouchers of one batch made by generate_hotspot_vouchers. By default 
 | `batch`        | Yes      | The batch name `{"type":"string","pattern":"^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$"}` |
 | `include_used` | Yes      | Also remove vouchers that were used `{"default":false,"type":"boolean"}`        |
 | `apply`        | Yes      | false = count only; true = remove `{"default":false,"type":"boolean"}`          |
+
+## protect_hotspot_login
+
+**Rate-Limit the Hotspot Login** · Risk: **write**
+
+Limits how fast one client can open connections to the hotspot login service, so guessing voucher codes or passwords by trying many of them is slowed and then blocked. It adds firewall rules in the `pre-hs-input` chain, which RouterOS runs before its own hotspot rules: a client that opens more than `per_minute` new connections to the login ports (tcp 64872-64875) is put in the address list `hs-login-flood` and dropped for `block_minutes`. DEFAULTS TO A DRY RUN (`apply=false`) that shows the rules. It limits connections for each client address, not attempts for each user name, so it cannot tell a wrong code from a page reload: keep `per_minute` well above normal use. Undo it with `unprotect_hotspot_login`. The router needs a hotspot for the chain to be used.
+
+| Parameter       | Required | Definition                                                                   |
+| --------------- | -------- | ---------------------------------------------------------------------------- |
+| `per_minute`    | Yes      | `{"default":30,"type":"integer","minimum":5,"maximum":600}`                  |
+| `burst`         | Yes      | `{"default":15,"type":"integer","minimum":1,"maximum":200}`                  |
+| `block_minutes` | Yes      | `{"default":10,"type":"integer","minimum":1,"maximum":1440}`                 |
+| `apply`         | Yes      | false = show the rules; true = add them `{"default":false,"type":"boolean"}` |
+
+## unprotect_hotspot_login
+
+**Remove the Hotspot Login Rate Limit** · Risk: **destructive**
+
+Removes the rules `protect_hotspot_login` added and empties its block list. Clients that were blocked can sign in again at once. Rules you added yourself are not touched. Returns how many rules were removed.
+
+No tool-specific parameters.

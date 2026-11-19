@@ -5,11 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { z } from "zod";
+import { MikrotikConfigSchema } from "../src/config";
+import { getConfig, setConfig } from "../src/core/runtime";
 import { loginLink, voucherSheetCsv, voucherSheetHtml } from "../src/core/voucher-sheet";
 
 const command = vi.hoisted(() => vi.fn());
 vi.mock("../src/core/connector", () => ({ executeMikrotikCommand: command }));
 const { hotspotBuilderTools } = await import("../src/tools/hotspot-builder");
+const { resetVoucherIssue, voucherIssueRoute } = await import("../src/observability/voucher-issue");
 
 const ctx = { device: "edge", info() {}, error() {} };
 const tool = (name: string) => hotspotBuilderTools.find((t) => t.name === name)!;
@@ -117,8 +120,8 @@ test("removal names each voucher and its batch, so nothing else can match", asyn
   );
   const removes = command.mock.calls.map((c) => String(c[0])).filter((c) => c.includes("remove"));
   expect(removes).toEqual([
-    '/ip hotspot user remove [find name="g111" comment="voucher-batch: nov"]',
-    '/ip hotspot user remove [find name="g333" comment="voucher-batch: nov"]',
+    '/ip hotspot user remove [find name="g111" comment~"^voucher-batch: nov( ref=.*)?\\$"]',
+    '/ip hotspot user remove [find name="g333" comment~"^voucher-batch: nov( ref=.*)?\\$"]',
   ]);
   command.mockClear();
   expect(await run("remove_voucher_batch", { batch: "nov", include_used: true })).toContain(
@@ -128,4 +131,126 @@ test("removal names each voucher and its batch, so nothing else can match", asyn
   expect(await run("remove_voucher_batch", { batch: "none", apply: true })).toContain(
     "No voucher of batch 'none'",
   );
+});
+
+const TOKEN = "billing-system-token-0001";
+const issue = (
+  init: { token?: string; body?: unknown; method?: string } = {},
+): Promise<Response | null> =>
+  voucherIssueRoute(
+    new Request("http://x/api/vouchers/issue", {
+      method: init.method ?? "POST",
+      headers: init.token ? { authorization: `Bearer ${init.token}` } : {},
+      body: init.method === "GET" ? undefined : JSON.stringify(init.body ?? {}),
+    }),
+    new URL("http://x/api/vouchers/issue"),
+  );
+
+test("the issue route does not exist until it is configured, and needs its own token", async () => {
+  const original = getConfig();
+  try {
+    setConfig(
+      MikrotikConfigSchema.parse({
+        devices: { edge: { host: "10.0.0.1" } },
+        defaultDevice: "edge",
+      }),
+    );
+    expect((await issue({ token: TOKEN }))!.status).toBe(404);
+    expect(
+      MikrotikConfigSchema.safeParse({ devices: {}, vouchers: { issue: { token: "short" } } })
+        .success,
+    ).toBe(false);
+    expect(MikrotikConfigSchema.safeParse({ devices: {}, vouchers: { issue: {} } }).success).toBe(
+      false,
+    );
+
+    setConfig(
+      MikrotikConfigSchema.parse({
+        devices: { edge: { host: "10.0.0.1" } },
+        defaultDevice: "edge",
+        vouchers: { issue: { token: TOKEN, uptimeLimit: "1d", maxPerMinute: 2 } },
+      }),
+    );
+    resetVoucherIssue();
+    expect((await issue())!.status).toBe(401);
+    expect((await issue({ token: "wrong-token-000000000" }))!.status).toBe(401);
+    expect((await issue({ token: TOKEN, method: "GET" }))!.status).toBe(405);
+    expect((await issue({ token: TOKEN, body: { reference: "a b; /system reset" } }))!.status).toBe(
+      400,
+    );
+    expect(command).not.toHaveBeenCalled();
+
+    // A paid reference gets one voucher; the same reference again gets the same one.
+    const sold: string[] = [];
+    command.mockImplementation(async (cmd?: string) => {
+      const text = String(cmd);
+      if (text.includes("print detail"))
+        return sold.length ? ` 0 name="${sold[0]}" comment="x"` : "";
+      const name = text.match(/name=(\S+)/)?.[1];
+      if (name) sold.push(name);
+      return "";
+    });
+    const first = await (await issue({ token: TOKEN, body: { reference: "pay_123" } }))!.json();
+    expect(first).toMatchObject({
+      batch: "sold",
+      reference: "pay_123",
+      repeated: false,
+      validity: "1d",
+    });
+    expect(first.code).toMatch(/^g[0-9a-f]{8}$/);
+    const add = command.mock.calls.map((c) => String(c[0])).find((c) => c.includes("user add"))!;
+    expect(add).toContain('limit-uptime=1d comment="voucher-batch: sold ref=pay_123"');
+    const again = await (await issue({ token: TOKEN, body: { reference: "pay_123" } }))!.json();
+    expect(again).toMatchObject({ code: first.code, repeated: true });
+    expect(sold).toHaveLength(1);
+
+    // The limit counts new vouchers, not repeated questions.
+    command.mockImplementation(async () => "");
+    expect((await issue({ token: TOKEN }))!.status).toBe(200);
+    expect((await issue({ token: TOKEN }))!.status).toBe(429);
+    // Another path is not this route's business.
+    expect(
+      await voucherIssueRoute(new Request("http://x/api/other"), new URL("http://x/api/other")),
+    ).toBeNull();
+  } finally {
+    setConfig(original);
+    resetVoucherIssue();
+  }
+});
+
+test("the login limit goes in the chain that runs before the hotspot rules, and is removed by its tag", async () => {
+  const { loginLimitRules } = await import("../src/tools/hotspot-builder");
+  const rules = loginLimitRules(30, 15, 10);
+  expect(rules).toHaveLength(5);
+  expect(rules[0]).toBe(
+    '/ip firewall filter add chain=pre-hs-input protocol=tcp dst-port=64872-64875 src-address-list=hs-login-flood action=drop comment="hs-login-limit: blocked clients"',
+  );
+  expect(rules[2]).toContain(
+    "chain=hs-login-limit dst-limit=30/1m,15,src-address/1m action=return",
+  );
+  expect(rules[3]).toContain(
+    "action=add-src-to-address-list address-list=hs-login-flood address-list-timeout=10m",
+  );
+
+  command.mockImplementation(async (cmd?: string) =>
+    String(cmd).includes("count-only") ? "0" : "",
+  );
+  expect(await run("protect_hotspot_login", {})).toContain("DRY RUN — 5 rule(s)");
+  expect(command.mock.calls.some((c) => String(c[0]).includes(" add "))).toBe(false);
+  expect(await run("protect_hotspot_login", { apply: true })).toContain(
+    "limited to 30 new connections a minute",
+  );
+
+  command.mockReset();
+  command.mockImplementation(async (cmd?: string) =>
+    String(cmd).includes("count-only") ? "5" : "",
+  );
+  expect(await run("protect_hotspot_login", { apply: true })).toContain("already rate-limited");
+  expect(await run("unprotect_hotspot_login", {})).toBe(
+    "Removed 5 rule(s) and emptied the block list.",
+  );
+  expect(command.mock.calls.map((c) => String(c[0])).filter((c) => c.includes("remove"))).toEqual([
+    '/ip firewall filter remove [find comment~"^hs-login-limit"]',
+    '/ip firewall address-list remove [find list="hs-login-flood"]',
+  ]);
 });

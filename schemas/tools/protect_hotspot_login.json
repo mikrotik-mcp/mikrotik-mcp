@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "protect_hotspot_login",
+  "type": "object",
+  "properties": {
+    "per_minute": {
+      "default": 30,
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 600
+    },
+    "burst": {
+      "default": 15,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200
+    },
+    "block_minutes": {
+      "default": 10,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1440
+    },
+    "apply": {
+      "default": false,
+      "description": "false = show the rules; true = add them",
+      "type": "boolean"
+    }
+  },
+  "required": ["per_minute", "burst", "block_minutes", "apply"],
+  "additionalProperties": false
+}
