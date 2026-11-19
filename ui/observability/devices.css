@@ -680,26 +680,10 @@
   }
 }
 
-/* A router's country: its flag's colours as a faint, slow wash over the box. */
-.dv-flag-wash {
-  opacity: 0.34;
+/* A router's country: its whole flag, faint, behind the box's text. */
+.dv-flag {
+  opacity: 0.5;
 }
-:root:not(.dark) .dv-flag-wash {
-  opacity: 0.26;
-}
-.dv-flag-blob {
-  animation: dv-flag-drift 14s ease-in-out infinite alternate;
-}
-@keyframes dv-flag-drift {
-  from {
-    transform: translate(-10px, -3px);
-  }
-  to {
-    transform: translate(12px, 4px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dv-flag-blob {
-    animation: none;
-  }
+:root:not(.dark) .dv-flag {
+  opacity: 0.4;
 }

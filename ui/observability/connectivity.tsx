@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { formatMs, useLineDraw } from "./monitoring-ui";
 import { deviceState } from "./device-card";
-import { useFlagPalettes } from "./flag-colours";
+import { withToken } from "./api";
 import { tipProps } from "./kit";
 import type { TipCard, TipRow } from "./kit";
 import type { DeviceInfo } from "./types";
@@ -13,21 +13,11 @@ const ROW = 72;
 const BOX_W = 240;
 const BOX_H = 44;
 /**
- * Where the blobs of a flag's colours sit in a router box, for one, two and
- * three colours: [across, down] as parts of the box, from its centre line.
+ * The flag behind a router box. The flag file is a circle, so it is stretched to
+ * an ellipse that the box fits inside: every stripe of the flag crosses the box.
  */
-const WASH: Record<number, [number, number][]> = {
-  1: [[0.6, 0]],
-  2: [
-    [0.3, -0.25],
-    [0.8, 0.25],
-  ],
-  3: [
-    [0.22, -0.3],
-    [0.58, 0.35],
-    [0.9, -0.2],
-  ],
-};
+const FLAG_W = 900;
+const FLAG_H = 60;
 /** A router name as an id for its flag's clip path. */
 const flagId = (name: string): string => name.replace(/[^a-zA-Z0-9_-]/g, "_");
 const COL_1 = 470;
@@ -224,7 +214,6 @@ export function ManagementPaths({
   pulses: Record<string, number>;
 }): ReactNode {
   const root = useRef<SVGSVGElement>(null);
-  const palettes = useFlagPalettes(devices.flatMap((d) => d.geo?.countryCode ?? []));
   const lit = useLit(pulses);
   const { placed, height, mid } = layout(devices);
   useLineDraw(
@@ -244,12 +233,21 @@ export function ManagementPaths({
       role="img"
       aria-label={`Management paths from the MCP server to ${devices.length} router${devices.length === 1 ? "" : "s"}`}
     >
-      {/* A router's country is a wash of its flag's colours over the whole box:
-          one soft blob for each colour, drifting slowly. */}
+      {/* A router's country is its flag over the whole box: faint, and fainter
+          still under the name, so the text stays easy to read. */}
       <defs>
-        <filter id="dv-flag-soft" x="-60%" y="-120%" width="220%" height="340%">
-          <feGaussianBlur stdDeviation="16" />
+        <linearGradient id="dv-flag-fade-ramp" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0.38" stopColor="white" stopOpacity="0.45" />
+          <stop offset="0.62" stopColor="white" stopOpacity="1" />
+        </linearGradient>
+        {/* Soft along the box, so an emblem melts into its stripe, and only a
+            little across it, so the stripes stay apart. */}
+        <filter id="dv-flag-soft" x="-10%" y="-20%" width="120%" height="140%">
+          <feGaussianBlur stdDeviation="34 3.5" />
         </filter>
+        <mask id="dv-flag-fade" maskContentUnits="objectBoundingBox">
+          <rect width="1" height="1" fill="url(#dv-flag-fade-ramp)" />
+        </mask>
       </defs>
       <g
         {...tipProps((): TipCard => ({
@@ -381,25 +379,20 @@ export function ManagementPaths({
                       rx="9"
                     />
                   </clipPath>
-                  <g className="dv-flag-wash">
-                    {(palettes[d.geo.countryCode] ?? []).map((colour, i, all) => {
-                      // One soft blob for each colour, spread across the box.
-                      const at = WASH[all.length]?.[i] ?? WASH[1]![0]!;
-                      return (
-                        <ellipse
-                          key={colour}
-                          className="dv-flag-blob"
-                          cx={x + BOX_W * at[0]}
-                          cy={cy + BOX_H * at[1]}
-                          rx={BOX_W * 0.34}
-                          ry={BOX_H * 0.95}
-                          fill={colour}
-                          filter="url(#dv-flag-soft)"
-                          style={{ animationDelay: `${i * -3}s` }}
-                        />
-                      );
-                    })}
-                  </g>
+                  {/* The whole flag, stretched over the whole box. It is a circle in
+                      the file, so it is drawn wider and taller than the box: the
+                      box then sits inside the circle and shows every stripe. */}
+                  <image
+                    className="dv-flag"
+                    href={withToken(`/api/flag/${d.geo.countryCode}`)}
+                    x={x + BOX_W / 2 - FLAG_W / 2}
+                    y={cy - FLAG_H / 2}
+                    width={FLAG_W}
+                    height={FLAG_H}
+                    preserveAspectRatio="none"
+                    filter="url(#dv-flag-soft)"
+                    mask="url(#dv-flag-fade)"
+                  />
                 </g>
               )}
               <circle cx={x + 18} cy={cy} r="3.5" fill={dot} />
