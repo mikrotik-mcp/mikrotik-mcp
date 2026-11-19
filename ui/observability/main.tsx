@@ -95,6 +95,7 @@ import type { MonitorPageInfo } from "./monitoring-ui";
 import { AaaView } from "./aaa";
 import { ClientsView } from "./clients";
 import { OpenVpnView } from "./openvpn";
+import { WireguardUsersView } from "./wireguard-users";
 import { InterfacesView } from "./interfaces";
 import { PromptsView } from "./prompts";
 import { ClientChecksView } from "./client-checks";
@@ -380,6 +381,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Reports are read-only. Management tabs support the relevant add, edit, enable/disable and remove actions; secrets are write-only and shown redacted.",
       "Reports & insights shows traffic totals, daily and cumulative charts, connection statistics and a calendar for all users or one user. Individual session lists are not displayed or exported.",
       "If a device lacks the user-manager package, the User Manager tabs explain how to install it; RADIUS-client tabs still work.",
+    ],
+  },
+  "wireguard-users": {
+    what: "The WireGuard remote-access users of the selected router: add one, hand over its profile, see who has access and until when.",
+    tips: [
+      "A new user gets the lowest free address in the interface's subnet. The profile is shown once, as a QR code and a file, and is not kept.",
+      "An end date alone does not stop a connection. Disable expired users here, or run expire_wireguard_users on a schedule.",
+      "Revoke removes the peer at once. Only users added here or with onboard_wireguard_user are listed.",
     ],
   },
   openvpn: {
@@ -852,6 +861,13 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       <>
         <path d="M12 3 4 6v5c0 4.4 3.2 7.6 8 9 4.8-1.4 8-4.6 8-9V6l-8-3Z" />
         <path d="M9.5 11.5 11 13l3.5-3.5" />
+      </>
+    ),
+    "wireguard-users": (
+      <>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3 19c0-3 2.7-5 6-5s6 2 6 5" />
+        <path d="M17 8h4M19 6v4" />
       </>
     ),
     openvpn: (
@@ -1814,6 +1830,7 @@ function App(): ReactNode {
                 {view === "clients" && <ClientsView />}
                 {view === "aaa" && <AaaView />}
                 {view === "openvpn" && <OpenVpnView />}
+                {view === "wireguard-users" && <WireguardUsersView />}
                 {view === "interfaces" && <InterfacesView />}
                 {view === "prompts" && <PromptsView />}
                 {view === "client-checks" && <ClientChecksView />}

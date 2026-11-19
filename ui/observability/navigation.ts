@@ -6,6 +6,7 @@ export type ViewId =
   | "bandwidth"
   | "ip-intelligence"
   | "openvpn"
+  | "wireguard-users"
   | "recovery-lab"
   | "flight-recorder"
   | "service-routing"
@@ -62,6 +63,11 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     id: "openvpn",
     label: "OpenVPN",
     sub: "Active VPN connections, connection time & session control",
+  },
+  {
+    id: "wireguard-users",
+    label: "WireGuard Users",
+    sub: "Add remote users with a QR code, set an end date, revoke",
   },
   {
     id: "recovery-lab",

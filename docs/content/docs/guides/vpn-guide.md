@@ -103,7 +103,8 @@ is routed, not masqueraded.
 - **An end date.** `expires=2026-12-31` is recorded on the peer.
 
 `list_wireguard_users` shows every user with its address, expiry and last
-handshake. `revoke_wireguard_user` removes one.
+handshake. `revoke_wireguard_user` removes one. The dashboard page **WireGuard Users** does the same
+in the browser: add a user, scan its QR code, revoke.
 
 An expiry date alone does not stop a connection. `expire_wireguard_users`
 makes it take effect: it disables (or, with `action=remove`, deletes) the peers

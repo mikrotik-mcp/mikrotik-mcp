@@ -11,6 +11,7 @@ export const FEATURE_RELEASES: Record<ViewId, string | null> = {
   bandwidth: "6.10.0",
   "ip-intelligence": null,
   openvpn: null,
+  "wireguard-users": "6.16.0",
   "service-routing": null,
   "flight-recorder": null,
   "recovery-lab": null,

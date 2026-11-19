@@ -195,6 +195,7 @@ import { postureRoutes } from "./posture-routes";
 import { createAccessSettingsRoutes } from "./access-settings";
 import { approvalRoutes } from "./approval-routes";
 import { voucherIssueRoute } from "./voucher-issue";
+import { wireguardRoutes } from "./wireguard-routes";
 import { txnRoutes } from "./txn-routes";
 import { flowRoutes } from "./flow-routes";
 import { rolloutRoutes } from "./rollout-routes";
@@ -1725,6 +1726,8 @@ export async function runDashboard(
 
     // Config Studio routes are independent of the event store, so dispatch
     // them before the recorder guard below.
+    const wireguardResp = await wireguardRoutes(req, url);
+    if (wireguardResp) return wireguardResp;
     const approvalResp = await approvalRoutes(req, url);
     if (approvalResp) return approvalResp;
     const accessResp = await accessSettingsRoutes(req, url);
