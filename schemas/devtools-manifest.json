@@ -307,7 +307,7 @@
       "group": "Interfaces",
       "description": "Plans the move from the legacy `wireless` package to the new `wifi` driver: translates every setting to its new name, and lists what the new driver cannot do. Read-only.",
       "alwaysOn": false,
-      "tools": ["plan_wireless_to_wifi_migration"]
+      "tools": ["plan_wireless_to_wifi_migration", "apply_wireless_to_wifi_migration"]
     },
     {
       "slug": "capsman",
@@ -3459,6 +3459,14 @@
     },
     {
       "name": "plan_wireless_to_wifi_migration",
+      "module": "wifi-migration",
+      "group": "Interfaces",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "apply_wireless_to_wifi_migration",
       "module": "wifi-migration",
       "group": "Interfaces",
       "noDevice": false,

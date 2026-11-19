@@ -2,6 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "plan_wireless_to_wifi_migration",
   "type": "object",
-  "properties": {},
+  "properties": {
+    "save": {
+      "default": false,
+      "description": "Store the plan on the MCP host for apply_wireless_to_wifi_migration",
+      "type": "boolean"
+    }
+  },
+  "required": ["save"],
   "additionalProperties": false
 }

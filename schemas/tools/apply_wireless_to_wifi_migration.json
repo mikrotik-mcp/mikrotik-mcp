@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "apply_wireless_to_wifi_migration",
+  "type": "object",
+  "properties": {
+    "passwords_from": {
+      "default": {},
+      "description": "For each security profile: where its password is (a secret reference)",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^(?:env:[A-Za-z_][A-Za-z0-9_]*|file:.+|keyring:[A-Za-z0-9][A-Za-z0-9._@-]{0,63}\\/[A-Za-z0-9][A-Za-z0-9._@-]{0,63})$"
+      }
+    },
+    "ignore_blockers": {
+      "default": false,
+      "type": "boolean"
+    },
+    "apply": {
+      "default": false,
+      "description": "false = show the commands; true = apply",
+      "type": "boolean"
+    }
+  },
+  "required": ["passwords_from", "ignore_blockers", "apply"],
+  "additionalProperties": false
+}

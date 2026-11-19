@@ -79,9 +79,54 @@ Limits to know:
 - It does not check the hardware. The new driver needs `wifi-qcom-ac`
   (802.11ac ARM devices) or `wifi-qcom` (802.11ax devices); MIPS devices and
   devices with 16 MB of storage cannot run it. Check the product page.
-- The move is manual: install the new package, reboot, then run the reviewed
-  commands. Wireless clients drop while you do it, so have a wired or console
-  way in.
+- The tools do not install a package and do not reboot. You do those two
+  steps; wireless clients drop while you do, so have a wired or console way in.
 - Bridge ports, the DHCP server and firewall rules still name the old
   interfaces afterwards. Point them at the new names.
-- CAPsMAN settings are not part of the plan.
+
+### Saving and applying the plan
+
+After the package is changed, the legacy menus are gone and cannot be read. So
+the order is fixed:
+
+1. `plan_wireless_to_wifi_migration save=true` stores the plan on the MCP host
+   (`~/.mikrotik-mcp/wifi-migrations`, or `MIKROTIK_WIFI_MIGRATION_DIR`).
+2. Install the `wifi` package and reboot. This is your step.
+3. `apply_wireless_to_wifi_migration` applies the saved plan.
+
+Wi-Fi passwords do not pass through the call. `passwords_from` maps each
+security profile to a secret reference that the server reads on the host:
+
+```text
+apply_wireless_to_wifi_migration passwords_from={"home":"keyring:mikrotik-mcp/home-wifi"}
+```
+
+The tool refuses to run while the router has no `/interface wifi` menu, when a
+profile has no reference, and when the plan has blockers (unless
+`ignore_blockers=true`). It shows a dry run first with passwords hidden. Every
+command is parsed on the router before anything is written; then a snapshot is
+taken and the commands go in Safe Mode.
+
+### CAPsMAN
+
+The plan also covers a legacy CAPsMAN. The named profiles keep their names:
+
+| Legacy (`/caps-man`)                                     | New (`/interface wifi`)            |
+| -------------------------------------------------------- | ---------------------------------- |
+| `security`                                               | `security`                         |
+| `channel`, `control-channel-width` + `extension-channel` | `channel`, `width`                 |
+| `datapath`, `client-to-client-forwarding=no`             | `datapath`, `client-isolation=yes` |
+| `configuration`                                          | `configuration` with `mode=ap`     |
+| `provisioning`, `hw-supported-modes`                     | `provisioning`, `supported-bands`  |
+| `manager enabled=yes`                                    | `capsman set enabled=yes`          |
+| `/interface wireless cap`                                | `/interface wifi cap`              |
+
+Limits to know:
+
+- A wifi CAPsMAN manages only CAPs that run the wifi driver. The plan lists
+  this as a blocker when a manager is enabled: keep both managers running and
+  move the CAPs one at a time.
+- Settings written inline in a configuration (`security.encryption=…`) are not
+  carried over; the plan names them. Certificates are set by hand.
+- In the wifi driver a CAP always bridges traffic itself. A legacy setup that
+  sent client traffic through the manager changes its traffic path.
