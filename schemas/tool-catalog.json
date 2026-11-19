@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.15.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 1001,
+  "toolCount": 1005,
   "tools": [
     {
       "name": "create_client_check",
@@ -35422,6 +35422,141 @@
           }
         },
         "required": ["confirm", "use_safe_mode"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_config_templates",
+      "title": "List Configuration Templates",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Lists the configuration templates kept on the MCP host, each with the variables it needs. A template is RouterOS script text with `{{variable}}` places, applied to routers with apply_config_template. It contacts no router. Use it to see which templates exist before you provision a router. Returns one line per template.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "save_config_template",
+      "title": "Save a Configuration Template",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Saves a configuration template on the MCP host. `content` is RouterOS script text: full commands, or export style with a menu line (`/ip address`) and `add …` lines under it. Write `{{name}}` where a value differs between routers, and `{{name|default}}` to give a default. A place stands for one whole value (`name={{identity}}`) and must NOT be inside quotes: the value is quoted for you when it is applied, which is also what stops a value from adding commands. A template with a place inside quotes is refused. Saving a name that exists replaces it. It changes no router. Returns the variables the template needs.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$",
+            "description": "Template name"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200000,
+            "description": "RouterOS script text with {{variable}} places"
+          }
+        },
+        "required": ["name", "content"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "remove_config_template",
+      "title": "Remove a Configuration Template",
+      "risk": "destructive",
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Deletes one configuration template from the MCP host. It changes no router: a router that the template was applied to keeps its configuration. Returns whether a template was removed.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$",
+            "description": "Template name"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "apply_config_template",
+      "title": "Apply a Configuration Template to Routers",
+      "risk": "write",
+      "annotations": {
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "description": "Applies a saved configuration template to one or more routers, each with its own values: the way to provision a new router, or to give many routers the same reviewed configuration. `variables` holds the values for every router; `per_device` holds values for one router and wins. Two variables are always set for you: `device` (the name in this server's device list) and `host` (its address). DEFAULTS TO A DRY RUN (`apply=false`) that returns the rendered commands for each router. Before anything is written, every command is parsed on that router; a command that is not valid there stops that router with the place of the problem, and nothing is written to it. Applying takes a config snapshot and writes in Safe Mode, so a change that cuts the connection is rolled back. Routers are done one at a time, and the run stops at the first router that fails. To provision a factory-default router, first add it to the device list (by its MAC address for MAC-Telnet, or its default address); Safe Mode needs SSH, so a MAC-Telnet router is written directly.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$",
+            "description": "Template name"
+          },
+          "devices": {
+            "minItems": 1,
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Routers to apply the template to"
+          },
+          "variables": {
+            "default": {},
+            "description": "Values for every router",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "per_device": {
+            "default": {},
+            "description": "Values for one router: { router: { variable: value } }",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "apply": {
+            "default": false,
+            "description": "false = show the commands; true = apply",
+            "type": "boolean"
+          }
+        },
+        "required": ["name", "devices", "variables", "per_device", "apply"],
         "additionalProperties": false
       }
     },

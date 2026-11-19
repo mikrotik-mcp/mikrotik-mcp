@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "apply_config_template",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$",
+      "description": "Template name"
+    },
+    "devices": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Routers to apply the template to"
+    },
+    "variables": {
+      "default": {},
+      "description": "Values for every router",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "per_device": {
+      "default": {},
+      "description": "Values for one router: { router: { variable: value } }",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "apply": {
+      "default": false,
+      "description": "false = show the commands; true = apply",
+      "type": "boolean"
+    }
+  },
+  "required": ["name", "devices", "variables", "per_device", "apply"],
+  "additionalProperties": false
+}

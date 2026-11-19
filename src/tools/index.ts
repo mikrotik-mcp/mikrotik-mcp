@@ -34,6 +34,7 @@ import { deviceTools } from "./devices";
 import { deviceModeTools } from "./device-mode";
 import { dhcpTools } from "./dhcp";
 import { hotspotBuilderTools } from "./hotspot-builder";
+import { configTemplateTools } from "./config-template";
 import { containerTools } from "./container";
 import { containerStackTools } from "./container-stack";
 import { diskTools } from "./disk";
@@ -1469,6 +1470,16 @@ export const moduleCatalog: ModuleInfo[] = [
       "Terraform-style dry-run: preview intended commands (risk, lock-out, safe order) and apply " +
       "them under Safe Mode with the exact `/export` diff (`plan_changes`, `apply_plan`).",
     tools: changePlanTools,
+  },
+  {
+    label: "Configuration Templates",
+    slug: "config-template",
+    group: "Automation",
+    description:
+      "Keep a reviewed RouterOS configuration with {{variable}} places on the MCP host, and " +
+      "apply it to a new router or to many with each router's values: parsed on the router " +
+      "first, then written in Safe Mode after a snapshot.",
+    tools: configTemplateTools,
   },
   // ── Memory ─────────────────────────────────────────────────────────────
   {

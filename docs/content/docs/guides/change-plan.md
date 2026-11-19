@@ -99,3 +99,59 @@ apply_plan   script="<my changes>" confirm=true   # commit (auto-reverts on lock
 canary first, a health gate and soak between waves, and automatic revert of
 everything already changed if a gate fails — see
 **[Staged Fleet Rollout](/docs/guides/fleet-rollout)** (`plan_rollout` / `start_rollout`).
+
+## Configuration templates and provisioning
+
+A template is a reviewed RouterOS configuration with `{{variable}}` places. It
+is kept on the MCP host and applied to a new router, or to many, with each
+router's values.
+
+```text
+# branch router
+/system identity set name={{identity}}
+/ip address
+add address={{lan_ip}} interface={{lan_if|bridge}}
+```
+
+- A place stands for **one whole value**. `{{lan_if|bridge}}` gives a default.
+- Do not put a place inside quotes. The value is written as a RouterOS value,
+  with quotes when it needs them. That is also what stops a value from adding a
+  parameter or a second command, so a template with a place inside quotes is
+  refused.
+- Both styles are read: full commands, and export style where a menu line
+  (`/ip address`) applies to the `add …` lines under it.
+- `device` and `host` are always set for you from the device list.
+
+| Tool                     | Does                                                     |
+| ------------------------ | -------------------------------------------------------- |
+| `save_config_template`   | Saves or replaces a template. Changes no router.         |
+| `list_config_templates`  | Lists templates and the variables each needs.            |
+| `apply_config_template`  | Renders for each router and applies. Dry run by default. |
+| `remove_config_template` | Deletes a template from the host.                        |
+
+Applying is careful. For each router, in order:
+
+1. The template is rendered with `variables` (for every router) and
+   `per_device` (for one router, which wins).
+2. Every command is parsed on that router. A command that is not valid there
+   stops the router with the place of the problem; nothing is written to it.
+3. A config snapshot is taken.
+4. The commands are written in Safe Mode, so a change that cuts the connection
+   is rolled back.
+
+The run stops at the first router that fails; the routers after it are not
+touched.
+
+To provision a factory-default router, add it to the device list first: by its
+MAC address (MAC-Telnet reaches it with no IP), or by its default address.
+
+Limits to know:
+
+- Templates live in `~/.mikrotik-mcp/templates` (or `MIKROTIK_TEMPLATE_DIR`) as
+  plain `.rsc` files. Do not write a secret into a template; pass it as a
+  variable.
+- A MAC-Telnet router has no Safe Mode and is written directly.
+- The check is syntax only. A value that is looked up when the command runs (an
+  interface that does not exist) fails at apply time, inside Safe Mode.
+- There is no loop or condition in a template. Use RouterOS script (`:if`,
+  `:foreach`) in the template text for that.

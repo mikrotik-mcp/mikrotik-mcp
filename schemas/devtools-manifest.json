@@ -2229,6 +2229,19 @@
       "tools": ["plan_changes", "apply_plan"]
     },
     {
+      "slug": "config-template",
+      "label": "Configuration Templates",
+      "group": "Automation",
+      "description": "Keep a reviewed RouterOS configuration with {{variable}} places on the MCP host, and apply it to a new router or to many with each router's values: parsed on the router first, then written in Safe Mode after a snapshot.",
+      "alwaysOn": false,
+      "tools": [
+        "list_config_templates",
+        "save_config_template",
+        "remove_config_template",
+        "apply_config_template"
+      ]
+    },
+    {
       "slug": "memory",
       "label": "Knowledge Graph",
       "group": "Memory",
@@ -11798,6 +11811,42 @@
         "visibility": ["model"],
         "automatic": true
       }
+    },
+    {
+      "name": "list_config_templates",
+      "module": "config-template",
+      "group": "Automation",
+      "noDevice": true,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "save_config_template",
+      "module": "config-template",
+      "group": "Automation",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "remove_config_template",
+      "module": "config-template",
+      "group": "Automation",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "apply_config_template",
+      "module": "config-template",
+      "group": "Automation",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
     },
     {
       "name": "memory_get_scope",
