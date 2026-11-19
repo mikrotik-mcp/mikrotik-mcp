@@ -5,7 +5,7 @@
   "properties": {
     "channel": {
       "type": "string",
-      "enum": ["slack", "discord", "ntfy", "webhook", "mcp"],
+      "enum": ["slack", "discord", "ntfy", "telegram", "email", "webhook", "mcp"],
       "description": "Which configured channel to test."
     }
   },

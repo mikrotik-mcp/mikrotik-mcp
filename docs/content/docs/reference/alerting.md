@@ -39,9 +39,9 @@ Returns alerts that fired or resolved over a time window, newest first, with the
 
 Sends a test notification on one configured channel and reports the delivery outcome (HTTP status, attempts, duration). Use this to prove a webhook is reachable and correctly configured BEFORE relying on it for real alerts — a silently broken channel is worse than none. Sends a real message to the destination. Contacts no RouterOS device.
 
-| Parameter | Required | Definition                                                                                              |
-| --------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| `channel` | Yes      | Which configured channel to test. `{"type":"string","enum":["slack","discord","ntfy","webhook","mcp"]}` |
+| Parameter | Required | Definition                                                                                                                 |
+| --------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `channel` | Yes      | Which configured channel to test. `{"type":"string","enum":["slack","discord","ntfy","telegram","email","webhook","mcp"]}` |
 
 ## add_alert_rule
 
@@ -49,15 +49,15 @@ Sends a test notification on one configured channel and reports the delivery out
 
 Adds an alert rule at runtime. `trigger` is a JSON object of exactly one kind: a metric threshold `{"metric":"error_rate","window":"5m","above":0.15,"minCalls":20}`, an event `{"event":"tool_call","risk":["destructive"],"device":["core-rtr"]}`, or an absence `{"absence":"snapshot","within":"24h"}`. Set `for` so a condition must hold before firing, and `cooldown` (default 15m) to bound re-fires. The rule is added to the running engine; persist it in the config file to survive a restart.
 
-| Parameter     | Required | Definition                                                                                                                    |
-| ------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | Yes      | Unique id — keys muting and history, so make it stable. `{"type":"string","minLength":1}`                                     |
-| `trigger`     | Yes      | The trigger as a JSON object (see the description). `{"type":"string"}`                                                       |
-| `channels`    | Yes      | Where to deliver. `{"minItems":1,"type":"array","items":{"type":"string","enum":["slack","discord","ntfy","webhook","mcp"]}}` |
-| `severity`    | Yes      | `{"default":"medium","type":"string","enum":["low","medium","high","critical"]}`                                              |
-| `description` | No       | Human-readable title used in the message. `{"type":"string"}`                                                                 |
-| `for`         | No       | Hold time before firing, e.g. '2m'. `{"type":"string"}`                                                                       |
-| `cooldown`    | Yes      | Minimum gap between fires. `{"default":"15m","type":"string"}`                                                                |
+| Parameter     | Required | Definition                                                                                                                                       |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`          | Yes      | Unique id — keys muting and history, so make it stable. `{"type":"string","minLength":1}`                                                        |
+| `trigger`     | Yes      | The trigger as a JSON object (see the description). `{"type":"string"}`                                                                          |
+| `channels`    | Yes      | Where to deliver. `{"minItems":1,"type":"array","items":{"type":"string","enum":["slack","discord","ntfy","telegram","email","webhook","mcp"]}}` |
+| `severity`    | Yes      | `{"default":"medium","type":"string","enum":["low","medium","high","critical"]}`                                                                 |
+| `description` | No       | Human-readable title used in the message. `{"type":"string"}`                                                                                    |
+| `for`         | No       | Hold time before firing, e.g. '2m'. `{"type":"string"}`                                                                                          |
+| `cooldown`    | Yes      | Minimum gap between fires. `{"default":"15m","type":"string"}`                                                                                   |
 
 ## update_alert_rule
 
@@ -65,16 +65,16 @@ Adds an alert rule at runtime. `trigger` is a JSON object of exactly one kind: a
 
 Changes an existing alert rule in place. Only the fields you pass are modified; the rest are left as they are. Use to retune a noisy threshold, widen the cooldown, change channels, or enable/disable a rule without deleting it.
 
-| Parameter     | Required | Definition                                                                                                  |
-| ------------- | -------- | ----------------------------------------------------------------------------------------------------------- |
-| `id`          | Yes      | `{"type":"string","minLength":1}`                                                                           |
-| `trigger`     | No       | Replacement trigger, as a JSON object. `{"type":"string"}`                                                  |
-| `channels`    | No       | `{"minItems":1,"type":"array","items":{"type":"string","enum":["slack","discord","ntfy","webhook","mcp"]}}` |
-| `severity`    | No       | `{"type":"string","enum":["low","medium","high","critical"]}`                                               |
-| `description` | No       | `{"type":"string"}`                                                                                         |
-| `for`         | No       | `{"type":"string"}`                                                                                         |
-| `cooldown`    | No       | `{"type":"string"}`                                                                                         |
-| `enabled`     | No       | `{"type":"boolean"}`                                                                                        |
+| Parameter     | Required | Definition                                                                                                                     |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `id`          | Yes      | `{"type":"string","minLength":1}`                                                                                              |
+| `trigger`     | No       | Replacement trigger, as a JSON object. `{"type":"string"}`                                                                     |
+| `channels`    | No       | `{"minItems":1,"type":"array","items":{"type":"string","enum":["slack","discord","ntfy","telegram","email","webhook","mcp"]}}` |
+| `severity`    | No       | `{"type":"string","enum":["low","medium","high","critical"]}`                                                                  |
+| `description` | No       | `{"type":"string"}`                                                                                                            |
+| `for`         | No       | `{"type":"string"}`                                                                                                            |
+| `cooldown`    | No       | `{"type":"string"}`                                                                                                            |
+| `enabled`     | No       | `{"type":"boolean"}`                                                                                                           |
 
 ## remove_alert_rule
 

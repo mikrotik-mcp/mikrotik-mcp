@@ -32,7 +32,15 @@ const Duration = z.string().refine((v) => parseDuration(v) !== null, {
 export const SEVERITIES = ["low", "medium", "high", "critical"] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
-export const CHANNELS = ["slack", "discord", "ntfy", "webhook", "mcp"] as const;
+export const CHANNELS = [
+  "slack",
+  "discord",
+  "ntfy",
+  "telegram",
+  "email",
+  "webhook",
+  "mcp",
+] as const;
 export type ChannelName = (typeof CHANNELS)[number];
 
 /**

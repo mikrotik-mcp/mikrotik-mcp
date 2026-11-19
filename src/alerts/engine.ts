@@ -257,6 +257,12 @@ export class AlertEngine {
     queueMicrotask(() => void this.drain());
   }
 
+  /** Queue a notification that no rule produced (the daily digest). */
+  broadcast(channels: AlertRule["channels"], notification: AlertNotification): void {
+    this.queue.push({ notification, channels });
+    queueMicrotask(() => void this.drain());
+  }
+
   /**
    * Deliver everything queued, one item at a time.
    *

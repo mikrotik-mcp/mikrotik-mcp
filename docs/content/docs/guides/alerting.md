@@ -8,7 +8,7 @@ part that reaches out.
 
 Every tool call already flows through one choke point. Alerting hangs rules off
 that, plus device health and config drift, and delivers to Slack, Discord, ntfy,
-a generic webhook, or the MCP client itself.
+Telegram, email, a generic webhook, or the MCP client itself.
 
 Off unless an `alerts` block exists in your config.
 
@@ -116,13 +116,15 @@ produces exactly one alert and one resolve.
 
 ## Channels
 
-| Channel   | Config                                             |
-| --------- | -------------------------------------------------- |
-| `slack`   | `{ "url": "https://hooks.slack.com/…" }`           |
-| `discord` | `{ "url": "https://discord.com/api/…" }`           |
-| `ntfy`    | `{ "url": "https://ntfy.sh/topic", "token": "…" }` |
-| `webhook` | `{ "url": "…", "method": "POST", "headers": {} }`  |
-| `mcp`     | `{}` — pushes to the connected MCP client          |
+| Channel    | Config                                                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `slack`    | `{ "url": "https://hooks.slack.com/…" }`                                                                                            |
+| `discord`  | `{ "url": "https://discord.com/api/…" }`                                                                                            |
+| `ntfy`     | `{ "url": "https://ntfy.sh/topic", "token": "…" }`                                                                                  |
+| `telegram` | `{ "token": "123:ABC…", "chatId": "-1001234" }`                                                                                     |
+| `email`    | `{ "host": "smtp.example.net", "port": 587, "username": "…", "password": "…", "from": "mcp@example.net", "to": "ops@example.net" }` |
+| `webhook`  | `{ "url": "…", "method": "POST", "headers": {} }`                                                                                   |
+| `mcp`      | `{}` — pushes to the connected MCP client                                                                                           |
 
 Prove one works before relying on it:
 
@@ -133,6 +135,38 @@ test_alert_channel channel=slack
 Delivery gets a **5-second timeout**, at most **two retries** with backoff, and a
 16 KB payload cap. A `4xx` is not retried — a revoked webhook will not become
 valid on the third attempt.
+
+### Telegram
+
+Create a bot with @BotFather and use its token. `chatId` is the user, group or
+channel the bot posts in; the bot must be a member of a group or channel. The
+message is plain text, so alert text is never read as Telegram markup.
+
+### Email
+
+The server speaks SMTP itself and sends one plain-text message for each alert.
+
+- Port `465` connects with TLS. Any other port starts in clear text and upgrades
+  with STARTTLS when the mail server offers it.
+- **A password is never sent over a connection that is not encrypted.** If
+  `username` is set and the server offers no TLS, the delivery fails with that
+  reason.
+- `to` takes one address, or several separated by commas.
+
+### Daily digest
+
+One message a day that sums up the alerts of the last 24 hours: how many times
+each rule fired, on which routers, and how many deliveries failed.
+
+```json
+{ "alerts": { "digest": { "enabled": true, "hour": 8, "channels": ["telegram", "email"] } } }
+```
+
+`hour` is the local hour of the host (0-23, default 8). The digest reads the
+alert history, so it needs the dashboard database (`--dashboard`). A day with
+no alert still sends a short "no alerts" message, which also proves the channel
+works. To stop a flapping condition from repeating, raise the rule's `cooldown`:
+a condition that fires again inside its cooldown sends nothing.
 
 ### The `mcp` channel and transports
 

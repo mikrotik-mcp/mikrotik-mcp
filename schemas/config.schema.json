@@ -518,6 +518,54 @@
               "required": ["url"],
               "additionalProperties": false
             },
+            "telegram": {
+              "type": "object",
+              "properties": {
+                "token": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "chatId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["token", "chatId"],
+              "additionalProperties": false
+            },
+            "email": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "port": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "secure": {
+                  "type": "boolean"
+                },
+                "username": {
+                  "type": "string"
+                },
+                "password": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string",
+                  "minLength": 3
+                },
+                "to": {
+                  "type": "string",
+                  "minLength": 3
+                }
+              },
+              "required": ["host", "from", "to"],
+              "additionalProperties": false
+            },
             "webhook": {
               "type": "object",
               "properties": {
@@ -554,6 +602,31 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "digest": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            },
+            "hour": {
+              "default": 8,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "channels": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["slack", "discord", "ntfy", "telegram", "email", "webhook", "mcp"]
+              }
+            }
+          },
+          "required": ["enabled", "hour", "channels"],
+          "additionalProperties": false
         }
       },
       "required": ["enabled", "rules", "channels", "maxHistory"],

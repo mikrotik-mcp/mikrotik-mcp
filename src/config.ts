@@ -310,6 +310,23 @@ export const AlertChannelsSchema = z.object({
   slack: z.object({ url: z.string().url() }).optional(),
   discord: z.object({ url: z.string().url() }).optional(),
   ntfy: z.object({ url: z.string().url(), token: z.string().optional() }).optional(),
+  /** A Telegram bot: the token from @BotFather and the chat to post in. */
+  telegram: z.object({ token: z.string().min(1), chatId: z.string().min(1) }).optional(),
+  /**
+   * Email over SMTP. Port 465 connects with TLS; any other port upgrades with
+   * STARTTLS. A password is never sent over a connection that is not encrypted.
+   */
+  email: z
+    .object({
+      host: z.string().min(1),
+      port: z.coerce.number().int().positive().optional(),
+      secure: z.boolean().optional(),
+      username: z.string().optional(),
+      password: z.string().optional(),
+      from: z.string().min(3),
+      to: z.string().min(3),
+    })
+    .optional(),
   webhook: z
     .object({
       url: z.string().url(),
@@ -332,6 +349,17 @@ export const AlertsConfigSchema = z.object({
   channels: AlertChannelsSchema.default(() => ({})),
   /** Alert history retention, in records. */
   maxHistory: z.coerce.number().int().positive().default(5000),
+  /** One message a day that sums up the alerts of the last 24 hours. */
+  digest: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** Local hour of the day (0-23). */
+      hour: z.coerce.number().int().min(0).max(23).default(8),
+      channels: z
+        .array(z.enum(["slack", "discord", "ntfy", "telegram", "email", "webhook", "mcp"]))
+        .default([]),
+    })
+    .optional(),
 });
 export type AlertsConfig = z.infer<typeof AlertsConfigSchema>;
 

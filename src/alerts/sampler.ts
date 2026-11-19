@@ -10,6 +10,7 @@
  * `for: 2m` rule can actually observe two minutes of "still true". Coupling
  * them would force one cadence to be wrong.
  */
+import { runDigest } from "./digest";
 import { getAlertEngine } from "./engine";
 import type { AbsenceTriggerT, MetricSample } from "./model";
 import { percentile } from "../observability/stats";
@@ -131,6 +132,12 @@ export async function sampleAlertsOnce(now = Date.now()): Promise<void> {
   if (engine.hasAbsenceRules()) {
     await engine.sampleAbsence(lastSeen, now);
   }
+  await runDigest(
+    getConfig().alerts?.digest,
+    now,
+    (sinceMs) => engine.history({ sinceMs, limit: 1000 }),
+    (channels, n) => engine.broadcast(channels, n),
+  );
 }
 
 /**

@@ -4,7 +4,7 @@
  * Hand-authored (not derived from the JSON schema) so labels, help text, grouping
  * and "advanced" collapsing read well for non-technical users — cross-checked
  * against `schemas/config.schema.json` (the Field Guide still documents the raw
- * schema). Mirrors `ui/observability/config-spec.ts`; keep the two in sync
+ * schema). Mirrors `raycast/src/config-spec.ts`; keep the two in sync
  * (`tests/observability/config-spec.spec.ts` fails if they drift).
  */
 
@@ -56,12 +56,7 @@ export const DEVICE_FIELDS: CfgField[] = [
   { key: "port", label: "SSH port", type: "number", placeholder: "22" },
   { key: "username", label: "Username", type: "text", placeholder: "admin" },
   { key: "password", label: "Password", type: "password", secret: true },
-  {
-    key: "timeoutMs",
-    label: "Timeout (ms)",
-    type: "number",
-    placeholder: "10000",
-  },
+  { key: "timeoutMs", label: "Timeout (ms)", type: "number", placeholder: "10000" },
   {
     key: "description",
     label: "Description",
@@ -83,20 +78,8 @@ export const DEVICE_FIELDS: CfgField[] = [
     advanced: true,
     help: "Path to a private-key file.",
   },
-  {
-    key: "privateKey",
-    label: "Private key (PEM)",
-    type: "password",
-    secret: true,
-    advanced: true,
-  },
-  {
-    key: "keyPassphrase",
-    label: "Key passphrase",
-    type: "password",
-    secret: true,
-    advanced: true,
-  },
+  { key: "privateKey", label: "Private key (PEM)", type: "password", secret: true, advanced: true },
+  { key: "keyPassphrase", label: "Key passphrase", type: "password", secret: true, advanced: true },
   {
     key: "jumpVia",
     label: "Jump via device",
@@ -132,12 +115,7 @@ export const DEVICE_FIELDS: CfgField[] = [
     secret: true,
     advanced: true,
   },
-  {
-    key: "jumpHost.keyFilename",
-    label: "Jump host key file",
-    type: "text",
-    advanced: true,
-  },
+  { key: "jumpHost.keyFilename", label: "Jump host key file", type: "text", advanced: true },
   {
     key: "mac",
     label: "MAC address",
@@ -146,12 +124,7 @@ export const DEVICE_FIELDS: CfgField[] = [
     help: "Set to reach the device over Layer-2 MAC-Telnet (no IP).",
   },
   { key: "sourceMac", label: "Source MAC", type: "text", advanced: true },
-  {
-    key: "macHost",
-    label: "MAC-Telnet host iface",
-    type: "text",
-    advanced: true,
-  },
+  { key: "macHost", label: "MAC-Telnet host iface", type: "text", advanced: true },
   {
     key: "macPort",
     label: "MAC-Telnet port",
@@ -188,8 +161,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     title: "Devices",
     icon: "🖧",
     kind: "deviceMap",
-    blurb:
-      "MikroTik routers this server manages. Toggle a device off to hide it from the tools.",
+    blurb: "MikroTik routers this server manages. Toggle a device off to hide it from the tools.",
     fields: DEVICE_FIELDS,
   },
   {
@@ -235,18 +207,8 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         advanced: true,
         help: "Comma-separated.",
       },
-      {
-        key: "allowedOrigins",
-        label: "Allowed origins",
-        type: "text",
-        advanced: true,
-      },
-      {
-        key: "corsOrigins",
-        label: "CORS origins",
-        type: "text",
-        advanced: true,
-      },
+      { key: "allowedOrigins", label: "Allowed origins", type: "text", advanced: true },
+      { key: "corsOrigins", label: "CORS origins", type: "text", advanced: true },
     ],
   },
   {
@@ -256,8 +218,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     kind: "object",
     path: "dashboard",
     enable: { key: "enabled", label: "Dashboard" },
-    blurb:
-      "This web dashboard — records every tool call and serves the live UI.",
+    blurb: "This web dashboard — records every tool call and serves the live UI.",
     fields: [
       { key: "host", label: "Bind host", type: "text", placeholder: "0.0.0.0" },
       { key: "port", label: "Bind port", type: "number", placeholder: "9090" },
@@ -285,18 +246,8 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         help: "Browse, upload, download and copy router files. It needs no token: anyone who can open this dashboard can read and change router files, backups included. Set an access token, or turn this off, on a network you do not trust.",
       },
       { key: "dbPath", label: "Database path", type: "text", advanced: true },
-      {
-        key: "maxEvents",
-        label: "Max events kept",
-        type: "number",
-        advanced: true,
-      },
-      {
-        key: "maxBodyBytes",
-        label: "Max body bytes",
-        type: "number",
-        advanced: true,
-      },
+      { key: "maxEvents", label: "Max events kept", type: "number", advanced: true },
+      { key: "maxBodyBytes", label: "Max body bytes", type: "number", advanced: true },
     ],
   },
   {
@@ -314,12 +265,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         type: "number",
         placeholder: "10000",
       },
-      {
-        key: "idleTimeout",
-        label: "Idle timeout (ms)",
-        type: "number",
-        placeholder: "30000",
-      },
+      { key: "idleTimeout", label: "Idle timeout (ms)", type: "number", placeholder: "30000" },
     ],
   },
   {
@@ -333,24 +279,9 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     fields: [
       { key: "bucket", label: "Bucket", type: "text" },
       { key: "region", label: "Region", type: "text" },
-      {
-        key: "endpoint",
-        label: "Endpoint",
-        type: "text",
-        placeholder: "https://s3.example.com",
-      },
-      {
-        key: "accessKeyId",
-        label: "Access key ID",
-        type: "password",
-        secret: true,
-      },
-      {
-        key: "secretAccessKey",
-        label: "Secret access key",
-        type: "password",
-        secret: true,
-      },
+      { key: "endpoint", label: "Endpoint", type: "text", placeholder: "https://s3.example.com" },
+      { key: "accessKeyId", label: "Access key ID", type: "password", secret: true },
+      { key: "secretAccessKey", label: "Secret access key", type: "password", secret: true },
       { key: "prefix", label: "Key prefix", type: "text" },
       {
         key: "sessionToken",
@@ -385,8 +316,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     kind: "object",
     path: "alerts",
     enable: { presence: true, label: "Alerting" },
-    blurb:
-      "Where alerts are delivered. Rules themselves are managed in the Alerts view.",
+    blurb: "Where alerts are delivered. Rules themselves are managed in the Alerts view.",
     fields: [
       {
         key: "enabled",
@@ -395,23 +325,51 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         help: "Off keeps the rules but sends nothing.",
       },
       { key: "channels.slack.url", label: "Slack webhook URL", type: "text" },
-      {
-        key: "channels.discord.url",
-        label: "Discord webhook URL",
-        type: "text",
-      },
+      { key: "channels.discord.url", label: "Discord webhook URL", type: "text" },
       { key: "channels.ntfy.url", label: "ntfy topic URL", type: "text" },
+      { key: "channels.ntfy.token", label: "ntfy token", type: "password", secret: true },
       {
-        key: "channels.ntfy.token",
-        label: "ntfy token",
+        key: "channels.telegram.token",
+        label: "Telegram bot token",
         type: "password",
         secret: true,
       },
       {
-        key: "channels.webhook.url",
-        label: "Generic webhook URL",
+        key: "channels.telegram.chatId",
+        label: "Telegram chat ID",
         type: "text",
+        help: "The user, group or channel the bot posts in.",
       },
+      { key: "channels.email.host", label: "SMTP server", type: "text" },
+      {
+        key: "channels.email.port",
+        label: "SMTP port",
+        type: "number",
+        help: "465 connects with TLS. Any other port upgrades with STARTTLS. Default 587.",
+      },
+      { key: "channels.email.username", label: "SMTP user", type: "text" },
+      { key: "channels.email.password", label: "SMTP password", type: "password", secret: true },
+      { key: "channels.email.from", label: "Email sender", type: "text" },
+      {
+        key: "channels.email.to",
+        label: "Email recipients",
+        type: "text",
+        help: "One address, or several separated by commas.",
+      },
+      {
+        key: "digest.enabled",
+        label: "Daily digest",
+        type: "bool",
+        help: "One message a day that sums up the alerts of the last 24 hours.",
+      },
+      { key: "digest.hour", label: "Digest hour (0-23)", type: "number" },
+      {
+        key: "digest.channels",
+        label: "Digest channels",
+        type: "list",
+        help: "Channel names, for example telegram or email.",
+      },
+      { key: "channels.webhook.url", label: "Generic webhook URL", type: "text" },
       {
         key: "channels.webhook.method",
         label: "Webhook method",
@@ -435,8 +393,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     kind: "object",
     path: "attacks",
     enable: { key: "enabled", label: "Attack detection" },
-    blurb:
-      "Sweep the fleet for attacks. Detect-only until you switch the mode.",
+    blurb: "Sweep the fleet for attacks. Detect-only until you switch the mode.",
     fields: [
       {
         key: "mode",
@@ -451,12 +408,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         type: "select",
         options: ["medium", "high", "confirmed"],
       },
-      {
-        key: "pollSeconds",
-        label: "Sweep interval (s)",
-        type: "number",
-        placeholder: "120",
-      },
+      { key: "pollSeconds", label: "Sweep interval (s)", type: "number", placeholder: "120" },
       {
         key: "windowMinutes",
         label: "Look-back window (min)",
@@ -471,12 +423,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         placeholder: "1h",
         help: "A wrong block must expire on its own.",
       },
-      {
-        key: "maxBlocksPerHour",
-        label: "Max blocks / hour",
-        type: "number",
-        placeholder: "6",
-      },
+      { key: "maxBlocksPerHour", label: "Max blocks / hour", type: "number", placeholder: "6" },
       {
         key: "neverBlock",
         label: "Never block",
@@ -491,12 +438,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         placeholder: "brute-force, credential-spray",
         help: "Detectors permitted to trigger an automatic response.",
       },
-      {
-        key: "concurrency",
-        label: "Devices swept at once",
-        type: "number",
-        advanced: true,
-      },
+      { key: "concurrency", label: "Devices swept at once", type: "number", advanced: true },
       {
         key: "learningDays",
         label: "Baseline learning (days)",
@@ -510,12 +452,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         type: "bool",
         advanced: true,
       },
-      {
-        key: "retainDays",
-        label: "Incident retention (days)",
-        type: "number",
-        advanced: true,
-      },
+      { key: "retainDays", label: "Incident retention (days)", type: "number", advanced: true },
     ],
   },
   {
@@ -528,12 +465,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     blurb:
       "Recurring read-only audits, diffed run over run. Jobs are managed in the Schedules view.",
     fields: [
-      {
-        key: "concurrency",
-        label: "Jobs at once",
-        type: "number",
-        placeholder: "4",
-      },
+      { key: "concurrency", label: "Jobs at once", type: "number", placeholder: "4" },
       {
         key: "timeoutMs",
         label: "Job timeout (ms)",
@@ -541,12 +473,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         placeholder: "600000",
         help: "Stops one wedged device from holding a job open into the next occurrence.",
       },
-      {
-        key: "tickSeconds",
-        label: "Scheduler tick (s)",
-        type: "number",
-        advanced: true,
-      },
+      { key: "tickSeconds", label: "Scheduler tick (s)", type: "number", advanced: true },
       {
         key: "jitterMs",
         label: "Start jitter (ms)",
@@ -554,12 +481,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         advanced: true,
         help: "Spreads jobs that share an occurrence.",
       },
-      {
-        key: "retainDays",
-        label: "Run history (days)",
-        type: "number",
-        advanced: true,
-      },
+      { key: "retainDays", label: "Run history (days)", type: "number", advanced: true },
     ],
   },
   {
@@ -584,12 +506,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         type: "text",
         help: "`:memory:` for an ephemeral store.",
       },
-      {
-        key: "retentionHours",
-        label: "Raw retention (hours)",
-        type: "number",
-        placeholder: "24",
-      },
+      { key: "retentionHours", label: "Raw retention (hours)", type: "number", placeholder: "24" },
       {
         key: "rollupDays",
         label: "Rollup retention (days)",
@@ -621,17 +538,26 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         placeholder: "./mikrotik-policies/*.yaml",
         help: "A bare directory loads every .yaml/.yml/.json in it.",
       },
-      {
-        key: "includeStarterPack",
-        label: "Include starter pack",
-        type: "bool",
-      },
+      { key: "includeStarterPack", label: "Include starter pack", type: "bool" },
     ],
   },
   {
-    id: "serviceProbes", title: "Service Probes", icon: "🩺", kind: "object", path: "serviceProbes",
-    blurb: "Approve service checks and host/IP ranges in the dashboard Service Probes editor or JSON. Scheduled contract IDs are managed in JSON; no destinations are allowed by default.",
-    fields: [{ key: "timeoutMs", label: "Probe deadline (ms)", type: "number", placeholder: "5000", help: "100–10000 ms per DNS plus connection check. Targets and enrollment are administrator-owned." }],
+    id: "serviceProbes",
+    title: "Service Probes",
+    icon: "🩺",
+    kind: "object",
+    path: "serviceProbes",
+    blurb:
+      "Approve service checks and host/IP ranges in the dashboard Service Probes editor or JSON. Scheduled contract IDs are managed in JSON; no destinations are allowed by default.",
+    fields: [
+      {
+        key: "timeoutMs",
+        label: "Probe deadline (ms)",
+        type: "number",
+        placeholder: "5000",
+        help: "100–10000 ms per DNS plus connection check. Targets and enrollment are administrator-owned.",
+      },
+    ],
   },
   {
     id: "access",
@@ -649,13 +575,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         key: "maxRisk",
         label: "Maximum risk",
         type: "select",
-        options: [
-          "READ",
-          "WRITE",
-          "WRITE_IDEMPOTENT",
-          "DESTRUCTIVE",
-          "DANGEROUS",
-        ],
+        options: ["READ", "WRITE", "WRITE_IDEMPOTENT", "DESTRUCTIVE", "DANGEROUS"],
         help: "Highest tier a caller may invoke. READ is equivalent to read-only mode.",
       },
       {
@@ -720,11 +640,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         type: "bool",
         help: "Block all write/destructive tools.",
       },
-      {
-        key: "disableUpdateCheck",
-        label: "Disable update check",
-        type: "bool",
-      },
+      { key: "disableUpdateCheck", label: "Disable update check", type: "bool" },
       {
         key: "logLevel",
         label: "Log level",
@@ -732,12 +648,7 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         options: ["error", "warn", "info", "debug"],
         help: "What the server writes to its log (stderr). The default, error, keeps the log small. A change applies at once.",
       },
-      {
-        key: "backupDir",
-        label: "Backup directory",
-        type: "text",
-        advanced: true,
-      },
+      { key: "backupDir", label: "Backup directory", type: "text", advanced: true },
     ],
   },
 ];

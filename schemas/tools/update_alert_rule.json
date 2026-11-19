@@ -16,7 +16,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["slack", "discord", "ntfy", "webhook", "mcp"]
+        "enum": ["slack", "discord", "ntfy", "telegram", "email", "webhook", "mcp"]
       }
     },
     "severity": {

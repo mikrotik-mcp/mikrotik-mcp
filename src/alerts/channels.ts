@@ -18,6 +18,8 @@
  */
 import { logger } from "../logger";
 import type { ChannelName, Severity } from "./model";
+import { sendMail } from "./smtp";
+import type { SmtpConfig } from "./smtp";
 
 /** How long any single delivery attempt may take. */
 export const DELIVERY_TIMEOUT_MS = 5000;
@@ -42,6 +44,9 @@ export interface ChannelConfig {
   slack?: { url: string };
   discord?: { url: string };
   ntfy?: { url: string; token?: string };
+  /** A bot token from @BotFather and the chat (user, group or channel) to post in. */
+  telegram?: { token: string; chatId: string };
+  email?: SmtpConfig;
   webhook?: {
     url: string;
     method?: string;
@@ -82,10 +87,18 @@ export function redactChannels(cfg: ChannelConfig | undefined): Record<string, u
   const out: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(cfg)) {
     if (!value) continue;
-    const v = value as { url?: string; token?: string; method?: string };
+    const v = value as {
+      url?: string;
+      token?: string;
+      method?: string;
+      password?: string;
+      host?: string;
+    };
     out[name] = {
       ...(v.url ? { url: maskUrl(v.url) } : {}),
       ...(v.token ? { token: "«redacted»" } : {}),
+      ...(v.password ? { password: "«redacted»" } : {}),
+      ...(v.host ? { host: v.host } : {}),
       ...(v.method ? { method: v.method } : {}),
       configured: true,
     };
@@ -274,6 +287,35 @@ export async function deliver(
             cfg.ntfy.token ? { authorization: `Bearer ${cfg.ntfy.token}` } : {},
           ),
         );
+      }
+      case "telegram": {
+        if (!cfg.telegram?.token || !cfg.telegram.chatId)
+          return done({ ok: false, error: "telegram channel not configured", attempts: 0 });
+        // Plain text, no parse_mode: alert text is never read as Telegram markup.
+        const sent = await post(`https://api.telegram.org/bot${cfg.telegram.token}/sendMessage`, {
+          chat_id: cfg.telegram.chatId,
+          text: cap(`${summarize(n)}\n${n.body}`.trim()).slice(0, 4096),
+          disable_web_page_preview: true,
+        });
+        // The bot token is in the URL: an error text must not carry it.
+        return done({
+          ...sent,
+          error: sent.error?.replaceAll(cfg.telegram.token, "«redacted»"),
+        });
+      }
+      case "email": {
+        if (!cfg.email?.host || !cfg.email.from || !cfg.email.to)
+          return done({ ok: false, error: "email channel not configured", attempts: 0 });
+        try {
+          await sendMail(cfg.email, summarize(n), `${n.body}\n\nrule ${n.ruleId}`.trim());
+          return done({ ok: true, attempts: 1 });
+        } catch (e) {
+          return done({
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+            attempts: 1,
+          });
+        }
       }
       case "webhook": {
         if (!cfg.webhook?.url)
