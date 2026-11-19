@@ -266,3 +266,45 @@ The dashboard is backed by a small JSON API on the same port (handy for scripts)
 The front-end connects over the Bun-native WebSocket by default and falls back
 to SSE automatically if the upgrade fails. All routes require the bearer token
 when one is configured (the WebSocket/SSE read it from `?token=`).
+
+## Audit export to syslog or a SIEM
+
+Every finished tool call can go to a syslog collector as one RFC 5424 message.
+It works with the dashboard off, and it sends the same sanitised record the
+dashboard stores, so secrets are redacted first.
+
+```json
+{
+  "audit": {
+    "syslog": { "host": "siem.example.net", "port": 514, "protocol": "udp", "writesOnly": false }
+  }
+}
+```
+
+| Setting        | Default        | Meaning                                                |
+| -------------- | -------------- | ------------------------------------------------------ |
+| `host`         | (required)     | The collector.                                         |
+| `port`         | `514`          |                                                        |
+| `protocol`     | `udp`          | `tcp` frames each message with its length (RFC 6587).  |
+| `facility`     | `13`           | Syslog facility number. 13 is "log audit".             |
+| `appName`      | `mikrotik-mcp` | The APP-NAME field.                                    |
+| `includeInput` | `false`        | Add the redacted arguments of the call to the message. |
+| `writesOnly`   | `false`        | Skip read-only calls.                                  |
+
+A message looks like this:
+
+```text
+<110>1 2026-01-02T03:04:05.000Z host mikrotik-mcp 4242 add_ip_address [mcp@32473 callId="…" tool="add_ip_address" risk="WRITE" device="edge" transport="stdio" outcome="ok" durationMs="42"] add_ip_address on edge: ok
+```
+
+The severity is 3 (error) for a failed call, 5 (notice) for a dangerous or
+destructive call, and 6 (info) for the rest.
+
+Limits to know:
+
+- Delivery is best-effort. A message that cannot be sent is dropped; it never
+  delays or fails a tool call. Use the dashboard database when you need a
+  complete record.
+- The messages are not encrypted. Send them over a network you trust, or to a
+  local collector that forwards with TLS.
+- A message is cut at 2048 characters.

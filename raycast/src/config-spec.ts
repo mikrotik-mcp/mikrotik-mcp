@@ -310,6 +310,39 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     fields: [{ key: "dbPath", label: "Database path", type: "text" }],
   },
   {
+    id: "audit",
+    title: "Audit export",
+    icon: "🧾",
+    kind: "object",
+    path: "audit",
+    enable: { presence: true, label: "Audit export" },
+    blurb:
+      "Send every finished tool call to a syslog collector or SIEM. Secrets are redacted first. It works with the dashboard off.",
+    fields: [
+      { key: "syslog.host", label: "Syslog host", type: "text" },
+      { key: "syslog.port", label: "Syslog port", type: "number", help: "Default 514." },
+      {
+        key: "syslog.protocol",
+        label: "Protocol",
+        type: "select",
+        options: ["udp", "tcp"],
+        help: "TCP frames each message with its length (RFC 6587).",
+      },
+      {
+        key: "syslog.includeInput",
+        label: "Include arguments",
+        type: "bool",
+        help: "Add the redacted arguments of each call to the message.",
+      },
+      {
+        key: "syslog.writesOnly",
+        label: "Only changes",
+        type: "bool",
+        help: "Skip read-only calls.",
+      },
+    ],
+  },
+  {
     id: "alerts",
     title: "Alerts",
     icon: "🔔",

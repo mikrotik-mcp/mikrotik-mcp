@@ -20,6 +20,13 @@ let maxEvents = 100_000;
 let transport = "stdio";
 let sinceLastPrune = 0;
 const subscribers = new Set<(e: ToolEvent) => void>();
+/** The audit export. It works with the dashboard off, so it is not a subscriber. */
+let auditSink: ((e: ToolEvent) => void) | undefined;
+
+/** Send every finished call to an audit sink (syslog). Pass nothing to stop. */
+export function setAuditSink(sink?: (e: ToolEvent) => void): void {
+  auditSink = sink;
+}
 
 /** How often (in inserts) to run a retention prune. */
 const PRUNE_EVERY = 500;
@@ -72,9 +79,16 @@ export function subscriberCount(): number {
  * swallowed (and would surface in logs via the caller, not here).
  */
 export function recordToolCall(raw: Omit<RawCall, "transport">, id = crypto.randomUUID()): boolean {
-  if (!enabled || !store) return false;
+  const recording = enabled && store !== null;
+  if (!recording && !auditSink) return false;
   try {
     const event = buildEvent({ ...raw, transport }, id, capture);
+    try {
+      auditSink?.(event);
+    } catch {
+      // an audit export failure must not stop the call or its record
+    }
+    if (!recording || !store) return false;
     store.insert(event);
     // A maintenance failure must not misreport an already-persisted call as missing.
     try {

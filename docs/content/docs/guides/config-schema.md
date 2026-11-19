@@ -669,6 +669,57 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
 }
 ```
 
+## audit
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "syslog": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "default": 514,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "protocol": {
+          "default": "udp",
+          "type": "string",
+          "enum": ["udp", "tcp"]
+        },
+        "facility": {
+          "default": 13,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "appName": {
+          "default": "mikrotik-mcp",
+          "type": "string"
+        },
+        "includeInput": {
+          "default": false,
+          "type": "boolean"
+        },
+        "writesOnly": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": ["host", "port", "protocol", "facility", "appName", "includeInput", "writesOnly"],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+```
+
 ## flows
 
 ```json

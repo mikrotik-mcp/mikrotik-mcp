@@ -24,7 +24,9 @@ import { startFlightRecorder, stopFlightRecorder } from "./flight-recorder/servi
 import { createDeviceClient, describeTransport } from "./core/transport";
 import { logger } from "./logger";
 import { allToolModules } from "./tools";
+import { createSyslogSink } from "./observability/audit-syslog";
 import { runDashboard } from "./observability/dashboard";
+import { setAuditSink } from "./observability/recorder";
 import { runHttp } from "./transport/http";
 import { runStdio } from "./transport/stdio";
 import { VERSION, SERVER_NAME } from "./version";
@@ -277,6 +279,15 @@ async function main(): Promise<void> {
         `Alerting disabled — invalid rules: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
+  }
+
+  // Audit export: every finished tool call to a syslog collector. It does not
+  // need the dashboard.
+  if (cfg.audit?.syslog) {
+    setAuditSink(createSyslogSink(cfg.audit.syslog).send);
+    logger.info(
+      `Audit export: syslog ${cfg.audit.syslog.protocol}://${cfg.audit.syslog.host}:${cfg.audit.syslog.port}`,
+    );
   }
 
   // Scheduled audits: opt-in via the `schedules` config block. The first tick

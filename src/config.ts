@@ -306,6 +306,27 @@ export type S3Config = z.infer<typeof S3ConfigSchema>;
  * response. No SSRF validation is performed: these endpoints are configured
  * deliberately by the operator.
  */
+/**
+ * Audit export. Every finished tool call goes to a syslog collector or SIEM as
+ * one RFC 5424 message. It works with the dashboard off.
+ */
+export const AuditConfigSchema = z.object({
+  syslog: z
+    .object({
+      host: z.string().min(1),
+      port: z.coerce.number().int().positive().default(514),
+      protocol: z.enum(["udp", "tcp"]).default("udp"),
+      /** Syslog facility number. 13 is "log audit". */
+      facility: z.coerce.number().int().min(0).max(23).default(13),
+      appName: z.string().default("mikrotik-mcp"),
+      /** Add the redacted arguments of each call to the message. */
+      includeInput: z.boolean().default(false),
+      /** Send only calls that can change a router. */
+      writesOnly: z.boolean().default(false),
+    })
+    .optional(),
+});
+
 export const AlertChannelsSchema = z.object({
   slack: z.object({ url: z.string().url() }).optional(),
   discord: z.object({ url: z.string().url() }).optional(),
@@ -625,6 +646,7 @@ export const MikrotikConfigSchema = z.object({
   dashboard: DashboardConfigSchema.default(() => DashboardConfigSchema.parse({})),
   /** Alerting: rules + delivery channels. Absent unless configured (opt-in). */
   alerts: AlertsConfigSchema.optional(),
+  audit: AuditConfigSchema.optional(),
   /** NetFlow/IPFIX collection (opt-in; binds a UDP port only when enabled). */
   flows: FlowsConfigSchema.default(() => FlowsConfigSchema.parse({})),
   /** Policy-as-code rule files (read-only linting against config snapshots). */
@@ -726,6 +748,7 @@ export function parseFlags(argv: string[]): Record<string, string> {
  */
 const PASSTHROUGH_BLOCKS = [
   "alerts",
+  "audit",
   "flows",
   "policy",
   "schedules",
