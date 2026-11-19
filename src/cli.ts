@@ -292,6 +292,16 @@ async function main(): Promise<void> {
     );
   }
 
+  // Search by meaning for find_tools: embed the catalog in the background. The
+  // first search may come before it is ready; it then uses words only.
+  if (cfg.mcp.semanticSearch)
+    // Loaded here, not at the top: the catalog is large and only `serve` needs it.
+    void Promise.all([import("./tools/tool-gateway"), import("./core/tool-semantic")])
+      .then(async ([gateway, semantic]) =>
+        semantic.startSemanticIndex(await gateway.semanticDocs()),
+      )
+      .catch(() => {});
+
   // Approvals: tell the chosen alert channels about each change that waits.
   if (cfg.approvals?.enabled) {
     const notify = cfg.approvals.notify;

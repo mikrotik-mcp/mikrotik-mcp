@@ -32,7 +32,9 @@ import type { ToolContext } from "../core/context";
 import { WRITE, READ, defineTool, invokeCall } from "../core/registry";
 import type { RegisterableTool, ToolModule } from "../core/registry";
 import { buildToolIndex, searchToolIndex } from "../core/tool-search";
-import type { ToolForIndex, ToolSearchIndex } from "../core/tool-search";
+import type { ScoredTool, ToolForIndex, ToolSearchIndex } from "../core/tool-search";
+import { fuseRanks, semanticRank } from "../core/tool-semantic";
+import type { SemanticDoc } from "../core/tool-semantic";
 import { tryResolveDeviceName } from "../core/runtime";
 import { evaluateAccess, getAccessPolicy } from "../core/access";
 import { getEventStore } from "../observability/recorder";
@@ -74,6 +76,82 @@ async function gateway(): Promise<GatewayState> {
   }
   cache = { index: buildToolIndex(forIndex), byName };
   return cache;
+}
+
+/** Every catalog tool as the semantic index needs it (the gateway's own tools left out). */
+export async function semanticDocs(): Promise<SemanticDoc[]> {
+  const { index } = await gateway();
+  return index.entries.map((e) => ({ name: e.name, title: e.title, description: e.description }));
+}
+
+/**
+ * Rank the catalog for a request: the lexical ranking (the request's own
+ * words) merged with the semantic one (its meaning), when that is ready.
+ *
+ * `sure` is true when the first result can be trusted enough to hand over its
+ * parameters at once: the request is that tool's exact name, or both rankings
+ * put the same tool first.
+ */
+export function rankTools(
+  index: ToolSearchIndex,
+  query: string,
+  limit: number,
+): { hits: ScoredTool[]; sure: boolean; semantic: boolean } {
+  const lexical = searchToolIndex(index, query, 60);
+  const near = semanticRank(query, 60);
+  if (!near)
+    return {
+      hits: lexical.slice(0, limit),
+      sure: (lexical[0]?.score ?? 0) >= 100,
+      semantic: false,
+    };
+  const exact = (lexical[0]?.score ?? 0) >= 100 ? lexical[0]!.name : undefined;
+  const fused = fuseRanks(
+    [lexical.map((h) => h.name), near.map((h) => h.name)],
+    limit + (exact ? 1 : 0),
+  );
+  // A request that IS a tool name keeps that tool first, whatever the meaning says.
+  const names = exact ? [exact, ...fused.filter((name) => name !== exact)] : fused;
+  const scoreOf = new Map(lexical.map((h) => [h.name, h.score]));
+  const entry = new Map(index.entries.map((e) => [e.name, e]));
+  const hits = names.slice(0, limit).flatMap((name) => {
+    const e = entry.get(name);
+    return e
+      ? [
+          {
+            name: e.name,
+            title: e.title,
+            description: e.description,
+            module: e.module,
+            group: e.group,
+            params: e.params,
+            score: scoreOf.get(name) ?? 0,
+          },
+        ]
+      : [];
+  });
+  return {
+    hits,
+    sure: exact !== undefined || (lexical[0]?.name === near[0]?.name && near[0] !== undefined),
+    semantic: true,
+  };
+}
+
+/** The parameter lines of a tool, as describe_tool prints them. */
+function paramLinesOf(tool: RegisterableTool, ctx: ToolContext): string {
+  const params = describeParams(
+    (ctx.tools?.shape(tool.name) ?? tool.inputSchema) as Record<string, z.ZodTypeAny> | undefined,
+  );
+  return params.length
+    ? params
+        .map(
+          (p) =>
+            `  • ${p.name}${p.required ? " (required)" : " (optional)"}${
+              p.description ? ` — ${p.description}` : ""
+            }`,
+        )
+        .join("\n")
+    : "  (no parameters)";
 }
 
 /** Reset the memoised index — used by tests; harmless in production. */
@@ -210,14 +288,15 @@ export const toolGatewayTools: ToolModule = [
     annotations: READ,
     description:
       "🔍 START HERE — this is the PRIMARY entry point for ANY MikroTik / RouterOS task. " +
-      "ALWAYS call this tool FIRST before attempting any other tool. This server has several hundred " +
-      "dedicated tools with full validation and structured output, but the host only surfaces a small " +
-      "subset — this tool searches the FULL catalog and finds the best match for your intent.\n\n" +
-      "Describe what you want to do in natural language or keywords, e.g. 'block a LAN client by MAC', " +
-      "'add an IPv4 firewall filter rule', 'import a TLS certificate', 'list DHCP leases', " +
-      "'create a WireGuard peer'. Returns each match's exact tool name, description, parameters and " +
-      "a ready-to-run `invoke_tool` call.\n\n" +
-      "Workflow: find_tools → (optional) describe_tool → invoke_tool. " +
+      "ALWAYS call this tool FIRST before attempting any other tool. A tool that is not in your tool " +
+      "list is NOT missing: this server has about a thousand tools and every one of them runs through " +
+      "`invoke_tool`. Never say a tool is unavailable before this search returned nothing.\n\n" +
+      "Describe what you want to do in your own words, e.g. 'block a LAN client by MAC', " +
+      "'change the nameservers the router uses', 'import a TLS certificate', 'list DHCP leases', " +
+      "'create a WireGuard peer'. The search matches words AND meaning, so you do not need the tool's " +
+      "own terms. Returns a short list: each tool's exact name and one line on what it is for (no " +
+      "schemas). When it is sure of the best match it adds that tool's parameters and a ready call.\n\n" +
+      "Workflow: find_tools → describe_tool (for the tool you picked) → invoke_tool. " +
       "Only if this search returns zero results, run a raw command with " +
       '`invoke_tool {"name":"run_routeros_command","arguments":{"command":"…"}}`. ' +
       "For IPv4 vs IPv6, include 'ipv4' or 'ipv6' to disambiguate. " +
@@ -240,13 +319,16 @@ export const toolGatewayTools: ToolModule = [
         .describe("Max results to return (default 8)."),
     },
     async handler(a, ctx) {
-      const { index } = await gateway();
+      const { index, byName } = await gateway();
       const limit = a.limit ?? 8;
       // Only tools this server can run (read-only mode and module filters drop
       // some); over-fetch so the filter does not shorten the result.
-      const hits = searchToolIndex(index, a.query, limit + 25)
+      const ranked = rankTools(index, a.query, limit + 25);
+      const hits = ranked.hits
         .filter((h) => !ctx.tools || ctx.tools.shape(h.name) !== undefined)
         .slice(0, limit);
+      // The first result survived the filter only if it is still first.
+      const sure = ranked.sure && hits[0]?.name === ranked.hits[0]?.name;
       if (hits.length === 0) {
         return (
           `No tools matched "${a.query}". Try different keywords (a RouterOS scope like ` +
@@ -254,13 +336,25 @@ export const toolGatewayTools: ToolModule = [
           `${howToRun("run_routeros_command", ctx)}.`
         );
       }
+      // For each tool: the name, what it is for, and a ready call. No schema
+      // here; the list stays short, and the chosen tool's details come from
+      // describe_tool.
       const lines = hits.map((h, i) => {
-        const params = h.params.length ? ` · params: ${h.params.join(", ")}` : " · params: none";
-        const desc = h.description.replace(/\s+/g, " ").slice(0, 200);
-        return `${i + 1}. ${h.name}  [${h.module}]\n   ${h.title} — ${desc}${params}\n   Run: ${howToRun(h.name, ctx)}`;
+        const desc = h.description.replace(/\s+/g, " ").slice(0, 160);
+        // The ready call stays: a name with no way to run it is a dead end for a
+        // client that has not loaded the tool.
+        return `${i + 1}. ${h.name}  [${h.module}] — ${h.title}. ${desc}\n   Run: ${howToRun(h.name, ctx)}`;
       });
+      const top = byName.get(hits[0]!.name);
+      const detail =
+        sure && top
+          ? `\n\nBest match: ${top.name}. Its parameters:\n${paramLinesOf(top, ctx)}`
+          : "\n\nThe Run line gives only the required arguments. For every parameter of the tool you pick, call describe_tool with its name.";
       const plural = hits.length === 1 ? "" : "s";
-      return `Found ${hits.length} tool${plural} for "${a.query}" (best first). Each has a ready-to-run call:\n\n${lines.join("\n\n")}`;
+      return (
+        `Found ${hits.length} tool${plural} for "${a.query}" (best first).\n\n${lines.join("\n")}${detail}\n\n` +
+        "Every tool in this list can be run with invoke_tool, also when it is not in your own tool list."
+      );
     },
   }),
 
@@ -288,11 +382,6 @@ export const toolGatewayTools: ToolModule = [
       // The schema and parameters a direct call uses on this server: the same
       // object `tools/list` publishes, including `device` and `reason`.
       const schema = ctx.tools?.schema(tool.name) ?? listedSchema(tool.inputSchema);
-      const params = describeParams(
-        (ctx.tools?.shape(tool.name) ?? tool.inputSchema) as
-          | Record<string, z.ZodTypeAny>
-          | undefined,
-      );
       if (ctx.tools && ctx.tools.shape(tool.name) === undefined) {
         return `"${tool.name}" exists in the catalog but is not available on this server (read-only mode or a module filter).`;
       }
@@ -301,16 +390,7 @@ export const toolGatewayTools: ToolModule = [
         : tool.annotations.destructiveHint
           ? "DESTRUCTIVE / DANGEROUS"
           : "WRITE";
-      const paramLines = params.length
-        ? params
-            .map(
-              (p) =>
-                `  • ${p.name}${p.required ? " (required)" : " (optional)"}${
-                  p.description ? ` — ${p.description}` : ""
-                }`,
-            )
-            .join("\n")
-        : "  (no parameters)";
+      const paramLines = paramLinesOf(tool, ctx);
       return (
         `${tool.name} — ${tool.title}\n` +
         `risk: ${risk}\n\n` +
@@ -329,13 +409,15 @@ export const toolGatewayTools: ToolModule = [
     dispatcher: true,
     description:
       "Execute ANY tool in the catalog by its exact name with the given arguments — the way to run " +
-      "a tool you found via find_tools when it is not in your tool list. The call goes through the " +
+      "a tool you found via find_tools when it is not in your tool list. A tool that is not in your " +
+      "tool list is NOT missing; it runs here. The call goes through the " +
       "same pipeline as a direct call: the same schema validation, access and risk checks, safety " +
       "guards and audit record (saved under the target tool's own name and Tool call ID). " +
       "Put the target's arguments in `arguments`, exactly as describe_tool lists them — including " +
       "`reason` when the target requires it. To choose a device, set `device` on THIS call or " +
-      "inside `arguments`. Unknown argument names are rejected, not ignored. If validation fails " +
-      "you get the expected parameters back; fix and retry.",
+      "inside `arguments`. Unknown argument names are rejected, not ignored. If validation fails, " +
+      "nothing runs and you get every parameter of the tool back with its description: correct the " +
+      "arguments and call again.",
     inputSchema: {
       name: z.string().min(1).describe("Exact tool name to run, e.g. 'create_filter_rule'."),
       arguments: z
@@ -377,15 +459,19 @@ export const toolGatewayTools: ToolModule = [
       // (a dropped `use_safe_mode: false` would change what the call does).
       const parsed = z.object(shape).strict().safeParse(args);
       if (!parsed.success) {
-        const params = describeParams(shape as Record<string, z.ZodTypeAny>)
-          .map((p) => `${p.name}${p.required ? " (required)" : ""}`)
-          .join(", ");
         const issues = parsed.error.issues
           .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
           .join("; ");
+        // The parameters come back with the error, so the next call can be
+        // correct without a describe_tool round trip.
+        const target = byName.get(name) ?? metaTool(name);
+        const expected = target
+          ? paramLinesOf(target, ctx)
+          : describeParams(shape as Record<string, z.ZodTypeAny>)
+              .map((p) => `  • ${p.name}${p.required ? " (required)" : " (optional)"}`)
+              .join("\n") || "  (no parameters)";
         return fail(
-          `Invalid arguments for "${name}": ${issues}. ` +
-            `Expected parameters: ${params || "(none)"}. For the full schema: ${howToRun("describe_tool", ctx)}.`,
+          `Invalid arguments for "${name}": ${issues}.\nNothing ran. The parameters of ${name}:\n${expected}\nCorrect the arguments and call invoke_tool again.`,
         );
       }
 

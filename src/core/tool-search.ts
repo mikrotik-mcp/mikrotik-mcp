@@ -87,10 +87,73 @@ const SYNONYMS: Record<string, string[]> = {
   edit: ["update", "set", "modify"],
 };
 
-/** Expand query tokens with their CRUD-verb synonyms (union, deduped). */
+/**
+ * Words people use for a RouterOS thing that the tools name differently. A
+ * request for "nameservers" must reach the DNS tools, and "restart" the reboot
+ * tool. One direction only (the user's word to the catalog's word), and only
+ * where the catalog word is unambiguous.
+ */
+const DOMAIN_WORDS: Record<string, string[]> = {
+  nameserver: ["dns"],
+  nameservers: ["dns"],
+  resolver: ["dns"],
+  resolution: ["dns"],
+  restart: ["reboot"],
+  rename: ["identity"],
+  hostname: ["identity"],
+  masquerade: ["nat"],
+  hide: ["nat", "masquerade"],
+  kick: ["disconnect"],
+  laptop: ["device"],
+  phone: ["device"],
+  pc: ["device"],
+  computer: ["device"],
+  machine: ["device"],
+  machines: ["devices", "connected"],
+  attached: ["connected"],
+  storage: ["disk"],
+  undo: ["rollback"],
+  revert: ["rollback"],
+  attacking: ["attacks", "attack"],
+  hacked: ["attacks", "attack"],
+  firmware: ["update", "upgrade"],
+  holes: ["vulnerabilities", "advisories"],
+  vulnerable: ["vulnerabilities", "advisories"],
+  tunnel: ["wireguard", "vpn"],
+  employee: ["user", "vpn"],
+  remote: ["vpn"],
+  slow: ["diagnose", "speed"],
+  fixed: ["static"],
+  forever: ["static"],
+  gadgets: ["segment", "vlan"],
+  iot: ["segment", "vlan"],
+  separate: ["segment", "vlan", "zone"],
+  timezone: ["clock"],
+  time: ["clock"],
+  ranges: ["address", "list"],
+  happened: ["logs", "events"],
+  channel: ["wifi", "channels"],
+  radio: ["wifi", "wireless"],
+  copy: ["backup", "snapshot"],
+  answers: ["ping"],
+  reachable: ["ping"],
+  path: ["traceroute"],
+  wireshark: ["capture", "sniffer"],
+  nightly: ["scheduler", "schedule"],
+  night: ["scheduler", "schedule"],
+  job: ["scheduler", "schedule"],
+  inside: ["forward", "nat"],
+  codes: ["vouchers"],
+  guests: ["hotspot", "vouchers"],
+};
+
+/** Expand query tokens with verb synonyms and with the catalog's word for a user's word. */
 function expandQuery(tokens: string[]): Set<string> {
   const out = new Set(tokens);
-  for (const t of tokens) for (const s of SYNONYMS[t] ?? []) out.add(s);
+  for (const t of tokens) {
+    for (const s of SYNONYMS[t] ?? []) out.add(s);
+    for (const s of DOMAIN_WORDS[t] ?? []) out.add(s);
+  }
   return out;
 }
 

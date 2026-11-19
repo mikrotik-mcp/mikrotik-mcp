@@ -29,7 +29,7 @@ describe("tools/list over the real MCP transport (offline)", () => {
           disableUpdateCheck: true,
           memory: { enabled: false },
           tools: { modules: ["mcp-settings"] },
-          mcp: { toolPageSize: 0 },
+          mcp: { toolSurface: "full", toolPageSize: 0 },
         }),
       );
       const { server } = createServer();
@@ -73,7 +73,7 @@ describe("tools/list over the real MCP transport (offline)", () => {
               defaultDevice: "offline_a",
               disableUpdateCheck: true,
               memory: { enabled: false },
-              mcp: { capabilityGating, appViews, toolPageSize },
+              mcp: { toolSurface: "full", capabilityGating, appViews, toolPageSize },
             }),
           );
           const { server } = createServer();

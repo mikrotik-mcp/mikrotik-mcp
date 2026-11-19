@@ -278,7 +278,8 @@
         "corsOrigins": "",
         "sessionIdleTimeout": 86400000,
         "toolPageSize": 0,
-        "toolSurface": "full",
+        "toolSurface": "auto",
+        "semanticSearch": true,
         "coreTools": "",
         "appViews": false,
         "capabilityGating": "annotate"
@@ -325,9 +326,13 @@
           "maximum": 9007199254740991
         },
         "toolSurface": {
-          "default": "full",
+          "default": "auto",
           "type": "string",
-          "enum": ["full", "core"]
+          "enum": ["auto", "full", "core"]
+        },
+        "semanticSearch": {
+          "default": true,
+          "type": "boolean"
         },
         "coreTools": {
           "default": "",
@@ -353,6 +358,7 @@
         "sessionIdleTimeout",
         "toolPageSize",
         "toolSurface",
+        "semanticSearch",
         "coreTools",
         "appViews",
         "capabilityGating"

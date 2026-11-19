@@ -710,3 +710,64 @@ resources and embedded app views vary by client even when basic tools work.
 | Cloud connector cannot reach localhost | Use authenticated remote access or a supported secure tunnel.                                                                       |
 
 For a guided installation, use [Install with your AI assistant](/docs/guides/installation-assistant).
+
+## How a client finds a tool among a thousand
+
+The server has about a thousand tools. A host that receives all of them loads
+only some. A tool it did not load looks missing to the model, and the model may
+then tell you it cannot do the job. Three things work against that.
+
+### A short tool list
+
+`mcp.toolSurface` decides what `tools/list` holds:
+
+| Value            | `tools/list` holds                                                                                                               |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `auto` (default) | The core set when the catalog has more than 100 tools; every tool otherwise.                                                     |
+| `core`           | The core set: `find_tools`, `describe_tool`, `invoke_tool`, Safe Mode control, access scope, call history, plus `mcp.coreTools`. |
+| `full`           | Every tool.                                                                                                                      |
+
+With the core set, every tool the model sees is callable, and every other tool
+runs through `invoke_tool` with the same validation, access checks and audit
+record as a direct call. Set `--tool-surface full` for a client that loads the
+whole list and calls tools by their own names.
+
+### Search by words and by meaning
+
+`find_tools` takes a request in the model's own words. It merges two rankings:
+
+- **Words.** The request's words against tool names, titles and descriptions.
+- **Meaning.** A small embedding model
+  ([ternlight](https://github.com/soycaporal/ternlight), a 5 MB WebAssembly
+  bundle) runs on the host. "The router is hot, check temperature" finds
+  `get_system_health` with no word in common. Nothing is sent anywhere.
+
+The catalog is embedded once in the background when the server starts (about
+five seconds) and the result is cached in `~/.mikrotik-mcp/tool-vectors.bin`.
+A search before that is done uses words only. Turn it off with
+`--semantic-search false`.
+
+On 25 requests that were written without looking at the tool names, the right
+tool was in the first five results 4 times with words alone and 15 times with
+both. It is better, not perfect: when the list misses, rephrase the request or
+name the RouterOS menu.
+
+### Short answers, and errors that correct themselves
+
+- `find_tools` returns a name, one line and a ready call for each tool. It
+  sends no schema. When it is sure of the best match, it adds that tool's
+  parameters.
+- `describe_tool` returns the full parameters of the one tool the model picked.
+- `invoke_tool` with a wrong argument runs nothing and returns every parameter
+  of the tool, so the next call can be right. A wrong tool name returns the
+  closest names.
+
+Limits to know:
+
+- The embedding model reads English. A request in another language is matched
+  by words only, which mostly means not at all: ask in English, or let the
+  model translate.
+- The package adds about 23 MB on disk.
+- A model can still answer without calling any tool. The server cannot see
+  that; the rule at the top of the server instructions and of the tool
+  descriptions makes it less likely.

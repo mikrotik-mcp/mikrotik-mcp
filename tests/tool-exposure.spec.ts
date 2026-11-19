@@ -48,7 +48,9 @@ async function connect(config: Record<string, unknown> = {}) {
       defaultDevice: "home",
       disableUpdateCheck: true,
       memory: { enabled: false },
+      // These tests describe each surface by name; `auto` has its own test below.
       ...config,
+      mcp: { toolSurface: "full", ...(config.mcp as Record<string, unknown> | undefined) },
     }),
   );
   resetSessionScope();

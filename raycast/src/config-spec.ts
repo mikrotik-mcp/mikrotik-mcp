@@ -217,6 +217,20 @@ export const CONFIG_SECTIONS: CfgSection[] = [
         help: "Expose rich App-view metadata to compatible clients.",
       },
       {
+        key: "toolSurface",
+        label: "Tool list",
+        type: "select",
+        options: ["auto", "full", "core"],
+        help: "auto lists only the core tools when the catalog is large; every other tool runs through invoke_tool. full lists every tool. A host that gets a thousand tools loads only some, and the model then calls the rest missing.",
+      },
+      {
+        key: "semanticSearch",
+        label: "Search tools by meaning",
+        type: "bool",
+        defaultOn: true,
+        help: "find_tools also matches the meaning of a request, with a small model that runs on this host. Nothing is sent out.",
+      },
+      {
         key: "capabilityGating",
         label: "Capability gating",
         type: "select",

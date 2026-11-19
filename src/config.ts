@@ -91,14 +91,23 @@ export const McpServerSettingsSchema = z.object({
   /**
    * Which tools `tools/list` contains.
    *
-   * - `full` (default) — every tool.
+   * - `auto` (default) — `core` when the catalog has more than 100 tools,
+   *   `full` otherwise. A host that receives a thousand tools loads only some of
+   *   them; a tool it did not load looks missing to the model, which then stops.
+   *   With a short list every tool the model sees is callable.
+   * - `full` — every tool.
    * - `core` — only the pinned core set (the tool gateway, Safe Mode control,
    *   access scope, call history) plus `coreTools`. Every other tool still
    *   exists and runs through `invoke_tool` with the same validation, checks
    *   and audit record. Use it for hosts that load only part of a large tool
    *   list, where a tool can be listed by the server and still be unreachable.
    */
-  toolSurface: z.enum(["full", "core"]).default("full"),
+  toolSurface: z.enum(["auto", "full", "core"]).default("auto"),
+  /**
+   * Search the tool catalog by meaning as well as by words (`find_tools`). It
+   * uses a small embedding model that runs on this host; nothing is sent out.
+   */
+  semanticSearch: z.boolean().default(true),
   /** Comma-separated extra tool names to list in `core` surface mode. */
   coreTools: z.string().default(""),
   /**
@@ -1101,6 +1110,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
   // default (true), an explicit falsy value disables it. The config-file
   // `mcp.appViews` (merged below) overrides this.
   const appViewsRaw = pick("app-views", "MIKROTIK_MCP__APP_VIEWS");
+  const semanticRaw = pick("semantic-search", "MIKROTIK_MCP__SEMANTIC_SEARCH");
   const appViewsEnv =
     appViewsRaw === undefined ? undefined : !/^(0|false|no|off)$/i.test(appViewsRaw);
 
@@ -1114,6 +1124,8 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     sessionIdleTimeout: pick("mcp-session-idle-timeout", "MIKROTIK_MCP__SESSION_IDLE_TIMEOUT"),
     toolPageSize: pick("tool-page-size", "MIKROTIK_MCP__TOOL_PAGE_SIZE"),
     toolSurface: pick("tool-surface", "MIKROTIK_MCP__TOOL_SURFACE"),
+    semanticSearch:
+      semanticRaw === undefined ? undefined : !/^(0|false|no|off)$/i.test(semanticRaw),
     coreTools: pick("core-tools", "MIKROTIK_MCP__CORE_TOOLS"),
     // `--app-views=false` / MIKROTIK_MCP__APP_VIEWS=false disables App-view metadata.
     appViews: appViewsEnv,

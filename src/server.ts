@@ -26,7 +26,24 @@ import {
   LOGO_URL,
 } from "./version";
 
+/** Above this many tools, the `auto` surface lists only the core set. */
+export const AUTO_CORE_ABOVE = 100;
+
+/** The surface `tools/list` uses: `auto` is `core` for a large catalog. */
+export function resolveSurface(
+  setting: "auto" | "full" | "core",
+  toolCount: number,
+): "full" | "core" {
+  if (setting !== "auto") return setting;
+  return toolCount > AUTO_CORE_ABOVE ? "core" : "full";
+}
+
 const INSTRUCTIONS = `MikroTik RouterOS management over SSH.
+
+RULE: a tool that is not in your tool list is NOT missing. Every tool of this
+server runs through \`invoke_tool\`. Call \`find_tools\` to get its name, then
+\`invoke_tool\`. Never tell the user that a tool is unavailable before
+\`find_tools\` returned nothing.
 
 This server exposes RouterOS configuration as MCP tools grouped by subsystem:
 interfaces, IP addressing, DHCP, DNS, firewall (filter + NAT), routing, VLANs,
@@ -34,14 +51,17 @@ wireless, WireGuard, queues/QoS, users, logs, backups, PoE, system, network
 tools, bridges, address-lists, scheduler/scripts and certificates.
 
 Tool discovery — MANDATORY workflow:
-  This server has several hundred dedicated tools, but the host only surfaces a
-  small subset at a time. You MUST follow this order:
-    1. ALWAYS call \`find_tools\` FIRST — describe what you want to do and it
-       searches the full catalog for the best-matching dedicated tool.
-    2. (Optional) Call \`describe_tool\` to get the exact parameter schema.
-    3. Run it with the \`invoke_tool\` call that \`find_tools\` printed. Call a tool
-       by its own name only if it is in your tool list. \`invoke_tool\` applies the
-       same validation, risk checks and audit record as a direct call.
+  This server has about a thousand dedicated tools. Your tool list holds only a
+  few of them. You MUST follow this order:
+    1. ALWAYS call \`find_tools\` FIRST — describe what you want to do in your own
+       words. It searches the full catalog by words and by meaning and returns
+       tool names with one line each.
+    2. Call \`describe_tool\` with the name you picked to get its parameters.
+       When \`find_tools\` is sure of the best match, it gives them at once.
+    3. Run it with \`invoke_tool\`. Call a tool by its own name only if it is in
+       your tool list. \`invoke_tool\` applies the same validation, risk checks
+       and audit record as a direct call, and an argument error returns the
+       parameters so you can correct the call.
     4. ONLY if \`find_tools\` returned ZERO results, run a raw command with
        \`invoke_tool {"name":"run_routeros_command","arguments":{"command":"…"}}\`.
   Dedicated tools have schema validation, structured output, and correct risk
@@ -295,7 +315,10 @@ export function createServer(opts: { sendLog?: SendLog } = {}): CreatedServer {
     // hide App-metadata tools still surface them (the recurring "reads don't load").
     appViews: getConfig().mcp.appViews,
     readOnly,
-    surface: getConfig().mcp.toolSurface,
+    surface: resolveSurface(
+      getConfig().mcp.toolSurface,
+      toolModules.reduce((sum, module) => sum + module.length, 0),
+    ),
     coreTools: getConfig()
       .mcp.coreTools.split(",")
       .map((name) => name.trim())

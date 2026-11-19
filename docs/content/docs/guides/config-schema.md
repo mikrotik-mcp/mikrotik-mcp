@@ -298,7 +298,8 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "corsOrigins": "",
     "sessionIdleTimeout": 86400000,
     "toolPageSize": 0,
-    "toolSurface": "full",
+    "toolSurface": "auto",
+    "semanticSearch": true,
     "coreTools": "",
     "appViews": false,
     "capabilityGating": "annotate"
@@ -345,9 +346,13 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
       "maximum": 9007199254740991
     },
     "toolSurface": {
-      "default": "full",
+      "default": "auto",
       "type": "string",
-      "enum": ["full", "core"]
+      "enum": ["auto", "full", "core"]
+    },
+    "semanticSearch": {
+      "default": true,
+      "type": "boolean"
     },
     "coreTools": {
       "default": "",
@@ -373,6 +378,7 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
     "sessionIdleTimeout",
     "toolPageSize",
     "toolSurface",
+    "semanticSearch",
     "coreTools",
     "appViews",
     "capabilityGating"

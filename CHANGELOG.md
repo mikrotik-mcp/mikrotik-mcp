@@ -125,6 +125,9 @@ the GitHub release notes.
   `protect_hotspot_login` rate-limits the hotspot login.
 - **WireGuard Users page.** Add a user, scan its QR code, set an end date,
   revoke.
+- **Tool search by meaning.** `find_tools` now also matches what a request
+  means, with the ternlight embedding model on the host. It returns a name, one
+  line and a ready call for each tool, no schema.
 
 - **Start summary.** `serve` on an interactive terminal now prints, under the
   banner, where the server answers (the MCP endpoint and the dashboard, on
@@ -158,6 +161,11 @@ the GitHub release notes.
 
 ### Changed
 
+- **`tools/list` is short by default.** `mcp.toolSurface` defaults to `auto`:
+  with more than 100 tools only the core set is listed, and every other tool
+  runs through `invoke_tool`. A client that calls tools by their own names
+  needs `--tool-surface full`.
+- `invoke_tool` returns every parameter of the tool when an argument is wrong.
 - **The Terminal page no longer needs a token or a loopback bind.** Like the
   Files page, it is on by default and is turned off or on with
   `dashboard.terminal`: a switch in **Config → Dashboard** (no restart) or
