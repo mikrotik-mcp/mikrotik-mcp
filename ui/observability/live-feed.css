@@ -17,7 +17,8 @@
 /* The table: the board's column widths. */
 .live-feed-grid {
   min-width: 600px;
-  grid-template-columns: 18px 44px minmax(0, 1.4fr) 62px 110px 60px minmax(0, 1fr) 26px;
+  /* The tool name takes what it needs; the result gets the rest of the row. */
+  grid-template-columns: 18px 44px minmax(120px, 230px) 62px 110px 60px minmax(0, 1fr) 26px;
 }
 .live-feed-grid > span {
   min-width: 0;
