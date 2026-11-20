@@ -8,6 +8,13 @@ const state = vi.hoisted(() => ({
   >,
   stallForward: false,
 }));
+// No real TCP here: the race is a stub that a test can point at a winner.
+const race = vi.hoisted(() => ({ winner: undefined as string | undefined }));
+vi.mock("../../src/ssh/fastest-address", () => ({
+  ADDRESS_HEAD_START_MS: 500,
+  fastestFirst: async (hosts: string[]) =>
+    race.winner ? [race.winner, ...hosts.filter((host) => host !== race.winner)] : hosts,
+}));
 vi.mock("ssh2", () => ({
   Client: class FakeSSH extends EventEmitter {
     config?: { host: string; sock?: unknown };
@@ -44,6 +51,7 @@ vi.mock("ssh2", () => ({
 beforeEach(() => {
   state.made.length = 0;
   state.stallForward = false;
+  race.winner = undefined;
   vi.clearAllMocks();
 });
 afterEach(() => vi.useRealTimers());
@@ -95,4 +103,26 @@ test("jump tunnel timeout fails clearly and retires the bastion", async () => {
   expect(client.lastError).toMatch(/did not open a tunnel/);
   expect(state.made[0]!.end).toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+test("the address that answers first is used, and the slower ones before it are recorded", async () => {
+  race.winner = "up.invalid";
+  const attempts = vi.fn();
+  const client = new MikroTikSSHClient({
+    host: "down.invalid",
+    username: "test",
+    hosts: () => ["down.invalid", "up.invalid"],
+    onAttempt: attempts,
+  });
+  expect(await client.connect()).toBe(true);
+  expect(client.connectedHost).toBe("up.invalid");
+  // The dead primary was never dialled over SSH.
+  expect(state.made).toHaveLength(1);
+  expect(attempts).toHaveBeenNthCalledWith(
+    1,
+    "down.invalid",
+    "no answer in 500 ms, used up.invalid",
+  );
+  expect(attempts).toHaveBeenNthCalledWith(2, "up.invalid");
+  client.disconnect();
 });

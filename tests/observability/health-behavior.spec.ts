@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { DeviceConfigSchema, MikrotikConfigSchema } from "../../src/config";
+import { endpointOptions, noteAnswered } from "../../src/core/device-endpoints";
 import { getConfig, setConfig } from "../../src/core/runtime";
 import {
   getDeviceHistory,
@@ -60,7 +61,7 @@ test("successful probe reads resources first, then optional identity, neighbors 
     "/ip neighbor print detail",
     "/disk print detail",
   ]);
-  expect(mocks.create.mock.calls[0][0].timeoutMs).toBe(8_000);
+  expect(mocks.create.mock.calls[0][0].timeoutMs).toBe(20_000);
   expect(getDeviceStatus("fixture")).toEqual(result);
   expect(getDeviceHistory("fixture").at(-1)).toMatchObject({ cpuLoad: 20, memUsedPct: 50 });
   expect(getDeviceNeighbors("fixture")).toHaveLength(1);
@@ -111,4 +112,46 @@ test("fleet probe reads configured devices without changing their configuration"
   await probeAll();
   expect(mocks.create).toHaveBeenCalled();
   expect(getDeviceStatus("fixture").reachable).toBe(true);
+});
+
+test("a command that returns after a failed probe marks the router reachable at once", async () => {
+  const dc = getConfig().devices.fixture;
+  mocks.create.mockReturnValue(client({ connect: vi.fn(async () => false), lastError: "slow" }));
+
+  // An open session is not enough: it can open and never answer.
+  const release = endpointOptions(dc, "ssh", 22).onConnected!("192.0.2.9");
+  expect(await probeDevice("fixture", dc)).toMatchObject({ reachable: false, error: "slow" });
+  expect(getDeviceStatus("fixture")).toMatchObject({ reachable: false });
+  release();
+
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  noteAnswered(dc);
+  expect(getDeviceStatus("fixture")).toMatchObject({ reachable: true, error: undefined });
+
+  // The next failed probe is newer than that command, so it stands.
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(await probeDevice("fixture", dc)).toMatchObject({ reachable: false });
+});
+
+test("a router whose probe is still running is skipped, the others are probed", async () => {
+  setConfig(
+    MikrotikConfigSchema.parse({
+      devices: { slow: { host: "192.0.2.20" }, quick: { host: "192.0.2.21" } },
+      defaultDevice: "slow",
+    }),
+  );
+  let finish = (): void => {};
+  mocks.create.mockImplementation((dc: { host: string }) =>
+    dc.host === "192.0.2.20"
+      ? client({ connect: vi.fn(() => new Promise<boolean>((r) => (finish = () => r(true)))) })
+      : client(),
+  );
+  const first = probeAll();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await probeAll();
+  const hosts = mocks.create.mock.calls.map(([dc]) => dc.host);
+  expect(hosts.filter((host) => host === "192.0.2.20")).toHaveLength(1);
+  expect(hosts.filter((host) => host === "192.0.2.21")).toHaveLength(2);
+  finish();
+  await first;
 });

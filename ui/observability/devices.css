@@ -679,11 +679,3 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-
-/* A router's country: its whole flag, faint, behind the box's text. */
-.dv-flag {
-  opacity: 0.5;
-}
-:root:not(.dark) .dv-flag {
-  opacity: 0.4;
-}

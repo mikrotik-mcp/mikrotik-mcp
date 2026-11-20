@@ -23,6 +23,7 @@ import { logger } from "../logger";
 import type { EndpointOptions } from "../core/device-endpoints";
 import { endpointAddress } from "../core/device-endpoints";
 import { commandUnsupported } from "../core/routeros";
+import { ADDRESS_HEAD_START_MS, fastestFirst } from "./fastest-address";
 
 /**
  * How long a one-shot `run()` may go with NO output and NO channel close before
@@ -230,12 +231,25 @@ export class MikroTikSSHClient {
     via?: Client,
   ): Promise<{ client: Client; host: string }> {
     const errors: string[] = [];
-    for (const host of o.hosts?.() ?? [o.host]) {
+    const candidates = o.hosts?.() ?? [o.host];
+    // Behind a jump host this machine cannot reach the addresses, so they keep their order.
+    const hosts = via
+      ? candidates
+      : await fastestFirst(candidates, o.port ?? 22, o.timeoutMs ?? 10_000);
+    // Addresses that had a head start and still lost the race to the first one.
+    const passed = candidates.slice(0, candidates.indexOf(hosts[0]));
+    for (const host of hosts) {
       let sock: Readable | undefined;
       try {
         if (via) sock = await this.forwardOut(via, host, o.port ?? 22, o.timeoutMs ?? 10_000);
         const client = await this.openClient({ ...o, host }, sock);
+        for (const slow of passed.filter((address) => address !== host)) {
+          o.onAttempt?.(slow, `no answer in ${ADDRESS_HEAD_START_MS} ms, used ${host}`);
+        }
         o.onAttempt?.(host);
+        // A session that dies later (a keepalive timeout) marks its address as
+        // failed, so the next connection starts with another address.
+        client.on("error", (error) => o.onAttempt?.(host, `session lost: ${error.message}`));
         const release = o.onConnected?.(host);
         if (release) {
           this.releases.push(release);

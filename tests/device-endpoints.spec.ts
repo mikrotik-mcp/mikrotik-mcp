@@ -25,6 +25,12 @@ const mock = vi.hoisted(() => ({
   connectError: "",
   forwards: [] as string[],
 }));
+// The TCP race needs real routers. Here the configured order stands.
+vi.mock("../src/ssh/fastest-address", () => ({
+  ADDRESS_HEAD_START_MS: 500,
+  fastestFirst: async (hosts: string[]) => hosts,
+}));
+
 vi.mock("ssh2", () => ({
   Client: class extends EventEmitter {
     host = "";

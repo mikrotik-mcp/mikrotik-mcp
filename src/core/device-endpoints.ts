@@ -20,6 +20,8 @@ export interface DeviceEndpoints {
   connected: EndpointConnection[];
   observations: EndpointObservation[];
   remembered?: RememberedEndpoint[];
+  /** When a command last returned from this router, on any address. */
+  answeredAt?: number;
 }
 
 // Config-object identity isolates devices, drafts and configuration generations.
@@ -29,6 +31,7 @@ const states = new WeakMap<
     live: Set<EndpointConnection>;
     observations: Map<string, EndpointObservation>;
     remembered: Map<string, RememberedEndpoint>;
+    answeredAt?: number;
   }
 >();
 function state(dc: DeviceConfig) {
@@ -54,7 +57,13 @@ export function deviceEndpoints(dc: DeviceConfig): DeviceEndpoints | undefined {
     connected: Array.from(new Map([...current.live].map((c) => [JSON.stringify(c), c])).values()),
     observations: [...current.observations.values()],
     remembered: [...current.remembered.values()].filter((c) => c.expiresAt > Date.now()),
+    answeredAt: current.answeredAt,
   };
+}
+
+/** A command returned from this router. An open session alone does not count. */
+export function noteAnswered(dc: DeviceConfig): void {
+  state(dc).answeredAt = Date.now();
 }
 
 export interface EndpointOptions {

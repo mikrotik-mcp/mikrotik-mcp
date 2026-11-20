@@ -2,7 +2,6 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { formatMs, useLineDraw } from "./monitoring-ui";
 import { deviceState } from "./device-card";
-import { withToken } from "./api";
 import { tipProps } from "./kit";
 import type { TipCard, TipRow } from "./kit";
 import type { DeviceInfo } from "./types";
@@ -12,14 +11,6 @@ const LIT_MS = 1600;
 const ROW = 72;
 const BOX_W = 240;
 const BOX_H = 44;
-/**
- * The flag behind a router box. The flag file is a circle, so it is stretched to
- * an ellipse that the box fits inside: every stripe of the flag crosses the box.
- */
-const FLAG_W = 900;
-const FLAG_H = 60;
-/** A router name as an id for its flag's clip path. */
-const flagId = (name: string): string => name.replace(/[^a-zA-Z0-9_-]/g, "_");
 const COL_1 = 470;
 const COL_2 = 800;
 const SERVER_RIGHT = 240;
@@ -66,6 +57,12 @@ function linkWord(d: DeviceInfo, via: string | null): string {
   return d.transport === "rest" ? "REST, direct" : "Direct SSH";
 }
 
+/** The address the open session uses, or the one the last check reached, else the primary. */
+function addressInUse(d: DeviceInfo): string {
+  const host = d.endpoints?.connected[0]?.host ?? d.status.connectedHost;
+  return host && !d.mac ? `${host}:${d.port}` : (d.address ?? `${d.host}:${d.port}`);
+}
+
 function latencyRow(d: DeviceInfo): TipRow[] {
   return d.status.latencyMs != null
     ? [{ label: "Latency", value: formatMs(d.status.latencyMs) }]
@@ -84,7 +81,7 @@ function routerCard(d: DeviceInfo, via: string | null, on: boolean): TipCard {
     sub: STATE_WORD[state],
     led: state === "online" ? "ok" : state === "offline" ? "bad" : "off",
     rows: [
-      { label: "Address", value: d.address ?? `${d.host}:${d.port}` },
+      { label: "Address", value: addressInUse(d) },
       ...(d.geo
         ? [{ label: "Country", value: [d.geo.city, d.geo.country].filter(Boolean).join(", ") }]
         : []),
@@ -107,7 +104,7 @@ function pathCard(d: DeviceInfo, via: string | null, from: string): TipCard {
     rows: [
       { label: "From", value: from },
       ...(via ? [{ label: "Via", value: via }] : []),
-      { label: "To", value: d.address ?? `${d.host}:${d.port}` },
+      { label: "To", value: addressInUse(d) },
       ...latencyRow(d),
       { label: "State", value: STATE_WORD[deviceState(d)] },
     ],
@@ -233,22 +230,6 @@ export function ManagementPaths({
       role="img"
       aria-label={`Management paths from the MCP server to ${devices.length} router${devices.length === 1 ? "" : "s"}`}
     >
-      {/* A router's country is its flag over the whole box: faint, and fainter
-          still under the name, so the text stays easy to read. */}
-      <defs>
-        <linearGradient id="dv-flag-fade-ramp" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0.38" stopColor="white" stopOpacity="0.45" />
-          <stop offset="0.62" stopColor="white" stopOpacity="1" />
-        </linearGradient>
-        {/* Soft along the box, so an emblem melts into its stripe, and only a
-            little across it, so the stripes stay apart. */}
-        <filter id="dv-flag-soft" x="-10%" y="-20%" width="120%" height="140%">
-          <feGaussianBlur stdDeviation="34 3.5" />
-        </filter>
-        <mask id="dv-flag-fade" maskContentUnits="objectBoundingBox">
-          <rect width="1" height="1" fill="url(#dv-flag-fade-ramp)" />
-        </mask>
-      </defs>
       <g
         {...tipProps((): TipCard => ({
           title: "MCP server",
@@ -367,34 +348,6 @@ export function ManagementPaths({
                 stroke={box}
                 strokeOpacity={on || state === "offline" ? 1 : 0.9}
               />
-              {d.geo?.countryCode && (
-                // chart-exempt: the flag is decoration; the box's own card names the country.
-                <g aria-hidden="true" clipPath={`url(#dv-flag-clip-${flagId(d.name)})`}>
-                  <clipPath id={`dv-flag-clip-${flagId(d.name)}`}>
-                    <rect
-                      x={x + 1}
-                      y={cy - BOX_H / 2 + 1}
-                      width={BOX_W - 2}
-                      height={BOX_H - 2}
-                      rx="9"
-                    />
-                  </clipPath>
-                  {/* The whole flag, stretched over the whole box. It is a circle in
-                      the file, so it is drawn wider and taller than the box: the
-                      box then sits inside the circle and shows every stripe. */}
-                  <image
-                    className="dv-flag"
-                    href={withToken(`/api/flag/${d.geo.countryCode}`)}
-                    x={x + BOX_W / 2 - FLAG_W / 2}
-                    y={cy - FLAG_H / 2}
-                    width={FLAG_W}
-                    height={FLAG_H}
-                    preserveAspectRatio="none"
-                    filter="url(#dv-flag-soft)"
-                    mask="url(#dv-flag-fade)"
-                  />
-                </g>
-              )}
               <circle cx={x + 18} cy={cy} r="3.5" fill={dot} />
               <text
                 x={x + 32}

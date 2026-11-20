@@ -10,6 +10,7 @@
 import type { ToolContext } from "./context";
 import { DeviceConnectionError } from "./device-connection-error";
 import { isPoolEnabled, runPooled } from "./connection-pool";
+import { noteAnswered } from "./device-endpoints";
 import { resolveDeviceName, getDevice } from "./runtime";
 import {
   connectErrorMessage,
@@ -180,10 +181,16 @@ export async function executeMikrotikCommand(
     ctx.info(`[${deviceName}] Executing (safe mode): ${containerCommandForLog(command)}`);
     // Safe Mode holds a persistent interactive SSH session — never REST.
     ctx.transport = "ssh";
-    return safe.execute(command);
+    return answered(await safe.execute(command), ctx.device);
   }
   ctx.info(`[${deviceName}] Executing MikroTik command: ${containerCommandForLog(command)}`);
-  return runOnce(command, ctx.device, opts, ctx);
+  return answered(await runOnce(command, ctx.device, opts, ctx), ctx.device);
+}
+
+/** Record that the router returned a command, for the dashboard's reachability. */
+function answered(output: string, deviceName?: string): string {
+  noteAnswered(getDevice(deviceName));
+  return output;
 }
 
 /**

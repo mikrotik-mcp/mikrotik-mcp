@@ -10,6 +10,7 @@
  * never exercised by the offline test runner.
  */
 import type { DeviceConfig } from "../config";
+import { deviceEndpoints } from "../core/device-endpoints";
 import { getConfig } from "../core/runtime";
 import { parseDisks, parseKeyValues, parseSystemResource } from "../core/routeros-parse";
 import type { RouterDisk } from "../core/routeros-parse";
@@ -83,13 +84,30 @@ const statuses = new Map<string, DeviceStatus>();
 const histories = new Map<string, MetricSample[]>();
 const neighbors = new Map<string, Neighbor[]>();
 let timer: ReturnType<typeof setInterval> | null = null;
-let inFlight = false;
+/** Routers with a probe still running. A slow router never delays the others. */
+const probing = new Set<string>();
+
+/** A probe waits at least this long: some routers need about 10 s to open SSH. */
+const PROBE_MIN_TIMEOUT_MS = 15_000;
 
 const UNKNOWN: DeviceStatus = { reachable: null, checkedAt: null, latencyMs: null };
 
+/**
+ * A probe opens its own connection, so it can fail while tool calls still work.
+ * A command that returned after the probe shows the router is reachable. An open
+ * session does not: a session can open and then never answer.
+ */
+function withSessionEvidence(status: DeviceStatus, dc: DeviceConfig): DeviceStatus {
+  const answeredAt = deviceEndpoints(dc)?.answeredAt ?? 0;
+  if (status.reachable !== false || answeredAt <= (status.checkedAt ?? 0)) return status;
+  return { ...status, reachable: true, error: undefined, checkedAt: answeredAt };
+}
+
 /** The most recent probe result for a device (UNKNOWN until first probe). */
 export function getDeviceStatus(name: string): DeviceStatus {
-  return statuses.get(name) ?? UNKNOWN;
+  const status = statuses.get(name) ?? UNKNOWN;
+  const dc = getConfig()?.devices?.[name];
+  return dc ? withSessionEvidence(status, dc) : status;
 }
 
 /** The neighbours (`/ip neighbor`) most recently discovered from a device. */
@@ -120,13 +138,13 @@ export async function probeDevice(
   // device serves one session at a time — so `probeAll` throttles them to a long
   // interval (MAC_PROBE_INTERVAL_MS) to avoid contending with real tool calls.
   // SSH devices are cheap and probed every cycle.
-  // Pick the transport by config (SSH or MAC-Telnet). The 8s probe clamp keeps
-  // the SSH path snappy; a MAC-Telnet client floors its own prime budget higher
-  // (RouterOS's ~10s console stall), so the clamp simply doesn't shorten it.
+  // Pick the transport by config (SSH or MAC-Telnet). The probe waits at least as
+  // long as a tool call does: a shorter limit marks a slow router offline while
+  // tool calls to it still work.
   const client = createDeviceClient(
     {
       ...dc,
-      timeoutMs: Math.min(dc.timeoutMs ?? 10_000, 8_000),
+      timeoutMs: Math.max(dc.timeoutMs ?? 10_000, PROBE_MIN_TIMEOUT_MS),
     },
     devices,
     dc,
@@ -230,6 +248,7 @@ export async function probeDevice(
   // own dedup, but feeding it one "still offline" event per cycle would make
   // every `for` window trivially satisfied and defeat the point of the setting.
   const previous = statuses.get(name)?.reachable ?? null;
+  status = withSessionEvidence(status, dc);
   statuses.set(name, status);
   if (previous !== null && previous !== status.reachable) {
     emitAlertEvent({
@@ -249,29 +268,29 @@ export async function probeDevice(
 const MAC_PROBE_INTERVAL_MS = 5 * 60_000;
 const lastMacProbe = new Map<string, number>();
 
-/** Probe every configured device concurrently (reentrancy-guarded). */
+/** Probe every configured device concurrently. A router still being probed is skipped. */
 export async function probeAll(): Promise<void> {
-  if (inFlight) return;
-  inFlight = true;
-  try {
-    const cfg = getConfig();
-    const now = Date.now();
-    await Promise.all(
-      Object.entries(cfg.devices).map(([name, dc]) => {
-        // Throttle the expensive MAC-Telnet probe so it can't monopolise the
-        // device's single session and starve real tool calls.
-        if (dc.mac) {
-          if (now - (lastMacProbe.get(name) ?? 0) < MAC_PROBE_INTERVAL_MS) return Promise.resolve();
-          lastMacProbe.set(name, now);
-        }
-        return probeDevice(name, dc).catch(() => {
-          /* probeDevice never throws, but stay defensive */
-        });
-      }),
-    );
-  } finally {
-    inFlight = false;
-  }
+  const cfg = getConfig();
+  const now = Date.now();
+  await Promise.all(
+    Object.entries(cfg.devices).map(async ([name, dc]) => {
+      if (probing.has(name)) return;
+      // Throttle the expensive MAC-Telnet probe so it can't monopolise the
+      // device's single session and starve real tool calls.
+      if (dc.mac) {
+        if (now - (lastMacProbe.get(name) ?? 0) < MAC_PROBE_INTERVAL_MS) return;
+        lastMacProbe.set(name, now);
+      }
+      probing.add(name);
+      try {
+        await probeDevice(name, dc);
+      } catch {
+        /* probeDevice never throws, but stay defensive */
+      } finally {
+        probing.delete(name);
+      }
+    }),
+  );
 }
 
 /** Start periodic health checks (one immediate pass, then every `intervalMs`). */
