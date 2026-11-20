@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { PenLine, RotateCw, TriangleAlert, X, Zap } from "lucide-react";
 import { DeviceAddressStatus } from "./device-address-status";
+import { LossBand, LossCell, PhoneLossRow } from "./device-loss";
 import { DeviceResources, MeterBar } from "./health";
 import {
   MonitorButton,
@@ -168,6 +169,7 @@ export function RouterRow({
       <span data-col="latency" className="truncate text-right font-mono text-[12px]">
         {d.status.latencyMs != null && state === "online" ? formatMs(d.status.latencyMs) : "—"}
       </span>
+      <LossCell d={d} />
       <span data-col="calls" className="flex flex-col items-end">
         <span className="text-foreground tabular-nums">{num(d.activity.calls)}</span>
         <span
@@ -248,6 +250,7 @@ export function PhoneRouterRow({
           </span>
         </span>
       )}
+      <PhoneLossRow d={d} />
     </button>
   );
 }
@@ -606,6 +609,7 @@ export function RouterDetails({
         <div className="grid grid-cols-3 gap-2">{actions}</div>
         {alert}
         <DeviceResources d={d} phone />
+        <LossBand d={d} phone />
         <Facts d={d} phone />
         {capabilityBlock}
         <AvailableSwitch d={d} phone onToggle={onToggle} />
@@ -647,6 +651,7 @@ export function RouterDetails({
           <AvailableSwitch d={d} phone={false} onToggle={onToggle} />
         </div>
       </div>
+      <LossBand d={d} />
     </section>
   );
 }

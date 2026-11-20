@@ -139,6 +139,8 @@ export interface CapabilitiesPayload {
 
 export interface DeviceInfo {
   endpoints?: import("../../src/core/device-endpoints").DeviceEndpoints;
+  /** Probes lost on the management path. Absent for MAC-Telnet and jump-host routers. */
+  loss?: import("../../src/observability/packet-loss").DeviceLoss;
   name: string;
   host: string;
   port: number;

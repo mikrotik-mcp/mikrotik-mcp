@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 import { createServer } from "node:net";
 import type { AddressInfo, Server } from "node:net";
 import { afterEach, expect, test } from "vite-plus/test";

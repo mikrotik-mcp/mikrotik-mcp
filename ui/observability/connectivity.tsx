@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { formatMs, useLineDraw } from "./monitoring-ui";
 import { deviceState } from "./device-card";
+import { lossPct, lossTone } from "./device-loss";
 import { tipProps } from "./kit";
 import type { TipCard, TipRow } from "./kit";
 import type { DeviceInfo } from "./types";
@@ -41,8 +42,12 @@ function pathSub(d: DeviceInfo, via: string | null): string {
           : d.status.latencyMs != null
             ? formatMs(d.status.latencyMs)
             : "reachable";
-  return `${how} · ${result}`;
+  return d.loss ? `${how} · ${result} · ${lossPct(d.loss.pct)} loss` : `${how} · ${result}`;
 }
+
+/** An online router whose management path loses packets. */
+const losing = (d: DeviceInfo): boolean =>
+  deviceState(d) === "online" && !!d.loss && lossTone(d.loss.pct) !== "good";
 
 const STATE_WORD = {
   online: "Online",
@@ -69,6 +74,12 @@ function latencyRow(d: DeviceInfo): TipRow[] {
     : [];
 }
 
+function lossRow(d: DeviceInfo): TipRow[] {
+  return d.loss
+    ? [{ label: "Loss", value: `${lossPct(d.loss.pct)} of ${d.loss.sent} probes` }]
+    : [];
+}
+
 function errorFoot(d: DeviceInfo): TipCard["foot"] {
   return d.status.error ? { label: "Error", value: d.status.error, tone: "down" } : undefined;
 }
@@ -87,6 +98,7 @@ function routerCard(d: DeviceInfo, via: string | null, on: boolean): TipCard {
         : []),
       { label: "Path", value: via ? `via ${via}` : linkWord(d, via) },
       ...latencyRow(d),
+      ...lossRow(d),
       { label: "Calls", value: d.activity.calls.toLocaleString("en-US") },
       { label: "Errors", value: d.activity.errors.toLocaleString("en-US") },
       ...(d.pool ? [{ label: "In flight", value: String(d.pool.inflight) }] : []),
@@ -106,6 +118,7 @@ function pathCard(d: DeviceInfo, via: string | null, from: string): TipCard {
       ...(via ? [{ label: "Via", value: via }] : []),
       { label: "To", value: addressInUse(d) },
       ...latencyRow(d),
+      ...lossRow(d),
       { label: "State", value: STATE_WORD[deviceState(d)] },
     ],
     foot: errorFoot(d),
@@ -170,14 +183,15 @@ const short = (name: string) => (name.length > 24 ? `${name.slice(0, 23)}…` : 
 
 /** The line legend under the panel title: solid, dashed and dotted management paths. */
 export function PathLegend(): ReactNode {
-  const items: [string, string | undefined][] = [
+  const items: [string, string | undefined, string?][] = [
     ["Direct SSH", undefined],
     ["Through a jump host", "6 5"],
     ["MAC-Telnet (layer 2)", "2 5"],
+    ["Losing packets", undefined, "var(--warning)"],
   ];
   return (
     <span className="monitor-legend">
-      {items.map(([label, dash]) => (
+      {items.map(([label, dash, color]) => (
         <span key={label} className="inline-flex items-center gap-1.5">
           <svg width="24" height="6" aria-hidden="true">
             <line
@@ -185,7 +199,7 @@ export function PathLegend(): ReactNode {
               y1="3"
               x2="24"
               y2="3"
-              stroke="var(--text-secondary)"
+              stroke={color ?? "var(--text-secondary)"}
               strokeWidth="2"
               strokeDasharray={dash}
               strokeLinecap="round"
@@ -282,16 +296,26 @@ export function ManagementPaths({
           ? { x: host.x + BOX_W, y: host.cy, bend: BEND_2 }
           : { x: SERVER_RIGHT, y: mid, bend: BEND_1 };
         const path = `M${from.x} ${from.y} C${from.bend} ${from.y} ${from.bend} ${cy} ${x} ${cy}`;
+        const lossy = losing(d);
         const stroke =
-          state === "offline" ? "var(--destructive)" : on ? "var(--sig)" : "var(--line-2)";
+          state === "offline"
+            ? "var(--destructive)"
+            : on
+              ? "var(--sig)"
+              : lossy
+                ? "var(--warning)"
+                : "var(--line-2)";
         const dash = d.mac ? "2 5" : via || host ? "6 5" : undefined;
         const box = on
           ? "var(--sig)"
           : state === "offline"
             ? "var(--destructive)"
-            : "var(--line-2)";
-        const dot =
-          state === "online"
+            : lossy
+              ? "var(--warning)"
+              : "var(--line-2)";
+        const dot = lossy
+          ? "var(--warning)"
+          : state === "online"
             ? "var(--sig)"
             : state === "offline"
               ? "var(--destructive)"
@@ -363,7 +387,13 @@ export function ManagementPaths({
                 x={x + 32}
                 y={cy + 13}
                 fontSize="11"
-                fill={state === "offline" ? "var(--destructive)" : "var(--muted-foreground)"}
+                fill={
+                  state === "offline"
+                    ? "var(--destructive)"
+                    : lossy
+                      ? "var(--warning)"
+                      : "var(--muted-foreground)"
+                }
               >
                 {pathSub(d, via)}
               </text>

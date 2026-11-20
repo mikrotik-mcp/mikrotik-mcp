@@ -268,7 +268,7 @@ export function DevicesView({
           </>
         ) : undefined
       }
-      lead="Your routers, how MCP reaches them, and what each one reported at its last check."
+      lead="Your routers, how MCP reaches them, how many probes each path loses, and what each one reported at its last check."
       actions={controls}
     />
   );
@@ -447,7 +447,7 @@ export function DevicesView({
         <MonitorPanel
           className="dv-paths-panel"
           title="How MCP reaches each router"
-          description="Management path only, not your clients' traffic. A line lights up while a call runs."
+          description="Management path only, not your clients' traffic. A line lights up while a call runs, and turns amber when the path loses packets."
           extra={<PathLegend />}
         >
           <ManagementPaths devices={list} pulses={pulses} />
@@ -486,6 +486,7 @@ export function DevicesView({
                     <span>CPU</span>
                     <span>Memory</span>
                     <span className="text-right">Latency</span>
+                    <span className="text-right">Loss, last 30 probes</span>
                     <span className="text-right">Calls</span>
                   </div>
                   {shown.map((d) => {

@@ -158,6 +158,7 @@ import {
   startHealthChecks,
   stopHealthChecks,
 } from "./health";
+import { getDeviceLoss, startLossSampler, stopLossSampler } from "./packet-loss";
 import { getDeviceGeo, ipGeoRoute, startGeoLookups, stopGeoLookups } from "./geo";
 import { flagSvg } from "./flags";
 import { observeToolCall, renderMetrics } from "./metrics";
@@ -378,10 +379,17 @@ function devicesPayload(store: EventStore): unknown {
   const devices = Object.entries(cfg.devices).map(([name, dc]) => {
     const isMac = isMacTelnetDevice(dc);
     const ps = poolMap.get(name);
+    const endpoints = deviceEndpoints(dc);
+    const status = getDeviceStatus(name);
     return {
       name,
       host: dc.host,
-      endpoints: deviceEndpoints(dc),
+      endpoints,
+      // Probes lost on the management path, for the address in use now.
+      loss: getDeviceLoss(
+        name,
+        endpoints?.connected[0]?.host ?? endpoints?.remembered?.[0]?.host ?? status.connectedHost,
+      ),
       port: dc.port,
       // A `mac` device is reached over Layer-2 MAC-Telnet, not SSH — surface that
       // so the dashboard shows the MAC instead of the unused default host:port.
@@ -408,7 +416,7 @@ function devicesPayload(store: EventStore): unknown {
       // just host:port). Surfaced so the dashboard can draw the tunnel.
       jumpVia: dc.jumpVia,
       jumpHost: dc.jumpHost ? { host: dc.jumpHost.host, port: dc.jumpHost.port } : undefined,
-      status: getDeviceStatus(name),
+      status,
       // ISO country (+ flag) geolocated from the device's public IP, when it has
       // one. null for MAC-Telnet / private-IP / not-yet-resolved devices.
       geo: getDeviceGeo(name),
@@ -1602,6 +1610,7 @@ export async function runDashboard(
   // Periodically probe each configured device's SSH reachability for the
   // connectivity graph/status (one immediate pass, then every 30s).
   startHealthChecks(30_000);
+  startLossSampler();
   // Geolocate each device's public IP for the country flag (cached ~1 day).
   startGeoLookups();
   let openVpnHistory: OpenVpnHistoryStore | undefined;
@@ -2224,6 +2233,7 @@ export async function runDashboard(
       siteActivity?.close();
       if (dashboardStartedFlows) getFlowCollector().stop();
       stopHealthChecks();
+      stopLossSampler();
       stopGeoLookups();
       stopUsageSampler();
       stopCapsmanSampler();

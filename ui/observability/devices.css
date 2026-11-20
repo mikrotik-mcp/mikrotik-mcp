@@ -43,7 +43,7 @@
   width: 280px;
 }
 .dv-cols {
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.25fr) 104px 104px 64px 84px 26px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) 104px 104px 64px 160px 84px 26px;
 }
 
 /* ── Router details ───────────────────────────────────────────────────────── */
@@ -92,7 +92,71 @@
   padding: 9px 12px;
   font-size: 12px;
 }
+
+/* ── Packet loss (the "Devices: packet loss" board) ───────────────────────── */
+.dv-loss-tape {
+  flex: none;
+}
+.dv-loss {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr) 316px;
+  border-top: 1px solid var(--line);
+}
+.dv-loss > div {
+  min-width: 0;
+  padding: 16px 18px;
+}
+.dv-loss > div + div {
+  border-left: 1px solid var(--line);
+}
+.dv-loss-num {
+  font-family: var(--font-mt);
+  font-size: 38px;
+  font-weight: 500;
+  line-height: 40px;
+  letter-spacing: -0.02em;
+}
+.dv-loss-num-phone {
+  font-size: 32px;
+  line-height: 34px;
+}
+.dv-loss-facts {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+.dv-loss-chart {
+  display: block;
+}
+/* The axis text sits outside the stretched plot, so it keeps its shape. */
+.dv-loss-plot {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  column-gap: 8px;
+  font-family: var(--font-mt);
+  font-size: 10px;
+  line-height: 12px;
+  color: var(--text-faint);
+}
+.dv-loss-y {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0 0 0;
+  text-align: right;
+}
+.dv-loss-x {
+  display: flex;
+  grid-column: 2;
+  justify-content: space-between;
+  padding-top: 6px;
+}
 @media (max-width: 1100px) {
+  .dv-loss {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dv-loss > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
   .dv-details-grid {
     grid-template-columns: minmax(0, 1fr);
   }
