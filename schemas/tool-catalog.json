@@ -24005,7 +24005,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "`analyze_ovpn_usage` — Compute exact OpenVPN historical and live usage, traffic (download, upload, total bytes), session durations, and connection counts across any time window or filter set. Automatically collects RouterOS User Manager accounting (`/user-manager session`), live OpenVPN connections (`/ppp active where service=ovpn` + `<ovpn-*>` interface byte counters), and local history in a single query, then performs all aggregations deterministically in TypeScript: (1) all-users grand totals and daily breakdown, (2) per-user aggregated totals, traffic shares, averages, peak sessions, unique client IPs, and disconnect causes, (3) per-user-per-day connection counts and byte/duration totals, and (4) paginated per-session details. Supports filtering by `from`/`to` dates or timestamps, `date` (single day), `days` (lookback window, default 7), `all_time`, `user`/`users` (exact or substring), `caller_id` (client public IP), `address` (tunnel IP), `status` (`all`/`active`/`closed`), `terminate_cause`, `exclude_zero_traffic`, and minimum bytes/duration.",
+      "description": "`analyze_ovpn_usage` — Compute exact OpenVPN historical and live usage, traffic (download, upload, total bytes), session durations, connection counts, client source IPs (`caller_id`), assigned internal tunnel IPs (`address`), and IP geolocation/ISP metadata (`country`, `city`, `asn_organization`, `asn`, `country_code` via `https://ipu.revue.ir/<ip>/json`) across any time window or filter set. Automatically collects RouterOS User Manager accounting (`/user-manager session`), live OpenVPN connections (`/ppp active where service=ovpn` + `<ovpn-*>` interface byte counters), local history, and cached `https://ipu.revue.ir/<ip>/json` GeoIP/ASN lookups in a single workflow, then performs all aggregations deterministically in TypeScript: (1) all-users grand totals, daily breakdown, and country/city/ISP distributions, (2) per-user aggregated totals, traffic shares, averages, peak sessions, unique client IPs, assigned tunnel IPs, countries/cities/ISPs, and per-source-IP traffic & duration breakdown, (3) per-user-per-day connection counts, byte/duration totals, IPs, and locations, and (4) paginated per-connection details showing exact download, upload, duration, client source IP, assigned tunnel IP, country, city, and `asn_organization`. Supports filtering by `from`/`to` dates or timestamps, `date` (single day), `days` (lookback window, default 7), `all_time`, `user`/`users` (exact or substring), `caller_id` (client public IP), `address` (tunnel IP), `country`, `city`, `asn_organization`/`isp`/`asn`, `status` (`all`/`active`/`closed`), `terminate_cause`, `exclude_zero_traffic`, and minimum bytes/duration.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -24093,6 +24093,31 @@
           "tunnel_ip": {
             "description": "Alias for `address`.",
             "type": "string"
+          },
+          "country": {
+            "description": "Filter sessions by client IP country name or 2-letter ISO code (e.g. `'Iran'`, `'IR'`, `'Germany'`, `'DE'`), resolved via `https://ipu.revue.ir/<ip>/json`.",
+            "type": "string"
+          },
+          "city": {
+            "description": "Filter sessions by client IP city (e.g. `'Tehran'`, `'Shiraz'`), resolved via `https://ipu.revue.ir/<ip>/json`.",
+            "type": "string"
+          },
+          "asn_organization": {
+            "description": "Filter sessions by client IP ASN / ISP organization name or ASN number (e.g. `'Iran Telecommunication'`, `'Asiatech'`, `'Irancell'`, `'58224'`), resolved via `https://ipu.revue.ir/<ip>/json`. Alias: `isp`, `asn`.",
+            "type": "string"
+          },
+          "isp": {
+            "description": "Alias for `asn_organization`.",
+            "type": "string"
+          },
+          "asn": {
+            "description": "Alias for `asn_organization`.",
+            "type": "string"
+          },
+          "enrich_ip_geo": {
+            "default": true,
+            "description": "When true (default), resolve every unique client source IP via `https://ipu.revue.ir/<ip>/json` (cached locally in SQLite) to attach `country`, `city`, `asn`, and `asn_organization` to each session, daily breakdown, and user summary.",
+            "type": "boolean"
           },
           "status": {
             "default": "all",
@@ -24201,6 +24226,7 @@
         },
         "required": [
           "user_match",
+          "enrich_ip_geo",
           "status",
           "exclude_zero_traffic",
           "include_daily_breakdown",

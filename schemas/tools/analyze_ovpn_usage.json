@@ -87,6 +87,31 @@
       "description": "Alias for `address`.",
       "type": "string"
     },
+    "country": {
+      "description": "Filter sessions by client IP country name or 2-letter ISO code (e.g. `'Iran'`, `'IR'`, `'Germany'`, `'DE'`), resolved via `https://ipu.revue.ir/<ip>/json`.",
+      "type": "string"
+    },
+    "city": {
+      "description": "Filter sessions by client IP city (e.g. `'Tehran'`, `'Shiraz'`), resolved via `https://ipu.revue.ir/<ip>/json`.",
+      "type": "string"
+    },
+    "asn_organization": {
+      "description": "Filter sessions by client IP ASN / ISP organization name or ASN number (e.g. `'Iran Telecommunication'`, `'Asiatech'`, `'Irancell'`, `'58224'`), resolved via `https://ipu.revue.ir/<ip>/json`. Alias: `isp`, `asn`.",
+      "type": "string"
+    },
+    "isp": {
+      "description": "Alias for `asn_organization`.",
+      "type": "string"
+    },
+    "asn": {
+      "description": "Alias for `asn_organization`.",
+      "type": "string"
+    },
+    "enrich_ip_geo": {
+      "default": true,
+      "description": "When true (default), resolve every unique client source IP via `https://ipu.revue.ir/<ip>/json` (cached locally in SQLite) to attach `country`, `city`, `asn`, and `asn_organization` to each session, daily breakdown, and user summary.",
+      "type": "boolean"
+    },
     "status": {
       "default": "all",
       "description": "Filter by session state: `'all'` (both active and closed sessions, default), `'active'` (currently connected only), or `'closed'` (disconnected/completed only).",
@@ -187,6 +212,7 @@
   },
   "required": [
     "user_match",
+    "enrich_ip_geo",
     "status",
     "exclude_zero_traffic",
     "include_daily_breakdown",
