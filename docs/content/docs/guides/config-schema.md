@@ -1298,6 +1298,30 @@ Use these definitions inside your `devices.json`. Defaults apply only when a val
 }
 ```
 
+## feedback
+
+```json
+{
+  "default": {
+    "enabled": true,
+    "dbPath": "/Users/alimaster/.mikrotik-mcp/feedback.db"
+  },
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "default": true,
+      "type": "boolean"
+    },
+    "dbPath": {
+      "default": "/Users/alimaster/.mikrotik-mcp/feedback.db",
+      "type": "string"
+    }
+  },
+  "required": ["enabled", "dbPath"],
+  "additionalProperties": false
+}
+```
+
 ## backupDir
 
 ```json

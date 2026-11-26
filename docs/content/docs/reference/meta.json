@@ -57,6 +57,7 @@
     "mcp-settings",
     "device-capabilities",
     "access",
+    "feedback",
     "---Interfaces---",
     "interfaces",
     "vlan",
