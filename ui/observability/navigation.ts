@@ -44,6 +44,7 @@ export type ViewId =
   | "modules"
   | "config"
   | "memory"
+  | "feedback"
   | "alerts"
   | "releases"
   | "capsman"
@@ -184,6 +185,11 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
   { id: "modules", label: "Modules", sub: "Enable/disable tool modules — curate the surface" },
   { id: "config", label: "Config", sub: "Effective configuration & safe editor" },
   { id: "memory", label: "Memory", sub: "Evidence, lessons & relevant context across sessions" },
+  {
+    id: "feedback",
+    label: "Feedback",
+    sub: "Deduplicated LLM tool bugs, missing tools & workarounds",
+  },
   {
     id: "alerts",
     label: "Alerts",
