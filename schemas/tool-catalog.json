@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.22.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 1016,
+  "toolCount": 1017,
   "tools": [
     {
       "name": "create_client_check",
@@ -36656,7 +36656,7 @@
         "destructiveHint": false,
         "openWorldHint": false
       },
-      "description": "Report a tool bug, missing capability (`missing_tool`), missing filter/parameter (`missing_param`), confusing schema, unexpected output, or documentation gap to the MCP host's local feedback database (`~/.mikrotik-mcp/feedback.db`). Call this proactively without asking the user whenever `find_tools` has no dedicated tool and you must fall back to `run_routeros_command`, when a tool fails due to a command-builder or schema defect, or when parameters are ambiguous. Built-in multi-stage deduplication automatically matches existing reports (stripping volatile IPs/MACs/IDs), increments `occurrences` instead of creating duplicates, and returns any known `workaround` or operator `resolutionNote`. Never include plaintext passwords, private keys, or tokens. Does not contact a router.",
+      "description": "Report a tool bug, missing capability (`missing_tool`), missing filter/parameter (`missing_param`), confusing schema, unexpected output, or documentation gap to the MCP host's local feedback database (`~/.mikrotik-mcp/feedback.db`). Call this proactively without asking the user whenever `find_tools` has no dedicated tool and you must fall back to `run_routeros_command`, when a tool fails due to a command-builder or schema defect, or when parameters are ambiguous. Format important tool names, RouterOS paths, and key terms in **bold** (`**...**`) or inline code so exported GitHub issues and dashboard cards are easy to scan. Built-in multi-stage deduplication automatically matches existing reports (stripping volatile IPs/MACs/IDs), increments `occurrences` instead of creating duplicates, and returns any known `workaround` or `resolutionNote`. Never include plaintext passwords, private keys, or tokens. Does not contact a router.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -36802,7 +36802,7 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "description": "Search existing LLM tool feedback reports, resolved fixes (`status='resolved'`), newly added replacement tools (`replacementTool`), known bugs, and operator resolution notes / workarounds stored on this MCP host. Use this to check whether a previously reported bug or missing tool was fixed (`fixedInVersion` / `replacementTool`) or already has a documented workaround. Does not contact a router.",
+      "description": "Search existing LLM tool feedback reports, resolved fixes (`status='resolved'`), newly added replacement tools (`replacementTool`), known bugs, and resolution notes / workarounds stored on this MCP host. Use this to check whether a previously reported bug or missing tool was fixed (`fixedInVersion` / `replacementTool`) or already has a documented workaround. Does not contact a router.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -36863,6 +36863,216 @@
           }
         },
         "required": ["query", "status", "sort", "limit", "offset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_feedback",
+      "title": "Update or Resolve a Tool Feedback Issue",
+      "risk": "write-idempotent",
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Update an existing tool-feedback issue in the MCP host's local feedback database (`~/.mikrotik-mcp/feedback.db`) by `id` (or `issue_id`). Coding agents and operators use this after implementing a missing tool, fixing a schema/command-builder bug, or discovering a reliable workaround: set `status='resolved'` (or `'in_progress'` / `'wont_fix'`), record `resolution_note`, `replacement_tool`, `fixed_in_version`, and `workaround`, and format important tool names, file paths, and key terms in **bold** (`**...**`). Resolved guidance is automatically synced into MCP Knowledge Memory (`mcp-tool-feedback` shared policy entity) so future AI sessions immediately learn the fix via `memory_recall`. Does not contact a router.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Numeric ID of the feedback issue to update (e.g. `1`).",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "issue_id": {
+            "description": "Alias for `id` — numeric ID of the feedback issue to update.",
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "description": "New workflow status: `'open'`, `'in_progress'`, `'resolved'`, or `'wont_fix'`. Setting `'resolved'` records `resolvedAt` and syncs the fix into MCP Memory (`mcp-tool-feedback`).",
+            "type": "string",
+            "enum": ["open", "in_progress", "resolved", "wont_fix"]
+          },
+          "impact": {
+            "description": "Updated impact severity.",
+            "type": "string",
+            "enum": ["blocker", "degraded", "friction", "suggestion"]
+          },
+          "kind": {
+            "description": "Updated feedback category.",
+            "type": "string",
+            "enum": [
+              "bug",
+              "missing_tool",
+              "missing_param",
+              "confusing_schema",
+              "unexpected_output",
+              "performance",
+              "docs_gap",
+              "feature_request"
+            ]
+          },
+          "title": {
+            "description": "Updated concise one-line title.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "detail": {
+            "description": "Updated problem description (Markdown bold/code supported).",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          },
+          "summary": {
+            "description": "Alias for `detail` when updating the problem description.",
+            "type": "string",
+            "maxLength": 8000
+          },
+          "description": {
+            "description": "Alias for `detail` when updating the problem description.",
+            "type": "string",
+            "maxLength": 8000
+          },
+          "expected": {
+            "description": "Updated expected behavior (or `null` to clear).",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workaround": {
+            "description": "Documented workaround for AI sessions (returned automatically on `find_feedback` and `submit_feedback`).",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggested_fix": {
+            "description": "Updated engineering fix proposal (or `null` to clear).",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution_note": {
+            "description": "Resolution note explaining what was fixed or added, how agents should use it, or why it was closed. Format important tool names, file paths, and key terms in **bold** (`**...**`).",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution": {
+            "description": "Alias for `resolution_note`.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "description": "Alias for `resolution_note`.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fixed_in_version": {
+            "description": "Version or commit where the fix or new tool was added (e.g. `'v6.22.0'`).",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "description": "Alias for `fixed_in_version`.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "replacement_tool": {
+            "description": "Newly implemented or replacement MCP tool name(s) that agents should call instead of raw CLI workarounds (e.g. `'update_script, update_scheduler'`).",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "github_issue_url": {
+            "description": "Linked GitHub Issue URL, if filed.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sync_to_memory": {
+            "description": "Whether to sync this resolution/guidance into MCP Knowledge Memory (`mcp-tool-feedback` policy entity). Defaults to `true` when resolving or updating resolution/workaround fields.",
+            "type": "boolean"
+          },
+          "tags": {
+            "description": "Replacement subsystem tags list.",
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        },
         "additionalProperties": false
       }
     },
