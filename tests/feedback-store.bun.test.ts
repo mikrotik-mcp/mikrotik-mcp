@@ -110,6 +110,22 @@ test("feedback store deduplicates exact and fuzzy reports, increments occurrence
     expect(merged.occurrences).toBe(4);
     expect(store.get(2)).toBeNull();
     expect(store.get(1)?.occurrences).toHaveLength(4);
+
+    // 6. Common LLM parameter aliases (summary -> detail, device_name -> device, tool -> operation, error -> actual_error)
+    const r5 = store.submit({
+      kind: "missing_tool",
+      title: "Missing update_script and update_scheduler tools in scheduler module",
+      summary: "Lacks update_script and update_scheduler in scheduler module.",
+      tool: "/system/script/set",
+      device_name: "home-ax3",
+      error: "no dedicated tool",
+      tags: ["scheduler"],
+    });
+    expect(r5.action).toBe("created");
+    expect(r5.issue.detail).toBe("Lacks update_script and update_scheduler in scheduler module.");
+    expect(r5.issue.operation).toBe("/system/script/set");
+    expect(r5.issue.lastDevice).toBe("home-ax3");
+    expect(r5.issue.actualError).toBe("no dedicated tool");
   } finally {
     store.close();
   }

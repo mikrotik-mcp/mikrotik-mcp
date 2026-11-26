@@ -16,10 +16,10 @@ import {
 } from "./dedup";
 import {
   FindFeedbackSchema,
-  SubmitFeedbackSchema,
   UpdateFeedbackSchema,
   feedbackImpacts,
   feedbackKinds,
+  normalizeSubmitFeedbackInput,
   sanitizeFeedbackText,
 } from "./types";
 import type {
@@ -321,7 +321,7 @@ class SqliteFeedbackStore implements FeedbackStore {
   }
 
   submit(rawInput: SubmitFeedbackInput, source: FeedbackSource = "llm"): SubmitFeedbackResult {
-    const parsed = SubmitFeedbackSchema.parse(rawInput);
+    const parsed = normalizeSubmitFeedbackInput(rawInput);
     const title = sanitizeFeedbackText(parsed.title);
     const detail = sanitizeFeedbackText(parsed.detail);
     if (!title || !detail) {

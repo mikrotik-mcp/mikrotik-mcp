@@ -54,6 +54,10 @@ export const SubmitFeedbackSchema = z
       .describe(
         "Exact MCP tool name (e.g. 'list_firewall_rules') or RouterOS menu path (e.g. '/ip/firewall/filter') involved. Omit only for general server feedback.",
       ),
+    tool: optionalShortText.describe("Alias for `operation` (MCP tool name or RouterOS path)."),
+    tool_name: optionalShortText.describe(
+      "Alias for `operation` (MCP tool name or RouterOS path).",
+    ),
     title: z
       .string()
       .trim()
@@ -62,14 +66,26 @@ export const SubmitFeedbackSchema = z
       .describe(
         "Concise one-line summary of the issue or missing capability (e.g. 'create_wireguard_peer rejects preshared-key with base64 padding').",
       ),
-    detail: longText.describe(
+    detail: optionalLongText.describe(
       "Clear explanation of what you were trying to accomplish, what happened, and why the current tool behavior or catalog fell short. Never include plaintext passwords, private keys, or tokens.",
+    ),
+    summary: optionalLongText.describe(
+      "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
+    ),
+    description: optionalLongText.describe(
+      "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
+    ),
+    message: optionalLongText.describe(
+      "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
     ),
     expected: optionalLongText.describe(
       "What the tool or server should have done or returned instead.",
     ),
     actual_error: optionalLongText.describe(
       "Exact error string or RouterOS parser message returned, if any (secrets will be redacted).",
+    ),
+    error: optionalLongText.describe(
+      "Alias for `actual_error` — exact error string or RouterOS parser message returned.",
     ),
     workaround: optionalLongText.describe(
       "How you worked around the issue in this session (e.g. 'Used run_routeros_command with /ip/dns/cache/flush' or 'Filtered client-side'). Helps future sessions and operators.",
@@ -82,6 +98,9 @@ export const SubmitFeedbackSchema = z
     ),
     device: optionalShortText.describe(
       "Configured device name where the issue occurred, if applicable.",
+    ),
+    device_name: optionalShortText.describe(
+      "Alias for `device` — configured device name where the issue occurred.",
     ),
     routeros_version: optionalShortText.describe(
       "RouterOS version of the target device (e.g. '7.16.2'), if known.",
@@ -103,7 +122,67 @@ export const SubmitFeedbackSchema = z
   })
   .strict();
 
-export type SubmitFeedbackInput = z.infer<typeof SubmitFeedbackSchema>;
+export type SubmitFeedbackInput = z.input<typeof SubmitFeedbackSchema>;
+
+export interface NormalizedSubmitFeedbackInput {
+  kind: FeedbackKind;
+  impact: FeedbackImpact;
+  operation?: string;
+  title: string;
+  detail: string;
+  expected?: string;
+  actual_error?: string;
+  workaround?: string;
+  suggested_fix?: string;
+  call_id?: string;
+  device?: string;
+  routeros_version?: string;
+  agent_model?: string;
+  tags: string[];
+  force_new: boolean;
+}
+
+/**
+ * Parse and normalize a `submit_feedback` payload, resolving common LLM parameter
+ * aliases (`summary`/`description`/`message` → `detail`, `device_name` → `device`,
+ * `tool`/`tool_name` → `operation`, `error` → `actual_error`).
+ */
+export function normalizeSubmitFeedbackInput(raw: unknown): NormalizedSubmitFeedbackInput {
+  const parsed = SubmitFeedbackSchema.parse(raw);
+  const detail = (
+    parsed.detail ||
+    parsed.summary ||
+    parsed.description ||
+    parsed.message ||
+    ""
+  ).trim();
+  if (!detail) {
+    throw new z.ZodError([
+      {
+        code: "custom",
+        path: ["detail"],
+        message: "Required (supply `detail` or `summary`)",
+      },
+    ]);
+  }
+  return {
+    kind: parsed.kind,
+    impact: parsed.impact,
+    operation: parsed.operation || parsed.tool || parsed.tool_name,
+    title: parsed.title,
+    detail,
+    expected: parsed.expected,
+    actual_error: parsed.actual_error || parsed.error,
+    workaround: parsed.workaround,
+    suggested_fix: parsed.suggested_fix,
+    call_id: parsed.call_id,
+    device: parsed.device || parsed.device_name,
+    routeros_version: parsed.routeros_version,
+    agent_model: parsed.agent_model,
+    tags: parsed.tags,
+    force_new: parsed.force_new,
+  };
+}
 
 export const FindFeedbackSchema = z
   .object({
