@@ -87,6 +87,8 @@ export const PINNED_TOOLS: readonly string[] = [
   "enable_safe_mode",
   "commit_safe_mode",
   "get_tool_call",
+  "submit_feedback",
+  "find_feedback",
 ];
 const PINNED = new Set(PINNED_TOOLS);
 
