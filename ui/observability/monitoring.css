@@ -1213,6 +1213,240 @@
     padding: 14px 24px;
   }
 
+  /* ── Jira-style Feedback Kanban Board ──────────────────────────────────────── */
+  .fb-board-scroll {
+    width: 100%;
+    min-width: 0;
+  }
+  .fb-board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(300px, 1fr));
+    align-items: stretch;
+    gap: 14px;
+    min-width: 1242px;
+    padding: 4px 2px 14px;
+  }
+  .fb-lane {
+    position: relative;
+    display: flex;
+    min-height: 540px;
+    max-height: 76vh;
+    min-width: 300px;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--glass);
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(14px);
+    transition:
+      box-shadow 180ms ease,
+      background-color 180ms ease,
+      transform 180ms ease;
+  }
+  .fb-lane::before {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 3px;
+    background: var(--lane-accent, var(--line-2));
+    content: "";
+    opacity: 0.85;
+  }
+  .fb-lane[data-status="open"] {
+    --lane-accent: var(--warning);
+    --lane-soft: var(--warn-soft);
+  }
+  .fb-lane[data-status="in_progress"] {
+    --lane-accent: var(--brand);
+    --lane-soft: var(--acc-soft);
+  }
+  .fb-lane[data-status="resolved"] {
+    --lane-accent: var(--sig);
+    --lane-soft: var(--sig-soft);
+  }
+  .fb-lane[data-status="wont_fix"] {
+    --lane-accent: var(--muted-foreground);
+    --lane-soft: var(--overlay-03);
+  }
+  .fb-lane[data-drop-active="true"] {
+    background: color-mix(in srgb, var(--lane-soft, var(--sig-soft)) 65%, var(--glass));
+    box-shadow:
+      inset 0 0 0 1.5px var(--lane-accent, var(--sig)),
+      0 14px 36px rgba(0, 0, 0, 0.22);
+    transform: translateY(-2px);
+  }
+  .fb-lane-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--glass-2) 65%, transparent);
+    padding: 13px 14px 11px;
+  }
+  .fb-lane-scroll {
+    min-height: 0;
+    flex: 1;
+  }
+  .fb-lane-body {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+  .fb-drop-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1.5px dashed var(--lane-accent, var(--sig));
+    border-radius: 12px;
+    background: var(--lane-soft, var(--sig-soft));
+    padding: 12px;
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+  }
+  .fb-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    border-radius: 13px;
+    background: var(--surface-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      0 2px 8px rgba(0, 0, 0, 0.08);
+    padding: 12px 13px 11px 15px;
+    cursor: grab;
+    user-select: none;
+    transition:
+      transform 150ms ease,
+      box-shadow 150ms ease,
+      background-color 150ms ease,
+      opacity 150ms ease;
+  }
+  .fb-card::before {
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 0;
+    width: 3.5px;
+    border-radius: 0 4px 4px 0;
+    background: var(--card-impact, var(--line-2));
+    content: "";
+  }
+  .fb-card[data-impact="blocker"] {
+    --card-impact: var(--destructive);
+  }
+  .fb-card[data-impact="degraded"] {
+    --card-impact: var(--warning);
+  }
+  .fb-card[data-impact="friction"] {
+    --card-impact: var(--brand);
+  }
+  .fb-card[data-impact="suggestion"] {
+    --card-impact: var(--sig);
+  }
+  .fb-card:hover {
+    background: color-mix(in srgb, var(--surface-2) 86%, var(--glass-2));
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 8px 22px rgba(0, 0, 0, 0.16);
+    transform: translateY(-1px);
+  }
+  .fb-card:active {
+    cursor: grabbing;
+  }
+  .fb-card[data-dragging="true"] {
+    opacity: 0.42;
+    transform: scale(0.98);
+  }
+  .fb-card[data-selected="true"] {
+    background: color-mix(in srgb, var(--sig-soft) 45%, var(--surface-2));
+    box-shadow:
+      inset 0 0 0 1.5px var(--sig),
+      0 6px 18px rgba(0, 0, 0, 0.16);
+  }
+  .fb-filter-pill {
+    display: inline-flex;
+    height: 28px;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 0 11px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 140ms ease,
+      box-shadow 140ms ease,
+      color 140ms ease;
+  }
+  .fb-filter-pill:hover {
+    background: var(--glass-2);
+    color: var(--foreground);
+  }
+  .fb-filter-pill[data-active="true"] {
+    background: var(--sig-soft);
+    box-shadow: inset 0 0 0 1px var(--sig);
+    color: var(--foreground);
+  }
+  .fb-swimlane {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-radius: 16px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 14px;
+  }
+  .fb-modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .fb-modal-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border-radius: 14px;
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--line);
+    padding: 14px 16px;
+  }
+  .fb-modal-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .fb-impact-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  @media (max-width: 639px) {
+    .fb-impact-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   /* ── Phones ────────────────────────────────────────────────────────────────── */
   @media (max-width: 899px) {
     /* The phone boards set long verdict lines at 26/32. */
