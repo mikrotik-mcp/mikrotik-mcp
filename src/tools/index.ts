@@ -1010,7 +1010,8 @@ export const moduleCatalog: ModuleInfo[] = [
     slug: "openvpn",
     group: "VPN & Tunneling",
     description:
-      "OpenVPN servers — legacy single + RouterOS 7.17 multi-server — and clients (`/interface ovpn-*`).",
+      "OpenVPN servers — legacy single + RouterOS 7.17 multi-server — clients (`/interface ovpn-*`), " +
+      "live sessions (`list_ovpn_sessions`), and historical/daily usage & traffic accounting analytics (`analyze_ovpn_usage`).",
     tools: openvpnTools,
   },
   {

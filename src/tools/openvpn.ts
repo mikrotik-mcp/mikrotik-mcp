@@ -18,8 +18,24 @@ import {
   disconnectOpenVpnSession,
   disconnectOpenVpnInput,
 } from "../core/openvpn-sessions";
+import { AnalyzeOpenVpnUsageSchema, analyzeOpenVpnUsage } from "../core/openvpn-analytics";
 
 export const openvpnTools: ToolModule = [
+  defineTool({
+    name: "analyze_ovpn_usage",
+    title: "Analyze OpenVPN Usage & Session Accounting",
+    annotations: READ,
+    description:
+      "`analyze_ovpn_usage` — Compute exact OpenVPN historical and live usage, traffic (download, upload, total bytes), session durations, and connection counts across any time window or filter set. " +
+      "Automatically collects RouterOS User Manager accounting (`/user-manager session`), live OpenVPN connections (`/ppp active where service=ovpn` + `<ovpn-*>` interface byte counters), and local history in a single query, then performs all aggregations deterministically in TypeScript: " +
+      "(1) all-users grand totals and daily breakdown, (2) per-user aggregated totals, traffic shares, averages, peak sessions, unique client IPs, and disconnect causes, (3) per-user-per-day connection counts and byte/duration totals, and (4) paginated per-session details. " +
+      "Supports filtering by `from`/`to` dates or timestamps, `date` (single day), `days` (lookback window, default 7), `all_time`, `user`/`users` (exact or substring), `caller_id` (client public IP), `address` (tunnel IP), `status` (`all`/`active`/`closed`), `terminate_cause`, `exclude_zero_traffic`, and minimum bytes/duration.",
+    inputSchema: AnalyzeOpenVpnUsageSchema.shape,
+    async handler(a, ctx) {
+      const { report, text } = await analyzeOpenVpnUsage(a, ctx);
+      return { text, structuredContent: report as unknown as Record<string, unknown> };
+    },
+  }),
   defineTool({
     name: "list_ovpn_sessions",
     title: "List Active OpenVPN Connections",
