@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.22.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 1017,
+  "toolCount": 1018,
   "tools": [
     {
       "name": "create_client_check",
@@ -23993,6 +23993,224 @@
           }
         },
         "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "analyze_ovpn_usage",
+      "title": "Analyze OpenVPN Usage & Session Accounting",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "`analyze_ovpn_usage` — Compute exact OpenVPN historical and live usage, traffic (download, upload, total bytes), session durations, and connection counts across any time window or filter set. Automatically collects RouterOS User Manager accounting (`/user-manager session`), live OpenVPN connections (`/ppp active where service=ovpn` + `<ovpn-*>` interface byte counters), and local history in a single query, then performs all aggregations deterministically in TypeScript: (1) all-users grand totals and daily breakdown, (2) per-user aggregated totals, traffic shares, averages, peak sessions, unique client IPs, and disconnect causes, (3) per-user-per-day connection counts and byte/duration totals, and (4) paginated per-session details. Supports filtering by `from`/`to` dates or timestamps, `date` (single day), `days` (lookback window, default 7), `all_time`, `user`/`users` (exact or substring), `caller_id` (client public IP), `address` (tunnel IP), `status` (`all`/`active`/`closed`), `terminate_cause`, `exclude_zero_traffic`, and minimum bytes/duration.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "from": {
+            "description": "Start of the analysis window in router local time (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`). Alias: `since`, `start_date`. When omitted, `days` (default 7) is used unless `all_time=true`.",
+            "type": "string"
+          },
+          "since": {
+            "description": "Alias for `from` (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`).",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Alias for `from` (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`).",
+            "type": "string"
+          },
+          "to": {
+            "description": "End of the analysis window in router local time (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`). A date-only value (`YYYY-MM-DD`) includes the full day through `23:59:59`. Alias: `until`, `end_date`.",
+            "type": "string"
+          },
+          "until": {
+            "description": "Alias for `to` (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`).",
+            "type": "string"
+          },
+          "end_date": {
+            "description": "Alias for `to` (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`).",
+            "type": "string"
+          },
+          "date": {
+            "description": "Single calendar day shortcut (`YYYY-MM-DD`), equivalent to setting both `from` and `to` to that day. Alias: `day`.",
+            "type": "string"
+          },
+          "day": {
+            "description": "Alias for `date` (`YYYY-MM-DD`).",
+            "type": "string"
+          },
+          "days": {
+            "description": "Number of calendar days ending today on the router's clock (1 = today only, 7 = today + previous 6 days). Default 7 when no date range is specified.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 366
+          },
+          "all_time": {
+            "description": "When true, analyze all retained accounting records without a start-date cutoff. Warning: on routers with tens of thousands of historical sessions this may take 15–20 seconds.",
+            "type": "boolean"
+          },
+          "user": {
+            "description": "Filter to a specific OpenVPN username (exact match by default, or substring match when `user_match='contains'`; also accepts comma-separated usernames). Alias: `username`.",
+            "type": "string"
+          },
+          "username": {
+            "description": "Alias for `user`.",
+            "type": "string"
+          },
+          "users": {
+            "description": "Filter to any of the listed OpenVPN usernames.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "user_match": {
+            "default": "exact",
+            "description": "How to match `user` / `users`: `'exact'` (case-insensitive exact username match, default) or `'contains'` (case-insensitive substring match).",
+            "type": "string",
+            "enum": ["exact", "contains"]
+          },
+          "caller_id": {
+            "description": "Filter by client public source IP (`calling-station-id` / `caller-id`). Matches exact IP or prefix/substring. Alias: `source_ip`, `client_ip`.",
+            "type": "string"
+          },
+          "source_ip": {
+            "description": "Alias for `caller_id`.",
+            "type": "string"
+          },
+          "client_ip": {
+            "description": "Alias for `caller_id`.",
+            "type": "string"
+          },
+          "address": {
+            "description": "Filter by assigned OpenVPN tunnel IP (`user-address` / `address`, e.g. `10.10.6.215`). Alias: `tunnel_ip`.",
+            "type": "string"
+          },
+          "tunnel_ip": {
+            "description": "Alias for `address`.",
+            "type": "string"
+          },
+          "status": {
+            "default": "all",
+            "description": "Filter by session state: `'all'` (both active and closed sessions, default), `'active'` (currently connected only), or `'closed'` (disconnected/completed only).",
+            "type": "string",
+            "enum": ["all", "active", "closed"]
+          },
+          "active_only": {
+            "description": "Shortcut for `status='active'` when true, or `status='closed'` when false.",
+            "type": "boolean"
+          },
+          "terminate_cause": {
+            "description": "Filter by RADIUS disconnect / terminate cause (e.g. `'lost-carrier'`, `'idle-timeout'`, `'user-request'`, `'session-timeout'`, `'admin-reset'`). Case-insensitive substring or exact match.",
+            "type": "string"
+          },
+          "exclude_zero_traffic": {
+            "default": false,
+            "description": "When true, exclude 0-byte connection attempts (handshake/reconnect retries where download + upload = 0) from the primary aggregations. Even when false, the report separately counts `nonZeroTrafficSessions` vs `zeroTrafficSessions`.",
+            "type": "boolean"
+          },
+          "min_total_bytes": {
+            "description": "Only include sessions whose combined download + upload bytes are at least this value.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "min_download_bytes": {
+            "description": "Only include sessions whose client download bytes are at least this value.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "min_upload_bytes": {
+            "description": "Only include sessions whose client upload bytes are at least this value.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "min_duration_seconds": {
+            "description": "Only include sessions whose duration (uptime in seconds) is at least this value.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "max_duration_seconds": {
+            "description": "Only include sessions whose duration (uptime in seconds) is at most this value.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "include_daily_breakdown": {
+            "default": true,
+            "description": "Include per-user-per-day and all-users-per-day connection counts, durations, and download/upload/total byte breakdowns.",
+            "type": "boolean"
+          },
+          "include_sessions": {
+            "default": true,
+            "description": "Include the paginated list of individual OpenVPN sessions with per-session download, upload, total bytes, duration, caller IP, tunnel IP, and timestamps.",
+            "type": "boolean"
+          },
+          "include_inactive_users": {
+            "default": false,
+            "description": "When true (and no user filter is active), include configured OpenVPN/User Manager accounts that had 0 matching connections in the window.",
+            "type": "boolean"
+          },
+          "sort_users_by": {
+            "default": "total_bytes",
+            "description": "How to sort the per-user summary table.",
+            "type": "string",
+            "enum": [
+              "total_bytes",
+              "download_bytes",
+              "upload_bytes",
+              "connections",
+              "duration",
+              "user"
+            ]
+          },
+          "sort_sessions_by": {
+            "default": "started_desc",
+            "description": "How to sort the individual sessions list.",
+            "type": "string",
+            "enum": [
+              "started_desc",
+              "started_asc",
+              "total_bytes_desc",
+              "duration_desc",
+              "download_desc",
+              "upload_desc"
+            ]
+          },
+          "session_limit": {
+            "default": 100,
+            "description": "Maximum number of individual session records to return in `sessions` (1–1000, default 100). Aggregations always cover 100% of matching sessions regardless of this limit.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "session_offset": {
+            "default": 0,
+            "description": "Pagination offset into the sorted `sessions` list.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "user_match",
+          "status",
+          "exclude_zero_traffic",
+          "include_daily_breakdown",
+          "include_sessions",
+          "include_inactive_users",
+          "sort_users_by",
+          "sort_sessions_by",
+          "session_limit",
+          "session_offset"
+        ],
         "additionalProperties": false
       }
     },

@@ -1443,9 +1443,10 @@
       "slug": "openvpn",
       "label": "OpenVPN",
       "group": "VPN & Tunneling",
-      "description": "OpenVPN servers — legacy single + RouterOS 7.17 multi-server — and clients (`/interface ovpn-*`).",
+      "description": "OpenVPN servers — legacy single + RouterOS 7.17 multi-server — clients (`/interface ovpn-*`), live sessions (`list_ovpn_sessions`), and historical/daily usage & traffic accounting analytics (`analyze_ovpn_usage`).",
       "alwaysOn": false,
       "tools": [
+        "analyze_ovpn_usage",
         "list_ovpn_sessions",
         "disconnect_ovpn_session",
         "get_ovpn_server",
@@ -8357,6 +8358,14 @@
     {
       "name": "disable_sstp_client",
       "module": "sstp",
+      "group": "VPN & Tunneling",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "analyze_ovpn_usage",
+      "module": "openvpn",
       "group": "VPN & Tunneling",
       "noDevice": false,
       "requires": null,
