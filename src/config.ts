@@ -39,6 +39,13 @@ export const DEFAULT_FLOWS_DB = join(homedir(), ".mikrotik-mcp", "flows.db");
 export const DEFAULT_MEMORY_DB = join(homedir(), ".mikrotik-mcp", "memory.db");
 
 /**
+ * Default LLM tool-feedback DB: `~/.mikrotik-mcp/feedback.db`. Stores deduplicated
+ * bug reports, missing-tool requests and parameter confusion filed by AI agents
+ * so recurring gaps aggregate into a single triageable counter.
+ */
+export const DEFAULT_FEEDBACK_DB = join(homedir(), ".mikrotik-mcp", "feedback.db");
+
+/**
  * Default local backup vault: `~/.mikrotik-mcp/backups/`. Holds `/export` `.rsc`
  * config backups on the MCP server's own filesystem (NOT on the device, NOT S3),
  * one file per backup. Override with `MIKROTIK_BACKUP_DIR`.
@@ -657,6 +664,19 @@ export const MemoryConfigSchema = z.object({
 export type MemoryConfig = z.infer<typeof MemoryConfigSchema>;
 
 /**
+ * LLM tool feedback & telemetry loop. Persists deduplicated reports when an AI
+ * agent hits a missing capability, a tool bug, or a confusing schema, counting
+ * repeat occurrences rather than creating duplicate tickets.
+ */
+export const FeedbackConfigSchema = z.object({
+  /** Master switch — when false the feedback tools are inert (no DB opened). */
+  enabled: z.boolean().default(true),
+  /** SQLite database path for feedback issues (`:memory:` for ephemeral). */
+  dbPath: z.string().default(DEFAULT_FEEDBACK_DB),
+});
+export type FeedbackConfig = z.infer<typeof FeedbackConfigSchema>;
+
+/**
  * Tool-surface curation. This server exposes several hundred tools across ~110
  * modules; MCP clients discover tools by relevance search and only feed a capped
  * candidate set to the model, so a query can crowd out simple read tools (e.g.
@@ -789,6 +809,8 @@ export const MikrotikConfigSchema = z.object({
   tools: ToolFilterSchema.default(() => ToolFilterSchema.parse({})),
   /** Persistent knowledge-graph memory (entities, relations, observations). */
   memory: MemoryConfigSchema.default(() => MemoryConfigSchema.parse({})),
+  /** LLM tool feedback & telemetry loop (deduplicated issue reports & occurrences). */
+  feedback: FeedbackConfigSchema.default(() => FeedbackConfigSchema.parse({})),
   /**
    * Directory for the local backup vault (`/export` `.rsc` files on the MCP host).
    * Editable from the dashboard's Backups page and persisted here. Falls back to
@@ -880,6 +902,7 @@ function parseDevicesSource(
   mcp?: Record<string, unknown>;
   ssh?: Record<string, unknown>;
   memory?: Record<string, unknown>;
+  feedback?: Record<string, unknown>;
   readOnly?: boolean;
   verifyWrites?: boolean;
   disableUpdateCheck?: boolean;
@@ -929,6 +952,10 @@ function parseDevicesSource(
     structured && obj.memory && typeof obj.memory === "object"
       ? (obj.memory as Record<string, unknown>)
       : undefined;
+  const feedback =
+    structured && obj.feedback && typeof obj.feedback === "object"
+      ? (obj.feedback as Record<string, unknown>)
+      : undefined;
   // Top-level scalar toggles (also structured-form only, for the same reason).
   const readOnly = structured && typeof obj.readOnly === "boolean" ? obj.readOnly : undefined;
   const verifyWrites =
@@ -953,6 +980,7 @@ function parseDevicesSource(
     mcp,
     ssh,
     memory,
+    feedback,
     readOnly,
     verifyWrites,
     disableUpdateCheck,
@@ -1065,6 +1093,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
   let fileMcp: Record<string, unknown> | undefined;
   let fileSsh: Record<string, unknown> | undefined;
   let fileMemory: Record<string, unknown> | undefined;
+  let fileFeedback: Record<string, unknown> | undefined;
   let fileReadOnly: boolean | undefined;
   let fileVerifyWrites: boolean | undefined;
   let fileDisableUpdateCheck: boolean | undefined;
@@ -1084,6 +1113,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     fileMcp = src.mcp;
     fileSsh = src.ssh;
     fileMemory = src.memory;
+    fileFeedback = src.feedback;
     fileReadOnly = src.readOnly;
     fileVerifyWrites = src.verifyWrites;
     fileDisableUpdateCheck = src.disableUpdateCheck;
@@ -1208,6 +1238,12 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     dbPath: pick("memory-db", "MIKROTIK_MEMORY__DB_PATH"),
   });
 
+  // 6b) LLM tool feedback. Config-file block is the baseline; env/flags override.
+  const feedback = overlay(fileFeedback, {
+    enabled: boolOpt(pick("feedback-enabled", "MIKROTIK_FEEDBACK__ENABLED")),
+    dbPath: pick("feedback-db", "MIKROTIK_FEEDBACK__DB_PATH"),
+  });
+
   // 7) Policy-as-code rule files. `MIKROTIK_POLICY_PATHS` / `--policy-paths`
   // carries a comma-separated list; left unset, the schema default applies.
   const policyPaths = csv(pick("policy-paths", "MIKROTIK_POLICY_PATHS"));
@@ -1258,6 +1294,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): MikrotikConf
     tools,
     ssh,
     memory,
+    feedback,
     policy,
     schedules,
     attacks,
