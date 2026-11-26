@@ -16,9 +16,11 @@
  * and all-users aggregates are computed deterministically here so AI agents never
  * perform arithmetic on raw session dumps.
  */
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { isIP } from "node:net";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { getAsnOrganizationLabel } from "./asn-organization";
 import { executeMikrotikCommand } from "./connector";
 import type { ToolContext } from "./context";
 import { openVpnClientBytes } from "./openvpn-sessions";
@@ -26,12 +28,17 @@ import { connectionDuration, openVpnUptime } from "./openvpn-sessions-model";
 import { getConfig, resolveDeviceName } from "./runtime";
 import { assertDeviceAccess } from "./scoped-access";
 import { humanBytes } from "../flows/aggregate";
+import { isPublicIpLiteral, sourceIpLiteral } from "../observability/geo";
 
 const MAX_DAYS = 366;
 const DEFAULT_DAYS = 7;
 const DEFAULT_SESSION_LIMIT = 100;
 const MAX_SESSION_LIMIT = 1000;
 const SESSION_CMD_TIMEOUT_MS = 60_000;
+const GEO_LOOKUP_CONCURRENCY = 6;
+const GEO_LOOKUP_TIMEOUT_MS = 4000;
+const GEO_LOOKUP_MAX_IPS_PER_CALL = 200;
+const GEO_CACHE_TTL_MS = 14 * 24 * 60 * 60_000;
 
 /**
  * Quote a string for RouterOS console expressions, additionally escaping `?`
@@ -144,6 +151,35 @@ export const AnalyzeOpenVpnUsageSchema = z.object({
       "Filter by assigned OpenVPN tunnel IP (`user-address` / `address`, e.g. `10.10.6.215`). Alias: `tunnel_ip`.",
     ),
   tunnel_ip: z.string().trim().optional().describe("Alias for `address`."),
+  country: z
+    .string()
+    .trim()
+    .optional()
+    .describe(
+      "Filter sessions by client IP country name or 2-letter ISO code (e.g. `'Iran'`, `'IR'`, `'Germany'`, `'DE'`), resolved via `https://ipu.revue.ir/<ip>/json`.",
+    ),
+  city: z
+    .string()
+    .trim()
+    .optional()
+    .describe(
+      "Filter sessions by client IP city (e.g. `'Tehran'`, `'Shiraz'`), resolved via `https://ipu.revue.ir/<ip>/json`.",
+    ),
+  asn_organization: z
+    .string()
+    .trim()
+    .optional()
+    .describe(
+      "Filter sessions by client IP ASN / ISP organization name or ASN number (e.g. `'Iran Telecommunication'`, `'Asiatech'`, `'Irancell'`, `'58224'`), resolved via `https://ipu.revue.ir/<ip>/json`. Alias: `isp`, `asn`.",
+    ),
+  isp: z.string().trim().optional().describe("Alias for `asn_organization`."),
+  asn: z.string().trim().optional().describe("Alias for `asn_organization`."),
+  enrich_ip_geo: z
+    .boolean()
+    .default(true)
+    .describe(
+      "When true (default), resolve every unique client source IP via `https://ipu.revue.ir/<ip>/json` (cached locally in SQLite) to attach `country`, `city`, `asn`, and `asn_organization` to each session, daily breakdown, and user summary.",
+    ),
   status: z
     .enum(["all", "active", "closed"])
     .default("all")
@@ -260,6 +296,10 @@ export interface NormalizedOpenVpnQuery {
   userMatch: "exact" | "contains";
   callerId?: string;
   address?: string;
+  country?: string;
+  city?: string;
+  asnOrganization?: string;
+  enrichIpGeo: boolean;
   status: "all" | "active" | "closed";
   terminateCause?: string;
   excludeZeroTraffic: boolean;
@@ -350,6 +390,10 @@ export function normalizeOpenVpnQuery(raw: AnalyzeOpenVpnUsageInput): Normalized
 
   const callerId = (parsed.caller_id || parsed.source_ip || parsed.client_ip)?.trim() || undefined;
   const address = (parsed.address || parsed.tunnel_ip)?.trim() || undefined;
+  const country = parsed.country?.trim() || undefined;
+  const city = parsed.city?.trim() || undefined;
+  const asnOrganization =
+    (parsed.asn_organization || parsed.isp || parsed.asn)?.trim() || undefined;
   const status =
     parsed.active_only === true
       ? "active"
@@ -366,6 +410,10 @@ export function normalizeOpenVpnQuery(raw: AnalyzeOpenVpnUsageInput): Normalized
     userMatch: parsed.user_match,
     callerId,
     address,
+    country,
+    city,
+    asnOrganization,
+    enrichIpGeo: parsed.enrich_ip_geo,
     status,
     terminateCause: parsed.terminate_cause?.trim() || undefined,
     excludeZeroTraffic: parsed.exclude_zero_traffic,
@@ -528,10 +576,44 @@ export function parseRouterLocalTimeMs(timestamp: string | undefined | null): nu
 }
 
 export interface OpenVpnGeoInfo {
+  ip?: string;
+  network?: string;
+  continent?: string;
   country?: string;
   countryCode?: string;
+  region?: string;
+  city?: string;
+  timezone?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   asn?: string;
+  asnNumber?: number;
+  asnOrganization?: string;
   organization?: string;
+  privateAddress?: boolean;
+  ipv6?: boolean;
+  addressType?: string;
+}
+
+export interface OpenVpnSourceIpSummary {
+  ip: string;
+  connections: number;
+  downloadBytes: number;
+  uploadBytes: number;
+  totalBytes: number;
+  downloadHuman: string;
+  uploadHuman: string;
+  totalHuman: string;
+  totalDurationSeconds: number;
+  totalDurationFormatted: string;
+  tunnelAddresses: string[];
+  country?: string;
+  countryCode?: string;
+  region?: string;
+  city?: string;
+  asn?: string;
+  asnOrganization?: string;
+  network?: string;
 }
 
 export interface LocalHistoryFallbackRow {
@@ -544,6 +626,7 @@ export interface LocalHistoryFallbackRow {
   uptime: number | null;
   country: string;
   countryCode: string;
+  city?: string;
   asn: string;
   organization: string;
 }
@@ -586,6 +669,13 @@ export interface OpenVpnAnalyzedSession {
   status: string[];
   source: "user-manager" | "user-manager+live" | "ppp-active" | "local-history";
   encoding?: string;
+  country?: string;
+  countryCode?: string;
+  region?: string;
+  city?: string;
+  asn?: string;
+  asnOrganization?: string;
+  network?: string;
   geo?: OpenVpnGeoInfo;
 }
 
@@ -631,6 +721,9 @@ export interface OpenVpnUserDailyRow {
   maxSessionHuman: string;
   callerIds: string[];
   tunnelAddresses: string[];
+  locations: string[];
+  asnOrganizations: string[];
+  sourceIps: OpenVpnSourceIpSummary[];
 }
 
 export interface OpenVpnUserSummary {
@@ -668,6 +761,10 @@ export interface OpenVpnUserSummary {
   uniqueCallerIds: number;
   callerIds: string[];
   tunnelAddresses: string[];
+  countries: string[];
+  cities: string[];
+  asnOrganizations: string[];
+  sourceIps: OpenVpnSourceIpSummary[];
   terminateCauses: Record<string, number>;
   dailyBreakdown?: OpenVpnUserDailyRow[];
 }
@@ -697,6 +794,9 @@ export interface OpenVpnUsageReport {
     userMatch: "exact" | "contains";
     callerId?: string;
     address?: string;
+    country?: string;
+    city?: string;
+    asnOrganization?: string;
     status: "all" | "active" | "closed";
     terminateCause?: string;
     excludeZeroTraffic: boolean;
@@ -717,6 +817,12 @@ export interface OpenVpnUsageReport {
     distinctDaysWithActivity: number;
     uniqueCallerIds: number;
     uniqueTunnelAddresses: number;
+    uniqueCountries: number;
+    countries: Record<string, number>;
+    uniqueCities: number;
+    cities: Record<string, number>;
+    uniqueAsnOrganizations: number;
+    asnOrganizations: Record<string, number>;
     downloadBytes: number;
     uploadBytes: number;
     totalBytes: number;
@@ -954,7 +1060,9 @@ export function computeOpenVpnUsageReport(
           ? raw["terminate-cause"].trim()
           : null;
       const status = normalizeStatusList(raw.status);
-      const geo = callerId ? geoByIp.get(callerId) : undefined;
+      const normCallerIp = callerId ? (sourceIpLiteral(callerId) ?? callerId) : "";
+      const geo = callerId ? (geoByIp.get(callerId) ?? geoByIp.get(normCallerIp)) : undefined;
+      const asnOrg = geo?.asnOrganization || geo?.organization;
 
       allSessions.push({
         id: id || acctSessionId || `${user}:${started}`,
@@ -978,6 +1086,13 @@ export function computeOpenVpnUsageReport(
         status,
         source,
         ...(encoding ? { encoding } : {}),
+        ...(geo?.country ? { country: geo.country } : {}),
+        ...(geo?.countryCode ? { countryCode: geo.countryCode } : {}),
+        ...(geo?.region ? { region: geo.region } : {}),
+        ...(geo?.city ? { city: geo.city } : {}),
+        ...(geo?.asn ? { asn: geo.asn } : {}),
+        ...(asnOrg ? { asnOrganization: asnOrg } : {}),
+        ...(geo?.network ? { network: geo.network } : {}),
         ...(geo ? { geo } : {}),
       });
     }
@@ -992,15 +1107,24 @@ export function computeOpenVpnUsageReport(
           : row.ended !== null && row.ended >= row.started
             ? Math.floor((row.ended - row.started) / 1000)
             : 0;
+      const normRowIp = row.ip ? (sourceIpLiteral(row.ip) ?? row.ip) : "";
+      const cachedGeo = row.ip ? (geoByIp.get(row.ip) ?? geoByIp.get(normRowIp)) : undefined;
       const geo: OpenVpnGeoInfo | undefined =
-        row.country || row.countryCode || row.asn || row.organization
+        cachedGeo || row.country || row.countryCode || row.city || row.asn || row.organization
           ? {
-              ...(row.country ? { country: row.country } : {}),
-              ...(row.countryCode ? { countryCode: row.countryCode } : {}),
-              ...(row.asn ? { asn: row.asn } : {}),
-              ...(row.organization ? { organization: row.organization } : {}),
+              ...cachedGeo,
+              ...(row.country && !cachedGeo?.country ? { country: row.country } : {}),
+              ...(row.countryCode && !cachedGeo?.countryCode
+                ? { countryCode: row.countryCode }
+                : {}),
+              ...(row.city && !cachedGeo?.city ? { city: row.city } : {}),
+              ...(row.asn && !cachedGeo?.asn ? { asn: row.asn } : {}),
+              ...(row.organization && !cachedGeo?.asnOrganization
+                ? { asnOrganization: row.organization, organization: row.organization }
+                : {}),
             }
-          : geoByIp.get(row.ip);
+          : undefined;
+      const asnOrg = geo?.asnOrganization || geo?.organization;
 
       allSessions.push({
         id: row.id,
@@ -1023,6 +1147,13 @@ export function computeOpenVpnUsageReport(
         terminateCause: null,
         status: active ? ["start"] : ["start", "stop"],
         source: "local-history",
+        ...(geo?.country ? { country: geo.country } : {}),
+        ...(geo?.countryCode ? { countryCode: geo.countryCode } : {}),
+        ...(geo?.region ? { region: geo.region } : {}),
+        ...(geo?.city ? { city: geo.city } : {}),
+        ...(geo?.asn ? { asn: geo.asn } : {}),
+        ...(asnOrg ? { asnOrganization: asnOrg } : {}),
+        ...(geo?.network ? { network: geo.network } : {}),
         ...(geo ? { geo } : {}),
       });
     }
@@ -1050,7 +1181,9 @@ export function computeOpenVpnUsageReport(
     const totalBytes = downloadBytes + uploadBytes;
     const encoding =
       typeof live.encoding === "string" && live.encoding.trim() ? live.encoding.trim() : undefined;
-    const geo = callerId ? geoByIp.get(callerId) : undefined;
+    const normCallerIp = callerId ? (sourceIpLiteral(callerId) ?? callerId) : "";
+    const geo = callerId ? (geoByIp.get(callerId) ?? geoByIp.get(normCallerIp)) : undefined;
+    const asnOrg = geo?.asnOrganization || geo?.organization;
 
     allSessions.push({
       id: id || hexId || `${user}:${started}`,
@@ -1074,6 +1207,13 @@ export function computeOpenVpnUsageReport(
       status: ["active"],
       source: "ppp-active",
       ...(encoding ? { encoding } : {}),
+      ...(geo?.country ? { country: geo.country } : {}),
+      ...(geo?.countryCode ? { countryCode: geo.countryCode } : {}),
+      ...(geo?.region ? { region: geo.region } : {}),
+      ...(geo?.city ? { city: geo.city } : {}),
+      ...(geo?.asn ? { asn: geo.asn } : {}),
+      ...(asnOrg ? { asnOrganization: asnOrg } : {}),
+      ...(geo?.network ? { network: geo.network } : {}),
       ...(geo ? { geo } : {}),
     });
   }
@@ -1083,6 +1223,9 @@ export function computeOpenVpnUsageReport(
   const lowerUsers = query.users.map((u) => u.toLowerCase());
   const lowerCaller = query.callerId?.toLowerCase();
   const lowerAddress = query.address?.toLowerCase();
+  const lowerCountry = query.country?.toLowerCase();
+  const lowerCity = query.city?.toLowerCase();
+  const lowerAsnOrg = query.asnOrganization?.toLowerCase();
   const lowerCause = query.terminateCause?.toLowerCase();
 
   let zeroTrafficDroppedByExclude = 0;
@@ -1111,6 +1254,39 @@ export function computeOpenVpnUsageReport(
     if (lowerAddress) {
       const a = s.address.toLowerCase();
       if (a !== lowerAddress && !a.includes(lowerAddress)) return false;
+    }
+
+    if (lowerCountry) {
+      const cName = (s.country ?? s.geo?.country ?? "").toLowerCase();
+      const cCode = (s.countryCode ?? s.geo?.countryCode ?? "").toLowerCase();
+      if (cName !== lowerCountry && cCode !== lowerCountry && !cName.includes(lowerCountry)) {
+        return false;
+      }
+    }
+
+    if (lowerCity) {
+      const cityVal = (s.city ?? s.geo?.city ?? "").toLowerCase();
+      if (cityVal !== lowerCity && !cityVal.includes(lowerCity)) return false;
+    }
+
+    if (lowerAsnOrg) {
+      const orgVal = (
+        s.asnOrganization ??
+        s.geo?.asnOrganization ??
+        s.geo?.organization ??
+        ""
+      ).toLowerCase();
+      const asnVal = (s.asn ?? s.geo?.asn ?? "").toLowerCase();
+      const asnNum = s.geo?.asnNumber !== undefined ? String(s.geo.asnNumber).toLowerCase() : "";
+      if (
+        orgVal !== lowerAsnOrg &&
+        asnVal !== lowerAsnOrg &&
+        asnNum !== lowerAsnOrg &&
+        !orgVal.includes(lowerAsnOrg) &&
+        !asnVal.includes(lowerAsnOrg)
+      ) {
+        return false;
+      }
     }
 
     if (query.status === "active" && !s.active) return false;
@@ -1155,7 +1331,51 @@ export function computeOpenVpnUsageReport(
   const globalDays = new Set<string>();
   const globalCallers = new Set<string>();
   const globalAddresses = new Set<string>();
+  const globalCountries: Record<string, number> = {};
+  const globalCities: Record<string, number> = {};
+  const globalAsnOrgs: Record<string, number> = {};
   const globalCauses: Record<string, number> = {};
+
+  interface SourceIpAcc {
+    ip: string;
+    connections: number;
+    downloadBytes: number;
+    uploadBytes: number;
+    totalBytes: number;
+    totalDurationSeconds: number;
+    tunnelAddresses: Set<string>;
+    geo?: OpenVpnGeoInfo;
+  }
+
+  const buildSourceIpSummaryList = (map: Map<string, SourceIpAcc>): OpenVpnSourceIpSummary[] =>
+    [...map.values()]
+      .sort(
+        (a, b) =>
+          b.totalBytes - a.totalBytes || b.connections - a.connections || a.ip.localeCompare(b.ip),
+      )
+      .map((item) => {
+        const asnOrg = item.geo?.asnOrganization || item.geo?.organization;
+        return {
+          ip: item.ip,
+          connections: item.connections,
+          downloadBytes: item.downloadBytes,
+          uploadBytes: item.uploadBytes,
+          totalBytes: item.totalBytes,
+          downloadHuman: humanBytes(item.downloadBytes),
+          uploadHuman: humanBytes(item.uploadBytes),
+          totalHuman: humanBytes(item.totalBytes),
+          totalDurationSeconds: item.totalDurationSeconds,
+          totalDurationFormatted: connectionDuration(item.totalDurationSeconds),
+          tunnelAddresses: [...item.tunnelAddresses].sort(),
+          ...(item.geo?.country ? { country: item.geo.country } : {}),
+          ...(item.geo?.countryCode ? { countryCode: item.geo.countryCode } : {}),
+          ...(item.geo?.region ? { region: item.geo.region } : {}),
+          ...(item.geo?.city ? { city: item.geo.city } : {}),
+          ...(item.geo?.asn ? { asn: item.geo.asn } : {}),
+          ...(asnOrg ? { asnOrganization: asnOrg } : {}),
+          ...(item.geo?.network ? { network: item.geo.network } : {}),
+        };
+      });
 
   // Per-user accumulator
   interface UserAcc {
@@ -1176,6 +1396,10 @@ export function computeOpenVpnUsageReport(
     lastEndedAt: string | null;
     callerIds: Map<string, number>;
     tunnelAddresses: Map<string, number>;
+    countries: Map<string, number>;
+    cities: Map<string, number>;
+    asnOrganizations: Map<string, number>;
+    sourceIps: Map<string, SourceIpAcc>;
     terminateCauses: Record<string, number>;
     daily: Map<
       string,
@@ -1192,6 +1416,9 @@ export function computeOpenVpnUsageReport(
         maxSessionBytes: number;
         callerIds: Set<string>;
         tunnelAddresses: Set<string>;
+        locations: Set<string>;
+        asnOrganizations: Set<string>;
+        sourceIps: Map<string, SourceIpAcc>;
       }
     >;
   }
@@ -1235,6 +1462,10 @@ export function computeOpenVpnUsageReport(
         lastEndedAt: null,
         callerIds: new Map(),
         tunnelAddresses: new Map(),
+        countries: new Map(),
+        cities: new Map(),
+        asnOrganizations: new Map(),
+        sourceIps: new Map(),
         terminateCauses: {},
         daily: new Map(),
       };
@@ -1268,6 +1499,19 @@ export function computeOpenVpnUsageReport(
     if (s.day) globalDays.add(s.day);
     if (s.callerId) globalCallers.add(s.callerId);
     if (s.address) globalAddresses.add(s.address);
+
+    const sessionCountry = s.country ?? s.geo?.country;
+    const sessionCity = s.city ?? s.geo?.city;
+    const sessionAsnOrg = s.asnOrganization ?? s.geo?.asnOrganization ?? s.geo?.organization;
+    if (sessionCountry) {
+      globalCountries[sessionCountry] = (globalCountries[sessionCountry] ?? 0) + 1;
+    }
+    if (sessionCity) {
+      globalCities[sessionCity] = (globalCities[sessionCity] ?? 0) + 1;
+    }
+    if (sessionAsnOrg) {
+      globalAsnOrgs[sessionAsnOrg] = (globalAsnOrgs[sessionAsnOrg] ?? 0) + 1;
+    }
 
     const causeKey = s.active ? "active" : s.terminateCause || "unknown";
     globalCauses[causeKey] = (globalCauses[causeKey] ?? 0) + 1;
@@ -1321,6 +1565,38 @@ export function computeOpenVpnUsageReport(
     if (s.callerId) uAcc.callerIds.set(s.callerId, (uAcc.callerIds.get(s.callerId) ?? 0) + 1);
     if (s.address)
       uAcc.tunnelAddresses.set(s.address, (uAcc.tunnelAddresses.get(s.address) ?? 0) + 1);
+    if (sessionCountry) {
+      uAcc.countries.set(sessionCountry, (uAcc.countries.get(sessionCountry) ?? 0) + 1);
+    }
+    if (sessionCity) {
+      uAcc.cities.set(sessionCity, (uAcc.cities.get(sessionCity) ?? 0) + 1);
+    }
+    if (sessionAsnOrg) {
+      uAcc.asnOrganizations.set(sessionAsnOrg, (uAcc.asnOrganizations.get(sessionAsnOrg) ?? 0) + 1);
+    }
+    if (s.callerId) {
+      let srcEntry = uAcc.sourceIps.get(s.callerId);
+      if (!srcEntry) {
+        srcEntry = {
+          ip: s.callerId,
+          connections: 0,
+          downloadBytes: 0,
+          uploadBytes: 0,
+          totalBytes: 0,
+          totalDurationSeconds: 0,
+          tunnelAddresses: new Set(),
+          geo: s.geo,
+        };
+        uAcc.sourceIps.set(s.callerId, srcEntry);
+      }
+      srcEntry.connections++;
+      srcEntry.downloadBytes += s.downloadBytes;
+      srcEntry.uploadBytes += s.uploadBytes;
+      srcEntry.totalBytes += s.totalBytes;
+      srcEntry.totalDurationSeconds += s.durationSeconds;
+      if (s.address) srcEntry.tunnelAddresses.add(s.address);
+      if (!srcEntry.geo && s.geo) srcEntry.geo = s.geo;
+    }
     uAcc.terminateCauses[causeKey] = (uAcc.terminateCauses[causeKey] ?? 0) + 1;
 
     // Per-user daily accumulator
@@ -1339,6 +1615,9 @@ export function computeOpenVpnUsageReport(
         maxSessionBytes: 0,
         callerIds: new Set(),
         tunnelAddresses: new Set(),
+        locations: new Set(),
+        asnOrganizations: new Set(),
+        sourceIps: new Map(),
       };
       uAcc.daily.set(s.day, uDay);
     }
@@ -1353,6 +1632,32 @@ export function computeOpenVpnUsageReport(
     if (s.totalBytes > uDay.maxSessionBytes) uDay.maxSessionBytes = s.totalBytes;
     if (s.callerId) uDay.callerIds.add(s.callerId);
     if (s.address) uDay.tunnelAddresses.add(s.address);
+    const locLabel = [sessionCity, sessionCountry].filter(Boolean).join(", ");
+    if (locLabel) uDay.locations.add(locLabel);
+    if (sessionAsnOrg) uDay.asnOrganizations.add(sessionAsnOrg);
+    if (s.callerId) {
+      let daySrc = uDay.sourceIps.get(s.callerId);
+      if (!daySrc) {
+        daySrc = {
+          ip: s.callerId,
+          connections: 0,
+          downloadBytes: 0,
+          uploadBytes: 0,
+          totalBytes: 0,
+          totalDurationSeconds: 0,
+          tunnelAddresses: new Set(),
+          geo: s.geo,
+        };
+        uDay.sourceIps.set(s.callerId, daySrc);
+      }
+      daySrc.connections++;
+      daySrc.downloadBytes += s.downloadBytes;
+      daySrc.uploadBytes += s.uploadBytes;
+      daySrc.totalBytes += s.totalBytes;
+      daySrc.totalDurationSeconds += s.durationSeconds;
+      if (s.address) daySrc.tunnelAddresses.add(s.address);
+      if (!daySrc.geo && s.geo) daySrc.geo = s.geo;
+    }
   }
 
   const grandTotalBytes = totalDownloadBytes + totalUploadBytes;
@@ -1382,6 +1687,16 @@ export function computeOpenVpnUsageReport(
     const sortedTunnels = [...uAcc.tunnelAddresses.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([ip]) => ip);
+    const sortedCountries = [...uAcc.countries.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([c]) => c);
+    const sortedCities = [...uAcc.cities.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([c]) => c);
+    const sortedAsnOrgs = [...uAcc.asnOrganizations.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([o]) => o);
+    const userSourceIps = buildSourceIpSummaryList(uAcc.sourceIps);
 
     const dailyBreakdown: OpenVpnUserDailyRow[] | undefined = query.includeDailyBreakdown
       ? [...uAcc.daily.values()]
@@ -1409,6 +1724,9 @@ export function computeOpenVpnUsageReport(
               maxSessionHuman: humanBytes(d.maxSessionBytes),
               callerIds: [...d.callerIds].sort(),
               tunnelAddresses: [...d.tunnelAddresses].sort(),
+              locations: [...d.locations].sort(),
+              asnOrganizations: [...d.asnOrganizations].sort(),
+              sourceIps: buildSourceIpSummaryList(d.sourceIps),
             };
           })
       : undefined;
@@ -1448,6 +1766,10 @@ export function computeOpenVpnUsageReport(
       uniqueCallerIds: sortedCallers.length,
       callerIds: sortedCallers,
       tunnelAddresses: sortedTunnels,
+      countries: sortedCountries,
+      cities: sortedCities,
+      asnOrganizations: sortedAsnOrgs,
+      sourceIps: userSourceIps,
       terminateCauses: uAcc.terminateCauses,
       ...(dailyBreakdown ? { dailyBreakdown } : {}),
     };
@@ -1587,6 +1909,9 @@ export function computeOpenVpnUsageReport(
       userMatch: query.userMatch,
       ...(query.callerId ? { callerId: query.callerId } : {}),
       ...(query.address ? { address: query.address } : {}),
+      ...(query.country ? { country: query.country } : {}),
+      ...(query.city ? { city: query.city } : {}),
+      ...(query.asnOrganization ? { asnOrganization: query.asnOrganization } : {}),
       status: query.status,
       ...(query.terminateCause ? { terminateCause: query.terminateCause } : {}),
       excludeZeroTraffic: query.excludeZeroTraffic,
@@ -1611,6 +1936,12 @@ export function computeOpenVpnUsageReport(
       distinctDaysWithActivity: globalDays.size,
       uniqueCallerIds: globalCallers.size,
       uniqueTunnelAddresses: globalAddresses.size,
+      uniqueCountries: Object.keys(globalCountries).length,
+      countries: globalCountries,
+      uniqueCities: Object.keys(globalCities).length,
+      cities: globalCities,
+      uniqueAsnOrganizations: Object.keys(globalAsnOrgs).length,
+      asnOrganizations: globalAsnOrgs,
       downloadBytes: totalDownloadBytes,
       uploadBytes: totalUploadBytes,
       totalBytes: grandTotalBytes,
@@ -1688,6 +2019,26 @@ export function formatOpenVpnUsageReport(report: OpenVpnUsageReport): string {
   lines.push(
     `- **Total Duration**: **${summary.totalDurationFormatted}** (${summary.totalDurationSeconds.toLocaleString("en-US")} s) · Average: **${summary.averageDurationFormatted}** (${summary.averageDurationSeconds} s) · Longest: **${summary.maxDurationFormatted}** (${summary.maxDurationSeconds} s)`,
   );
+  if (Object.keys(summary.countries).length > 0 || Object.keys(summary.cities).length > 0) {
+    const countryPairs = Object.entries(summary.countries)
+      .sort((a, b) => b[1] - a[1])
+      .map(([c, n]) => `${c} (${n})`)
+      .join(", ");
+    const cityPairs = Object.entries(summary.cities)
+      .sort((a, b) => b[1] - a[1])
+      .map(([c, n]) => `${c} (${n})`)
+      .join(", ");
+    lines.push(
+      `- **Client Locations**: Countries: ${countryPairs || "—"}${cityPairs ? ` · Cities: ${cityPairs}` : ""}`,
+    );
+  }
+  if (Object.keys(summary.asnOrganizations).length > 0) {
+    const orgPairs = Object.entries(summary.asnOrganizations)
+      .sort((a, b) => b[1] - a[1])
+      .map(([o, n]) => `${o} (${n})`)
+      .join(", ");
+    lines.push(`- **Client ISPs / ASN Organizations**: ${orgPairs}`);
+  }
   if (Object.keys(summary.terminateCauses).length > 0) {
     const causes = Object.entries(summary.terminateCauses)
       .sort((a, b) => b[1] - a[1])
@@ -1702,18 +2053,54 @@ export function formatOpenVpnUsageReport(report: OpenVpnUsageReport): string {
     lines.push("_No matching OpenVPN user activity in this window._");
   } else {
     lines.push(
-      "| User | Connections (Non-Zero / 0B) | Active | Days | Download | Upload | Total Traffic | Share | Total Duration | Avg Duration | Peak Session | Unique IPs |",
+      "| User | Connections (Non-Zero / 0B) | Active | Days | Download | Upload | Total Traffic | Share | Total Duration | Avg Duration | Peak Session | Unique IPs | Tunnel IPs | Locations (City, Country) | ISPs / ASN Orgs |",
     );
     lines.push(
-      "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+      "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
     );
     for (const u of report.users) {
+      const tunnelCol =
+        u.tunnelAddresses.length > 0
+          ? `${u.tunnelAddresses.slice(0, 3).join(", ")}${u.tunnelAddresses.length > 3 ? ` (+${u.tunnelAddresses.length - 3})` : ""}`
+          : "—";
+      const locParts =
+        u.cities.length > 0 || u.countries.length > 0
+          ? [...new Set([...u.cities, ...u.countries])].slice(0, 4).join(", ")
+          : "—";
+      const orgCol =
+        u.asnOrganizations.length > 0
+          ? `${u.asnOrganizations.slice(0, 3).join(", ")}${u.asnOrganizations.length > 3 ? ` (+${u.asnOrganizations.length - 3})` : ""}`
+          : "—";
       lines.push(
-        `| **${u.user}** | ${u.connections} (${u.nonZeroTrafficConnections} / ${u.zeroTrafficConnections}) | ${u.activeSessions} | ${u.distinctDaysConnected} | ${u.downloadHuman} (${u.downloadBytes.toLocaleString("en-US")} B) | ${u.uploadHuman} (${u.uploadBytes.toLocaleString("en-US")} B) | **${u.totalHuman}** (${u.totalBytes.toLocaleString("en-US")} B) | ${u.trafficSharePercent.toFixed(2)}% | ${u.totalDurationFormatted} | ${u.averageDurationFormatted} | ${u.maxSessionHuman} | ${u.uniqueCallerIds} |`,
+        `| **${u.user}** | ${u.connections} (${u.nonZeroTrafficConnections} / ${u.zeroTrafficConnections}) | ${u.activeSessions} | ${u.distinctDaysConnected} | ${u.downloadHuman} (${u.downloadBytes.toLocaleString("en-US")} B) | ${u.uploadHuman} (${u.uploadBytes.toLocaleString("en-US")} B) | **${u.totalHuman}** (${u.totalBytes.toLocaleString("en-US")} B) | ${u.trafficSharePercent.toFixed(2)}% | ${u.totalDurationFormatted} | ${u.averageDurationFormatted} | ${u.maxSessionHuman} | ${u.uniqueCallerIds} | ${tunnelCol} | ${locParts} | ${orgCol} |`,
       );
     }
   }
   lines.push("");
+
+  if (report.users.some((u) => u.sourceIps.length > 0)) {
+    lines.push("## 2b. Per-User Client Source IPs, Tunnel IPs & Geo/ISP Breakdown");
+    for (const u of report.users) {
+      if (u.sourceIps.length === 0) continue;
+      lines.push(`### User \`${u.user}\` — Source IP & Location Breakdown`);
+      lines.push(
+        "| Client Source IP | Country | City | ASN / ISP (`asn_organization`) | Assigned Tunnel IP(s) | Connections | Duration | Download | Upload | Total Traffic |",
+      );
+      lines.push("| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |");
+      for (const ipRow of u.sourceIps) {
+        const countryCol = ipRow.country
+          ? `${ipRow.country}${ipRow.countryCode ? ` (${ipRow.countryCode.toUpperCase()})` : ""}`
+          : "—";
+        const cityCol = ipRow.city || "—";
+        const asnCol = [ipRow.asnOrganization, ipRow.asn].filter(Boolean).join(" · ") || "—";
+        const tunnelCol = ipRow.tunnelAddresses.join(", ") || "—";
+        lines.push(
+          `| \`${ipRow.ip}\` | ${countryCol} | ${cityCol} | ${asnCol} | ${tunnelCol} | ${ipRow.connections} | ${ipRow.totalDurationFormatted} | ${ipRow.downloadHuman} (${ipRow.downloadBytes.toLocaleString("en-US")} B) | ${ipRow.uploadHuman} (${ipRow.uploadBytes.toLocaleString("en-US")} B) | **${ipRow.totalHuman}** (${ipRow.totalBytes.toLocaleString("en-US")} B) |`,
+        );
+      }
+      lines.push("");
+    }
+  }
 
   if (report.dailyTotals && report.dailyTotals.length > 0) {
     lines.push("## 3. All-Users Daily Totals");
@@ -1735,12 +2122,18 @@ export function formatOpenVpnUsageReport(report: OpenVpnUsageReport): string {
         `### User: \`${u.user}\` — ${u.connections} connection(s), ${u.totalHuman} total (${u.downloadHuman} down / ${u.uploadHuman} up), ${u.totalDurationFormatted} total uptime`,
       );
       lines.push(
-        "| Date | Connections (Non-Zero / 0B) | Active | Download | Upload | Total Traffic | Total Duration | Avg Duration | Peak Session | Client IPs |",
+        "| Date | Connections (Non-Zero / 0B) | Active | Download | Upload | Total Traffic | Total Duration | Avg Duration | Peak Session | Client IPs | Tunnel IPs | Locations | ISPs / ASN Orgs |",
       );
-      lines.push("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |");
+      lines.push(
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |",
+      );
       for (const d of u.dailyBreakdown) {
+        const callerCol = `${d.callerIds.slice(0, 5).join(", ")}${d.callerIds.length > 5 ? ` (+${d.callerIds.length - 5})` : ""}`;
+        const tunnelCol = `${d.tunnelAddresses.slice(0, 4).join(", ")}${d.tunnelAddresses.length > 4 ? ` (+${d.tunnelAddresses.length - 4})` : ""}`;
+        const locCol = d.locations.join("; ") || "—";
+        const orgCol = d.asnOrganizations.join("; ") || "—";
         lines.push(
-          `| ${d.day} | ${d.connections} (${d.nonZeroTrafficConnections} / ${d.zeroTrafficConnections}) | ${d.activeConnections} | ${d.downloadHuman} (${d.downloadBytes.toLocaleString("en-US")} B) | ${d.uploadHuman} (${d.uploadBytes.toLocaleString("en-US")} B) | **${d.totalHuman}** (${d.totalBytes.toLocaleString("en-US")} B) | ${d.totalDurationFormatted} | ${d.averageDurationFormatted} | ${d.maxSessionHuman} | ${d.callerIds.slice(0, 5).join(", ")}${d.callerIds.length > 5 ? ` (+${d.callerIds.length - 5})` : ""} |`,
+          `| ${d.day} | ${d.connections} (${d.nonZeroTrafficConnections} / ${d.zeroTrafficConnections}) | ${d.activeConnections} | ${d.downloadHuman} (${d.downloadBytes.toLocaleString("en-US")} B) | ${d.uploadHuman} (${d.uploadBytes.toLocaleString("en-US")} B) | **${d.totalHuman}** (${d.totalBytes.toLocaleString("en-US")} B) | ${d.totalDurationFormatted} | ${d.averageDurationFormatted} | ${d.maxSessionHuman} | ${callerCol || "—"} | ${tunnelCol || "—"} | ${locCol} | ${orgCol} |`,
         );
       }
       lines.push("");
@@ -1749,20 +2142,29 @@ export function formatOpenVpnUsageReport(report: OpenVpnUsageReport): string {
 
   if (report.sessions) {
     lines.push(
-      `## 5. Individual OpenVPN Sessions (showing ${report.sessions.returned} of ${report.sessions.totalMatching}, offset ${report.sessions.offset})`,
+      `## 5. Individual OpenVPN Connections (showing ${report.sessions.returned} of ${report.sessions.totalMatching}, offset ${report.sessions.offset})`,
     );
     if (report.sessions.items.length === 0) {
       lines.push("_No matching sessions._");
     } else {
       lines.push(
-        "| User | Started | Ended / State | Duration | Download | Upload | Total Traffic | Caller IP | Tunnel IP | Terminate Cause |",
+        "| User | Started | Ended / State | Duration | Download | Upload | Total Traffic | Client Source IP | Assigned Tunnel IP | Country | City | ASN / ISP (`asn_organization`) | Terminate Cause |",
       );
-      lines.push("| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |");
+      lines.push(
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- |",
+      );
       for (const s of report.sessions.items) {
-        const geoLabel = s.geo?.organization || s.geo?.asn || s.geo?.countryCode?.toUpperCase();
-        const callerCol = geoLabel ? `${s.callerId} (${geoLabel})` : s.callerId || "—";
+        const countryVal = s.country ?? s.geo?.country;
+        const codeVal = s.countryCode ?? s.geo?.countryCode;
+        const countryCol = countryVal
+          ? `${countryVal}${codeVal ? ` (${codeVal.toUpperCase()})` : ""}`
+          : "—";
+        const cityCol = s.city ?? s.geo?.city ?? "—";
+        const orgVal = s.asnOrganization ?? s.geo?.asnOrganization ?? s.geo?.organization;
+        const asnVal = s.asn ?? s.geo?.asn;
+        const asnCol = [orgVal, asnVal].filter(Boolean).join(" · ") || "—";
         lines.push(
-          `| **${s.user}** | ${s.started} | ${s.active ? "**ACTIVE**" : (s.ended ?? "—")} | ${s.durationFormatted} | ${s.downloadHuman} (${s.downloadBytes.toLocaleString("en-US")} B) | ${s.uploadHuman} (${s.uploadBytes.toLocaleString("en-US")} B) | **${s.totalHuman}** (${s.totalBytes.toLocaleString("en-US")} B) | ${callerCol} | ${s.address || "—"} | ${s.active ? "active" : (s.terminateCause ?? "—")} |`,
+          `| **${s.user}** | ${s.started} | ${s.active ? "**ACTIVE**" : (s.ended ?? "—")} | ${s.durationFormatted} | ${s.downloadHuman} (${s.downloadBytes.toLocaleString("en-US")} B) | ${s.uploadHuman} (${s.uploadBytes.toLocaleString("en-US")} B) | **${s.totalHuman}** (${s.totalBytes.toLocaleString("en-US")} B) | \`${s.callerId || "—"}\` | \`${s.address || "—"}\` | ${countryCol} | ${cityCol} | ${asnCol} | ${s.active ? "active" : (s.terminateCause ?? "—")} |`,
         );
       }
     }
@@ -1777,6 +2179,113 @@ export function formatOpenVpnUsageReport(report: OpenVpnUsageReport): string {
   return lines.join("\n");
 }
 
+interface CachedGeoEntry {
+  geo: OpenVpnGeoInfo;
+  updatedAt: number;
+}
+
+const memoryGeoCache = new Map<string, CachedGeoEntry>();
+
+export function clearOpenVpnGeoMemoryCache(): void {
+  memoryGeoCache.clear();
+}
+
+/**
+ * Fetch IP geolocation and ASN metadata from `https://ipu.revue.ir/<ip>/json`.
+ */
+export async function fetchIpuRevueGeoInfo(
+  ip: string,
+  fetchFn: typeof fetch = fetch,
+  timeoutMs = GEO_LOOKUP_TIMEOUT_MS,
+): Promise<OpenVpnGeoInfo | null> {
+  const cleanIp = sourceIpLiteral(ip) ?? ip.trim();
+  if (!cleanIp || isIP(cleanIp) === 0 || !isPublicIpLiteral(cleanIp)) return null;
+
+  const res = await fetchFn(`https://ipu.revue.ir/${encodeURIComponent(cleanIp)}/json`, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) return null;
+  const d = (await res.json()) as {
+    ip?: unknown;
+    network?: unknown;
+    continent?: unknown;
+    country?: unknown;
+    country_code?: unknown;
+    region?: unknown;
+    city?: unknown;
+    timezone?: unknown;
+    latitude?: unknown;
+    longitude?: unknown;
+    asn?: unknown;
+    asn_organization?: unknown;
+    private_address?: unknown;
+    ipv6?: unknown;
+    address_type?: unknown;
+  };
+  if (d.private_address === true) return null;
+
+  const country = typeof d.country === "string" && d.country.trim() ? d.country.trim() : undefined;
+  const countryCode =
+    typeof d.country_code === "string" && /^[a-z]{2}$/i.test(d.country_code.trim())
+      ? d.country_code.trim().toLowerCase()
+      : undefined;
+  const region = typeof d.region === "string" && d.region.trim() ? d.region.trim() : undefined;
+  const city = typeof d.city === "string" && d.city.trim() ? d.city.trim() : undefined;
+  const continent =
+    typeof d.continent === "string" && d.continent.trim() ? d.continent.trim() : undefined;
+  const network = typeof d.network === "string" && d.network.trim() ? d.network.trim() : undefined;
+  const timezone =
+    typeof d.timezone === "string" && d.timezone.trim() ? d.timezone.trim() : undefined;
+  const latitude =
+    typeof d.latitude === "number" && Number.isFinite(d.latitude) ? d.latitude : undefined;
+  const longitude =
+    typeof d.longitude === "number" && Number.isFinite(d.longitude) ? d.longitude : undefined;
+
+  const asnMatch =
+    typeof d.asn === "string" || typeof d.asn === "number"
+      ? /^(?:AS)?(\d+)$/i.exec(String(d.asn).trim())
+      : null;
+  const asnNumber = asnMatch ? Number(asnMatch[1]) : undefined;
+  const asn =
+    asnNumber !== undefined && Number.isSafeInteger(asnNumber) && asnNumber > 0
+      ? `AS${asnNumber}`
+      : undefined;
+
+  const rawOrg =
+    typeof d.asn_organization === "string" && d.asn_organization.trim()
+      ? d.asn_organization
+          .replace(/\p{Cc}/gu, " ")
+          .trim()
+          .slice(0, 256)
+      : undefined;
+  const friendlyOrg = getAsnOrganizationLabel(asn, rawOrg);
+  const asnOrganization = rawOrg || friendlyOrg;
+
+  if (!country && !countryCode && !city && !asn && !asnOrganization) return null;
+
+  return {
+    ip: cleanIp,
+    ...(network ? { network } : {}),
+    ...(continent ? { continent } : {}),
+    ...(country ? { country } : {}),
+    ...(countryCode ? { countryCode } : {}),
+    ...(region ? { region } : {}),
+    ...(city ? { city } : {}),
+    ...(timezone ? { timezone } : {}),
+    ...(latitude !== undefined ? { latitude } : {}),
+    ...(longitude !== undefined ? { longitude } : {}),
+    ...(asn ? { asn } : {}),
+    ...(asnNumber !== undefined ? { asnNumber } : {}),
+    ...(asnOrganization ? { asnOrganization, organization: asnOrganization } : {}),
+    ...(typeof d.private_address === "boolean" ? { privateAddress: d.private_address } : {}),
+    ...(typeof d.ipv6 === "boolean" ? { ipv6: d.ipv6 } : {}),
+    ...(typeof d.address_type === "string" && d.address_type
+      ? { addressType: d.address_type }
+      : {}),
+  };
+}
+
 /**
  * Best-effort reader for cached GeoIP/ASN metadata and historical fallback rows
  * from the local `~/.mikrotik-mcp/openvpn-history.db` when running under Bun.
@@ -1786,6 +2295,14 @@ async function readLocalOpenVpnEnrichment(
 ): Promise<{ geoByIp: Map<string, OpenVpnGeoInfo>; historyRows: LocalHistoryFallbackRow[] }> {
   const geoByIp = new Map<string, OpenVpnGeoInfo>();
   const historyRows: LocalHistoryFallbackRow[] = [];
+
+  const now = Date.now();
+  for (const [ip, entry] of memoryGeoCache.entries()) {
+    if (now - entry.updatedAt <= GEO_CACHE_TTL_MS) {
+      geoByIp.set(ip, entry.geo);
+    }
+  }
+
   if (!("Bun" in globalThis)) return { geoByIp, historyRows };
   try {
     const dbPath = join(dirname(getConfig().dashboard.dbPath), "openvpn-history.db");
@@ -1793,6 +2310,60 @@ async function readLocalOpenVpnEnrichment(
     const { Database } = await import("bun:sqlite");
     const db = new Database(dbPath, { readonly: true });
     try {
+      try {
+        const cachedRows = db
+          .query<
+            {
+              ip: string;
+              network: string;
+              continent: string;
+              country: string;
+              countryCode: string;
+              region: string;
+              city: string;
+              timezone: string;
+              latitude: number | null;
+              longitude: number | null;
+              asn: number | null;
+              asnOrganization: string;
+              privateAddress: number;
+              ipv6: number;
+              addressType: string;
+              updatedAt: number;
+            },
+            []
+          >("SELECT * FROM ovpn_ip_geo_cache LIMIT 10000")
+          .all();
+        for (const r of cachedRows) {
+          if (!r.ip) continue;
+          const asn = r.asn && r.asn > 0 ? `AS${r.asn}` : undefined;
+          const info: OpenVpnGeoInfo = {
+            ip: r.ip,
+            ...(r.network ? { network: r.network } : {}),
+            ...(r.continent ? { continent: r.continent } : {}),
+            ...(r.country ? { country: r.country } : {}),
+            ...(r.countryCode ? { countryCode: r.countryCode } : {}),
+            ...(r.region ? { region: r.region } : {}),
+            ...(r.city ? { city: r.city } : {}),
+            ...(r.timezone ? { timezone: r.timezone } : {}),
+            ...(r.latitude !== null ? { latitude: r.latitude } : {}),
+            ...(r.longitude !== null ? { longitude: r.longitude } : {}),
+            ...(asn ? { asn } : {}),
+            ...(r.asn && r.asn > 0 ? { asnNumber: r.asn } : {}),
+            ...(r.asnOrganization
+              ? { asnOrganization: r.asnOrganization, organization: r.asnOrganization }
+              : {}),
+            privateAddress: Boolean(r.privateAddress),
+            ipv6: Boolean(r.ipv6),
+            ...(r.addressType ? { addressType: r.addressType } : {}),
+          };
+          geoByIp.set(r.ip, info);
+          memoryGeoCache.set(r.ip, { geo: info, updatedAt: r.updatedAt || now });
+        }
+      } catch {
+        /* ovpn_ip_geo_cache table may not exist yet */
+      }
+
       const geoRows = db
         .query<
           { ip: string; country: string; countryCode: string; asn: string; organization: string },
@@ -1802,11 +2373,16 @@ async function readLocalOpenVpnEnrichment(
         )
         .all();
       for (const r of geoRows) {
+        const existing = geoByIp.get(r.ip);
+        if (existing?.city && existing?.asnOrganization) continue;
         geoByIp.set(r.ip, {
-          ...(r.country ? { country: r.country } : {}),
-          ...(r.countryCode ? { countryCode: r.countryCode } : {}),
-          ...(r.asn ? { asn: r.asn } : {}),
-          ...(r.organization ? { organization: r.organization } : {}),
+          ...existing,
+          ...(r.country && !existing?.country ? { country: r.country } : {}),
+          ...(r.countryCode && !existing?.countryCode ? { countryCode: r.countryCode } : {}),
+          ...(r.asn && !existing?.asn ? { asn: r.asn } : {}),
+          ...(r.organization && !existing?.asnOrganization
+            ? { asnOrganization: r.organization, organization: r.organization }
+            : {}),
         });
       }
       const rows = db
@@ -1822,6 +2398,161 @@ async function readLocalOpenVpnEnrichment(
     /* local history enrichment is optional and must never fail the router query */
   }
   return { geoByIp, historyRows };
+}
+
+async function persistGeoCacheEntries(entries: OpenVpnGeoInfo[]): Promise<void> {
+  if (entries.length === 0 || !("Bun" in globalThis)) return;
+  try {
+    const dbPath = join(dirname(getConfig().dashboard.dbPath), "openvpn-history.db");
+    mkdirSync(dirname(dbPath), { recursive: true });
+    const { Database } = await import("bun:sqlite");
+    const db = new Database(dbPath);
+    try {
+      db.run("PRAGMA busy_timeout = 3000");
+      db.run(`CREATE TABLE IF NOT EXISTS ovpn_ip_geo_cache (
+        ip TEXT PRIMARY KEY,
+        network TEXT NOT NULL DEFAULT '',
+        continent TEXT NOT NULL DEFAULT '',
+        country TEXT NOT NULL DEFAULT '',
+        countryCode TEXT NOT NULL DEFAULT '',
+        region TEXT NOT NULL DEFAULT '',
+        city TEXT NOT NULL DEFAULT '',
+        timezone TEXT NOT NULL DEFAULT '',
+        latitude REAL,
+        longitude REAL,
+        asn INTEGER,
+        asnOrganization TEXT NOT NULL DEFAULT '',
+        privateAddress INTEGER NOT NULL DEFAULT 0,
+        ipv6 INTEGER NOT NULL DEFAULT 0,
+        addressType TEXT NOT NULL DEFAULT '',
+        updatedAt INTEGER NOT NULL
+      )`);
+      const stmt = db.query(
+        `INSERT OR REPLACE INTO ovpn_ip_geo_cache (
+          ip, network, continent, country, countryCode, region, city, timezone,
+          latitude, longitude, asn, asnOrganization, privateAddress, ipv6, addressType, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      const now = Date.now();
+      for (const e of entries) {
+        if (!e.ip) continue;
+        stmt.run(
+          e.ip,
+          e.network ?? "",
+          e.continent ?? "",
+          e.country ?? "",
+          e.countryCode ?? "",
+          e.region ?? "",
+          e.city ?? "",
+          e.timezone ?? "",
+          e.latitude ?? null,
+          e.longitude ?? null,
+          e.asnNumber ?? null,
+          e.asnOrganization ?? e.organization ?? "",
+          e.privateAddress ? 1 : 0,
+          e.ipv6 ? 1 : 0,
+          e.addressType ?? "",
+          now,
+        );
+      }
+    } finally {
+      db.close();
+    }
+  } catch {
+    /* SQLite cache write is best-effort */
+  }
+}
+
+/**
+ * Enrich unique public client IPs found in the router payload via `https://ipu.revue.ir/<ip>/json`
+ * when not already present with full city/ASN details in `geoByIp`.
+ */
+export async function enrichOpenVpnCallerIps(
+  payload: RawRouterOpenVpnPayload,
+  historyRows: LocalHistoryFallbackRow[],
+  geoByIp: Map<string, OpenVpnGeoInfo>,
+  options: {
+    fetchFn?: typeof fetch;
+    persistToSqlite?: boolean;
+  } = {},
+): Promise<Map<string, OpenVpnGeoInfo>> {
+  const uniqueRawIps = new Set<string>();
+  for (const s of payload.umSessions ?? []) {
+    const ip = str(s["calling-station-id"]);
+    if (ip) uniqueRawIps.add(ip);
+  }
+  for (const p of payload.pppActive ?? []) {
+    const ip = str(p["caller-id"]);
+    if (ip) uniqueRawIps.add(ip);
+  }
+  for (const h of historyRows) {
+    if (h.ip) uniqueRawIps.add(h.ip);
+  }
+
+  const ipsToFetch: string[] = [];
+  const rawByClean = new Map<string, string[]>();
+
+  for (const rawIp of uniqueRawIps) {
+    const clean = sourceIpLiteral(rawIp) ?? rawIp.trim();
+    if (!clean || isIP(clean) === 0 || !isPublicIpLiteral(clean)) continue;
+    const list = rawByClean.get(clean) ?? [];
+    list.push(rawIp);
+    rawByClean.set(clean, list);
+
+    const existing = geoByIp.get(clean) ?? geoByIp.get(rawIp);
+    // Fetch from ipu.revue.ir if missing or if cached entry lacks city or raw ASN organization
+    if (!existing || !existing.city || !existing.asnOrganization) {
+      if (!ipsToFetch.includes(clean)) {
+        ipsToFetch.push(clean);
+      }
+    } else {
+      geoByIp.set(clean, existing);
+      for (const r of list) geoByIp.set(r, existing);
+    }
+  }
+
+  const boundedIps = ipsToFetch.slice(0, GEO_LOOKUP_MAX_IPS_PER_CALL);
+  if (boundedIps.length === 0) return geoByIp;
+
+  const newlyResolved: OpenVpnGeoInfo[] = [];
+  const fetchFn = options.fetchFn ?? fetch;
+  let cursor = 0;
+
+  const workers = Array.from(
+    { length: Math.min(GEO_LOOKUP_CONCURRENCY, boundedIps.length) },
+    async () => {
+      while (cursor < boundedIps.length) {
+        const idx = cursor++;
+        const ip = boundedIps[idx];
+        if (!ip) continue;
+        try {
+          const info = await fetchIpuRevueGeoInfo(ip, fetchFn);
+          if (info) {
+            const merged: OpenVpnGeoInfo = {
+              ...geoByIp.get(ip),
+              ...info,
+            };
+            geoByIp.set(ip, merged);
+            for (const rawIp of rawByClean.get(ip) ?? []) {
+              geoByIp.set(rawIp, merged);
+            }
+            memoryGeoCache.set(ip, { geo: merged, updatedAt: Date.now() });
+            newlyResolved.push(merged);
+          }
+        } catch {
+          /* ignore per-IP lookup failures so analytics never fail on transient network issues */
+        }
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
+  if (options.persistToSqlite !== false && newlyResolved.length > 0) {
+    await persistGeoCacheEntries(newlyResolved);
+  }
+
+  return geoByIp;
 }
 
 /**
@@ -1853,6 +2584,12 @@ export async function analyzeOpenVpnUsage(
   ]);
 
   const payload = parseRouterOpenVpnPayload(rawOutput);
+  const historyRows = payload.hasUserManager ? [] : localEnrichment.historyRows;
+
+  if (query.enrichIpGeo) {
+    await enrichOpenVpnCallerIps(payload, historyRows, localEnrichment.geoByIp);
+  }
+
   const report = computeOpenVpnUsageReport(device, payload, query, {
     geoByIp: localEnrichment.geoByIp,
     localHistoryRows: payload.hasUserManager ? undefined : localEnrichment.historyRows,

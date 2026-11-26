@@ -20,8 +20,12 @@ export interface OpenVpnSession {
     status: "pending" | "resolved" | "private" | "unavailable";
     countryCode?: string;
     country?: string;
+    region?: string;
+    city?: string;
     asn?: string;
     asnOrganization?: string;
+    rawAsnOrganization?: string;
+    network?: string;
   };
 }
 export interface OpenVpnSnapshot {

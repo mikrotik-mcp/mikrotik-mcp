@@ -20,6 +20,7 @@ export interface HistorySession {
   uncertain: number;
   country: string;
   countryCode: string;
+  city?: string;
   asn: string;
   organization: string;
 }
@@ -80,7 +81,30 @@ export class OpenVpnHistoryStore {
       ip TEXT NOT NULL, tunnel TEXT NOT NULL, started INTEGER NOT NULL, firstSeen INTEGER NOT NULL,
       lastSeen INTEGER NOT NULL, ended INTEGER, uptime INTEGER, uncertain INTEGER NOT NULL,
       country TEXT NOT NULL, countryCode TEXT NOT NULL, asn TEXT NOT NULL, organization TEXT NOT NULL,
-      geoStatus TEXT NOT NULL)`);
+      geoStatus TEXT NOT NULL, city TEXT NOT NULL DEFAULT '')`);
+    try {
+      db.run("ALTER TABLE ovpn_history ADD COLUMN city TEXT NOT NULL DEFAULT ''");
+    } catch {
+      /* column already exists */
+    }
+    db.run(`CREATE TABLE IF NOT EXISTS ovpn_ip_geo_cache (
+      ip TEXT PRIMARY KEY,
+      network TEXT NOT NULL DEFAULT '',
+      continent TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT '',
+      countryCode TEXT NOT NULL DEFAULT '',
+      region TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      timezone TEXT NOT NULL DEFAULT '',
+      latitude REAL,
+      longitude REAL,
+      asn INTEGER,
+      asnOrganization TEXT NOT NULL DEFAULT '',
+      privateAddress INTEGER NOT NULL DEFAULT 0,
+      ipv6 INTEGER NOT NULL DEFAULT 0,
+      addressType TEXT NOT NULL DEFAULT '',
+      updatedAt INTEGER NOT NULL
+    )`);
     db.run(
       "CREATE INDEX IF NOT EXISTS ovpn_history_geo ON ovpn_history(ip,lastSeen) WHERE geoStatus='pending'",
     );
@@ -135,6 +159,7 @@ export class OpenVpnHistoryStore {
             uptime=COALESCE(?,uptime),uncertain=MAX(uncertain,?),
             country=CASE WHEN ?='' THEN country ELSE ? END,
             countryCode=CASE WHEN ?='' THEN countryCode ELSE ? END,
+            city=CASE WHEN ?='' THEN city ELSE ? END,
             asn=CASE WHEN ?='' THEN asn ELSE ? END,
             organization=CASE WHEN ?='' THEN organization ELSE ? END,
             geoStatus=CASE WHEN countryCode='' THEN ? ELSE geoStatus END WHERE id=?`)
@@ -148,6 +173,8 @@ export class OpenVpnHistoryStore {
               geo?.country ?? "",
               geo?.countryCode ?? "",
               geo?.countryCode ?? "",
+              geo?.city ?? "",
+              geo?.city ?? "",
               geo?.asn ?? "",
               geo?.asn ?? "",
               geo?.asnOrganization ?? "",
@@ -158,7 +185,9 @@ export class OpenVpnHistoryStore {
           active.delete(identity);
         } else {
           this.db
-            .query("INSERT INTO ovpn_history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            .query(
+              "INSERT INTO ovpn_history (id,device,user,identity,ip,tunnel,started,firstSeen,lastSeen,ended,uptime,uncertain,country,countryCode,asn,organization,geoStatus,city) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            )
             .run(
               randomUUID(),
               device,
@@ -177,6 +206,7 @@ export class OpenVpnHistoryStore {
               geo?.asn ?? "",
               geo?.asnOrganization ?? "",
               geo?.status ?? "pending",
+              geo?.city ?? "",
             );
         }
       }
@@ -209,11 +239,12 @@ export class OpenVpnHistoryStore {
       if (!geo || geo.status === "pending") continue;
       this.db
         .query(
-          "UPDATE ovpn_history SET country=?,countryCode=?,asn=?,organization=?,geoStatus=? WHERE ip=? AND geoStatus='pending'",
+          "UPDATE ovpn_history SET country=?,countryCode=?,city=?,asn=?,organization=?,geoStatus=? WHERE ip=? AND geoStatus='pending'",
         )
         .run(
           geo.country ?? "",
           geo.countryCode ?? "",
+          geo.city ?? "",
           geo.asn ?? "",
           geo.asnOrganization ?? "",
           geo.status,
