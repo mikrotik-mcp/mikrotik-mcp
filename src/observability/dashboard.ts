@@ -210,6 +210,7 @@ import { subscribeTxn } from "./txn-hub";
 import { alertRoutes } from "./alert-routes";
 import { clientError, errorResponse, logError } from "./http-error";
 import { closeMemoryStore, memoryRoutes } from "./memory-routes";
+import { closeFeedbackStore, feedbackRoutes } from "./feedback-routes";
 import { dashboardSocketLifecycle } from "./websocket-lifecycle";
 
 const SERVER_TAG = "mikrotik-mcp";
@@ -1837,6 +1838,9 @@ export async function runDashboard(
     const memoryResp = await memoryRoutes(req, url);
     if (memoryResp) return memoryResp;
 
+    const feedbackResp = await feedbackRoutes(req, url);
+    if (feedbackResp) return feedbackResp;
+
     const db = getEventStore();
     if (!db) return json({ error: "recorder not active" }, 503);
 
@@ -2248,6 +2252,7 @@ export async function runDashboard(
       capsmanStore?.close();
       capsmanStore = null;
       closeMemoryStore();
+      closeFeedbackStore();
     },
   };
 }
