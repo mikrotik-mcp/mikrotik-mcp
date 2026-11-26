@@ -5,9 +5,9 @@
  * A device's `host` may be a public IP, a private/LAN IP, or a hostname. Only a
  * PUBLIC address geolocates meaningfully, so private/loopback/link-local ranges
  * (and MAC-Telnet devices, which have no IP) are skipped and yield no flag. The
- * lookup uses the free, key-less ipu.revue.ir API (falling back to ipkit.ir and
- * ipquery.io if it doesn't answer) and is cached for a day — a device's country
- * effectively never changes, so we never hammer the endpoint.
+ * lookup uses the free, key-less ipkit.ir API (falling back to ipquery.io if it
+ * doesn't answer) and is cached for a day — a device's country effectively never
+ * changes, so we never hammer the endpoint.
  *
  * Like the health probes, this only runs when the dashboard is enabled, so the
  * offline test runner never performs network I/O.
@@ -25,18 +25,12 @@ export interface DeviceGeo {
   countryCode: string;
   /** Full country name, e.g. "Germany". */
   country: string;
-  /** Region / province, when the provider reports one. */
-  region?: string;
   /** City, when the provider reports one. */
   city?: string;
   /** Source-IP autonomous system number, normalized as AS<number>. */
   asn?: string;
   /** Compact network label (local ASN directory when known), not the user's identity. */
   asnOrganization?: string;
-  /** Raw provider-reported ASN organization name (e.g. "Iran Telecommunication Company PJS"). */
-  rawAsnOrganization?: string;
-  /** CIDR network prefix, when reported by the provider (e.g. "86.104.81.0/24"). */
-  network?: string;
 }
 
 interface Cached {
@@ -107,16 +101,12 @@ function toGeo(
   city: string | undefined,
   asn?: unknown,
   organization?: unknown,
-  region?: string,
-  network?: string,
 ): DeviceGeo | null {
   if (!code || !/^[a-z]{2}$/i.test(code)) return null;
   const geo: DeviceGeo = {
     countryCode: code.toLowerCase(),
     country: country ?? code,
-    region: region || undefined,
     city: city || undefined,
-    network: network || undefined,
   };
   const asnMatch =
     typeof asn === "string" || typeof asn === "number"
@@ -125,41 +115,12 @@ function toGeo(
   const asnNumber = asnMatch ? Number(asnMatch[1]) : 0;
   if (Number.isSafeInteger(asnNumber) && asnNumber > 0 && asnNumber <= 0xffffffff)
     geo.asn = `AS${asnNumber}`;
-  if (typeof organization === "string") {
-    const rawOrg = organization
-      .replace(/\p{Cc}/gu, " ")
-      .trim()
-      .slice(0, 256);
-    if (rawOrg) geo.rawAsnOrganization = rawOrg;
-  }
   const label = getAsnOrganizationLabel(geo.asn, organization);
   if (label) geo.asnOrganization = label;
   return geo;
 }
 
-/** Primary provider: ipu.revue.ir (`https://ipu.revue.ir/<ip>/json`). */
-export async function fetchIpuRevue(ip: string, timeoutMs = 8000): Promise<DeviceGeo | null> {
-  const res = await fetch(`https://ipu.revue.ir/${encodeURIComponent(ip)}/json`, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!res.ok) throw new Error(`ipu.revue.ir HTTP ${res.status}`);
-  const d = (await res.json()) as {
-    ip?: string;
-    network?: string;
-    country?: string;
-    country_code?: string;
-    region?: string;
-    city?: string;
-    private_address?: boolean;
-    asn?: unknown;
-    asn_organization?: unknown;
-  };
-  if (d.private_address) return null;
-  return toGeo(d.country, d.country_code, d.city, d.asn, d.asn_organization, d.region, d.network);
-}
-
-/** Secondary provider: ipkit.ir. Content-negotiates, so ask for JSON explicitly. */
+/** Primary provider: ipkit.ir. Content-negotiates, so ask for JSON explicitly. */
 async function fetchIpkit(ip: string): Promise<DeviceGeo | null> {
   const res = await fetch(`https://ipkit.ir/${ip}`, {
     headers: { accept: "application/json" },
@@ -195,15 +156,8 @@ async function fetchIpquery(ip: string): Promise<DeviceGeo | null> {
   );
 }
 
-/** Geolocate a public IP, trying ipu.revue.ir first and falling back to ipkit.ir / ipquery.io. */
+/** Geolocate a public IP, trying ipkit.ir first and falling back to ipquery.io. */
 async function fetchGeo(ip: string): Promise<DeviceGeo | null> {
-  try {
-    return await fetchIpuRevue(ip);
-  } catch (e) {
-    logger.warn(
-      `[${LOG_TAG}] ipu.revue.ir geo failed for ${ip}, trying ipkit: ${e instanceof Error ? e.message : String(e)}`,
-    );
-  }
   try {
     return await fetchIpkit(ip);
   } catch (e) {
@@ -225,12 +179,8 @@ export interface IpGeo {
   status: "pending" | "resolved" | "private" | "unavailable";
   countryCode?: string;
   country?: string;
-  region?: string;
-  city?: string;
   asn?: string;
   asnOrganization?: string;
-  rawAsnOrganization?: string;
-  network?: string;
 }
 
 interface IpGeoEntry {
@@ -266,12 +216,8 @@ function drainGeoQueue(): void {
             countryCode: geo.countryCode,
             country: geo.country,
           };
-          if (geo.region) result.region = geo.region;
-          if (geo.city) result.city = geo.city;
           if (geo.asn) result.asn = geo.asn;
           if (geo.asnOrganization) result.asnOrganization = geo.asnOrganization;
-          if (geo.rawAsnOrganization) result.rawAsnOrganization = geo.rawAsnOrganization;
-          if (geo.network) result.network = geo.network;
           job.entry.result = result;
         } else job.entry.result = { status: "unavailable" };
         job.entry.expires = Date.now() + (geo ? REFRESH_MS : 5 * 60_000);
