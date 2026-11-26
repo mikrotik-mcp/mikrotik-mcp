@@ -175,8 +175,10 @@ export function stopTerminalScheduler(): void {
  */
 export async function runDueSchedules(store: TerminalStore, now = Date.now()): Promise<number> {
   let ran = 0;
+  const devices = getConfig().devices ?? {};
   for (const item of store.listSchedules()) {
     if (item.nextRun === null || item.nextRun > now) continue;
+    if (devices[item.device]?.disabled) continue;
     ran++;
     const ctx = createContext(undefined, item.device);
     let output = "";

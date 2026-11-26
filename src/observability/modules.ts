@@ -29,7 +29,8 @@ import { getConfig } from "../core/runtime";
  */
 function unsupportedDevices(requires: ToolRequires): { device: string; reason: string }[] {
   const out: { device: string; reason: string }[] = [];
-  for (const name of Object.keys(getConfig().devices)) {
+  for (const [name, dc] of Object.entries(getConfig().devices)) {
+    if (dc.disabled) continue;
     const caps = peekCapabilities(name);
     if (!caps) continue;
     const reason = explainUnmet(caps, requires);

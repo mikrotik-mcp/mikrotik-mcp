@@ -13,7 +13,7 @@
  * last leaves, so an idle dashboard touches no router.
  */
 import { createContext } from "../core/context";
-import { resolveDeviceName } from "../core/runtime";
+import { getConfig, resolveDeviceName } from "../core/runtime";
 import { sampleAllTraffic } from "../tools/connected-devices";
 import type { BulkTrafficPayload } from "../tools/connected-devices";
 
@@ -46,18 +46,28 @@ export function subscribeTraffic(target: string, fn: Listener): () => void {
     const poll = async (): Promise<void> => {
       active.reading = true;
       let sample: BulkTrafficPayload;
-      try {
-        sample = await sampleAllTraffic(createContext(undefined, device));
-      } catch (e) {
-        // A connection failure throws; surface it as an empty sample so the
-        // client shows the notice rather than freezing on stale numbers.
+      if (getConfig()?.devices?.[device]?.disabled) {
         sample = {
           ts: Date.now(),
           source: "none",
-          note: e instanceof Error ? e.message : String(e),
+          note: `Device '${device}' is disabled.`,
           hosts: {},
           limits: {},
         };
+      } else {
+        try {
+          sample = await sampleAllTraffic(createContext(undefined, device));
+        } catch (e) {
+          // A connection failure throws; surface it as an empty sample so the
+          // client shows the notice rather than freezing on stale numbers.
+          sample = {
+            ts: Date.now(),
+            source: "none",
+            note: e instanceof Error ? e.message : String(e),
+            hosts: {},
+            limits: {},
+          };
+        }
       }
       active.reading = false;
       if (hubs.get(device) !== active) return;

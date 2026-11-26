@@ -25,7 +25,7 @@ import { executeMikrotikCommand } from "../core/connector";
 import { Cmd, looksLikeError } from "../core/routeros";
 import { getS3Client, isS3Configured, s3Key } from "../core/s3";
 import { deviceSlug } from "../core/slug";
-import { getConfig, getDevice, resolveDeviceName } from "../core/runtime";
+import { getConfig, getDevice, onConfigChanged, resolveDeviceName } from "../core/runtime";
 import { isMacTelnetDevice, resolveJump, sshOptionsOf } from "../core/transport";
 import { logger } from "../logger";
 import { MikroTikSSHClient } from "../ssh/client";
@@ -575,6 +575,17 @@ export function closeFileSessions(): void {
   }
 }
 
+onConfigChanged(() => {
+  const devices = getConfig()?.devices ?? {};
+  for (const [device, pending] of Array.from(sessions)) {
+    const dc = devices[device];
+    if (!dc || dc.disabled) {
+      sessions.delete(device);
+      void pending.then((session) => session.client.disconnect()).catch(() => {});
+    }
+  }
+});
+
 /** A tail starts with this much of the end of the file, and ends after this long. */
 const TAIL_START_BYTES = 32 * 1024;
 const TAIL_MAX_MS = 30 * 60_000;
@@ -630,7 +641,10 @@ const dropFromVault = (name: string): void => {
     /* already gone */
   }
 };
-const routerNames = (): string[] => Object.keys(getConfig().devices ?? {});
+const routerNames = (): string[] =>
+  Object.entries(getConfig().devices ?? {})
+    .filter(([, dc]) => !dc.disabled)
+    .map(([name]) => name);
 
 // ── direct copy ───────────────────────────────────────────────────────────
 interface Endpoint {

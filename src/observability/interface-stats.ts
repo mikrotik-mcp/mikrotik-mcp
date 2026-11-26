@@ -2,7 +2,7 @@ import { executeMikrotikCommand } from "../core/connector";
 import { createContext } from "../core/context";
 import { Cmd, looksLikeError } from "../core/routeros";
 import { parseRecords, parseSize } from "../core/routeros-parse";
-import { resolveDeviceName } from "../core/runtime";
+import { getConfig, resolveDeviceName } from "../core/runtime";
 import { isYes } from "../utils/yes";
 import { clientError } from "./http-error";
 
@@ -147,10 +147,19 @@ export function subscribeInterfaces(target: string, listener: Listener): () => v
     const active = hub;
     const poll = async () => {
       let sample: InterfaceSample;
-      try {
-        sample = interfaceRates(await readInterfaces(device), active.last);
-      } catch (error) {
-        sample = { device, ts: Date.now(), interfaces: [], error: clientError(error) };
+      if (getConfig()?.devices?.[device]?.disabled) {
+        sample = {
+          device,
+          ts: Date.now(),
+          interfaces: [],
+          error: `Device '${device}' is disabled.`,
+        };
+      } else {
+        try {
+          sample = interfaceRates(await readInterfaces(device), active.last);
+        } catch (error) {
+          sample = { device, ts: Date.now(), interfaces: [], error: clientError(error) };
+        }
       }
       if (hubs.get(device) !== active) return;
       active.last = sample;

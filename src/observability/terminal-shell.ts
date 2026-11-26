@@ -25,7 +25,7 @@ import type { WriteStream } from "node:fs";
 import { join } from "node:path";
 import type { ClientChannel } from "ssh2";
 import { isMacTelnetDevice, resolveJump, sshOptionsOf } from "../core/transport";
-import { getDevice } from "../core/runtime";
+import { getConfig, getDevice, onConfigChanged } from "../core/runtime";
 import { logger } from "../logger";
 import { MikroTikSSHClient } from "../ssh/client";
 import { recordToolCall } from "./recorder";
@@ -298,3 +298,11 @@ export function closeShell(id: string): boolean {
 export function closeAllShells(): void {
   for (const session of Array.from(sessions.values())) session.close("dashboard stopped");
 }
+
+onConfigChanged(() => {
+  const devices = getConfig()?.devices ?? {};
+  for (const session of Array.from(sessions.values())) {
+    const dc = devices[session.device];
+    if (!dc || dc.disabled) session.close("router disabled");
+  }
+});

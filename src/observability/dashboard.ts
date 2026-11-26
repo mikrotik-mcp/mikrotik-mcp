@@ -1916,10 +1916,15 @@ export async function runDashboard(
     if (url.pathname === "/api/capabilities/refresh" && req.method === "POST") {
       const b = (await readJson(req)) as { device?: string };
       if (typeof b?.device !== "string") return json({ error: "device (string) is required" }, 400);
-      if (!(b.device in getConfig().devices)) {
+      const cfg = getConfig();
+      const dc = cfg.devices[b.device];
+      if (!dc) {
         return json({ error: `unknown device: ${b.device}` }, 404);
       }
       invalidateCapabilities(b.device);
+      if (dc.disabled) {
+        return json({ error: `Device '${b.device}' is disabled.` }, 400);
+      }
       try {
         const caps = await getCapabilities(b.device);
         return json({ device: b.device, capabilities: serializeCapabilities(caps) });
@@ -1945,7 +1950,14 @@ export async function runDashboard(
           [b.device]: { ...dc, disabled: b.disabled || undefined },
         },
       };
+      if (b.disabled) {
+        closeDevice(b.device);
+        invalidateCapabilities(b.device);
+      }
       setConfig(next);
+      if (!b.disabled) {
+        void probeDevice(b.device, next.devices[b.device]).catch(() => {});
+      }
 
       let persisted = true;
       let warning: string | undefined;
@@ -1982,9 +1994,13 @@ export async function runDashboard(
       const b = (await readJson(req)) as { device?: string };
       const name = typeof b?.device === "string" ? b.device : "";
       const cfg = getConfig();
-      if (!(name in cfg.devices)) return json({ error: `unknown device: ${name}` }, 404);
+      const dc = cfg.devices[name];
+      if (!dc) return json({ error: `unknown device: ${name}` }, 404);
       if (url.pathname === "/api/devices/reconnect") closeDevice(name);
-      const status = await probeDevice(name, cfg.devices[name]);
+      if (dc.disabled) {
+        return json({ error: `Device '${name}' is disabled.` }, 400);
+      }
+      const status = await probeDevice(name, dc);
       return json({ ok: true, status, ...(devicesPayload(db) as Record<string, unknown>) });
     }
 
@@ -1995,18 +2011,15 @@ export async function runDashboard(
     // Prometheus scrape. Inside the token check: a scraper sends the dashboard
     // token as a Bearer header.
     if (url.pathname === "/metrics") {
-      const names = Object.keys(getConfig().devices);
+      const cfg = getConfig();
+      const names = Object.entries(cfg.devices)
+        .filter(([, dc]) => !dc.disabled)
+        .map(([name]) => name);
       // `?detail=0` keeps a scrape to what the health probe already holds.
       const detail =
         url.searchParams.get("detail") === "0"
           ? ""
-          : renderDetail(
-              detailFor(
-                names.filter(
-                  (name) => !getConfig().devices[name]?.disabled && getDeviceStatus(name).reachable,
-                ),
-              ),
-            );
+          : renderDetail(detailFor(names.filter((name) => getDeviceStatus(name).reachable)));
       return new Response(renderMetrics(names, getDeviceStatus) + detail, {
         headers: { "content-type": "text/plain; version=0.0.4; charset=utf-8" },
       });
