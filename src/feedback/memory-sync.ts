@@ -21,30 +21,61 @@ const KIND_LABELS: Record<FeedbackKind, string> = {
 };
 
 /**
+ * Emphasize important technical identifiers (MCP tool names, source paths,
+ * RouterOS CLI paths, and core classes/schemas) in prose with Markdown bold
+ * (`**...**`) when they are not already formatted in bold or backticks.
+ */
+export function emphasizeFeedbackMarkdown(text: string): string {
+  if (!text) return text;
+  // Preserve existing code blocks, inline code, and bold spans by splitting on them.
+  const segments = text.split(/(```[\s\S]*?```|`[^`\n]+`|\*\*[^*\n]+\*\*)/g);
+  return segments
+    .map((segment, index) => {
+      // Odd indices are matched code/bold blocks — leave untouched.
+      if (index % 2 === 1) return segment;
+      return segment
+        .replace(
+          /(^|[\s(])((?:src|tests|ui|schemas|docs|raycast)\/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+)(?=$|[\s).,;:!?])/g,
+          "$1**`$2`**",
+        )
+        .replace(
+          /(^|[\s(])(\/(?:ip|ipv6|interface|routing|system|tool|user|certificate|container|mpls|ppp|queue|radius|snmp|special-login|file|log)(?:\/[a-z0-9-]+|\s+[a-z0-9-]+)+)(?=$|[\s).,;:!?])/g,
+          "$1**`$2`**",
+        )
+        .replace(/\b([a-z]{2,16}_[a-z0-9_]{2,48})\b/g, "**`$1`**")
+        .replace(
+          /\b(SubmitFeedbackSchema|UpdateFeedbackSchema|FindFeedbackSchema|MikrotikConfigSchema|Cmd)\b/g,
+          "**`$1`**",
+        );
+    })
+    .join("");
+}
+
+/**
  * Format a concise, high-signal lesson for the MCP knowledge graph so that any
  * future AI session calling `memory_recall` immediately learns that a reported
  * bug/suggestion was fixed, what replacement tool to use, or what workaround
  * applies.
  */
 export function formatFeedbackMemoryContent(issue: FeedbackIssue): string {
-  const op = issue.operation ? `[${issue.operation}] ` : "";
+  const op = issue.operation ? `[**\`${issue.operation}\`**] ` : "";
   const statusTag =
     issue.status === "resolved"
-      ? `RESOLVED${issue.fixedInVersion ? ` in ${issue.fixedInVersion}` : ""}`
+      ? `**RESOLVED**${issue.fixedInVersion ? ` in **\`${issue.fixedInVersion}\`**` : ""}`
       : issue.status === "wont_fix"
-        ? "WONT_FIX"
-        : issue.status.toUpperCase();
-  const lines: string[] = [`${op}Feedback #${issue.id} (${statusTag}): ${issue.title}.`];
+        ? "**WONT_FIX**"
+        : `**${issue.status.toUpperCase()}**`;
+  const lines: string[] = [`${op}**Feedback #${issue.id}** (${statusTag}): **${issue.title}**.`];
   if (issue.replacementTool) {
     lines.push(
-      `Implemented tool / capability: use \`${issue.replacementTool}\` (via find_tools / invoke_tool) instead of raw CLI workarounds.`,
+      `**Implemented tool / capability:** use **\`${issue.replacementTool}\`** (via **\`find_tools\`** / **\`invoke_tool\`**) instead of raw CLI workarounds.`,
     );
   }
   if (issue.resolutionNote) {
-    lines.push(`Resolution: ${issue.resolutionNote}`);
+    lines.push(`**Resolution:** ${emphasizeFeedbackMarkdown(issue.resolutionNote)}`);
   }
   if (issue.workaround) {
-    lines.push(`Workaround: ${issue.workaround}`);
+    lines.push(`**Workaround:** ${emphasizeFeedbackMarkdown(issue.workaround)}`);
   }
   return lines.join(" ").slice(0, 7500);
 }
@@ -138,43 +169,52 @@ export function buildGithubIssuePayload(
   ];
 
   const lines: string[] = [
-    `## Summary`,
-    issue.detail,
+    `## **Summary**`,
+    `**Issue:** **${issue.title}**`,
     "",
-    `## Telemetry & Device Context`,
+    emphasizeFeedbackMarkdown(issue.detail),
+    "",
+    `## **Telemetry & Device Context**`,
     `| Field | Value |`,
     `| :--- | :--- |`,
-    `| **Feedback ID** | \`#${issue.id}\` (\`${issue.fingerprint}\`) |`,
-    `| **Category** | \`${issue.kind}\` (${KIND_LABELS[issue.kind]}) |`,
-    `| **Impact** | \`${issue.impact}\` |`,
-    `| **Status** | \`${issue.status}\` |`,
-    `| **Operation / Tool** | \`${issue.operation ?? "(general)"}\` |`,
-    `| **Deduplicated Sightings** | \`×${issue.occurrences}\`${issue.reopenedCount > 0 ? ` (reopened \`${issue.reopenedCount}×\`)` : ""} |`,
-    `| **Devices Affected** | ${devices.length ? devices.map((d) => `\`${d}\``).join(", ") : "—"} |`,
-    `| **RouterOS Versions** | ${rosVersions.length ? rosVersions.map((v) => `\`v${v}\``).join(", ") : "—"} |`,
-    `| **AI Agent Models** | ${models.length ? models.map((m) => `\`${m}\``).join(", ") : "—"} |`,
-    `| **First / Last Seen** | ${new Date(issue.firstSeenAt).toISOString()} → ${new Date(issue.lastSeenAt).toISOString()} |`,
+    `| **Feedback ID** | **\`#${issue.id}\`** (\`${issue.fingerprint}\`) |`,
+    `| **Category** | **${KIND_LABELS[issue.kind]}** (\`${issue.kind}\`) |`,
+    `| **Impact** | **\`${issue.impact}\`** |`,
+    `| **Status** | **\`${issue.status}\`** |`,
+    `| **Operation / Tool** | **\`${issue.operation ?? "(general)"}\`** |`,
+    `| **Deduplicated Sightings** | **\`×${issue.occurrences}\`**${issue.reopenedCount > 0 ? ` (reopened **\`${issue.reopenedCount}×\`**)` : ""} |`,
+    `| **Devices Affected** | ${devices.length ? devices.map((d) => `**\`${d}\`**`).join(", ") : "—"} |`,
+    `| **RouterOS Versions** | ${rosVersions.length ? rosVersions.map((v) => `**\`v${v}\`**`).join(", ") : "—"} |`,
+    `| **AI Agent Models** | ${models.length ? models.map((m) => `**\`${m}\`**`).join(", ") : "—"} |`,
+    ...(issue.tags.length
+      ? [`| **Subsystem Tags** | ${issue.tags.map((t) => `**\`${t}\`**`).join(", ")} |`]
+      : []),
+    `| **First / Last Seen** | **${new Date(issue.firstSeenAt).toISOString()}** → **${new Date(issue.lastSeenAt).toISOString()}** |`,
   ];
 
   if (issue.actualError) {
-    lines.push("", "## Actual Error / RouterOS Output", "```text", issue.actualError, "```");
+    lines.push("", "## **Actual Error / RouterOS Output**", "```text", issue.actualError, "```");
   }
   if (issue.expected) {
-    lines.push("", "## Expected Behavior", issue.expected);
+    lines.push("", "## **Expected Behavior**", emphasizeFeedbackMarkdown(issue.expected));
   }
   if (issue.workaround) {
-    lines.push("", "## Current Workaround", issue.workaround);
+    lines.push("", "## **Current Workaround**", emphasizeFeedbackMarkdown(issue.workaround));
   }
   if (issue.suggestedFix) {
-    lines.push("", "## Suggested Fix", issue.suggestedFix);
+    lines.push("", "## **Suggested Fix**", emphasizeFeedbackMarkdown(issue.suggestedFix));
   }
   if (issue.resolutionNote || issue.fixedInVersion || issue.replacementTool) {
     lines.push(
       "",
-      "## Operator Resolution Notes",
-      ...(issue.fixedInVersion ? [`- **Fixed in version:** \`${issue.fixedInVersion}\``] : []),
-      ...(issue.replacementTool ? [`- **Replacement tool:** \`${issue.replacementTool}\``] : []),
-      ...(issue.resolutionNote ? [`- **Note:** ${issue.resolutionNote}`] : []),
+      "## **Operator & Agent Resolution Notes**",
+      ...(issue.fixedInVersion ? [`- **Fixed in version:** **\`${issue.fixedInVersion}\`**`] : []),
+      ...(issue.replacementTool
+        ? [`- **Replacement tool(s):** **\`${issue.replacementTool}\`**`]
+        : []),
+      ...(issue.resolutionNote
+        ? [`- **Resolution note:** ${emphasizeFeedbackMarkdown(issue.resolutionNote)}`]
+        : []),
     );
   }
 
@@ -256,47 +296,63 @@ export function buildBatchGithubIssuePayload(
     );
 
   const lines: string[] = [
-    `## Batch Feedback Summary (${issues.length} issues · ×${totalSightings} total sightings)`,
-    `| # | Category | Impact | Operation / Tool | Sightings | Device / RouterOS | Title |`,
+    `## **Batch Feedback Summary (${issues.length} issues · ×${totalSightings} total sightings)**`,
+    `| **#** | **Category** | **Impact** | **Operation / Tool** | **Sightings** | **Device / RouterOS** | **Title** |`,
     `| :--- | :--- | :--- | :--- | :--- | :--- | :--- |`,
     ...issues.map(
       (i) =>
-        `| \`#${i.id}\` | \`${i.kind}\` | \`${i.impact}\` | \`${i.operation ?? "(general)"}\` | \`×${i.occurrences}\` | ${
+        `| **\`#${i.id}\`** | **\`${i.kind}\`** | **\`${i.impact}\`** | **\`${i.operation ?? "(general)"}\`** | **\`×${i.occurrences}\`** | ${
           [i.lastDevice, i.lastRouterosVersion ? `v${i.lastRouterosVersion}` : null]
             .filter(Boolean)
+            .map((v) => `**\`${v}\`**`)
             .join(" / ") || "—"
-        } | ${i.title.replace(/\|/g, "\\|")} |`,
+        } | **${i.title.replace(/\|/g, "\\|")}** |`,
     ),
     "",
-    `## Aggregated Environment & Device Telemetry`,
-    `- **Feedback IDs:** ${issues.map((i) => `\`#${i.id}\``).join(", ")}`,
-    `- **Devices Affected:** ${devices.length ? devices.map((d) => `\`${d}\``).join(", ") : "—"}`,
-    `- **RouterOS Versions:** ${rosVersions.length ? rosVersions.map((v) => `\`v${v}\``).join(", ") : "—"}`,
-    `- **AI Agent Models:** ${models.length ? models.map((m) => `\`${m}\``).join(", ") : "—"}`,
+    `## **Aggregated Environment & Device Telemetry**`,
+    `- **Feedback IDs:** ${issues.map((i) => `**\`#${i.id}\`**`).join(", ")}`,
+    `- **Devices Affected:** ${devices.length ? devices.map((d) => `**\`${d}\`**`).join(", ") : "—"}`,
+    `- **RouterOS Versions:** ${rosVersions.length ? rosVersions.map((v) => `**\`v${v}\`**`).join(", ") : "—"}`,
+    `- **AI Agent Models:** ${models.length ? models.map((m) => `**\`${m}\`**`).join(", ") : "—"}`,
   ];
 
   for (const { issue } of entries) {
     lines.push(
       "",
       `---`,
-      `### Issue #${issue.id}: ${issue.title}`,
-      `- **Category:** \`${issue.kind}\` (${KIND_LABELS[issue.kind]}) · **Impact:** \`${issue.impact}\` · **Status:** \`${issue.status}\``,
-      `- **Operation / Tool:** \`${issue.operation ?? "(general)"}\` · **Sightings:** \`×${issue.occurrences}\` · **Fingerprint:** \`${issue.fingerprint}\``,
-      `- **Device / RouterOS:** ${issue.lastDevice ?? "—"} / ${issue.lastRouterosVersion ? `v${issue.lastRouterosVersion}` : "—"}`,
+      `### **Issue #${issue.id}: ${issue.title}**`,
+      `- **Category:** **${KIND_LABELS[issue.kind]}** (\`${issue.kind}\`) · **Impact:** **\`${issue.impact}\`** · **Status:** **\`${issue.status}\`**`,
+      `- **Operation / Tool:** **\`${issue.operation ?? "(general)"}\`** · **Sightings:** **\`×${issue.occurrences}\`** · **Fingerprint:** \`${issue.fingerprint}\``,
+      `- **Device / RouterOS:** ${issue.lastDevice ? `**\`${issue.lastDevice}\`**` : "—"} / ${issue.lastRouterosVersion ? `**\`v${issue.lastRouterosVersion}\`**` : "—"}`,
       "",
-      issue.detail,
+      emphasizeFeedbackMarkdown(issue.detail),
     );
     if (issue.actualError) {
       lines.push("", "**Actual Error:**", "```text", issue.actualError, "```");
     }
     if (issue.expected) {
-      lines.push("", `**Expected:** ${issue.expected}`);
+      lines.push("", `**Expected Behavior:** ${emphasizeFeedbackMarkdown(issue.expected)}`);
     }
     if (issue.workaround) {
-      lines.push("", `**Workaround:** ${issue.workaround}`);
+      lines.push("", `**Current Workaround:** ${emphasizeFeedbackMarkdown(issue.workaround)}`);
     }
     if (issue.suggestedFix) {
-      lines.push("", `**Suggested Fix:** ${issue.suggestedFix}`);
+      lines.push("", `**Suggested Fix:** ${emphasizeFeedbackMarkdown(issue.suggestedFix)}`);
+    }
+    if (issue.resolutionNote || issue.fixedInVersion || issue.replacementTool) {
+      lines.push(
+        "",
+        `**Resolution Notes:**`,
+        ...(issue.fixedInVersion
+          ? [`- **Fixed in version:** **\`${issue.fixedInVersion}\`**`]
+          : []),
+        ...(issue.replacementTool
+          ? [`- **Replacement tool(s):** **\`${issue.replacementTool}\`**`]
+          : []),
+        ...(issue.resolutionNote
+          ? [`- **Note:** ${emphasizeFeedbackMarkdown(issue.resolutionNote)}`]
+          : []),
+      );
     }
   }
 
