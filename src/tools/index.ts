@@ -1497,8 +1497,8 @@ export const moduleCatalog: ModuleInfo[] = [
     slug: "feedback",
     group: "Discovery & Meta",
     description:
-      "Deduplicated LLM tool feedback and telemetry loop (`submit_feedback`, `find_feedback`) — " +
-      "report missing tools, bugs, or confusing schemas and surface known workarounds.",
+      "Deduplicated LLM tool feedback and telemetry loop (`submit_feedback`, `find_feedback`, `update_feedback`) — " +
+      "report missing tools, bugs, or confusing schemas, resolve issues with replacement tools, and surface known workarounds.",
     tools: feedbackTools,
   },
   // ── Interactive views (MCP Apps) ─────────────────────────────────────────

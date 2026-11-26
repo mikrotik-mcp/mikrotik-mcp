@@ -89,6 +89,7 @@ export const PINNED_TOOLS: readonly string[] = [
   "get_tool_call",
   "submit_feedback",
   "find_feedback",
+  "update_feedback",
 ];
 const PINNED = new Set(PINNED_TOOLS);
 
