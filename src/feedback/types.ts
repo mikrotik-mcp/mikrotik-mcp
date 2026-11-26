@@ -138,6 +138,137 @@ export const FindFeedbackSchema = z
 
 export type FindFeedbackInput = z.infer<typeof FindFeedbackSchema>;
 
+export const UpdateFeedbackSchema = z
+  .object({
+    status: z.enum(feedbackStatuses).optional(),
+    impact: z.enum(feedbackImpacts).optional(),
+    kind: z.enum(feedbackKinds).optional(),
+    title: shortText.optional(),
+    detail: longText.optional(),
+    expected: z.string().trim().max(8000).nullable().optional(),
+    workaround: z.string().trim().max(8000).nullable().optional(),
+    suggested_fix: z.string().trim().max(8000).nullable().optional(),
+    resolution_note: z.string().trim().max(8000).nullable().optional(),
+    fixed_in_version: z.string().trim().max(120).nullable().optional(),
+    replacement_tool: z.string().trim().max(200).nullable().optional(),
+    github_issue_url: z.string().trim().max(500).nullable().optional(),
+    sync_to_memory: z.boolean().optional(),
+    tags: z.array(z.string().trim().min(1).max(64)).max(12).optional(),
+  })
+  .strict();
+
+export type UpdateFeedbackInput = z.infer<typeof UpdateFeedbackSchema>;
+
+export const GithubIssueFeedbackSchema = z
+  .object({
+    repo: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "Must be in 'owner/repo' format")
+      .default("mikrotik-mcp/mikrotik-mcp"),
+    title: z.string().trim().min(3).max(256).optional(),
+    body: z.string().trim().min(10).max(32000).optional(),
+    labels: z.array(z.string().trim().min(1).max(50)).max(10).optional(),
+    token: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export type GithubIssueFeedbackInput = z.infer<typeof GithubIssueFeedbackSchema>;
+
+export const BatchFeedbackSchema = z
+  .object({
+    ids: z.array(z.number().int().positive()).min(1).max(200),
+    action: z.enum(["update", "sync_memory", "github_issue", "merge", "delete"]),
+    patch: UpdateFeedbackSchema.optional(),
+    target_id: z.number().int().positive().optional(),
+    github: GithubIssueFeedbackSchema.optional(),
+  })
+  .strict();
+
+export type BatchFeedbackInput = z.infer<typeof BatchFeedbackSchema>;
+
+export interface FeedbackOccurrence {
+  id: number;
+  issueId: number;
+  ts: number;
+  source: FeedbackSource;
+  callId: string | null;
+  device: string | null;
+  routerosVersion: string | null;
+  agentModel: string | null;
+  detail: string | null;
+  actualError: string | null;
+  workaround: string | null;
+}
+
+export interface FeedbackIssue {
+  id: number;
+  fingerprint: string;
+  kind: FeedbackKind;
+  impact: FeedbackImpact;
+  status: FeedbackStatus;
+  operation: string | null;
+  title: string;
+  detail: string;
+  expected: string | null;
+  actualError: string | null;
+  workaround: string | null;
+  suggestedFix: string | null;
+  resolutionNote: string | null;
+  fixedInVersion: string | null;
+  replacementTool: string | null;
+  memoryFactId: number | null;
+  githubIssueUrl: string | null;
+  tags: string[];
+  occurrences: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  resolvedAt: number | null;
+  reopenedCount: number;
+  lastSource: FeedbackSource;
+  lastCallId: string | null;
+  lastDevice: string | null;
+  lastRouterosVersion: string | null;
+  lastAgentModel: string | null;
+}
+
+export interface SubmitFeedbackResult {
+  action: "created" | "Incremented existing" | "Reopened existing";
+  deduplicated: boolean;
+  matchStage: "none" | "exact_fingerprint" | "fuzzy_similarity";
+  similarity: number;
+  issue: FeedbackIssue;
+  advice: string;
+}
+
+export interface FeedbackSummary {
+  totalIssues: number;
+  totalOccurrences: number;
+  openIssues: number;
+  inProgressIssues: number;
+  resolvedIssues: number;
+  wontFixIssues: number;
+  blockersOpen: number;
+  repeatOccurrencesSaved: number;
+  byKind: Record<FeedbackKind, number>;
+  byImpact: Record<FeedbackImpact, number>;
+  topOperations: {
+    operation: string;
+    issues: number;
+    occurrences: number;
+    openIssues: number;
+    highestImpact: FeedbackImpact;
+  }[];
+}
+
+export interface FeedbackListResult {
+  items: FeedbackIssue[];
+  total: number;
+  limit: number;
+  offset: number;
+  summary: FeedbackSummary;
+}
+
 /** Validate and sanitize free-text fields so credentials never land in feedback.db. */
 export function sanitizeFeedbackText(value: string | undefined | null): string | null {
   if (value === undefined || value === null) return null;
