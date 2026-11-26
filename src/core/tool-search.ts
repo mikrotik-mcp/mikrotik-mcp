@@ -87,6 +87,7 @@ const SYNONYMS: Record<string, string[]> = {
   modify: ["update", "set", "change"],
   change: ["update", "set", "modify"],
   edit: ["update", "set", "modify"],
+  analyze: ["audit", "inspect", "report", "calculate", "summarize"],
 };
 
 /**
@@ -97,6 +98,18 @@ const SYNONYMS: Record<string, string[]> = {
  */
 const DOMAIN_WORDS: Record<string, string[]> = {
   fw: ["firewall", "filter"],
+  openvpn: ["ovpn"],
+  ovpn: ["openvpn"],
+  bandwidth: ["usage", "traffic", "bytes"],
+  consumption: ["usage", "traffic", "bytes"],
+  consumed: ["usage", "traffic", "bytes"],
+  accounting: ["usage", "session", "sessions"],
+  analytics: ["analyze", "usage"],
+  statistics: ["analyze", "usage", "stats"],
+  stats: ["analyze", "usage"],
+  daily: ["usage", "analyze", "days"],
+  history: ["usage", "analyze", "sessions"],
+  historical: ["usage", "analyze", "sessions"],
   nameserver: ["dns"],
   nameservers: ["dns"],
   resolver: ["dns"],

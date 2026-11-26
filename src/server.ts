@@ -47,7 +47,7 @@ server runs through \`invoke_tool\`. Call \`find_tools\` to get its name, then
 
 This server exposes RouterOS configuration as MCP tools grouped by subsystem:
 interfaces, IP addressing, DHCP, DNS, firewall (filter + NAT), routing, VLANs,
-wireless, WireGuard, queues/QoS, users, logs, backups, PoE, system, network
+wireless, WireGuard, OpenVPN (live sessions + historical usage/accounting analytics via \`analyze_ovpn_usage\`), queues/QoS, users, logs, backups, PoE, system, network
 tools, bridges, address-lists, scheduler/scripts and certificates.
 
 Tool discovery — MANDATORY workflow:
