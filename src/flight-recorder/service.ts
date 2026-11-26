@@ -236,7 +236,8 @@ export async function flightTick(): Promise<void> {
   if (ticking) return;
   ticking = true;
   try {
-    for (const device of Object.keys(getConfig().devices)) {
+    for (const [device, dc] of Object.entries(getConfig().devices)) {
+      if (dc.disabled) continue;
       try {
         const r = await record(device);
         if (r.enabled) await sampleFlight(device);

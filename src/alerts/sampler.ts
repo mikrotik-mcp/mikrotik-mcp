@@ -87,7 +87,10 @@ export async function lastSeen(t: AbsenceTriggerT): Promise<number | undefined> 
       // Queried straight from `snapshots.db` rather than mirrored into a cache.
       // A cache would need seeding at startup and invalidating on write, and a
       // stale one here means a false "no snapshot in 24h" page.
-      const devices = t.device?.length ? t.device : Object.keys(getConfig().devices);
+      const cfgDevices = getConfig().devices;
+      const devices = (t.device?.length ? t.device : Object.keys(cfgDevices)).filter(
+        (d) => !cfgDevices[d]?.disabled,
+      );
       let newest: number | undefined;
       try {
         const store = await getSnapshotStore();
@@ -106,7 +109,10 @@ export async function lastSeen(t: AbsenceTriggerT): Promise<number | undefined> 
       return newest;
     }
     case "device_seen": {
-      const devices = t.device?.length ? t.device : Object.keys(getConfig().devices);
+      const cfgDevices = getConfig().devices;
+      const devices = (t.device?.length ? t.device : Object.keys(cfgDevices)).filter(
+        (d) => !cfgDevices[d]?.disabled,
+      );
       let newest: number | undefined;
       for (const d of devices) {
         const st = getDeviceStatus(d);

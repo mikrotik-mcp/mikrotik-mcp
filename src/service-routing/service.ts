@@ -405,7 +405,8 @@ export async function routingTick(): Promise<void> {
   ticking = true;
   try {
     const store = await operationsStore();
-    for (const device of Object.keys(getConfig().devices)) {
+    for (const [device, dc] of Object.entries(getConfig().devices)) {
+      if (dc.disabled) continue;
       for (const saved of store
         .list<RoutingPolicy>(kind, device)
         .filter((p) => (p.armedUntil ?? 0) > Date.now())) {

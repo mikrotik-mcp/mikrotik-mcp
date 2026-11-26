@@ -176,9 +176,9 @@ async function probeDevice(name: string, d: import("./config").DeviceConfig): Pr
 }
 
 async function authCheck(): Promise<number> {
-  // Verify every configured device (a no-op extra device costs one SSH probe).
+  // Verify every enabled configured device (a no-op extra device costs one SSH probe).
   const cfg = loadConfig();
-  const entries = Object.entries(cfg.devices);
+  const entries = Object.entries(cfg.devices).filter(([, d]) => !d.disabled);
   let ok = true;
   for (const [name, d] of entries) {
     ok = (await probeDevice(name, d)) && ok;
