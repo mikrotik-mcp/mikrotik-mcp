@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "version": "6.22.0",
   "generated": "by scripts/gen-schemas.ts — do not edit by hand",
-  "toolCount": 1013,
+  "toolCount": 1016,
   "tools": [
     {
       "name": "create_client_check",
@@ -31530,6 +31530,67 @@
       }
     },
     {
+      "name": "update_scheduler",
+      "title": "Update Scheduler Entry",
+      "risk": "write-idempotent",
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Modifies an existing scheduler entry (`/system scheduler set [find name=...]`) in place without deleting and recreating it. Targets the entry by its current `name`; supply `new_name` to rename it. Any combination of `on_event`, `interval`, `start_time`, `start_date`, `policy`, `comment`, or `disabled` can be updated. To inspect the current entry first use get_scheduler. To update a stored script in `/system script` use update_script.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Current name of the scheduler entry to update"
+          },
+          "new_name": {
+            "description": "New name if renaming the scheduler entry",
+            "type": "string"
+          },
+          "on_event": {
+            "description": "Updated script source or script name to run on event",
+            "type": "string"
+          },
+          "interval": {
+            "description": "Updated run interval, e.g. '00:05:00' or '5s' (0 = run once)",
+            "type": "string"
+          },
+          "start_time": {
+            "description": "Updated start time, e.g. '12:00:00' or 'startup'",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Updated start date, e.g. 'jan/01/2026'",
+            "type": "string"
+          },
+          "policy": {
+            "description": "Updated permission policy list, e.g. 'read,write,test,policy'",
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "disabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "remove_scheduler",
       "title": "Remove Scheduler Entry",
       "risk": "destructive",
@@ -31652,6 +31713,79 @@
             "type": "string"
           }
         },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_script",
+      "title": "Get Script Details",
+      "risk": "read",
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Retrieves full detail — including the complete `source`, `policy`, `dont-require-permissions`, `run-count`, and `last-started` — for a single stored script (`/system script print detail where name=...`). Use this to inspect a script's source code before modifying it with update_script. To list all scripts use list_scripts.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Exact name of the script to inspect"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_script",
+      "title": "Update Script in Repository",
+      "risk": "write-idempotent",
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "description": "Modifies an existing stored script in the system script repository (`/system script set [find name=...]`) in place without deleting and recreating it. Targets the script by its current `name`; supply `new_name` to rename it. Any combination of `source`, `policy`, `comment`, or `dont_require_permissions` can be updated, with automatic RouterOS console quoting and `$` / `\"` / `\\` / newline escaping. To inspect a script before editing use get_script; to run it on demand use run_script.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "unset": {
+            "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "Current name of the script to update"
+          },
+          "new_name": {
+            "description": "New name if renaming the script",
+            "type": "string"
+          },
+          "source": {
+            "description": "Updated script source code, VERBATIM (may contain spaces/semicolons/quotes/newlines — they are quoted and escaped for the console automatically). Never HTML-escape it: pass `<`, `>`, `&` as themselves, since `&lt;`/`&gt;`/`&amp;` are stored literally and break comparisons.",
+            "type": "string"
+          },
+          "policy": {
+            "description": "Updated permission policy list, e.g. 'read,write,test,policy'",
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "dont_require_permissions": {
+            "description": "Run without checking the policy permissions of the caller (yes/no)",
+            "type": "boolean"
+          }
+        },
+        "required": ["name"],
         "additionalProperties": false
       }
     },
@@ -36552,6 +36686,16 @@
             "type": "string",
             "maxLength": 200
           },
+          "tool": {
+            "description": "Alias for `operation` (MCP tool name or RouterOS path).",
+            "type": "string",
+            "maxLength": 300
+          },
+          "tool_name": {
+            "description": "Alias for `operation` (MCP tool name or RouterOS path).",
+            "type": "string",
+            "maxLength": 300
+          },
           "title": {
             "type": "string",
             "minLength": 3,
@@ -36559,10 +36703,24 @@
             "description": "Concise one-line summary of the issue or missing capability (e.g. 'create_wireguard_peer rejects preshared-key with base64 padding')."
           },
           "detail": {
+            "description": "Clear explanation of what you were trying to accomplish, what happened, and why the current tool behavior or catalog fell short. Never include plaintext passwords, private keys, or tokens.",
             "type": "string",
-            "minLength": 1,
-            "maxLength": 8000,
-            "description": "Clear explanation of what you were trying to accomplish, what happened, and why the current tool behavior or catalog fell short. Never include plaintext passwords, private keys, or tokens."
+            "maxLength": 8000
+          },
+          "summary": {
+            "description": "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
+            "type": "string",
+            "maxLength": 8000
+          },
+          "description": {
+            "description": "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
+            "type": "string",
+            "maxLength": 8000
+          },
+          "message": {
+            "description": "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
+            "type": "string",
+            "maxLength": 8000
           },
           "expected": {
             "description": "What the tool or server should have done or returned instead.",
@@ -36571,6 +36729,11 @@
           },
           "actual_error": {
             "description": "Exact error string or RouterOS parser message returned, if any (secrets will be redacted).",
+            "type": "string",
+            "maxLength": 8000
+          },
+          "error": {
+            "description": "Alias for `actual_error` — exact error string or RouterOS parser message returned.",
             "type": "string",
             "maxLength": 8000
           },
@@ -36591,6 +36754,11 @@
           },
           "device": {
             "description": "Configured device name where the issue occurred, if applicable.",
+            "type": "string",
+            "maxLength": 300
+          },
+          "device_name": {
+            "description": "Alias for `device` — configured device name where the issue occurred.",
             "type": "string",
             "maxLength": 300
           },
@@ -36621,7 +36789,7 @@
             "type": "boolean"
           }
         },
-        "required": ["kind", "impact", "title", "detail", "tags", "force_new"],
+        "required": ["kind", "impact", "title", "tags", "force_new"],
         "additionalProperties": false
       }
     },

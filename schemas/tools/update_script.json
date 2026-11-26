@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "update_script",
+  "type": "object",
+  "properties": {
+    "unset": {
+      "description": "Properties to UNSET (RouterOS `!prop`), so they no longer apply — e.g. ['dst-address'] removes the destination-address match. snake_case or kebab-case. Not for setting a value.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      }
+    },
+    "name": {
+      "type": "string",
+      "description": "Current name of the script to update"
+    },
+    "new_name": {
+      "description": "New name if renaming the script",
+      "type": "string"
+    },
+    "source": {
+      "description": "Updated script source code, VERBATIM (may contain spaces/semicolons/quotes/newlines — they are quoted and escaped for the console automatically). Never HTML-escape it: pass `<`, `>`, `&` as themselves, since `&lt;`/`&gt;`/`&amp;` are stored literally and break comparisons.",
+      "type": "string"
+    },
+    "policy": {
+      "description": "Updated permission policy list, e.g. 'read,write,test,policy'",
+      "type": "string"
+    },
+    "comment": {
+      "type": "string"
+    },
+    "dont_require_permissions": {
+      "description": "Run without checking the policy permissions of the caller (yes/no)",
+      "type": "boolean"
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": false
+}

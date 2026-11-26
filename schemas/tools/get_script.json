@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "get_script",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Exact name of the script to inspect"
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": false
+}

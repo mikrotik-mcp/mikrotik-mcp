@@ -28,6 +28,16 @@
       "type": "string",
       "maxLength": 200
     },
+    "tool": {
+      "description": "Alias for `operation` (MCP tool name or RouterOS path).",
+      "type": "string",
+      "maxLength": 300
+    },
+    "tool_name": {
+      "description": "Alias for `operation` (MCP tool name or RouterOS path).",
+      "type": "string",
+      "maxLength": 300
+    },
     "title": {
       "type": "string",
       "minLength": 3,
@@ -35,10 +45,24 @@
       "description": "Concise one-line summary of the issue or missing capability (e.g. 'create_wireguard_peer rejects preshared-key with base64 padding')."
     },
     "detail": {
+      "description": "Clear explanation of what you were trying to accomplish, what happened, and why the current tool behavior or catalog fell short. Never include plaintext passwords, private keys, or tokens.",
       "type": "string",
-      "minLength": 1,
-      "maxLength": 8000,
-      "description": "Clear explanation of what you were trying to accomplish, what happened, and why the current tool behavior or catalog fell short. Never include plaintext passwords, private keys, or tokens."
+      "maxLength": 8000
+    },
+    "summary": {
+      "description": "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
+      "type": "string",
+      "maxLength": 8000
+    },
+    "description": {
+      "description": "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
+      "type": "string",
+      "maxLength": 8000
+    },
+    "message": {
+      "description": "Alias for `detail` when `detail` is omitted — explanation of the issue or missing capability.",
+      "type": "string",
+      "maxLength": 8000
     },
     "expected": {
       "description": "What the tool or server should have done or returned instead.",
@@ -47,6 +71,11 @@
     },
     "actual_error": {
       "description": "Exact error string or RouterOS parser message returned, if any (secrets will be redacted).",
+      "type": "string",
+      "maxLength": 8000
+    },
+    "error": {
+      "description": "Alias for `actual_error` — exact error string or RouterOS parser message returned.",
       "type": "string",
       "maxLength": 8000
     },
@@ -67,6 +96,11 @@
     },
     "device": {
       "description": "Configured device name where the issue occurred, if applicable.",
+      "type": "string",
+      "maxLength": 300
+    },
+    "device_name": {
+      "description": "Alias for `device` — configured device name where the issue occurred.",
       "type": "string",
       "maxLength": 300
     },
@@ -97,6 +131,6 @@
       "type": "boolean"
     }
   },
-  "required": ["kind", "impact", "title", "detail", "tags", "force_new"],
+  "required": ["kind", "impact", "title", "tags", "force_new"],
   "additionalProperties": false
 }

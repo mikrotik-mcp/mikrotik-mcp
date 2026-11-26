@@ -1961,11 +1961,14 @@
         "create_scheduler",
         "list_schedulers",
         "get_scheduler",
+        "update_scheduler",
         "remove_scheduler",
         "enable_scheduler",
         "disable_scheduler",
         "add_script",
         "list_scripts",
+        "get_script",
+        "update_script",
         "remove_script",
         "run_script"
       ]
@@ -10638,6 +10641,14 @@
       }
     },
     {
+      "name": "update_scheduler",
+      "module": "scheduler",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
       "name": "remove_scheduler",
       "module": "scheduler",
       "group": "System & Ops",
@@ -10680,6 +10691,26 @@
         "visibility": ["model", "app"],
         "automatic": true
       }
+    },
+    {
+      "name": "get_script",
+      "module": "scheduler",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": {
+        "resourceUri": "ui://mikrotik/records.html?v=2",
+        "visibility": ["model", "app"],
+        "automatic": true
+      }
+    },
+    {
+      "name": "update_script",
+      "module": "scheduler",
+      "group": "System & Ops",
+      "noDevice": false,
+      "requires": null,
+      "ui": null
     },
     {
       "name": "remove_script",
