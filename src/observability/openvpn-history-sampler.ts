@@ -1,6 +1,6 @@
 import { createContext } from "../core/context";
 import { listOpenVpnSessions } from "../core/openvpn-sessions";
-import { getConfig } from "../core/runtime";
+import { getConfig, onConfigChanged } from "../core/runtime";
 import { getSafeModeManager } from "../ssh/safe-mode";
 import { getIpGeo, sourceIpLiteral } from "./geo";
 import { OPENVPN_HISTORY_INTERVAL } from "./openvpn-history";
@@ -50,6 +50,32 @@ export function startOpenVpnHistorySampler(store: OpenVpnHistoryStore) {
     if (!stopped) timer = setTimeout(() => void sample(), OPENVPN_HISTORY_INTERVAL);
   }
   void sample();
+  const knownDisabled = new Map<string, boolean>();
+  onConfigChanged(() => {
+    if (stopped) return;
+    const devices = getConfig()?.devices ?? {};
+    for (const name of Array.from(knownDisabled.keys())) {
+      if (!(name in devices)) {
+        knownDisabled.delete(name);
+        retries.delete(name);
+      }
+    }
+    let reenabled = false;
+    for (const [name, dc] of Object.entries(devices)) {
+      const wasDisabled = knownDisabled.get(name);
+      const isDisabled = !!dc.disabled;
+      knownDisabled.set(name, isDisabled);
+      if (isDisabled) retries.delete(name);
+      else if (wasDisabled === true) {
+        retries.delete(name);
+        if (!dc.mac) reenabled = true;
+      }
+    }
+    if (reenabled) {
+      clearTimeout(timer);
+      void sample();
+    }
+  });
   return () => {
     stopped = true;
     clearTimeout(timer);

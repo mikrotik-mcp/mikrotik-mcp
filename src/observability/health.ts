@@ -11,7 +11,7 @@
  */
 import type { DeviceConfig } from "../config";
 import { deviceEndpoints } from "../core/device-endpoints";
-import { getConfig } from "../core/runtime";
+import { getConfig, onConfigChanged } from "../core/runtime";
 import { parseDisks, parseKeyValues, parseSystemResource } from "../core/routeros-parse";
 import type { RouterDisk } from "../core/routeros-parse";
 import { createDeviceClient } from "../core/transport";
@@ -103,15 +103,17 @@ function withSessionEvidence(status: DeviceStatus, dc: DeviceConfig): DeviceStat
   return { ...status, reachable: true, error: undefined, checkedAt: answeredAt };
 }
 
-/** The most recent probe result for a device (UNKNOWN until first probe). */
+/** The most recent probe result for a device (UNKNOWN until first probe, or while disabled). */
 export function getDeviceStatus(name: string): DeviceStatus {
-  const status = statuses.get(name) ?? UNKNOWN;
   const dc = getConfig()?.devices?.[name];
+  if (dc?.disabled) return UNKNOWN;
+  const status = statuses.get(name) ?? UNKNOWN;
   return dc ? withSessionEvidence(status, dc) : status;
 }
 
 /** The neighbours (`/ip neighbor`) most recently discovered from a device. */
 export function getDeviceNeighbors(name: string): Neighbor[] {
+  if (getConfig()?.devices?.[name]?.disabled) return [];
   return neighbors.get(name) ?? [];
 }
 
@@ -268,12 +270,16 @@ export async function probeDevice(
 const MAC_PROBE_INTERVAL_MS = 5 * 60_000;
 const lastMacProbe = new Map<string, number>();
 
-/** Probe every configured device concurrently. A router still being probed is skipped. */
+/** Probe every enabled configured device concurrently. A router still being probed is skipped. */
 export async function probeAll(): Promise<void> {
   const cfg = getConfig();
   const now = Date.now();
   await Promise.all(
     Object.entries(cfg.devices).map(async ([name, dc]) => {
+      if (dc.disabled) {
+        statuses.delete(name);
+        return;
+      }
       if (probing.has(name)) return;
       // Throttle the expensive MAC-Telnet probe so it can't monopolise the
       // device's single session and starve real tool calls.
@@ -292,6 +298,29 @@ export async function probeAll(): Promise<void> {
     }),
   );
 }
+
+const knownDisabled = new Map<string, boolean>();
+onConfigChanged(() => {
+  const devices = getConfig()?.devices ?? {};
+  for (const name of Array.from(knownDisabled.keys())) {
+    if (!(name in devices)) {
+      knownDisabled.delete(name);
+    }
+  }
+  for (const [name, dc] of Object.entries(devices)) {
+    const wasDisabled = knownDisabled.get(name);
+    const isDisabled = !!dc.disabled;
+    knownDisabled.set(name, isDisabled);
+    if (isDisabled) {
+      statuses.delete(name);
+    } else if (wasDisabled === true && timer && !probing.has(name)) {
+      probing.add(name);
+      void probeDevice(name, dc)
+        .catch(() => {})
+        .finally(() => probing.delete(name));
+    }
+  }
+});
 
 /** Start periodic health checks (one immediate pass, then every `intervalMs`). */
 export function startHealthChecks(intervalMs = 30_000): void {

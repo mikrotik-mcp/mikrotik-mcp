@@ -11,7 +11,7 @@
  */
 import { connect } from "node:net";
 import type { DeviceConfig } from "../config";
-import { getConfig } from "../core/runtime";
+import { getConfig, onConfigChanged } from "../core/runtime";
 
 export const LOSS_PROBE_INTERVAL_MS = 5_000;
 export const LOSS_PROBE_LIMIT_MS = 1_000;
@@ -201,3 +201,23 @@ export function stopLossSampler(): void {
   timer = null;
   store.clear();
 }
+
+const knownDisabled = new Map<string, boolean>();
+onConfigChanged(() => {
+  const devices = getConfig()?.devices ?? {};
+  for (const name of Array.from(knownDisabled.keys())) {
+    if (!(name in devices)) {
+      knownDisabled.delete(name);
+      store.delete(name);
+    }
+  }
+  let reenabled = false;
+  for (const [name, dc] of Object.entries(devices)) {
+    const wasDisabled = knownDisabled.get(name);
+    const isDisabled = !!dc.disabled;
+    knownDisabled.set(name, isDisabled);
+    if (isDisabled) store.delete(name);
+    else if (wasDisabled === true) reenabled = true;
+  }
+  if (reenabled && timer) void sampleLoss();
+});

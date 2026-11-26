@@ -26,7 +26,7 @@ import {
   parseRouterosDate,
   parseSize,
 } from "../core/routeros-parse";
-import { getConfig } from "../core/runtime";
+import { getConfig, onConfigChanged } from "../core/runtime";
 import { logger } from "../logger";
 import { KID_CONTROL_COUNTERS_COMMAND, parseKidControlOutput } from "../tools/connected-devices";
 import type { ClientCounter, UsageStore, VpnSession } from "./usage-store";
@@ -145,7 +145,7 @@ export async function sampleUsageOnce(store: UsageStore): Promise<void> {
     const cfg = getConfig();
     await Promise.all(
       Object.entries(cfg.devices).map(async ([name, dc]) => {
-        if (dc.mac) return; // skip slow MAC-Telnet devices on the timer
+        if (dc.disabled || dc.mac) return; // skip disabled and slow MAC-Telnet devices on the timer
         try {
           await sampleClients(store, name, ts);
           await ingestSessions(store, name);
@@ -200,3 +200,27 @@ export function stopUsageSampler(): void {
   }
   currentStore = null;
 }
+
+const knownDisabled = new Map<string, boolean>();
+onConfigChanged(() => {
+  const devices = getConfig()?.devices ?? {};
+  for (const name of Array.from(knownDisabled.keys())) {
+    if (!(name in devices)) {
+      knownDisabled.delete(name);
+      noUserManager.delete(name);
+    }
+  }
+  let reenabled = false;
+  for (const [name, dc] of Object.entries(devices)) {
+    const wasDisabled = knownDisabled.get(name);
+    const isDisabled = !!dc.disabled;
+    knownDisabled.set(name, isDisabled);
+    if (!isDisabled && wasDisabled === true) {
+      noUserManager.delete(name);
+      if (!dc.mac) reenabled = true;
+    }
+  }
+  if (reenabled && timer && currentStore) {
+    void sampleUsageOnce(currentStore);
+  }
+});

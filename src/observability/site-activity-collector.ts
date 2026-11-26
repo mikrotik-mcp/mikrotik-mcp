@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createContext } from "../core/context";
 import { executeMikrotikCommand } from "../core/connector";
 import { parseRecords } from "../core/routeros-parse";
-import { getConfig } from "../core/runtime";
+import { getConfig, listDevices } from "../core/runtime";
 import { decodeTzsp } from "../core/tzsp";
 import { getFlowCollector } from "../flows/collector";
 import { logger } from "../logger";
@@ -95,8 +95,14 @@ export async function startSiteActivityCollector(
       );
     }
     if (at - lastLanRead < 300_000) return;
+    const cfg = getConfig();
+    const defaultDc = cfg.devices[cfg.defaultDevice];
+    const device =
+      defaultDc && !defaultDc.disabled && !defaultDc.mac
+        ? cfg.defaultDevice
+        : listDevices().names.find((n) => !cfg.devices[n]?.mac);
+    if (!device) return;
     lastLanRead = at;
-    const device = getConfig().defaultDevice;
     const ctx = createContext(undefined, device);
     try {
       const clients = await fetchDevices(ctx);

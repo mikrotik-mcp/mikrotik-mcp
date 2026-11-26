@@ -15,7 +15,7 @@
 import { lookup } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
 import { getAsnOrganizationLabel } from "../core/asn-organization";
-import { getConfig } from "../core/runtime";
+import { getConfig, onConfigChanged } from "../core/runtime";
 import { logger } from "../logger";
 
 const LOG_TAG = "mikrotik-mcp";
@@ -276,6 +276,7 @@ export async function refreshGeo(): Promise<void> {
     const now = Date.now();
     await Promise.all(
       Object.entries(getConfig().devices).map(([name, dc]) => {
+        if (dc.disabled) return Promise.resolve();
         const c = cache.get(name);
         if (c && now - c.at < REFRESH_MS) return Promise.resolve();
         // MAC-Telnet devices have no IP to geolocate.
@@ -300,3 +301,22 @@ export function stopGeoLookups(): void {
     timer = null;
   }
 }
+
+const knownDisabled = new Map<string, boolean>();
+onConfigChanged?.(() => {
+  const devices = getConfig()?.devices ?? {};
+  for (const name of Array.from(knownDisabled.keys())) {
+    if (!(name in devices)) {
+      knownDisabled.delete(name);
+      cache.delete(name);
+    }
+  }
+  let reenabled = false;
+  for (const [name, dc] of Object.entries(devices)) {
+    const wasDisabled = knownDisabled.get(name);
+    const isDisabled = !!dc.disabled;
+    knownDisabled.set(name, isDisabled);
+    if (!isDisabled && wasDisabled === true) reenabled = true;
+  }
+  if (reenabled && timer) void refreshGeo();
+});

@@ -19,7 +19,7 @@
  */
 import { capsmanOverview } from "../core/capsman";
 import { createContext } from "../core/context";
-import { getConfig } from "../core/runtime";
+import { getConfig, onConfigChanged } from "../core/runtime";
 import { fetchCapsmanState } from "../utils/wifi-query";
 import { logger } from "../logger";
 import type { CapsmanStore, RadioSample } from "./capsman-store";
@@ -36,6 +36,7 @@ export const MAX_CAPSMAN_INTERVAL_MS = 6 * 60 * 60_000; // 6 hours
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let inFlight = false;
+let currentStore: CapsmanStore | null = null;
 
 /**
  * Devices with no wireless family at all. Once `fetchCapsmanState` returns a
@@ -82,7 +83,7 @@ export async function sampleCapsmanOnce(store: CapsmanStore): Promise<void> {
     const cfg = getConfig();
     await Promise.all(
       Object.entries(cfg.devices).map(async ([name, dc]) => {
-        if (dc.mac) return; // skip slow MAC-Telnet devices on the timer
+        if (dc.disabled || dc.mac) return; // skip disabled and slow MAC-Telnet devices on the timer
         try {
           await sampleDevice(store, name, ts);
         } catch (e) {
@@ -106,6 +107,7 @@ export function startCapsmanSampler(
   store: CapsmanStore,
   intervalMs = DEFAULT_CAPSMAN_INTERVAL_MS,
 ): void {
+  currentStore = store;
   const ms = clampInterval(intervalMs);
   void sampleCapsmanOnce(store);
   timer = setInterval(() => void sampleCapsmanOnce(store), ms);
@@ -117,4 +119,29 @@ export function stopCapsmanSampler(): void {
     clearInterval(timer);
     timer = null;
   }
+  currentStore = null;
 }
+
+const knownDisabled = new Map<string, boolean>();
+onConfigChanged(() => {
+  const devices = getConfig()?.devices ?? {};
+  for (const name of Array.from(knownDisabled.keys())) {
+    if (!(name in devices)) {
+      knownDisabled.delete(name);
+      noCapsman.delete(name);
+    }
+  }
+  let reenabled = false;
+  for (const [name, dc] of Object.entries(devices)) {
+    const wasDisabled = knownDisabled.get(name);
+    const isDisabled = !!dc.disabled;
+    knownDisabled.set(name, isDisabled);
+    if (!isDisabled && wasDisabled === true) {
+      noCapsman.delete(name);
+      if (!dc.mac) reenabled = true;
+    }
+  }
+  if (reenabled && timer && currentStore) {
+    void sampleCapsmanOnce(currentStore);
+  }
+});
