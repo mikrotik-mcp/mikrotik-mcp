@@ -38,6 +38,18 @@ const SAMPLE: ToolForIndex[] = [
     "certificate",
   ),
   T("list_ip_addresses", "List IP Addresses", "List IPv4 addresses on interfaces", "ip-address"),
+  T(
+    "analyze_ovpn_usage",
+    "Analyze OpenVPN Usage & Session Accounting",
+    "Compute exact OpenVPN historical and live usage, traffic (download, upload, total bytes), session durations, and daily connection counts per user and across all users.",
+    "openvpn",
+  ),
+  T(
+    "list_ovpn_sessions",
+    "List Active OpenVPN Connections",
+    "Read currently connected OpenVPN users on an explicit router.",
+    "openvpn",
+  ),
 ];
 
 const index = buildToolIndex(SAMPLE);
@@ -85,5 +97,17 @@ describe("searchToolIndex", () => {
 
   test("a non-matching query returns no results", () => {
     expect(searchToolIndex(index, "zzzqqq nonsense")).toEqual([]);
+  });
+
+  test("OpenVPN usage, bandwidth, and daily accounting queries rank analyze_ovpn_usage first", () => {
+    for (const q of [
+      "openvpn usage statistics per user",
+      "ovpn bandwidth consumption daily",
+      "analyze openvpn traffic and session history",
+      "openvpn accounting download upload bytes",
+    ]) {
+      const hits = searchToolIndex(index, q);
+      expect(hits[0]?.name).toBe("analyze_ovpn_usage");
+    }
   });
 });
