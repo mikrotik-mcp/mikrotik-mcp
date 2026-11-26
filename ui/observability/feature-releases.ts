@@ -49,6 +49,7 @@ export const FEATURE_RELEASES: Record<ViewId, string | null> = {
   modules: null,
   config: null,
   memory: null,
+  feedback: "6.22.0",
   alerts: null,
   releases: null,
   capsman: null,
