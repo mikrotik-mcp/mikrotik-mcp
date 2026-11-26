@@ -167,6 +167,7 @@ import { wirelessTools } from "./wireless";
 import { wifiOptimizerTools } from "./wifi-optimizer";
 import { capsmanTools } from "./capsman";
 import { memoryTools } from "./memory";
+import { feedbackTools } from "./feedback";
 
 export interface ModuleInfo {
   /** Display label used in docs. */
@@ -1491,6 +1492,15 @@ export const moduleCatalog: ModuleInfo[] = [
       "across sessions. Create, search and manage structured knowledge the AI can reference.",
     tools: memoryTools,
   },
+  {
+    label: "Tool Feedback",
+    slug: "feedback",
+    group: "Discovery & Meta",
+    description:
+      "Deduplicated LLM tool feedback and telemetry loop (`submit_feedback`, `find_feedback`) — " +
+      "report missing tools, bugs, or confusing schemas and surface known workarounds.",
+    tools: feedbackTools,
+  },
   // ── Interactive views (MCP Apps) ─────────────────────────────────────────
   {
     label: "Apps — Dashboards",
@@ -1515,6 +1525,7 @@ export const allToolModules: ToolModule[] = moduleCatalog.map((m) => m.tools);
 export const ALWAYS_ON_MODULES = new Set([
   "tool-gateway",
   "memory",
+  "feedback",
   "server-pulse",
   // Home of the pinned core tools (see PINNED_TOOLS in core/registry.ts).
   "safe-mode",
