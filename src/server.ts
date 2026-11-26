@@ -68,8 +68,21 @@ Tool discovery — MANDATORY workflow:
   annotations — a raw command has none of these. Always prefer the dedicated
   tool path. These tools are always in your tool list: find_tools, describe_tool,
   invoke_tool, get_access_scope, safe_mode_status, enable_safe_mode,
-  commit_safe_mode, rollback_safe_mode, get_tool_call. Reach every other tool
-  named in these instructions through \`invoke_tool\` when it is not listed.
+  commit_safe_mode, rollback_safe_mode, get_tool_call, submit_feedback,
+  find_feedback. Reach every other tool named in these instructions through
+  \`invoke_tool\` when it is not listed.
+
+Tool feedback & continuous improvement:
+  When \`find_tools\` lacks a dedicated tool and you must fall back to
+  \`run_routeros_command\`, when a tool fails due to a schema/command-builder bug,
+  or when a parameter or output is confusing, call \`submit_feedback\` immediately
+  without asking the user. Built-in deduplication automatically merges repeat
+  reports and returns any known operator workaround, \`fixedInVersion\`, or
+  \`replacementTool\`. Use \`find_feedback\` (including \`status="resolved"\`) to
+  check whether a previously reported bug or missing capability has already been
+  fixed or replaced with a dedicated tool; resolved fixes are also synced into
+  \`memory_recall\` under the shared \`mcp-tool-feedback\` policy entity. Never
+  include passwords, keys or tokens in feedback.
 
 Tool-call diagnostics:
   Every registered invocation returns a unique Tool call ID. Use \`get_tool_call\`
