@@ -19,7 +19,7 @@ import {
   FindFeedbackSchema,
   GithubIssueFeedbackSchema,
   SubmitFeedbackSchema,
-  UpdateFeedbackSchema,
+  normalizeUpdateFeedbackInput,
 } from "../feedback/types";
 
 export { closeFeedbackStore };
@@ -155,7 +155,7 @@ export async function feedbackRoutes(req: Request, url: URL): Promise<Response |
         return found ? json(found) : json({ error: `Feedback issue #${id} not found` }, 404);
       }
       if (req.method === "PATCH") {
-        const patch = UpdateFeedbackSchema.parse(await body(req));
+        const patch = normalizeUpdateFeedbackInput(await body(req));
         let issue = store.update(id, patch);
         const shouldSyncMemory =
           patch.sync_to_memory ??

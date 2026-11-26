@@ -219,24 +219,151 @@ export type FindFeedbackInput = z.infer<typeof FindFeedbackSchema>;
 
 export const UpdateFeedbackSchema = z
   .object({
-    status: z.enum(feedbackStatuses).optional(),
-    impact: z.enum(feedbackImpacts).optional(),
-    kind: z.enum(feedbackKinds).optional(),
-    title: shortText.optional(),
-    detail: longText.optional(),
-    expected: z.string().trim().max(8000).nullable().optional(),
-    workaround: z.string().trim().max(8000).nullable().optional(),
-    suggested_fix: z.string().trim().max(8000).nullable().optional(),
-    resolution_note: z.string().trim().max(8000).nullable().optional(),
-    fixed_in_version: z.string().trim().max(120).nullable().optional(),
-    replacement_tool: z.string().trim().max(200).nullable().optional(),
-    github_issue_url: z.string().trim().max(500).nullable().optional(),
-    sync_to_memory: z.boolean().optional(),
-    tags: z.array(z.string().trim().min(1).max(64)).max(12).optional(),
+    id: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Numeric ID of the feedback issue to update (e.g. `1`)."),
+    issue_id: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Alias for `id` — numeric ID of the feedback issue to update."),
+    status: z
+      .enum(feedbackStatuses)
+      .optional()
+      .describe(
+        "New workflow status: `'open'`, `'in_progress'`, `'resolved'`, or `'wont_fix'`. Setting `'resolved'` records `resolvedAt` and syncs the fix into MCP Memory (`mcp-tool-feedback`).",
+      ),
+    impact: z.enum(feedbackImpacts).optional().describe("Updated impact severity."),
+    kind: z.enum(feedbackKinds).optional().describe("Updated feedback category."),
+    title: shortText.optional().describe("Updated concise one-line title."),
+    detail: longText
+      .optional()
+      .describe("Updated problem description (Markdown bold/code supported)."),
+    summary: optionalLongText.describe("Alias for `detail` when updating the problem description."),
+    description: optionalLongText.describe(
+      "Alias for `detail` when updating the problem description.",
+    ),
+    expected: z
+      .string()
+      .trim()
+      .max(8000)
+      .nullable()
+      .optional()
+      .describe("Updated expected behavior (or `null` to clear)."),
+    workaround: z
+      .string()
+      .trim()
+      .max(8000)
+      .nullable()
+      .optional()
+      .describe(
+        "Documented workaround for AI sessions (returned automatically on `find_feedback` and `submit_feedback`).",
+      ),
+    suggested_fix: z
+      .string()
+      .trim()
+      .max(8000)
+      .nullable()
+      .optional()
+      .describe("Updated engineering fix proposal (or `null` to clear)."),
+    resolution_note: z
+      .string()
+      .trim()
+      .max(8000)
+      .nullable()
+      .optional()
+      .describe(
+        "Resolution note explaining what was fixed or added, how agents should use it, or why it was closed. Format important tool names, file paths, and key terms in **bold** (`**...**`).",
+      ),
+    resolution: z
+      .string()
+      .trim()
+      .max(8000)
+      .nullable()
+      .optional()
+      .describe("Alias for `resolution_note`."),
+    note: z
+      .string()
+      .trim()
+      .max(8000)
+      .nullable()
+      .optional()
+      .describe("Alias for `resolution_note`."),
+    fixed_in_version: z
+      .string()
+      .trim()
+      .max(120)
+      .nullable()
+      .optional()
+      .describe("Version or commit where the fix or new tool was added (e.g. `'v6.22.0'`)."),
+    version: z
+      .string()
+      .trim()
+      .max(120)
+      .nullable()
+      .optional()
+      .describe("Alias for `fixed_in_version`."),
+    replacement_tool: z
+      .string()
+      .trim()
+      .max(200)
+      .nullable()
+      .optional()
+      .describe(
+        "Newly implemented or replacement MCP tool name(s) that agents should call instead of raw CLI workarounds (e.g. `'update_script, update_scheduler'`).",
+      ),
+    github_issue_url: z
+      .string()
+      .trim()
+      .max(500)
+      .nullable()
+      .optional()
+      .describe("Linked GitHub Issue URL, if filed."),
+    sync_to_memory: z
+      .boolean()
+      .optional()
+      .describe(
+        "Whether to sync this resolution/guidance into MCP Knowledge Memory (`mcp-tool-feedback` policy entity). Defaults to `true` when resolving or updating resolution/workaround fields.",
+      ),
+    tags: z
+      .array(z.string().trim().min(1).max(64))
+      .max(12)
+      .optional()
+      .describe("Replacement subsystem tags list."),
   })
   .strict();
 
-export type UpdateFeedbackInput = z.infer<typeof UpdateFeedbackSchema>;
+export type UpdateFeedbackInput = z.input<typeof UpdateFeedbackSchema>;
+
+/**
+ * Normalize an `update_feedback` payload, resolving common LLM parameter aliases
+ * (`issue_id` → `id`, `summary`/`description` → `detail`, `resolution`/`note` →
+ * `resolution_note`, `version` → `fixed_in_version`).
+ */
+export function normalizeUpdateFeedbackInput(raw: unknown): z.infer<typeof UpdateFeedbackSchema> {
+  const parsed = UpdateFeedbackSchema.parse(raw);
+  const id = parsed.id ?? parsed.issue_id;
+  const detail = parsed.detail ?? parsed.summary ?? parsed.description;
+  const resolution_note =
+    parsed.resolution_note !== undefined
+      ? parsed.resolution_note
+      : parsed.resolution !== undefined
+        ? parsed.resolution
+        : parsed.note;
+  const fixed_in_version =
+    parsed.fixed_in_version !== undefined ? parsed.fixed_in_version : parsed.version;
+  return {
+    ...parsed,
+    ...(id !== undefined ? { id } : {}),
+    ...(detail !== undefined ? { detail } : {}),
+    ...(resolution_note !== undefined ? { resolution_note } : {}),
+    ...(fixed_in_version !== undefined ? { fixed_in_version } : {}),
+  };
+}
 
 export const GithubIssueFeedbackSchema = z
   .object({

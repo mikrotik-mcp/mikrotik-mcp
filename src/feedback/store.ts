@@ -16,10 +16,10 @@ import {
 } from "./dedup";
 import {
   FindFeedbackSchema,
-  UpdateFeedbackSchema,
   feedbackImpacts,
   feedbackKinds,
   normalizeSubmitFeedbackInput,
+  normalizeUpdateFeedbackInput,
   sanitizeFeedbackText,
 } from "./types";
 import type {
@@ -686,7 +686,7 @@ class SqliteFeedbackStore implements FeedbackStore {
     const existingRow = this.getIssueRow(id);
     if (!existingRow) throw new Error(`Feedback issue #${id} not found`);
     const existing = rowToIssue(existingRow);
-    const parsed = UpdateFeedbackSchema.parse(rawInput);
+    const parsed = normalizeUpdateFeedbackInput(rawInput);
 
     const nextStatus = parsed.status ?? existing.status;
     const nextImpact = parsed.impact ?? existing.impact;
