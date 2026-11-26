@@ -861,3 +861,125 @@ export interface AttacksPayload {
     minConfidence: string;
   };
 }
+
+// ── LLM Tool Feedback & Telemetry (`/api/feedback/*`) ────────────────────────
+export const FEEDBACK_KINDS = [
+  "bug",
+  "missing_tool",
+  "missing_param",
+  "confusing_schema",
+  "unexpected_output",
+  "performance",
+  "docs_gap",
+  "feature_request",
+] as const;
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+
+export const FEEDBACK_IMPACTS = [
+  "blocker",
+  "degraded",
+  "friction",
+  "suggestion",
+] as const;
+export type FeedbackImpact = (typeof FEEDBACK_IMPACTS)[number];
+
+export const FEEDBACK_STATUSES = [
+  "open",
+  "in_progress",
+  "resolved",
+  "wont_fix",
+] as const;
+export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
+
+export type FeedbackSource = "llm" | "operator";
+
+export interface FeedbackOccurrence {
+  id: number;
+  issueId: number;
+  ts: number;
+  source: FeedbackSource;
+  callId: string | null;
+  device: string | null;
+  routerosVersion: string | null;
+  agentModel: string | null;
+  detail: string | null;
+  actualError: string | null;
+  workaround: string | null;
+}
+
+export interface FeedbackIssue {
+  id: number;
+  fingerprint: string;
+  kind: FeedbackKind;
+  impact: FeedbackImpact;
+  status: FeedbackStatus;
+  operation: string | null;
+  title: string;
+  detail: string;
+  expected: string | null;
+  actualError: string | null;
+  workaround: string | null;
+  suggestedFix: string | null;
+  resolutionNote: string | null;
+  fixedInVersion: string | null;
+  replacementTool: string | null;
+  memoryFactId: number | null;
+  githubIssueUrl: string | null;
+  tags: string[];
+  occurrences: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  resolvedAt: number | null;
+  reopenedCount: number;
+  lastSource: FeedbackSource;
+  lastCallId: string | null;
+  lastDevice: string | null;
+  lastRouterosVersion: string | null;
+  lastAgentModel: string | null;
+}
+
+export interface SubmitFeedbackResult {
+  action: "created" | "Incremented existing" | "Reopened existing";
+  deduplicated: boolean;
+  matchStage: "none" | "exact_fingerprint" | "fuzzy_similarity";
+  similarity: number;
+  issue: FeedbackIssue;
+  advice: string;
+  error?: string;
+}
+
+export interface FeedbackSummary {
+  totalIssues: number;
+  totalOccurrences: number;
+  openIssues: number;
+  inProgressIssues: number;
+  resolvedIssues: number;
+  wontFixIssues: number;
+  blockersOpen: number;
+  repeatOccurrencesSaved: number;
+  byKind: Record<FeedbackKind, number>;
+  byImpact: Record<FeedbackImpact, number>;
+  topOperations: {
+    operation: string;
+    issues: number;
+    occurrences: number;
+    openIssues: number;
+    highestImpact: FeedbackImpact;
+  }[];
+}
+
+export interface FeedbackListResult {
+  items: FeedbackIssue[];
+  total: number;
+  limit: number;
+  offset: number;
+  summary: FeedbackSummary;
+  error?: string;
+}
+
+export interface FeedbackConfigPayload {
+  enabled: boolean;
+  dbPath: string;
+  summary: FeedbackSummary | null;
+}
+
