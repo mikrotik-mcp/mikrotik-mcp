@@ -1199,6 +1199,25 @@
       "required": ["enabled", "dbPath"],
       "additionalProperties": false
     },
+    "feedback": {
+      "default": {
+        "enabled": true,
+        "dbPath": "/Users/alimaster/.mikrotik-mcp/feedback.db"
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "dbPath": {
+          "default": "/Users/alimaster/.mikrotik-mcp/feedback.db",
+          "type": "string"
+        }
+      },
+      "required": ["enabled", "dbPath"],
+      "additionalProperties": false
+    },
     "backupDir": {
       "type": "string"
     },
@@ -1228,6 +1247,7 @@
     "access",
     "tools",
     "memory",
+    "feedback",
     "disableUpdateCheck",
     "logLevel"
   ],

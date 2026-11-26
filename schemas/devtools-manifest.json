@@ -2272,6 +2272,14 @@
       ]
     },
     {
+      "slug": "feedback",
+      "label": "Tool Feedback",
+      "group": "Discovery & Meta",
+      "description": "Deduplicated LLM tool feedback and telemetry loop (`submit_feedback`, `find_feedback`) — report missing tools, bugs, or confusing schemas and surface known workarounds.",
+      "alwaysOn": true,
+      "tools": ["submit_feedback", "find_feedback"]
+    },
+    {
       "slug": "app-views",
       "label": "Apps — Dashboards",
       "group": "MCP Apps",
@@ -12026,6 +12034,22 @@
       "module": "memory",
       "group": "Memory",
       "noDevice": false,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "submit_feedback",
+      "module": "feedback",
+      "group": "Discovery & Meta",
+      "noDevice": true,
+      "requires": null,
+      "ui": null
+    },
+    {
+      "name": "find_feedback",
+      "module": "feedback",
+      "group": "Discovery & Meta",
+      "noDevice": true,
       "requires": null,
       "ui": null
     },
