@@ -19,7 +19,7 @@ import { MikroTikSSHClient } from "../ssh/client";
 import type { RunOptions } from "../ssh/client";
 import type { DeviceConfig } from "../config";
 import { logger } from "../logger";
-import { getConfig, getDevice } from "./runtime";
+import { getConfig, getDevice, onConfigChanged } from "./runtime";
 import { DeviceConnectionError } from "./device-connection-error";
 import { connectErrorMessage, resolveJump, sshOptionsOf } from "./transport";
 
@@ -223,6 +223,14 @@ export function closeAll(): void {
 export function closeDevice(deviceName: string): void {
   removeEntry(deviceName);
 }
+
+onConfigChanged(() => {
+  const devices = getConfig().devices ?? {};
+  for (const name of Array.from(entries.keys())) {
+    const dc = devices[name];
+    if (!dc || dc.disabled) removeEntry(name);
+  }
+});
 
 /** Current pool status for debugging / observability. */
 export function poolStatus(): Array<{

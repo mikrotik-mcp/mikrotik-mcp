@@ -15,7 +15,7 @@ import { probeDevice } from "./capability-probe";
 import { unknownCapabilities } from "./capability";
 import type { Capabilities } from "./capability";
 import { createContext } from "./context";
-import { onConfigChanged, resolveDeviceName } from "./runtime";
+import { onConfigChanged, resolveDeviceName, tryResolveDeviceName } from "./runtime";
 import { logger } from "../logger";
 
 /** How long a probe stays fresh. RouterOS facts change only on upgrade/reboot. */
@@ -92,7 +92,9 @@ export function getCapabilities(deviceName?: string): Promise<Capabilities> {
  * callers MUST read as "no information", never as "unsupported".
  */
 export function peekCapabilities(deviceName?: string): Capabilities | undefined {
-  const key = resolveDeviceName(deviceName);
+  const key =
+    deviceName !== undefined ? tryResolveDeviceName(deviceName) : resolveDeviceName(deviceName);
+  if (!key) return undefined;
   const hit = cache.get(key);
   if (!hit || clock() - hit.startedAt >= CAPABILITY_TTL_MS) return undefined;
   return hit.value;
@@ -110,7 +112,8 @@ export function invalidateCapabilities(deviceName?: string): void {
     cache.clear();
     return;
   }
-  cache.delete(resolveDeviceName(deviceName));
+  const key = tryResolveDeviceName(deviceName) ?? deviceName;
+  cache.delete(key);
 }
 
 // A config reload can repoint a device name at a different router entirely, so
