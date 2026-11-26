@@ -77,7 +77,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
     id: "workspace",
     label: "MCP workspace",
     description: "AI context, tool permissions and server settings",
-    views: ["prompts", "memory", "modules", "access", "config", "releases"],
+    views: ["prompts", "memory", "feedback", "modules", "access", "config", "releases"],
   },
 ];
 
@@ -98,4 +98,6 @@ export const PAGE_SEARCH_TERMS: Partial<Record<ViewId, string>> = {
   schedules: "scheduled audits cron automation",
   explain: "explain configuration architecture documentation",
   s3: "cloud backup storage bucket",
+  feedback:
+    "feedback bug report missing tool param schema confusion occurrences dedup workaround telemetry",
 };
