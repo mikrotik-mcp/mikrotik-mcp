@@ -265,6 +265,7 @@ function buildAiFixPrompt(issue: FeedbackIssue, occurrences: FeedbackOccurrence[
     "2. **Safe Command Building:** Use `Cmd` builders (`src/core/cmd.ts`) and strict Zod schemas so no unsanitized argument can ever reach RouterOS in command position.",
     "3. **Schema & Catalog Sync:** If you add or modify tool schemas, run `bun run gen` to regenerate `schemas/` and reference docs.",
     "4. **Verification Gate:** Add or update unit tests in `tests/` covering the exact failure or new capability, then run `bun run test:types && bun run test && bun run lint`.",
+    `5. **Close the Feedback Loop:** Once verified, call \`update_feedback\` with \`id: ${issue.id}\`, \`status: "resolved"\`, \`resolution_note\`, \`replacement_tool\`, and \`fixed_in_version\` (using **bold** for important tool names and paths) so the fix is synced to MCP Memory (\`mcp-tool-feedback\`).`,
   );
   return lines.join("\n");
 }
@@ -339,9 +340,47 @@ function buildBatchAiFixPrompt(issues: FeedbackIssue[]): string {
     "2. **Safe Command Building:** Use `Cmd` builders (`src/core/cmd.ts`) and strict Zod schemas so no unsanitized argument can ever reach RouterOS in command position.",
     "3. **Schema & Catalog Sync:** Run `bun run gen` after adding or modifying tool schemas.",
     "4. **Verification Gate:** Add or update unit tests in `tests/` covering every resolved item, then run `bun run test:types && bun run test && bun run lint`.",
+    '5. **Close the Feedback Loop:** Call `update_feedback` for each resolved issue ID with `status: "resolved"`, `resolution_note`, `replacement_tool`, and `fixed_in_version` (using **bold** for key terms) so all fixes are synced to MCP Memory.',
   );
 
   return lines.join("\n");
+}
+
+function FormattedFeedbackText({ text }: { text: string }): ReactNode {
+  const tokens = text.split(/(\*\*`[^`\n]+`\*\*|\*\*[^*\n]+\*\*|`[^`\n]+`)/g);
+  return (
+    <>
+      {tokens.map((token, idx) => {
+        if (token.startsWith("**`") && token.endsWith("`**") && token.length > 6) {
+          return (
+            <strong key={idx} className="font-semibold text-foreground">
+              <code className="rounded bg-[var(--overlay-04)] px-1 py-0.5 font-mono text-[0.92em]">
+                {token.slice(3, -3)}
+              </code>
+            </strong>
+          );
+        }
+        if (token.startsWith("**") && token.endsWith("**") && token.length > 4) {
+          return (
+            <strong key={idx} className="font-semibold text-foreground">
+              {token.slice(2, -2)}
+            </strong>
+          );
+        }
+        if (token.startsWith("`") && token.endsWith("`") && token.length > 2) {
+          return (
+            <code
+              key={idx}
+              className="rounded bg-[var(--overlay-04)] px-1 py-0.5 font-mono text-[0.92em] text-foreground"
+            >
+              {token.slice(1, -1)}
+            </code>
+          );
+        }
+        return token;
+      })}
+    </>
+  );
 }
 
 function KindBadge({ kind }: { kind: FeedbackKind }): ReactNode {
@@ -1626,7 +1665,7 @@ export function FeedbackView(): ReactNode {
             {item.title}
           </strong>
           <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">
-            {item.detail}
+            <FormattedFeedbackText text={item.detail} />
           </span>
         </button>
 
@@ -1676,12 +1715,12 @@ export function FeedbackView(): ReactNode {
             {item.resolutionNote ? (
               <div className="line-clamp-2">
                 <strong className="font-medium text-foreground">Fix: </strong>
-                {item.resolutionNote}
+                <FormattedFeedbackText text={item.resolutionNote} />
               </div>
             ) : item.workaround ? (
               <div className="line-clamp-2">
                 <strong className="font-medium text-foreground">Workaround: </strong>
-                {item.workaround}
+                <FormattedFeedbackText text={item.workaround} />
               </div>
             ) : (
               <div className="truncate font-mono">{item.actualError}</div>
@@ -2478,7 +2517,7 @@ export function FeedbackView(): ReactNode {
                         >
                           <strong className="block font-semibold">{item.title}</strong>
                           <span className="mt-1 line-clamp-2 block text-xs text-muted-foreground">
-                            {item.detail}
+                            <FormattedFeedbackText text={item.detail} />
                           </span>
                         </button>
 
@@ -2517,7 +2556,9 @@ export function FeedbackView(): ReactNode {
                                 <strong className="font-medium text-foreground">
                                   {item.resolutionNote ? "Resolution: " : "Workaround: "}
                                 </strong>
-                                {item.resolutionNote ?? item.workaround}
+                                <FormattedFeedbackText
+                                  text={(item.resolutionNote ?? item.workaround)!}
+                                />
                               </div>
                             )}
                           </div>
@@ -2843,7 +2884,7 @@ export function FeedbackView(): ReactNode {
                     <div className="flex flex-col gap-4">
                       <DetailBlock label="Problem description">
                         <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                          {activeIssue.detail}
+                          <FormattedFeedbackText text={activeIssue.detail} />
                         </p>
                       </DetailBlock>
 
@@ -2861,7 +2902,7 @@ export function FeedbackView(): ReactNode {
                       {activeIssue.expected && (
                         <DetailBlock label="Expected behavior">
                           <p className="whitespace-pre-wrap text-xs text-muted-foreground">
-                            {activeIssue.expected}
+                            <FormattedFeedbackText text={activeIssue.expected} />
                           </p>
                         </DetailBlock>
                       )}
@@ -2869,7 +2910,7 @@ export function FeedbackView(): ReactNode {
                       {activeIssue.suggestedFix && (
                         <DetailBlock label="LLM suggested fix">
                           <p className="whitespace-pre-wrap text-xs text-muted-foreground">
-                            {activeIssue.suggestedFix}
+                            <FormattedFeedbackText text={activeIssue.suggestedFix} />
                           </p>
                         </DetailBlock>
                       )}
@@ -3106,13 +3147,21 @@ export function FeedbackView(): ReactNode {
                                   {occ.agentModel ? ` · ${occ.agentModel}` : ""}
                                 </span>
                               </header>
-                              {occ.detail && <p className="text-xs">{occ.detail}</p>}
+                              {occ.detail && (
+                                <p className="text-xs">
+                                  <FormattedFeedbackText text={occ.detail} />
+                                </p>
+                              )}
                               {occ.actualError && (
                                 <pre className="overflow-x-auto rounded border p-1.5 font-mono text-[11px] text-muted-foreground">
                                   {occ.actualError}
                                 </pre>
                               )}
-                              {occ.workaround && <small>Workaround used: {occ.workaround}</small>}
+                              {occ.workaround && (
+                                <small>
+                                  Workaround used: <FormattedFeedbackText text={occ.workaround} />
+                                </small>
+                              )}
                               {occ.callId && (
                                 <small className="font-mono">Call ID: {occ.callId}</small>
                               )}

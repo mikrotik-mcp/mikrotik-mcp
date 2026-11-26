@@ -299,6 +299,7 @@ export function buildAiFixPrompt(
     "2. **Safe Command Building:** Use `Cmd` builders (`src/core/cmd.ts`) and strict Zod schemas so no unsanitized argument can ever reach RouterOS in command position.",
     "3. **Schema & Catalog Sync:** If you add or modify tool schemas, run `bun run gen` to regenerate `schemas/` and reference docs.",
     "4. **Verification Gate:** Add or update unit tests in `tests/` covering the exact failure or new capability, then run `bun run test:types && bun run test && bun run lint`.",
+    `5. **Close the Feedback Loop:** Once verified, call \`update_feedback\` with \`id: ${issue.id}\`, \`status: "resolved"\`, \`resolution_note\`, \`replacement_tool\`, and \`fixed_in_version\` (using **bold** for important tool names and paths) so the fix is synced to MCP Memory (\`mcp-tool-feedback\`).`,
   );
   return lines.join("\n");
 }
@@ -389,6 +390,7 @@ export function buildBatchAiFixPrompt(issues: FeedbackIssue[]): string {
     "2. **Safe Command Building:** Use `Cmd` builders (`src/core/cmd.ts`) and strict Zod schemas so no unsanitized argument can ever reach RouterOS in command position.",
     "3. **Schema & Catalog Sync:** Run `bun run gen` after adding or modifying tool schemas.",
     "4. **Verification Gate:** Add or update unit tests in `tests/` covering every resolved item, then run `bun run test:types && bun run test && bun run lint`.",
+    "5. **Close the Feedback Loop:** Call `update_feedback` for each resolved issue ID with `status: \"resolved\"`, `resolution_note`, `replacement_tool`, and `fixed_in_version` (using **bold** for key terms) so all fixes are synced to MCP Memory.",
   );
 
   return lines.join("\n");
