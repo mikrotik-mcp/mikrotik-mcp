@@ -133,6 +133,7 @@ import { SchedulesView } from "./schedules";
 import { ExplainView } from "./explain";
 import { AttacksView } from "./attacks";
 import { MemoryView } from "./memory";
+import { FeedbackView } from "./feedback";
 import { AlertsView } from "./alerts";
 import { ModulesView } from "./modules";
 import { ReleasesView } from "./releases";
@@ -577,6 +578,14 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Use Recall lab to preview exact LLM context and why each memory was selected. Expired and archived memories are excluded.",
       "Review unverified or stale records before relying on them. Editing content or source resets verification; archiving preserves history.",
       "Changing the database path switches knowledge bases; it does not move existing data. Never store credentials here.",
+    ],
+  },
+  feedback: {
+    what: "Deduplicated LLM tool feedback & telemetry loop: whenever an AI session hits a missing tool, a missing parameter, a broken command builder, or a confusing schema, it files structured feedback here via `submit_feedback`.",
+    tips: [
+      "Repeat reports for the same operation and error skeleton automatically increment `×N` occurrences instead of creating duplicate issues.",
+      "Write a Known Workaround or Operator Resolution Note in the drawer — future LLM sessions that hit the same issue receive your guidance immediately.",
+      "Use 'Copy Fix Prompt for AI' in the drawer to hand a structured bug report straight to a coding agent.",
     ],
   },
   alerts: {
@@ -1032,6 +1041,13 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
         <circle cx="18" cy="14" r="2" />
         <circle cx="12" cy="20" r="2" />
         <path d="M12 8v-0.5M12 8 7.2 12.5M12 8 16.8 12.5M6 16 10.5 18.5M18 16 13.5 18.5" />
+      </>
+    ),
+    feedback: (
+      <>
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        <path d="M12 7v4" />
+        <circle cx="12" cy="14" r="0.8" fill="currentColor" stroke="none" />
       </>
     ),
     alerts: (
@@ -2057,6 +2073,7 @@ function App(): ReactNode {
 
                 {/* ── Memory ── */}
                 {view === "memory" && <MemoryView />}
+                {view === "feedback" && <FeedbackView />}
                 {view === "alerts" && <AlertsView />}
 
                 {/* ── Releases & Updates ── */}
