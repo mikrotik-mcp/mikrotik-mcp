@@ -34,7 +34,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/config", () => ({ loadConfig: mocks.config }));
-vi.mock("../src/core/runtime", () => ({ setConfig: mocks.setConfig }));
+vi.mock("../src/core/runtime", () => ({
+  getConfig: () => ({ devices: {} }),
+  onConfigChanged: vi.fn(),
+  setConfig: mocks.setConfig,
+}));
 vi.mock("../src/core/transport", () => ({
   createDeviceClient: () => ({
     connect: mocks.connect,

@@ -15,6 +15,7 @@ vi.mock("../src/core/openvpn-sessions", async (original) => ({
 vi.mock("../src/core/scoped-access", () => ({ assertDeviceAccess: access }));
 vi.mock("../src/core/runtime", () => ({
   getConfig: () => ({ devices: { home: {}, disabled: { disabled: true }, mac: { mac: "AA" } } }),
+  onConfigChanged: vi.fn(),
   resolveDeviceName: (name: string) => {
     if (name !== "home") throw new Error("Unknown");
     return name;

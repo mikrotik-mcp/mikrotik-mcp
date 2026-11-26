@@ -9,7 +9,10 @@ import {
 } from "../../src/observability/geo";
 
 const mocks = vi.hoisted(() => ({ getConfig: vi.fn(), lookup: vi.fn() }));
-vi.mock("../../src/core/runtime", () => ({ getConfig: mocks.getConfig }));
+vi.mock("../../src/core/runtime", () => ({
+  getConfig: mocks.getConfig,
+  onConfigChanged: vi.fn(),
+}));
 vi.mock("node:dns/promises", () => ({ lookup: mocks.lookup }));
 
 function route(path: string, method = "GET") {

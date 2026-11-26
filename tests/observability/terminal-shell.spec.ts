@@ -5,7 +5,11 @@ import { join } from "node:path";
 import { expect, test, vi } from "vite-plus/test";
 
 vi.mock("../../src/ssh/client", () => ({ MikroTikSSHClient: class {} }));
-vi.mock("../../src/core/runtime", () => ({ getDevice: () => ({}) }));
+vi.mock("../../src/core/runtime", () => ({
+  getConfig: () => ({ devices: {} }),
+  getDevice: () => ({}),
+  onConfigChanged: vi.fn(),
+}));
 vi.mock("../../src/core/transport", () => ({
   isMacTelnetDevice: () => false,
   resolveJump: () => undefined,

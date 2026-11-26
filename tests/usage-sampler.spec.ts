@@ -147,3 +147,35 @@ test("unsupported Kid Control retains legacy queue sampling", async () => {
     { ip: "10.0.0.2", rx: 50, tx: 10, source: "queue" },
   ]);
 });
+
+test("skips disabled devices without logging errors and samples immediately when re-enabled", async () => {
+  setConfig(
+    MikrotikConfigSchema.parse({
+      defaultDevice: "edge",
+      devices: {
+        edge: { host: "192.0.2.1" },
+        netherlands: { host: "192.0.2.2", disabled: true },
+      },
+    }),
+  );
+  const db = store();
+  startUsageSampler(db, MIN_USAGE_INTERVAL_MS);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(logger.warn).not.toHaveBeenCalled();
+  expect(db.recordClientSamples).toHaveBeenCalledTimes(1);
+  expect(db.recordClientSamples).toHaveBeenCalledWith("edge", expect.any(Number), []);
+
+  // Re-enable 'netherlands' while sampler is running: triggers an immediate sample pass.
+  vi.mocked(db.recordClientSamples).mockClear();
+  setConfig(
+    MikrotikConfigSchema.parse({
+      defaultDevice: "edge",
+      devices: {
+        edge: { host: "192.0.2.1" },
+        netherlands: { host: "192.0.2.2" },
+      },
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(db.recordClientSamples).toHaveBeenCalledWith("netherlands", expect.any(Number), []);
+});

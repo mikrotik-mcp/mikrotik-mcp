@@ -8,6 +8,8 @@ import {
   getDeviceStatus,
   probeAll,
   probeDevice,
+  startHealthChecks,
+  stopHealthChecks,
 } from "../../src/observability/health";
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), alert: vi.fn() }));
@@ -41,7 +43,10 @@ beforeEach(() => {
   setConfig(MikrotikConfigSchema.parse({ devices: { fixture: config }, defaultDevice: "fixture" }));
   mocks.create.mockImplementation(() => client());
 });
-afterEach(() => setConfig(initial));
+afterEach(() => {
+  stopHealthChecks();
+  setConfig(initial);
+});
 
 test("successful probe reads resources first, then optional identity, neighbors and disks", async () => {
   const fake = client();
@@ -154,4 +159,43 @@ test("a router whose probe is still running is skipped, the others are probed", 
   expect(hosts.filter((host) => host === "192.0.2.21")).toHaveLength(2);
   finish();
   await first;
+});
+
+test("disabled devices are skipped by probeAll, report UNKNOWN status, and are probed immediately when re-enabled", async () => {
+  setConfig(
+    MikrotikConfigSchema.parse({
+      devices: {
+        active: { host: "192.0.2.30" },
+        disabledRouter: { host: "192.0.2.31", disabled: true },
+      },
+      defaultDevice: "active",
+    }),
+  );
+  mocks.create.mockClear();
+  await probeAll();
+  const hosts = mocks.create.mock.calls.map(([dc]) => dc.host);
+  expect(hosts).toEqual(["192.0.2.30"]);
+  expect(getDeviceStatus("disabledRouter")).toEqual({
+    reachable: null,
+    checkedAt: null,
+    latencyMs: null,
+  });
+  expect(getDeviceNeighbors("disabledRouter")).toEqual([]);
+
+  // Start health checks and re-enable the disabled router — it should be probed immediately.
+  startHealthChecks(60_000);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  mocks.create.mockClear();
+  setConfig(
+    MikrotikConfigSchema.parse({
+      devices: {
+        active: { host: "192.0.2.30" },
+        disabledRouter: { host: "192.0.2.31" },
+      },
+      defaultDevice: "active",
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(mocks.create.mock.calls.map(([dc]) => dc.host)).toContain("192.0.2.31");
+  expect(getDeviceStatus("disabledRouter").reachable).toBe(true);
 });

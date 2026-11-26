@@ -100,6 +100,7 @@ vi.mock("../../src/core/runtime", () => ({
     if (!routers[name]) throw new Error(`Unknown device '${name}'`);
     return { name, ...endpoints[name] };
   },
+  onConfigChanged: vi.fn(),
   resolveDeviceName: (name: string) => name,
 }));
 vi.mock("../../src/core/transport", () => ({

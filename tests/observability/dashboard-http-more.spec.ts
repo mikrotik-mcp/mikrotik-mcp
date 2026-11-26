@@ -303,7 +303,8 @@ test("device toggle applies live state and reports persistence failure without t
   expect(fixture.probe).not.toHaveBeenCalled();
 });
 
-test("device toggle can re-enable a saved disabled device", async () => {
+test("device toggle can re-enable a saved disabled device and immediately probes it", async () => {
+  fixture.probe.mockResolvedValue({ reachable: true });
   const response = await post("/api/devices/toggle", { device: "backup", disabled: false });
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({
@@ -313,6 +314,29 @@ test("device toggle can re-enable a saved disabled device", async () => {
   });
   expect(getConfig().devices.backup.disabled).toBeUndefined();
   expect(fixture.writes).toHaveBeenCalledTimes(1);
+  expect(fixture.probe).toHaveBeenCalledWith(
+    "backup",
+    expect.objectContaining({ host: "192.0.2.11" }),
+  );
+});
+
+test("capabilities and device test routes handle disabled devices cleanly without throwing", async () => {
+  const caps = await request("/api/capabilities?token=more-token");
+  expect(caps.status).toBe(200);
+  expect(await caps.json()).toEqual({
+    devices: [
+      { device: "edge", capabilities: null },
+      { device: "backup", capabilities: null },
+    ],
+  });
+
+  const refreshDisabled = await post("/api/capabilities/refresh", { device: "backup" });
+  expect(refreshDisabled.status).toBe(400);
+  expect(await refreshDisabled.json()).toEqual({ error: "Device 'backup' is disabled." });
+
+  const testDisabled = await post("/api/devices/test", { device: "backup" });
+  expect(testDisabled.status).toBe(400);
+  expect(await testDisabled.json()).toEqual({ error: "Device 'backup' is disabled." });
 });
 
 test("memory settings are readable while disabled and memory operations fail closed", async () => {

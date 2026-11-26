@@ -50,6 +50,7 @@ vi.mock("../../src/tools/config-snapshot", () => ({
 }));
 vi.mock("../../src/core/runtime", () => ({
   getConfig: () => ({ readOnly: state.readOnly }),
+  onConfigChanged: vi.fn(),
   resolveDeviceName: (name?: string) => name ?? "lab",
 }));
 

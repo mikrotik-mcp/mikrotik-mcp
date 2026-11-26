@@ -100,3 +100,38 @@ test("immediate and periodic timer passes survive retention failures", async () 
   await vi.advanceTimersByTimeAsync(MIN_CAPSMAN_INTERVAL_MS);
   expect(db.pruneSamples).toHaveBeenCalledTimes(2);
 });
+
+test("skips disabled devices without errors and samples immediately when re-enabled", async () => {
+  setConfig(
+    MikrotikConfigSchema.parse({
+      defaultDevice: "edge",
+      devices: {
+        edge: { host: "192.0.2.1" },
+        netherlands: { host: "192.0.2.2", disabled: true },
+      },
+    }),
+  );
+  const db = store();
+  startCapsmanSampler(db, MIN_CAPSMAN_INTERVAL_MS);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(logger.warn).not.toHaveBeenCalled();
+  expect(db.recordRadioSamples).toHaveBeenCalledTimes(1);
+  expect(db.recordRadioSamples).toHaveBeenCalledWith("edge", expect.any(Number), expect.any(Array));
+
+  db.recordRadioSamples.mockClear();
+  setConfig(
+    MikrotikConfigSchema.parse({
+      defaultDevice: "edge",
+      devices: {
+        edge: { host: "192.0.2.1" },
+        netherlands: { host: "192.0.2.2" },
+      },
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(db.recordRadioSamples).toHaveBeenCalledWith(
+    "netherlands",
+    expect.any(Number),
+    expect.any(Array),
+  );
+});
