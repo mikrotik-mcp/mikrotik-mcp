@@ -3,7 +3,10 @@ import { createContext } from "../src/core/context";
 import {
   analyzeOpenVpnUsage,
   buildOpenVpnAnalyticsCommand,
+  clearOpenVpnGeoMemoryCache,
   computeOpenVpnUsageReport,
+  enrichOpenVpnCallerIps,
+  fetchIpuRevueGeoInfo,
   formatOpenVpnUsageReport,
   normalizeOpenVpnQuery,
   normalizeRouterDateTime,
@@ -11,7 +14,7 @@ import {
   parseAccountingUptimeSeconds,
   parseRouterOpenVpnPayload,
 } from "../src/core/openvpn-analytics";
-import type { RawRouterOpenVpnPayload } from "../src/core/openvpn-analytics";
+import type { OpenVpnGeoInfo, RawRouterOpenVpnPayload } from "../src/core/openvpn-analytics";
 import { openvpnTools } from "../src/tools/openvpn";
 
 const { run, allowed } = vi.hoisted(() => ({
@@ -41,6 +44,7 @@ describe("OpenVPN usage & accounting analytics", () => {
   beforeEach(() => {
     run.mockReset();
     allowed.mockReset();
+    clearOpenVpnGeoMemoryCache();
   });
 
   test("normalizes dates, aliases, user lists, and status shortcuts", () => {
@@ -259,14 +263,177 @@ describe("OpenVPN usage & accounting analytics", () => {
     expect(nonZeroReport.summary.zeroTrafficConnections).toBe(0);
     expect(nonZeroReport.summary.totalBytes).toBe(565_000_000);
 
-    // Test formatted Markdown output includes all 6 sections
+    // Test formatted Markdown output includes all sections
     const md = formatOpenVpnUsageReport(report);
     expect(md).toContain("## 1. All-Users Aggregate Summary");
     expect(md).toContain("## 2. Per-User Aggregated Summary");
+    expect(md).toContain("## 2b. Per-User Client Source IPs, Tunnel IPs & Geo/ISP Breakdown");
     expect(md).toContain("## 3. All-Users Daily Totals");
     expect(md).toContain("## 4. Per-User Daily Breakdown");
-    expect(md).toContain("## 5. Individual OpenVPN Sessions");
+    expect(md).toContain("## 5. Individual OpenVPN Connections");
     expect(md).toContain("## 6. Structured JSON Data");
+  });
+
+  test("enriches public client IPs via https://ipu.revue.ir/[ip]/json and filters by country, city, and asn_organization", async () => {
+    const mockFetch = vi.fn(async (url: unknown) => {
+      const urlStr = String(url);
+      if (urlStr.includes("86.104.81.119")) {
+        return new Response(
+          JSON.stringify({
+            ip: "86.104.81.119",
+            network: "86.104.81.0/24",
+            network_source: "city",
+            continent: "Asia",
+            country: "Iran",
+            country_code: "IR",
+            region: "Tehran",
+            city: "Tehran",
+            timezone: "Asia/Tehran",
+            latitude: 35.7219,
+            longitude: 51.3347,
+            accuracy_radius: null,
+            asn: 58224,
+            asn_organization: "Iran Telecommunication Company PJS",
+            private_address: false,
+            ipv6: false,
+            address_type: "unicast",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          ip: "5.113.12.177",
+          network: "5.113.0.0/16",
+          continent: "Asia",
+          country: "Iran",
+          country_code: "IR",
+          region: "Fars",
+          city: "Shiraz",
+          asn: 44244,
+          asn_organization: "Iran Cell Service and Communication Company",
+          private_address: false,
+          ipv6: false,
+          address_type: "unicast",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const singleGeo = await fetchIpuRevueGeoInfo("86.104.81.119", mockFetch);
+    expect(singleGeo).toMatchObject({
+      ip: "86.104.81.119",
+      country: "Iran",
+      countryCode: "ir",
+      region: "Tehran",
+      city: "Tehran",
+      asn: "AS58224",
+      asnNumber: 58224,
+      asnOrganization: "Iran Telecommunication Company PJS",
+      network: "86.104.81.0/24",
+    });
+
+    // Private IPs are skipped without network I/O
+    expect(await fetchIpuRevueGeoInfo("192.168.1.10", mockFetch)).toBeNull();
+
+    const payload: RawRouterOpenVpnPayload = {
+      clock: { date: "2026-11-26", time: "20:00:00", "gmt-offset": 12600 },
+      hasUserManager: true,
+      umUsers: [{ name: "baba" }, { name: "fereshteh" }],
+      umSessions: [
+        {
+          ".id": "*1",
+          "acct-session-id": "81400100",
+          user: "baba",
+          "calling-station-id": "86.104.81.119",
+          "user-address": "10.10.6.215",
+          started: "2026-11-26 10:00:00",
+          ended: "2026-11-26 11:00:00",
+          uptime: "01:00:00",
+          download: 50_000_000,
+          upload: 10_000_000,
+          active: false,
+          "terminate-cause": "user-request",
+        },
+        {
+          ".id": "*2",
+          "acct-session-id": "81400200",
+          user: "fereshteh",
+          "calling-station-id": "5.113.12.177",
+          "user-address": "10.10.6.120",
+          started: "2026-11-26 12:00:00",
+          ended: "2026-11-26 12:30:00",
+          uptime: "00:30:00",
+          download: 25_000_000,
+          upload: 5_000_000,
+          active: false,
+          "terminate-cause": "idle-timeout",
+        },
+      ],
+      pppActive: [],
+    };
+
+    const geoByIp = new Map<string, OpenVpnGeoInfo>();
+    await enrichOpenVpnCallerIps(payload, [], geoByIp, {
+      fetchFn: mockFetch,
+      persistToSqlite: false,
+    });
+
+    const fullReport = computeOpenVpnUsageReport(
+      "home-ax3",
+      payload,
+      normalizeOpenVpnQuery({ days: 1 } as any),
+      { geoByIp },
+    );
+
+    expect(fullReport.summary.uniqueCountries).toBe(1);
+    expect(fullReport.summary.countries).toEqual({ Iran: 2 });
+    expect(fullReport.summary.cities).toEqual({ Tehran: 1, Shiraz: 1 });
+    expect(fullReport.summary.asnOrganizations).toEqual({
+      "Iran Telecommunication Company PJS": 1,
+      "Iran Cell Service and Communication Company": 1,
+    });
+
+    const baba = fullReport.users.find((u) => u.user === "baba")!;
+    expect(baba.countries).toEqual(["Iran"]);
+    expect(baba.cities).toEqual(["Tehran"]);
+    expect(baba.asnOrganizations).toEqual(["Iran Telecommunication Company PJS"]);
+    expect(baba.tunnelAddresses).toEqual(["10.10.6.215"]);
+    expect(baba.sourceIps[0]).toMatchObject({
+      ip: "86.104.81.119",
+      country: "Iran",
+      city: "Tehran",
+      asnOrganization: "Iran Telecommunication Company PJS",
+      tunnelAddresses: ["10.10.6.215"],
+      connections: 1,
+      downloadBytes: 50_000_000,
+      uploadBytes: 10_000_000,
+      totalBytes: 60_000_000,
+    });
+
+    const shirazOnly = computeOpenVpnUsageReport(
+      "home-ax3",
+      payload,
+      normalizeOpenVpnQuery({ days: 1, city: "Shiraz" } as any),
+      { geoByIp },
+    );
+    expect(shirazOnly.summary.totalConnections).toBe(1);
+    expect(shirazOnly.users[0]?.user).toBe("fereshteh");
+
+    const tciOnly = computeOpenVpnUsageReport(
+      "home-ax3",
+      payload,
+      normalizeOpenVpnQuery({ days: 1, isp: "Telecommunication" } as any),
+      { geoByIp },
+    );
+    expect(tciOnly.summary.totalConnections).toBe(1);
+    expect(tciOnly.users[0]?.user).toBe("baba");
+
+    const md = formatOpenVpnUsageReport(fullReport);
+    expect(md).toContain("Iran Telecommunication Company PJS");
+    expect(md).toContain("Tehran");
+    expect(md).toContain("Shiraz");
+    expect(md).toContain("10.10.6.215");
   });
 
   test("analyzeOpenVpnUsage executes end-to-end and analyze_ovpn_usage has no MCP App UI metadata", async () => {
@@ -304,7 +471,10 @@ describe("OpenVPN usage & accounting analytics", () => {
     );
 
     const ctx = createContext(undefined, "home-ax3");
-    const { report, text } = await analyzeOpenVpnUsage({ days: 1 } as any, ctx);
+    const { report, text } = await analyzeOpenVpnUsage(
+      { days: 1, enrich_ip_geo: false } as any,
+      ctx,
+    );
     expect(allowed).toHaveBeenCalledWith(["home-ax3"], "analyze_ovpn_usage", "READ");
     expect(report.summary.totalConnections).toBe(1);
     expect(report.summary.totalBytes).toBe(12_582_912);
