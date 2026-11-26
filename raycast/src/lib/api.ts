@@ -58,6 +58,17 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await res.json().catch(() => ({}))) as T;
 }
 
+/** PATCH JSON; returns the parsed JSON body even on non-2xx (routes reply `{ ok, error }`). */
+export async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const { base, token } = cfg();
+  const res = await fetch(`${base}${path}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(body),
+  });
+  return (await res.json().catch(() => ({}))) as T;
+}
+
 /** DELETE with a JSON body; returns the parsed JSON body even on non-2xx. */
 export async function deleteJson<T>(path: string, body: unknown): Promise<T> {
   const { base, token } = cfg();
