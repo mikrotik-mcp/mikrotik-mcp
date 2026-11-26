@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "submit_feedback",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "bug",
+        "missing_tool",
+        "missing_param",
+        "confusing_schema",
+        "unexpected_output",
+        "performance",
+        "docs_gap",
+        "feature_request"
+      ],
+      "description": "Category of the feedback: 'bug' (tool error or broken behavior), 'missing_tool' (needed capability has no dedicated tool), 'missing_param' (tool exists but lacks a parameter/filter), 'confusing_schema' (description or arguments are ambiguous), 'unexpected_output' (output format/content was surprising or incomplete), 'performance' (timeout or slow execution), 'docs_gap' (missing guidance), or 'feature_request'."
+    },
+    "impact": {
+      "default": "friction",
+      "description": "Operational impact on the current task: 'blocker' (task could not be completed), 'degraded' (had to fall back to raw command or manual workaround), 'friction' (took extra retries/calls), or 'suggestion' (improvement idea).",
+      "type": "string",
+      "enum": ["blocker", "degraded", "friction", "suggestion"]
+    },
+    "operation": {
+      "description": "Exact MCP tool name (e.g. 'list_firewall_rules') or RouterOS menu path (e.g. '/ip/firewall/filter') involved. Omit only for general server feedback.",
+      "type": "string",
+      "maxLength": 200
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 240,
+      "description": "Concise one-line summary of the issue or missing capability (e.g. 'create_wireguard_peer rejects preshared-key with base64 padding')."
+    },
+    "detail": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000,
+      "description": "Clear explanation of what you were trying to accomplish, what happened, and why the current tool behavior or catalog fell short. Never include plaintext passwords, private keys, or tokens."
+    },
+    "expected": {
+      "description": "What the tool or server should have done or returned instead.",
+      "type": "string",
+      "maxLength": 8000
+    },
+    "actual_error": {
+      "description": "Exact error string or RouterOS parser message returned, if any (secrets will be redacted).",
+      "type": "string",
+      "maxLength": 8000
+    },
+    "workaround": {
+      "description": "How you worked around the issue in this session (e.g. 'Used run_routeros_command with /ip/dns/cache/flush' or 'Filtered client-side'). Helps future sessions and operators.",
+      "type": "string",
+      "maxLength": 8000
+    },
+    "suggested_fix": {
+      "description": "Concrete proposal for how the tool schema, command builder, or catalog should be improved.",
+      "type": "string",
+      "maxLength": 8000
+    },
+    "call_id": {
+      "description": "Tool call ID from the failed or problematic invocation, if available.",
+      "type": "string",
+      "maxLength": 300
+    },
+    "device": {
+      "description": "Configured device name where the issue occurred, if applicable.",
+      "type": "string",
+      "maxLength": 300
+    },
+    "routeros_version": {
+      "description": "RouterOS version of the target device (e.g. '7.16.2'), if known.",
+      "type": "string",
+      "maxLength": 300
+    },
+    "agent_model": {
+      "description": "Identifier of the AI model or client submitting the feedback, if known.",
+      "type": "string",
+      "maxLength": 300
+    },
+    "tags": {
+      "default": [],
+      "description": "Optional subsystem tags (e.g. ['wireguard', 'ipv6', 'safe-mode']).",
+      "maxItems": 12,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
+    "force_new": {
+      "default": false,
+      "description": "When true, bypass fuzzy deduplication and force creation of a distinct feedback issue (exact fingerprint duplicates still merge).",
+      "type": "boolean"
+    }
+  },
+  "required": ["kind", "impact", "title", "detail", "tags", "force_new"],
+  "additionalProperties": false
+}

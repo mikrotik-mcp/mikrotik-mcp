@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "find_feedback",
+  "type": "object",
+  "properties": {
+    "query": {
+      "default": "",
+      "description": "Keywords, tool name, error message, or subsystem to search for.",
+      "type": "string",
+      "maxLength": 500
+    },
+    "operation": {
+      "description": "Filter by exact or normalized tool name / RouterOS path.",
+      "type": "string",
+      "maxLength": 200
+    },
+    "kind": {
+      "description": "Filter by feedback kind.",
+      "type": "string",
+      "enum": [
+        "bug",
+        "missing_tool",
+        "missing_param",
+        "confusing_schema",
+        "unexpected_output",
+        "performance",
+        "docs_gap",
+        "feature_request"
+      ]
+    },
+    "impact": {
+      "description": "Filter by impact level.",
+      "type": "string",
+      "enum": ["blocker", "degraded", "friction", "suggestion"]
+    },
+    "status": {
+      "default": "all",
+      "description": "Filter by resolution status ('all' includes resolved issues with workarounds).",
+      "type": "string",
+      "enum": ["open", "in_progress", "resolved", "wont_fix", "all"]
+    },
+    "sort": {
+      "default": "occurrences",
+      "description": "Sort order: 'occurrences' (most frequent first), 'recent' (latest seen first), 'impact' (highest severity first), or 'first_seen'.",
+      "type": "string",
+      "enum": ["occurrences", "recent", "impact", "first_seen"]
+    },
+    "limit": {
+      "default": 25,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "offset": {
+      "default": 0,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    }
+  },
+  "required": ["query", "status", "sort", "limit", "offset"],
+  "additionalProperties": false
+}
