@@ -354,6 +354,16 @@ export const CONFIG_SECTIONS: CfgSection[] = [
     fields: [{ key: "dbPath", label: "Database path", type: "text" }],
   },
   {
+    id: "feedback",
+    title: "Tool Feedback",
+    icon: "💬",
+    kind: "object",
+    path: "feedback",
+    enable: { key: "enabled", label: "Feedback" },
+    blurb: "Deduplicated LLM tool bug reports, missing-capability telemetry and operator workarounds.",
+    fields: [{ key: "dbPath", label: "Database path", type: "text" }],
+  },
+  {
     id: "vouchers",
     title: "Voucher sales",
     icon: "🎟️",
