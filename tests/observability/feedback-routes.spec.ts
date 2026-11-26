@@ -168,8 +168,12 @@ test("feedback REST validates inputs, supports CRUD and merge, and rejects malfo
   const ghJson = (await ghWeb.json()) as { mode: string; url: string };
   expect(ghJson.mode).toBe("web_url");
   expect(ghJson.url).toContain("https://github.com/mikrotik-mcp/mikrotik-mcp/issues/new");
-  expect(decodeURIComponent(ghJson.url)).toContain("home-ax3");
-  expect(decodeURIComponent(ghJson.url)).toContain("7.16.2");
+  const ghBody = new URL(ghJson.url).searchParams.get("body") ?? "";
+  expect(ghBody).toContain("## **Summary**");
+  expect(ghBody).toContain("## **Telemetry & Device Context**");
+  expect(ghBody).toContain("**`home-ax3`**");
+  expect(ghBody).toContain("**`v7.16.2`**");
+  expect(ghBody).toContain("**`run_routeros_command`**");
 
   // POST merge
   const merged = await request("/1/merge", "POST", { sourceId: 2 });
@@ -222,4 +226,38 @@ test("config endpoint can toggle feedback store and rolls back on disk write fai
   expect(atomicWrite).toHaveBeenCalledOnce();
   expect(installFeedbackStore).toHaveBeenCalledWith(store);
   expect(getConfig().feedback.enabled).toBe(true);
+});
+
+test("update_feedback MCP tool updates feedback status and resolution notes with alias normalization", async () => {
+  const { feedbackTools } = await import("../../src/tools/feedback");
+  const updateTool = feedbackTools.find((t) => t.name === "update_feedback")!;
+  expect(updateTool).toBeDefined();
+
+  const res = JSON.parse(
+    String(
+      await updateTool.handler(
+        {
+          issue_id: 1,
+          status: "resolved",
+          resolution:
+            "Added **update_script** and **update_scheduler** in **src/tools/scheduler.ts**.",
+          version: "v6.22.0",
+          replacement_tool: "update_script, update_scheduler",
+        } as never,
+        {} as never,
+      ),
+    ),
+  ) as { ok: boolean; issue: { id: number; status: string } };
+  expect(res.ok).toBe(true);
+  expect(store.update).toHaveBeenCalledWith(
+    1,
+    expect.objectContaining({
+      id: 1,
+      status: "resolved",
+      resolution_note:
+        "Added **update_script** and **update_scheduler** in **src/tools/scheduler.ts**.",
+      fixed_in_version: "v6.22.0",
+      replacement_tool: "update_script, update_scheduler",
+    }),
+  );
 });

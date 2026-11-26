@@ -76,6 +76,7 @@ describe("update_* tools", () => {
     // not apply. Adding an update tool? It must take `unset` or be listed here.
     const exempt = new Set([
       "update_alert_rule",
+      "update_feedback",
       "update_mcp_settings",
       "update_device_mode_features",
       "update_bgp_instance_med_comparison",

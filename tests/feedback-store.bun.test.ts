@@ -155,10 +155,12 @@ test("syncFeedbackToMemory records a shared, verified lesson in MCP knowledge me
     });
     const resolved = fbStore.update(submitted.issue.id, {
       status: "resolved",
-      fixed_in_version: "v6.22.0",
+      version: "v6.22.0",
       replacement_tool: "flush_dns_cache",
-      resolution_note: "Added dedicated flush_dns_cache tool in DNS module.",
+      resolution: "Added dedicated flush_dns_cache tool in src/tools/dns.ts.",
     });
+    expect(resolved.fixedInVersion).toBe("v6.22.0");
+    expect(resolved.resolutionNote).toContain("src/tools/dns.ts");
     const factId = await syncFeedbackToMemory(resolved);
     expect(factId).toBeGreaterThan(0);
 
@@ -175,8 +177,9 @@ test("syncFeedbackToMemory records a shared, verified lesson in MCP knowledge me
       recalled.items.some(
         (item) =>
           item.id === factId &&
-          item.content.includes("flush_dns_cache") &&
-          item.content.includes("v6.22.0"),
+          item.content.includes("**`flush_dns_cache`**") &&
+          item.content.includes("**`v6.22.0`**") &&
+          item.content.includes("**`src/tools/dns.ts`**"),
       ),
     ).toBe(true);
   } finally {
