@@ -26,6 +26,7 @@ import type {
   AlertsPayload,
   AttacksPayload,
   DevicesPayload,
+  FeedbackSummary,
   RolloutRecord,
   ScheduleJobRow,
   ScheduleRegression,
@@ -46,6 +47,7 @@ export default function Command() {
     "/api/schedules/regressions?limit=3",
   );
   const attackQ = useApi<AttacksPayload>("/api/attacks?hours=24");
+  const feedbackQ = useApi<FeedbackSummary>("/api/feedback/summary");
   const queries = [
     devicesQ,
     statsQ,
@@ -55,6 +57,7 @@ export default function Command() {
     scheduleQ,
     regressionQ,
     attackQ,
+    feedbackQ,
   ];
   const labels = [
     "Device health",
@@ -65,6 +68,7 @@ export default function Command() {
     "Audits",
     "Audit changes",
     "Security",
+    "Tool feedback",
   ];
   const failed = queries.flatMap((query, index) =>
     query.error ? [labels[index]] : [],
@@ -87,6 +91,10 @@ export default function Command() {
   );
   const stats = statsQ.data;
   const events = eventsQ.data?.events ?? [];
+  const feedback = feedbackQ.data;
+  const openBlockers = feedback?.blockersOpen ?? 0;
+  const openFeedback =
+    (feedback?.openIssues ?? 0) + (feedback?.inProgressIssues ?? 0);
   const tone = fleetTone({
     ...fleet,
     unavailable,
@@ -190,8 +198,18 @@ export default function Command() {
       {(firing.length > 0 ||
         incidents.length > 0 ||
         rollouts.length > 0 ||
-        criticalFindings > 0) && (
+        criticalFindings > 0 ||
+        openBlockers > 0) && (
         <MenuBarExtra.Section title="NEEDS ATTENTION">
+          {openBlockers > 0 && (
+            <FleetItem
+              title={`${openBlockers} blocker tool feedback issue${openBlockers === 1 ? "" : "s"}`}
+              subtitle={`${openFeedback} active on Kanban board`}
+              icon={Icon.Bug}
+              tone="warning"
+              onAction={() => launch("feedback")}
+            />
+          )}
           {incidents.length > 0 && (
             <MenuBarExtra.Submenu
               title={`${incidents.length} security incidents · last 24h`}
@@ -426,6 +444,44 @@ export default function Command() {
             onAction={() => openDashboard("schedules")}
           />
         </MenuBarExtra.Submenu>
+        <MenuBarExtra.Submenu
+          title={
+            feedback
+              ? `Tool feedback · ${openFeedback} active (${num(feedback.totalOccurrences)} sightings)`
+              : "Tool feedback"
+          }
+          icon={Icon.Bug}
+        >
+          {feedback && (
+            <>
+              <FleetItem
+                title="Open / In Progress"
+                subtitle={`${feedback.openIssues} open · ${feedback.inProgressIssues} in progress`}
+                icon={Icon.ExclamationMark}
+                tone={
+                  feedback.blockersOpen > 0
+                    ? "critical"
+                    : openFeedback > 0
+                      ? "warning"
+                      : "healthy"
+                }
+                onAction={() => launch("feedback")}
+              />
+              <FleetItem
+                title="Resolved (MCP Memory KB)"
+                subtitle={`${feedback.resolvedIssues} resolved · ${feedback.repeatOccurrencesSaved} duplicates absorbed`}
+                icon={Icon.CheckCircle}
+                tone="healthy"
+                onAction={() => launch("feedback")}
+              />
+            </>
+          )}
+          <FleetLink
+            title="Open Tool Feedback Board…"
+            command="feedback"
+            icon={Icon.ArrowRight}
+          />
+        </MenuBarExtra.Submenu>
       </MenuBarExtra.Section>
 
       <MenuBarExtra.Section title="WORKSPACE">
@@ -440,6 +496,11 @@ export default function Command() {
             title="Prompt Library"
             command="prompts"
             icon={Icon.Message}
+          />
+          <FleetLink
+            title="Tool Feedback"
+            command="feedback"
+            icon={Icon.Bug}
           />
           <FleetLink title="Devices" command="devices" icon={Icon.HardDrive} />
           <FleetLink
