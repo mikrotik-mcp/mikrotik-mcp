@@ -1,8 +1,9 @@
 import { LoadingState } from "./loading-state";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent, FormEvent, ReactElement, ReactNode } from "react";
+import type { CSSProperties, DragEvent, FormEvent, ReactElement, ReactNode } from "react";
 import {
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Columns3,
@@ -38,6 +39,13 @@ import type {
 import { feedbackImpacts, feedbackKinds, feedbackStatuses } from "../../src/feedback/types";
 import { api, deleteJson, postJson, withToken } from "./api";
 import { CopyButton, HBars } from "./atoms";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu";
 import { ScrollArea, ScrollBar } from "./components/ui/scroll-area";
 import {
   Checkbox,
@@ -48,14 +56,10 @@ import {
   RowMenu,
   RowMore,
   Select,
-  SelectionBar,
   TextArea,
   TextInput,
 } from "./kit";
 import {
-  Donut,
-  Metric,
-  MetricStrip,
   MonitorButton,
   MonitorDialog,
   MonitorEmpty,
@@ -64,14 +68,15 @@ import {
   MonitorSearch,
   MonitorSelect,
   MonitorTabs,
-  PageIntro,
   Segmented,
   StatusBadge,
   StatusDot,
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 import { toast } from "./toast-action";
+import { PaneDivider, usePaneSize } from "./pane-divider";
 import "./monitoring.css";
+import "./feedback.css";
 
 const LIST_PAGE_SIZE = 24;
 const BOARD_PAGE_SIZE = 100;
@@ -747,7 +752,11 @@ export function FeedbackView(): ReactNode {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const [viewMode, setViewMode] = useState<ViewMode>("board");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const queuePane = usePaneSize("mt-feedback-queue-percent", 36, 28, 55);
+  const [readingId, setReadingId] = useState<number | null>(null);
+  const backToQueue = useRef<HTMLButtonElement>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [swimlaneBy, setSwimlaneBy] = useState<SwimlaneBy>("none");
 
   const [statusTab, setStatusTab] = useState<StatusTab>("all");
@@ -768,6 +777,21 @@ export function FeedbackView(): ReactNode {
   const [dropTargetStatus, setDropTargetStatus] = useState<FeedbackStatus | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const hasSelection = selectedIds.size > 0;
+  useEffect(() => {
+    if (!hasSelection) return;
+    const clearOnEscape = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !document.querySelector('[role="menu"], [role="dialog"], [role="listbox"]')
+      ) {
+        setSelectedIds(new Set());
+      }
+    };
+    window.addEventListener("keydown", clearOnEscape);
+    return () => window.removeEventListener("keydown", clearOnEscape);
+  }, [hasSelection]);
   const lastClickedIdRef = useRef<number | null>(null);
   const shiftHeldRef = useRef(false);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -902,6 +926,7 @@ export function FeedbackView(): ReactNode {
     [rawItems, parsedSearch.tokens, deviceFilter, rosFilter, quickPresets],
   );
 
+  const reading = items.find((item) => item.id === readingId) ?? items[0];
   const activeIndex = activeId !== null ? items.findIndex((i) => i.id === activeId) : -1;
   const currentDetail = activeId !== null && detailData?.issue.id === activeId ? detailData : null;
   const activeIssueBase =
@@ -1222,8 +1247,6 @@ export function FeedbackView(): ReactNode {
     });
   };
 
-  const selectedItems = rawItems.filter((i) => selectedIds.has(i.id));
-
   const copySelectedPrompts = async (ids?: number[]) => {
     const targetIds = ids ?? [...selectedIds];
     const targetItems = rawItems.filter((i) => targetIds.includes(i.id));
@@ -1396,6 +1419,78 @@ export function FeedbackView(): ReactNode {
     }));
   }, [items, swimlaneBy]);
 
+  const hasUnresolved = items.some((item) => item.status !== "resolved");
+  const hasBlockers = items.some((item) => item.impact === "blocker");
+  const selectUnresolved = () =>
+    setSelectedIds(
+      new Set(items.filter((item) => item.status !== "resolved").map((item) => item.id)),
+    );
+  const selectBlockers = () =>
+    setSelectedIds(
+      new Set(items.filter((item) => item.impact === "blocker").map((item) => item.id)),
+    );
+  const deleteSelected = () => void deleteIssues([...selectedIds]);
+  const selectionActions = [
+    {
+      label: "Copy AI Prompt",
+      icon: <Copy aria-hidden="true" />,
+      onSelect: () => void copySelectedPrompts(),
+    },
+    {
+      label: "Submit GitHub Issue",
+      icon: <ExternalLink aria-hidden="true" />,
+      disabled: busy,
+      onSelect: () => void batchSubmitGithubIssue(),
+    },
+    {
+      label: "Resolve & Sync Memory",
+      icon: <Check aria-hidden="true" />,
+      disabled: busy,
+      onSelect: () => void batchUpdateStatus("resolved", "Resolved selected issues"),
+    },
+    {
+      label: "In Progress",
+      icon: <Wrench aria-hidden="true" />,
+      disabled: busy,
+      onSelect: () => void batchUpdateStatus("in_progress", "Marked in progress"),
+    },
+    {
+      label: "Won’t Fix",
+      icon: <XCircle aria-hidden="true" />,
+      disabled: busy,
+      onSelect: () => void batchUpdateStatus("wont_fix", "Marked won't fix"),
+    },
+    {
+      label: "Reopen",
+      icon: <RotateCcw aria-hidden="true" />,
+      disabled: busy,
+      onSelect: () => void batchUpdateStatus("open", "Reopened selected issues"),
+    },
+    {
+      label: "Sync Memory",
+      icon: <Sparkles aria-hidden="true" />,
+      disabled: busy,
+      onSelect: () => void batchSyncMemory(),
+    },
+    ...(selectedIds.size >= 2
+      ? [
+          {
+            label: "Merge",
+            icon: <GitMerge aria-hidden="true" />,
+            disabled: busy,
+            onSelect: () => void batchMergeSelected(),
+          },
+        ]
+      : []),
+    {
+      label: "Delete",
+      icon: <Trash2 aria-hidden="true" />,
+      danger: true,
+      disabled: busy,
+      onSelect: deleteSelected,
+    },
+  ];
+
   const renderIssueContextMenu = (item: FeedbackIssue, children: ReactElement) => {
     const isSelected = selectedIds.has(item.id);
     return (
@@ -1487,66 +1582,7 @@ export function FeedbackView(): ReactNode {
         selection={{
           count: selectedIds.size,
           summary: "Batch prompt, GitHub issue, resolve, memory sync, merge or delete",
-          actions: [
-            {
-              label: `Copy AI Prompt (${selectedIds.size})`,
-              icon: <Copy aria-hidden="true" />,
-              onSelect: () => void copySelectedPrompts(),
-            },
-            {
-              label: `Submit GitHub Issue (${selectedIds.size})`,
-              icon: <ExternalLink aria-hidden="true" />,
-              disabled: busy,
-              onSelect: () => void batchSubmitGithubIssue(),
-            },
-            {
-              label: `Move ${selectedIds.size} → Resolved & Sync Memory`,
-              icon: <Check aria-hidden="true" />,
-              disabled: busy,
-              onSelect: () => void batchUpdateStatus("resolved", "Resolved selected issues"),
-            },
-            {
-              label: `Move ${selectedIds.size} → In Progress`,
-              icon: <Wrench aria-hidden="true" />,
-              disabled: busy,
-              onSelect: () => void batchUpdateStatus("in_progress", "Marked in progress"),
-            },
-            {
-              label: `Move ${selectedIds.size} → Open`,
-              icon: <RotateCcw aria-hidden="true" />,
-              disabled: busy,
-              onSelect: () => void batchUpdateStatus("open", "Reopened selected issues"),
-            },
-            {
-              label: `Move ${selectedIds.size} → Won’t Fix`,
-              icon: <XCircle aria-hidden="true" />,
-              disabled: busy,
-              onSelect: () => void batchUpdateStatus("wont_fix", "Marked won't fix"),
-            },
-            {
-              label: `Sync to MCP Memory (${selectedIds.size})`,
-              icon: <Sparkles aria-hidden="true" />,
-              disabled: busy,
-              onSelect: () => void batchSyncMemory(),
-            },
-            ...(selectedIds.size >= 2
-              ? [
-                  {
-                    label: `Merge ${selectedIds.size} into #${[...selectedIds][0]}`,
-                    icon: <GitMerge aria-hidden="true" />,
-                    disabled: busy,
-                    onSelect: () => void batchMergeSelected(),
-                  },
-                ]
-              : []),
-            {
-              label: `Delete ${selectedIds.size} issues`,
-              icon: <Trash2 aria-hidden="true" />,
-              danger: true,
-              disabled: busy,
-              onSelect: () => void deleteIssues([...selectedIds]),
-            },
-          ],
+          actions: selectionActions,
           clear: () => setSelectedIds(new Set()),
         }}
         actions={[
@@ -1774,145 +1810,53 @@ export function FeedbackView(): ReactNode {
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-[18px]">
-      <PageIntro
-        eyebrow="LLM tool telemetry & Jira workflow board"
-        verdict={
-          summary ? (
-            openIssuesCount === 0 ? (
-              <>
-                All reported tool feedback is <span className="s">resolved</span>.
-              </>
-            ) : (
-              <>
-                {openIssuesCount} active tool {openIssuesCount === 1 ? "issue" : "issues"} across{" "}
-                <span className="s">{summary.totalOccurrences}</span> sightings.
-                {summary.blockersOpen > 0 && (
-                  <>
-                    {" "}
-                    <span className="w">
-                      {summary.blockersOpen} {summary.blockersOpen === 1 ? "blocker" : "blockers"}.
-                    </span>
-                  </>
-                )}
-              </>
-            )
-          ) : (
-            "Deduplicated tool feedback from AI sessions."
-          )
-        }
-        lead="Drag cards across Jira workflow columns to transition status (Open → In Progress → Resolved → Won’t Fix). Moving a card to Resolved automatically syncs the fix or replacement tool into MCP Memory so future AI sessions learn it via memory_recall."
-        actions={
-          <>
-            <MonitorButton
-              variant="primary"
-              icon={<Plus aria-hidden="true" />}
-              onClick={() => {
-                setCreateInitialStatus("open");
-                setCreating(true);
-              }}
-            >
-              File feedback
-            </MonitorButton>
-            <Segmented
-              label="View mode"
-              value={viewMode}
-              onChange={(v) => setViewMode(v)}
-              options={[
-                {
-                  value: "board",
-                  label: (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
-                      Jira Board
-                    </span>
-                  ),
-                },
-                {
-                  value: "list",
-                  label: (
-                    <span className="inline-flex items-center gap-1.5">
-                      <List className="h-3.5 w-3.5" aria-hidden="true" />
-                      List Queue
-                    </span>
-                  ),
-                },
-              ]}
-            />
-            <MonitorButton
-              variant="ghost"
-              disabled={loading}
-              onClick={refresh}
-              icon={<RefreshCw aria-hidden="true" className={loading ? "animate-spin" : ""} />}
-            >
-              Refresh
-            </MonitorButton>
-          </>
-        }
-        aside={
-          summary ? (
-            <div className="glass flex min-w-[290px] items-center gap-4 p-4">
-              <Donut
-                size={116}
-                stroke={12}
-                center={summary.totalIssues}
-                sub="issues"
-                label="Feedback status"
-                noun="issues"
-                parts={[
-                  { value: summary.openIssues, tone: "warn", label: "Open" },
-                  { value: summary.inProgressIssues, tone: "brand", label: "In progress" },
-                  { value: summary.resolvedIssues, tone: "good", label: "Resolved" },
-                  { value: summary.wontFixIssues, tone: "muted", label: "Won’t fix" },
-                ]}
-              />
-              <div className="flex flex-1 flex-col gap-2 text-xs">
-                {(
-                  [
-                    ["warn", "Open", summary.openIssues],
-                    ["brand", "In progress", summary.inProgressIssues],
-                    ["good", "Resolved", summary.resolvedIssues],
-                    ["default", "Won’t fix", summary.wontFixIssues],
-                  ] as const
-                ).map(([tone, label, n]) => (
-                  <span key={label} className="flex items-center gap-2">
-                    <StatusDot tone={tone} />
-                    <span className="flex-1 text-muted-foreground">{label}</span>
-                    <span className="tabular-nums">{n}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : undefined
-        }
-      />
+    <div
+      className="feedback-desk"
+      data-reading={
+        (viewMode === "list" && readingId != null && readingId === reading?.id) || undefined
+      }
+    >
+      <header className="feedback-heading">
+        <div>
+          <h1>Feedback</h1>
+          <p>RouterOS tool reports, workarounds and resolutions.</p>
+        </div>
+        <div className="feedback-actions">
+          <MonitorButton
+            variant="ghost"
+            disabled={loading}
+            onClick={refresh}
+            icon={<RefreshCw aria-hidden="true" />}
+          >
+            Refresh
+          </MonitorButton>
+          <MonitorButton
+            variant="primary"
+            icon={<Plus aria-hidden="true" />}
+            onClick={() => {
+              setCreateInitialStatus("open");
+              setCreating(true);
+            }}
+          >
+            File feedback
+          </MonitorButton>
+        </div>
+      </header>
 
-      <MetricStrip label="Tool feedback metrics">
-        <Metric
-          label="Open & In Progress"
-          value={openIssuesCount}
-          tone={openIssuesCount > 0 ? "warn" : "good"}
-          hint={`${summary?.openIssues ?? 0} open · ${summary?.inProgressIssues ?? 0} in progress`}
-        />
-        <Metric
-          label="Active Blockers"
-          value={summary?.blockersOpen ?? 0}
-          tone={(summary?.blockersOpen ?? 0) > 0 ? "bad" : "good"}
-          hint="Tasks where the LLM was blocked"
-        />
-        <Metric
-          label="Total Sightings"
-          value={summary?.totalOccurrences ?? 0}
-          tone="brand"
-          hint={`${summary?.repeatOccurrencesSaved ?? 0} duplicate tickets prevented`}
-        />
-        <Metric
-          label="Resolved & Guided"
-          value={summary?.resolvedIssues ?? 0}
-          tone="good"
-          hint="Auto-synced to MCP Memory on resolve"
-        />
-      </MetricStrip>
+      <dl className="feedback-ledger" aria-label="Feedback totals">
+        {[
+          ["Reports", summary?.totalIssues],
+          ["Awaiting resolution", summary ? openIssuesCount : undefined],
+          ["Active blockers", summary?.blockersOpen],
+          ["Resolved", summary?.resolvedIssues],
+          ["Sightings", summary?.totalOccurrences],
+        ].map(([label, count]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{count?.toLocaleString() ?? "—"}</dd>
+          </div>
+        ))}
+      </dl>
 
       {error && (
         <MonitorNote tone="bad" role="alert">
@@ -1925,354 +1869,358 @@ export function FeedbackView(): ReactNode {
         </MonitorNote>
       )}
 
-      {/* Professional Search, Smart Tokens, Quick Filter Chips & Swimlane Controls */}
-      <div className="glass flex flex-col gap-3 p-4">
-        <div className="flex flex-wrap items-center gap-2.5">
+      <section className="feedback-tools" aria-label="Feedback controls">
+        <div className="feedback-toolbar">
+          <Segmented
+            label="View mode"
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              {
+                value: "list",
+                label: (
+                  <span>
+                    <List aria-hidden="true" /> Queue
+                  </span>
+                ),
+              },
+              {
+                value: "board",
+                label: (
+                  <span>
+                    <Columns3 aria-hidden="true" /> Board
+                  </span>
+                ),
+              },
+            ]}
+          />
           <MonitorSearch
-            className="min-w-[260px] flex-1"
-            label="Search & JQL-style filter"
-            placeholder="Search text or use tokens: kind:bug impact:blocker tool:wireguard device:home-ax3 is:hot is:memory…"
+            className="feedback-search"
+            label="Search reports or filter by token"
+            placeholder="Search reports or tool:…"
             value={query}
             onChange={(v) => {
               setQuery(v.slice(0, 500));
               setOffset(0);
             }}
           />
-          <MonitorSelect
-            label="Category"
-            value={kindFilter}
-            onChange={(v) => {
-              setKindFilter(v);
-              setOffset(0);
-            }}
-            options={[
-              { value: "all", label: "All categories" },
-              ...feedbackKinds.map((k) => ({ value: k, label: KIND_LABELS[k] })),
-            ]}
-          />
-          <MonitorSelect
-            label="Impact"
-            value={impactFilter}
-            onChange={(v) => {
-              setImpactFilter(v);
-              setOffset(0);
-            }}
-            options={[
-              { value: "all", label: "All impacts" },
-              ...feedbackImpacts.map((i) => ({ value: i, label: IMPACT_LABELS[i] })),
-            ]}
-          />
-          {availableDevices.length > 0 && (
-            <MonitorSelect
-              label="Router"
-              value={deviceFilter}
-              onChange={(v) => {
-                setDeviceFilter(v);
-                setOffset(0);
-              }}
-              options={[
-                { value: "all", label: "All routers" },
-                ...availableDevices.map((d) => ({ value: d, label: d })),
-              ]}
-            />
-          )}
-          {availableRosVersions.length > 0 && (
-            <MonitorSelect
-              label="RouterOS"
-              value={rosFilter}
-              onChange={(v) => {
-                setRosFilter(v);
-                setOffset(0);
-              }}
-              options={[
-                { value: "all", label: "All RouterOS" },
-                ...availableRosVersions.map((v) => ({ value: v, label: `v${v}` })),
-              ]}
-            />
-          )}
-          {viewMode === "board" && (
-            <MonitorSelect
-              label="Swimlanes"
-              value={swimlaneBy}
-              onChange={(v) => setSwimlaneBy(v as SwimlaneBy)}
-              options={[
-                { value: "none", label: "Swimlanes: None" },
-                { value: "impact", label: "Group by Impact" },
-                { value: "kind", label: "Group by Category" },
-                { value: "device", label: "Group by Router" },
-              ]}
-            />
-          )}
-          <Segmented
-            label="Sort feedback"
-            value={sort}
-            onChange={(v) => {
-              setSort(v);
-              setOffset(0);
-            }}
-            options={[
-              { value: "occurrences", label: "Most frequent" },
-              { value: "impact", label: "Impact" },
-              { value: "recent", label: "Latest" },
-            ]}
-          />
+          <button
+            type="button"
+            className="feedback-filter-toggle"
+            aria-expanded={filtersOpen}
+            aria-controls="feedback-filters"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            <Filter aria-hidden="true" /> Filters
+            {hasAnyFilter && <span aria-label="Filters active"> •</span>}
+          </button>
         </div>
+        <div id="feedback-filters" hidden={!filtersOpen} className="feedback-filters">
+          <div className="flex flex-wrap items-center gap-2">
+            <MonitorSelect
+              label="Category"
+              value={kindFilter}
+              onChange={(v) => {
+                setKindFilter(v);
+                setOffset(0);
+              }}
+              options={[
+                { value: "all", label: "All categories" },
+                ...feedbackKinds.map((k) => ({ value: k, label: KIND_LABELS[k] })),
+              ]}
+            />
+            <MonitorSelect
+              label="Impact"
+              value={impactFilter}
+              onChange={(v) => {
+                setImpactFilter(v);
+                setOffset(0);
+              }}
+              options={[
+                { value: "all", label: "All impacts" },
+                ...feedbackImpacts.map((i) => ({ value: i, label: IMPACT_LABELS[i] })),
+              ]}
+            />
+            {availableDevices.length > 0 && (
+              <MonitorSelect
+                label="Router"
+                value={deviceFilter}
+                onChange={(v) => {
+                  setDeviceFilter(v);
+                  setOffset(0);
+                }}
+                options={[
+                  { value: "all", label: "All routers" },
+                  ...availableDevices.map((d) => ({ value: d, label: d })),
+                ]}
+              />
+            )}
+            {availableRosVersions.length > 0 && (
+              <MonitorSelect
+                label="RouterOS"
+                value={rosFilter}
+                onChange={(v) => {
+                  setRosFilter(v);
+                  setOffset(0);
+                }}
+                options={[
+                  { value: "all", label: "All RouterOS" },
+                  ...availableRosVersions.map((v) => ({ value: v, label: `v${v}` })),
+                ]}
+              />
+            )}
+            {viewMode === "board" && (
+              <MonitorSelect
+                label="Swimlanes"
+                value={swimlaneBy}
+                onChange={(v) => setSwimlaneBy(v as SwimlaneBy)}
+                options={[
+                  { value: "none", label: "Swimlanes: None" },
+                  { value: "impact", label: "Group by Impact" },
+                  { value: "kind", label: "Group by Category" },
+                  { value: "device", label: "Group by Router" },
+                ]}
+              />
+            )}
+            <Segmented
+              label="Sort feedback"
+              value={sort}
+              onChange={(v) => {
+                setSort(v);
+                setOffset(0);
+              }}
+              options={[
+                { value: "occurrences", label: "Most frequent" },
+                { value: "impact", label: "Impact" },
+                { value: "recent", label: "Latest" },
+              ]}
+            />
+          </div>
 
-        {/* Quick Jira-style Filter Pills + Active Smart Token Badges */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-2.5 text-xs">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-              <Filter className="h-3 w-3" aria-hidden="true" />
-              Quick filters:
-            </span>
-            <button
-              type="button"
-              className="fb-filter-pill"
-              data-active={quickPresets.has("blockers") || undefined}
-              onClick={() => togglePreset("blockers")}
-            >
-              <StatusDot tone="bad" />
-              Blockers
-            </button>
-            <button
-              type="button"
-              className="fb-filter-pill"
-              data-active={quickPresets.has("hot") || undefined}
-              onClick={() => togglePreset("hot")}
-            >
-              <Flame className="h-3.5 w-3.5 text-[var(--warning)]" aria-hidden="true" />
-              Hot (×3+)
-            </button>
-            <button
-              type="button"
-              className="fb-filter-pill"
-              data-active={quickPresets.has("missing_tool") || undefined}
-              onClick={() => togglePreset("missing_tool")}
-            >
-              <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
-              Missing Tools
-            </button>
-            <button
-              type="button"
-              className="fb-filter-pill"
-              data-active={quickPresets.has("reopened") || undefined}
-              onClick={() => togglePreset("reopened")}
-            >
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              Reopened (↺)
-            </button>
-            <button
-              type="button"
-              className="fb-filter-pill"
-              data-active={quickPresets.has("has_fix") || undefined}
-              onClick={() => togglePreset("has_fix")}
-            >
-              <Check className="h-3.5 w-3.5 text-[var(--sig)]" aria-hidden="true" />
-              Has Fix / Workaround
-            </button>
-            <button
-              type="button"
-              className="fb-filter-pill"
-              data-active={quickPresets.has("memory_synced") || undefined}
-              onClick={() => togglePreset("memory_synced")}
-            >
-              <Sparkles className="h-3.5 w-3.5 text-[var(--sig)]" aria-hidden="true" />
-              Synced in Memory
-            </button>
-            <button
-              type="button"
-              className="fb-filter-pill"
-              data-active={quickPresets.has("github_linked") || undefined}
-              onClick={() => togglePreset("github_linked")}
-            >
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              Linked to GitHub
-            </button>
-
-            {operationFilter && (
+          {/* Quick Jira-style Filter Pills + Active Smart Token Badges */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-2.5 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                <Filter className="h-3 w-3" aria-hidden="true" />
+                Quick filters:
+              </span>
               <button
                 type="button"
                 className="fb-filter-pill"
-                data-active="true"
-                onClick={() => setOperationFilter("")}
+                data-active={quickPresets.has("blockers") || undefined}
+                onClick={() => togglePreset("blockers")}
               >
-                <span className="font-mono">tool:{operationFilter}</span>
-                <X className="h-3 w-3" aria-hidden="true" />
+                <StatusDot tone="bad" />
+                Blockers
               </button>
-            )}
-
-            {parsedSearch.tokens.map((tok) => (
               <button
-                key={tok.raw}
                 type="button"
-                className="fb-filter-pill font-mono"
-                data-active="true"
-                title="Click to remove search token"
-                onClick={() => removeQueryToken(tok.raw)}
+                className="fb-filter-pill"
+                data-active={quickPresets.has("hot") || undefined}
+                onClick={() => togglePreset("hot")}
               >
-                <span>
-                  {tok.key}:{tok.value}
-                </span>
-                <X className="h-3 w-3" aria-hidden="true" />
+                <Flame className="h-3.5 w-3.5 text-[var(--warning)]" aria-hidden="true" />
+                Hot (×3+)
               </button>
-            ))}
+              <button
+                type="button"
+                className="fb-filter-pill"
+                data-active={quickPresets.has("missing_tool") || undefined}
+                onClick={() => togglePreset("missing_tool")}
+              >
+                <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
+                Missing Tools
+              </button>
+              <button
+                type="button"
+                className="fb-filter-pill"
+                data-active={quickPresets.has("reopened") || undefined}
+                onClick={() => togglePreset("reopened")}
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Reopened (↺)
+              </button>
+              <button
+                type="button"
+                className="fb-filter-pill"
+                data-active={quickPresets.has("has_fix") || undefined}
+                onClick={() => togglePreset("has_fix")}
+              >
+                <Check className="h-3.5 w-3.5 text-[var(--sig)]" aria-hidden="true" />
+                Has Fix / Workaround
+              </button>
+              <button
+                type="button"
+                className="fb-filter-pill"
+                data-active={quickPresets.has("memory_synced") || undefined}
+                onClick={() => togglePreset("memory_synced")}
+              >
+                <Sparkles className="h-3.5 w-3.5 text-[var(--sig)]" aria-hidden="true" />
+                Synced in Memory
+              </button>
+              <button
+                type="button"
+                className="fb-filter-pill"
+                data-active={quickPresets.has("github_linked") || undefined}
+                onClick={() => togglePreset("github_linked")}
+              >
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                Linked to GitHub
+              </button>
 
-            {hasAnyFilter && (
-              <MonitorButton size="sm" variant="ghost" onClick={clearAllFilters}>
-                Reset all filters
-              </MonitorButton>
+              {operationFilter && (
+                <button
+                  type="button"
+                  className="fb-filter-pill"
+                  data-active="true"
+                  onClick={() => setOperationFilter("")}
+                >
+                  <span className="font-mono">tool:{operationFilter}</span>
+                  <X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              )}
+
+              {parsedSearch.tokens.map((tok) => (
+                <button
+                  key={tok.raw}
+                  type="button"
+                  className="fb-filter-pill font-mono"
+                  data-active="true"
+                  title="Click to remove search token"
+                  onClick={() => removeQueryToken(tok.raw)}
+                >
+                  <span>
+                    {tok.key}:{tok.value}
+                  </span>
+                  <X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              ))}
+
+              {hasAnyFilter && (
+                <MonitorButton size="sm" variant="ghost" onClick={clearAllFilters}>
+                  Reset all filters
+                </MonitorButton>
+              )}
+            </div>
+
+            {/* Hotspot quick-filter chips */}
+            {summary && summary.topOperations.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-muted-foreground">Hotspots:</span>
+                {summary.topOperations.slice(0, 4).map((op) => {
+                  if (op.operation === "(general)") return null;
+                  const active = operationFilter === op.operation;
+                  return (
+                    <button
+                      key={op.operation}
+                      type="button"
+                      className="fb-filter-pill font-mono"
+                      data-active={active || undefined}
+                      onClick={() => {
+                        setOperationFilter(active ? "" : op.operation);
+                        setOffset(0);
+                      }}
+                    >
+                      <StatusDot tone={impactTone(op.highestImpact)} />
+                      <span>{op.operation}</span>
+                      <span className="text-muted-foreground">×{op.occurrences}</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
-
-          {/* Hotspot quick-filter chips */}
-          {summary && summary.topOperations.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">Hotspots:</span>
-              {summary.topOperations.slice(0, 4).map((op) => {
-                if (op.operation === "(general)") return null;
-                const active = operationFilter === op.operation;
-                return (
-                  <button
-                    key={op.operation}
-                    type="button"
-                    className="fb-filter-pill font-mono"
-                    data-active={active || undefined}
-                    onClick={() => {
-                      setOperationFilter(active ? "" : op.operation);
-                      setOffset(0);
-                    }}
-                  >
-                    <StatusDot tone={impactTone(op.highestImpact)} />
-                    <span>{op.operation}</span>
-                    <span className="text-muted-foreground">×{op.occurrences}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
-
-        {/* Multi-select & Batch Action Bar */}
-        {items.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-2.5 text-xs">
-            <div className="flex flex-wrap items-center gap-2.5">
+        {(items.length > 0 || selectedIds.size > 0) && (
+          <div
+            className="feedback-selection"
+            data-selected={selectedIds.size > 0 || undefined}
+            role="group"
+            aria-label="Report selection"
+          >
+            <label className="feedback-selection-count">
               <Checkbox
                 aria-label="Select all shown feedback issues"
+                disabled={items.length === 0}
                 checked={someShownSelected ? "indeterminate" : allShownSelected}
                 onCheckedChange={toggleSelectAllShown}
               />
-              <span className="font-medium">
-                {selectedIds.size > 0
-                  ? `${selectedIds.size} selected (drag any selected card to move all together)`
+              <span aria-live="polite">
+                {selectedIds.size
+                  ? `${selectedIds.size} selected`
                   : `Select all (${items.length} shown)`}
               </span>
-              {items.some((i) => i.status !== "resolved") && (
-                <MonitorButton
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    setSelectedIds(
-                      new Set(items.filter((i) => i.status !== "resolved").map((i) => i.id)),
-                    )
-                  }
-                >
-                  Select unresolved
-                </MonitorButton>
-              )}
-              {items.some((i) => i.impact === "blocker") && (
-                <MonitorButton
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    setSelectedIds(
-                      new Set(items.filter((i) => i.impact === "blocker").map((i) => i.id)),
-                    )
-                  }
-                >
-                  Select blockers
-                </MonitorButton>
-              )}
-              {selectedIds.size > 0 && (
-                <MonitorButton size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-                  Clear selection
-                </MonitorButton>
-              )}
-            </div>
-
-            {selectedIds.size > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <CopyButton
-                  text={buildBatchAiFixPrompt(selectedItems)}
-                  label={
-                    selectedIds.size === 1
-                      ? "Copy AI Prompt"
-                      : `Copy AI Prompt (${selectedIds.size})`
-                  }
-                  title="Copy combined Prompt-Engineering prompt for all selected feedback items"
-                />
-                <MonitorButton
-                  size="sm"
-                  variant="glass"
-                  disabled={busy}
-                  icon={<ExternalLink aria-hidden="true" />}
-                  onClick={() => void batchSubmitGithubIssue()}
-                >
-                  {selectedIds.size === 1
-                    ? "Submit GitHub Issue"
-                    : `Submit GitHub Issue (${selectedIds.size})`}
-                </MonitorButton>
-                <MonitorButton
-                  size="sm"
-                  variant="primary"
-                  disabled={busy}
-                  icon={<Check aria-hidden="true" />}
-                  onClick={() => void batchUpdateStatus("resolved", "Resolved selected issues")}
-                >
-                  Move → Resolved & Sync Memory
-                </MonitorButton>
-                <MonitorButton
-                  size="sm"
-                  variant="glass"
-                  disabled={busy}
-                  icon={<Wrench aria-hidden="true" />}
-                  onClick={() => void batchUpdateStatus("in_progress", "Marked in progress")}
-                >
-                  Move → In Progress
-                </MonitorButton>
-                <MonitorButton
-                  size="sm"
-                  variant="glass"
-                  disabled={busy}
-                  icon={<Sparkles aria-hidden="true" />}
-                  onClick={() => void batchSyncMemory()}
-                >
-                  Sync Memory
-                </MonitorButton>
-                {selectedIds.size >= 2 && (
-                  <MonitorButton
-                    size="sm"
-                    variant="glass"
-                    disabled={busy}
-                    icon={<GitMerge aria-hidden="true" />}
-                    onClick={() => void batchMergeSelected()}
-                  >
-                    Merge ({selectedIds.size})
-                  </MonitorButton>
+            </label>
+            {selectedIds.size === 0 ? (
+              <div className="feedback-selection-presets">
+                {hasUnresolved && (
+                  <button type="button" onClick={selectUnresolved}>
+                    Select unresolved
+                  </button>
                 )}
-                <MonitorButton
-                  size="sm"
-                  variant="danger"
-                  disabled={busy}
-                  icon={<Trash2 aria-hidden="true" />}
-                  onClick={() => void deleteIssues([...selectedIds])}
+                {hasBlockers && (
+                  <button type="button" onClick={selectBlockers}>
+                    Select blockers
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="feedback-selection-controls">
+                <button
+                  type="button"
+                  className="feedback-selection-clear"
+                  aria-label="Clear selection"
+                  onClick={() => setSelectedIds(new Set())}
                 >
-                  Delete ({selectedIds.size})
-                </MonitorButton>
+                  Clear
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="feedback-selection-actions">
+                      Actions <ChevronDown aria-hidden="true" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    collisionPadding={12}
+                    aria-label="Selected report actions"
+                    className="feedback-action-menu"
+                  >
+                    {selectionActions.map((action) => (
+                      <DropdownMenuItem
+                        key={action.label}
+                        variant={action.danger ? "destructive" : "default"}
+                        disabled={action.disabled}
+                        onSelect={action.onSelect}
+                      >
+                        {action.icon}
+                        {action.label}
+                      </DropdownMenuItem>
+                    ))}
+                    {items.some(
+                      (item) => item.status !== "resolved" || item.impact === "blocker",
+                    ) && (
+                      <>
+                        <DropdownMenuSeparator />
+                        {hasUnresolved && (
+                          <DropdownMenuItem onSelect={selectUnresolved}>
+                            Select unresolved
+                          </DropdownMenuItem>
+                        )}
+                        {hasBlockers && (
+                          <DropdownMenuItem onSelect={selectBlockers}>
+                            Select blockers
+                          </DropdownMenuItem>
+                        )}
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             )}
           </div>
         )}
-      </div>
+      </section>
 
       {/* VIEW 1: JIRA KANBAN BOARD WITH DRAG & DROP */}
       {viewMode === "board" ? (
@@ -2404,7 +2352,7 @@ export function FeedbackView(): ReactNode {
           )}
         </div>
       ) : (
-        /* VIEW 2: LIST QUEUE VIEW WITH SIDEBAR ANALYTICS */
+        /* The queue and reading pane share the same filtered page of issues. */
         <>
           <MonitorTabs
             label="Feedback status filter"
@@ -2422,19 +2370,22 @@ export function FeedbackView(): ReactNode {
             ]}
           />
 
-          <div className="grid min-w-0 grid-cols-1 items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <MonitorPanel
-              title="Deduplicated feedback queue"
-              description="Ranked by repeat occurrences so the highest-friction tool gaps surface at the top."
-              flush
-            >
+          <div
+            className="feedback-workspace"
+            style={{ "--queue-width": `${queuePane.size}%` } as CSSProperties}
+          >
+            <section className="feedback-queue" id="feedback-queue" aria-label="Report queue">
+              <header className="feedback-pane-head">
+                <h2>Report queue</h2>
+                <span>{page ? page.total.toLocaleString() : "—"}</span>
+              </header>
               {loading && !page && (
                 <div className="px-[18px] pb-3.5 pt-3">
                   <LoadingState label="Loading feedback queue" layout="cards" />
                 </div>
               )}
 
-              <div className="flex flex-col gap-2.5 px-[18px] py-3.5" aria-busy={loading}>
+              <div className="feedback-rows" aria-busy={loading}>
                 {!loading && items.length === 0 ? (
                   <MonitorEmpty
                     icon={<MessageSquarePlus aria-hidden="true" />}
@@ -2454,149 +2405,51 @@ export function FeedbackView(): ReactNode {
                 ) : (
                   items.map((item) => {
                     const isSelected = selectedIds.has(item.id);
-                    const isOpenDrawer = activeId === item.id;
                     return renderIssueContextMenu(
                       item,
                       <article
-                        className="memory-fact"
-                        data-selected={isOpenDrawer || isSelected || undefined}
+                        className="feedback-row"
+                        data-current={reading?.id === item.id || undefined}
                       >
-                        <header className="flex flex-wrap items-center gap-2">
+                        <div className="feedback-row-meta">
                           <span
-                            className="monitor-check"
                             onPointerDown={(ev) => {
                               shiftHeldRef.current = ev.shiftKey;
                             }}
-                            onClick={(ev) => ev.stopPropagation()}
                           >
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => toggleSelect(item.id)}
-                              aria-label={`Select feedback #${item.id} (Shift-click selects a range)`}
+                              aria-label={`Select report #${item.id}`}
                             />
                           </span>
-                          <span className="font-mono text-xs text-muted-foreground">
-                            #{item.id}
-                          </span>
-                          <span data-col="kind">
-                            <KindBadge kind={item.kind} />
-                          </span>
-                          <span data-col="impact">
-                            <StatusBadge tone={impactTone(item.impact)}>
-                              {IMPACT_LABELS[item.impact]}
-                            </StatusBadge>
-                          </span>
-                          <StatusBadge tone={statusTone(item.status)} quiet>
-                            {STATUS_LABELS[item.status]}
-                          </StatusBadge>
-                          {item.operation && (
-                            <button
-                              type="button"
-                              data-col="operation"
-                              className="monitor-chip font-mono text-xs"
-                              title={`Filter by ${item.operation}`}
-                              onClick={() => {
-                                setOperationFilter(
-                                  operationFilter === item.operation ? "" : item.operation!,
-                                );
-                                setOffset(0);
-                              }}
-                            >
-                              {item.operation}
-                            </button>
-                          )}
-                          <span className="flex-1" />
-                          <OccurrencePill count={item.occurrences} reopened={item.reopenedCount} />
+                          <span>#{item.id}</span>
+                          <span data-col="kind">{KIND_LABELS[item.kind]}</span>
                           <RowMore />
-                        </header>
-
+                        </div>
                         <button
+                          className="feedback-row-open"
+                          id={`feedback-report-${item.id}`}
                           type="button"
-                          className="memory-fact-content"
-                          onClick={() => setActiveId(item.id)}
+                          aria-current={reading?.id === item.id || undefined}
+                          onClick={() => {
+                            setReadingId(item.id);
+                            requestAnimationFrame(() => {
+                              if (backToQueue.current?.offsetWidth) backToQueue.current.focus();
+                            });
+                          }}
                         >
-                          <strong className="block font-semibold">{item.title}</strong>
-                          <span className="mt-1 line-clamp-2 block text-xs text-muted-foreground">
-                            <FormattedFeedbackText text={item.detail} />
+                          <strong>
+                            <FormattedFeedbackText text={item.title} />
+                          </strong>
+                          <span>
+                            <StatusDot tone={statusTone(item.status)} />
+                            {STATUS_LABELS[item.status]}
+                            <time dateTime={new Date(item.lastSeenAt).toISOString()}>
+                              {formatAgo(item.lastSeenAt)}
+                            </time>
                           </span>
                         </button>
-
-                        {(item.actualError ||
-                          item.workaround ||
-                          item.resolutionNote ||
-                          item.fixedInVersion ||
-                          item.replacementTool) && (
-                          <div className="flex flex-col gap-1 text-xs">
-                            {item.actualError && (
-                              <div className="truncate font-mono text-muted-foreground">
-                                Error: {item.actualError}
-                              </div>
-                            )}
-                            {(item.fixedInVersion || item.replacementTool || item.memoryFactId) && (
-                              <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
-                                {item.fixedInVersion && (
-                                  <span className="monitor-chip font-mono text-[11px]">
-                                    Fixed in {item.fixedInVersion}
-                                  </span>
-                                )}
-                                {item.replacementTool && (
-                                  <span className="monitor-chip font-mono text-[11px]">
-                                    Tool: {item.replacementTool}
-                                  </span>
-                                )}
-                                {item.memoryFactId && (
-                                  <span className="monitor-chip text-[11px]">
-                                    Memory #{item.memoryFactId}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            {(item.resolutionNote || item.workaround) && (
-                              <div className="truncate text-muted-foreground">
-                                <strong className="font-medium text-foreground">
-                                  {item.resolutionNote ? "Resolution: " : "Workaround: "}
-                                </strong>
-                                <FormattedFeedbackText
-                                  text={(item.resolutionNote ?? item.workaround)!}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <footer className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <span>First seen {formatAgo(item.firstSeenAt)}</span>
-                          <span>·</span>
-                          <span>Last seen {formatAgo(item.lastSeenAt)}</span>
-                          {item.lastDevice && (
-                            <>
-                              <span>·</span>
-                              <span className="font-mono">{item.lastDevice}</span>
-                            </>
-                          )}
-                          {item.lastRouterosVersion && (
-                            <>
-                              <span>·</span>
-                              <span className="font-mono">v{item.lastRouterosVersion}</span>
-                            </>
-                          )}
-                          <span className="ml-auto flex flex-wrap items-center gap-1.5">
-                            <CopyButton
-                              text={buildAiFixPrompt(item)}
-                              label="Copy AI Prompt"
-                              title="Copy professional Prompt-Engineering prompt (Role, Context, Telemetry & Constraints)"
-                            />
-                            <MonitorButton
-                              size="sm"
-                              variant="glass"
-                              disabled={busy}
-                              icon={<ExternalLink aria-hidden="true" />}
-                              onClick={() => void submitGithubIssue(item.id)}
-                            >
-                              {item.githubIssueUrl ? "GitHub Issue" : "Submit GitHub Issue"}
-                            </MonitorButton>
-                          </span>
-                        </footer>
                       </article>,
                     );
                   })
@@ -2604,8 +2457,8 @@ export function FeedbackView(): ReactNode {
               </div>
 
               <div className="monitor-foot" aria-live="polite">
-                <StatusDot tone="good" pulse={!loading} />
-                <span>{loading ? "Refreshing feedback…" : "Local only"}</span>
+                <StatusDot tone="default" />
+                <span>{loading ? "Refreshing feedback…" : "Reports"}</span>
                 <span className="flex-1" />
                 {page && (
                   <span className="tabular-nums">
@@ -2637,9 +2490,125 @@ export function FeedbackView(): ReactNode {
                   </>
                 )}
               </div>
-            </MonitorPanel>
-
-            <div className="flex flex-col gap-3.5">
+            </section>
+            <PaneDivider
+              pane={queuePane}
+              label="Resize report queue"
+              controls="feedback-queue"
+              percent
+            />
+            <section className="feedback-reader" aria-label="Report preview">
+              {reading ? (
+                <>
+                  <header className="feedback-pane-head">
+                    <button
+                      type="button"
+                      className="feedback-back"
+                      ref={backToQueue}
+                      onClick={() => {
+                        setReadingId(null);
+                        requestAnimationFrame(() =>
+                          document.getElementById(`feedback-report-${reading.id}`)?.focus(),
+                        );
+                      }}
+                    >
+                      <ChevronLeft aria-hidden="true" />
+                      Queue
+                    </button>
+                    <span className="feedback-record-id">Report #{reading.id}</span>
+                    <StatusBadge tone={statusTone(reading.status)} quiet>
+                      {STATUS_LABELS[reading.status]}
+                    </StatusBadge>
+                  </header>
+                  <div className="feedback-paper" key={reading.id}>
+                    <div className="feedback-byline">
+                      {KIND_LABELS[reading.kind]}
+                      <span>·</span>
+                      {IMPACT_LABELS[reading.impact]}
+                    </div>
+                    <h2>
+                      <FormattedFeedbackText text={reading.title} />
+                    </h2>
+                    {reading.operation && (
+                      <button
+                        className="feedback-path"
+                        type="button"
+                        title="Filter by this operation"
+                        onClick={() => {
+                          setOperationFilter(reading.operation!);
+                          setOffset(0);
+                        }}
+                      >
+                        {reading.operation}
+                      </button>
+                    )}
+                    <section className="feedback-problem">
+                      <h3>Report</h3>
+                      <p>
+                        <FormattedFeedbackText text={reading.detail} />
+                      </p>
+                    </section>
+                    {(
+                      [
+                        ["Resolution", reading.resolutionNote],
+                        ["Workaround", reading.workaround],
+                        ["Suggested fix", reading.suggestedFix],
+                      ] as const
+                    ).map(
+                      ([label, value]) =>
+                        value && (
+                          <section key={label} className="feedback-fix">
+                            <h3>{label}</h3>
+                            <p>
+                              <FormattedFeedbackText text={value} />
+                            </p>
+                          </section>
+                        ),
+                    )}
+                    <div className="feedback-provenance">
+                      <span>
+                        Last seen <b>{formatAgo(reading.lastSeenAt)}</b>
+                      </span>
+                      <span>
+                        Sightings <b>{reading.occurrences.toLocaleString()}</b>
+                      </span>
+                      {reading.fixedInVersion && (
+                        <span>
+                          Fixed in <b>{reading.fixedInVersion}</b>
+                        </span>
+                      )}
+                      {reading.memoryFactId && (
+                        <span>
+                          Memory <b>#{reading.memoryFactId}</b>
+                        </span>
+                      )}
+                    </div>
+                    <div className="feedback-actions">
+                      <MonitorButton onClick={() => setActiveId(reading.id)}>
+                        Open details
+                      </MonitorButton>
+                      <CopyButton label="Copy AI prompt" text={buildAiFixPrompt(reading)} />
+                      <MonitorButton
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => void submitGithubIssue(reading.id)}
+                      >
+                        {reading.githubIssueUrl ? "GitHub issue" : "Submit GitHub issue"}
+                      </MonitorButton>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="feedback-blank">
+                  {loading ? "Loading report…" : "No report selected"}
+                </div>
+              )}
+            </section>
+          </div>
+          <details className="feedback-analytics">
+            <summary>Feedback analytics</summary>
+            <div className="feedback-analytics-grid">
               <MonitorPanel
                 title="Hotspot tools & paths"
                 description="Operations generating the most repeat feedback sightings."
@@ -2653,7 +2622,7 @@ export function FeedbackView(): ReactNode {
                           key={op.operation}
                           type="button"
                           className="memory-subject justify-between"
-                          data-selected={active || undefined}
+                          aria-pressed={active}
                           onClick={() => {
                             setOperationFilter(
                               active || op.operation === "(general)" ? "" : op.operation,
@@ -2696,75 +2665,9 @@ export function FeedbackView(): ReactNode {
                 )}
               </MonitorPanel>
             </div>
-          </div>
+          </details>
         </>
       )}
-
-      <SelectionBar
-        count={selectedIds.size}
-        noun={selectedIds.size === 1 ? "issue" : "issues"}
-        onClear={() => setSelectedIds(new Set())}
-        actions={[
-          {
-            label: "Copy AI Prompt",
-            icon: <Copy aria-hidden="true" />,
-            onSelect: () => void copySelectedPrompts(),
-          },
-          {
-            label: "Submit GitHub Issue",
-            icon: <ExternalLink aria-hidden="true" />,
-            disabled: busy,
-            onSelect: () => void batchSubmitGithubIssue(),
-          },
-          {
-            label: "Resolve & Sync Memory",
-            icon: <Check aria-hidden="true" />,
-            disabled: busy,
-            onSelect: () => void batchUpdateStatus("resolved", "Resolved selected issues"),
-          },
-          {
-            label: "In Progress",
-            icon: <Wrench aria-hidden="true" />,
-            disabled: busy,
-            onSelect: () => void batchUpdateStatus("in_progress", "Marked in progress"),
-          },
-          {
-            label: "Won’t Fix",
-            icon: <XCircle aria-hidden="true" />,
-            disabled: busy,
-            onSelect: () => void batchUpdateStatus("wont_fix", "Marked won't fix"),
-          },
-          {
-            label: "Reopen",
-            icon: <RotateCcw aria-hidden="true" />,
-            disabled: busy,
-            onSelect: () => void batchUpdateStatus("open", "Reopened selected issues"),
-          },
-          {
-            label: "Sync Memory",
-            icon: <Sparkles aria-hidden="true" />,
-            disabled: busy,
-            onSelect: () => void batchSyncMemory(),
-          },
-          ...(selectedIds.size >= 2
-            ? [
-                {
-                  label: "Merge",
-                  icon: <GitMerge aria-hidden="true" />,
-                  disabled: busy,
-                  onSelect: () => void batchMergeSelected(),
-                },
-              ]
-            : []),
-          {
-            label: "Delete",
-            icon: <Trash2 aria-hidden="true" />,
-            danger: true,
-            disabled: busy,
-            onSelect: () => void deleteIssues([...selectedIds]),
-          },
-        ]}
-      />
 
       <RowDrawer
         open={activeIssue !== null}

@@ -61,6 +61,7 @@
     align-items: center;
     gap: 10px;
     border: 0;
+    border-inline-start: 2px solid transparent;
     border-radius: 10px;
     background: transparent;
     padding: 8px 10px;
@@ -79,11 +80,11 @@
   .memory-subject:hover {
     background: var(--overlay-03);
   }
-  .memory-subject[data-selected="true"] {
+  .memory-subject[aria-pressed="true"] {
     background: var(--sig-soft);
-    box-shadow: inset 2px 0 0 var(--sig);
+    border-inline-start-color: var(--sig);
   }
-  .memory-subject[data-selected="true"] > svg {
+  .memory-subject[aria-pressed="true"] > svg {
     color: var(--success);
   }
   .memory-subject:focus-visible,

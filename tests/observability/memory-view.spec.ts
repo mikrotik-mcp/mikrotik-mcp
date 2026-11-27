@@ -92,6 +92,7 @@ test("uses paginated memory reads, scoped entities, and revision-safe actions", 
     el.querySelector("small")?.textContent?.startsWith("router ·"),
   )!;
   await click(subject);
+  expect(subject.getAttribute("aria-pressed")).toBe("true");
   expect(vi.mocked(api).mock.calls.some(([path]) => path.includes("entityName=edge"))).toBe(true);
   await click(host.querySelector<HTMLElement>('[data-state="pinned"]')!);
   expect(vi.mocked(api).mock.calls.some(([path]) => path.includes("state=pinned"))).toBe(true);
@@ -139,7 +140,7 @@ test("failed memory creation keeps the form and explains the error", async () =>
 });
 test("shared scope shows its impact and requires explicit confirmation before applying", async () => {
   await render();
-  await click(host.querySelector<HTMLElement>('.memory-subject[data-selected="false"]')!);
+  await click(host.querySelector<HTMLElement>('.memory-subject[aria-pressed="false"]')!);
   await click(button("Shared memory"));
   expect(host.textContent).toContain("One lesson. The right routers.");
   const options = [...host.querySelectorAll<HTMLButtonElement>(".memory-scope-options button")];
@@ -236,7 +237,7 @@ test("review crosses shrinking page boundaries without skipping records or losin
   reviewRecords(26);
   vi.useFakeTimers();
   await render();
-  await click(host.querySelector<HTMLElement>('.memory-subject[data-selected="false"]')!);
+  await click(host.querySelector<HTMLElement>('.memory-subject[aria-pressed="false"]')!);
   await fill(host.querySelector<HTMLInputElement>('[aria-label="Search knowledge"]')!, "Review");
   await act(async () => vi.advanceTimersByTime(260));
   await click(host.querySelector<HTMLElement>('[data-state="review"]')!);

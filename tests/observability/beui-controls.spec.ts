@@ -530,6 +530,7 @@ test("the rail keeps navigation, flyouts, pins and modified-link behavior", asyn
   await act(async () => network.focus());
   await click(host.querySelector<HTMLAnchorElement>('.fly a[href="#devices"]')!);
   expect(navigate).toHaveBeenCalledWith("devices");
+  await render(h(SidebarHarness, { view: "devices", onNavigate: navigate }));
   await click(host.querySelector<HTMLButtonElement>('[aria-label="Toggle navigation"]')!);
   expect(sidebarState()).toBe("expanded");
   expect(host.querySelector('a[href="#devices"] .lbl')?.textContent).toBe("Devices");

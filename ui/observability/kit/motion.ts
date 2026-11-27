@@ -149,22 +149,6 @@ export function tick(
   };
 }
 
-/** Moves the highlight bar behind the active row. */
-export function glide(bar: HTMLElement, row: HTMLElement | null): void {
-  if (!row) {
-    bar.style.opacity = "0";
-    return;
-  }
-  const to = { translateY: row.offsetTop, height: row.offsetHeight };
-  if (reducedMotion() || bar.style.opacity !== "1") {
-    bar.style.transform = `translateY(${to.translateY}px)`;
-    bar.style.height = `${to.height}px`;
-    bar.style.opacity = "1";
-    return;
-  }
-  animate(bar, { ...to, duration: 160, ease: EASE.enter });
-}
-
 /** A short horizontal shake for a field that failed validation. */
 export function shake(el: HTMLElement): void {
   if (reducedMotion()) return;

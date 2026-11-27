@@ -976,7 +976,7 @@ export function MemoryView() {
         <button
           type="button"
           className="memory-subject"
-          data-selected={!entity}
+          aria-pressed={!entity}
           onClick={() => selectEntity("")}
         >
           <Layers aria-hidden="true" />
@@ -992,7 +992,7 @@ export function MemoryView() {
               <button
                 type="button"
                 className="memory-subject"
-                data-selected={entity === item.name}
+                aria-pressed={entity === item.name}
                 key={item.name}
                 onClick={() => selectEntity(item.name)}
               >
@@ -1292,7 +1292,6 @@ export function MemoryView() {
         )}
       </div>
       <div className="monitor-foot" aria-live="polite">
-        <StatusDot tone="good" pulse={!loading} />
         <span>
           {loading ? "Refreshing knowledge…" : "30s refresh · local only"}
           {!page && !loading && " · Knowledge unavailable"}

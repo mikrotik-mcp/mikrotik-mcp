@@ -67,39 +67,39 @@ async function mount(view: ViewId = "openvpn") {
     ),
   );
 }
-const heading = (label: string) =>
-  host.querySelector<HTMLButtonElement>(`button.shell-group-heading[aria-label="${label}"]`)!;
-const track = (label: string) =>
-  document.getElementById(heading(label).getAttribute("aria-controls")!)!;
+const sectionPicker = () =>
+  host.querySelector<HTMLButtonElement>('[role="combobox"][aria-label="Browse section"]')!;
+const pages = () => host.querySelector<HTMLElement>(".shell-section-pages")!;
+async function browse(label: string) {
+  await act(async () => sectionPicker().click());
+  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) =>
+    item.textContent?.includes(label),
+  )!;
+  await act(async () => option.click());
+}
 
-test("active page opens its correct category, with counts and the shared scrollbar", async () => {
+test("opens the current section and keeps firing alerts reachable from another section", async () => {
   await mount();
-  expect(host.querySelectorAll(".shell-nav-group")).toHaveLength(8);
-  expect(heading("Users & VPN").getAttribute("aria-expanded")).toBe("true");
-  expect(heading("Users & VPN").dataset.active).toBe("true");
-  expect(heading("Users & VPN").querySelector(".shell-group-size")?.textContent).toBe("4");
-  expect(track("Users & VPN").hidden).toBe(false);
-  expect(track("Users & VPN").querySelector('a[href="#openvpn"]')).not.toBeNull();
-  expect(track("Network").hidden).toBe(true);
-  expect(
-    host.querySelector('.shell-nav-scroll [data-slot="scroll-area-viewport"] .shell-groups'),
-  ).not.toBeNull();
-  expect(heading("Monitoring").querySelector('[aria-label="2 alerts firing"]')).not.toBeNull();
-  expect(host.querySelector('nav[aria-label="Dashboard navigation"]')).not.toBeNull();
-  expect(host.querySelector('a[aria-current="page"]')?.getAttribute("href")).toBe("#openvpn");
+  expect(sectionPicker().textContent).toContain("Users & VPN");
+  expect(pages().querySelectorAll("a")).toHaveLength(4);
+  expect(pages().querySelector('a[aria-current="page"]')?.getAttribute("href")).toBe("#openvpn");
+  expect(host.querySelector('a[aria-label="2 alerts firing"]')?.getAttribute("href")).toBe(
+    "#alerts",
+  );
+  await act(async () => sectionPicker().click());
+  expect(document.querySelectorAll('[role="option"]')).toHaveLength(8);
 });
 
-test("navigating across categories reveals the new group without carrying the old expansion", async () => {
+test("browsing a different section previews its pages and route changes reveal the destination", async () => {
   await mount();
-  await act(async () => heading("Backup & recovery").click());
-  expect(track("Backup & recovery").hidden).toBe(false);
-  await act(async () => heading("Backup & recovery").click());
-  expect(track("Backup & recovery").hidden).toBe(true);
-  await act(async () => heading("Backup & recovery").click());
+  await browse("Backup & recovery");
+  expect(pages().getAttribute("aria-label")).toBe("Backup & recovery");
+  expect(navigate).not.toHaveBeenCalled();
   await mount("capsman");
-  expect(track("Network").hidden).toBe(false);
-  expect(track("Backup & recovery").hidden).toBe(true);
-  expect(track("Users & VPN").hidden).toBe(true);
+  expect(sectionPicker().textContent).toContain("Network");
+  expect(pages().querySelector('[aria-current="page"]')?.getAttribute("href")).toBe("#capsman");
+  await mount("openvpn");
+  expect(sectionPicker().textContent).toContain("Users & VPN");
 });
 
 test("reveals a below-fold active page by scrolling only the menu viewport", async () => {
@@ -125,10 +125,8 @@ test("the search field opens the palette, and choosing a page closes the mobile 
   expect(field.getAttribute("aria-haspopup")).toBe("dialog");
   await act(async () => field.click());
   expect(openSearch).toHaveBeenCalledOnce();
-  await act(async () => heading("Network").click());
-  await act(async () =>
-    track("Network").querySelector<HTMLAnchorElement>('a[href="#capsman"]')!.click(),
-  );
+  await browse("Network");
+  await act(async () => pages().querySelector<HTMLAnchorElement>('a[href="#capsman"]')!.click());
   expect(navigate).toHaveBeenCalledWith("capsman");
   expect(closeMobile).toHaveBeenCalledWith(false);
 });
@@ -274,29 +272,19 @@ test("the collapsed sidebar choice survives a reload", async () => {
   expect(host.textContent).toBe("rail");
 });
 
-test("the line is lit from the first group to the page you are on", async () => {
-  await mount("openvpn");
-  const line = (label: string) => heading(label).closest("section")!.dataset.line;
-  expect(
-    ["Monitoring", "Network", "Users & VPN", "Diagnostics", "MCP workspace"].map(line),
-  ).toEqual(["passed", "passed", "here", "ahead", "ahead"]);
-  // The branch of the open group: lit to OpenVPN, the second of its four pages.
-  const rows = [...track("Users & VPN").querySelectorAll<HTMLElement>(".shell-nav-row")];
-  expect(rows.map((row) => row.dataset.line)).toEqual(["passed", "here", "ahead", "ahead"]);
-  const branch = heading("Users & VPN").closest("section")!.querySelector(".shell-branch")!;
-  expect(branch.hasAttribute("data-lit")).toBe(true);
-  expect(branch.getAttribute("aria-hidden")).toBe("true");
-});
-
-test("another open group has a branch, but nothing on it is lit", async () => {
-  await mount("openvpn");
-  await act(async () => heading("Security").click());
-  const section = heading("Security").closest("section")!;
-  expect(section.querySelector(".shell-branch")!.hasAttribute("data-lit")).toBe(false);
-  const rows = [...track("Security").querySelectorAll<HTMLElement>(".shell-nav-row")];
-  expect(rows.every((row) => row.dataset.line === "ahead")).toBe(true);
-  // A closed group draws no branch.
-  expect(heading("Network").closest("section")!.querySelector(".shell-branch")).toBeNull();
+test("navigation width can be adjusted, restored on remount and reset", async () => {
+  await mount();
+  const divider = () =>
+    host.querySelector<HTMLElement>('[role="separator"][aria-label="Resize navigation"]')!;
+  await act(async () =>
+    divider().dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })),
+  );
+  expect(divider().getAttribute("aria-valuenow")).toBe("384");
+  await act(async () => root.render(null));
+  await mount();
+  expect(divider().getAttribute("aria-valuenow")).toBe("384");
+  await act(async () => divider().dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+  expect(divider().getAttribute("aria-valuenow")).toBe("280");
 });
 
 test("pinned pages are a board: a number key, the group, and a live number", async () => {

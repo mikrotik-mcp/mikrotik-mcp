@@ -140,14 +140,12 @@
   top: 0;
   z-index: 20;
   flex: none;
-  /* The line map board is 320 wide. */
-  width: 320px;
+  width: 280px;
   height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--shell-sidebar);
   box-shadow: inset -1px 0 0 var(--line);
-  backdrop-filter: blur(14px);
   color: var(--foreground);
   line-height: 21px;
 }
@@ -258,11 +256,6 @@
   flex-direction: column;
   gap: 1px;
 }
-.shell-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
 /* Small uppercase label: "Pinned". */
 .ngl {
   padding: 10px 8px 4px;
@@ -272,81 +265,12 @@
   text-transform: uppercase;
   color: var(--text-faint);
 }
-/* A group row (the boards' .ng): icon, name, alert badge, page count. */
-.sec-h {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 30px;
-  margin-top: 4px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 21px;
-  /* The boards' link reset paints rows in the body colour, not tx2. */
-  color: var(--foreground);
-  text-align: left;
-}
-.sb .sec-h svg {
-  width: 15px;
-  height: 15px;
-  color: var(--muted-foreground);
-}
-.sec-h .lbl {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.shell-group-heading {
-  cursor: pointer;
-  transition:
-    background-color 150ms,
-    color 150ms;
-}
-.shell-group-heading:hover {
-  background: var(--overlay-03);
-  color: var(--foreground);
-}
-.shell-group-heading[data-open="true"] {
-  color: var(--foreground);
-}
-.sb .shell-group-heading[data-open="true"] svg,
-.sb .shell-group-heading[data-active="true"] svg {
-  color: var(--success);
-}
-.sec-h .n {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-.sec-h .pill-bad {
-  margin-left: auto;
-}
-.sec-h .pill-bad + .n {
-  margin-left: 6px;
-}
 .sec-d {
   margin: 0;
   padding: 0 8px 6px;
   font-size: 12px;
   line-height: 16px;
   color: var(--text-faint);
-}
-.shell-nav-track {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  overflow: hidden;
-}
-.shell-nav-track[hidden] {
-  display: none;
 }
 .nav {
   position: relative;
@@ -384,7 +308,7 @@
   border-radius: 9px;
   background: var(--line-2);
 }
-.it > :not(.shell-nav-hl) {
+.it > * {
   position: relative;
 }
 .it > svg {
@@ -423,15 +347,6 @@
 }
 .it[data-active] > svg {
   color: var(--success);
-}
-/* The active highlight: a teal wash and edge that slide to the new page. */
-.shell-nav-hl {
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--sig-soft), transparent);
-  box-shadow: inset 2px 0 0 var(--sig);
-  pointer-events: none;
 }
 .shell-nav-badges {
   display: inline-flex;
@@ -1087,346 +1002,211 @@ span.ri:hover {
   }
 }
 
-/* ------------------------------------------------------------------ line map
- * Board "G final": one line runs through every group. It is lit from the top
- * to the group you are in, then along that group's branch to the page you are
- * on. A group is a station on the line; a page is a stop on a branch.
- */
-.shell-groups {
-  --map-track: color-mix(in oklab, var(--muted-foreground) 32%, transparent);
-  --map-station: color-mix(in oklab, var(--muted-foreground) 62%, transparent);
-  position: relative;
-  gap: 0;
+/* Workspace navigation */
+.shell-brand .logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: var(--sig);
+  background: var(--sig-soft);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.shell-sidebar-inner {
+  padding-top: 20px;
+  gap: 16px;
+}
+.shell-brand .brand b {
+  font-size: 16px;
 }
 .sb-scroll .ngl {
-  padding: 0 8px 2px;
-  font: 500 10.5px/21px var(--font-mt);
-  color: var(--muted-foreground);
-}
-/* A pinned page: a LED, the name, its count. */
-.it[data-pinned] {
-  height: 30px;
-  padding-left: 8px;
-  font-size: 13.5px;
-}
-.shell-pin-led {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--sig);
-  box-shadow: var(--glow) var(--sig);
-}
-.shell-pin-led[data-tone="bad"] {
-  background: var(--destructive);
-  box-shadow: var(--glow) var(--destructive);
-}
-/* The main line: each group draws its own part, and the parts join. */
-.shell-groups .shell-nav-group {
-  position: relative;
-  gap: 0;
-}
-.shell-groups .shell-nav-group::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 21px;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--map-track);
-}
-.shell-groups .shell-nav-group:first-child::before {
-  top: 22px;
-}
-.shell-groups .shell-nav-group:last-child::before {
-  bottom: auto;
-  height: 22px;
-}
-.shell-groups .shell-nav-group[data-line="passed"]::before {
-  background: var(--sig);
-  box-shadow: var(--glow) var(--sig);
-}
-/* In the group you are in, the line is lit down to its station only. */
-.shell-groups .shell-nav-group[data-line="here"]:not(:first-child)::before {
-  background: linear-gradient(var(--sig) 0 22px, var(--map-track) 22px);
-}
-/* A station: the group's name beside a ring on the line. */
-.shell-groups .sec-h {
-  position: relative;
-  height: 44px;
-  margin-top: 0;
-  padding: 0 8px 0 44px;
-  font-size: 13.5px;
-  font-weight: 400;
-}
-.shell-groups .sec-h > svg {
-  display: none;
-}
-.shell-groups .sec-h::before {
-  content: "";
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  box-sizing: border-box;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--map-station);
-  border-radius: 50%;
-  background: var(--background);
-}
-.shell-groups [data-line="passed"] > .sec-h::before {
-  border-color: var(--sig);
-}
-.shell-groups [data-line="here"] > .sec-h::before {
-  top: 14px;
-  left: 14px;
-  width: 16px;
-  height: 16px;
-  border-color: var(--background);
-  background: var(--sig);
-}
-.shell-groups [data-line="here"] > .sec-h {
-  font-weight: 600;
-  color: var(--text-emphasis);
-}
-.shell-groups [data-line="here"] > .sec-h .n {
-  color: var(--success);
-}
-/* The branch: a curve from the station to the first stop, then a line down. */
-/* `.sb svg` sizes icons; this one is a drawing, so it names itself twice. */
-.sb .shell-groups svg.shell-branch {
-  position: absolute;
-  top: 22px;
-  left: 21px;
-  width: 30px;
-  height: 41px;
-  overflow: visible;
-  pointer-events: none;
-}
-.shell-branch path {
-  fill: none;
-  stroke: var(--map-track);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-.shell-branch[data-lit] path {
-  stroke: var(--sig);
-  stroke-width: 2.5;
-  filter: drop-shadow(var(--glow) var(--sig));
-}
-.shell-groups .shell-nav-track,
-.shell-groups .shell-nav-track .nav {
-  gap: 0;
-}
-.shell-groups .shell-nav-row::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 49px;
-  width: 2px;
-  background: var(--map-track);
-}
-.shell-groups .shell-nav-row:first-child::before {
-  top: 19px;
-}
-.shell-groups .shell-nav-row:last-child::before {
-  bottom: 19px;
-}
-.shell-groups .shell-nav-row[data-line="passed"]::before {
-  background: var(--sig);
-  box-shadow: var(--glow) var(--sig);
-}
-.shell-groups .shell-nav-row[data-line="here"]:not(:first-child)::before {
-  background: linear-gradient(var(--sig) 0 19px, var(--map-track) 19px);
-}
-/* A stop: the page's name beside a small ring on the branch. */
-.shell-groups .it {
-  height: 38px;
-  padding: 0 10px 0 72px;
-  font-size: 13.5px;
-}
-.shell-groups .it::before {
-  top: 15px;
-  left: 46px;
-  box-sizing: border-box;
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--map-station);
-  border-radius: 50%;
-  background: var(--background);
-  box-shadow: none;
-}
-.shell-groups .shell-nav-row[data-line="passed"] .it::before {
-  border-color: var(--sig);
-}
-/* The stop you are at: a ring with a lit centre. */
-.shell-groups .it[data-active]::before {
-  top: 10px;
-  left: 41px;
-  width: 18px;
-  height: 18px;
-  border-color: var(--sig);
-  background:
-    radial-gradient(circle, var(--sig) 0 3.5px, transparent 4px),
-    linear-gradient(var(--sig-soft), var(--sig-soft)), var(--background);
-  box-shadow: none;
-}
-.shell-groups .it[data-active] {
-  font-weight: 600;
-}
-/* The line says where you are, so the row needs no wash. */
-.shell-groups .shell-nav-hl {
-  display: none;
-}
-
-/* Collapsed: the line stays, and a group is a round station with its icon. */
-.rail .rail-groups:has(.rail-group) {
-  gap: 6px;
-}
-.rail-group {
-  position: relative;
-}
-.rail-group::before {
-  content: "";
-  position: absolute;
-  top: -6px;
-  bottom: 0;
-  left: calc(50% - 1px);
-  width: 2px;
-  background: color-mix(in oklab, var(--muted-foreground) 32%, transparent);
-}
-.rail-group:first-child::before {
-  top: 50%;
-}
-.rail-group:last-child::before {
-  bottom: 50%;
-}
-.rail-group[data-line="passed"]::before {
-  background: var(--sig);
-  box-shadow: var(--glow) var(--sig);
-}
-.rail-group[data-line="here"]:not(:first-child)::before {
-  background: linear-gradient(
-    var(--sig) 0 28px,
-    color-mix(in oklab, var(--muted-foreground) 32%, transparent) 28px
-  );
-}
-.rail-group > .ri {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--background);
-  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--muted-foreground) 55%, transparent);
-}
-.rail-group[data-line="passed"] > .ri {
-  color: var(--success);
-  box-shadow: inset 0 0 0 2px var(--sig);
-}
-.rail-group > .ri.on {
-  background: var(--sig);
-  color: var(--background);
-  box-shadow: var(--glow) var(--sig);
-}
-
-/* ------------------------------------------------------------- pinned board
- * Board "Pinned 3": a departure board. One glass card, a head, and one row for
- * each pinned page: its number key, its name over its group, its live number.
- */
-.shell-pinned[data-board] {
-  gap: 0;
-  margin-bottom: 10px;
-  border-radius: 14px;
-  background: var(--glass);
-  box-shadow: inset 0 0 0 1px var(--line);
-  overflow: hidden;
-}
-.shell-pinned[data-board] .ngl {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 30px;
-  padding: 0 12px;
-  background: var(--overlay-03);
-  box-shadow: inset 0 -1px 0 var(--line);
-  line-height: 30px;
-}
-.shell-pin-keys {
-  margin-left: auto;
-  font-weight: 400;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 8px 6px;
+  font-weight: 500;
+  line-height: 20px;
+  font-family: inherit;
+  font-size: 12px;
   letter-spacing: 0;
   text-transform: none;
-}
-.shell-pinned[data-board] .nav {
-  gap: 0;
-}
-.shell-pinned[data-board] .shell-nav-row + .shell-nav-row {
-  box-shadow: inset 0 1px 0 var(--line);
-}
-.it.shell-pin {
-  height: 44px;
-  gap: 10px;
-  padding: 0 12px;
-  border-radius: 0;
-  font-size: 13.5px;
-  font-weight: 500;
-}
-.it.shell-pin[data-active] {
-  background: linear-gradient(90deg, var(--sig-soft), transparent);
-  box-shadow: inset 2px 0 0 var(--sig);
-  font-weight: 600;
-}
-.it.shell-pin[data-active]:hover {
-  background: linear-gradient(90deg, var(--sig-soft), transparent);
-}
-.shell-pin-key {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: var(--overlay-03);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  font: 500 11px var(--font-mt);
   color: var(--muted-foreground);
 }
-.it.shell-pin[data-active] .shell-pin-key {
-  background: var(--sig);
-  box-shadow: none;
-  color: var(--background);
+.shell-pin-keys {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.shell-pinned {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.shell-pin {
+  height: 40px;
+  gap: 12px;
+}
+.shell-pin-key {
+  order: 4;
+  min-width: 18px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 11px/18px var(--font-mt);
+  color: var(--muted-foreground);
+}
+.shell-nav-row:is(:hover, :focus-within) .shell-pin-key {
+  visibility: hidden;
 }
 .shell-pin-text {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.shell-pin-text .lbl {
-  flex: none;
-  line-height: 17px;
+  display: grid;
 }
 .shell-pin-group {
-  overflow: hidden;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 14px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 12px;
+}
+.shell-pin-text .lbl {
+  line-height: 18px;
+  font-weight: 500;
+}
+.it.shell-pin[data-active] {
+  background: var(--overlay-04);
 }
 .shell-pin-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: 500 11.5px var(--font-mt);
-  color: var(--foreground);
+  font: 11px var(--font-mt);
 }
 .shell-pin-note[data-tone="bad"] {
   color: var(--destructive);
 }
-.shell-pinned[data-board] .shell-pin-toggle {
-  top: 10px;
+.shell-section-switch {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.shell-section-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-inline: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.shell-section-caption a {
+  color: var(--destructive);
+  font-size: 11px;
+}
+.sb .shell-section-select {
+  width: 100%;
+  height: 44px;
+  padding-inline: 12px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--text-emphasis);
+  font-weight: 550;
+}
+.shell-section-select .lead {
+  color: var(--text-secondary);
+}
+.shell-section-pages .nav {
+  gap: 2px;
+}
+.shell-section-pages .it {
+  height: 40px;
+  padding: 0 36px 0 8px;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  border-radius: 8px;
+}
+.shell-section-pages .it::before,
+.fly .shell-nav-link::before {
+  display: none;
+}
+.shell-page-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--muted-foreground);
+}
+.shell-page-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.shell-section-pages .it[data-active],
+.fly .it[data-active] {
+  background: var(--overlay-04);
+  color: var(--text-emphasis);
+  font-weight: 600;
+}
+.shell-nav-link[data-active] .shell-page-icon {
+  background: var(--sig);
+  color: #092e29;
+}
+.shell-section-pages .shell-nav-badges:not(:empty) {
+  margin-right: -24px;
+}
+.shell-section-pages .shell-pin-toggle {
+  top: 8px;
   right: 8px;
+  background: transparent;
+}
+.shell-section-pages .shell-pin-toggle:is(:hover, :focus-visible) {
+  background: var(--surface-3);
+}
+.fly .shell-nav-link {
+  padding-inline-start: 6px;
+  gap: 6px;
+}
+@media (pointer: coarse) {
+  .shell-section-pages .it {
+    min-height: 44px;
+    padding-right: 8px;
+  }
+  .shell-section-pages .shell-nav-badges:not(:empty) {
+    margin-right: 0;
+  }
+}
+.sb-foot {
+  padding: 12px 4px 0;
+  border-radius: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  box-shadow: none;
+}
+.sb-foot .shell-dot {
+  box-shadow: none;
+}
+
+.pane-divider {
+  position: absolute;
+  z-index: 3;
+  inset: 0 -5px 0 auto;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.pane-divider::after {
+  content: "";
+  position: absolute;
+  inset: calc(50% - 16px) auto auto 4px;
+  width: 2px;
+  height: 32px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.pane-divider:is(:hover, :focus-visible, :active)::after {
+  background: var(--sig);
+}
+.shell-sidebar > .pane-divider {
+  right: 0;
+}
+.shell-sidebar > .pane-divider::after {
+  left: auto;
+  right: 0;
 }

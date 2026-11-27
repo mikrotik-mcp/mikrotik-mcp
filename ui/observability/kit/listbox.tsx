@@ -1,12 +1,12 @@
 /**
  * The option list shared by Select, Combobox, MultiSelect and the router picker:
  * groups, LEDs, icons, two-line options, a meta value, a check on the chosen
- * option, the matched part of the label in teal, and a highlight that glides.
+ * option, the matched part of the label in teal, and a stationary active-row highlight.
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import { Check } from "lucide-react";
-import { glide, popIn } from "./motion";
+import { popIn } from "./motion";
 
 export type Tone = "ok" | "bad" | "warn" | "acc" | "off";
 
@@ -111,7 +111,6 @@ export function OptionList({
 }): ReactNode {
   const ownRef = useRef<HTMLDivElement>(null);
   const listRef = focusRef ?? ownRef;
-  const barRef = useRef<HTMLSpanElement>(null);
 
   // Rows rise in once, when the list first shows.
   useEffect(() => {
@@ -124,14 +123,12 @@ export function OptionList({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
   }, []);
 
-  // The highlight glides to the active row and keeps it in view.
+  // Keep the active option visible during keyboard navigation.
   useLayoutEffect(() => {
     const list = listRef.current;
-    const bar = barRef.current;
-    if (!list || !bar) return;
+    if (!list) return;
     const row =
       active >= 0 ? list.querySelector<HTMLElement>(`#${CSS.escape(optionId(id, active))}`) : null;
-    glide(bar, row);
     row?.scrollIntoView({ block: "nearest" });
   }, [active, id, options, listRef]);
 
@@ -148,7 +145,6 @@ export function OptionList({
       onKeyDown={onKeyDown}
       className="kit-list"
     >
-      <span ref={barRef} className="kit-hl" aria-hidden="true" />
       {options.map((o, i) => {
         const head =
           o.group && o.group !== lastGroup ? (

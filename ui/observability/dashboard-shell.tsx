@@ -26,7 +26,9 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { animate, createScope, spring, stagger } from "animejs";
+import { animate } from "animejs";
+import { Select } from "./kit/select";
+import { PaneDivider, usePaneSize } from "./pane-divider";
 import { ScrollArea } from "./components/ui/scroll-area";
 import { navigationGroups, viewGroup, VIEWS } from "./navigation";
 import {
@@ -133,21 +135,6 @@ function focusables(root: HTMLElement | null): HTMLElement[] {
 
 /** "Live · WebSocket", "Live · SSE" or "Stream offline", with a live LED. */
 export function StreamStatus({ mode }: { mode: LiveMode }): ReactNode {
-  const dot = useRef<HTMLSpanElement>(null);
-  const live = mode !== "off";
-  // The live LED breathes while the stream is connected.
-  useEffect(() => {
-    if (!live || !dot.current || !motionAllowed()) return;
-    const breathe = animate(dot.current, {
-      opacity: [1, 0.45, 1],
-      duration: 2400,
-      loop: true,
-      ease: "inOutSine",
-    });
-    return () => {
-      breathe.revert();
-    };
-  }, [live]);
   return (
     <span
       className="shell-stream"
@@ -155,7 +142,6 @@ export function StreamStatus({ mode }: { mode: LiveMode }): ReactNode {
       title="Dashboard event stream, not router health"
     >
       <span
-        ref={dot}
         className="shell-dot"
         data-tone={mode === "off" ? "off" : "ok"}
         data-live={mode !== "off" || undefined}
@@ -217,13 +203,10 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
   } = props;
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const instance = isMobile ? "mobile-nav" : "desktop-nav";
-  const asideRef = useRef<HTMLElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
+  const sidebar = usePaneSize("mt-navigation-width", 280, 224, 384);
   const navigationViewport = useRef<HTMLDivElement>(null);
   const [pins, setPins] = useState(() => readNavigationPins());
   const [pinNotice, setPinNotice] = useState("");
-  // The rail replaces the open sidebar only after its labels have faded out.
-  const [railShown, setRailShown] = useState(collapsed);
   const [flyout, setFlyout] = useState<string | null>(null);
 
   useEffect(() => {
@@ -241,119 +224,11 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
   }, []);
 
   const activeGroup = viewGroup(view).id;
-  const [groupState, setGroupState] = useState(() => ({ view, expanded: new Set([activeGroup]) }));
-  // A newly navigated page reveals its own group without an effect-driven render.
-  const expanded = groupState.view === view ? groupState.expanded : new Set([activeGroup]);
-
-  // Collapse: fade the labels first, then swap in the rail. Expand at once,
-  // and skip the fade when motion is reduced.
-  if (collapsed !== railShown && (!collapsed || isMobile || !motionAllowed()))
-    setRailShown(collapsed);
-  useEffect(() => {
-    if (!collapsed || railShown || !innerRef.current) return;
-    const fade = animate(innerRef.current, {
-      opacity: [1, 0],
-      duration: 90,
-      ease: "outQuad",
-      onComplete: () => setRailShown(true),
-    });
-    return () => {
-      fade.revert();
-    };
-  }, [collapsed, railShown]);
-
-  // The width springs between 248 and 68 px; the new content settles in after.
-  const firstLayout = useRef(true);
-  useLayoutEffect(() => {
-    if (firstLayout.current) {
-      firstLayout.current = false;
-      return;
-    }
-    const aside = asideRef.current;
-    if (!aside) return;
-    const scope = createScope({
-      root: asideRef,
-      mediaQueries: { reduceMotion: REDUCE_MOTION },
-    }).add((self) => {
-      if (self?.matches.reduceMotion) return;
-      animate(aside, {
-        width: railShown ? [320, 72] : [72, 320],
-        ease: spring({ bounce: 0.12, duration: 320 }),
-      });
-      if (railShown)
-        animate(".ri", {
-          opacity: [0, 1],
-          x: [-4, 0],
-          duration: 220,
-          delay: stagger(14, { start: 80 }),
-          ease: "outQuart",
-        });
-      else
-        animate(".shell-sidebar-inner", {
-          opacity: [0, 1],
-          duration: 180,
-          delay: 120,
-          ease: "outQuad",
-        });
-    });
-    return () => scope.revert();
-  }, [railShown]);
-
-  // Active page: the highlight and its accent bar slide to the new row.
-  const lastHighlight = useRef<number | null>(null);
-  useLayoutEffect(() => {
-    const highlight = innerRef.current?.querySelector<HTMLElement>(
-      ".shell-nav-group .shell-nav-hl",
-    );
-    const before = lastHighlight.current;
-    if (!highlight || before == null || !motionAllowed()) return;
-    const offset = before - highlight.getBoundingClientRect().top;
-    if (!offset || Math.abs(offset) > 640) return;
-    const slide = animate(highlight, {
-      y: [offset, 0],
-      ease: spring({ bounce: 0.15, duration: 280 }),
-    });
-    return () => {
-      slide.revert();
-    };
-  }, [view]);
-  useLayoutEffect(() => {
-    const highlight = innerRef.current?.querySelector<HTMLElement>(
-      ".shell-nav-group .shell-nav-hl",
-    );
-    lastHighlight.current = highlight ? highlight.getBoundingClientRect().top : null;
-  });
-
-  // Group open: height eases, rows fade up 4px with a 20 ms stagger.
-  const opening = useRef<string | null>(null);
-  useLayoutEffect(() => {
-    const id = opening.current;
-    opening.current = null;
-    if (!id || !motionAllowed()) return;
-    const track = document.getElementById(`${instance}-${id}`);
-    if (!track) return;
-    const height = track.scrollHeight;
-    const animations = [
-      animate(track, {
-        height: [0, height],
-        duration: 220,
-        ease: "outQuart",
-        onComplete: () => {
-          track.style.height = "";
-        },
-      }),
-      animate(track.querySelectorAll(".it"), {
-        opacity: [0, 1],
-        y: [4, 0],
-        duration: 200,
-        delay: stagger(20),
-        ease: "outQuart",
-      }),
-    ];
-    return () => {
-      for (const animation of animations) animation.revert();
-    };
-  });
+  const [section, setSection] = useState({ view, id: activeGroup });
+  // Back/forward, pinned shortcuts and palette navigation all reveal the destination.
+  if (section.view !== view) setSection({ view, id: activeGroup });
+  const groups = navigationGroups("");
+  const currentSection = groups.find((group) => group.id === section.id)!;
 
   useEffect(() => {
     if (isMobile && !mobileOpen) return;
@@ -368,7 +243,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
     // Scroll this viewport only: scrollIntoView would also move the dashboard.
     if (link.bottom > bounds.bottom) viewport.scrollTop += link.bottom - bounds.bottom + 12;
     else if (link.top < bounds.top) viewport.scrollTop += link.top - bounds.top - 12;
-  }, [view, railShown, isMobile, mobileOpen]);
+  }, [view, collapsed, isMobile, mobileOpen]);
 
   // A desktop resize must not leave an invisible modal trapping keyboard focus.
   useEffect(() => {
@@ -393,15 +268,15 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       if (document.querySelector("[role=dialog][data-state=open], [role=menu], [role=listbox]"))
         return;
       event.preventDefault();
+      setSection({ view: id, id: viewGroup(id).id });
       onNavigate(id);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [pins, onNavigate]);
 
-  const groups = navigationGroups("");
-  const activeIndex = groups.findIndex((group) => group.id === activeGroup);
   const choose = (id: ViewId): void => {
+    setSection({ view: id, id: viewGroup(id).id });
     onNavigate(id);
     onMobileOpenChange(false);
     setFlyout(null);
@@ -415,57 +290,20 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       `${label} ${next.includes(id) ? "pinned" : "unpinned"}.${saved ? "" : " Browser storage unavailable; kept for this session only."}`,
     );
   };
-  const toggleGroup = (id: string): void => {
-    const open = expanded.has(id);
-    const commit = (): void =>
-      setGroupState(() => {
-        const next = new Set(expanded);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return { view, expanded: next };
-      });
-    if (!open) {
-      opening.current = id;
-      commit();
-      return;
-    }
-    const track = document.getElementById(`${instance}-${id}`);
-    if (!track || !motionAllowed()) {
-      commit();
-      return;
-    }
-    animate(track, {
-      height: [track.offsetHeight, 0],
-      opacity: [1, 0],
-      duration: 180,
-      ease: "outQuart",
-      onComplete: () => {
-        track.style.height = "";
-        track.style.opacity = "";
-        commit();
-      },
-    });
-  };
   const pageLabel = (item: (typeof VIEWS)[number]): string => {
     const release = newFeatureRelease(item.id, version);
     return release ? `${item.label} · New in v${release}` : item.label;
   };
 
-  const pageRow = (
-    item: (typeof VIEWS)[number],
-    inPinned = false,
-    inFlyout = false,
-    line?: LineState,
-  ): ReactNode => {
+  const pageRow = (item: (typeof VIEWS)[number], inFlyout = false): ReactNode => {
     const pinned = pins.includes(item.id);
     const release = newFeatureRelease(item.id, version);
     const active = view === item.id;
     return (
-      <div className="shell-nav-row" key={item.id} data-line={line}>
+      <div className="shell-nav-row" key={item.id}>
         <a
           href={`#${item.id}`}
           className="it shell-nav-link"
-          data-pinned={inPinned || undefined}
           data-active={active || undefined}
           aria-current={active ? "page" : undefined}
           aria-label={release ? pageLabel(item) : undefined}
@@ -476,7 +314,9 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
             choose(item.id);
           }}
         >
-          {active && <span className="shell-nav-hl" aria-hidden="true" />}
+          <span className="shell-page-icon" aria-hidden="true">
+            {renderIcon(item.id)}
+          </span>
           <span className="lbl">{item.label}</span>
           <span className="shell-nav-badges">
             <NewFeatureBadge view={item.id} version={version} />
@@ -497,8 +337,6 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
             title={`${pinned ? "Unpin" : "Pin"} ${item.label}`}
             onClick={() => {
               togglePin(item.id);
-              // Removing a shortcut must not strand focus on an unmounted control.
-              if (inPinned) document.getElementById(`${instance}-search`)?.focus();
             }}
           >
             {pinned ? <PinOff aria-hidden="true" /> : <Pin aria-hidden="true" />}
@@ -534,6 +372,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
             choose(item.id);
           }}
         >
+          {renderIcon(item.id)}
           <kbd className="shell-pin-key" aria-hidden="true">
             {index < 9 ? index + 1 : "·"}
           </kbd>
@@ -591,7 +430,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
   );
 
   const expandedMenu = (drawer: boolean): ReactNode => (
-    <div className="shell-sidebar-inner" ref={innerRef}>
+    <div className="shell-sidebar-inner" id={`${instance}-content`}>
       <div className="sb-top">
         {brand}
         {drawer && (
@@ -616,22 +455,59 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
         <span className="ph">Jump to a page</span>
         <kbd className="kbd2">{shortcutLabel("K")}</kbd>
       </button>
+      <div className="shell-section-switch">
+        <div className="shell-section-caption">
+          <label htmlFor={`${instance}-section`}>Browse section</label>
+          {firingCount > 0 && currentSection.id !== "monitoring" && (
+            <a
+              href="#alerts"
+              aria-label={`${firingCount} alerts firing`}
+              onClick={(event) => {
+                if (!plainClick(event)) return;
+                event.preventDefault();
+                choose("alerts");
+              }}
+            >
+              {firingCount} firing
+            </a>
+          )}
+        </div>
+        <Select
+          id={`${instance}-section`}
+          label="Browse section"
+          className="shell-section-select"
+          value={currentSection.id}
+          onChange={(id) => {
+            setSection({ view, id });
+            if (navigationViewport.current) navigationViewport.current.scrollTop = 0;
+          }}
+          options={groups.map((group) => {
+            const Icon = GROUP_ICONS[group.id] ?? Layers;
+            return {
+              value: group.id,
+              label: group.label,
+              icon: <Icon aria-hidden="true" />,
+              meta: group.items.length,
+            };
+          })}
+        />
+      </div>
       <ScrollArea className="shell-nav-scroll" viewportProps={{ ref: navigationViewport }}>
         <div className="sb-scroll">
           <section
-            className="sec shell-pinned"
-            aria-label="Pinned pages"
-            data-board={pins.length > 0 || undefined}
+            className="shell-nav-group shell-section-pages"
+            aria-label={currentSection.label}
           >
-            <div className="ngl">
-              Pinned
-              {pins.length > 0 && (
+            <div className="nav">{currentSection.items.map((item) => pageRow(item))}</div>
+          </section>
+          {pins.length > 0 && (
+            <section className="sec shell-pinned" aria-label="Pinned pages">
+              <div className="ngl">
+                Pinned
                 <span className="shell-pin-keys">
                   {pins.length === 1 ? "press 1" : `press 1 to ${Math.min(pins.length, 9)}`}
                 </span>
-              )}
-            </div>
-            {pins.length > 0 ? (
+              </div>
               <div className="nav">
                 {pins.map((id, index) =>
                   pinnedRow(
@@ -640,73 +516,14 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
                   ),
                 )}
               </div>
-            ) : (
-              <p className="sec-d shell-pin-hint">Pin your go-to pages for quick access.</p>
-            )}
-          </section>
+            </section>
+          )}
           <p
             className={pinNotice.includes("unavailable") ? "sec-d shell-pin-hint" : "sr-only"}
             role="status"
           >
             {pinNotice}
           </p>
-          <div className="shell-groups">
-            {groups.map((group, index) => {
-              const open = expanded.has(group.id);
-              const GroupIcon = GROUP_ICONS[group.id] ?? Layers;
-              const alerting = group.views.includes("alerts") && firingCount > 0;
-              const here = group.id === activeGroup;
-              const page = here ? group.items.findIndex((item) => item.id === view) : -1;
-              return (
-                <section
-                  className="sec shell-nav-group"
-                  key={group.id}
-                  data-line={lineState(index, activeIndex)}
-                >
-                  <button
-                    type="button"
-                    className="sec-h shell-group-heading"
-                    aria-label={group.label}
-                    title={group.description}
-                    data-active={group.id === activeGroup}
-                    data-open={open}
-                    aria-expanded={open}
-                    aria-controls={`${instance}-${group.id}`}
-                    onClick={() => toggleGroup(group.id)}
-                  >
-                    <GroupIcon aria-hidden="true" />
-                    <span className="lbl">{group.label}</span>
-                    {alerting && (
-                      <span className="pill-bad" aria-label={`${firingCount} alerts firing`}>
-                        {firingCount}
-                      </span>
-                    )}
-                    <span className="n shell-group-size" aria-hidden="true">
-                      {group.items.length}
-                    </span>
-                  </button>
-                  {open && (
-                    // The branch from the group's station to its first page.
-                    <svg
-                      className="shell-branch"
-                      data-lit={page >= 0 || undefined}
-                      viewBox="0 0 30 41"
-                      aria-hidden="true"
-                    >
-                      <path d="M1 0 C1 24 29 16 29 41" />
-                    </svg>
-                  )}
-                  <div id={`${instance}-${group.id}`} className="shell-nav-track" hidden={!open}>
-                    <div className="nav">
-                      {group.items.map((item, at) =>
-                        pageRow(item, false, false, lineState(at, page)),
-                      )}
-                    </div>
-                  </div>
-                </section>
-              );
-            })}
-          </div>
         </div>
       </ScrollArea>
       <footer className="sb-foot">
@@ -750,26 +567,22 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       </MobileDrawer>
     );
 
-  if (!railShown)
+  if (!collapsed)
     return (
       <nav
-        ref={asideRef}
+        style={{ width: sidebar.size }}
         className="shell-sidebar sb"
         aria-label="Dashboard navigation"
         data-state="expanded"
       >
         {expandedMenu(false)}
+        <PaneDivider pane={sidebar} label="Resize navigation" controls="desktop-nav-content" />
       </nav>
     );
 
   const pinnedViews = pins.map((id) => VIEWS.find((item) => item.id === id)!);
   return (
-    <nav
-      ref={asideRef}
-      className="shell-sidebar sb rail"
-      aria-label="Dashboard navigation"
-      data-state="collapsed"
-    >
+    <nav className="shell-sidebar sb rail" aria-label="Dashboard navigation" data-state="collapsed">
       <div className="sb-top">
         <a
           href="#overview"
@@ -823,11 +636,10 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
       )}
       <span className="rsep" aria-hidden="true" />
       <div className="rail-groups">
-        {groups.map((group, index) => (
+        {groups.map((group) => (
           <RailGroup
             key={group.id}
             group={group}
-            line={lineState(index, activeIndex)}
             active={group.id === activeGroup}
             alerts={group.views.includes("alerts") ? firingCount : 0}
             open={flyout === group.id}
@@ -835,7 +647,7 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
               setFlyout((current) => (open ? group.id : current === group.id ? null : current))
             }
           >
-            {group.items.map((item) => pageRow(item, false, true))}
+            {group.items.map((item) => pageRow(item, true))}
           </RailGroup>
         ))}
       </div>
@@ -871,19 +683,9 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
   );
 }
 
-/**
- * Where a stop is on the lit line: before the place you are at, at it, or
- * after it. `at` is -1 when the place is not in this list, so nothing is lit.
- */
-type LineState = "passed" | "here" | "ahead";
-function lineState(index: number, at: number): LineState {
-  return at < 0 || index > at ? "ahead" : index === at ? "here" : "passed";
-}
-
 /** A rail icon for one group; hover or focus shows the group's pages beside it. */
 function RailGroup({
   group,
-  line,
   active,
   alerts,
   open,
@@ -891,7 +693,6 @@ function RailGroup({
   children,
 }: {
   group: { id: string; label: string; description: string };
-  line: LineState;
   active: boolean;
   alerts: number;
   open: boolean;
@@ -970,7 +771,7 @@ function RailGroup({
   return (
     <div
       className="rail-group"
-      data-line={line}
+
       onMouseEnter={() => schedule(true, 120)}
       onMouseLeave={() => schedule(false, 160)}
       onFocus={() => {
