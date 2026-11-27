@@ -106,3 +106,37 @@ test("releasedAgo counts calendar days", () => {
   expect(releasedAgo(new Date(2026, 10, 18, 1, 0).toISOString(), now)).toBe("today");
   expect(releasedAgo(new Date(2026, 9, 1).toISOString(), now)).toBe("");
 });
+
+test.each(["## MikroTik MCP 6.23.0", "## 6.20.0", "# v6.24.0-rc.1"])(
+  "groups sections beneath %s",
+  (title) => {
+    const notes = parseRelease(
+      [
+        title,
+        "Release summary.",
+        "  ### Added",
+        "- First.",
+        "- Second.",
+        "### Fixed",
+        "- A fix.",
+        "```sh",
+        "## shell comment",
+        "```",
+      ].join("\r\n"),
+    );
+    expect(notes.introHtml).toContain("Release summary.");
+    expect(notes.sections.map((s) => [s.title, s.count])).toEqual([
+      ["Added", 2],
+      ["Fixed", 1],
+    ]);
+    expect(notes.sections[1]?.introHtml).toContain("## shell comment");
+  },
+);
+
+test("a section count includes each change once and keeps its nested details", () => {
+  const section = parseRelease(
+    "## 6.23.0\n### Added\n- First\n  - Detail one\n  - Detail two\n- Second",
+  ).sections[0]!;
+  expect(section.count).toBe(2);
+  expect(section.introHtml).toContain('class="md-sub">Detail two');
+});

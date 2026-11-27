@@ -41,7 +41,8 @@ export type Freshness = "fresh" | "aging" | "stale" | "ancient";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const GITHUB_API = "https://api.github.com/repos/mikrotik-mcp/mikrotik-mcp/releases/latest";
+const RELEASES_URL = "https://api.github.com/repos/mikrotik-mcp/mikrotik-mcp/releases";
+const GITHUB_API = `${RELEASES_URL}/latest`;
 const MEMORY_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 const FILE_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const CACHE_PATH = join(homedir(), ".mikrotik-mcp", "update-check.json");
@@ -102,6 +103,55 @@ function saveFileCache(data: ReleasePayload): void {
 
 // ── GitHub API fetch ─────────────────────────────────────────────────────────
 
+async function readRelease(res: Response): Promise<ReleasePayload> {
+  const gh = (await res.json()) as {
+    tag_name: string;
+    name: string;
+    body: string;
+    published_at: string;
+    html_url: string;
+  };
+  const latestVersion = gh.tag_name.replace(/^v/, "");
+  const cmp = compareVersions(latestVersion, VERSION);
+  return {
+    version: latestVersion,
+    name: gh.name || `v${latestVersion}`,
+    body: gh.body || "",
+    publishedAt: gh.published_at,
+    url: gh.html_url,
+    isNewer: cmp > 0,
+    isAhead: cmp < 0,
+    currentVersion: VERSION,
+  };
+}
+
+let installedCache: { data: ReleasePayload; fetchedAt: number } | null = null;
+
+/** An upgrade may leave a fresh latest-release cache referring to the previous install. */
+export async function fetchReleaseForVersion(version: string): Promise<ReleasePayload | null> {
+  for (const cache of [installedCache, memoryCache]) {
+    if (cache?.data.version === version && Date.now() - cache.fetchedAt < MEMORY_CACHE_TTL)
+      return withCurrentRelation(cache.data);
+  }
+  const saved = loadFileCache();
+  if (saved?.version === version) return withCurrentRelation(saved);
+
+  for (const tag of [version, `v${version}`]) {
+    const res = await fetch(`${RELEASES_URL}/tags/${encodeURIComponent(tag)}`, {
+      headers: { accept: "application/vnd.github+json", "user-agent": `mikrotik-mcp/${VERSION}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.status === 404) continue;
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+    const data = await readRelease(res);
+    if (data.version !== version)
+      throw new Error("Release tag does not match the requested version");
+    installedCache = { data, fetchedAt: Date.now() };
+    return data;
+  }
+  return null;
+}
+
 /**
  * Fetch the latest GitHub release. Uses the two-tier cache (memory → file →
  * network). The result is always saved to both caches on a successful fetch.
@@ -129,25 +179,7 @@ export async function fetchLatestRelease(): Promise<ReleasePayload> {
   });
   if (!res.ok) throw new Error(`GitHub API ${res.status}`);
 
-  const gh = (await res.json()) as {
-    tag_name: string;
-    name: string;
-    body: string;
-    published_at: string;
-    html_url: string;
-  };
-  const latestVersion = gh.tag_name.replace(/^v/, "");
-  const cmp = compareVersions(latestVersion, VERSION);
-  const data: ReleasePayload = {
-    version: latestVersion,
-    name: gh.name || `v${latestVersion}`,
-    body: gh.body || "",
-    publishedAt: gh.published_at,
-    url: gh.html_url,
-    isNewer: cmp > 0,
-    isAhead: cmp < 0,
-    currentVersion: VERSION,
-  };
+  const data = await readRelease(res);
 
   // Populate both caches
   memoryCache = { data, fetchedAt: Date.now() };

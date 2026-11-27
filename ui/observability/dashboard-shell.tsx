@@ -551,7 +551,14 @@ export function DashboardSidebar(props: SidebarProps): ReactNode {
             {version ? `v${version}` : "—"}
           </span>
           {onReleaseNotes && (
-            <button type="button" className="shell-link" onClick={onReleaseNotes}>
+            <button
+              type="button"
+              className="shell-link"
+              onClick={() => {
+                if (drawer) onMobileOpenChange(false);
+                onReleaseNotes();
+              }}
+            >
               What's new
             </button>
           )}

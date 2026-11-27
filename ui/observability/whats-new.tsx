@@ -1,67 +1,14 @@
-/**
- * Release notes: checks GitHub for a newer version and shows the notes in a
- * dialog with numbered sections, a rail to move between them and a version path.
- * Built from the "Release notes dialog" boards in the Signal canvas.
- */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
-import { animate, svg } from "animejs";
-import { ExternalLink, X } from "lucide-react";
-import { Dialog as DialogPrimitive } from "radix-ui";
+import { ArrowUpRight, ChevronDown, X } from "lucide-react";
+import { Dialog } from "radix-ui";
+import type { ReleasePayload } from "../../src/core/update-check";
 import { api } from "./api";
-import { MonitorButton } from "./monitoring-ui";
-import { parseRelease, releasedAgo } from "./release-notes";
+import { BrandMark } from "./dashboard-shell";
+import { parseRelease } from "./release-notes";
 import type { ReleaseSection } from "./release-notes";
-import "./monitoring.css";
 import "./whats-new.css";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-interface ReleaseInfo {
-  version: string;
-  name: string;
-  body: string;
-  publishedAt: string;
-  url: string;
-  isNewer: boolean;
-  currentVersion: string;
-}
-
-// ── localStorage helpers ─────────────────────────────────────────────────────
-
-const LS_KEY = "mt-whats-new-dismissed";
-const LS_SEEN_KEY = "mt-whats-new-seen-version";
-
-function isDismissed(version: string): boolean {
-  try {
-    return localStorage.getItem(LS_KEY) === version;
-  } catch {
-    return false;
-  }
-}
-
-function dismiss(version: string): void {
-  try {
-    localStorage.setItem(LS_KEY, version);
-  } catch {
-    /* storage unavailable */
-  }
-}
-
-/** Returns true when the running version changed since the last dashboard visit. */
-function checkVersionChanged(version: string): boolean {
-  try {
-    const prev = localStorage.getItem(LS_SEEN_KEY);
-    localStorage.setItem(LS_SEEN_KEY, version);
-    return prev !== null && prev !== version;
-  } catch {
-    return false;
-  }
-}
-
-// ── Rendered-markdown styling ────────────────────────────────────────────────
-// The release body is injected HTML (see `./markdown`), so its descendant tags
-// are styled via arbitrary variants on the container rather than a stylesheet.
 export const MARKDOWN =
   "text-[13px] leading-[1.7] text-muted-foreground " +
   "[&_h2]:mt-[18px] [&_h2]:mb-1.5 [&_h2]:text-[17px] [&_h2]:font-bold [&_h2]:text-foreground " +
@@ -88,504 +35,260 @@ export const MARKDOWN =
   "[&_.wn-table-wrap]:my-2.5 [&_.wn-table-wrap]:overflow-x-auto [&_.wn-table-wrap]:rounded-md [&_.wn-table-wrap]:border [&_.wn-table-wrap]:border-border " +
   "[&_.wn-task]:-ml-[18px] [&_.wn-task]:list-none [&_.wn-check]:inline-block [&_.wn-check]:w-4 [&_.wn-task.done_.wn-check]:text-success";
 
-// ── Hook ─────────────────────────────────────────────────────────────────────
+type Target = { installed: string; from?: string; available?: ReleasePayload };
+const SEEN = "mt-whats-new-seen-version";
+const DISMISSED = "mt-whats-new-dismissed";
 
-const POLL_INTERVAL = 10 * 60 * 1000; // 10 minutes
+function stored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function remember(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* Storage can be disabled. */
+  }
+}
 
-export function useWhatsNew(currentVersion: string | undefined): {
-  release: ReleaseInfo | null;
-  showModal: boolean;
-  showIndicator: boolean;
-  openModal: () => void;
-  dismissRelease: () => void;
-} {
-  const [release, setRelease] = useState<ReleaseInfo | null>(null);
-  const [showModal, setShowModal] = useState(false);
+export function useWhatsNew(installed: string | undefined) {
+  const [target, setTarget] = useState<Target | null>(null);
+  const [latest, setLatest] = useState<ReleasePayload | null>(null);
+  const visit = useRef<{ version: string; from?: string } | null>(null);
 
   useEffect(() => {
-    if (!currentVersion) return;
-
-    // Detect if the running server version changed since the last visit (user updated)
-    const justUpdated = checkVersionChanged(currentVersion);
-    let prevFetchedVersion: string | null = null;
-
-    const fetchRelease = (): void => {
-      api<ReleaseInfo>("/api/releases/latest")
-        .then((r) => {
-          setRelease(r);
-
-          const isFirst = prevFetchedVersion === null;
-          const newRemoteVersion = prevFetchedVersion !== null && r.version !== prevFetchedVersion;
-          prevFetchedVersion = r.version;
-
-          // Auto-show when user just updated the project (show current changelog)
-          if (isFirst && justUpdated) {
-            setTimeout(() => setShowModal(true), 1200);
-            return;
-          }
-          // Auto-show when a newer version is discovered (on load or via poll)
-          if (r.isNewer && !isDismissed(r.version) && (isFirst || newRemoteVersion)) {
-            setTimeout(() => setShowModal(true), isFirst ? 1200 : 0);
-          }
-        })
-        .catch(() => {
-          /* silent — update check is best-effort */
-        });
+    if (!installed) return;
+    if (visit.current?.version !== installed) {
+      const previous = stored(SEEN);
+      visit.current = {
+        version: installed,
+        from: previous && previous !== installed ? previous : undefined,
+      };
+      remember(SEEN, installed);
+    }
+    const from = visit.current.from;
+    if (from) setTarget({ installed, from });
+    const controller = new AbortController();
+    let lastNotification: string | undefined;
+    const check = async () => {
+      try {
+        const release = await api<ReleasePayload>("/api/releases/latest", controller.signal);
+        if (controller.signal.aborted || release.currentVersion !== installed) return;
+        setLatest(release);
+        if (
+          release.isNewer &&
+          release.version !== lastNotification &&
+          stored(DISMISSED) !== release.version
+        ) {
+          if (!from || lastNotification)
+            setTarget((open) => open ?? { installed, available: release });
+          lastNotification = release.version;
+        }
+      } catch {
+        /* Update notifications are best effort. */
+      }
     };
-
-    fetchRelease();
-    const id = setInterval(fetchRelease, POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [currentVersion]);
-
-  const dismissRelease = useCallback(() => {
-    if (release?.isNewer) dismiss(release.version);
-    setShowModal(false);
-  }, [release]);
-
-  const openModal = useCallback(() => setShowModal(true), []);
+    void check();
+    const timer = setInterval(() => void check(), 600_000);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [installed]);
 
   return {
-    release,
-    showModal,
-    showIndicator: release !== null && release.isNewer,
-    openModal,
-    dismissRelease,
+    target: target?.installed === installed ? target : null,
+    showIndicator: latest?.currentVersion === installed && latest?.isNewer === true,
+    openModal: installed ? () => setTarget({ installed, from: visit.current?.from }) : undefined,
+    dismissRelease: () => {
+      if (target?.available) remember(DISMISSED, target.available.version);
+      setTarget(null);
+    },
   };
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
-
-function reducedMotion(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function Markdown({ html }: { html: string }) {
+  // eslint-disable-next-line react/no-danger -- rendered release Markdown
+  return <div className="rn-md" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-/** "6.15.0" → v6.15<faint .>0 */
-function Version({ value }: { value: string }): ReactNode {
-  const cut = value.lastIndexOf(".");
-  if (cut < 0) return <>v{value}</>;
+function Section({ section, fold }: { section: ReleaseSection; fold: boolean }) {
+  const [expanded, setExpanded] = useState(!fold);
+  const { count, title, features, introHtml } = section;
   return (
-    <>
-      v{value.slice(0, cut)}
-      <span>.</span>
-      {value.slice(cut + 1)}
-    </>
-  );
-}
-
-/** Two nodes joined by a line: the version you came from, and this release. */
-function VersionPath({
-  from,
-  fromSub,
-  to,
-  toSub,
-  isNew,
-}: {
-  from: string;
-  fromSub: string;
-  to: string;
-  toSub: string;
-  isNew: boolean;
-}): ReactNode {
-  const ref = useRef<SVGSVGElement>(null);
-  const col = isNew ? "var(--page-accent)" : "var(--sig)";
-  const dash = isNew ? "4 5" : undefined;
-  // The line draws in, then a light pulse runs to the new node now and then.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || reducedMotion()) return;
-    const lines = el.querySelectorAll<SVGLineElement>("line");
-    const pulse = el.querySelector<SVGCircleElement>(".rn-pulse");
-    const motion = [
-      animate(svg.createDrawable(lines), { draw: ["0 0", "0 1"], duration: 700, ease: "outQuart" }),
-    ];
-    if (pulse)
-      motion.push(
-        animate(pulse, {
-          cx: [30, 289],
-          opacity: [0, 1, 1, 0],
-          duration: 1400,
-          delay: 500,
-          ease: "inOutSine",
-          loop: true,
-          loopDelay: 2600,
-        }),
-      );
-    return () => {
-      for (const m of motion) m.revert();
-    };
-  }, []);
-  return (
-    <div className="rn-path" aria-hidden="true">
-      <svg ref={ref} width="320" height="78" viewBox="0 0 320 78">
-        <line
-          x1="30"
-          y1="26"
-          x2="150"
-          y2="26"
-          stroke="var(--text-faint)"
-          strokeWidth="2"
-          strokeDasharray={dash}
-        />
-        <line
-          x1="150"
-          y1="26"
-          x2="289"
-          y2="26"
-          stroke={col}
-          strokeWidth="2"
-          opacity=".75"
-          strokeDasharray={dash}
-        />
-        <circle
-          className="rn-pulse"
-          cx="190"
-          cy="26"
-          r="3.5"
-          fill={col}
-          style={{ filter: `drop-shadow(0 0 6px ${col})` }}
-        />
-        <circle
-          cx="24"
-          cy="26"
-          r="6"
-          fill="var(--surface-2)"
-          stroke="var(--text-faint)"
-          strokeWidth="2"
-        />
-        <circle cx="296" cy="26" r="12" fill={col} opacity=".16" />
-        <circle
-          cx="296"
-          cy="26"
-          r="7"
-          fill={col}
-          style={{ filter: `drop-shadow(0 0 8px ${col})` }}
-        />
-        <text x="24" y="58" textAnchor="middle" className="lab">
-          {from}
-        </text>
-        <text x="24" y="74" textAnchor="middle" className="sub">
-          {fromSub}
-        </text>
-        <text x="296" y="58" textAnchor="middle" className="lab">
-          {to}
-        </text>
-        <text x="296" y="74" textAnchor="middle" className="sub">
-          {toSub}
-        </text>
-      </svg>
-    </div>
-  );
-}
-
-function Section({ s }: { s: ReleaseSection }): ReactNode {
-  const count =
-    s.count == null ? null : s.kind === "features" ? `${s.count} features` : String(s.count);
-  return (
-    <section className="rn-sec" id={s.id} data-kind={s.kind}>
-      <div className="rn-sh">
-        <span className="n">{s.index}</span>
-        <h3>{s.title}</h3>
-        {count && <span className="c">{count}</span>}
-      </div>
-      {s.introHtml && (
-        // eslint-disable-next-line react/no-danger -- escaped by renderMarkdown
-        <div className="rn-md" dangerouslySetInnerHTML={{ __html: s.introHtml }} />
+    <section
+      className="rn-section"
+      data-kind={section.kind}
+      data-improved={/improv|changed/i.test(title) || undefined}
+    >
+      <h3>
+        <i aria-hidden="true" />
+        {title}
+        {count !== null && <span>{count}</span>}
+      </h3>
+      {fold && (
+        <button
+          type="button"
+          className="rn-disclose"
+          aria-expanded={expanded}
+          aria-controls={section.id}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "Hide" : "Show"} {count ?? ""} {count === 1 ? "fix" : "fixes"}{" "}
+          <ChevronDown aria-hidden="true" />
+        </button>
       )}
-      {s.features.map((f, j) => (
-        <article key={f.id} id={f.id} className="rn-feat" data-lead={j === 0}>
-          <h4>
-            <span className="rn-led" data-tone={j === 0 ? undefined : "acc"} />
-            {/* eslint-disable-next-line react/no-danger -- escaped by renderMarkdown */}
-            <span dangerouslySetInnerHTML={{ __html: f.titleHtml }} />
-          </h4>
-          <div
-            className="rn-md"
-            data-tone={j === 0 ? undefined : "acc"}
-            // eslint-disable-next-line react/no-danger -- escaped by renderMarkdown
-            dangerouslySetInnerHTML={{ __html: f.html }}
-          />
-        </article>
-      ))}
+      <div id={section.id} hidden={!expanded}>
+        {introHtml && <Markdown html={introHtml} />}
+        {features.map((f) => (
+          <article className="rn-feature" key={f.id}>
+            <h4>{f.title}</h4>
+            <Markdown html={f.html} />
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
 
-export function WhatsNewModal({
-  release,
-  onDismiss,
-}: {
-  release: ReleaseInfo;
-  onDismiss: () => void;
-}): ReactNode {
-  const parsed = useMemo(() => parseRelease(release.body), [release.body]);
-  const { sections } = parsed;
-  const date = new Date(release.publishedAt).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const ago = releasedAgo(release.publishedAt);
-  const from = release.isNewer ? release.currentVersion : parsed.previousVersion;
-  const stats = sections.filter((s) => s.count != null).slice(0, 4);
-
-  // The portal mounts its children after the first effects run, so the nodes
-  // the effects need are kept as state and the effects wait for them.
-  const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
-  const [content, setContent] = useState<HTMLDivElement | null>(null);
-  const docRef = useRef<HTMLDivElement>(null);
-  const [toc, setToc] = useState<HTMLDivElement | null>(null);
-  const [active, setActive] = useState(sections[0]?.features[0]?.id ?? sections[0]?.id ?? "");
-  const [read, setRead] = useState(0);
-
-  // Scrim fades in, the panel scales up from 0.98 (as MonitorDialog).
-  useEffect(() => {
-    if (!overlay || !content || reducedMotion()) return;
-    const motion = [
-      animate(overlay, { opacity: [0, 1], duration: 160, ease: "outQuad" }),
-      animate(content, { opacity: [0, 1], scale: [0.98, 1], duration: 220, ease: "outQuart" }),
-    ];
-    return () => {
-      for (const m of motion) m.revert();
-    };
-  }, [overlay, content]);
-
-  // The section or feature at the top of the reading area, and how far you are.
-  const onScroll = useCallback(() => {
-    const doc = docRef.current;
-    if (!doc) return;
-    const max = doc.scrollHeight - doc.clientHeight;
-    setRead(max > 0 ? Math.min(100, Math.round((doc.scrollTop / max) * 100)) : 100);
-    let current = "";
-    for (const el of doc.querySelectorAll<HTMLElement>(".rn-sec, .rn-feat")) {
-      if (el.offsetTop - doc.scrollTop <= 80) current = el.id;
-      else break;
-    }
-    if (current) setActive(current);
-  }, []);
-  useEffect(onScroll, [onScroll, content]);
-
-  // The rail's bar slides to the active entry. The rail mounts inside the
-  // dialog's portal after the first effects run, so it is tracked as state.
-  useEffect(() => {
-    const bar = toc?.querySelector<HTMLElement>(".rn-toc-bar");
-    const item = toc?.querySelector<HTMLElement>(`[data-target="${active}"]`);
-    if (!bar || !item) return;
-    const to = { translateY: item.offsetTop + 6, height: item.offsetHeight - 12 };
-    if (reducedMotion() || !bar.style.height) {
-      bar.style.transform = `translateY(${to.translateY}px)`;
-      bar.style.height = `${to.height}px`;
-      return;
-    }
-    const a = animate(bar, { ...to, duration: 260, ease: "outQuart" });
-    return () => {
-      a.pause();
-    };
-  }, [active, toc]);
-
-  const jump = (id: string): void => {
-    const doc = docRef.current;
-    const el = doc?.querySelector<HTMLElement>(`#${id}`);
-    if (!doc || !el) return;
-    doc.scrollTo({ top: el.offsetTop - 8, behavior: reducedMotion() ? "auto" : "smooth" });
-  };
-
-  // Copy buttons inside the rendered body.
-  const onDocClick = (e: MouseEvent<HTMLDivElement>): void => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-copy]");
-    const code = btn?.parentElement?.querySelector("code");
-    if (!btn || !code) return;
-    void navigator.clipboard?.writeText(code.textContent ?? "").then(() => {
+function copyCommand(e: MouseEvent<HTMLDivElement>): void {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-copy]");
+  const code = btn?.parentElement?.querySelector("code");
+  if (!code || !btn) return;
+  void navigator.clipboard
+    ?.writeText(code.textContent ?? "")
+    .then(() => {
       const label = btn.lastChild;
       if (label?.nodeType !== Node.TEXT_NODE) return;
       label.textContent = "Copied";
       setTimeout(() => {
         label.textContent = "Copy";
       }, 1600);
-    });
-  };
+    })
+    .catch(() => {});
+}
 
-  const activeSection =
-    sections.find((s) => s.id === active || s.features.some((f) => f.id === active))?.id ?? "";
+export function WhatsNewModal({
+  target,
+  onDismiss,
+}: {
+  target: Target;
+  onDismiss: () => void;
+}): ReactNode {
+  const { installed, available, from } = target;
+  const version = available?.version ?? installed;
+  const [notes, setNotes] = useState<ReleasePayload | null | undefined>(available);
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (available) return;
+    const controller = new AbortController();
+    void api<ReleasePayload | null>("/api/releases/current", controller.signal)
+      .then((r) => {
+        if (controller.signal.aborted) return;
+        if (r && r.version !== installed) throw new Error("Running version changed");
+        setNotes(r);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setError(true);
+      });
+    return () => controller.abort();
+  }, [available, installed, retry]);
+
+  const parsed = useMemo(() => parseRelease(notes?.body ?? ""), [notes?.body]);
+  const date = Date.parse(notes?.publishedAt ?? "");
+  const subtitle = available
+    ? `v${version} available · Running v${installed}`
+    : from
+      ? `Updated from v${from} to v${version}`
+      : `Version ${version}`;
   return (
-    <DialogPrimitive.Root
+    <Dialog.Root
       open
-      onOpenChange={(o) => {
-        if (!o) onDismiss();
+      onOpenChange={(open) => {
+        if (!open) onDismiss();
       }}
     >
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay ref={setOverlay} className="monitor-scrim fixed inset-0 z-50" />
-        <DialogPrimitive.Content
-          ref={setContent}
+      <Dialog.Portal>
+        <Dialog.Overlay className="monitor-scrim fixed inset-0 z-50" />
+        <Dialog.Content
           className="rn"
           onOpenAutoFocus={(e) => {
             e.preventDefault();
-            docRef.current?.focus({ preventScroll: true });
+            bodyRef.current?.focus();
           }}
         >
-          <div className="rn-pbar" aria-hidden="true">
-            <i style={{ width: `${read}%` }} />
-          </div>
-          <div className="rn-hero">
-            <div className="min-w-0">
-              <p className="rn-eb" data-new={release.isNewer}>
-                <span className="rn-led" data-tone={release.isNewer ? "acc" : undefined} />
-                {release.isNewer ? "New release" : "Release notes"}
-              </p>
-              <DialogPrimitive.Title asChild>
-                <h2 className="rn-ver">
-                  <Version value={release.version} />
-                </h2>
-              </DialogPrimitive.Title>
-              <DialogPrimitive.Description asChild>
-                <p className="rn-meta">
-                  Released {date}
-                  {ago && (
-                    <span className="rn-ago">
-                      <i />
-                      {ago}
-                    </span>
-                  )}
-                  <i />
-                  {release.isNewer ? `you run v${release.currentVersion}` : "you run this version"}
-                </p>
-              </DialogPrimitive.Description>
-              {stats.length > 0 && (
-                <div className="rn-stats">
-                  {stats.map((s) => (
-                    <span
-                      key={s.id}
-                      className="rn-stat"
-                      data-tone={s.kind === "upgrade" ? "warn" : undefined}
-                    >
-                      <b>{s.count}</b>
-                      {s.title.toLowerCase()}
-                    </span>
-                  ))}
-                </div>
-              )}
+          <header className="rn-header">
+            <div className="rn-mark">
+              <BrandMark />
             </div>
-            {from && (
-              <VersionPath
-                from={`v${from}`}
-                fromSub={release.isNewer ? "you run" : "before"}
-                to={`v${release.version}`}
-                toSub={release.isNewer ? "available" : "running"}
-                isNew={release.isNewer}
-              />
-            )}
-            <DialogPrimitive.Close asChild>
-              <button type="button" className="monitor-icon-btn rn-x" aria-label="Close">
-                <X aria-hidden="true" />
-              </button>
-            </DialogPrimitive.Close>
-          </div>
-
-          {sections.length > 0 && (
-            <nav className="rn-chips" aria-label="Release sections">
-              {sections.map((s) => (
+            <Dialog.Title>What’s new in MikroTik MCP</Dialog.Title>
+            <Dialog.Description>
+              {subtitle}
+              {Number.isFinite(date) && (
+                <>
+                  {" "}
+                  ·{" "}
+                  {new Date(date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </>
+              )}
+            </Dialog.Description>
+            <Dialog.Close className="rn-close" aria-label="Close release notes">
+              <X size={16} />
+            </Dialog.Close>
+          </header>
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- delegated native Copy buttons */}
+          <div className="rn-scroll" tabIndex={-1} ref={bodyRef} onClick={copyCommand}>
+            {error ? (
+              <div role="status">
+                Couldn’t load the notes for v{version}.{" "}
                 <button
-                  key={s.id}
-                  type="button"
-                  data-on={s.id === activeSection}
-                  onClick={() => jump(s.id)}
+                  className="rn-disclose"
+                  onClick={() => {
+                    setError(false);
+                    setRetry((n) => n + 1);
+                  }}
                 >
-                  {s.short}
-                  {s.count != null && <span className="c">{s.count}</span>}
+                  Try again
                 </button>
-              ))}
-            </nav>
-          )}
-
-          <div className="rn-body">
-            <nav className="rn-rail" aria-label="Release sections">
-              <p className="rn-rail-lbl">On this page</p>
-              <div className="rn-toc" ref={setToc}>
-                <span className="rn-toc-bar" aria-hidden="true" />
-                {sections.map((s) => (
-                  <div key={s.id} className="contents">
-                    <button
-                      type="button"
-                      data-target={s.id}
-                      data-kind={s.kind}
-                      data-on={s.id === active}
-                      aria-current={s.id === active ? "location" : undefined}
-                      onClick={() => jump(s.id)}
-                    >
-                      <span className="n">{s.index}</span>
-                      <span className="t">{s.title}</span>
-                      {s.count != null && <span className="c">{s.count}</span>}
-                    </button>
-                    {s.features.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        data-sub="true"
-                        data-target={f.id}
-                        data-on={f.id === active}
-                        aria-current={f.id === active ? "location" : undefined}
-                        onClick={() => jump(f.id)}
-                        title={f.title}
-                      >
-                        <span className="t">{f.title}</span>
-                      </button>
-                    ))}
-                  </div>
+              </div>
+            ) : notes === undefined ? (
+              <p role="status">Loading release notes…</p>
+            ) : (
+              <>
+                {parsed.introHtml && <Markdown html={parsed.introHtml} />}
+                {parsed.sections.map((section, i) => (
+                  <Section
+                    key={section.id}
+                    section={section}
+                    fold={section.kind === "fixes" && i > 0}
+                  />
                 ))}
-              </div>
-              <div className="rn-prog">
-                <div className="rn-prog-t">
-                  <span>Read</span>
-                  <b>{read}%</b>
-                </div>
-                <div className="rn-prog-bar">
-                  <i style={{ width: `${read}%` }} />
-                </div>
-                <div className="rn-prog-t">
-                  <span>About {parsed.minutes} min</span>
-                </div>
-              </div>
-            </nav>
-            {/* Clicks are delegated to the Copy buttons inside the body. */}
-            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-            <div
-              className="rn-doc"
-              ref={docRef}
-              tabIndex={-1}
-              onScroll={onScroll}
-              onClick={onDocClick}
-            >
-              {parsed.introHtml && (
-                // eslint-disable-next-line react/no-danger -- escaped by renderMarkdown
-                <div className="rn-md" dangerouslySetInnerHTML={{ __html: parsed.introHtml }} />
-              )}
-              {sections.map((s) => (
-                <Section key={s.id} s={s} />
-              ))}
-              {sections.length === 0 && !parsed.introHtml && (
-                <p className="rn-hint">This release has no notes.</p>
-              )}
-            </div>
-            <div className="rn-fade" aria-hidden="true" />
+                {!parsed.introHtml && !parsed.sections.length && (
+                  <p>No release notes have been published for v{version}.</p>
+                )}
+              </>
+            )}
           </div>
-
-          <div className="rn-foot">
-            <a className="rn-gh" href={release.url} target="_blank" rel="noopener noreferrer">
-              <ExternalLink aria-hidden="true" />
-              View on GitHub
-            </a>
-            <span className="sp" />
-            <span className="rn-hint">
-              <kbd>Esc</kbd> to close
-            </span>
-            <MonitorButton variant="primary" onClick={onDismiss}>
-              Got it
-            </MonitorButton>
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+          <footer className="rn-footer">
+            {notes?.url && (
+              <a href={notes.url} target="_blank" rel="noopener noreferrer">
+                Full changelog <ArrowUpRight size={14} aria-hidden="true" />
+              </a>
+            )}
+            <Dialog.Close className="rn-done">Got it</Dialog.Close>
+          </footer>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

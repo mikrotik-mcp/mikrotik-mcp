@@ -116,7 +116,7 @@ import { normalizeExport } from "../snapshots/format";
 import type { SnapshotStore } from "../snapshots/store";
 import { openSnapshotStore } from "../snapshots/store";
 import { getConfig, resolveDeviceName, setConfig } from "../core/runtime";
-import { fetchAllReleases, fetchLatestRelease } from "../core/update-check";
+import { fetchAllReleases, fetchLatestRelease, fetchReleaseForVersion } from "../core/update-check";
 import { logger } from "../logger";
 import { UI_DIST_DIR } from "../paths";
 import type { ConfigAdmin } from "./config-admin";
@@ -2036,6 +2036,14 @@ export async function runDashboard(
       return new Response(dashboardHtml(), {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
+    }
+
+    if (url.pathname === "/api/releases/current" && req.method === "GET") {
+      try {
+        return json(await fetchReleaseForVersion(VERSION));
+      } catch (e) {
+        return json({ error: clientError(e, "Could not load this release") }, 502);
+      }
     }
 
     if (url.pathname === "/api/releases/latest") {

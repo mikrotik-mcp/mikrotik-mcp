@@ -101,13 +101,52 @@ function enhance(html: string, kind: SectionKind): string {
 }
 
 function topLevelItems(html: string): number {
-  return (html.match(/<li[ >]/g) ?? []).length;
+  return (html.match(/<li(?:>| class="wn-task)/g) ?? []).length;
+}
+
+/** Split only real headings. Keep heading-like lines in fenced examples intact. */
+function splitHeadings(markdown: string): string[] {
+  const headings: { offset: number; end: number; depth: number; title: string }[] = [];
+  let fence = "";
+  for (const match of markdown.matchAll(/^.*$/gm)) {
+    const line = match[0];
+    const delimiter = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (delimiter) {
+      if (!fence) fence = delimiter[1]!;
+      else if (delimiter[1]!.startsWith(fence) && !delimiter[2]!.trim()) fence = "";
+      continue;
+    }
+    const heading = !fence && /^ {0,3}(#{1,6})\s+(.+)$/.exec(line);
+    if (heading)
+      headings.push({
+        offset: match.index,
+        end: match.index + line.length,
+        depth: heading[1]!.length,
+        title: heading[2]!.trim(),
+      });
+  }
+  if (!headings.length) return [markdown];
+  const depth = Math.min(...headings.map((h) => h.depth));
+  const parts: string[] = [];
+  let start = 0;
+  for (const h of headings) {
+    if (h.depth !== depth) continue;
+    parts.push(markdown.slice(start, h.offset), h.title);
+    start = h.end;
+  }
+  return [...parts, markdown.slice(start)];
 }
 
 export function parseRelease(body: string): ParsedRelease {
-  const md = body.replace(/\r\n?/g, "\n").replace(/^\s*# [^\n]*\n/, "");
+  const md = body
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .replace(
+      /^#{1,3}\s+(?:(?:MikroTik MCP|Release)\s+)?v?\d+\.\d+\.\d+(?:[-+][\w.+-]+)?\s*(?:\n|$)/i,
+      "",
+    );
   const words = md.split(/\s+/).filter(Boolean).length;
-  const parts = md.split(/^## (.+)$/m);
+  const parts = splitHeadings(md);
   const intro = parts[0]?.trim() ?? "";
   let previousVersion: string | null = null;
   const sections: ReleaseSection[] = [];
@@ -115,14 +154,19 @@ export function parseRelease(body: string): ParsedRelease {
   for (let i = 1; i < parts.length; i += 2) {
     const title = parts[i]!.trim();
     const content = parts[i + 1] ?? "";
-    const chunks = content.split(/^### (.+)$/m);
+    const chunks = splitHeadings(content);
     const n = sections.length;
     const featureTitles: string[] = [];
     for (let j = 1; j < chunks.length; j += 2) featureTitles.push(chunks[j]!.trim());
     const kind = kindOf(title, featureTitles.length > 0);
     const render = (s: string): string => {
-      const html = enhance(renderMarkdown(s), kind);
-      const m = COMPARE.exec(renderMarkdown(s));
+      // Template-indented releases use the same margin for every top-level bullet.
+      const lines = s.split("\n").filter((line) => line.trim());
+      const indent = Math.min(3, ...lines.map((line) => line.length - line.trimStart().length));
+      const normalized = indent ? s.replace(new RegExp(`^ {0,${indent}}`, "gm"), "") : s;
+      const rendered = renderMarkdown(normalized, { document: true });
+      const html = enhance(rendered, kind);
+      const m = COMPARE.exec(rendered);
       if (m) previousVersion = m[2]!;
       return html;
     };

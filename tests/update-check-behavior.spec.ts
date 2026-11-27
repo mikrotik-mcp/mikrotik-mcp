@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { VERSION } from "../src/version";
 
@@ -157,4 +158,42 @@ test("version ordering and freshness boundaries classify patch, minor and major 
   expect(api.updateSummaryLine({ version: "99.1.0", isNewer: true } as never)).toContain(
     "check_server_pulse",
   );
+});
+
+test.each(["6.22.0", "6.23.0", "6.24.0-rc.1"])(
+  "installed notes match the exact tag %s despite a cached latest",
+  async (version) => {
+    const api = await module();
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ ...release, tag_name: "6.21.0", body: "cached previous release" }),
+    );
+    await api.fetchLatestRelease();
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ ...release, tag_name: `v${version}`, body: `Notes for ${version}` }),
+    );
+    const exact = await api.fetchReleaseForVersion(version);
+    expect(exact).toMatchObject({ version, body: `Notes for ${version}` });
+    expect(await api.fetchReleaseForVersion(version)).toEqual(exact);
+    expect(
+      fetchMock.mock.calls.map(
+        ([url]) =>
+          (typeof url === "string" ? url : url instanceof URL ? url.href : url.url).split(
+            "/releases/",
+          )[1],
+      ),
+    ).toEqual(["latest", `tags/${version}`, `tags/v${version}`]);
+  },
+);
+
+test("missing, mismatched and temporarily unavailable tags never borrow another version's notes", async () => {
+  const api = await module();
+  fetchMock
+    .mockResolvedValueOnce(new Response(null, { status: 404 }))
+    .mockResolvedValueOnce(new Response(null, { status: 404 }));
+  expect(await api.fetchReleaseForVersion("6.24.0")).toBeNull();
+  fetchMock.mockResolvedValueOnce(Response.json(release));
+  await expect(api.fetchReleaseForVersion("6.24.0")).rejects.toThrow("tag does not match");
+  fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
+  await expect(api.fetchReleaseForVersion("6.24.0")).rejects.toThrow("503");
 });

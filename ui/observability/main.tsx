@@ -1718,7 +1718,7 @@ function App(): ReactNode {
         feedCount={feed.length}
         firingCount={firingCount ?? 0}
         releaseAvailable={whatsNew.showIndicator}
-        onReleaseNotes={whatsNew.release ? () => whatsNew.openModal() : undefined}
+        onReleaseNotes={whatsNew.openModal}
         controls={<ReloadServerButton />}
         compactControls={<ReloadServerButton compact />}
         collapsed={sidebarCollapsed}
@@ -2559,8 +2559,12 @@ function App(): ReactNode {
         renderIcon={(id) => <NavIcon name={id} />}
         actions={paletteActions}
       />
-      {whatsNew.showModal && whatsNew.release && (
-        <WhatsNewModal release={whatsNew.release} onDismiss={whatsNew.dismissRelease} />
+      {whatsNew.target && (
+        <WhatsNewModal
+          key={JSON.stringify([whatsNew.target.installed, whatsNew.target.available?.version])}
+          target={whatsNew.target}
+          onDismiss={whatsNew.dismissRelease}
+        />
       )}
       {selected && <DetailDrawer event={selected} onClose={() => setSelected(null)} />}
       <Toaster />
