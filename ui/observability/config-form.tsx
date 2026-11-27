@@ -333,9 +333,9 @@ export function DevicesForm({
 }: {
   cfg: Cfg;
   onChange: (c: Cfg) => void;
-  onSave: (c: Cfg) => Promise<boolean>;
+  onSave: (c: Cfg, newName?: string) => Promise<boolean>;
   saveNotice: string;
-  initialSelection?: { name: string; isNew: boolean };
+  initialSelection?: { name: string; isNew: boolean; cloneFrom?: string };
   onCancelStandalone?: () => void;
 } & DeviceControls): ReactNode {
   const [sheet, setSheet] = useState(initialSelection ?? null);
@@ -358,7 +358,7 @@ export function DevicesForm({
   const duplicate = (source: string) => {
     const result = duplicateDevice(cfg, source);
     onChange(result.config);
-    setSheet({ name: result.name, isNew: true });
+    setSheet({ name: result.name, isNew: true, cloneFrom: source });
     setAnnouncement(`Copied ${source} to ${result.name}. Review and save to apply.`);
   };
 
@@ -384,9 +384,10 @@ export function DevicesForm({
       cfg={cfg}
       name={sheet.name}
       isNew={sheet.isNew}
+      cloneFrom={sheet.cloneFrom}
       saveNotice={saveNotice}
-      onSave={async (next) => {
-        const saved = await onSave(next);
+      onSave={async (next, newName) => {
+        const saved = await onSave(next, newName);
         if (saved) setSheet(null);
         return saved;
       }}
@@ -586,10 +587,10 @@ export function DevicesForm({
                           <MonitorButton
                             size="sm"
                             variant="ghost"
-                            aria-label={`Copy ${n}`}
+                            aria-label={`Clone ${n}`}
                             onClick={() => duplicate(n)}
                           >
-                            Copy
+                            Clone
                           </MonitorButton>
                           <MonitorButton
                             size="sm"

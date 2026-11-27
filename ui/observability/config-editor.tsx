@@ -41,6 +41,7 @@ export function ConfigEditor({
   initial,
   onClose,
   onReload,
+  onDeviceCreated,
   scope = "server",
   initialSelection,
   original = initial,
@@ -49,8 +50,9 @@ export function ConfigEditor({
   initial: unknown;
   onClose: () => void;
   onReload: () => void;
+  onDeviceCreated?: (name: string) => void;
   scope?: ConfigScope;
-  initialSelection?: { name: string; isNew: boolean };
+  initialSelection?: { name: string; isNew: boolean; cloneFrom?: string };
   original?: unknown;
   /**
    * Set to the editor's guarded close (it asks before dropping a draft and
@@ -274,7 +276,36 @@ export function ConfigEditor({
       }}
       tests={tests}
       onTest={(name) => void testDevice(name)}
-      onSave={async (next) => {
+      onSave={async (next, newName) => {
+        if (newName) {
+          if (busy || pending) return false;
+          setBusy(true);
+          try {
+            const result = await postJson<SaveResp & { config?: Cfg; error?: string }>(
+              "/api/config/devices",
+              { name: newName, device: asObj(next.devices)[newName] },
+            );
+            if (!result.ok || !result.config)
+              throw new Error(
+                result.error || result.errors?.[0]?.message || "Could not add the router.",
+              );
+            const live = result.config;
+            setBaseline(live);
+            setCfg({
+              ...next,
+              devices: { ...asObj(next.devices), [newName]: asObj(live.devices)[newName] },
+            });
+            setPreview(null);
+            toast.success(`Added ${newName}`);
+            onDeviceCreated?.(newName);
+            onReload();
+            if (selection) onClose();
+            return true;
+          } finally {
+            setBusy(false);
+          }
+        }
+
         const saved = await doSave(next);
         if (saved) setSelection(undefined);
         return saved;

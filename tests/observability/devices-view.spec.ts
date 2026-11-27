@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { typeInto } from "../_stubs/kit";
 import { act, createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
@@ -101,8 +102,7 @@ const acceptDeviceForm = async () => {
     [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
       (b) => b.textContent?.trim() === label,
     )!;
-  await click(formButton("Continue"));
-  await click(formButton("Continue"));
+  await click(document.querySelector<HTMLElement>('[role="dialog"] summary')!);
   await click(formButton("Add to draft"));
 };
 const filter = async (name: string) =>
@@ -214,21 +214,30 @@ const mockConfigApi = (rollbackMs = 60000) => {
     const path = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     calls.push({ path, body });
-    const result = path.includes("test-device")
-      ? { ok: true, status: { reachable: true, latencyMs: 12, identity: "lab" } }
-      : path.includes("validate")
-        ? { ok: true }
-        : path.includes("preview")
-          ? { summary: { changed: true, added: 1, removed: 0 }, unified: "+test" }
-          : path.includes("keep")
-            ? { kept: true }
-            : path.includes("rollback")
-              ? { rolledBack: true, config: draftConfig }
-              : init?.method === "POST"
-                ? { ok: true, config: body.config, pendingId: "pending-lab", rollbackMs }
-                : path.includes("schema")
-                  ? {}
-                  : draftConfig;
+    const result =
+      path === "/api/config/devices"
+        ? {
+            ok: true,
+            config: {
+              ...draftConfig,
+              devices: { ...draftConfig.devices, [body.name]: body.device },
+            },
+          }
+        : path.includes("test-device")
+          ? { ok: true, status: { reachable: true, latencyMs: 12, identity: "lab" } }
+          : path.includes("validate")
+            ? { ok: true }
+            : path.includes("preview")
+              ? { summary: { changed: true, added: 1, removed: 0 }, unified: "+test" }
+              : path.includes("keep")
+                ? { kept: true }
+                : path.includes("rollback")
+                  ? { rolledBack: true, config: draftConfig }
+                  : init?.method === "POST"
+                    ? { ok: true, config: body.config, pendingId: "pending-lab", rollbackMs }
+                    : path.includes("schema")
+                      ? {}
+                      : draftConfig;
     return new Response(JSON.stringify(result), {
       headers: { "content-type": "application/json" },
     });
@@ -302,7 +311,7 @@ test("copy, edit and remove stay in the Devices draft until saved", async () => 
   const calls = mockConfigApi();
   await render();
   await click(button("Manage routers"));
-  await click(button("Copy branch"));
+  await click(button("Clone branch"));
   await acceptDeviceForm();
   expect(button("Edit settings for branch-copy")).toBeTruthy();
   await click(button("Remove branch-copy"));
@@ -464,23 +473,40 @@ test("the add modal tests without saving, then Connect & Save uses safe apply wi
     );
     name.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  // Test and Connect & save sit on the review step, as the board draws them.
-  await click(modalButton("Continue"));
-  await click(modalButton("Continue"));
+  expect(modalButton("Continue")).toBeUndefined();
   await click(modalButton("Test connection"));
   expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
   await click(modalButton("Connect & save"));
   expect(calls.filter((c) => c.path.includes("test-device"))).toHaveLength(2);
-  const saves = calls.filter((c) => c.path === "/api/config?scope=devices");
+  const saves = calls.filter((c) => c.path === "/api/config/devices");
   expect(saves).toHaveLength(1);
-  expect(saves[0].body.config.devices["new-lab"].host).toBe("192.168.88.1");
-  expect(saves[0].body.config.devices.device).toBeUndefined();
-  expect(saves[0].body.rollbackMs).toBe(60000);
+  expect(saves[0].body.name).toBe("new-lab");
+  expect(saves[0].body.device.host).toBe("192.168.88.1");
+  expect(calls.some((c) => c.path === "/api/config?scope=devices")).toBe(false);
   expect(document.querySelector('[role="dialog"]')).toBeNull();
-  expect(host.textContent).toContain("unless you keep it");
+  expect(host.querySelector('[aria-label="Manage routers"]')).toBeNull();
+  expect(button("Keep changes")).toBeUndefined();
   expect(calls.some((c) => c.path.includes("/keep"))).toBe(false);
-  await click(button("Keep changes"));
-  expect(host.textContent).toContain("Changes kept.");
+});
+
+test("cloning from the fleet adds an independent router using the stored credential source", async () => {
+  const calls = mockConfigApi();
+  await render();
+  await click(button("Clone edge"));
+  expect(document.querySelector<HTMLInputElement>("#dev_name")?.value).toBe("edge-copy");
+  await typeInto(document.querySelector<HTMLInputElement>("#f_host")!, "192.0.2.55");
+  await click(
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (el) => el.textContent?.trim() === "Connect & save",
+    )!,
+  );
+  const added = calls.find((call) => call.path === "/api/config/devices")!;
+  expect(added.body).toMatchObject({
+    name: "edge-copy",
+    device: { host: "192.0.2.55", $credentialsFrom: "edge" },
+  });
+  expect(draftConfig.devices.edge.host).toBe("192.0.2.1");
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
 test("new and discovered routers open here without overwriting an existing router or saving", async () => {

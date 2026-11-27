@@ -359,6 +359,18 @@ test("memory settings reject unknown fields and accept a no-op update without pe
   expect(fixture.writes).not.toHaveBeenCalled();
 });
 
+test("single-router creation rejects a conflicting name or invalid device without changing the fleet", async () => {
+  const existing = getConfig();
+  expect(
+    (await post("/api/config/devices", { name: "edge", device: { host: "192.0.2.99" } })).status,
+  ).toBe(409);
+  expect((await post("/api/config/devices", { name: "branch", device: { port: -1 } })).status).toBe(
+    400,
+  );
+  expect(getConfig()).toBe(existing);
+  expect(fixture.writes).not.toHaveBeenCalled();
+});
+
 test("config test-device probes only the validated draft with the supplied inventory", async () => {
   fixture.probe.mockResolvedValue({ reachable: true, identity: "draft-router" });
   const response = await post("/api/config/test-device", {

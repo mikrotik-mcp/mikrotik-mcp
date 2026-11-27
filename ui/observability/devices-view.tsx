@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  Copy,
   PenLine,
   Plus,
   Power,
@@ -40,7 +41,7 @@ import {
 } from "./monitoring-ui";
 import { api } from "./api";
 import { num } from "./format";
-import { addDevice } from "../../src/config-device-draft";
+import { addDevice, duplicateDevice } from "../../src/config-device-draft";
 import type { CapabilitiesJson, DevicesPayload, SSHPoolPayload } from "./types";
 
 type DeviceFilter = "all" | "online" | "offline" | "pending" | "disabled";
@@ -94,13 +95,18 @@ export function DevicesView({
   const [drawer, setDrawer] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, DeviceBusy>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  type Request = { name?: string; add?: boolean; seed?: NonNullable<typeof seed> };
+  type Request = {
+    name?: string;
+    add?: boolean;
+    cloneFrom?: string;
+    seed?: NonNullable<typeof seed>;
+  };
   const [request, setRequest] = useState<Request | null>(() => (seed ? { seed } : null));
   const [error, setError] = useState<string | null>(null);
   const [editor, setEditor] = useState<{
     initial: Record<string, unknown>;
     original: Record<string, unknown>;
-    selection?: { name: string; isNew: boolean };
+    selection?: { name: string; isNew: boolean; cloneFrom?: string };
   } | null>(null);
   const loading = !!request && !editor && !error;
   const openManager = (next: Request) => {
@@ -114,7 +120,7 @@ export function DevicesView({
       .then((original) => {
         if (controller.signal.aborted) return;
         let initial = original;
-        let selection: { name: string; isNew: boolean } | undefined;
+        let selection: { name: string; isNew: boolean; cloneFrom?: string } | undefined;
         const devices = (original.devices ?? {}) as Record<string, unknown>;
         if (request.seed) {
           // Discovery must never overwrite an existing router with the same name.
@@ -126,10 +132,12 @@ export function DevicesView({
             defaultDevice: original.defaultDevice || name,
           };
           selection = { name, isNew: true };
-        } else if (request.add) {
-          const added = addDevice(original);
+        } else if (request.add || request.cloneFrom) {
+          const added = request.cloneFrom
+            ? duplicateDevice(original, request.cloneFrom)
+            : addDevice(original);
           initial = added.config;
-          selection = { name: added.name, isNew: true };
+          selection = { name: added.name, isNew: true, cloneFrom: request.cloneFrom };
         } else if (request.name) {
           if (!Object.hasOwn(devices, request.name))
             throw new Error("This router is no longer configured. Refresh the router list.");
@@ -296,6 +304,12 @@ export function DevicesView({
             setRequest(null);
             onSeedConsumed?.();
           }}
+          onDeviceCreated={(name) => {
+            setQuery("");
+            setFilter("all");
+            setPicked(name);
+            setDrawer(null);
+          }}
           onReload={() => onReload?.()}
         />
       )}
@@ -334,6 +348,7 @@ export function DevicesView({
         onAction={(kind) => void runAction(selected.name, kind)}
         onToggle={actions.onToggle}
         onManage={editor || loading ? undefined : (name) => openManager({ name })}
+        onClone={editor || loading ? undefined : (cloneFrom) => openManager({ cloneFrom })}
         canTest={!!actions.onTest}
         canReconnect={!!actions.onReconnect}
         canProbe={!!actions.onProbeCapabilities}
@@ -501,11 +516,18 @@ export function DevicesView({
                         onSelect: () => void runAction(d.name, "reconnect"),
                       });
                     if (!editor && !loading)
-                      rowActions.push({
-                        label: "Edit",
-                        icon: <PenLine aria-hidden="true" />,
-                        onSelect: () => openManager({ name: d.name }),
-                      });
+                      rowActions.push(
+                        {
+                          label: "Edit",
+                          icon: <PenLine aria-hidden="true" />,
+                          onSelect: () => openManager({ name: d.name }),
+                        },
+                        {
+                          label: "Clone",
+                          icon: <Copy aria-hidden="true" />,
+                          onSelect: () => openManager({ cloneFrom: d.name }),
+                        },
+                      );
                     if (actions.onToggle)
                       rowActions.push({
                         label: d.disabled ? "Make available to MCP" : "Turn off for MCP",

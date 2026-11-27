@@ -1,6 +1,6 @@
 import { endpointAddress, managementEndpoint } from "../../src/core/device-endpoints";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
-import { PenLine, RotateCw, TriangleAlert, X, Zap } from "lucide-react";
+import { Copy, PenLine, RotateCw, TriangleAlert, X, Zap } from "lucide-react";
 import { DeviceAddressStatus } from "./device-address-status";
 import { LossBand, LossCell, PhoneLossRow } from "./device-loss";
 import { DeviceResources, MeterBar } from "./health";
@@ -502,6 +502,7 @@ export function RouterDetails({
   onAction,
   onToggle,
   onManage,
+  onClone,
   canTest,
   canReconnect,
   canProbe,
@@ -515,6 +516,7 @@ export function RouterDetails({
   onAction: (kind: DeviceBusy) => void;
   onToggle?: (name: string, disabled: boolean) => void;
   onManage?: (name: string) => void;
+  onClone?: (name: string) => void;
   canTest: boolean;
   canReconnect: boolean;
   canProbe: boolean;
@@ -563,6 +565,17 @@ export function RouterDetails({
           onClick={() => onAction("reconnect")}
         >
           {busy === "reconnect" ? "Reconnecting…" : "Reconnect"}
+        </MonitorButton>
+      )}
+      {onClone && (
+        <MonitorButton
+          size={size}
+          variant="ghost"
+          icon={<Copy aria-hidden="true" />}
+          aria-label={`Clone ${d.name}`}
+          onClick={() => onClone(d.name)}
+        >
+          Clone
         </MonitorButton>
       )}
       {onManage && (

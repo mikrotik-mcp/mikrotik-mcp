@@ -8,11 +8,13 @@ export function DeviceAddressesEditor({
   fallbackHosts,
   onChange,
   invalid = false,
+  compact = false,
 }: {
   host: string;
   fallbackHosts: string[];
   onChange: (host: string, fallbackHosts: string[]) => void;
   invalid?: boolean;
+  compact?: boolean;
 }) {
   const hosts = [host, ...fallbackHosts];
   const change = (next: string[]) => onChange(next[0], next.slice(1));
@@ -21,9 +23,11 @@ export function DeviceAddressesEditor({
       <div className="flex flex-col gap-1.5" role="group" aria-label="Management addresses">
         {hosts.map((value, index) => (
           <div className="dv-addr-row" data-primary={index === 0} key={index}>
-            <span className="monitor-chip w-16 justify-center">
-              {index === 0 ? "Primary" : index + 1}
-            </span>
+            {(!compact || hosts.length > 1) && (
+              <span className="monitor-chip w-16 justify-center">
+                {index === 0 ? "Primary" : index + 1}
+              </span>
+            )}
             <TextInput
               id={index === 0 ? "f_host" : `f_fallback_${index}`}
               wrapClassName="min-w-0 flex-1"
@@ -48,15 +52,17 @@ export function DeviceAddressesEditor({
                 Set primary
               </MonitorButton>
             )}
-            <button
-              type="button"
-              className="monitor-icon-btn disabled:opacity-40"
-              aria-label={`Remove ${value || `address ${index + 1}`}`}
-              disabled={hosts.length === 1}
-              onClick={() => change(hosts.filter((_, i) => i !== index))}
-            >
-              <X aria-hidden="true" />
-            </button>
+            {(!compact || hosts.length > 1) && (
+              <button
+                type="button"
+                className="monitor-icon-btn disabled:opacity-40"
+                aria-label={`Remove ${value || `address ${index + 1}`}`}
+                disabled={hosts.length === 1}
+                onClick={() => change(hosts.filter((_, i) => i !== index))}
+              >
+                <X aria-hidden="true" />
+              </button>
+            )}
           </div>
         ))}
         <div className="flex items-center gap-2">
@@ -70,7 +76,11 @@ export function DeviceAddressesEditor({
             Add fallback address
           </MonitorButton>
           <span className="flex-1" />
-          <span className="monitor-hint">Up to 8. The last working address gets a head start.</span>
+          {!compact && (
+            <span className="monitor-hint">
+              Up to 8. The last working address gets a head start.
+            </span>
+          )}
         </div>
       </div>
     </>

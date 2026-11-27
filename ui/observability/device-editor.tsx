@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Check, ChevronDown, ChevronRight, Plus, X } from "lucide-react";
+import {
+  Cable,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  KeyRound,
+  Plus,
+  Router,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { CREDENTIAL_SOURCE, renameDevice, setDraftField } from "../../src/config-device-draft";
 import type { SshKeyOption } from "../../src/observability/ssh-key-inventory";
 import { api, postJson } from "./api";
@@ -96,7 +107,7 @@ function SecretField({
         value={stored ? "" : text(value)}
         onChange={onChange}
         autoComplete="new-password"
-        placeholder={stored ? "Stored securely · leave unchanged" : "Enter a secret"}
+        placeholder={stored ? "Stored securely · leave unchanged" : `Enter ${label.toLowerCase()}`}
       />
     </Field>
   );
@@ -405,6 +416,7 @@ export function DeviceEditor({
   cfg,
   name,
   isNew,
+  cloneFrom,
   onApply,
   onSave,
   saveNotice,
@@ -414,8 +426,9 @@ export function DeviceEditor({
   cfg: Draft;
   name: string;
   isNew: boolean;
+  cloneFrom?: string;
   onApply: (cfg: Draft) => void;
-  onSave: (cfg: Draft) => Promise<boolean>;
+  onSave: (cfg: Draft, newName?: string) => Promise<boolean>;
   saveNotice: string;
   onCancel: () => void;
   advanced: (
@@ -575,8 +588,10 @@ export function DeviceEditor({
         onApply(next);
         return;
       }
-      setStep(2);
-      toTop();
+      if (!isNew) {
+        setStep(2);
+        toTop();
+      }
       setTesting(true);
       const connection = await testDeviceConnection(
         newName.trim(),
@@ -587,16 +602,19 @@ export function DeviceEditor({
       setTesting(false);
       setTest({ ...connection, snapshot, at: Date.now() });
       if (!connection.ok) return;
-      if (!(await onSave(next)) && mounted.current)
+      if (!(await (isNew ? onSave(next, newName.trim()) : onSave(next))) && mounted.current)
         setErrors({
           form: "The connection worked, but the save was not confirmed. Check the saved routers before you try again. Your form is still here.",
         });
-    } catch {
+    } catch (error) {
       if (mounted.current)
         setErrors({
-          form: connectAndSave
-            ? "Connect & save did not finish. Check the saved routers before you try again."
-            : "Could not validate the draft. Nothing was saved. Try again.",
+          form:
+            error instanceof Error
+              ? error.message
+              : connectAndSave
+                ? "Connect & save did not finish. Check the saved routers before you try again."
+                : "Could not validate the draft. Nothing was saved. Try again.",
         });
     } finally {
       inFlight.current = false;
@@ -611,8 +629,10 @@ export function DeviceEditor({
     inFlight.current = true;
     setTesting(true);
     setTest(null);
-    setStep(2);
-    toTop();
+    if (!isNew) {
+      setStep(2);
+      toTop();
+    }
     const result = await testDeviceConnection(name, dev, { ...devices, [name]: dev });
     inFlight.current = false;
     if (mounted.current) {
@@ -683,6 +703,270 @@ export function DeviceEditor({
         : [];
   const elsewhere = Object.entries(errors).filter(([key]) => !shownHere.includes(key));
 
+  const addressFields = (
+    <>
+      {transport === "mac" ? (
+        <Field label="MAC address" error={errors.mac} id={fieldId("mac")}>
+          {input("mac", "48:A9:8A:C6:42:F7")}
+        </Field>
+      ) : (
+        <div className="monitor-fl">
+          <div className="flex items-center gap-2">
+            <span className="monitor-label flex-1">
+              {isNew ? "Router address" : "Management addresses"}
+            </span>
+            {!isNew && <span className="monitor-hint">Automatic failover</span>}
+          </div>
+          <DeviceAddressesEditor
+            compact={isNew}
+            host={text(dev.host)}
+            fallbackHosts={Array.isArray(dev.fallbackHosts) ? dev.fallbackHosts : []}
+            invalid={!!errors.host}
+            onChange={(host, fallbackHosts) => {
+              setDev(({ fallbackHosts: _old, ...current }) => ({
+                ...current,
+                host,
+                ...(fallbackHosts.length ? { fallbackHosts } : {}),
+              }));
+              setErrors({});
+              setDiscard(false);
+            }}
+          />
+          {errors.host && (
+            <span role="alert" className="monitor-err">
+              {errors.host}
+            </span>
+          )}
+        </div>
+      )}
+    </>
+  );
+  const portField = (
+    <>
+      {transport !== "mac" && (
+        <Field label="SSH port" error={errors.port} id={fieldId("port")}>
+          <NumberInput
+            allowEmpty
+            placeholder="22"
+            className="tabular-nums"
+            value={dev.port == null || dev.port === "" ? null : Number(dev.port)}
+            invalid={errors.port ? true : undefined}
+            onChange={(value) => setField("port", value ?? "")}
+          />
+        </Field>
+      )}
+    </>
+  );
+  const tagField = (
+    <div className="dv-tags">
+      <MultiSelect
+        label="Tags"
+        noun="tag"
+        placeholder="Add a tag"
+        allowCustom
+        value={Array.isArray(dev.tags) ? dev.tags : []}
+        options={[
+          ...new Set(
+            Object.values(devices).flatMap((device) =>
+              Array.isArray(device.tags) ? device.tags : [],
+            ),
+          ),
+        ].map((t) => ({ value: t, label: t }))}
+        onChange={(tags) => setField("tags", tags)}
+        disabled={busy}
+      />
+    </div>
+  );
+  const extraSettings = (
+    <>
+      {transport !== "mac" && (
+        <DeviceJumpHost
+          device={dev}
+          devices={devices}
+          name={name}
+          disabled={busy}
+          onChange={(next) => {
+            setDev(next);
+            setErrors({});
+            setDiscard(false);
+          }}
+        />
+      )}
+      <Disclosure label="Connection options" summary={`Timeout ${timeout} s`}>
+        {advanced(dev, setField, transport)}
+      </Disclosure>
+      <div className="flex items-start gap-3">
+        <span className="flex flex-1 flex-col">
+          <span className="text-foreground text-[13px]">Available to MCP</span>
+          <span className="text-muted-foreground text-[12px]">
+            Turn off to keep the router in your list without tool access.
+          </span>
+        </span>
+        <MonitorSwitch
+          checked={dev.disabled !== true}
+          label="Available to MCP"
+          onChange={(value) => setField("disabled", !value)}
+        />
+      </div>
+    </>
+  );
+  const authControls = (
+    <>
+      <Field label="Username" className="max-w-80" error={errors.username} id={fieldId("username")}>
+        {input("username", "admin")}
+      </Field>
+      {transport !== "mac" && (
+        <div className="monitor-fl">
+          <span className="monitor-label">Sign in with</span>
+          <Segmented
+            className="self-start"
+            label="Sign in with"
+            value={auth}
+            options={[
+              { value: "password", label: "Password" },
+              { value: "key", label: "SSH key" },
+            ]}
+            onChange={changeAuth}
+          />
+        </div>
+      )}
+    </>
+  );
+  const credentials = (
+    <>
+      {typeof dev[CREDENTIAL_SOURCE] === "string" && (
+        <div className="monitor-note">
+          <span>
+            <b className="text-foreground font-[510]">Copied credentials.</b> Secrets you leave
+            unchanged come from {text(dev[CREDENTIAL_SOURCE])}.
+          </span>
+        </div>
+      )}
+      {transport !== "mac" && auth === "key" ? (
+        <>
+          <KeyPicker
+            value={keySource === "file" ? text(dev.keyFilename) : ""}
+            onSelect={selectKeyFile}
+          />
+          {keySource === "file" ? (
+            <div className="dv-grid-key">
+              <Field
+                label="Private key path"
+                hint="The private file, not the .pub one."
+                error={errors.keyFilename}
+                id={fieldId("keyFilename")}
+              >
+                {input("keyFilename", "~/.ssh/id_ed25519")}
+              </Field>
+              <SecretField
+                label="Key passphrase"
+                optional
+                value={dev.keyPassphrase}
+                onChange={(value) => setField("keyPassphrase", value)}
+              />
+            </div>
+          ) : (
+            <div className="monitor-fl">
+              <div className="flex items-center gap-2">
+                <span className="monitor-label flex-1">Inline private key</span>
+                <MonitorButton
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setInlineVisible(!inlineVisible)}
+                >
+                  {inlineVisible ? "Hide key" : "Edit key"}
+                </MonitorButton>
+              </div>
+              {inlineVisible ? (
+                <TextArea
+                  aria-label="Inline private key"
+                  mono
+                  invalid={errors.privateKey ? true : undefined}
+                  value={dev.privateKey === REDACTED ? "" : text(dev.privateKey)}
+                  placeholder={
+                    dev.privateKey === REDACTED
+                      ? "The stored key stays until you paste a new one"
+                      : "Paste a PEM or OpenSSH private key"
+                  }
+                  onChange={(value) => setField("privateKey", value)}
+                />
+              ) : (
+                <span className="monitor-hint">
+                  {dev.privateKey ? "The private key is hidden." : "Choose Edit key to paste one."}
+                </span>
+              )}
+              {errors.privateKey && (
+                <span role="alert" className="monitor-err">
+                  {errors.privateKey}
+                </span>
+              )}
+              <SecretField
+                label="Key passphrase"
+                optional
+                value={dev.keyPassphrase}
+                onChange={(value) => setField("keyPassphrase", value)}
+              />
+            </div>
+          )}
+          <MonitorButton
+            size="sm"
+            variant="ghost"
+            className="self-start pl-0"
+            onClick={() => {
+              setKeySource(keySource === "file" ? "inline" : "file");
+              setDev(
+                ({ privateKey: _key, keyFilename: _file, keyPassphrase: _phrase, ...rest }) => rest,
+              );
+              setInlineVisible(true);
+            }}
+          >
+            {keySource === "file" ? "Paste a private key instead" : "Use a key file instead"}
+          </MonitorButton>
+          <Disclosure
+            label="Password fallback"
+            summary={transport === "rest" ? "Needed for REST" : "Optional for SSH"}
+            defaultOpen={transport === "rest"}
+          >
+            <SecretField
+              label="Password"
+              value={dev.password}
+              onChange={(value) => setField("password", value)}
+            />
+          </Disclosure>
+        </>
+      ) : (
+        <>
+          <SecretField
+            label="Password"
+            value={dev.password}
+            onChange={(value) => setField("password", value)}
+          />
+          {!isNew && (
+            <span className="monitor-hint">Leave the field empty to keep the stored password.</span>
+          )}
+        </>
+      )}
+    </>
+  );
+  const testResult = (
+    <div role="status" className="monitor-note dv-result items-center" data-result={result.tone}>
+      {result.tone !== "default" && (
+        <span className="dv-result-icon" aria-hidden="true">
+          {result.tone === "bad" ? <X /> : <Check />}
+        </span>
+      )}
+      <span className="flex flex-1 flex-col">
+        <span className="text-foreground font-[510]">{result.title}</span>
+        <span className="text-muted-foreground text-[12px]">{result.text}</span>
+      </span>
+      {currentTest && (
+        <span className="text-muted-foreground text-[12px]">
+          Tested {clockTime(currentTest.at)}
+        </span>
+      )}
+    </div>
+  );
+
   const footer = discard ? (
     <>
       <span role="alert" className="text-foreground flex-1 text-[13px]">
@@ -695,6 +979,24 @@ export function DeviceEditor({
         Discard form
       </MonitorButton>
     </>
+  ) : isNew ? (
+    <div className="dv-create-actions">
+      <MonitorButton size="sm" variant="ghost" disabled={busy} onClick={close}>
+        Cancel
+      </MonitorButton>
+      <MonitorButton size="sm" disabled={busy} onClick={() => void probe()}>
+        {testing && !saving ? "Testing…" : "Test connection"}
+      </MonitorButton>
+      <MonitorButton
+        size="sm"
+        variant="primary"
+        icon={<Cable />}
+        disabled={busy}
+        onClick={() => void apply(true)}
+      >
+        {testing && saving ? "Connecting…" : saving ? "Saving…" : "Connect & save"}
+      </MonitorButton>
+    </div>
   ) : (
     <>
       <MonitorButton size="sm" disabled={busy} onClick={close}>
@@ -754,447 +1056,273 @@ export function DeviceEditor({
           return;
         close();
       }}
-      eyebrow={`Router setup · ${isNew ? "new" : "edit"} connection`}
-      title={isNew ? "Add a router" : `Edit ${name}`}
-      description="Set how MCP connects, test it, then save it to your draft."
-      width={880}
+      eyebrow={isNew ? undefined : "Router setup · edit connection"}
+      title={
+        isNew ? (
+          <span className="dv-create-title">
+            <span aria-hidden="true">{cloneFrom ? <Copy /> : <Router />}</span>
+            {cloneFrom ? "Clone router" : "Add a router"}
+          </span>
+        ) : (
+          `Edit ${name}`
+        )
+      }
+      description={
+        isNew
+          ? cloneFrom
+            ? `Starting from ${cloneFrom}. Choose a name and connection for the new router.`
+            : "The MCP host stores your connection settings and credentials."
+          : "Edit the connection, then test or save your changes."
+      }
+      width={isNew ? 620 : 880}
       dismissible={false}
       closeDisabled={busy}
       footer={footer}
     >
-      <div ref={content} className="dv-ed">
-        <div className="dv-ed-side">
-          <nav aria-label="Steps" className="flex flex-col gap-1">
-            {STEPS.map(([label, sub], index) => (
-              <button
-                type="button"
-                key={label}
-                className="dv-step"
-                disabled={busy}
-                aria-current={step === index ? "step" : undefined}
-                data-done={index < step || undefined}
-                onClick={() => go(index)}
-              >
-                <span className="dv-step-n" aria-hidden="true">
-                  {index < step ? <Check /> : `0${index + 1}`}
-                </span>
-                <span className="flex flex-col">
-                  <span className="dv-step-label">{label}</span>
-                  <span className="dv-step-sub text-muted-foreground text-[12px] leading-4">
-                    {sub}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </nav>
-          <div className="glass dv-route" aria-label="Connection preview">
-            <span className="dv-section">Connection</span>
-            <div className="flex flex-col items-start">
-              <div className="flex items-center gap-2">
-                <StatusDot tone="good" pulse />
-                <span className="flex flex-col">
-                  <span className="text-foreground text-[13px] font-semibold">MCP host</span>
-                  <span className="monitor-hint">Credentials stay here</span>
-                </span>
-              </div>
-              <div className="dv-route-link">
-                <svg width="8" height="41" aria-hidden="true">
-                  <line
-                    x1="4"
-                    y1="2"
-                    x2="4"
-                    y2="39"
-                    stroke="var(--sig)"
-                    strokeWidth="2"
-                    strokeDasharray="4 4"
-                  />
-                </svg>
-                <span className="monitor-hint truncate font-mono">{route}</span>
-              </div>
-              <div className="flex min-w-0 max-w-full items-center gap-2">
-                <StatusDot tone={currentTest?.ok ? "good" : currentTest ? "bad" : "default"} />
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-foreground truncate font-mono text-[13px] font-semibold">
-                    {newName.trim() || "New router"}
-                  </span>
-                  <span className="monitor-hint truncate font-mono">
-                    {transport === "mac" ? text(dev.mac) : text(dev.host) || "Router address"}
-                  </span>
-                </span>
+      {isNew ? (
+        <fieldset className="dv-create" disabled={busy}>
+          <div className="dv-create-block">
+            <div className="dv-create-identity">
+              <Field label="Device name" error={errors.name} id={fieldId("name")}>
+                {input("name", "Branch router", false)}
+              </Field>
+              <div className="monitor-fl">
+                <span className="monitor-label">Protocol</span>
+                <Segmented
+                  label="Transport"
+                  value={transport}
+                  options={TRANSPORTS.map(([value, label]) => ({ value, label }))}
+                  onChange={changeTransport}
+                />
               </div>
             </div>
+            <div className={transport === "mac" ? undefined : "dv-create-address"}>
+              {addressFields}
+              {portField}
+            </div>
           </div>
-          <p className="monitor-hint">
-            This sets how MCP reaches the router. Nothing on the router changes.
-          </p>
-        </div>
-        <fieldset disabled={busy} className="dv-ed-body">
-          <h3 className="text-emphasis text-[16px] leading-[21px] font-semibold">
-            {HEADINGS[step]}
-          </h3>
-          {step === 0 && (
-            <>
-              <div className="dv-grid-2">
-                <Field label="Device name" error={errors.name} id={fieldId("name")}>
-                  {input("name", "home-router", false)}
-                </Field>
-                <Field label="Description" optional id={fieldId("description")}>
-                  {input("description", "Home · hAP ax³", false)}
-                </Field>
-              </div>
-              <div className="monitor-fl">
-                <span className="monitor-label">How MCP connects</span>
-                <div role="radiogroup" aria-label="Transport" className="dv-grid-3">
-                  {TRANSPORTS.map(([value, label, hint]) => (
-                    <button
-                      type="button"
-                      key={value}
-                      role="radio"
-                      aria-checked={transport === value}
-                      aria-label={label}
-                      className="monitor-choice"
-                      onClick={() => changeTransport(value)}
-                    >
-                      <span className="font-[510]">{label}</span>
-                      <small>{hint}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {transport === "mac" ? (
-                <Field label="MAC address" error={errors.mac} id={fieldId("mac")}>
-                  {input("mac", "48:A9:8A:C6:42:F7")}
-                </Field>
-              ) : (
-                <div className="monitor-fl">
-                  <div className="flex items-center gap-2">
-                    <span className="monitor-label flex-1">Management addresses</span>
-                    <span className="monitor-hint">Automatic failover</span>
-                  </div>
-                  <DeviceAddressesEditor
-                    host={text(dev.host)}
-                    fallbackHosts={Array.isArray(dev.fallbackHosts) ? dev.fallbackHosts : []}
-                    invalid={!!errors.host}
-                    onChange={(host, fallbackHosts) => {
-                      setDev(({ fallbackHosts: _old, ...current }) => ({
-                        ...current,
-                        host,
-                        ...(fallbackHosts.length ? { fallbackHosts } : {}),
-                      }));
-                      setErrors({});
-                      setDiscard(false);
-                    }}
-                  />
-                  {errors.host && (
-                    <span role="alert" className="monitor-err">
-                      {errors.host}
-                    </span>
-                  )}
-                </div>
-              )}
-              <div className={transport === "mac" ? undefined : "dv-grid-port"}>
-                {transport !== "mac" && (
-                  <Field label="SSH port" error={errors.port} id={fieldId("port")}>
-                    <NumberInput
-                      allowEmpty
-                      placeholder="22"
-                      className="tabular-nums"
-                      value={dev.port == null || dev.port === "" ? null : Number(dev.port)}
-                      invalid={errors.port ? true : undefined}
-                      onChange={(value) => setField("port", value ?? "")}
-                    />
-                  </Field>
-                )}
-                <div className="dv-tags">
-                  <MultiSelect
-                    label="Tags"
-                    noun="tag"
-                    placeholder="Add a tag"
-                    allowCustom
-                    value={Array.isArray(dev.tags) ? dev.tags : []}
-                    options={[
-                      ...new Set(
-                        Object.values(devices).flatMap((device) =>
-                          Array.isArray(device.tags) ? device.tags : [],
-                        ),
-                      ),
-                    ].map((t) => ({ value: t, label: t }))}
-                    onChange={(tags) => setField("tags", tags)}
-                    disabled={busy}
-                  />
-                </div>
-              </div>
-              {transport !== "mac" && (
-                <DeviceJumpHost
-                  device={dev}
-                  devices={devices}
-                  name={name}
-                  disabled={busy}
-                  onChange={(next) => {
-                    setDev(next);
-                    setErrors({});
-                    setDiscard(false);
-                  }}
-                />
-              )}
-              <Disclosure label="Connection options" summary={`Timeout ${timeout} s`}>
-                {advanced(dev, setField, transport)}
-              </Disclosure>
-              <div className="flex items-start gap-3">
-                <span className="flex flex-1 flex-col">
-                  <span className="text-foreground text-[13px]">Available to MCP</span>
-                  <span className="text-muted-foreground text-[12px]">
-                    Turn off to keep the router in your list without tool access.
-                  </span>
-                </span>
-                <MonitorSwitch
-                  checked={dev.disabled !== true}
-                  label="Available to MCP"
-                  onChange={(value) => setField("disabled", !value)}
-                />
-              </div>
-            </>
-          )}
-          {step === 1 && (
-            <>
-              <Field
-                label="Username"
-                className="max-w-80"
-                error={errors.username}
-                id={fieldId("username")}
-              >
-                {input("username", "admin")}
+          <section className="dv-create-block dv-create-login" aria-label="Authentication">
+            <h3>
+              <KeyRound aria-hidden="true" /> Authentication
+            </h3>
+            <div className="dv-create-identity">{authControls}</div>
+            {credentials}
+          </section>
+          <details className="dv-create-options">
+            <summary>
+              <SlidersHorizontal aria-hidden="true" /> More options{" "}
+              <ChevronDown aria-hidden="true" />
+            </summary>
+            <div className="dv-create-block">
+              <Field label="Description" optional id={fieldId("description")}>
+                {input("description", "Office gateway", false)}
               </Field>
-              {transport !== "mac" && (
-                <div className="monitor-fl">
-                  <span className="monitor-label">Sign in with</span>
-                  <Segmented
-                    className="self-start"
-                    label="Sign in with"
-                    value={auth}
-                    options={[
-                      { value: "password", label: "Password" },
-                      { value: "key", label: "SSH key" },
-                    ]}
-                    onChange={changeAuth}
-                  />
-                </div>
-              )}
-              {typeof dev[CREDENTIAL_SOURCE] === "string" && (
-                <div className="monitor-note">
-                  <span>
-                    <b className="text-foreground font-[510]">Copied credentials.</b> Secrets you
-                    leave unchanged come from {text(dev[CREDENTIAL_SOURCE])}.
-                  </span>
-                </div>
-              )}
-              {transport !== "mac" && auth === "key" ? (
-                <>
-                  <KeyPicker
-                    value={keySource === "file" ? text(dev.keyFilename) : ""}
-                    onSelect={selectKeyFile}
-                  />
-                  {keySource === "file" ? (
-                    <div className="dv-grid-key">
-                      <Field
-                        label="Private key path"
-                        hint="The private file, not the .pub one."
-                        error={errors.keyFilename}
-                        id={fieldId("keyFilename")}
-                      >
-                        {input("keyFilename", "~/.ssh/id_ed25519")}
-                      </Field>
-                      <SecretField
-                        label="Key passphrase"
-                        optional
-                        value={dev.keyPassphrase}
-                        onChange={(value) => setField("keyPassphrase", value)}
-                      />
-                    </div>
-                  ) : (
-                    <div className="monitor-fl">
-                      <div className="flex items-center gap-2">
-                        <span className="monitor-label flex-1">Inline private key</span>
-                        <MonitorButton
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setInlineVisible(!inlineVisible)}
-                        >
-                          {inlineVisible ? "Hide key" : "Edit key"}
-                        </MonitorButton>
-                      </div>
-                      {inlineVisible ? (
-                        <TextArea
-                          aria-label="Inline private key"
-                          mono
-                          invalid={errors.privateKey ? true : undefined}
-                          value={dev.privateKey === REDACTED ? "" : text(dev.privateKey)}
-                          placeholder={
-                            dev.privateKey === REDACTED
-                              ? "The stored key stays until you paste a new one"
-                              : "Paste a PEM or OpenSSH private key"
-                          }
-                          onChange={(value) => setField("privateKey", value)}
-                        />
-                      ) : (
-                        <span className="monitor-hint">
-                          {dev.privateKey
-                            ? "The private key is hidden."
-                            : "Choose Edit key to paste one."}
-                        </span>
-                      )}
-                      {errors.privateKey && (
-                        <span role="alert" className="monitor-err">
-                          {errors.privateKey}
-                        </span>
-                      )}
-                      <SecretField
-                        label="Key passphrase"
-                        optional
-                        value={dev.keyPassphrase}
-                        onChange={(value) => setField("keyPassphrase", value)}
-                      />
-                    </div>
-                  )}
-                  <MonitorButton
-                    size="sm"
-                    variant="ghost"
-                    className="self-start pl-0"
-                    onClick={() => {
-                      setKeySource(keySource === "file" ? "inline" : "file");
-                      setDev(
-                        ({
-                          privateKey: _key,
-                          keyFilename: _file,
-                          keyPassphrase: _phrase,
-                          ...rest
-                        }) => rest,
-                      );
-                      setInlineVisible(true);
-                    }}
-                  >
-                    {keySource === "file"
-                      ? "Paste a private key instead"
-                      : "Use a key file instead"}
-                  </MonitorButton>
-                  <Disclosure
-                    label="Password fallback"
-                    summary={transport === "rest" ? "Needed for REST" : "Optional for SSH"}
-                    defaultOpen={transport === "rest"}
-                  >
-                    <SecretField
-                      label="Password"
-                      value={dev.password}
-                      onChange={(value) => setField("password", value)}
-                    />
-                  </Disclosure>
-                </>
-              ) : (
-                <>
-                  <SecretField
-                    label="Password"
-                    value={dev.password}
-                    onChange={(value) => setField("password", value)}
-                  />
-                  <span className="monitor-hint">
-                    Stored passwords are never shown. Leave the field empty to keep the current one.
-                    A blank password works for first setup.
-                  </span>
-                </>
-              )}
-            </>
-          )}
-          {step === 2 && (
-            <>
-              <div className="dv-review">
-                <div className="border-border flex items-center gap-2.5 border-b px-4 py-3.5">
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-emphasis truncate font-mono text-[14px]">
-                      {newName.trim()}
-                    </span>
-                    {text(dev.description) && (
-                      <span className="text-muted-foreground truncate text-[12px]">
-                        {text(dev.description)}
-                      </span>
-                    )}
-                  </span>
-                  <StatusBadge tone={dev.disabled ? "default" : "good"}>
-                    {dev.disabled ? "Off for MCP" : "Ready for draft"}
-                  </StatusBadge>
-                </div>
-                <dl className="monitor-facts dv-review-facts px-4 py-3.5">
-                  {transport === "mac" ? (
-                    <>
-                      <dt>MAC address</dt>
-                      <dd className="font-mono text-[12px]">{text(dev.mac)}</dd>
-                    </>
-                  ) : (
-                    <>
-                      <dt>Address priority</dt>
-                      <dd className="font-mono text-[12px]">{hosts.join(" → ")}</dd>
-                    </>
-                  )}
-                  <dt>Connection</dt>
-                  <dd>
-                    {transport === "mac"
-                      ? "MAC-Telnet"
-                      : `${transport === "rest" ? "REST + SSH" : "SSH"}, port ${port}${via ? `, via ${via}` : ""}`}
-                  </dd>
-                  <dt>Username</dt>
-                  <dd className="font-mono text-[12px]">{text(dev.username)}</dd>
-                  <dt>Sign in</dt>
-                  <dd>{signIn}</dd>
-                  <dt>Timeout</dt>
-                  <dd>{timeout} s</dd>
-                  {dev.keyFilename && auth === "key" ? (
-                    <>
-                      <dt>Private key path</dt>
-                      <dd className="font-mono text-[12px]">{text(dev.keyFilename)}</dd>
-                    </>
-                  ) : null}
-                </dl>
-              </div>
-              <div
-                role="status"
-                className="monitor-note dv-result items-center"
-                data-result={result.tone}
+              {tagField}
+              {extraSettings}
+              <MonitorButton
+                size="sm"
+                className="self-start"
+                disabled={busy}
+                onClick={() => void apply()}
               >
-                {result.tone !== "default" && (
-                  <span className="dv-result-icon" aria-hidden="true">
-                    {result.tone === "bad" ? <X /> : <Check />}
-                  </span>
-                )}
-                <span className="flex flex-1 flex-col">
-                  <span className="text-foreground font-[510]">{result.title}</span>
-                  <span className="text-muted-foreground text-[12px]">{result.text}</span>
-                </span>
-                {currentTest && (
-                  <span className="text-muted-foreground text-[12px]">
-                    Tested {clockTime(currentTest.at)}
-                  </span>
-                )}
-              </div>
-              <p className="text-muted-foreground text-[12px]">
-                The test opens a session and runs one read. It isn't an ICMP ping.
-              </p>
-              <div className="monitor-note">
-                <span className="text-fg-secondary flex-1">
-                  <b className="text-foreground font-[510]">Nothing saved yet.</b>{" "}
-                  {isNew ? "Add to draft" : "Update draft"} keeps it in Manage routers until you
-                  save there. {saveNotice}
-                </span>
-              </div>
-            </>
-          )}
-          {elsewhere.length > 0 && (
-            <div role="alert" className="monitor-note flex-col" data-tone="bad">
-              {elsewhere.map(([key, message]) => (
-                <span key={key}>{message}</span>
-              ))}
+                Add to draft
+              </MonitorButton>
+            </div>
+          </details>
+          {(testing || test) && testResult}
+          {errors.form && (
+            <div role="alert" className="monitor-note" data-tone="bad">
+              {errors.form}
             </div>
           )}
         </fieldset>
-      </div>
+      ) : (
+        <div ref={content} className="dv-ed">
+          <div className="dv-ed-side">
+            <nav aria-label="Steps" className="flex flex-col gap-1">
+              {STEPS.map(([label, sub], index) => (
+                <button
+                  type="button"
+                  key={label}
+                  className="dv-step"
+                  disabled={busy}
+                  aria-current={step === index ? "step" : undefined}
+                  data-done={index < step || undefined}
+                  onClick={() => go(index)}
+                >
+                  <span className="dv-step-n" aria-hidden="true">
+                    {index < step ? <Check /> : `0${index + 1}`}
+                  </span>
+                  <span className="flex flex-col">
+                    <span className="dv-step-label">{label}</span>
+                    <span className="dv-step-sub text-muted-foreground text-[12px] leading-4">
+                      {sub}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </nav>
+            <div className="glass dv-route" aria-label="Connection preview">
+              <span className="dv-section">Connection</span>
+              <div className="flex flex-col items-start">
+                <div className="flex items-center gap-2">
+                  <StatusDot tone="good" pulse />
+                  <span className="flex flex-col">
+                    <span className="text-foreground text-[13px] font-semibold">MCP host</span>
+                    <span className="monitor-hint">Credentials stay here</span>
+                  </span>
+                </div>
+                <div className="dv-route-link">
+                  <svg width="8" height="41" aria-hidden="true">
+                    <line
+                      x1="4"
+                      y1="2"
+                      x2="4"
+                      y2="39"
+                      stroke="var(--sig)"
+                      strokeWidth="2"
+                      strokeDasharray="4 4"
+                    />
+                  </svg>
+                  <span className="monitor-hint truncate font-mono">{route}</span>
+                </div>
+                <div className="flex min-w-0 max-w-full items-center gap-2">
+                  <StatusDot tone={currentTest?.ok ? "good" : currentTest ? "bad" : "default"} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-foreground truncate font-mono text-[13px] font-semibold">
+                      {newName.trim() || "New router"}
+                    </span>
+                    <span className="monitor-hint truncate font-mono">
+                      {transport === "mac" ? text(dev.mac) : text(dev.host) || "Router address"}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p className="monitor-hint">
+              This sets how MCP reaches the router. Nothing on the router changes.
+            </p>
+          </div>
+          <fieldset disabled={busy} className="dv-ed-body">
+            <h3 className="text-emphasis text-[16px] leading-[21px] font-semibold">
+              {HEADINGS[step]}
+            </h3>
+            {step === 0 && (
+              <>
+                <div className="dv-grid-2">
+                  <Field label="Device name" error={errors.name} id={fieldId("name")}>
+                    {input("name", "home-router", false)}
+                  </Field>
+                  <Field label="Description" optional id={fieldId("description")}>
+                    {input("description", "Home · hAP ax³", false)}
+                  </Field>
+                </div>
+                <div className="monitor-fl">
+                  <span className="monitor-label">How MCP connects</span>
+                  <div role="radiogroup" aria-label="Transport" className="dv-grid-3">
+                    {TRANSPORTS.map(([value, label, hint]) => (
+                      <button
+                        type="button"
+                        key={value}
+                        role="radio"
+                        aria-checked={transport === value}
+                        aria-label={label}
+                        className="monitor-choice"
+                        onClick={() => changeTransport(value)}
+                      >
+                        <span className="font-[510]">{label}</span>
+                        <small>{hint}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {addressFields}
+                <div className={transport === "mac" ? undefined : "dv-grid-port"}>
+                  {portField}
+                  {tagField}
+                </div>
+                {extraSettings}
+              </>
+            )}
+            {step === 1 && (
+              <>
+                {authControls}
+                {credentials}
+              </>
+            )}
+            {step === 2 && (
+              <>
+                <div className="dv-review">
+                  <div className="border-border flex items-center gap-2.5 border-b px-4 py-3.5">
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="text-emphasis truncate font-mono text-[14px]">
+                        {newName.trim()}
+                      </span>
+                      {text(dev.description) && (
+                        <span className="text-muted-foreground truncate text-[12px]">
+                          {text(dev.description)}
+                        </span>
+                      )}
+                    </span>
+                    <StatusBadge tone={dev.disabled ? "default" : "good"}>
+                      {dev.disabled ? "Off for MCP" : "Ready for draft"}
+                    </StatusBadge>
+                  </div>
+                  <dl className="monitor-facts dv-review-facts px-4 py-3.5">
+                    {transport === "mac" ? (
+                      <>
+                        <dt>MAC address</dt>
+                        <dd className="font-mono text-[12px]">{text(dev.mac)}</dd>
+                      </>
+                    ) : (
+                      <>
+                        <dt>Address priority</dt>
+                        <dd className="font-mono text-[12px]">{hosts.join(" → ")}</dd>
+                      </>
+                    )}
+                    <dt>Connection</dt>
+                    <dd>
+                      {transport === "mac"
+                        ? "MAC-Telnet"
+                        : `${transport === "rest" ? "REST + SSH" : "SSH"}, port ${port}${via ? `, via ${via}` : ""}`}
+                    </dd>
+                    <dt>Username</dt>
+                    <dd className="font-mono text-[12px]">{text(dev.username)}</dd>
+                    <dt>Sign in</dt>
+                    <dd>{signIn}</dd>
+                    <dt>Timeout</dt>
+                    <dd>{timeout} s</dd>
+                    {dev.keyFilename && auth === "key" ? (
+                      <>
+                        <dt>Private key path</dt>
+                        <dd className="font-mono text-[12px]">{text(dev.keyFilename)}</dd>
+                      </>
+                    ) : null}
+                  </dl>
+                </div>
+                {testResult}
+                <p className="text-muted-foreground text-[12px]">
+                  The test opens a session and runs one read. It isn't an ICMP ping.
+                </p>
+                <div className="monitor-note">
+                  <span className="text-fg-secondary flex-1">
+                    <b className="text-foreground font-[510]">Nothing saved yet.</b>{" "}
+                    {isNew ? "Add to draft" : "Update draft"} keeps it in Manage routers until you
+                    save there. {saveNotice}
+                  </span>
+                </div>
+              </>
+            )}
+            {elsewhere.length > 0 && (
+              <div role="alert" className="monitor-note flex-col" data-tone="bad">
+                {elsewhere.map(([key, message]) => (
+                  <span key={key}>{message}</span>
+                ))}
+              </div>
+            )}
+          </fieldset>
+        </div>
+      )}
     </MonitorDialog>
   );
 }

@@ -657,6 +657,34 @@ async function configRoutes(req: Request, url: URL, admin: ConfigAdmin): Promise
     return json({ ok: true, status });
   }
 
+  if (p === "/api/config/devices" && req.method === "POST") {
+    const body = (await readJson(req)) as { name?: unknown; device?: unknown };
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    if (!name) return json({ ok: false, error: "Give this router a name." }, 400);
+    const current = getConfig();
+    if (Object.hasOwn(current.devices, name))
+      return json({ ok: false, error: `A router named ${name} already exists.` }, 409);
+    const device = mergeDeviceDraft(body.device, name, current.devices);
+    const config = validateConfig({
+      ...current,
+      defaultDevice: current.defaultDevice || name,
+      devices: { ...current.devices, [name]: device },
+    });
+    if (!config.ok || !config.value) return json({ ok: false, errors: config.errors }, 400);
+    if (!Object.hasOwn(config.value.devices, name))
+      return json({ ok: false, error: "Choose another router name." }, 400);
+    const saved = admin.applyConfig(config.value, 0);
+    admin.keepConfig(saved.pendingId);
+    try {
+      recordVersion(config.value, "auto", Date.now());
+    } catch (error) {
+      logger.warn(
+        `[${SERVER_TAG}] Router added, but config history could not be updated: ${String(error)}`,
+      );
+    }
+    return json({ ok: true, config: redact(config.value) }, 201);
+  }
+
   if (p === "/api/config/preview" && req.method === "POST") {
     const before = JSON.stringify(redact(getConfig()), null, 2);
     const after = JSON.stringify(redact(mergeDraft(await readJson(req))), null, 2);
