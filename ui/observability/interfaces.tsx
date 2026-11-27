@@ -3,7 +3,19 @@ import "./interfaces.css";
 import { LoadingState } from "./loading-state";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, Loader2, Pause, Play, RefreshCw, Server } from "lucide-react";
+import {
+  AlertTriangle,
+  Cable,
+  ChevronDown,
+  Layers,
+  List,
+  Loader2,
+  Pause,
+  Play,
+  RefreshCw,
+  Server,
+  Waypoints,
+} from "lucide-react";
 import {
   Metric,
   MetricStrip,
@@ -22,9 +34,19 @@ import {
 } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
 import { api, withToken } from "./api";
+import { interfaceProtocol, protocolGroups } from "./interface-protocols";
 import { clock } from "./format";
 import { sparkPoints } from "./signal-charts";
-import { DetailBlock, DetailList, LineHover, RowDrawer, RowMenu, RowMore, tipProps } from "./kit";
+import {
+  DetailBlock,
+  DetailList,
+  LineHover,
+  RowDrawer,
+  RowMenu,
+  RowMore,
+  Segmented,
+  tipProps,
+} from "./kit";
 import type { Tone as KitTone, TipCard } from "./kit";
 import type { DevicesPayload } from "./types";
 import type { InterfaceSample, InterfaceStats } from "../../src/observability/interface-stats";
@@ -33,6 +55,10 @@ type Point = { ts: number; rx: number | null; tx: number | null };
 type Total = { rx: number; tx: number };
 
 const PAGE = 24;
+const VIEW_OPTIONS = [
+  { value: "protocol", label: "By protocol", icon: <Layers aria-hidden="true" /> },
+  { value: "table", label: "Table", icon: <List aria-hidden="true" /> },
+] as const;
 const LEAD =
   "Every port, bridge and tunnel on one router, with live traffic and counters. Read-only.";
 /** The table's columns, from the board. */
@@ -306,6 +332,39 @@ function SectionLabel({ children }: { children: ReactNode }): ReactNode {
   );
 }
 
+function ProtocolSection({
+  group,
+  renderRow,
+  columnHead,
+}: {
+  group: ReturnType<typeof protocolGroups>[number];
+  renderRow: (row: InterfaceStats) => ReactNode;
+  columnHead: ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  const running = group.rows.filter((row) => row.running && !row.disabled).length;
+  const Icon = group.tunnel ? Waypoints : Cable;
+  return (
+    <section className="ifaces-protocol" aria-label={group.label}>
+      <h3>
+        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Icon size={17} aria-hidden="true" />
+          <span>{group.label}</span>
+          <span className="ifaces-group-count">{group.rows.length}</span>
+          <small>{running} running</small>
+          <ChevronDown size={15} aria-hidden="true" />
+        </button>
+      </h3>
+      {open && (
+        <div className="ifaces-group-rows">
+          {columnHead}
+          {group.rows.map(renderRow)}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNode }): ReactNode {
   const [sample, setSample] = useState<InterfaceSample | null>(null);
   const [history, setHistory] = useState<Record<string, Point[]>>(() => Object.create(null));
@@ -314,6 +373,7 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
   const [drawer, setDrawer] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [layout, setLayout] = useState<"protocol" | "table">("protocol");
   const [kind, setKind] = useState("all");
   const [paused, setPaused] = useState(false);
   const [visible, setVisible] = useState(!document.hidden);
@@ -391,20 +451,25 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
     rows.find((row) => row.name === selected) ??
     rows.find((row) => row.running && !row.disabled) ??
     rows[0];
-  const matching = rows.filter(
-    (row) =>
-      `${row.name} ${row.type} ${row.comment} ${row.mac}`
-        .toLowerCase()
-        .includes(query.toLowerCase()) &&
-      (kind === "all" || row.type === kind) &&
+  const groups = protocolGroups(rows);
+  const needle = query.trim().toLowerCase();
+  const matching = rows.filter((row) => {
+    const protocol = interfaceProtocol(row.type);
+    return (
+      [row.name, row.type, row.comment, row.mac, protocol.label].some((value) =>
+        value.toLowerCase().includes(needle),
+      ) &&
+      (kind === "all" ||
+        kind === `type:${row.type}` ||
+        kind === `group:${protocol.label}` ||
+        (kind === "tunnels" && protocol.tunnel)) &&
       (filter === "all" ||
-        (filter === "running"
-          ? row.running && !row.disabled
-          : filter === "disabled"
-            ? row.disabled
-            : !row.running && !row.disabled)),
-  );
-  const shown = matching.slice(0, limit);
+        filter === (row.disabled ? "disabled" : row.running ? "running" : "down"))
+    );
+  });
+  const matchingGroups = protocolGroups(matching);
+  const shown =
+    layout === "table" ? matching.slice(0, limit) : matchingGroups.flatMap((group) => group.rows);
   const currentRate = (value: number | null) => (unavailable ? "—" : rate(value));
 
   const running = rows.filter((r) => r.running && !r.disabled);
@@ -432,6 +497,107 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
       setLimit(PAGE);
     };
 
+  const renderRow = (row: InterfaceStats) => {
+    const off = row.disabled;
+    const isDown = !row.running && !row.disabled;
+    const quiet = off || isDown;
+    const errors =
+      row.rxErrors == null && row.txErrors == null
+        ? null
+        : (row.rxErrors ?? 0) + (row.txErrors ?? 0);
+    const sub = isDown
+      ? ["Link down", row.comment].filter(Boolean).join(" · ")
+      : off
+        ? ["Disabled", row.comment].filter(Boolean).join(" · ")
+        : row.comment || `${row.type} interface`;
+    return (
+      <RowMenu
+        key={row.name}
+        title={row.name}
+        sub={`${row.type} · ${stateLabel(row)}`}
+        onOpen={() => setDrawer(row.name)}
+        opens={[{ label: "Chart this interface", onSelect: () => setSelected(row.name) }]}
+        cells={{
+          name: { value: row.name, search: () => resetPage(setQuery)(row.name) },
+          type: {
+            value: row.type,
+            filter: () => resetPage(setKind)(`type:${row.type}`),
+            clearFilter: kind !== "all" ? () => resetPage(setKind)("all") : undefined,
+          },
+          rx: { value: quiet ? "—" : currentRate(row.rxRate), copy: !quiet },
+          tx: { value: quiet ? "—" : currentRate(row.txRate), copy: !quiet },
+          errors: { value: off ? "—" : count(errors), copy: !off },
+        }}
+        copies={[
+          { label: "Interface name", value: row.name },
+          ...(row.mac ? [{ label: "MAC address", value: row.mac }] : []),
+        ]}
+        row={row}
+      >
+        <div
+          role="button"
+          tabIndex={0}
+          className={`monitor-row ifaces-row min-w-[720px] ${COLS}`}
+          data-selected={active?.name === row.name || undefined}
+          aria-pressed={active?.name === row.name}
+          onClick={() => setSelected(row.name)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setSelected(row.name);
+            }
+          }}
+        >
+          <span data-col="name" className="flex min-w-0 items-center gap-2.5">
+            <StatusDot tone={stateTone(row)} />
+            <span className="flex min-w-0 flex-col">
+              <span className="p truncate font-mono text-[13px]">{row.name}</span>
+              <span
+                className={`truncate text-[12px] leading-[17px] ${isDown ? "text-warning" : "text-muted-foreground"}`}
+              >
+                {sub}
+                {row.dynamic ? " · dynamic" : ""}
+              </span>
+            </span>
+          </span>
+          <span data-col="type" className="min-w-0">
+            <span className="monitor-chip">{row.type}</span>
+          </span>
+          <span
+            data-col="rx"
+            className={`truncate text-right font-mono text-[12px] ${quiet ? "text-faint" : "text-fg-secondary"}`}
+          >
+            {quiet ? "—" : currentRate(row.rxRate)}
+          </span>
+          <span
+            data-col="tx"
+            className={`truncate text-right font-mono text-[12px] ${quiet ? "text-faint" : "text-fg-secondary"}`}
+          >
+            {quiet ? "—" : currentRate(row.txRate)}
+          </span>
+          <Spark points={history[row.name] ?? []} muted={quiet} name={row.name} />
+          <span
+            data-col="errors"
+            className={`text-right font-mono text-[12px] ${errors ? "text-warning" : "text-faint"}`}
+          >
+            {off ? "—" : count(errors)}
+          </span>
+          <RowMore />
+        </div>
+      </RowMenu>
+    );
+  };
+  const columnHead = (
+    <div className={`monitor-thead min-w-[720px] ${COLS}`}>
+      <span>Interface</span>
+      <span>Type</span>
+      <span className="text-right">RX</span>
+      <span className="text-right">TX</span>
+      <span>Last 2 min</span>
+      <span className="text-right">Errors</span>
+      <span />
+    </div>
+  );
   return (
     <section className="ifaces grid min-w-0 content-start gap-6">
       <PageIntro
@@ -626,145 +792,78 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
           description="Select a row to chart it above."
           flush
           extra={
-            <div className="flex flex-wrap items-center gap-2">
-              <MonitorSearch
-                className="ifaces-search"
-                label="Search interfaces"
-                placeholder="Name, type, MAC or comment"
-                value={query}
-                onChange={resetPage(setQuery)}
-              />
-              <MonitorSelect
-                label="Filter interface status"
-                value={filter}
-                onChange={resetPage(setFilter)}
-                options={[
-                  { value: "all", label: "All states" },
-                  { value: "running", label: "Running" },
-                  { value: "down", label: "Link down" },
-                  { value: "disabled", label: "Disabled" },
-                ]}
-              />
-              <MonitorSelect
-                label="Filter interface type"
-                value={kind}
-                onChange={resetPage(setKind)}
-                options={[
-                  { value: "all", label: "All types" },
-                  ...[...new Set(rows.map((row) => row.type))]
-                    .sort()
-                    .map((type) => ({ value: type, label: type })),
-                ]}
-              />
-              <span className="ml-1 font-mono text-[12px] text-muted-foreground">
-                {matching.length} / {rows.length}
-              </span>
-            </div>
+            <Segmented
+              label="Interface view"
+              value={layout}
+              onChange={setLayout}
+              options={VIEW_OPTIONS}
+            />
           }
         >
+          <div className="ifaces-filters">
+            <MonitorSearch
+              className="ifaces-search"
+              label="Search interfaces"
+              placeholder="Name, protocol, MAC or comment"
+              value={query}
+              onChange={resetPage(setQuery)}
+            />
+            <MonitorSelect
+              label="Filter interface status"
+              value={filter}
+              onChange={resetPage(setFilter)}
+              options={[
+                { value: "all", label: "All states" },
+                { value: "running", label: "Running" },
+                { value: "down", label: "Link down" },
+                { value: "disabled", label: "Disabled" },
+              ]}
+            />
+            <MonitorSelect
+              label="Filter interface type"
+              value={kind}
+              onChange={resetPage(setKind)}
+              options={[
+                { value: "all", label: "All types" },
+                { value: "tunnels", label: "All tunnels" },
+                ...groups.flatMap((group) => {
+                  const types = [...new Set(group.rows.map((row) => row.type))].sort();
+                  if (types.length === 1 && kind !== `type:${types[0]}`)
+                    return [{ value: `group:${group.label}`, label: group.label }];
+                  return [
+                    { value: `group:${group.label}`, label: `${group.label} · all types` },
+                    ...types.map((type) => ({
+                      value: `type:${type}`,
+                      label: `${group.label} · ${type}`,
+                    })),
+                  ];
+                }),
+              ]}
+            />
+            <span className="ml-1 font-mono text-[12px] text-muted-foreground">
+              {matching.length} / {rows.length}
+            </span>
+          </div>
           {matching.length ? (
-            <div ref={tableRef} className="overflow-x-auto">
-              <div className={`monitor-thead min-w-[720px] ${COLS}`}>
-                <span>Interface</span>
-                <span>Type</span>
-                <span className="text-right">RX</span>
-                <span className="text-right">TX</span>
-                <span>Last 2 min</span>
-                <span className="text-right">Errors</span>
-                <span />
-              </div>
-              {shown.map((row) => {
-                const off = row.disabled;
-                const isDown = !row.running && !row.disabled;
-                const quiet = off || isDown;
-                const errors =
-                  row.rxErrors == null && row.txErrors == null
-                    ? null
-                    : (row.rxErrors ?? 0) + (row.txErrors ?? 0);
-                const sub = isDown
-                  ? ["Link down", row.comment].filter(Boolean).join(" · ")
-                  : off
-                    ? ["Disabled", row.comment].filter(Boolean).join(" · ")
-                    : row.comment || `${row.type} interface`;
-                return (
-                  <RowMenu
-                    key={row.name}
-                    title={row.name}
-                    sub={`${row.type} · ${stateLabel(row)}`}
-                    onOpen={() => setDrawer(row.name)}
-                    opens={[
-                      { label: "Chart this interface", onSelect: () => setSelected(row.name) },
-                    ]}
-                    cells={{
-                      name: { value: row.name, search: () => resetPage(setQuery)(row.name) },
-                      type: {
-                        value: row.type,
-                        filter: () => resetPage(setKind)(row.type),
-                        clearFilter: kind !== "all" ? () => resetPage(setKind)("all") : undefined,
-                      },
-                      rx: { value: quiet ? "—" : currentRate(row.rxRate), copy: !quiet },
-                      tx: { value: quiet ? "—" : currentRate(row.txRate), copy: !quiet },
-                      errors: { value: off ? "—" : count(errors), copy: !off },
-                    }}
-                    copies={[
-                      { label: "Interface name", value: row.name },
-                      ...(row.mac ? [{ label: "MAC address", value: row.mac }] : []),
-                    ]}
-                    row={row}
-                  >
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      className={`monitor-row ifaces-row min-w-[720px] ${COLS}`}
-                      data-selected={active?.name === row.name || undefined}
-                      aria-pressed={active?.name === row.name}
-                      onClick={() => setSelected(row.name)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setSelected(row.name);
-                        }
-                      }}
-                    >
-                      <span data-col="name" className="flex min-w-0 items-center gap-2.5">
-                        <StatusDot tone={stateTone(row)} />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="p truncate font-mono text-[13px]">{row.name}</span>
-                          <span
-                            className={`truncate text-[12px] leading-[17px] ${isDown ? "text-warning" : "text-muted-foreground"}`}
-                          >
-                            {sub}
-                            {row.dynamic ? " · dynamic" : ""}
-                          </span>
-                        </span>
-                      </span>
-                      <span data-col="type" className="min-w-0">
-                        <span className="monitor-chip">{row.type}</span>
-                      </span>
-                      <span
-                        data-col="rx"
-                        className={`truncate text-right font-mono text-[12px] ${quiet ? "text-faint" : "text-fg-secondary"}`}
-                      >
-                        {quiet ? "—" : currentRate(row.rxRate)}
-                      </span>
-                      <span
-                        data-col="tx"
-                        className={`truncate text-right font-mono text-[12px] ${quiet ? "text-faint" : "text-fg-secondary"}`}
-                      >
-                        {quiet ? "—" : currentRate(row.txRate)}
-                      </span>
-                      <Spark points={history[row.name] ?? []} muted={quiet} name={row.name} />
-                      <span
-                        data-col="errors"
-                        className={`text-right font-mono text-[12px] ${errors ? "text-warning" : "text-faint"}`}
-                      >
-                        {off ? "—" : count(errors)}
-                      </span>
-                      <RowMore />
-                    </div>
-                  </RowMenu>
-                );
-              })}
+            <div
+              ref={tableRef}
+              className={layout === "table" ? "overflow-x-auto" : "ifaces-groups"}
+            >
+              {layout === "table" ? (
+                <>
+                  {columnHead}
+                  {shown.map(renderRow)}
+                </>
+              ) : (
+                matchingGroups.map((group) => (
+                  <ProtocolSection
+                    key={group.label}
+                    group={group}
+                    renderRow={renderRow}
+                    columnHead={columnHead}
+                  />
+                ))
+              )}
             </div>
           ) : (
             <div className="border-t border-line">
@@ -780,7 +879,7 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
               — means the router hasn't reported it yet, or the rate needs a second sample.
             </span>
             <span className="flex-1" />
-            {matching.length > limit && (
+            {layout === "table" && matching.length > limit && (
               <MonitorButton size="sm" onClick={() => setLimit(limit + PAGE)}>
                 Show {Math.min(PAGE, matching.length - limit)} more
               </MonitorButton>
