@@ -10,8 +10,10 @@
 import { executeMikrotikCommand } from "../core/connector";
 import { createContext } from "../core/context";
 import type { ToolContext } from "../core/context";
-import { parseRecords } from "../core/routeros-parse";
-import { resolveDeviceName } from "../core/runtime";
+import { parseAccountingUptimeSeconds } from "../core/openvpn-analytics";
+import { looksLikeError } from "../core/routeros";
+import { parseRecords, parseSize } from "../core/routeros-parse";
+import { getDevice, resolveDeviceName } from "../core/runtime";
 import { assertDeviceAccess } from "../core/scoped-access";
 import { isExpired, readUserComment } from "../core/wireguard-portal";
 import { vpnOnboardTools } from "../tools/vpn-onboard";
@@ -64,27 +66,101 @@ export async function wireguardRoutes(req: Request, url: URL): Promise<Response 
       assertDeviceAccess([device], "list_wireguard_users", "READ");
       const ctx = createContext(undefined, device);
       ctx.risk = "READ";
-      const interfaces = parseRecords(
-        await executeMikrotikCommand("/interface wireguard print detail", ctx),
-      )
-        .rows.map((row) => row.name)
-        .filter(Boolean);
-      const today = new Date().toISOString().slice(0, 10);
-      const users = parseRecords(
-        await executeMikrotikCommand("/interface wireguard peers print detail", ctx),
-      )
-        .rows.map((row) => ({ row, tag: readUserComment(row.comment ?? "") }))
-        .filter(({ tag }) => tag)
-        .map(({ row, tag }) => ({
-          user: tag!.user,
-          interface: row.interface ?? "",
-          address: row["allowed-address"] ?? "",
-          expires: tag!.expires ?? null,
-          expired: isExpired(tag!.expires, today),
-          disabled: row.disabled === "yes" || row.disabled === "true",
-          lastHandshake: row["last-handshake"] || null,
+      let includeUnmanaged = true;
+      try {
+        assertDeviceAccess([device], "list_wireguard_peers", "READ");
+      } catch {
+        includeUnmanaged = false;
+      }
+      const fields = "name,interface,comment,allowed-address,disabled,last-handshake,rx,tx";
+      const [interfacesText, counters] = await Promise.all([
+        executeMikrotikCommand(
+          "/interface wireguard print detail proplist=name,listen-port,disabled",
+          ctx,
+        ),
+        executeMikrotikCommand(
+          `:put [:serialize to=json options=json.no-string-conversion value=[/interface wireguard peers print as-value proplist=${fields}]]`,
+          ctx,
+        ).catch((error: unknown) => {
+          if (
+            /bad command name serialize|syntax error|expected end of command/i.test(String(error))
+          )
+            return "";
+          throw error;
+        }),
+      ]);
+      if (looksLikeError(interfacesText)) throw new Error(interfacesText);
+      let rows: Record<string, string | number | boolean>[];
+      if (counters.trim().startsWith("[")) {
+        rows = JSON.parse(counters);
+      } else {
+        // Older RouterOS releases have no JSON serializer. Request the runtime fields explicitly.
+        const detail = await executeMikrotikCommand(
+          `/interface wireguard peers print detail proplist=${fields}`,
+          ctx,
+        );
+        if (looksLikeError(detail)) throw new Error(detail);
+        rows = parseRecords(detail).rows;
+      }
+      const host = getDevice(device).host;
+      const interfaceOptions = parseRecords(interfacesText)
+        .rows.filter((row) => row.name)
+        .map((row) => ({
+          name: row.name,
+          disabled: row.disabled === "yes" || row.disabled === "true" || !!row.flags?.includes("X"),
+          endpoint:
+            host && row["listen-port"]
+              ? `${host.includes(":") && !host.startsWith("[") ? `[${host}]` : host}:${row["listen-port"]}`
+              : "",
         }));
-      return json({ device, interfaces, users });
+      const observedAt = Date.now();
+      const today = new Date(observedAt).toISOString().slice(0, 10);
+      const peers = rows.flatMap((row) => {
+        const tag = readUserComment(String(row.comment ?? ""));
+        if (!tag && !includeUnmanaged) return [];
+        const iface = String(row.interface ?? "");
+        const address = String(row["allowed-address"] ?? "");
+        const lastHandshake =
+          row["last-handshake"] == null ? null : String(row["last-handshake"]) || null;
+        const age = parseAccountingUptimeSeconds(lastHandshake);
+        return [
+          {
+            id: String(row[".id"] ?? `${iface}/${row.name ?? address}`),
+            user: tag?.user || String(row.name || address || iface),
+            interface: iface,
+            address,
+            managed: !!tag,
+            expires: tag?.expires ?? null,
+            expired: isExpired(tag?.expires, today),
+            disabled:
+              ["yes", "true"].includes(String(row.disabled)) ||
+              String(row.flags ?? "").includes("X"),
+            lastHandshake,
+            handshakeAt: age == null ? null : observedAt - age * 1000,
+            rx: parseSize(String(row.rx ?? "")) ?? null,
+            tx: parseSize(String(row.tx ?? "")) ?? null,
+          },
+        ];
+      });
+      const users = peers
+        .filter((p) => p.managed)
+        .map(({ user, interface: iface, address, expires, expired, disabled, lastHandshake }) => ({
+          user,
+          interface: iface,
+          address,
+          expires,
+          expired,
+          disabled,
+          lastHandshake,
+        }));
+      return json({
+        device,
+        observedAt,
+        interfaces: interfaceOptions.map((i) => i.name),
+        interfaceOptions,
+        users,
+        peers,
+      });
     }
     if (req.method !== "POST") return json({ error: "Unsupported WireGuard route" }, 405);
     // readOperationBody also refuses a cross-origin browser request.

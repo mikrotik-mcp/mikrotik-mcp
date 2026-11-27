@@ -61,6 +61,28 @@ test("users are listed with interfaces, expiry and handshake; other peers are le
   ).toBeNull();
 });
 
+test("numeric router counters, missing handshakes, and clock durations are returned per peer", async () => {
+  command.mockImplementation(async (cmd: string) =>
+    cmd.startsWith(":put")
+      ? JSON.stringify([
+          { name: "client", interface: "wg0", rx: 1048576, tx: 5, "last-handshake": "00:02:30" },
+          { name: "idle", interface: "wg0", rx: 0, tx: 0, disabled: true },
+        ])
+      : ' 0 name="wg0" listen-port=51820 disabled=no',
+  );
+  const d = await (await call("/api/wireguard/users?device=edge"))!.json();
+  expect(d.interfaceOptions[0].endpoint).toBe("10.0.0.1:51820");
+  expect(d.peers[0]).toMatchObject({
+    user: "client",
+    managed: false,
+    rx: 1048576,
+    tx: 5,
+    handshakeAt: d.observedAt - 150000,
+  });
+  expect(d.peers[1]).toMatchObject({ user: "idle", handshakeAt: null, disabled: true });
+  expect(d.users).toEqual([]);
+});
+
 test("onboarding returns the profile to the browser and keeps the key out of the record", async () => {
   command.mockImplementation(router);
   const response = (await call("/api/wireguard/onboard", {

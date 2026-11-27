@@ -1,51 +1,34 @@
-/**
- * WireGuard users: the remote-access users of one router. Add a user and get
- * its profile as a QR code and a file, see who has access and until when, and
- * revoke.
- *
- * The profile holds the user's private key. It is shown once, in this browser,
- * and is not kept: closing the panel discards it.
- */
-import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import qrcode from "qrcode-generator";
-import { Copy, Download, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, Download, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { api, postJson } from "./api";
-import { TextInput } from "./kit";
+import { format } from "date-fns";
+import { DateTimePicker, DetailList, RowDrawer, RowMenu, RowMore, TextInput } from "./kit";
 import {
-  Metric,
-  MetricStrip,
   MonitorButton,
+  MonitorDialog,
   MonitorEmpty,
   MonitorNote,
   MonitorPanel,
+  MonitorSearch,
   MonitorSelect,
-  PageIntro,
   RouterPicker,
+  Segmented,
   StatusBadge,
 } from "./monitoring-ui";
-import "./monitoring.css";
+import { WireguardTraffic, ratePoint, trafficBytes } from "./wireguard-traffic";
+import type { Peer, TrafficSample } from "./wireguard-traffic";
+import type { ThroughputPoint } from "./bandwidth-chart";
 import "./wireguard-users.css";
 
-interface WgUser {
-  user: string;
-  interface: string;
-  address: string;
-  expires: string | null;
-  expired: boolean;
-  disabled: boolean;
-  lastHandshake: string | null;
-}
-interface UsersPayload {
+interface Inventory extends TrafficSample {
   device: string;
-  interfaces: string[];
-  users: WgUser[];
+  interfaceOptions: { name: string; disabled: boolean; endpoint: string }[];
 }
 interface Profile {
   user: string;
   config: string;
 }
-
 /** The profile as a QR code: an SVG data URL, drawn in the browser. */
 function qrDataUrl(text: string): string {
   const code = qrcode(0, "M");
@@ -56,7 +39,12 @@ function qrDataUrl(text: string): string {
 
 /** A label for a copy of `user` that no user in `taken` has: "name-2", "name-3"… */
 export function copyLabel(user: string, taken: string[]): string {
-  const base = user.replace(/-\d+$/, "").slice(0, 59);
+  const base =
+    user
+      .replace(/-\d+$/, "")
+      .replace(/[^A-Za-z0-9._@-]+/g, "-")
+      .replace(/^[^A-Za-z0-9]+|[-.]+$/g, "")
+      .slice(0, 57) || "peer";
   for (let n = 2; ; n++) if (!taken.includes(`${base}-${n}`)) return `${base}-${n}`;
 }
 
@@ -69,354 +57,652 @@ function saveProfile(profile: Profile): void {
   URL.revokeObjectURL(url);
 }
 
-export function WireguardUsersView(): ReactNode {
-  const [devices, setDevices] = useState<string[]>([]);
-  const [defaultDevice, setDefaultDevice] = useState("");
-  const [device, setDevice] = useState("");
-  const [data, setData] = useState<UsersPayload | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState("");
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const [form, setForm] = useState({ user: "", interface: "", endpoint: "", expires: "", dns: "" });
-  const [copied, setCopied] = useState("");
-  const formRef = useRef<HTMLDivElement>(null);
+function handshake(peer: Peer, observedAt: number) {
+  if (peer.handshakeAt == null) return peer.lastHandshake || "Not reported";
+  const seconds = Math.max(0, Math.floor((observedAt - peer.handshakeAt) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
 
+export function WireguardUsersView() {
+  const [routers, setRouters] = useState<string[]>([]);
+  const [device, setDevice] = useState("");
+  const [defaultDevice, setDefault] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
+    const controller = new AbortController();
     void api<{ devices: { name: string; disabled?: boolean }[]; defaultDevice: string }>(
       "/api/devices",
+      controller.signal,
     )
       .then((r) => {
+        if (controller.signal.aborted) return;
         const names = r.devices.filter((d) => !d.disabled).map((d) => d.name);
-        setDevices(names);
-        setDefaultDevice(r.defaultDevice);
-        setDevice(names.includes(r.defaultDevice) ? r.defaultDevice : (names[0] ?? ""));
+        setRouters(names);
+        setDefault(r.defaultDevice);
+        setDevice(names.includes(r.defaultDevice) ? r.defaultDevice : names[0] || "");
+        if (!names.length) setError("Enable a router to view its WireGuard peers.");
       })
-      .catch(() => setError("Routers could not be loaded. Check the dashboard connection."));
+      .catch(() => {
+        if (!controller.signal.aborted) setError("Could not load routers.");
+      });
+    return () => controller.abort();
   }, []);
+  return (
+    <PeerWorkspace
+      key={device}
+      device={device}
+      routers={routers}
+      defaultDevice={defaultDevice}
+      onDevice={setDevice}
+      routerError={error}
+    />
+  );
+}
 
-  const load = useCallback(async () => {
-    if (!device) return;
-    setLoading(true);
-    try {
-      const next = await api<UsersPayload>(
-        `/api/wireguard/users?device=${encodeURIComponent(device)}`,
-      );
-      setData(next);
-      setError("");
-      setForm((f) => ({ ...f, interface: f.interface || next.interfaces[0] || "" }));
-    } catch (e) {
-      setData(null);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [device]);
+function PeerWorkspace({
+  device,
+  routers,
+  defaultDevice,
+  onDevice,
+  routerError,
+}: {
+  device: string;
+  routers: string[];
+  defaultDevice: string;
+  onDevice: (name: string) => void;
+  routerError: string;
+}) {
+  const [data, setData] = useState<Inventory | null>(null);
+  const [points, setPoints] = useState<ThroughputPoint[]>([]);
+  const [revision, setRevision] = useState(0);
+  const refresh = () => setRevision((n) => n + 1);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const previous = useRef<Inventory | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<"all" | "managed">("all");
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [form, setForm] = useState<{
+    user: string;
+    interface: string;
+    endpoint: string;
+    expires: string;
+    dns: string;
+    address: string;
+  } | null>(null);
+  const [copied, setCopied] = useState("");
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const qr = useMemo(() => (profile ? qrDataUrl(profile.config) : ""), [profile]);
 
   useEffect(() => {
-    setProfile(null);
-    setData(null);
-    setForm((f) => ({ ...f, interface: "" }));
-    void load();
-  }, [load]);
+    if (!device) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const read = async () => {
+      setLoading(true);
+      try {
+        const next = await api<Inventory>(
+          `/api/wireguard/users?device=${encodeURIComponent(device)}`,
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        if (previous.current && next.observedAt > previous.current.observedAt) {
+          const point = ratePoint(previous.current, next);
+          setPoints((old) =>
+            [...old.filter((p) => p.at > next.observedAt - 900_000), point].slice(-64),
+          );
+        }
+        previous.current = next;
+        setData(next);
+        setLoadError("");
+      } catch (e) {
+        if (!controller.signal.aborted) setLoadError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          timer = setTimeout(read, 15_000);
+        }
+      }
+    };
+    void read();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [device, revision]);
 
-  const act = async (
-    key: string,
-    path: string,
-    body: Record<string, unknown>,
-  ): Promise<{ ok?: boolean; message?: string; config?: string; error?: string }> => {
-    setBusy(key);
+  const peers = data?.peers ?? [];
+  const selected = peers.find((p) => p.id === selectedId);
+  const managed = peers.filter((p) => p.managed);
+  const expired = managed.filter((p) => p.expired && !p.disabled).length;
+  const available = data?.interfaceOptions.filter((i) => !i.disabled) ?? [];
+  const openForm = (source?: Peer) => {
+    const preferred =
+      available.find((i) => i.name === (source?.interface ?? managed[0]?.interface)) ??
+      (available.length === 1 ? available[0] : undefined);
+    setSelectedId(null);
+    setCopied(source?.user ?? "");
+    setError("");
+    setConfirming(null);
+    setForm({
+      user: source
+        ? copyLabel(
+            source.user,
+            managed.map((p) => p.user),
+          )
+        : "",
+      interface: preferred?.name ?? "",
+      endpoint: preferred?.endpoint ?? "",
+      dns: "",
+      address: "",
+      expires: source?.expires ?? "",
+    });
+  };
+  const act = async (path: string, body: Record<string, unknown>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
     try {
       const result = await postJson<{
         ok?: boolean;
-        message?: string;
         config?: string;
         error?: string;
-      }>(path, { device, ...body });
-      setError(result.ok === false || result.error ? (result.error ?? result.message ?? "") : "");
-      return result;
+        message?: string;
+      }>(`/api/wireguard/${path}`, { ...body, device });
+      if (!result.ok)
+        throw new Error(result.error || result.message || "The router did not confirm the change.");
+      if (path === "onboard") {
+        if (!result.config)
+          throw new Error("The router did not return a profile. Refresh the list before retrying.");
+        setProfile({ user: String(body.user), config: result.config });
+        setForm(null);
+      }
+      refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      return { ok: false };
     } finally {
-      setBusy("");
+      inFlight.current = false;
+      setBusy(false);
     }
   };
-
-  const onboard = async (): Promise<void> => {
-    const result = await act("add", "/api/wireguard/onboard", form);
-    if (result.config) {
-      setProfile({ user: form.user, config: result.config });
-      setForm((f) => ({ ...f, user: "", expires: "" }));
-      setCopied("");
-      await load();
-    }
+  const submit = () => {
+    if (!form) return;
+    const user = form.user.trim(),
+      endpoint = form.endpoint.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9._@-]{0,62}$/.test(user))
+      return setError(
+        "Enter a peer name using letters, numbers, dots, @, hyphens or underscores (up to 63 characters).",
+      );
+    if (managed.some((p) => p.user === user)) return setError("This peer name is already in use.");
+    if (!available.some((i) => i.name === form.interface))
+      return setError("Choose an enabled WireGuard interface.");
+    const port = endpoint.match(/^(?:\[[0-9a-f:]+\]|[\w.-]+):(\d{1,5})$/i)?.[1];
+    if (!port || Number(port) < 1 || Number(port) > 65535)
+      return setError(
+        "Enter the public hostname or IP and UDP port, for example vpn.example.net:51820.",
+      );
+    const address = form.address.trim();
+    if (
+      address &&
+      (!/^\d{1,3}(?:\.\d{1,3}){3}(?:\/32)?$/.test(address) ||
+        address
+          .split("/")[0]
+          .split(".")
+          .some((octet) => Number(octet) > 255))
+    )
+      return setError("Enter one client IPv4 address, optionally followed by /32.");
+    void act("onboard", { ...form, user, endpoint, address });
   };
-  const revoke = async (user: string): Promise<void> => {
-    // The first press asks; the second, on the same user, revokes.
-    if (confirming !== user) {
-      setConfirming(user);
-      return;
-    }
-    setConfirming(null);
-    await act(`revoke:${user}`, "/api/wireguard/revoke", { user });
-    await load();
-  };
-  /** Put a user's settings in the form, with a new label, to add one more like it. */
-  const duplicate = (user: WgUser): void => {
-    setForm((f) => ({
-      ...f,
-      user: copyLabel(
-        user.user,
-        (data?.users ?? []).map((u) => u.user),
-      ),
-      interface: user.interface,
-      expires: user.expires ?? "",
-    }));
-    setCopied(user.user);
-    const input = formRef.current?.querySelector("input");
-    input?.scrollIntoView?.({ block: "center" });
-    input?.focus();
-  };
-  const expire = async (): Promise<void> => {
-    await act("expire", "/api/wireguard/expire", { action: "disable", apply: true });
-    await load();
-  };
-
-  const users = data?.users ?? [];
-  const expired = users.filter((u) => u.expired && !u.disabled).length;
-  const qr = useMemo(() => (profile ? qrDataUrl(profile.config) : ""), [profile]);
-  const ready = form.user && form.interface && form.endpoint;
-
+  const visible = (scope === "all" ? peers : managed).filter((p) =>
+    [p.user, p.interface, p.address].some((s) =>
+      s.toLowerCase().includes(query.trim().toLowerCase()),
+    ),
+  );
+  const recent = peers.filter(
+    (p) => !p.disabled && p.handshakeAt != null && data!.observedAt - p.handshakeAt <= 180_000,
+  ).length;
   return (
-    <section className="wgu grid content-start gap-[18px]">
-      <PageIntro
-        eyebrow={`WireGuard users · ${device || "no router"}`}
-        verdict={data ? `${users.length} remote user(s).` : "Remote access, one user at a time."}
-        lead="Add a user and hand over its profile as a QR code or a file. The profile is shown once and is not kept."
-        actions={
-          <>
+    <section className="wgu">
+      <header className="wgu-intro">
+        <div>
+          <div className="wgu-context">
+            <ShieldCheck /> Remote access
+          </div>
+          <h1>WireGuard peers</h1>
+          <p>Monitor tunnel traffic and manage client access.</p>
+        </div>
+        <div className="wgu-tools">
+          <fieldset disabled={busy}>
             <RouterPicker
+              routers={routers}
               value={device}
-              onChange={setDevice}
-              routers={devices}
               defaultRouter={defaultDevice}
+              onChange={onDevice}
               label="Router"
             />
-            <MonitorButton
-              variant="ghost"
-              icon={<RefreshCw aria-hidden="true" className={loading ? "animate-spin" : ""} />}
-              onClick={() => void load()}
-              disabled={loading || !device}
-            >
-              Refresh
-            </MonitorButton>
-          </>
-        }
-      />
-      {error && (
+          </fieldset>
+          <MonitorButton
+            variant="ghost"
+            aria-label="Refresh peer statistics"
+            disabled={loading || !device}
+            icon={<RefreshCw />}
+            onClick={refresh}
+          />
+          <MonitorButton
+            variant="primary"
+            icon={<Plus />}
+            onClick={() => openForm()}
+            disabled={!data || busy}
+          >
+            Add peer
+          </MonitorButton>
+        </div>
+      </header>
+      {(routerError || loadError) && (
+        <MonitorNote tone="bad" role="alert">
+          {routerError || loadError}
+        </MonitorNote>
+      )}
+      {!form && error && (
         <MonitorNote tone="bad" role="alert">
           {error}
         </MonitorNote>
       )}
-      {data && (
-        <MetricStrip label="WireGuard users summary">
-          <Metric
-            label="Users"
-            value={String(users.length)}
-            hint={`${data.interfaces.length} interface(s)`}
-          />
-          <Metric
-            label="Expired"
-            value={String(expired)}
-            hint="still enabled"
-            tone={expired > 0 ? "warn" : "default"}
-          />
-          <Metric
-            label="Never connected"
-            value={String(users.filter((u) => !u.lastHandshake).length)}
-            hint="no handshake yet"
-          />
-        </MetricStrip>
+      {!data && !routerError && !loadError && (
+        <p role="status" className="wgu-muted">
+          Reading WireGuard counters…
+        </p>
       )}
-
-      <div className="wgu-cols">
-        <MonitorPanel
-          title="Add a user"
-          description={
-            copied
-              ? `Copied from ${copied}: interface and end date. The server endpoint and DNS are not kept on the router, so check them.`
-              : "A free address in the interface's subnet is picked for you."
+      {data && (
+        <>
+          <WireguardTraffic peers={peers} points={points} />
+          <MonitorPanel
+            title="Peer directory"
+            description={`${peers.length} peers · ${recent} with a handshake in the last 3 minutes`}
+            flush
+            extra={
+              expired > 0 ? (
+                <MonitorButton
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void act("expire", { action: "disable", apply: true })}
+                >
+                  Disable {expired} expired
+                </MonitorButton>
+              ) : undefined
+            }
+          >
+            <div className="wgu-filter">
+              <Segmented
+                label="Peer scope"
+                value={scope}
+                onChange={setScope}
+                options={[
+                  { value: "all", label: "All peers" },
+                  { value: "managed", label: "Managed users" },
+                ]}
+              />
+              <MonitorSearch
+                value={query}
+                onChange={setQuery}
+                label="Search peers"
+                placeholder="Search name, interface or IP"
+              />
+            </div>
+            <div className="wgu-scroll">
+              <table className="wgu-table">
+                <thead>
+                  <tr>
+                    {[
+                      "Peer / interface",
+                      "Tunnel address",
+                      "Received",
+                      "Sent",
+                      "Last handshake",
+                      "Access",
+                      "",
+                    ].map((h) => (
+                      <th key={h} scope="col">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((p) => (
+                    <RowMenu
+                      key={p.id}
+                      title={p.user}
+                      sub={p.interface}
+                      row={p}
+                      onOpen={() => setSelectedId(p.id)}
+                      copies={[{ label: "Tunnel address", value: p.address }]}
+                      actions={
+                        p.managed
+                          ? [
+                              {
+                                label: "Duplicate",
+                                icon: <Copy />,
+                                onSelect: () => openForm(p),
+                                disabled: busy,
+                              },
+                              {
+                                label: "Revoke access",
+                                icon: <Trash2 />,
+                                danger: true,
+                                onSelect: () => setConfirming(p.user),
+                                disabled: busy,
+                              },
+                            ]
+                          : []
+                      }
+                    >
+                      <tr>
+                        <th scope="row">
+                          <button
+                            type="button"
+                            className="wgu-peer"
+                            aria-label={`Inspect ${p.user}`}
+                            onClick={() => setSelectedId(p.id)}
+                          >
+                            {p.user}
+                          </button>
+                          <small>{p.interface}</small>
+                        </th>
+                        <td className="wgu-address" data-label="Tunnel address">
+                          {p.address || "—"}
+                        </td>
+                        <td data-label="Received">{trafficBytes(p.rx)}</td>
+                        <td data-label="Sent">{trafficBytes(p.tx)}</td>
+                        <td
+                          data-label="Last handshake"
+                          title={
+                            p.handshakeAt != null
+                              ? new Date(p.handshakeAt).toLocaleString()
+                              : undefined
+                          }
+                        >
+                          {handshake(p, data.observedAt)}
+                        </td>
+                        <td data-label="Access">
+                          <StatusBadge
+                            tone={
+                              p.disabled
+                                ? "default"
+                                : p.expired
+                                  ? "warn"
+                                  : p.managed
+                                    ? "good"
+                                    : "default"
+                            }
+                          >
+                            {p.disabled
+                              ? "Disabled"
+                              : p.expired
+                                ? "Expired"
+                                : p.expires
+                                  ? `Until ${p.expires}`
+                                  : p.managed
+                                    ? "Managed"
+                                    : "Router peer"}
+                          </StatusBadge>
+                        </td>
+                        <td>
+                          <RowMore />
+                        </td>
+                      </tr>
+                    </RowMenu>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!visible.length && (
+              <MonitorEmpty compact title={query ? "No matching peers" : "No peers in this view"} />
+            )}
+            <div className="wgu-stamp">
+              Updated {new Date(data.observedAt).toLocaleTimeString()} · refreshes every 15 s
+            </div>
+          </MonitorPanel>
+        </>
+      )}
+      {selected && (
+        <RowDrawer
+          open
+          title={selected.user}
+          label={`Peer details: ${selected.user}`}
+          meta={`${device} · ${selected.interface}`}
+          onClose={() => setSelectedId(null)}
+          actions={
+            selected.managed && (
+              <MonitorButton
+                aria-label={`Duplicate ${selected.user}`}
+                icon={<Copy />}
+                onClick={() => openForm(selected)}
+              >
+                Duplicate peer
+              </MonitorButton>
+            )
           }
         >
-          {data && data.interfaces.length === 0 ? (
-            <MonitorEmpty compact title="This router has no WireGuard interface." />
-          ) : (
-            <div className="wgu-form" ref={formRef}>
-              <label className="wgu-field">
-                <span>User label</span>
+          <DetailList
+            items={[
+              { label: "Tunnel address", value: selected.address, mono: true },
+              {
+                label: "Last handshake",
+                value:
+                  selected.handshakeAt == null
+                    ? "Not reported"
+                    : new Date(selected.handshakeAt).toLocaleString(),
+              },
+              { label: "Received", value: trafficBytes(selected.rx) },
+              { label: "Sent", value: trafficBytes(selected.tx) },
+              {
+                label: "Access",
+                value: selected.disabled ? "Disabled" : selected.expired ? "Expired" : "Enabled",
+              },
+              { label: "Expires", value: selected.expires ?? "No end date" },
+            ]}
+          />
+        </RowDrawer>
+      )}
+      {form && (
+        <MonitorDialog
+          open
+          title={copied ? "Duplicate peer" : "Add a peer"}
+          description={
+            copied
+              ? `Copied from ${copied}. A new client key will be generated.`
+              : "Create a client profile on the selected router."
+          }
+          width={540}
+          closeDisabled={busy}
+          onOpenChange={(o) => {
+            if (!o && !busy) {
+              setForm(null);
+              setError("");
+            }
+          }}
+          footer={
+            <>
+              <MonitorButton
+                disabled={busy}
+                onClick={() => {
+                  setForm(null);
+                  setError("");
+                }}
+              >
+                Cancel
+              </MonitorButton>
+              <MonitorButton
+                type="submit"
+                form="wgu-create"
+                variant="primary"
+                icon={<Plus />}
+                disabled={busy || !available.length}
+              >
+                {busy ? "Creating…" : "Create peer"}
+              </MonitorButton>
+            </>
+          }
+        >
+          <form
+            id="wgu-create"
+            className="wgu-form"
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <fieldset disabled={busy}>
+              <label>
+                Peer name
                 <TextInput
-                  label="User label"
+                  label="Peer name"
+                  autoFocus
                   value={form.user}
                   placeholder="alice-phone"
                   maxLength={63}
                   onChange={(user) => setForm({ ...form, user })}
                 />
               </label>
-              <label className="wgu-field">
+              <div className="wgu-field">
                 <span>Interface</span>
                 <MonitorSelect
                   label="Interface"
+                  options={available.map((i) => ({ value: i.name, label: i.name }))}
                   value={form.interface}
-                  onChange={(value) => setForm({ ...form, interface: value })}
-                  options={(data?.interfaces ?? []).map((name) => ({ value: name, label: name }))}
+                  onChange={(name) => {
+                    const old = available.find((i) => i.name === form.interface),
+                      next = available.find((i) => i.name === name);
+                    setForm({
+                      ...form,
+                      interface: name,
+                      endpoint:
+                        !form.endpoint || form.endpoint === old?.endpoint
+                          ? (next?.endpoint ?? "")
+                          : form.endpoint,
+                    });
+                  }}
                 />
-              </label>
-              <label className="wgu-field">
-                <span>Server endpoint</span>
+              </div>
+              <label>
+                Server endpoint
                 <TextInput
                   label="Server endpoint"
                   value={form.endpoint}
-                  placeholder="vpn.example.net:13231"
+                  placeholder="vpn.example.net:51820"
                   onChange={(endpoint) => setForm({ ...form, endpoint })}
                 />
+                <small>Confirm the public hostname and UDP port clients can reach.</small>
               </label>
-              <label className="wgu-field">
-                <span>Expires (optional)</span>
-                <TextInput
-                  label="Expires (optional)"
-                  value={form.expires}
-                  placeholder="2026-12-31"
-                  maxLength={10}
-                  onChange={(expires) => setForm({ ...form, expires })}
-                />
-              </label>
-              <label className="wgu-field">
-                <span>DNS (optional)</span>
-                <TextInput
-                  label="DNS (optional)"
-                  value={form.dns}
-                  placeholder="10.20.0.1"
-                  onChange={(dns) => setForm({ ...form, dns })}
-                />
-              </label>
+              <details>
+                <summary>Profile options</summary>
+                <label>
+                  Client IPv4 address
+                  <TextInput
+                    label="Client IPv4 address"
+                    value={form.address}
+                    placeholder="Assign automatically"
+                    onChange={(address) => setForm({ ...form, address })}
+                  />
+                </label>
+                <label>
+                  Expires (optional)
+                  <DateTimePicker
+                    showTime={false}
+                    label="Expires (optional)"
+                    placeholder="No end date"
+                    value={form.expires ? new Date(`${form.expires}T12:00:00`) : undefined}
+                    onChange={(day) =>
+                      setForm({ ...form, expires: day ? format(day, "yyyy-MM-dd") : "" })
+                    }
+                  />
+                </label>
+                <label>
+                  DNS (optional)
+                  <TextInput
+                    label="DNS (optional)"
+                    value={form.dns}
+                    placeholder="10.20.0.1"
+                    onChange={(dns) => setForm({ ...form, dns })}
+                  />
+                </label>
+              </details>
+              {(!available.length || error) && (
+                <MonitorNote tone="bad" role="alert">
+                  {error ||
+                    "This router needs an enabled WireGuard interface before you can create a peer."}
+                </MonitorNote>
+              )}
+            </fieldset>
+          </form>
+        </MonitorDialog>
+      )}
+      {profile && (
+        <MonitorDialog
+          open
+          title={`Profile for ${profile.user}`}
+          description="Scan with WireGuard or download the file. Closing this profile discards the client private key."
+          width={480}
+          dismissible={false}
+          onOpenChange={(o) => {
+            if (!o) setProfile(null);
+          }}
+          footer={
+            <>
+              <MonitorButton onClick={() => setProfile(null)}>Done</MonitorButton>
               <MonitorButton
                 variant="primary"
-                icon={<Plus aria-hidden="true" />}
-                disabled={!ready || busy === "add"}
-                onClick={() => void onboard()}
+                icon={<Download />}
+                onClick={() => saveProfile(profile)}
               >
-                Add user
+                Download .conf
               </MonitorButton>
-            </div>
-          )}
-        </MonitorPanel>
-
-        {profile && (
-          <MonitorPanel
-            title={`Profile of ${profile.user}`}
-            description="Scan it in the WireGuard app, or download the file. It holds the private key and is not shown again."
-            extra={
-              <MonitorButton size="sm" variant="ghost" onClick={() => setProfile(null)}>
-                Discard
+            </>
+          }
+        >
+          <div className="wgu-profile">
+            <img src={qr} alt={`WireGuard QR code for ${profile.user}`} />
+          </div>
+        </MonitorDialog>
+      )}
+      {confirming && (
+        <MonitorDialog
+          open
+          confirm
+          title={`Revoke ${confirming}?`}
+          description="This removes the peer from the router and disconnects the client."
+          onOpenChange={(o) => {
+            if (!o) setConfirming(null);
+          }}
+          footer={
+            <>
+              <MonitorButton onClick={() => setConfirming(null)}>Cancel</MonitorButton>
+              <MonitorButton
+                variant="danger"
+                onClick={() => {
+                  void act("revoke", { user: confirming });
+                  setConfirming(null);
+                }}
+              >
+                Revoke access
               </MonitorButton>
-            }
-          >
-            <div className="wgu-profile">
-              <img src={qr} alt={`QR code of the WireGuard profile of ${profile.user}`} />
-              <div className="wgu-profile-side">
-                <pre>{profile.config.replace(/(PrivateKey = ).+/, "$1(hidden)")}</pre>
-                <MonitorButton
-                  variant="primary"
-                  size="sm"
-                  icon={<Download aria-hidden="true" />}
-                  onClick={() => saveProfile(profile)}
-                >
-                  Download {profile.user}.conf
-                </MonitorButton>
-              </div>
-            </div>
-          </MonitorPanel>
-        )}
-      </div>
-
-      <MonitorPanel
-        title="Users"
-        description="Users added here or with onboard_wireguard_user. Other peers are not listed."
-        extra={
-          expired > 0 ? (
-            <MonitorButton
-              size="sm"
-              variant="ghost"
-              disabled={busy === "expire"}
-              onClick={() => void expire()}
-            >
-              Disable {expired} expired
-            </MonitorButton>
-          ) : undefined
-        }
-      >
-        {data && users.length === 0 && (
-          <MonitorEmpty compact title="No remote user on this router yet." />
-        )}
-        <div className="wgu-table">
-          {users.length > 0 && (
-            <div className="wgu-row wgu-head" aria-hidden="true">
-              <span>User</span>
-              <span>Address</span>
-              <span>Interface</span>
-              <span>Last handshake</span>
-              <span>Access</span>
-              <span />
-            </div>
-          )}
-          <ul className="wgu-list">
-            {users.map((user) => (
-              <li key={`${user.interface}:${user.user}`} className="wgu-row">
-                <b>{user.user}</b>
-                <span className="mono">{user.address}</span>
-                <span className="wgu-muted">{user.interface}</span>
-                <span className="wgu-muted">
-                  {user.lastHandshake ? `handshake ${user.lastHandshake} ago` : "never connected"}
-                </span>
-                <span className="wgu-state">
-                  {user.disabled ? (
-                    <StatusBadge tone="default">disabled</StatusBadge>
-                  ) : user.expired ? (
-                    <StatusBadge tone="warn">expired {user.expires}</StatusBadge>
-                  ) : user.expires ? (
-                    <StatusBadge tone="good">until {user.expires}</StatusBadge>
-                  ) : (
-                    <StatusBadge tone="good">no end date</StatusBadge>
-                  )}
-                </span>
-                <span className="wgu-actions">
-                  <MonitorButton
-                    size="sm"
-                    variant="ghost"
-                    icon={<Copy aria-hidden="true" />}
-                    aria-label={`Duplicate ${user.user}`}
-                    onClick={() => duplicate(user)}
-                  >
-                    Duplicate
-                  </MonitorButton>
-                  <MonitorButton
-                    size="sm"
-                    variant="danger"
-                    icon={<Trash2 aria-hidden="true" />}
-                    disabled={busy === `revoke:${user.user}`}
-                    onClick={() => void revoke(user.user)}
-                    onBlur={() => setConfirming(null)}
-                  >
-                    {confirming === user.user ? "Press again to revoke" : "Revoke"}
-                  </MonitorButton>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </MonitorPanel>
+            </>
+          }
+        >
+          {" "}
+          <p className="wgu-form">The client profile will stop working.</p>
+        </MonitorDialog>
+      )}
     </section>
   );
 }

@@ -136,6 +136,16 @@ export const vpnOnboardTools: ToolModule = [
         address = free;
       }
       const clientAddr = address.includes("/") ? address : `${address}/32`;
+      // Read the server's public key for the client config.
+      const detail = await executeMikrotikCommand(
+        `/interface wireguard print detail proplist=public-key where name=${quoted(a.interface)}`,
+        read,
+      );
+      const serverPub = detail.match(/public-key="?([A-Za-z0-9+/]{42,44}=)"?/)?.[1];
+      if (!serverPub) {
+        return `Cannot read the server public key from '${a.interface}'. No peer was added.`;
+      }
+
       const { privateKey, publicKey } = generateWireGuardKeypair();
 
       // Add the client as a peer on the server.
@@ -149,16 +159,6 @@ export const vpnOnboardTools: ToolModule = [
         ctx,
       );
       if (looksLikeError(add)) return `Failed to add peer for '${a.user}': ${add}`;
-
-      // Read the server's public key for the client config.
-      const detail = await executeMikrotikCommand(
-        `/interface wireguard print detail where name=${quoted(a.interface)}`,
-        ctx,
-      );
-      const serverPub = detail.match(/public-key="?([A-Za-z0-9+/]{42,44}=)"?/)?.[1];
-      if (!serverPub) {
-        return `Added the peer, but could not read the server public key from '${a.interface}'. Add it to the config manually.`;
-      }
 
       const config = [
         "[Interface]",
@@ -234,6 +234,8 @@ export const vpnOnboardTools: ToolModule = [
         ctx,
       );
       if (count.trim() === "0") return `No WireGuard peer found for user '${a.user}'.`;
+      if (count.trim() !== "1")
+        return `Cannot revoke: the label '${a.user}' does not identify a single peer.`;
       const r = await executeMikrotikCommand(
         `/interface wireguard peers remove [find ${where}]`,
         ctx,

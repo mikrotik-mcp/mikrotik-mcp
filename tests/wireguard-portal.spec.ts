@@ -46,6 +46,8 @@ test("the lowest free host is picked, never the server's or a used one", () => {
   expect(nextFreeAddress("10.20.0.5/30", ["10.20.0.6/32"])).toBeNull();
   expect(nextFreeAddress("10.20.0.254/24", ["10.20.0.1"])).toBe("10.20.0.2");
   expect(nextFreeAddress("fd00::1/64", [])).toBeNull();
+  expect(nextFreeAddress("10.20.0.1/24", ["10.20.0.0/28"])).toBe("10.20.0.16");
+  expect(nextFreeAddress("10.20.0.1/24", ["0.0.0.0/0"])).toBeNull();
 });
 
 test("the comment carries the user and the expiry, and expiry is by calendar day", () => {

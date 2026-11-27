@@ -26,10 +26,10 @@ test("onboard adds peer with generated key and returns matching private config",
   // The peers of the interface are read first (no user of this name yet), then the add.
   command
     .mockResolvedValueOnce("")
-    .mockResolvedValueOnce("")
-    .mockResolvedValueOnce(`public-key="${serverKey}"`);
+    .mockResolvedValueOnce(`public-key="${serverKey}"`)
+    .mockResolvedValueOnce("");
   const result = await run("onboard_wireguard_user", args);
-  const add = command.mock.calls[1][0] as string;
+  const add = command.mock.calls[2][0] as string;
   const clientPub = add.match(/public-key=([^ ]+)/)?.[1];
   if (typeof result !== "string") throw new Error("Expected WireGuard configuration text");
   const privateKey = result.match(/PrivateKey = ([A-Za-z0-9+/]{43}=)/)?.[1];
@@ -40,22 +40,25 @@ test("onboard adds peer with generated key and returns matching private config",
   expect(result).toContain(`PublicKey = ${serverKey}`);
   expect(result).toContain("DNS = 10.20.0.1");
   expect(result).toContain("AllowedIPs = 192.0.2.0/24");
-  expect(command.mock.calls[2][0]).toBe('/interface wireguard print detail where name="wg-server"');
+  expect(command.mock.calls[1][0]).toBe(
+    '/interface wireguard print detail proplist=public-key where name="wg-server"',
+  );
 });
 
-test("failed add skips key lookup and never exposes client private key", async () => {
-  command.mockResolvedValueOnce("").mockResolvedValueOnce("failure: duplicate");
+test("failed add never exposes client private key", async () => {
+  command
+    .mockResolvedValueOnce("")
+    .mockResolvedValueOnce(`public-key="${serverKey}"`)
+    .mockResolvedValueOnce("failure: duplicate");
   expect(await run("onboard_wireguard_user", args)).toBe(
     "Failed to add peer for 'alice': failure: duplicate",
   );
-  expect(command).toHaveBeenCalledTimes(2);
+  expect(command).toHaveBeenCalledTimes(3);
 });
 
-test("missing server key reports partial setup", async () => {
-  expect(await run("onboard_wireguard_user", args)).toContain(
-    "Added the peer, but could not read the server public key",
-  );
-  expect(command).toHaveBeenCalledTimes(3);
+test("missing server key stops before changing the router", async () => {
+  expect(await run("onboard_wireguard_user", args)).toContain("Cannot read the server public key");
+  expect(command).toHaveBeenCalledTimes(2);
 });
 
 test("revoke checks existence and handles remove rejection", async () => {

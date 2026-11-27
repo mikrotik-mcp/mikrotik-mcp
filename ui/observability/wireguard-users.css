@@ -1,120 +1,334 @@
-.wgu-cols {
+.wgu {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
+  gap: 20px;
+  min-width: 0;
+  align-content: start;
 }
-.wgu-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  align-items: end;
-}
-.wgu-profile {
+.wgu-intro,
+.wgu-tools,
+.wgu-context,
+.wgu-filter {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  align-items: flex-start;
-}
-.wgu-profile img {
-  width: 220px;
-  height: 220px;
-  border-radius: 12px;
-  background: white;
-  image-rendering: pixelated;
-}
-.wgu-profile-side {
-  display: grid;
-  flex: 1;
-  min-width: 220px;
   gap: 10px;
 }
-.wgu-profile pre {
-  overflow: auto;
-  border-radius: 10px;
-  background: var(--glass-2);
-  padding: 10px 12px;
-  color: var(--text-secondary);
-  font: 400 11.5px/18px var(--font-mt);
+.wgu-intro {
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0 4px;
 }
-/* One set of columns for the head and every row, so a label stays over its cells. */
-.wgu-table {
-  display: grid;
-  grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 1fr) minmax(80px, 0.7fr) minmax(
-      140px,
-      1fr
-    ) auto auto;
-  column-gap: 12px;
-  row-gap: 6px;
+.wgu-context {
+  color: var(--sig);
+  font-size: 12px;
+  font-weight: 550;
 }
-.wgu-list,
-.wgu-row {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
+.wgu-context svg {
+  width: 16px;
+  height: 16px;
 }
-.wgu-list {
-  row-gap: 6px;
+.wgu-intro h1 {
+  margin: 6px 0;
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.13;
+  letter-spacing: -0.045em;
+  font-weight: 640;
 }
-.wgu-row {
-  align-items: center;
-  border-radius: 10px;
-  box-shadow: inset 0 0 0 1px var(--line);
-  padding: 8px 12px;
-  font-size: 13px;
-}
-.wgu-head {
-  box-shadow: none;
-  padding-block: 0 2px;
+.wgu-intro p,
+.wgu-muted,
+.wgu-form small,
+.wgu-total small,
+.wgu-stamp {
   color: var(--muted-foreground);
-  font: 500 11px/16px var(--font-mt);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
-.wgu-actions {
+.wgu-intro p {
+  margin: 0;
+  font-size: 14px;
+}
+.wgu-tools fieldset,
+.wgu-form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.wgu-analytics {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr);
+  gap: 16px;
+}
+.wgu-total {
+  background: linear-gradient(130deg, var(--sig-soft), transparent 72%), var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 22px;
   display: flex;
-  gap: 6px;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 12px;
 }
-.wgu-row b {
-  color: var(--text-emphasis);
+.wgu-total h2 {
+  font-weight: 560;
+  font-size: 15px;
+  margin: 0;
+}
+.wgu-total > strong {
+  font-size: clamp(36px, 4.4vw, 64px);
+  line-height: 1.1;
+  letter-spacing: -0.055em;
+  font-weight: 570;
+  font-variant-numeric: tabular-nums;
+}
+.wgu-split,
+.wgu-rank li > div {
+  display: flex;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--line);
+}
+.wgu-split {
+  height: 9px;
+  margin: 8px 0;
+}
+.wgu-split i:first-child,
+.wgu-rank i:first-child {
+  background: var(--brand);
+}
+.wgu-split i:last-child,
+.wgu-rank i:last-child {
+  background: var(--sig);
+}
+.wgu-direction {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: auto;
+}
+.wgu-direction span {
+  display: grid;
+  grid-template-columns: 16px auto;
+  gap: 3px 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.wgu-direction svg {
+  width: 15px;
+  height: 15px;
+  color: var(--brand);
+}
+.wgu-direction span + span svg {
+  color: var(--sig);
+}
+.wgu-direction b {
+  grid-column: 2;
+  font-size: 16px;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+.wgu-total small,
+.wgu-stamp {
+  font-size: 11px;
+}
+.wgu-rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.wgu-rank li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+.wgu-rank li > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.wgu-muted {
+.wgu-rank li b {
+  font: inherit;
   color: var(--muted-foreground);
-  font-size: 12px;
 }
-@media (max-width: 1000px) {
-  .wgu-cols,
-  .wgu-form {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .wgu-table {
-    display: block;
-  }
-  .wgu-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .wgu-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
-  }
-  .wgu-head {
-    display: none;
-  }
-  .wgu-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
+.wgu-rank li > div {
+  grid-column: 1/-1;
+  height: 5px;
 }
+.wgu-filter {
+  justify-content: space-between;
+  padding: 0 16px 14px;
+}
+.wgu-scroll {
+  overflow-x: auto;
+}
+.wgu-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+.wgu-table :is(th, td) {
+  padding: 11px 14px;
+  border-top: 1px solid var(--line);
+}
+.wgu-table thead th {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.wgu-table tbody td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.wgu-table tbody tr:hover {
+  background: var(--glass-2);
+}
+.wgu-peer,
+.wgu-table small {
+  display: block;
+}
+.wgu-peer {
+  font-weight: 570;
+  overflow-wrap: anywhere;
+  min-width: 125px;
+}
+.wgu-table small,
+.wgu-address {
+  color: var(--muted-foreground);
+  font: 400 11px/1.5 var(--font-mt);
+}
+.wgu-table .wgu-address {
+  max-width: 220px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.wgu-stamp {
+  border-top: 1px solid var(--line);
+  padding: 10px 16px;
+}
+.wgu-table .wgu-tools {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.wgu-form {
+  padding: 18px 22px;
+}
+.wgu-form fieldset,
+.wgu-form label,
 .wgu-field {
   display: grid;
-  gap: 5px;
-  min-width: 0;
+  gap: 6px;
 }
-.wgu-field > span {
-  color: var(--muted-foreground);
-  font-size: 12px;
+.wgu-form fieldset {
+  gap: 14px;
+}
+.wgu-form label,
+.wgu-field {
+  font-size: 13px;
+}
+.wgu-form details {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.wgu-form summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.wgu-form details label {
+  margin-top: 10px;
+}
+.wgu-profile {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+.wgu-profile img {
+  image-rendering: pixelated;
+  width: min(100%, 248px);
+  border: 8px solid white;
+  border-radius: 9px;
+}
+@media (max-width: 850px) {
+  .wgu-analytics {
+    grid-template-columns: 1fr;
+  }
+  .wgu-total {
+    padding: 18px;
+  }
+  .wgu-analytics .monitor-panel-head {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 600px) {
+  .wgu {
+    gap: 12px;
+  }
+  .wgu-tools {
+    gap: 6px;
+  }
+  .wgu-filter {
+    align-items: stretch;
+  }
+  .wgu-filter .monitor-field {
+    flex: 1 1 180px;
+  }
+  .wgu-table :is(th, td) {
+    padding: 9px;
+  }
+  .wgu-intro h1 {
+    font-size: 30px;
+  }
+}
+
+@media (min-width: 601px) {
+  .wgu-filter .monitor-field {
+    width: min(100%, 320px);
+  }
+}
+@media (max-width: 600px) {
+  .wgu-table,
+  .wgu-table tbody {
+    display: block;
+  }
+  .wgu-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    overflow: hidden;
+  }
+  .wgu-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    padding: 15px;
+    border-top: 1px solid var(--line);
+  }
+  .wgu-table tbody :is(td, th) {
+    padding: 0;
+    border: 0;
+  }
+  .wgu-table tbody th {
+    grid-column: 1/-1;
+  }
+  .wgu-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: var(--muted-foreground);
+    font: 400 11px/1.4 var(--font-sans);
+  }
+  .wgu-table .wgu-address {
+    grid-column: 1/-1;
+    max-width: none;
+  }
+  .wgu-table td:empty {
+    display: none;
+  }
+  .wgu-table .wgu-tools {
+    justify-content: flex-start;
+  }
 }

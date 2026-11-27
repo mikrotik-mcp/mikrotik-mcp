@@ -35,14 +35,23 @@ export function nextFreeAddress(cidr: string, used: string[]): string | null {
   if (server === null || !Number.isInteger(prefix) || prefix < 8 || prefix > 30) return null;
   const size = 2 ** (32 - prefix);
   const network = Math.floor(server / size) * size;
-  const taken = new Set<number>([server]);
+  const ranges = [[server, server]];
   for (const entry of used)
     for (const one of entry.split(",")) {
-      const value = toInt(one.trim().split("/")[0] ?? "");
-      if (value !== null) taken.add(value);
+      const [ip, bits = "32"] = one.trim().split("/");
+      const value = toInt(ip),
+        prefix = Number(bits);
+      if (value === null || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) continue;
+      const width = 2 ** (32 - prefix);
+      const first = Math.floor(value / width) * width;
+      ranges.push([first, first + width - 1]);
     }
-  for (let host = network + 1; host < network + size - 1; host += 1)
-    if (!taken.has(host)) return toIp(host);
+  let host = network + 1;
+  for (const [first, last] of ranges.sort((a, b) => a[0] - b[0])) {
+    if (first > host) break;
+    host = Math.max(host, last + 1);
+  }
+  if (host < network + size - 1) return toIp(host);
   return null;
 }
 

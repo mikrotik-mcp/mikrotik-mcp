@@ -53,6 +53,7 @@ export function ThroughputChart({
   to,
   labels,
   drawKey,
+  sampleLabel = "Run",
 }: {
   points: ThroughputPoint[];
   /** The window the x axis spans, in ms. */
@@ -61,6 +62,7 @@ export function ThroughputChart({
   labels: string[];
   /** Redraw the lines when this changes (a new test or window). */
   drawKey: unknown;
+  sampleLabel?: "Run" | "Sample";
 }): ReactNode {
   const [box, width] = useWidth(640);
   useLineDraw(box, drawKey);
@@ -108,7 +110,7 @@ export function ThroughputChart({
         hour: "2-digit",
         minute: "2-digit",
       }),
-      sub: `Run ${i + 1} of ${points.length}`,
+      sub: `${sampleLabel} ${i + 1} of ${points.length}`,
       led: p.failed ? "bad" : "ok",
       rows: [
         { label: "Source TX", value: mbps(p.tx), color: "var(--sig)" },
@@ -118,7 +120,7 @@ export function ThroughputChart({
       ...(delta !== null
         ? {
             foot: {
-              label: "TX vs the run before",
+              label: `TX vs previous ${sampleLabel.toLowerCase()}`,
               value: `${delta >= 0 ? "+" : ""}${delta.toLocaleString("en-US")} Mbps`,
               tone: delta >= 0 ? ("up" as const) : ("down" as const),
             },
@@ -135,7 +137,7 @@ export function ThroughputChart({
           width="100%"
           height={HEIGHT}
           role="img"
-          aria-label="Throughput per run"
+          aria-label={`Throughput per ${sampleLabel.toLowerCase()}`}
           className="block overflow-visible"
         >
           {grid.map((gy) => (
@@ -194,7 +196,7 @@ export function ThroughputChart({
               height={HEIGHT}
               points={stops}
               card={card}
-              label="Throughput per run. Use the arrow keys to read each run."
+              label={`Throughput per ${sampleLabel.toLowerCase()}. Use arrow keys to explore.`}
               band={Math.max(12, Math.min(40, width / Math.max(1, points.length)))}
             />
           )}
