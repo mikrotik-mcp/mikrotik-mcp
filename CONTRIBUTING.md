@@ -96,3 +96,26 @@ local checks above pass, describe the RouterOS commands your change runs, and sa
 how you verified them (device model + RouterOS version, or why no device was
 needed). Be kind — this project follows a
 [Code of Conduct](.github/CODE_OF_CONDUCT.md).
+
+## Publishing the SchemaStore configuration schema
+
+After a release, `bun run release` compares the tagged Zod configuration input
+with the schema in [SchemaStore](https://github.com/SchemaStore/schemastore).
+A changed schema is formatted and validated with SchemaStore's own checker,
+then pushed to the release operator's fork and proposed to upstream. The hook
+uses the current Git identity and authenticated GitHub CLI account. The machine
+running the release needs Git, Bun, Node.js, npm and `gh` with fork and PR access.
+
+Matching schemas produce no PR. If this account already has a matching open
+sync PR, the hook prints its URL. Further schema changes update that branch and
+preserve the existing review. Formatting and the source commit alone do not
+trigger updates.
+
+To preview or retry the sync from a release tag (including a release published
+directly on GitHub), substitute its package version below. A retry only runs
+the SchemaStore step.
+
+```sh
+bun run schemastore:sync 6.26.0 --check
+bun run schemastore:sync 6.26.0
+```

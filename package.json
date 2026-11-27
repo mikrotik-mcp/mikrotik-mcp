@@ -91,6 +91,7 @@
     "test:coverage:combined": "bun run test:coverage && bun run test:bun:coverage && bun scripts/report-combined-coverage.ts --check",
     "test:coverage:check": "bun run test:coverage --coverage.thresholds.lines=90.01 --coverage.thresholds.statements=90.01 --coverage.thresholds.functions=90.01 --coverage.thresholds.branches=90.01",
     "release": "release-it",
+    "schemastore:sync": "bun --no-env-file scripts/sync-schemastore.ts",
     "test:types": "tsc --noEmit && tsc --project scripts/docker-publish/tsconfig.json && tsc --project scripts/tsconfig.service.json && bun run test:types:ui",
     "test:types:ui": "tsc --noEmit --project ui/tsconfig.json",
     "check": "vp check",

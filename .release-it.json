@@ -7,7 +7,8 @@
     "push": true
   },
   "hooks": {
-    "after:bump": ["bun --no-env-file scripts/sync-release-manifest.ts ${version}", "bun run gen"]
+    "after:bump": ["bun --no-env-file scripts/sync-release-manifest.ts ${version}", "bun run gen"],
+    "after:release": "bun run schemastore:sync ${version}"
   },
   "github": {
     "release": true
