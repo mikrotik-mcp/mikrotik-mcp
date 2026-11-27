@@ -597,6 +597,11 @@ export function renderStatus(report: ServiceReport, on: boolean): string {
       `${c.warn("!")} The process runs but MCP does not answer yet. Check the logs below.`,
     );
 
+  if (report.running && !report.dashboardUp)
+    advice.push(
+      `${c.warn("!")} Dashboard does not answer at ${report.dashboard}. Check the service logs for startup or port errors.`,
+    );
+
   let versionLine = report.installed ? `${c.bold(report.installed)} installed` : c.dim("unknown");
   if (answering) {
     versionLine =

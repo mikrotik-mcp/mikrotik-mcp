@@ -226,6 +226,12 @@ describe("status screen", () => {
     expect(out).toContain("MCP does not answer yet");
   });
 
+  it("reports a dashboard outage even when the running MCP answers", () => {
+    const out = renderStatus({ ...healthy, dashboardUp: false, devicesLive: false }, false);
+    expect(out).toContain("Dashboard does not answer at http://127.0.0.1:9090");
+    expect(out).not.toContain("Everything is in order");
+  });
+
   it("colour changes nothing but the colour", () => {
     expect(plain(renderStatus(healthy, true))).toBe(renderStatus(healthy, false));
   });
