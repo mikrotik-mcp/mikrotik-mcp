@@ -196,6 +196,9 @@ import { postureRoutes } from "./posture-routes";
 import { createAccessSettingsRoutes } from "./access-settings";
 import { approvalRoutes } from "./approval-routes";
 import { voucherIssueRoute } from "./voucher-issue";
+import { webProxyRoutes } from "./web-proxy-routes";
+import type { ProxyHistory } from "./web-proxy-history";
+import { openProxyHistory, startProxySampler } from "./web-proxy-history";
 import { wireguardRoutes } from "./wireguard-routes";
 import { txnRoutes } from "./txn-routes";
 import { flowRoutes } from "./flow-routes";
@@ -1645,6 +1648,14 @@ export async function runDashboard(
   startLossSampler();
   // Geolocate each device's public IP for the country flag (cached ~1 day).
   startGeoLookups();
+  let proxyHistory: ProxyHistory | undefined;
+  let stopProxySampler: (() => void) | undefined;
+  try {
+    proxyHistory = await openProxyHistory(join(dirname(cfg.dbPath), "web-proxy.db"));
+    stopProxySampler = startProxySampler(proxyHistory);
+  } catch (e) {
+    logger.warn(`[${SERVER_TAG}] Web proxy history unavailable: ${String(e)}`);
+  }
   let openVpnHistory: OpenVpnHistoryStore | undefined;
   let stopOpenVpnHistory: (() => void) | undefined;
   try {
@@ -1767,6 +1778,8 @@ export async function runDashboard(
 
     // Config Studio routes are independent of the event store, so dispatch
     // them before the recorder guard below.
+    const proxyResp = await webProxyRoutes(req, url, proxyHistory);
+    if (proxyResp) return proxyResp;
     const wireguardResp = await wireguardRoutes(req, url);
     if (wireguardResp) return wireguardResp;
     const approvalResp = await approvalRoutes(req, url);
@@ -2283,6 +2296,8 @@ export async function runDashboard(
     server,
     store,
     stop() {
+      stopProxySampler?.();
+      proxyHistory?.close();
       stopOpenVpnHistory?.();
       openVpnHistory?.close();
       stopSiteActivity?.();

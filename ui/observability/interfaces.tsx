@@ -176,7 +176,17 @@ function segments(values: (number | null)[], x: (i: number) => number, y: (v: nu
 }
 
 /** RX and TX over the last 60 samples: the board's line chart with five time marks. */
-function TrafficChart({ points, name }: { points: Point[]; name: string }): ReactNode {
+export function TrafficChart({
+  points,
+  name,
+  windowLabel = "the last 2 minutes",
+  formatTime = clock,
+}: {
+  points: Point[];
+  name: string;
+  windowLabel?: string;
+  formatTime?: (ts: number) => string;
+}): ReactNode {
   const root = useRef<HTMLDivElement>(null);
   const slide = useRef<SVGGElement>(null);
   useLineDraw(root, name);
@@ -221,7 +231,7 @@ function TrafficChart({ points, name }: { points: Point[]; name: string }): Reac
     const before = points[i - 1];
     const gap = p.rx == null && p.tx == null;
     return {
-      title: clock(p.ts),
+      title: formatTime(p.ts),
       sub: name,
       rows: gap
         ? [{ label: "Reading", value: "none (gap)" }]
@@ -281,13 +291,13 @@ function TrafficChart({ points, name }: { points: Point[]; name: string }): Reac
             height={CH}
             points={hover}
             card={card}
-            label={`Receive and transmit rate on ${name} over the last 2 minutes`}
+            label={`Receive and transmit rate on ${name} over ${windowLabel}`}
           />
         )}
       </svg>
       <div className="mt-1.5 flex justify-between text-[11px] text-faint">
         {ticks.map((p, i) => (
-          <span key={i}>{p ? clock(p.ts) : ""}</span>
+          <span key={i}>{p ? formatTime(p.ts) : ""}</span>
         ))}
       </div>
     </div>

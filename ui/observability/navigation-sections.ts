@@ -37,7 +37,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
     id: "users-vpn",
     label: "Users & VPN",
     description: "LAN clients, VPN connections and user accounting",
-    views: ["clients", "openvpn", "wireguard-users", "aaa"],
+    views: ["clients", "openvpn", "wireguard-users", "http-proxy", "aaa"],
   },
   {
     id: "diagnostics",

@@ -96,6 +96,7 @@ import type { MonitorPageInfo } from "./monitoring-ui";
 import { AaaView } from "./aaa";
 import { ClientsView } from "./clients";
 import { OpenVpnView } from "./openvpn";
+import { WebProxyView } from "./web-proxy";
 import { WireguardUsersView } from "./wireguard-users";
 import { InterfacesView } from "./interfaces";
 import { PromptsView } from "./prompts";
@@ -383,6 +384,12 @@ const HELP: Record<ViewId, { what: string; tips: string[] }> = {
       "Reports are read-only. Management tabs support the relevant add, edit, enable/disable and remove actions; secrets are write-only and shown redacted.",
       "Reports & insights shows traffic totals, daily and cumulative charts, connection statistics and a calendar for all users or one user. Individual session lists are not displayed or exported.",
       "If a device lacks the user-manager package, the User Manager tabs explain how to install it; RADIUS-client tabs still work.",
+    ],
+  },
+  "http-proxy": {
+    what: "RouterOS HTTP proxy settings, destination access rules and recorded traffic.",
+    tips: [
+      "Choose a router and a time window. Rates and usage come from proxy counters sampled by the dashboard.",
     ],
   },
   "wireguard-users": {
@@ -871,6 +878,12 @@ function NavIcon({ name }: { name: ViewId }): ReactNode {
       <>
         <path d="M12 3 4 6v5c0 4.4 3.2 7.6 8 9 4.8-1.4 8-4.6 8-9V6l-8-3Z" />
         <path d="M9.5 11.5 11 13l3.5-3.5" />
+      </>
+    ),
+    "http-proxy": (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="3" />
+        <path d="M6 12h12m-4-3 3 3-3 3" />
       </>
     ),
     "wireguard-users": (
@@ -1846,6 +1859,7 @@ function App(): ReactNode {
                 {view === "clients" && <ClientsView />}
                 {view === "aaa" && <AaaView />}
                 {view === "openvpn" && <OpenVpnView />}
+                {view === "http-proxy" && <WebProxyView devices={devices} />}
                 {view === "wireguard-users" && <WireguardUsersView />}
                 {view === "interfaces" && <InterfacesView />}
                 {view === "prompts" && <PromptsView />}

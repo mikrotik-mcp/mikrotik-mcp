@@ -81,7 +81,8 @@ async function browse(label: string) {
 test("opens the current section and keeps firing alerts reachable from another section", async () => {
   await mount();
   expect(sectionPicker().textContent).toContain("Users & VPN");
-  expect(pages().querySelectorAll("a")).toHaveLength(4);
+  expect(pages().querySelectorAll("a")).toHaveLength(5);
+  expect(pages().querySelector('a[href="#http-proxy"]')).toBeTruthy();
   expect(pages().querySelector('a[aria-current="page"]')?.getAttribute("href")).toBe("#openvpn");
   expect(host.querySelector('a[aria-label="2 alerts firing"]')?.getAttribute("href")).toBe(
     "#alerts",

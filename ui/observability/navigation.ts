@@ -6,6 +6,7 @@ export type ViewId =
   | "bandwidth"
   | "ip-intelligence"
   | "openvpn"
+  | "http-proxy"
   | "wireguard-users"
   | "recovery-lab"
   | "flight-recorder"
@@ -64,6 +65,11 @@ export const VIEWS: { id: ViewId; label: string; sub: string }[] = [
     id: "openvpn",
     label: "OpenVPN",
     sub: "Active VPN connections, connection time & session control",
+  },
+  {
+    id: "http-proxy",
+    label: "HTTP Proxy",
+    sub: "Proxy settings, access rules and transfer history",
   },
   {
     id: "wireguard-users",
