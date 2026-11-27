@@ -15,6 +15,7 @@ import type { RowAction, Tone as KitTone } from "./kit";
 import { LoadingState } from "./loading-state";
 import { ManagementPaths, PathLegend } from "./connectivity";
 import {
+  addressOf,
   PhoneRouterRow,
   RouterDetails,
   RouterRow,
@@ -147,21 +148,20 @@ export function DevicesView({
   const counts = {
     all: list.length,
     online: list.filter((d) => deviceState(d) === "online").length,
-    offline: list.filter((d) => d.status.reachable === false).length,
-    pending: list.filter((d) => d.status.reachable == null).length,
+    offline: list.filter((d) => deviceState(d) === "offline").length,
+    pending: list.filter((d) => deviceState(d) === "pending").length,
     disabled: list.filter((d) => d.disabled).length,
   };
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (payload?.devices ?? []).filter((d) => {
-      if (filter === "online" && d.status.reachable !== true) return false;
-      if (filter === "offline" && d.status.reachable !== false) return false;
-      if (filter === "pending" && d.status.reachable != null) return false;
-      if (filter === "disabled" && !d.disabled) return false;
+      if (filter !== "all" && deviceState(d) !== filter) return false;
       return (
         !q ||
         [
           d.name,
+          addressOf(d, true),
+          ...(d.endpoints?.hosts ?? []),
           d.address,
           d.host,
           d.mac,
@@ -204,7 +204,7 @@ export function DevicesView({
     }
   };
 
-  const offline = list.filter((d) => d.status.reachable === false && !d.disabled);
+  const offline = list.filter((d) => deviceState(d) === "offline");
   const checked = list.map((d) => d.status.checkedAt ?? 0).filter((t) => t > 0);
   const lastCheck = checked.length ? Math.max(...checked) : null;
   const calls = list.reduce((n, d) => n + d.activity.calls, 0);
@@ -257,7 +257,10 @@ export function DevicesView({
       heading={
         list.length ? (
           <>
-            {counts.online} of {counts.all} <span className="max-sm:hidden">routers </span>
+            {counts.online} of {counts.all - counts.disabled}{" "}
+            <span className="max-sm:hidden">
+              {counts.disabled ? "enabled routers " : "routers "}
+            </span>
             reachable.
             {offlineText && (
               <>
@@ -358,19 +361,10 @@ export function DevicesView({
             value={
               <>
                 {counts.online}
-                <small>/{counts.all}</small>
+                <small>/{counts.all - counts.disabled}</small>
               </>
             }
-            hint={
-              <>
-                <span className="max-sm:hidden">
-                  at the last check{checkedAt ? `, ${checkedAt}` : ""}
-                </span>
-                <span className="sm:hidden">
-                  {checkedAt ? `at ${checkedAt}` : "at the last check"}
-                </span>
-              </>
-            }
+            hint={counts.disabled ? `${counts.disabled} disabled` : "enabled routers"}
           />
           <Metric
             label="Offline"
@@ -523,12 +517,12 @@ export function DevicesView({
                       <RowMenu
                         key={d.name}
                         title={d.name}
-                        sub={d.mac ?? `${d.host}:${d.port}`}
+                        sub={addressOf(d, true)}
                         onOpen={() => setDrawer(d.name)}
                         opens={[{ label: "Show full details", onSelect: () => setPicked(d.name) }]}
                         copies={[
                           { label: "Router name", value: d.name },
-                          { label: d.mac ? "MAC address" : "Address", value: d.mac ?? d.host },
+                          { label: d.mac ? "MAC address" : "Address", value: addressOf(d) },
                         ]}
                         row={d}
                         cells={{
@@ -537,7 +531,7 @@ export function DevicesView({
                             kind: "router",
                             open: { label: "Show full details", run: () => setPicked(d.name) },
                           },
-                          address: { value: d.mac ?? d.host },
+                          address: { value: addressOf(d) },
                           latency: {
                             value:
                               d.status.latencyMs != null
@@ -672,7 +666,7 @@ export function DevicesView({
               <DetailList
                 items={[
                   { label: "Router", value: d.name, mono: true },
-                  { label: d.mac ? "MAC address" : "Address", value: d.mac ?? d.host, mono: true },
+                  { label: d.mac ? "MAC address" : "Address", value: addressOf(d), mono: true },
                   { label: "Path", value: transportLine(d) },
                   ...(d.status.identity
                     ? [{ label: "Identity", value: d.status.identity, mono: true }]

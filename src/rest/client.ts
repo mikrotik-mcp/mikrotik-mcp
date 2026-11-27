@@ -19,6 +19,7 @@
  * returns null for them and the caller falls back to SSH. The two error classes
  * below are how that decision is communicated upward.
  */
+import { connectAddress } from "../core/connect-address";
 import { logger } from "../logger";
 import { toConsoleText, toRequest } from "./bridge";
 import type { EndpointOptions } from "../core/device-endpoints";
@@ -112,8 +113,8 @@ export class MikroTikRestClient {
     this.auth = `Basic ${btoa(`${opts.username}:${opts.password ?? ""}`)}`;
   }
 
-  private url(path: string, query: Record<string, string> = {}): string {
-    const u = new URL(`https://${endpointAddress(this.opts.host, this.opts.port)}/rest/${path}`);
+  private url(host: string, path: string, query: Record<string, string> = {}): string {
+    const u = new URL(`https://${endpointAddress(host, this.opts.port)}/rest/${path}`);
     for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
     return u.toString();
   }
@@ -123,18 +124,20 @@ export class MikroTikRestClient {
     path: string,
     query: Record<string, string>,
     body?: Record<string, string>,
+    host = this.connectedHost ?? this.opts.host,
+    signal?: AbortSignal,
   ): Promise<Response> {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), this.opts.timeoutMs);
     try {
-      return await fetch(this.url(path, query), {
+      return await fetch(this.url(host, path, query), {
         method,
         headers: {
           authorization: this.auth,
           ...(body ? { "content-type": "application/json" } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
-        signal: ac.signal,
+        signal: signal ? AbortSignal.any([ac.signal, signal]) : ac.signal,
         // Bun-specific: allows RouterOS's default self-signed certificate.
         // Ignored by runtimes that do not implement it.
         ...(this.opts.insecureTls ? { tls: { rejectUnauthorized: false } } : {}),
@@ -151,34 +154,36 @@ export class MikroTikRestClient {
   async connect(): Promise<boolean> {
     this.disconnect();
     this.lastError = undefined;
-    const errors: string[] = [];
-    for (const host of this.opts.hosts?.() ?? [this.opts.host]) {
-      this.opts.host = host;
-      try {
-        const res = await this.request("GET", "system/resource", {});
-        await res.body?.cancel();
-        if (!res.ok) {
-          this.lastError =
-            res.status === 401
-              ? "REST authentication failed (check username/password)"
-              : `REST probe failed with HTTP ${res.status}`;
-          this.opts.onAttempt?.(host, this.lastError);
-          return false;
-        }
-        this.connected = true;
-        this.connectedHost = host;
-        this.opts.onAttempt?.(host);
-        this.release = this.opts.onConnected?.(host);
-        return true;
-      } catch (e) {
-        this.lastError = describeConnectFailure(e, this.opts.insecureTls);
-        this.opts.onAttempt?.(host, this.lastError);
-        errors.push(`${endpointAddress(host, this.opts.port)}: ${this.lastError}`);
-        if (/certificate|TLS|SSL/i.test(this.lastError)) break;
-      }
+    try {
+      const { host } = await connectAddress(
+        this.opts.hosts?.() ?? [this.opts.host],
+        this.opts.port,
+        async (address, signal) => {
+          let res: Response;
+          try {
+            res = await this.request("GET", "system/resource", {}, undefined, address, signal);
+            await res.body?.cancel();
+          } catch (error) {
+            throw new Error(describeConnectFailure(error, this.opts.insecureTls));
+          }
+          if (!res.ok)
+            throw new Error(
+              res.status === 401
+                ? "REST authentication failed (check username/password)"
+                : `REST probe failed with HTTP ${res.status}`,
+            );
+        },
+        (message) => /authentication|HTTP 403\b|certificate|TLS|SSL/i.test(message),
+        this.opts.onAttempt,
+      );
+      this.connected = true;
+      this.connectedHost = host;
+      this.release = this.opts.onConnected?.(host);
+      return true;
+    } catch (error) {
+      this.lastError = error instanceof Error ? error.message : String(error);
+      return false;
     }
-    this.lastError = errors.join("; ");
-    return false;
   }
 
   /**

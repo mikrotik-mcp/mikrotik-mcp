@@ -29,7 +29,7 @@ import { dirname, join } from "node:path";
 import type { Server, ServerWebSocket } from "bun";
 import { serve } from "bun";
 import { z } from "zod";
-import { deviceEndpoints } from "../core/device-endpoints";
+import { deviceEndpoints, endpointAddress, managementEndpoint } from "../core/device-endpoints";
 import type { DashboardConfig, MikrotikConfig } from "../config";
 import {
   DEFAULT_SNAPSHOT_DB,
@@ -382,15 +382,18 @@ function devicesPayload(store: EventStore): unknown {
     const ps = poolMap.get(name);
     const endpoints = deviceEndpoints(dc);
     const status = getDeviceStatus(name);
+    const path = managementEndpoint(
+      dc.host,
+      dc.port,
+      endpoints,
+      status.reachable ? status.connectedHost : undefined,
+    );
     return {
       name,
       host: dc.host,
       endpoints,
       // Probes lost on the management path, for the address in use now.
-      loss: getDeviceLoss(
-        name,
-        endpoints?.connected[0]?.host ?? endpoints?.remembered?.[0]?.host ?? status.connectedHost,
-      ),
+      loss: getDeviceLoss(name, path.host),
       port: dc.port,
       // A `mac` device is reached over Layer-2 MAC-Telnet, not SSH — surface that
       // so the dashboard shows the MAC instead of the unused default host:port.
@@ -400,7 +403,7 @@ function devicesPayload(store: EventStore): unknown {
       // Feed's per-call `deviceTransport` is the record of what actually ran.
       transport: dc.mac ? "mac-telnet" : dc.api ? "rest" : "ssh",
       restPort: dc.api ? (dc.apiPort ?? 443) : undefined,
-      address: dc.mac ? dc.mac : `${dc.host}:${dc.port}`,
+      address: dc.mac ?? endpointAddress(path.host, path.port),
       username: dc.username,
       authMode: dc.mac
         ? "mac-telnet"

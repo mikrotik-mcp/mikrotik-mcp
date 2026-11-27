@@ -4,22 +4,21 @@ import { MikroTikSSHClient } from "../../src/ssh/client";
 
 const state = vi.hoisted(() => ({
   made: [] as Array<
-    EventEmitter & { end: ReturnType<typeof vi.fn>; forwardOut: ReturnType<typeof vi.fn> }
+    EventEmitter & {
+      end: ReturnType<typeof vi.fn>;
+      destroy: ReturnType<typeof vi.fn>;
+      forwardOut: ReturnType<typeof vi.fn>;
+    }
   >,
   stallForward: false,
-}));
-// No real TCP here: the race is a stub that a test can point at a winner.
-const race = vi.hoisted(() => ({ winner: undefined as string | undefined }));
-vi.mock("../../src/ssh/fastest-address", () => ({
-  ADDRESS_HEAD_START_MS: 500,
-  fastestFirst: async (hosts: string[]) =>
-    race.winner ? [race.winner, ...hosts.filter((host) => host !== race.winner)] : hosts,
+  lateTunnel: undefined as ((err?: Error, stream?: EventEmitter) => void) | undefined,
 }));
 vi.mock("ssh2", () => ({
   Client: class FakeSSH extends EventEmitter {
     config?: { host: string; sock?: unknown };
     connect = vi.fn((config: { host: string; sock?: unknown }) => {
       this.config = config;
+      if (config.host === "stall.invalid") return this;
       if (config.host === "down.invalid") this.emit("error", new Error("connection refused"));
       else if (config.host === "auth.invalid")
         this.emit("error", new Error("authentication failed"));
@@ -35,11 +34,12 @@ vi.mock("ssh2", () => ({
       (
         _a: string,
         _b: number,
-        _host: string,
+        host: string,
         _port: number,
         cb: (err?: Error, stream?: EventEmitter) => void,
       ) => {
-        if (!state.stallForward) cb(undefined, new EventEmitter());
+        if (host === "blocked-tunnel.invalid") state.lateTunnel = cb;
+        else if (!state.stallForward) cb(undefined, new EventEmitter());
       },
     );
     constructor() {
@@ -51,7 +51,7 @@ vi.mock("ssh2", () => ({
 beforeEach(() => {
   state.made.length = 0;
   state.stallForward = false;
-  race.winner = undefined;
+  state.lateTunnel = undefined;
   vi.clearAllMocks();
 });
 afterEach(() => vi.useRealTimers());
@@ -105,24 +105,39 @@ test("jump tunnel timeout fails clearly and retires the bastion", async () => {
   expect(vi.getTimerCount()).toBe(0);
 });
 
-test("the address that answers first is used, and the slower ones before it are recorded", async () => {
-  race.winner = "up.invalid";
+test("a stalled SSH handshake yields to an authenticated fallback and is cancelled", async () => {
+  vi.useFakeTimers();
   const attempts = vi.fn();
   const client = new MikroTikSSHClient({
-    host: "down.invalid",
+    host: "stall.invalid",
     username: "test",
-    hosts: () => ["down.invalid", "up.invalid"],
+    hosts: () => ["stall.invalid", "up.invalid"],
     onAttempt: attempts,
   });
-  expect(await client.connect()).toBe(true);
+  const result = client.connect();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(await result).toBe(true);
   expect(client.connectedHost).toBe("up.invalid");
-  // The dead primary was never dialled over SSH.
-  expect(state.made).toHaveLength(1);
-  expect(attempts).toHaveBeenNthCalledWith(
-    1,
-    "down.invalid",
-    "no answer in 500 ms, used up.invalid",
-  );
-  expect(attempts).toHaveBeenNthCalledWith(2, "up.invalid");
+  expect(state.made[0]!.destroy).toHaveBeenCalledOnce();
+  expect(attempts.mock.calls).toEqual([["up.invalid"]]);
+  client.disconnect();
+});
+
+test("a stalled forwarded channel yields to the next address on the same bastion", async () => {
+  vi.useFakeTimers();
+  const client = new MikroTikSSHClient({
+    host: "blocked-tunnel.invalid",
+    hosts: () => ["blocked-tunnel.invalid", "up.invalid"],
+    username: "test",
+    jump: { host: "jump.invalid", username: "test" },
+  });
+  const result = client.connect();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(await result).toBe(true);
+  expect(client.connectedHost).toBe("up.invalid");
+  expect(state.made[0]!.forwardOut).toHaveBeenCalledTimes(2);
+  const late = Object.assign(new EventEmitter(), { destroy: vi.fn() });
+  state.lateTunnel!(undefined, late);
+  expect(late.destroy).toHaveBeenCalledOnce();
   client.disconnect();
 });

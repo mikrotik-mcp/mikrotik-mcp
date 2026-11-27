@@ -21,9 +21,8 @@ import { Client } from "ssh2";
 import type { ConnectConfig, ClientChannel, SFTPWrapper } from "ssh2";
 import { logger } from "../logger";
 import type { EndpointOptions } from "../core/device-endpoints";
-import { endpointAddress } from "../core/device-endpoints";
 import { commandUnsupported } from "../core/routeros";
-import { ADDRESS_HEAD_START_MS, fastestFirst } from "./fastest-address";
+import { connectAddress } from "../core/connect-address";
 
 /**
  * How long a one-shot `run()` may go with NO output and NO channel close before
@@ -230,43 +229,50 @@ export class MikroTikSSHClient {
     o: SSHClientOptions,
     via?: Client,
   ): Promise<{ client: Client; host: string }> {
-    const errors: string[] = [];
-    const candidates = o.hosts?.() ?? [o.host];
-    // Behind a jump host this machine cannot reach the addresses, so they keep their order.
-    const hosts = via
-      ? candidates
-      : await fastestFirst(candidates, o.port ?? 22, o.timeoutMs ?? 10_000);
-    // Addresses that had a head start and still lost the race to the first one.
-    const passed = candidates.slice(0, candidates.indexOf(hosts[0]));
-    for (const host of hosts) {
-      let sock: Readable | undefined;
-      try {
-        if (via) sock = await this.forwardOut(via, host, o.port ?? 22, o.timeoutMs ?? 10_000);
-        const client = await this.openClient({ ...o, host }, sock);
-        for (const slow of passed.filter((address) => address !== host)) {
-          o.onAttempt?.(slow, `no answer in ${ADDRESS_HEAD_START_MS} ms, used ${host}`);
+    const port = o.port ?? 22;
+    const { host, value: client } = await connectAddress(
+      o.hosts?.() ?? [o.host],
+      port,
+      async (address, signal) => {
+        const sock = via
+          ? await this.forwardOut(via, address, port, o.timeoutMs ?? 10_000, signal)
+          : undefined;
+        try {
+          signal.throwIfAborted();
+          return await this.openClient({ ...o, host: address }, signal, sock);
+        } catch (error) {
+          sock?.destroy();
+          throw error;
         }
-        o.onAttempt?.(host);
-        // A session that dies later (a keepalive timeout) marks its address as
-        // failed, so the next connection starts with another address.
-        client.on("error", (error) => o.onAttempt?.(host, `session lost: ${error.message}`));
-        const release = o.onConnected?.(host);
-        if (release) {
-          this.releases.push(release);
-          client.once("close", release);
-        }
-        return { client, host };
-      } catch (error) {
-        sock?.destroy();
-        const message = error instanceof Error ? error.message : String(error);
-        o.onAttempt?.(host, message);
-        errors.push(`${endpointAddress(host, o.port ?? 22)}: ${message}`);
-        // Credentials and local key errors are not reachability problems.
-        if (/authentication|auth methods|private\s*key|key file|passphrase|host key/i.test(message))
-          break;
-      }
-    }
-    throw new Error(errors.join("; "));
+      },
+      (message) =>
+        /authentication|auth methods|private\s*key|key file|passphrase|host key|SSH agent/i.test(
+          message,
+        ),
+      o.onAttempt,
+    );
+    let release = o.onConnected?.(host);
+    const releaseSession = () => {
+      release?.();
+      release = undefined;
+    };
+    let lost = false;
+    const onError = (error: Error) => {
+      lost = true;
+      o.onAttempt?.(host, `session lost: ${error.message}`);
+    };
+    const onClose = () => {
+      if (!lost) o.onAttempt?.(host, "SSH session closed unexpectedly");
+      releaseSession();
+    };
+    client.on("error", onError);
+    client.once("close", onClose);
+    this.releases.push(() => {
+      client.off("error", onError);
+      client.off("close", onClose);
+      releaseSession();
+    });
+    return { client, host };
   }
 
   /**
@@ -274,7 +280,7 @@ export class MikroTikSSHClient {
    * stream (a forwarded channel from a jump host) instead of dialling the
    * network directly. Resolves the ready `Client`; rejects with a clear reason.
    */
-  private openClient(o: SSHClientOptions, sock?: Readable): Promise<Client> {
+  private openClient(o: SSHClientOptions, signal: AbortSignal, sock?: Readable): Promise<Client> {
     return new Promise((resolve, reject) => {
       const client = new Client();
       let ready = false;
@@ -345,6 +351,12 @@ export class MikroTikSSHClient {
         .on("close", () => {
           if (!ready) reject(new Error("SSH connection closed during handshake"));
         });
+      const cancel = () => {
+        reject(signal.reason);
+        client.destroy();
+      };
+      signal.addEventListener("abort", cancel, { once: true });
+      client.once("close", () => signal.removeEventListener("abort", cancel));
       try {
         client.connect(cfg);
       } catch (error) {
@@ -369,6 +381,7 @@ export class MikroTikSSHClient {
     host: string,
     port: number,
     timeoutMs: number,
+    signal: AbortSignal,
   ): Promise<Readable> {
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -384,7 +397,14 @@ export class MikroTikSSHClient {
           ),
         );
       }, timeoutMs);
+      const cancel = () => {
+        settled = true;
+        clearTimeout(timer);
+        reject(signal.reason);
+      };
+      signal.addEventListener("abort", cancel, { once: true });
       via.forwardOut("127.0.0.1", 0, host, port, (err, stream) => {
+        signal.removeEventListener("abort", cancel);
         if (settled) {
           stream?.destroy();
           return;

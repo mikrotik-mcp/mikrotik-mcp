@@ -538,6 +538,23 @@ test("renders the routers table without contacting or mutating devices", async (
   await select("branch");
   expect(details("branch")).not.toBeNull();
 });
+test("a live fallback wins over a failed probe throughout the fleet view", async () => {
+  const branch = payload.devices[1]!;
+  branch.endpoints = {
+    primary: branch.host,
+    hosts: [branch.host, "203.0.113.77"],
+    connected: [{ host: "203.0.113.77", port: 2222, transport: "ssh" }],
+    observations: [],
+  };
+  await render();
+  await filter("Online");
+  expect(names()).toEqual(["edge", "branch"]);
+  expect(rows()[1]?.querySelector('[data-col="address"]')?.textContent).toContain("203.0.113.77");
+  await select("branch");
+  expect(details("branch")?.textContent).toContain("Online · connected");
+  await filter("Offline");
+  expect(names()).toEqual([]);
+});
 test("filters distinguish offline, unobserved, and disabled devices", async () => {
   await render();
   await filter("Online");
@@ -545,7 +562,7 @@ test("filters distinguish offline, unobserved, and disabled devices", async () =
   await filter("Offline");
   expect(names()).toEqual(["branch"]);
   await filter("Unchecked");
-  expect(names()).toEqual(["pending", "disabled"]);
+  expect(names()).toEqual(["pending"]);
   await filter("Disabled");
   expect(names()).toEqual(["disabled"]);
   await filter("All");

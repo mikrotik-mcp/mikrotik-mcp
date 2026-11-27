@@ -20,6 +20,7 @@ import type { RunOptions } from "../ssh/client";
 import type { DeviceConfig } from "../config";
 import { logger } from "../logger";
 import { getConfig, getDevice, onConfigChanged } from "./runtime";
+import { endpointOptions } from "./device-endpoints";
 import { DeviceConnectionError } from "./device-connection-error";
 import { connectErrorMessage, resolveJump, sshOptionsOf } from "./transport";
 
@@ -77,7 +78,7 @@ function removeEntry(name: string): void {
 
 function armIdle(name: string, entry: PoolEntry): void {
   if (entry.idleTimer) clearTimeout(entry.idleTimer);
-  if (entry.inflight > 0 || entry.dead) return;
+  if (entry.inflight > 0 || entry.dead || entries.get(name) !== entry) return;
   const { idleTimeout } = poolConfig();
   entry.idleTimer = setTimeout(() => {
     logger.info(`SSH pool: closing idle connection to '${name}' (${idleTimeout / 1000}s idle)`);
@@ -87,7 +88,7 @@ function armIdle(name: string, entry: PoolEntry): void {
 
 /** Whether an error message indicates a lost SSH connection. Never replay commands. */
 function isConnectionError(msg: string): boolean {
-  return /not connected|ECONNRESET|EPIPE|socket.*(close|end|destroy)|channel.*(close|open)|timed out.*handshake/i.test(
+  return /not connected|ECONNRESET|EPIPE|socket.*(close|end|destroy)|channel.*(close|open|request timed out)|timed out.*handshake/i.test(
     msg,
   );
 }
@@ -166,22 +167,6 @@ async function acquire(name: string): Promise<PoolEntry> {
   }
 }
 
-/** Run one command on a connected pool entry; manages inflight + idle. */
-async function runOnEntry(name: string, command: string, opts?: RunOptions): Promise<string> {
-  const entry = await acquire(name);
-  if (entry.idleTimer) {
-    clearTimeout(entry.idleTimer);
-    entry.idleTimer = undefined;
-  }
-  entry.inflight++;
-  try {
-    return await entry.client.run(command, opts);
-  } finally {
-    entry.inflight--;
-    armIdle(name, entry);
-  }
-}
-
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
@@ -198,17 +183,26 @@ export async function runPooled(
   deviceName: string,
   opts?: RunOptions,
 ): Promise<string> {
+  const entry = await acquire(deviceName);
+  if (entry.idleTimer) {
+    clearTimeout(entry.idleTimer);
+    entry.idleTimer = undefined;
+  }
+  entry.inflight++;
+  const host = entry.client.connectedHost;
   try {
-    return await runOnEntry(deviceName, command, opts);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (!isConnectionError(msg)) throw e;
-
-    // The next tool call can reconnect/fail over. This call may already have
-    // executed on the router: an automatic retry could duplicate a mutation.
-    logger.info(`SSH pool: connection to '${deviceName}' lost; command was not replayed`);
-    removeEntry(deviceName);
-    throw e;
+    return await entry.client.run(command, opts);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (entries.get(deviceName) === entry && isConnectionError(message)) {
+      if (host) endpointOptions(entry.config, "ssh", entry.config.port).onAttempt?.(host, message);
+      removeEntry(deviceName);
+      logger.info(`SSH pool: connection to '${deviceName}' lost; command was not replayed`);
+    }
+    throw error;
+  } finally {
+    entry.inflight--;
+    armIdle(deviceName, entry);
   }
 }
 

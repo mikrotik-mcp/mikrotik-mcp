@@ -114,7 +114,7 @@ export function DeviceAddressStatus({
       </div>
       {!compact && (
         <span className="monitor-hint">
-          Fallback addresses are tried only when the primary fails.
+          The last working address gets a head start. Other addresses can connect if it stalls.
         </span>
       )}
     </div>

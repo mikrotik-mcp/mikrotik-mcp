@@ -42,6 +42,24 @@ describe("offline REST response handling", () => {
     await expect(c.runJson("/system resource print")).rejects.toThrow("Not connected");
   });
 
+  test("a failing HTTP gateway yields to a working address before the command runs", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 503 }))
+      .mockResolvedValueOnce(new Response("{}"))
+      .mockResolvedValueOnce(new Response("[]"));
+    globalThis.fetch = fetcher as unknown as typeof fetch;
+    const c = client({ hosts: () => ["192.0.2.2", "192.0.2.3"] });
+    expect(await c.connect()).toBe(true);
+    await c.runJson("/interface print");
+    expect(fetcher.mock.calls.map(([url]) => new URL(String(url)).hostname)).toEqual([
+      "192.0.2.2",
+      "192.0.2.3",
+      "192.0.2.3",
+    ]);
+    c.disconnect();
+  });
+
   test.each([
     [401, "authentication failed"],
     [503, "HTTP 503"],

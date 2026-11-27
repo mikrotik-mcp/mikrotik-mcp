@@ -25,12 +25,6 @@ const mock = vi.hoisted(() => ({
   connectError: "",
   forwards: [] as string[],
 }));
-// The TCP race needs real routers. Here the configured order stands.
-vi.mock("../src/ssh/fastest-address", () => ({
-  ADDRESS_HEAD_START_MS: 500,
-  fastestFirst: async (hosts: string[]) => hosts,
-}));
-
 vi.mock("ssh2", () => ({
   Client: class extends EventEmitter {
     host = "";
@@ -186,7 +180,7 @@ test("authenticated fallback is remembered beyond failure cooldown, renewed on c
     },
   ]);
   clock.mockReturnValue(61_000 + ENDPOINT_SUCCESS_TTL_MS);
-  expect(endpointOptions(dc, "ssh", 22).hosts!()[0]).toBe(dc.host);
+  expect(endpointOptions(dc, "ssh", 22).hosts!()[0]).toBe(next.connectedHost);
   expect(deviceEndpoints(dc)?.remembered).toEqual([]);
   expect(deviceEndpoints(dc)?.connected[0]?.host).toBe("203.0.113.1");
   expect(await next.run("/system identity print")).toContain("demo");

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { formatMs, useLineDraw } from "./monitoring-ui";
-import { deviceState } from "./device-card";
+import { addressOf, deviceState } from "./device-card";
 import { lossPct, lossTone } from "./device-loss";
 import { tipProps } from "./kit";
 import type { TipCard, TipRow } from "./kit";
@@ -62,12 +62,6 @@ function linkWord(d: DeviceInfo, via: string | null): string {
   return d.transport === "rest" ? "REST, direct" : "Direct SSH";
 }
 
-/** The address the open session uses, or the one the last check reached, else the primary. */
-function addressInUse(d: DeviceInfo): string {
-  const host = d.endpoints?.connected[0]?.host ?? d.status.connectedHost;
-  return host && !d.mac ? `${host}:${d.port}` : (d.address ?? `${d.host}:${d.port}`);
-}
-
 function latencyRow(d: DeviceInfo): TipRow[] {
   return d.status.latencyMs != null
     ? [{ label: "Latency", value: formatMs(d.status.latencyMs) }]
@@ -81,7 +75,9 @@ function lossRow(d: DeviceInfo): TipRow[] {
 }
 
 function errorFoot(d: DeviceInfo): TipCard["foot"] {
-  return d.status.error ? { label: "Error", value: d.status.error, tone: "down" } : undefined;
+  return d.status.error
+    ? { label: "Last probe error", value: d.status.error, tone: "down" }
+    : undefined;
 }
 
 /** The card for a router box. */
@@ -92,7 +88,7 @@ function routerCard(d: DeviceInfo, via: string | null, on: boolean): TipCard {
     sub: STATE_WORD[state],
     led: state === "online" ? "ok" : state === "offline" ? "bad" : "off",
     rows: [
-      { label: "Address", value: addressInUse(d) },
+      { label: "Address", value: addressOf(d, true) },
       ...(d.geo
         ? [{ label: "Country", value: [d.geo.city, d.geo.country].filter(Boolean).join(", ") }]
         : []),
@@ -116,7 +112,7 @@ function pathCard(d: DeviceInfo, via: string | null, from: string): TipCard {
     rows: [
       { label: "From", value: from },
       ...(via ? [{ label: "Via", value: via }] : []),
-      { label: "To", value: addressInUse(d) },
+      { label: "To", value: addressOf(d, true) },
       ...latencyRow(d),
       ...lossRow(d),
       { label: "State", value: STATE_WORD[deviceState(d)] },

@@ -47,6 +47,16 @@ export function endpointAddress(host: string, port: number): string {
   return `${host.includes(":") ? `[${host}]` : host}:${port}`;
 }
 
+/** A live path takes precedence over the address used for the last successful SSH probe. */
+export function managementEndpoint(
+  host: string,
+  port: number,
+  endpoints: DeviceEndpoints | undefined,
+  probedHost?: string,
+): Pick<EndpointConnection, "host" | "port"> {
+  return endpoints?.connected[0] ?? { host: probedHost ?? host, port };
+}
+
 /** Runtime observations, never credentials or a claim that every IP was tested. */
 export function deviceEndpoints(dc: DeviceConfig): DeviceEndpoints | undefined {
   if (dc.mac) return undefined;
@@ -87,6 +97,14 @@ export function endpointOptions(
       const all = [dc.host, ...(dc.fallbackHosts ?? [])];
       // Affinity applies only to new connections. Pool and Safe Mode sessions
       // stay pinned; expiry never closes a connection or replays a command.
+      const connected = [...current.live].find(
+        (c) =>
+          c.transport === transport &&
+          c.port === port &&
+          all.includes(c.host) &&
+          !current.observations.get(key(c.host))?.error,
+      );
+      if (connected) return [connected.host, ...all.filter((host) => host !== connected.host)];
       const remembered = current.remembered.get(service);
       if (remembered && remembered.expiresAt > Date.now() && all.includes(remembered.host)) {
         return [remembered.host, ...all.filter((host) => host !== remembered.host)];

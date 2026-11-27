@@ -1,3 +1,4 @@
+import { endpointAddress, managementEndpoint } from "../../src/core/device-endpoints";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { PenLine, RotateCw, TriangleAlert, X, Zap } from "lucide-react";
 import { DeviceAddressStatus } from "./device-address-status";
@@ -27,10 +28,14 @@ export interface DeviceActions {
 export type DeviceBusy = "test" | "reconnect" | "capabilities";
 export type DeviceState = "online" | "offline" | "pending" | "disabled";
 
-/** One word for a router: disabled wins, then the last reachability check. */
+function hasLiveSession(d: DeviceInfo): boolean {
+  return Boolean(d.endpoints?.connected.length || (d.pool?.pooled && !d.pool.dead));
+}
+
+/** A live authenticated session can outlast a failed telemetry probe. */
 export function deviceState(d: DeviceInfo): DeviceState {
   if (d.disabled) return "disabled";
-  return d.status.reachable === true
+  return hasLiveSession(d) || d.status.reachable === true
     ? "online"
     : d.status.reachable === false
       ? "offline"
@@ -67,7 +72,16 @@ export function clockTime(ts: number): string {
   });
 }
 
-const addressOf = (d: DeviceInfo): string => d.mac ?? d.host;
+export function addressOf(d: DeviceInfo, withPort = false): string {
+  if (d.mac) return d.mac;
+  const path = managementEndpoint(
+    d.host,
+    d.port,
+    d.endpoints,
+    d.status.reachable ? d.status.connectedHost : undefined,
+  );
+  return withPort ? endpointAddress(path.host, path.port) : path.host;
+}
 const hardware = (d: DeviceInfo, caps: CapabilitiesJson | null): string | undefined =>
   d.status.boardName ?? caps?.board ?? undefined;
 
@@ -434,7 +448,7 @@ function MacAddress({ d }: { d: DeviceInfo }): ReactNode {
       <Section label="Management address" />
       <div className="flex items-center gap-2 text-[12px]">
         <StatusDot tone={deviceState(d) === "online" ? "good" : "default"} />
-        <span className="text-foreground font-mono font-medium">{d.mac ?? d.host}</span>
+        <span className="text-foreground font-mono font-medium">{addressOf(d)}</span>
         <span className="flex-1" />
         <span className="text-muted-foreground">MAC-Telnet</span>
       </div>
@@ -512,7 +526,9 @@ export function RouterDetails({
       ? "Off for MCP"
       : state === "pending"
         ? "Unchecked"
-        : `${state === "online" ? "Online" : "Offline"}${checked ? ` · checked ${checked}` : ""}`;
+        : hasLiveSession(d)
+          ? "Online · connected"
+          : `${state === "online" ? "Online" : "Offline"}${checked ? ` · checked ${checked}` : ""}`;
   const about = [
     hardware(d, capabilities),
     (d.status.version ?? capabilities?.version)

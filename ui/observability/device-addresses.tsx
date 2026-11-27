@@ -70,7 +70,7 @@ export function DeviceAddressesEditor({
             Add fallback address
           </MonitorButton>
           <span className="flex-1" />
-          <span className="monitor-hint">Up to 8. MCP tries them in order.</span>
+          <span className="monitor-hint">Up to 8. The last working address gets a head start.</span>
         </div>
       </div>
     </>

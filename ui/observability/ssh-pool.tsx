@@ -4,6 +4,7 @@ import { DetailList, RowDrawer, RowMenu, RowMore } from "./kit";
 import type { Tone as KitTone } from "./kit";
 import { MonitorButton, MonitorPanel, StatusBadge, StatusDot, formatMs } from "./monitoring-ui";
 import type { Tone } from "./monitoring-ui";
+import { endpointAddress } from "../../src/core/device-endpoints";
 import { deviceState, jumpOf } from "./device-card";
 import { cn } from "@/lib/utils";
 import type { DeviceInfo, SSHPoolPayload } from "./types";
@@ -50,9 +51,11 @@ function poolRow(d: DeviceInfo) {
   const info = poolState(d.pool);
   const open = !!d.pool?.pooled && !d.pool.dead;
   const jump = jumpOf(d);
+  const ssh = d.endpoints?.connected.find((endpoint) => endpoint.transport === "ssh");
+  const host = ssh?.host ?? (d.status.reachable ? d.status.connectedHost : undefined) ?? d.host;
   return {
     info,
-    transport: jump ? `SSH · via ${jump}` : `SSH · ${d.host}:${d.port}`,
+    transport: jump ? `SSH · via ${jump}` : `SSH · ${endpointAddress(host, ssh?.port ?? d.port)}`,
     busy: d.pool ? String(open ? d.pool.inflight : 0) : "—",
     idle: d.pool ? String(open && d.pool.inflight === 0 ? 1 : 0) : "—",
   };
