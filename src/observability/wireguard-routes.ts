@@ -75,7 +75,7 @@ export async function wireguardRoutes(req: Request, url: URL): Promise<Response 
       const fields = "name,interface,comment,allowed-address,disabled,last-handshake,rx,tx";
       const [interfacesText, counters] = await Promise.all([
         executeMikrotikCommand(
-          "/interface wireguard print detail proplist=name,listen-port,disabled",
+          "/interface wireguard print detail proplist=name,listen-port,disabled,comment",
           ctx,
         ),
         executeMikrotikCommand(
@@ -107,6 +107,7 @@ export async function wireguardRoutes(req: Request, url: URL): Promise<Response 
         .rows.filter((row) => row.name)
         .map((row) => ({
           name: row.name,
+          comment: row.comment || "",
           disabled: row.disabled === "yes" || row.disabled === "true" || !!row.flags?.includes("X"),
           endpoint:
             host && row["listen-port"]
@@ -128,6 +129,7 @@ export async function wireguardRoutes(req: Request, url: URL): Promise<Response 
             id: String(row[".id"] ?? `${iface}/${row.name ?? address}`),
             user: tag?.user || String(row.name || address || iface),
             interface: iface,
+            comment: String(row.comment ?? ""),
             address,
             managed: !!tag,
             expires: tag?.expires ?? null,

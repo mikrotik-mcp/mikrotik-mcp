@@ -515,11 +515,7 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
       row.rxErrors == null && row.txErrors == null
         ? null
         : (row.rxErrors ?? 0) + (row.txErrors ?? 0);
-    const sub = isDown
-      ? ["Link down", row.comment].filter(Boolean).join(" · ")
-      : off
-        ? ["Disabled", row.comment].filter(Boolean).join(" · ")
-        : row.comment || `${row.type} interface`;
+    const sub = isDown ? "Link down" : off ? "Disabled" : `${row.type} interface`;
     return (
       <RowMenu
         key={row.name}
@@ -568,6 +564,14 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
                 {sub}
                 {row.dynamic ? " · dynamic" : ""}
               </span>
+              {row.comment && (
+                <span
+                  dir="auto"
+                  className="whitespace-pre-wrap [overflow-wrap:anywhere] text-start text-[12px] text-fg-secondary"
+                >
+                  {row.comment}
+                </span>
+              )}
             </span>
           </span>
           <span data-col="type" className="min-w-0">
@@ -908,7 +912,7 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
             label={`Interface details: ${row.name}`}
             status={{ tone: KIT_TONE[stateTone(row)], label: stateLabel(row) }}
             title={row.name}
-            meta={[row.type, row.comment, row.dynamic ? "dynamic" : ""].filter(Boolean).join(" · ")}
+            meta={[row.type, row.dynamic ? "dynamic" : ""].filter(Boolean).join(" · ")}
             rowKey={row.name}
             nav={{
               index: at,
@@ -923,6 +927,13 @@ function InterfaceMonitor({ device, picker }: { device: string; picker: ReactNod
               </MonitorButton>
             }
           >
+            {row.comment && (
+              <DetailBlock label="Comment">
+                <p dir="auto" className="whitespace-pre-wrap [overflow-wrap:anywhere] text-start">
+                  {row.comment}
+                </p>
+              </DetailBlock>
+            )}
             <DetailBlock label="Now">
               <DetailList
                 items={[

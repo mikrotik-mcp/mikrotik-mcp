@@ -23,7 +23,7 @@ import "./wireguard-users.css";
 
 interface Inventory extends TrafficSample {
   device: string;
-  interfaceOptions: { name: string; disabled: boolean; endpoint: string }[];
+  interfaceOptions: { name: string; disabled: boolean; endpoint: string; comment?: string }[];
 }
 interface Profile {
   user: string;
@@ -261,9 +261,12 @@ function PeerWorkspace({
       return setError("Enter one client IPv4 address, optionally followed by /32.");
     void act("onboard", { ...form, user, endpoint, address });
   };
+  const interfaceLabels = new Map(
+    data?.interfaceOptions.map((i) => [i.name, i.comment ? `${i.name} · ${i.comment}` : i.name]),
+  );
   const visible = (scope === "all" ? peers : managed).filter((p) =>
-    [p.user, p.interface, p.address].some((s) =>
-      s.toLowerCase().includes(query.trim().toLowerCase()),
+    [p.user, interfaceLabels.get(p.interface) ?? p.interface, p.address, p.comment ?? ""].some(
+      (s) => s.toLowerCase().includes(query.trim().toLowerCase()),
     ),
   );
   const recent = peers.filter(
@@ -354,7 +357,7 @@ function PeerWorkspace({
                 value={query}
                 onChange={setQuery}
                 label="Search peers"
-                placeholder="Search name, interface or IP"
+                placeholder="Search name, interface, IP or comment"
               />
             </div>
             <div className="wgu-scroll">
@@ -415,7 +418,8 @@ function PeerWorkspace({
                           >
                             {p.user}
                           </button>
-                          <small>{p.interface}</small>
+                          <small>{interfaceLabels.get(p.interface) ?? p.interface}</small>
+                          {p.comment && <small dir="auto">{p.comment}</small>}
                         </th>
                         <td className="wgu-address" data-label="Tunnel address">
                           {p.address || "—"}
@@ -478,7 +482,7 @@ function PeerWorkspace({
           open
           title={selected.user}
           label={`Peer details: ${selected.user}`}
-          meta={`${device} · ${selected.interface}`}
+          meta={`${device} · ${interfaceLabels.get(selected.interface) ?? selected.interface}`}
           onClose={() => setSelectedId(null)}
           actions={
             selected.managed && (
@@ -494,6 +498,7 @@ function PeerWorkspace({
         >
           <DetailList
             items={[
+              ...(selected.comment ? [{ label: "Comment", value: selected.comment }] : []),
               { label: "Tunnel address", value: selected.address, mono: true },
               {
                 label: "Last handshake",
@@ -578,7 +583,10 @@ function PeerWorkspace({
                 <span>Interface</span>
                 <MonitorSelect
                   label="Interface"
-                  options={available.map((i) => ({ value: i.name, label: i.name }))}
+                  options={available.map((i) => ({
+                    value: i.name,
+                    label: interfaceLabels.get(i.name) ?? i.name,
+                  }))}
                   value={form.interface}
                   onChange={(name) => {
                     const old = available.find((i) => i.name === form.interface),

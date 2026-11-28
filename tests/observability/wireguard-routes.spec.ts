@@ -43,6 +43,7 @@ const call = (path: string, body?: unknown, origin?: string): Promise<Response |
 test("users are listed with interfaces, expiry and handshake; other peers are left out", async () => {
   command.mockImplementation(router);
   const data = await (await call("/api/wireguard/users?device=edge"))!.json();
+  expect(data.peers[1].comment).toBe("site link");
   expect(data.interfaces).toEqual(["wg0"]);
   expect(data.users).toEqual([
     {
@@ -68,9 +69,11 @@ test("numeric router counters, missing handshakes, and clock durations are retur
           { name: "client", interface: "wg0", rx: 1048576, tx: 5, "last-handshake": "00:02:30" },
           { name: "idle", interface: "wg0", rx: 0, tx: 0, disabled: true },
         ])
-      : ' 0 name="wg0" listen-port=51820 disabled=no',
+      : ' 0 name="wg0" listen-port=51820 disabled=no comment="Office VPN"',
   );
   const d = await (await call("/api/wireguard/users?device=edge"))!.json();
+  expect(d.interfaceOptions[0].comment).toBe("Office VPN");
+  expect(d.peers[1].comment).toBe("");
   expect(d.interfaceOptions[0].endpoint).toBe("10.0.0.1:51820");
   expect(d.peers[0]).toMatchObject({
     user: "client",

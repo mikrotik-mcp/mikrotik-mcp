@@ -8,6 +8,7 @@ export interface Peer {
   id: string;
   user: string;
   interface: string;
+  comment?: string;
   address: string;
   expires: string | null;
   expired: boolean;
